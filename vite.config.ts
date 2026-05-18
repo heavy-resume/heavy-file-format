@@ -12,6 +12,8 @@ const BUILT_IN_PLUGINS_ID = 'virtual:hvy-built-in-plugins';
 const BUILT_IN_PLUGINS_RESOLVED_ID = `\0${BUILT_IN_PLUGINS_ID}`;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const IMPORT_REFERENCE_FILE_PATH = resolve(process.cwd(), 'src/ai-import-hvy-format-reference.hvy');
+const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
+const HVY_GUIDE_FILE_PATH = resolve(process.cwd(), 'hvy-guide.hvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.db-table',
@@ -205,31 +207,32 @@ export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plug
 
 export function createImportReferenceDocumentPlugin(): Plugin {
   return {
-    name: 'hvy-import-reference-document',
+    name: 'hvy-source-document-save',
     configureServer(server) {
-      server.middlewares.use(handleImportReferenceDocumentRequest);
+      server.middlewares.use(handleSourceDocumentRequest);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(handleImportReferenceDocumentRequest);
+      server.middlewares.use(handleSourceDocumentRequest);
     },
   };
 }
 
-function handleImportReferenceDocumentRequest(req: IncomingMessage, res: ServerResponse, next: () => void): void {
-  if (!req.url?.startsWith(IMPORT_REFERENCE_API_PATH)) {
+function handleSourceDocumentRequest(req: IncomingMessage, res: ServerResponse, next: () => void): void {
+  const sourceDocument = getSourceDocumentForRequest(req.url);
+  if (!sourceDocument) {
     next();
     return;
   }
   if (req.method === 'GET') {
     res.statusCode = 200;
     res.setHeader('content-type', 'text/plain; charset=utf-8');
-    res.end(readFileSync(IMPORT_REFERENCE_FILE_PATH, 'utf8'));
+    res.end(readFileSync(sourceDocument.filePath, 'utf8'));
     return;
   }
   if (req.method === 'PUT') {
     void readRequestText(req)
       .then((body) => {
-        writeFileSync(IMPORT_REFERENCE_FILE_PATH, body, 'utf8');
+        writeFileSync(sourceDocument.filePath, body, 'utf8');
         res.statusCode = 200;
         res.setHeader('content-type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: true }));
@@ -237,13 +240,23 @@ function handleImportReferenceDocumentRequest(req: IncomingMessage, res: ServerR
       .catch((error: unknown) => {
         res.statusCode = 500;
         res.setHeader('content-type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Could not save import reference document.' }));
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : `Could not save ${sourceDocument.label}.` }));
       });
     return;
   }
   res.statusCode = 405;
   res.setHeader('content-type', 'application/json; charset=utf-8');
   res.end(JSON.stringify({ error: 'Method not allowed.' }));
+}
+
+function getSourceDocumentForRequest(url: string | undefined): { filePath: string; label: string } | null {
+  if (url?.startsWith(IMPORT_REFERENCE_API_PATH)) {
+    return { filePath: IMPORT_REFERENCE_FILE_PATH, label: 'import reference document' };
+  }
+  if (url?.startsWith(HVY_GUIDE_API_PATH)) {
+    return { filePath: HVY_GUIDE_FILE_PATH, label: 'HVY guide document' };
+  }
+  return null;
 }
 
 function readRequestText(req: NodeJS.ReadableStream): Promise<string> {

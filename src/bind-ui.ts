@@ -28,6 +28,7 @@ import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
+const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 
 interface HvyFileSystemFileHandle {
   name: string;
@@ -119,6 +120,21 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   state.filename = normalized;
   downloadName.value = normalized;
   const bytes = serializeDocumentBytes(state.document);
+  if (state.selectedExample === 'guide') {
+    const response = await fetch(HVY_GUIDE_API_PATH, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+      },
+      body: new TextDecoder().decode(bytes),
+    });
+    if (!response.ok) {
+      throw new Error(`Could not save HVY guide document: ${response.status} ${response.statusText}`);
+    }
+    saveResumeState(state);
+    getRenderApp()();
+    return;
+  }
   if (state.selectedExample === 'import-reference') {
     const response = await fetch(IMPORT_REFERENCE_API_PATH, {
       method: 'PUT',

@@ -1,4 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+  await page.locator('.document-menu summary').click();
+  const item = page.getByRole('button', { name, exact: true });
+  await expect(item).toBeVisible();
+  await item.click({ force: true });
+}
 
 test('reference app uses embedded runtime boundary for themed controls', async ({ page }) => {
   await page.goto('/');
@@ -47,7 +55,7 @@ test('reference app uses embedded runtime boundary for themed controls', async (
 test('reference app can load the import HVY reference document', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Import Reference' }).click();
+  await selectDocumentMenuItem(page, 'Import Reference');
 
   await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
 });
@@ -85,7 +93,33 @@ title: Import Reference Test
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Import Reference' }).click();
+  await selectDocumentMenuItem(page, 'Import Reference');
+  await page.getByRole('button', { name: 'Save File' }).click();
+
+  await expect.poll(() => savedBody).toContain('hvy_version: 0.1');
+  expect(downloaded).toBe(false);
+});
+
+test('reference app saves the guide document through the server file endpoint', async ({ page }) => {
+  let savedBody = '';
+  let downloaded = false;
+  page.on('download', () => {
+    downloaded = true;
+  });
+  await page.route('**/api/hvy-guide-document', async (route) => {
+    if (route.request().method() === 'PUT') {
+      savedBody = route.request().postData() ?? '';
+      await route.fulfill({
+        contentType: 'application/json',
+        body: '{"ok":true}',
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: '{"error":"Method not allowed."}' });
+  });
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Guide');
   await page.getByRole('button', { name: 'Save File' }).click();
 
   await expect.poll(() => savedBody).toContain('hvy_version: 0.1');
@@ -1142,7 +1176,7 @@ hvy_version: 0.1
 test('resume template hides untouched scaffold sections only in viewer', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await selectDocumentMenuItem(page, 'Resume Template');
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#header')).toHaveCount(0);
   await expect(page.locator('#summary')).toHaveCount(0);
@@ -1164,7 +1198,7 @@ test('resume template hides untouched scaffold sections only in viewer', async (
 test('first styled heading in resume grid cell aligns to the top', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   const certification = page.locator('#certifications .reader-block-expandable').first();
@@ -1186,13 +1220,13 @@ test('first styled heading in resume grid cell aligns to the top', async ({ page
 test('resume section templates hide already used non-repeatable sections', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await selectDocumentMenuItem(page, 'Resume Template');
   let options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
   expect(options).toEqual(['Blank', 'Projects', 'Publications', 'Awards', 'Certifications', 'Resume Section']);
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await selectDocumentMenuItem(page, 'Resume Example');
   options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
@@ -1255,7 +1289,7 @@ section_defs:
 test('resume editor script does not scan changed reciprocal xrefs on load', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const rawEditor = page.locator('#rawEditor');
@@ -1268,7 +1302,7 @@ test('resume editor script does not scan changed reciprocal xrefs on load', asyn
 test('resume template empty skill and tool sections show add controls directly in AI view', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await selectDocumentMenuItem(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await page.locator('.viewer-sidebar-tab').click();
 
@@ -1369,7 +1403,7 @@ test('responsive preview controls resize document frame without resizing app chr
 test('responsive preview applies to pullout document surfaces', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await selectDocumentMenuItem(page, 'Resume Template');
   await page.getByRole('button', { name: 'Phone 390' }).click();
 
   await page.locator('.editor-sidebar-tab').click();

@@ -18,6 +18,22 @@ test('chat uses document editing mode in editor and ai views only', async ({ pag
   await expect.poll(() => page.locator('.chat-panel').evaluate((panel) => panel.getBoundingClientRect().width)).toBe(editChatWidth);
 });
 
+test('chat panel stays compact in phone viewer preview', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 620 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+
+  await expect.poll(() =>
+    page.locator('.chat-panel').evaluate((panel) => Math.round(panel.getBoundingClientRect().height))
+  ).toBeLessThanOrEqual(320);
+  await expect.poll(() =>
+    page.locator('[data-field="chat-input"]').evaluate((input) => Math.round(input.getBoundingClientRect().height))
+  ).toBeLessThanOrEqual(72);
+});
+
 test('chat stays scrolled to latest across full rerenders', async ({ page }) => {
   let responseIndex = 0;
   await page.setViewportSize({ width: 900, height: 640 });

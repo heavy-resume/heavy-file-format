@@ -1570,6 +1570,114 @@ test('first styled heading in resume grid cell aligns to the top', async ({ page
   expect(margins).toEqual({ headingMarginTop: '0px', wrapperMarginTop: '0px' });
 });
 
+test('h3 headings after body copy have subsection spacing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  ### Templating and Fill-ins
+
+  You can set up template components and sections with the "Make Template" button.
+
+  ### Meta Information
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const margins = await page.locator('#readerDocument h3').evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).marginTop));
+  expect(margins).toEqual(['0px', '15.2px']);
+});
+
+test('grid cells stretch container cards and pin trailing xref cards', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"cards"}-->
+#! Cards
+
+ <!--hvy:grid {"id":"mode-grid","gridColumns":3}-->
+
+  <!--hvy:grid:0 {"id":"viewer-cell"}-->
+
+   <!--hvy:container {"id":"viewer-card","containerTitle":"Viewer","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem; height: 100%;"}-->
+
+    <!--hvy:text {}-->
+     ## Viewer
+     Shows the document without editing features.
+
+    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
+
+  <!--hvy:grid:1 {"id":"ai-cell"}-->
+
+   <!--hvy:container {"id":"ai-card","containerTitle":"AI","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem; height: 100%;"}-->
+
+    <!--hvy:text {}-->
+     ## AI Assisted
+     Double click, tap, or ask for changes in chat. This card has enough copy to force the row taller than the neighboring cards.
+
+    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
+
+  <!--hvy:grid:2 {"id":"editor-cell"}-->
+
+   <!--hvy:container {"id":"editor-card","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem; height: 100%;"}-->
+
+    <!--hvy:text {}-->
+     ## Editor
+     For direct editing.
+
+    <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
+
+<!--hvy: {"id":"viewer-mode"}-->
+#! Viewer Mode
+
+<!--hvy: {"id":"ai-mode"}-->
+#! AI Mode
+
+<!--hvy: {"id":"editor-mode"}-->
+#! Editor Mode
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const metrics = await page.locator('#cards .reader-grid-layout').evaluate((grid) => {
+    const cells = Array.from(grid.querySelectorAll<HTMLElement>('.reader-grid-cell'));
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.reader-block-container'));
+    const containers = Array.from(grid.querySelectorAll<HTMLElement>('.reader-container'));
+    const bodies = Array.from(grid.querySelectorAll<HTMLElement>('.reader-container-body'));
+    const xrefs = Array.from(grid.querySelectorAll<HTMLElement>('.reader-container-body > .reader-block-xref-card:last-child'));
+    return {
+      gridAlignItems: getComputedStyle(grid).alignItems,
+      cellDisplays: cells.map((cell) => getComputedStyle(cell).display),
+      cellHeights: cells.map((cell) => cell.getBoundingClientRect().height),
+      cardHeights: cards.map((card) => card.getBoundingClientRect().height),
+      bodyHeightGaps: bodies.map((body, index) => containers[index]!.getBoundingClientRect().height - body.getBoundingClientRect().height),
+      xrefBottomGaps: xrefs.map((xref) => {
+        const body = xref.closest<HTMLElement>('.reader-container-body');
+        if (!body) return -1;
+        return body.getBoundingClientRect().bottom - xref.getBoundingClientRect().bottom - parseFloat(getComputedStyle(xref).marginBottom || '0');
+      }),
+    };
+  });
+
+  expect(metrics.gridAlignItems).toBe('stretch');
+  expect(metrics.cellDisplays).toEqual(['grid', 'grid', 'grid']);
+  expect(Math.max(...metrics.cellHeights) - Math.min(...metrics.cellHeights)).toBeLessThanOrEqual(1);
+  expect(Math.max(...metrics.cardHeights) - Math.min(...metrics.cardHeights)).toBeLessThanOrEqual(1);
+  expect(metrics.bodyHeightGaps.every((gap) => gap >= 0 && gap <= 1)).toBe(true);
+  expect(metrics.xrefBottomGaps.every((gap) => gap >= 0 && gap <= 1)).toBe(true);
+});
+
 test('resume section templates hide already used non-repeatable sections', async ({ page }) => {
   await page.goto('/');
 

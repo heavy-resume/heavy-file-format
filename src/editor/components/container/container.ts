@@ -173,9 +173,15 @@ function renderContainerReaderBody(options: {
   const canCollapse = options.bordered || Boolean(options.virtualKey);
   const expanded = canCollapse ? options.expanded : true;
   const previewRem = Number.isFinite(options.collapsedPreviewRem) && options.collapsedPreviewRem > 0 ? options.collapsedPreviewRem : 5;
+  const singletonExpandableBlock = options.virtualKey && options.blocks.length === 1 && options.blocks[0]?.schema.component === 'expandable'
+    ? options.blocks[0]
+    : null;
+  const singletonExpandableAttrs = singletonExpandableBlock
+    ? ` data-singleton-expandable-section-key="${options.helpers.escapeAttr(options.section.key)}" data-singleton-expandable-block-id="${options.helpers.escapeAttr(singletonExpandableBlock.id)}"`
+    : '';
   const collapsibleAttrs = `data-reader-action="toggle-container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(
     options.blockId
-  )}" data-container-key="${options.helpers.escapeAttr(options.virtualKey || `${options.section.key}:${options.blockId}`)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
+  )}" data-container-key="${options.helpers.escapeAttr(options.virtualKey || `${options.section.key}:${options.blockId}`)}" aria-expanded="${expanded ? 'true' : 'false'}"${singletonExpandableAttrs}`;
   const titleLabel = options.title.trim() || (options.virtualKey ? 'Group' : '');
   const className = [
     'reader-container',

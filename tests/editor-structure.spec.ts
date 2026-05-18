@@ -934,6 +934,47 @@ hvy_version: 0.1
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('viewer expands singleton grouped list expandable with one click', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"id":"grouped-items","componentListComponent":"expandable","componentListDefaultGroupKey":"Category"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:expandable {"id":"singleton-record","groupKeys":{"Category":"Only Group"},"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Collapsed record
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {}-->
+      Expanded singleton details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const group = page.locator('#readerDocument .reader-container.is-virtual-group-container', { hasText: 'Only Group' }).first();
+  await expect(group).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#readerDocument')).not.toContainText('Expanded singleton details');
+
+  await group.click();
+
+  await expect(page.locator('#readerDocument')).toContainText('Expanded singleton details');
+});
+
 test('closing context popover does not remove an existing modal', async ({ page }) => {
   await page.goto('/');
 

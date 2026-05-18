@@ -5,7 +5,12 @@ test('chat uses document editing mode in editor and ai views only', async ({ pag
 
   await page.getByRole('button', { name: 'Open chat' }).click();
   await expect(page.getByRole('heading', { name: 'Edit This Document' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open search' })).toBeHidden();
   await expect(page.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Describe how the document should change...');
+  await expect(page.locator('.chat-panel')).toHaveClass(/is-document-edit/);
+  await expect.poll(() =>
+    page.locator('.chat-panel').evaluate((panel) => Math.round(panel.getBoundingClientRect().height))
+  ).toBeGreaterThanOrEqual(456);
   const editChatWidth = await page.locator('.chat-panel').evaluate((panel) => panel.getBoundingClientRect().width);
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
@@ -14,8 +19,12 @@ test('chat uses document editing mode in editor and ai views only', async ({ pag
 
   await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
   await expect(page.getByRole('heading', { name: 'Ask This Document' })).toBeVisible();
+  await expect(page.locator('.chat-panel')).toHaveClass(/is-question-answer/);
   await expect(page.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Ask about the current HVY document...');
   await expect.poll(() => page.locator('.chat-panel').evaluate((panel) => panel.getBoundingClientRect().width)).toBe(editChatWidth);
+
+  await page.getByRole('button', { name: 'Close chat' }).click();
+  await expect(page.getByRole('button', { name: 'Open search' })).toBeVisible();
 });
 
 test('chat panel stays compact in phone viewer preview', async ({ page }) => {

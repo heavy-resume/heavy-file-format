@@ -388,7 +388,7 @@ export function renderChatPanel(
     <div class="chat-dock ${chat.panelOpen ? 'is-open' : 'is-closed'}" aria-label="Document chat">
       ${
         chat.panelOpen
-          ? `<aside class="chat-panel" tabindex="-1"${chat.isSending ? ' aria-busy="true"' : ''}>
+          ? `<aside class="chat-panel ${isDocumentEdit ? 'is-document-edit' : 'is-question-answer'}" tabindex="-1"${chat.isSending ? ' aria-busy="true"' : ''}>
                <div class="chat-panel-head">
                  <div>
                    <h2>${title}</h2>

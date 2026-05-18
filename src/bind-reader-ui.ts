@@ -7,6 +7,7 @@ import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
+import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { getActiveStateRuntime, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
@@ -307,7 +308,11 @@ export function bindReaderUi(app: HTMLElement): void {
         key,
         willExpand: container.getAttribute('aria-expanded') !== 'true',
       });
-      state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
+      const willExpand = container.getAttribute('aria-expanded') !== 'true';
+      state.readerContainerState[key] = willExpand;
+      if (willExpand) {
+        expandSingletonVirtualGroupChild(container);
+      }
       getRefreshReaderPanels()();
     }
   };

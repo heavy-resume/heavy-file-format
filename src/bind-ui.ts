@@ -24,6 +24,7 @@ import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '.
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
+import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import type { ReaderViewFilter } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
@@ -685,11 +686,15 @@ export function bindUi(app: HTMLElement): void {
         return;
       }
       runReaderAction(event, () => {
+        const willExpand = container.getAttribute('aria-expanded') !== 'true';
         logClickTrace(event, 'reader-area:handled:container-toggle', {
           key,
-          willExpand: container.getAttribute('aria-expanded') !== 'true',
+          willExpand,
         });
-        state.readerContainerState[key] = container.getAttribute('aria-expanded') !== 'true';
+        state.readerContainerState[key] = willExpand;
+        if (willExpand) {
+          expandSingletonVirtualGroupChild(container);
+        }
         getRefreshReaderPanels()();
       });
     }

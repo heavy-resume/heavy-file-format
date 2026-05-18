@@ -73,6 +73,31 @@ hvy_version: 0.1
   expect(expectedResult).not.toContain(document.sections[0]?.key);
 });
 
+test('xref target options sort alphabetically by visible title with id tie-breakers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"zebra-section"}-->
+#! Same
+
+ <!--hvy:text {"id":"alpha-block"}-->
+  Zebra
+
+<!--hvy: {"id":"alpha-section"}-->
+#! Alpha
+
+ <!--hvy:text {"id":"beta-block"}-->
+  Beta
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  const expectedResult = getXrefTargetOptions().map((option) => `${option.title}:${option.value}`);
+
+  expect(expectedResult).toEqual(['Alpha:alpha-section', 'Beta:beta-block', 'Same:zebra-section', 'Zebra:alpha-block']);
+});
+
 test('auto ids new tagged reusable template blocks for xref target options', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

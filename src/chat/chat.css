@@ -44,6 +44,15 @@
   display: none;
 }
 
+.chat-dock.is-open {
+  top: 1rem;
+  bottom: 1rem;
+}
+
+.chat-dock.is-open .chat-launcher {
+  display: none;
+}
+
 .chat-panel {
   position: relative;
   flex: 0 1 30rem;
@@ -61,6 +70,10 @@
   background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
   box-shadow: 0 18px 40px var(--hvy-shadow);
   overflow: hidden;
+}
+
+.chat-panel.is-document-edit {
+  flex-basis: 34rem;
 }
 
 .chat-panel > * {
@@ -546,6 +559,10 @@
     flex-basis: 20rem;
   }
 
+  .chat-panel.is-document-edit {
+    flex-basis: 20rem;
+  }
+
   .chat-settings {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -573,6 +590,10 @@
 
 .pane.hvy-preview-frame-phone .chat-panel {
   width: 100%;
+  flex-basis: 20rem;
+}
+
+.pane.hvy-preview-frame-phone .chat-panel.is-document-edit {
   flex-basis: 20rem;
 }
 

@@ -31,7 +31,7 @@ export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; lab
 
   visitBlocksForXrefOptions(requestedTags, add);
 
-  return options;
+  return options.sort(compareXrefTargetOptions);
 }
 
 export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
@@ -142,6 +142,14 @@ function matchesTagFilter(tags: string, requestedTags: string[]): boolean {
 function formatXrefOptionLabel(title: string, detail: string, value: string): string {
   const label = detail ? `${title} - ${detail}` : title;
   return `${label} (${value})`;
+}
+
+function compareXrefTargetOptions(
+  left: { value: string; title: string; detail: string; label: string },
+  right: { value: string; title: string; detail: string; label: string }
+): number {
+  return left.title.localeCompare(right.title, undefined, { numeric: true, sensitivity: 'base' })
+    || left.value.localeCompare(right.value, undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function normalizeTagFilter(tagFilter: string): string[] {

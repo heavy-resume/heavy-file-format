@@ -317,37 +317,44 @@
   font-size: 2rem;
 }
 
+.reader-block h3 {
+  margin-top: 0.7rem;
+}
+
 .reader-block p+h1,
 .reader-block p+h2,
-.reader-block p+h3,
 .reader-block p+h4,
 .reader-block p+h5,
 .reader-block p+h6,
 .reader-block ul+h1,
 .reader-block ul+h2,
-.reader-block ul+h3,
 .reader-block ul+h4,
 .reader-block ul+h5,
 .reader-block ul+h6,
 .reader-block ol+h1,
 .reader-block ol+h2,
-.reader-block ol+h3,
 .reader-block ol+h4,
 .reader-block ol+h5,
 .reader-block ol+h6,
 .reader-block blockquote+h1,
 .reader-block blockquote+h2,
-.reader-block blockquote+h3,
 .reader-block blockquote+h4,
 .reader-block blockquote+h5,
 .reader-block blockquote+h6,
 .reader-block pre+h1,
 .reader-block pre+h2,
-.reader-block pre+h3,
 .reader-block pre+h4,
 .reader-block pre+h5,
 .reader-block pre+h6 {
   margin-top: 0.4rem;
+}
+
+.reader-block p+h3,
+.reader-block ul+h3,
+.reader-block ol+h3,
+.reader-block blockquote+h3,
+.reader-block pre+h3 {
+  margin-top: 0.95rem;
 }
 
 .reader-block.align-left {

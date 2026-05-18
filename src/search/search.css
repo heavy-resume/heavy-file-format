@@ -15,6 +15,10 @@
   box-shadow: 0 18px 40px var(--hvy-shadow-lg);
 }
 
+.chat-dock.is-open ~ .search-launcher {
+  display: none;
+}
+
 .search-launcher.is-filtering {
   border-color: color-mix(in srgb, var(--hvy-button-bg) 78%, var(--hvy-border));
   background: color-mix(in srgb, var(--hvy-button-bg) 94%, var(--hvy-surface));

@@ -8,6 +8,7 @@ import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import {
   activateStateRuntime,
   createStateRuntime,
+  getActiveStateRuntime,
   state,
   initCallbacks,
   runWithStateRuntime,
@@ -364,14 +365,16 @@ function ensureRenderers(): void {
 
 function renderApp(): void {
   if (!currentRoot) return;
-  const capturedScroll = captureRenderScroll(currentRoot, state.paneScroll);
+  const root = currentRoot;
+  const runtime = getActiveStateRuntime();
+  const capturedScroll = captureRenderScroll(root, state.paneScroll);
   state.paneScroll = capturedScroll.paneScroll;
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
   capturePluginFocus();
-  currentRoot.innerHTML = `
-    <main class="layout hvy-embed-layout">
+  root.innerHTML = `
+    <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <div hidden>
         <button id="newBtn" type="button">New</button>
         <input id="fileInput" type="file" />
@@ -422,18 +425,18 @@ function renderApp(): void {
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
     </main>`;
-  bindEmbedUi(currentRoot);
-  reconcilePluginMounts(currentRoot);
-  restoreRenderScroll(currentRoot, capturedScroll);
+  bindEmbedUi(root, runtime);
+  reconcilePluginMounts(root);
+  restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
-    root: currentRoot,
+    root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runButtonVisibilityScripts(scope);
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
-  observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runButtonVisibilityScripts(currentRoot);
+  observeRenderedLinks(root, currentLinkObserver);
+  void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
   void runPluginDocumentHooks('unknown');
 }
 
@@ -449,15 +452,15 @@ function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
   root.addEventListener('drop', () => activateStateRuntime(runtime), { capture: true });
 }
 
-function bindEmbedUi(root: HTMLElement): void {
+function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   if (state.currentView === 'viewer') {
     bindReaderUi(root);
     return;
   }
   void import('./bind-ui').then(({ bindUi }) => {
-    if (currentRoot === root) {
+    runWithStateRuntime(runtime, () => {
       bindUi(root);
-    }
+    });
   });
 }
 
@@ -523,19 +526,20 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
 
 function refreshReaderPanels(): void {
   if (!currentRoot) return;
+  const runtime = getActiveStateRuntime();
   refreshReaderSurfaces({
     root: currentRoot,
     readerRenderer,
     sections: state.document.sections,
     capturePluginFocus,
     reconcilePluginMounts,
-    runButtonVisibilityScripts,
+    runButtonVisibilityScripts: (root) => runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root)),
   });
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runButtonVisibilityScripts(scope);
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);

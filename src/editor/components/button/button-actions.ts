@@ -2,7 +2,7 @@ import { findBlockByIds } from '../../../block-ops';
 import { requestProxyCompletion } from '../../../chat/chat';
 import { recordHistory } from '../../../history';
 import { runUserScript } from '../../../plugins/scripting/wrapper';
-import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
+import { getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntime } from '../../../state';
 import type { ChatMessage } from '../../../types';
 import { clearButtonAiGenerateRunning, isButtonAiGenerateRunning, markButtonAiGenerateRunning } from './button-state';
 
@@ -28,11 +28,13 @@ function coerceReturnedBoolean(value: unknown): boolean {
 }
 
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
+  const runtime = getActiveStateRuntime();
+  const inVisibilityRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
   const dynamicBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-dynamic-visibility="true"]'));
   await Promise.all(dynamicBlocks.map(async (element) => {
     const sectionKey = element.dataset.sectionKey ?? '';
     const blockId = element.dataset.blockId ?? '';
-    const block = findBlockByIds(sectionKey, blockId);
+    const block = inVisibilityRuntime(() => findBlockByIds(sectionKey, blockId));
     if (!block) {
       element.dataset.visibleState = 'hidden';
       return;
@@ -44,7 +46,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
     }
     element.dataset.visibleState = 'pending';
     const result = await runUserScript({
-      document: state.document,
+      document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
     });
@@ -58,7 +60,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
   await Promise.all(buttons.map(async (element) => {
     const sectionKey = element.dataset.sectionKey ?? '';
     const blockId = element.dataset.blockId ?? '';
-    const block = findBlockByIds(sectionKey, blockId);
+    const block = inVisibilityRuntime(() => findBlockByIds(sectionKey, blockId));
     if (!block) {
       element.dataset.visibleState = 'hidden';
       return;
@@ -70,7 +72,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
     }
     element.dataset.visibleState = 'pending';
     const result = await runUserScript({
-      document: state.document,
+      document: runtime.state.document,
       source,
       componentId: block.schema.id || block.id,
     });
@@ -91,10 +93,12 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
 }
 
 export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {
-  if (isButtonAiGenerateRunning(sectionKey, blockId)) {
+  const runtime = getActiveStateRuntime();
+  const inButtonRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
+  if (inButtonRuntime(() => isButtonAiGenerateRunning(sectionKey, blockId))) {
     return;
   }
-  const block = findBlockByIds(sectionKey, blockId);
+  const block = inButtonRuntime(() => findBlockByIds(sectionKey, blockId));
   if (!block || block.schema.buttonAction !== 'ai-generate') {
     return;
   }
@@ -108,7 +112,7 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     }
   };
 
-  markButtonAiGenerateRunning(sectionKey, blockId);
+  inButtonRuntime(() => markButtonAiGenerateRunning(sectionKey, blockId));
   if (root) {
     root.dataset.busyState = 'busy';
     root.setAttribute('aria-busy', 'true');
@@ -118,11 +122,13 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
   actionButton.textContent = 'Generating...';
   actionButton.setAttribute('disabled', 'true');
   setStatus('Preparing...');
-  getRefreshReaderPanels()();
-  getRenderApp()();
+  inButtonRuntime(() => {
+    getRefreshReaderPanels()();
+    getRenderApp()();
+  });
   try {
     const sourceResult = await runUserScript({
-      document: state.document,
+      document: runtime.state.document,
       source: block.schema.buttonSourceScript,
       componentId: block.schema.id || block.id,
     });
@@ -145,22 +151,22 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
       role: 'user',
       content: prompt,
     }];
-    const response = await requestProxyCompletion({
-      settings: state.chat.settings,
+    const response = await inButtonRuntime(() => requestProxyCompletion({
+      settings: runtime.state.chat.settings,
       messages,
       context: `Button generation input:\n${source}`,
       responseInstructions: 'Return only the generated text. Do not include Markdown fences, explanations, or labels.',
       mode: 'qa',
       debugLabel: 'button-ai-generate',
-    });
+    }));
     if (response.length > block.schema.buttonOutputCharLimit) {
       throw new Error(`Generation output exceeds ${block.schema.buttonOutputCharLimit} characters.`);
     }
 
     setStatus('Applying...');
-    recordHistory(`button:${block.id}:ai-generate`);
+    inButtonRuntime(() => recordHistory(`button:${block.id}:ai-generate`));
     const targetResult = await runUserScript({
-      document: state.document,
+      document: runtime.state.document,
       source: block.schema.buttonTargetScript,
       componentId: block.schema.id || block.id,
       injectedGlobals: {
@@ -172,12 +178,14 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
       throw new Error(targetResult.error ?? 'Target script failed.');
     }
     setStatus('Done.');
-    getRefreshReaderPanels()();
-    getRenderApp()();
+    inButtonRuntime(() => {
+      getRefreshReaderPanels()();
+      getRenderApp()();
+    });
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Generation failed.', true);
   } finally {
-    clearButtonAiGenerateRunning(sectionKey, blockId);
+    inButtonRuntime(() => clearButtonAiGenerateRunning(sectionKey, blockId));
     if (root) {
       root.dataset.busyState = 'idle';
       root.removeAttribute('aria-busy');
@@ -185,6 +193,6 @@ export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLEl
     actionButton.textContent = actionButton.dataset.idleLabel ?? 'Generate';
     delete actionButton.dataset.idleLabel;
     actionButton.removeAttribute('disabled');
-    void runButtonVisibilityScripts(app);
+    void inButtonRuntime(() => runButtonVisibilityScripts(app));
   }
 }

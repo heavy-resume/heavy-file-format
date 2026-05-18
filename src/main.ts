@@ -782,7 +782,7 @@ function renderTopbar(): string {
     <header class="topbar">
       <div class="title-block">
         <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>.</p>
+        <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">

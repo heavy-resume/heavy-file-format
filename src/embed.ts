@@ -6,6 +6,7 @@ import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import {
   activateStateRuntime,
   createStateRuntime,
+  getActiveStateRuntime,
   initCallbacks,
   state,
   runWithStateRuntime,
@@ -320,13 +321,15 @@ function renderSidebarTabLabel(): string {
 
 function renderApp(): void {
   if (!currentRoot) return;
+  const root = currentRoot;
+  const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
-  const capturedScroll = captureRenderScroll(currentRoot, state.paneScroll);
+  const capturedScroll = captureRenderScroll(root, state.paneScroll);
   state.paneScroll = capturedScroll.paneScroll;
   applyTheme();
   capturePluginFocus();
-  currentRoot.innerHTML = `
-    <main class="layout hvy-embed-layout">
+  root.innerHTML = `
+    <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
           <div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
@@ -344,23 +347,24 @@ function renderApp(): void {
         </div>
       </section>
     </main>`;
-  bindReaderUi(currentRoot);
-  reconcilePluginMounts(currentRoot);
-  restoreRenderScroll(currentRoot, capturedScroll);
+  bindReaderUi(root);
+  reconcilePluginMounts(root);
+  restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
-    root: currentRoot,
+    root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runButtonVisibilityScriptsIfNeeded(scope);
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
-  observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runButtonVisibilityScriptsIfNeeded(currentRoot);
+  observeRenderedLinks(root, currentLinkObserver);
+  void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
   void runPluginDocumentHooks('unknown');
 }
 
 function refreshReaderPanels(): void {
   if (!currentRoot) return;
+  const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
   if (!reader) return;
@@ -371,11 +375,11 @@ function refreshReaderPanels(): void {
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runButtonVisibilityScriptsIfNeeded(scope);
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runButtonVisibilityScriptsIfNeeded(reader);
+  void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
   void runPluginDocumentHooks('unknown');
 }
 
@@ -385,8 +389,9 @@ async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<voi
   if (!root.querySelector('[data-hvy-dynamic-visibility="true"], [data-hvy-button="true"]')) {
     return;
   }
+  const runtime = getActiveStateRuntime();
   const { runButtonVisibilityScripts } = await import('./editor/components/button/button-actions');
-  await runButtonVisibilityScripts(root);
+  await runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
 }
 
 function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
@@ -453,7 +458,7 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let mounted: HvyMount | null = null;
   const pending: Array<(mount: HvyMount) => void> = [];
   options.root.classList.add('hvy-document');
-  options.root.innerHTML = '<main class="layout hvy-embed-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
+  options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
   const ready = loadFullEmbed().then((module) => {
     mounted = module.mountHvy(options);
     for (const action of pending.splice(0)) {

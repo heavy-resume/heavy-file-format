@@ -18,7 +18,7 @@ import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindAppEvents } from './bind/app-events';
-import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
+import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';

@@ -71,6 +71,11 @@ body {
   background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
 }
 
+.hvy-embed-full-layout {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
 .reference-layout {
   padding: 1rem;
 }
@@ -333,6 +338,11 @@ body {
   gap: 0.75rem;
   min-height: 0;
   height: 100%;
+}
+
+.hvy-embed-full-layout .workspace-shell {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
 }
 
 .workspace-head {

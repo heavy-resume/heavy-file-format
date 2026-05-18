@@ -1,12 +1,8 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
-import { shouldAutoDismissSidebarHelp } from '../../sidebar-help';
+import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
 
-const sidebarHelpDismissTimers: Record<'editor' | 'viewer', number | null> = {
-  editor: null,
-  viewer: null,
-};
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
@@ -155,62 +151,6 @@ function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): vo
   picker.dataset.activePane = 'root';
   placeComponentPicker(picker);
   revealComponentPicker(picker);
-}
-
-export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {
-  scheduleSidebarHelpAutoCloseFor(app, 'editor');
-  scheduleSidebarHelpAutoCloseFor(app, 'viewer');
-}
-
-function scheduleSidebarHelpAutoCloseFor(app: HTMLElement, kind: 'editor' | 'viewer'): void {
-  if (sidebarHelpDismissTimers[kind] !== null) {
-    window.clearTimeout(sidebarHelpDismissTimers[kind]!);
-    sidebarHelpDismissTimers[kind] = null;
-  }
-  if (getSidebarHelpDismissed(kind) || !app.querySelector(getSidebarHelpSelector(kind))) {
-    return;
-  }
-  sidebarHelpDismissTimers[kind] = window.setTimeout(() => {
-    sidebarHelpDismissTimers[kind] = null;
-    const shell = app.querySelector<HTMLElement>(kind === 'editor' ? '.editor-shell' : '.viewer-shell');
-    if (!shouldAutoDismissSidebarHelp(shell, kind)) {
-      return;
-    }
-    dismissSidebarHelpBalloon(app, kind);
-  }, 5000);
-}
-
-function dismissSidebarHelpBalloon(app: HTMLElement, kind: 'editor' | 'viewer'): void {
-  if (sidebarHelpDismissTimers[kind] !== null) {
-    window.clearTimeout(sidebarHelpDismissTimers[kind]!);
-    sidebarHelpDismissTimers[kind] = null;
-  }
-  const balloon = app.querySelector<HTMLElement>(getSidebarHelpSelector(kind));
-  if (!balloon || balloon.classList.contains('is-closing')) {
-    setSidebarHelpDismissed(kind);
-    return;
-  }
-  balloon.classList.add('is-closing');
-  window.setTimeout(() => {
-    setSidebarHelpDismissed(kind);
-    balloon.remove();
-  }, 180);
-}
-
-function getSidebarHelpSelector(kind: 'editor' | 'viewer'): string {
-  return kind === 'editor' ? '.editor-sidebar-help-balloon' : '.viewer-sidebar-help-balloon';
-}
-
-function getSidebarHelpDismissed(kind: 'editor' | 'viewer'): boolean {
-  return kind === 'editor' ? state.editorSidebarHelpDismissed : state.viewerSidebarHelpDismissed;
-}
-
-function setSidebarHelpDismissed(kind: 'editor' | 'viewer'): void {
-  if (kind === 'editor') {
-    state.editorSidebarHelpDismissed = true;
-  } else {
-    state.viewerSidebarHelpDismissed = true;
-  }
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

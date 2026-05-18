@@ -14,6 +14,7 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('#app')).toHaveClass(/hvy-document/);
   await expect(page.locator('main.layout')).toHaveClass(/hvy-embed-layout/);
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).margin)).toBe('0px');
+  await expect(page.getByRole('link', { name: 'Two embedded docs' })).toHaveAttribute('href', '/examples/two-embedded-docs.html');
 
   const editorButton = page.getByRole('button', { name: 'Editor' });
   await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe(
@@ -557,6 +558,80 @@ hvy_version: 0.1
   expect(result.firstBg).not.toBe('');
   expect(result.secondBg).not.toBe('');
   expect(result.firstBg).not.toBe(result.secondBg);
+});
+
+test('embedded editor and viewer mounts coexist without sharing document state', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string, body: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${body}
+`;
+    const encoder = new TextEncoder();
+    const viewerRoot = document.querySelector<HTMLElement>('#viewerMount');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!viewerRoot || !editorRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const viewerMount = mountHvyViewer({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Viewer Summary', 'Viewer-only body.')), '.hvy'),
+    });
+    const editorMount = mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Editor Summary', 'Editor-only body.')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'mixed-editor',
+    });
+    await new Promise<void>((resolve, reject) => {
+      const startedAt = performance.now();
+      const waitForEditorMount = () => {
+        if (!editorRoot.textContent?.includes('Loading HVY')) {
+          resolve();
+          return;
+        }
+        if (performance.now() - startedAt > 1000) {
+          reject(new Error('Timed out waiting for editor embed.'));
+          return;
+        }
+        window.requestAnimationFrame(waitForEditorMount);
+      };
+      waitForEditorMount();
+    });
+
+    editorMount.getDocument().sections[0]!.title = 'Editor Mutated';
+    editorMount.setPaletteOverrideId('spring');
+    viewerMount.setPaletteOverrideId('paper');
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+    return {
+      viewerText: viewerRoot.textContent,
+      editorText: editorRoot.textContent,
+      viewerDocumentTitle: viewerMount.getDocument().sections[0]?.title,
+      editorDocumentTitle: editorMount.getDocument().sections[0]?.title,
+      viewerBg: viewerRoot.style.getPropertyValue('--hvy-bg'),
+      editorBg: editorRoot.style.getPropertyValue('--hvy-bg'),
+    };
+  });
+
+  expect(result.viewerText).toContain('Viewer-only body.');
+  expect(result.viewerText).not.toContain('Editor-only body.');
+  expect(result.editorText).toContain('Editor-only body.');
+  expect(result.editorText).not.toContain('Viewer-only body.');
+  expect(result.viewerDocumentTitle).toBe('Viewer Summary');
+  expect(result.editorDocumentTitle).toBe('Editor Mutated');
+  expect(result.viewerBg).not.toBe('');
+  expect(result.editorBg).not.toBe('');
+  expect(result.viewerBg).not.toBe(result.editorBg);
 });
 
 test('embedded editor mounts isolate keyed session state', async ({ page }) => {

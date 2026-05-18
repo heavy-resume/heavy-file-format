@@ -186,3 +186,118 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 });
+
+test('embedded editor and viewer keep independent sidebar hints and button runtime', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+  const firstButton = firstDoc.locator('[data-action="run-button-ai-generate"]');
+  const secondButton = secondDoc.locator('[data-action="run-button-ai-generate"]');
+  await expect(firstButton).toBeVisible({ timeout: 1_000 });
+  await expect(secondDoc.locator('#readerDocument')).toBeVisible();
+  await expect(secondDoc.locator('#editorTree')).toHaveCount(0);
+  await expect(secondButton).toBeVisible({ timeout: 1_000 });
+  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toContainText('Document One Side Notes');
+  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toContainText('Document Two Side Notes');
+
+  await firstDoc.locator('.editor-sidebar-help-balloon').click();
+  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toHaveClass(/is-closing/);
+  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toBeVisible();
+  await page.waitForTimeout(220);
+  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
+  await secondDoc.locator('.viewer-sidebar-help-balloon').click();
+  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveClass(/is-closing/);
+  await page.waitForTimeout(220);
+  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveCount(0);
+  await secondDoc.locator('.viewer-sidebar-tab').click();
+  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Sidebar note for the second embedded document.');
+  await secondDoc.locator('.viewer-sidebar-tab').click();
+  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
+
+  await firstButton.click();
+  await secondButton.click();
+
+  await expect(secondDoc).toContainText('Document Two generated from: Second document source text.', { timeout: 3_500 });
+  await expect(firstDoc).toContainText('Document One generated from: First document source text.', { timeout: 3_500 });
+  await expect(firstDoc).not.toContainText('Document Two generated from');
+  await expect(secondDoc).not.toContainText('Document One generated from');
+});
+
+test('second embedded viewer action buttons remain clickable', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+  await expect(secondDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
+  const firstDocMountBox = await firstDoc.boundingBox();
+  const firstDocLayoutBox = await firstDoc.locator('.hvy-embed-layout').boundingBox();
+  const secondDocMountBox = await secondDoc.boundingBox();
+  const secondDocLayoutBox = await secondDoc.locator('.hvy-embed-layout').boundingBox();
+  expect(firstDocMountBox).not.toBeNull();
+  expect(firstDocLayoutBox).not.toBeNull();
+  expect(secondDocMountBox).not.toBeNull();
+  expect(secondDocLayoutBox).not.toBeNull();
+  expect(firstDocLayoutBox!.height).toBeGreaterThanOrEqual(firstDocMountBox!.height - 1);
+  expect(secondDocLayoutBox!.height).toBeGreaterThanOrEqual(secondDocMountBox!.height - 1);
+
+  await firstDoc.locator('.search-launcher').click();
+  await expect(firstDoc.locator('.search-palette')).toBeVisible({ timeout: 1_000 });
+  const firstDocSearchBox = await firstDoc.boundingBox();
+  const firstSearchPaletteBox = await firstDoc.locator('.search-palette').boundingBox();
+  expect(firstDocSearchBox).not.toBeNull();
+  expect(firstSearchPaletteBox).not.toBeNull();
+  expect(firstSearchPaletteBox!.y).toBeGreaterThanOrEqual(firstDocSearchBox!.y);
+  expect(firstSearchPaletteBox!.y + firstSearchPaletteBox!.height).toBeLessThanOrEqual(firstDocSearchBox!.y + firstDocSearchBox!.height + 1);
+  await firstDoc.getByRole('button', { name: 'Close search panel' }).click();
+  await expect(firstDoc.locator('.search-palette')).toHaveCount(0);
+
+  await secondDoc.locator('.viewer-sidebar-help-balloon').click();
+  await page.waitForTimeout(220);
+  await secondDoc.locator('.viewer-sidebar-tab').click();
+  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Sidebar note for the second embedded document.');
+  await secondDoc.locator('.viewer-sidebar-tab').click();
+  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
+
+  await secondDoc.locator('.search-launcher').click();
+  await expect(secondDoc.locator('.search-palette')).toBeVisible({ timeout: 1_000 });
+  await secondDoc.locator('[data-field="search-query"]').fill('Second document source text');
+  await secondDoc.locator('#searchComposer').press('Enter');
+  await expect(secondDoc.locator('.search-result')).toContainText('Second document source text', { timeout: 1_000 });
+  await secondDoc.getByRole('button', { name: 'Close search panel' }).click();
+  await expect(secondDoc.locator('.search-palette')).toHaveCount(0);
+
+  await firstDoc.locator('.chat-launcher').click();
+  await expect(firstDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
+  const firstDocBox = await firstDoc.boundingBox();
+  const firstChatPanelBox = await firstDoc.locator('.chat-panel').boundingBox();
+  expect(firstDocBox).not.toBeNull();
+  expect(firstChatPanelBox).not.toBeNull();
+  expect(firstChatPanelBox!.x).toBeGreaterThanOrEqual(firstDocBox!.x);
+  expect(firstChatPanelBox!.x + firstChatPanelBox!.width).toBeLessThanOrEqual(firstDocBox!.x + firstDocBox!.width + 1);
+  expect(firstChatPanelBox!.y + firstChatPanelBox!.height).toBeLessThanOrEqual(firstDocBox!.y + firstDocBox!.height + 1);
+  const firstChatEmptyBox = await firstDoc.locator('.chat-empty').boundingBox();
+  const firstChatComposerBox = await firstDoc.locator('.chat-composer').boundingBox();
+  expect(firstChatEmptyBox).not.toBeNull();
+  expect(firstChatComposerBox).not.toBeNull();
+  expect(firstChatComposerBox!.y - (firstChatEmptyBox!.y + firstChatEmptyBox!.height)).toBeLessThanOrEqual(18);
+  await firstDoc.locator('.chat-launcher').click();
+  await expect(firstDoc.locator('.chat-panel')).toBeHidden();
+
+  await secondDoc.locator('.chat-launcher').click();
+  await expect(secondDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
+  await secondDoc.locator('.chat-launcher').click();
+  await expect(secondDoc.locator('.chat-panel')).toBeHidden();
+
+  await secondDoc.locator('[data-action="run-button-ai-generate"]').click();
+  await expect(secondDoc).toContainText('Document Two generated from: Second document source text.', { timeout: 3_500 });
+  await expect(firstDoc).not.toContainText('Document Two generated from');
+});

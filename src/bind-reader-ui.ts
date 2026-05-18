@@ -1,14 +1,55 @@
 import { findBlockByIds } from './block-ops';
+import { bindChangeControls } from './bind/handlers/change-controls';
+import { bindInputMisc } from './bind/handlers/input-misc';
+import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { findSectionByKey } from './section-ops';
-import { getRefreshReaderPanels, state } from './state';
+import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
+import { getActiveStateRuntime, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
+
+const readerAppControlsBound = new WeakSet<HTMLElement>();
+
+function bindReaderAppControls(app: HTMLElement): void {
+  if (readerAppControlsBound.has(app)) {
+    return;
+  }
+  readerAppControlsBound.add(app);
+  bindInputMisc(app);
+  bindChangeControls(app);
+  bindSubmit(app);
+
+  app.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionButton = target.closest<HTMLElement>('[data-action]');
+    const action = actionButton?.dataset.action ?? '';
+    if (!actionButton || !action) {
+      return;
+    }
+    const runtime = getActiveStateRuntime();
+    event.preventDefault();
+    void import('./bind/app-actions/registry').then(({ appActionRegistry }) => {
+      runWithStateRuntime(runtime, () => {
+        appActionRegistry[action]?.({
+          app,
+          actionButton,
+          event,
+          sectionKey: actionButton.dataset.sectionKey ?? '',
+          blockId: actionButton.dataset.blockId ?? '',
+          target,
+        });
+      });
+    });
+  });
+}
 
 export function bindReaderUi(app: HTMLElement): void {
   const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
   const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
+  scheduleSidebarHelpAutoClose(app);
+  bindReaderAppControls(app);
 
   const toggleComponentListReverse = (reverseList: HTMLElement): void => {
     const sectionKey = reverseList.dataset.sectionKey;
@@ -271,6 +312,9 @@ export function bindReaderUi(app: HTMLElement): void {
   readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   readerDocument?.addEventListener('click', handleReaderAreaClick);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  app.querySelector<HTMLElement>('.viewer-sidebar-help-balloon')?.addEventListener('click', () => {
+    dismissSidebarHelpBalloon(app, 'viewer');
+  });
 
   readerNav?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

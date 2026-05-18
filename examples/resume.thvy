@@ -43,7 +43,7 @@ importPreplan:
   - [history, resume-awards]
   - [resume-projects, resume-publications]
   - [resume-certifications, education]
-  - [resume-languages, resume-section]
+  - [resume-languages, tabular-resume-section]
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:
@@ -1507,7 +1507,7 @@ component_defs:
 <!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
 #! Info
 
- <!--hvy:text {"id":"resume-name","css":"margin-bottom: 0;","align":"center","fillIn":true}-->
+ <!--hvy:text {"id":"resume-name","css":"margin-bottom: 1rem;","align":"center","fillIn":true}-->
   # <!-- value {"placeholder":"Name"} -->
 
  <!--hvy:text {"id":"resume-pronunciation","css":"margin-top: 0;","align":"center","fillIn":true,"visibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value\" not in name"}-->

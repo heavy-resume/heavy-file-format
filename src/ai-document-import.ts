@@ -19,7 +19,7 @@ import {
   extractReusableTemplateVariablesFromSectionFlavor,
   type ReusableTemplateVariable,
 } from './reusable-template-values';
-import { applyTextFillInValueAtIndex, findTextFillInMarkers } from './text-fill-in';
+import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker } from './text-fill-in';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -130,8 +130,21 @@ type ImportTemplateListFlavor = {
   itemTemplate: VisualBlock;
 };
 
+type ImportTemplateFillInTarget = {
+  name: string;
+  label: string;
+  blockId: string;
+  markerIndex?: number;
+};
+
 const IMPORT_TEMPLATE_FLAVOR_FIELD = '_flavor';
 const IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD = '_sectionFlavor';
+const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
+  'You are performing an HVY import workflow.',
+  'Use the supplied import context only for this request.',
+  'Return only the response format requested in the latest import task.',
+  'Do not use tools. Do not mutate anything directly.',
+].join('\n');
 
 export interface PlannedImportXrefTarget {
   id: string;
@@ -227,13 +240,14 @@ export async function buildImportPlanForDocument(
       client: llm.client,
       messages: [
         {
-          id: crypto.randomUUID(),
+          id: 'ai-import-plan-task',
           role: 'user',
-          content: buildImportPlanPrompt(options.sourceName, options.instructions),
+          content: buildImportTaskMessage(buildImportPlanPrompt(options.sourceName, options.instructions), buildImportPlanResponseInstructions()),
         },
       ],
       context: buildImportPlanContext(document, options.sourceName, options.sourceText),
       responseInstructions: buildImportPlanResponseInstructions(),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: 'ai-import-plan',
       beforeRequest: beforeLlmCall,
@@ -284,13 +298,14 @@ export async function importTextIntoDocument(
       client: llm.client,
       messages: [
         {
-          id: crypto.randomUUID(),
+          id: 'ai-import-xref-targets-task',
           role: 'user',
-          content: buildImportXrefTargetPrompt(options.sourceName, options.instructions),
+          content: buildImportTaskMessage(buildImportXrefTargetPrompt(options.sourceName, options.instructions), buildImportXrefTargetResponseInstructions()),
         },
       ],
       context: buildImportXrefTargetContext(document, options.sourceName, options.sourceText, executableSteps),
       responseInstructions: buildImportXrefTargetResponseInstructions(),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: 'ai-import-xref-targets',
       beforeRequest: beforeLlmCall?.('thinking'),
@@ -317,13 +332,17 @@ export async function importTextIntoDocument(
           client: llm.client,
           messages: [
             {
-              id: crypto.randomUUID(),
+              id: `ai-import-template-values-${index + 1}-task`,
               role: 'user',
-              content: buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+              content: buildImportTaskMessage(
+                buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+                buildImportTemplateValuesResponseInstructions(templateStructure)
+              ),
             },
           ],
           context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets, templateStructure, step.extractedInformation),
           responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
+          systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
           mode: 'document-edit',
           debugLabel: `ai-import-template-values:${index + 1}`,
           beforeRequest: beforeLlmCall?.('thinking'),
@@ -349,13 +368,17 @@ export async function importTextIntoDocument(
           client: llm.client,
           messages: [
             {
-              id: crypto.randomUUID(),
+              id: `ai-import-section-data-${index + 1}-task`,
               role: 'user',
-              content: buildImportSectionInformationPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+              content: buildImportTaskMessage(
+                buildImportSectionInformationPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+                buildImportSectionInformationResponseInstructions()
+              ),
             },
           ],
           context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets),
           responseInstructions: buildImportSectionInformationResponseInstructions(),
+          systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
           mode: 'document-edit',
           debugLabel: `ai-import-section-data:${index + 1}`,
           beforeRequest: beforeLlmCall?.('thinking'),
@@ -373,13 +396,17 @@ export async function importTextIntoDocument(
         client: llm.client,
         messages: [
           {
-            id: crypto.randomUUID(),
+            id: `ai-import-section-hvy-${index + 1}-task`,
             role: 'user',
-            content: buildImportSectionHvyPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+            content: buildImportTaskMessage(
+              buildImportSectionHvyPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+              buildImportSectionHvyResponseInstructions()
+            ),
           },
         ],
         context: buildImportSectionHvyContext(document, step.extractedInformation!, application, plannedXrefTargets),
         responseInstructions: buildImportSectionHvyResponseInstructions(),
+        systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
         mode: 'document-edit',
         debugLabel: `ai-import-section-hvy:${index + 1}`,
         beforeRequest: beforeLlmCall?.('thinking'),
@@ -435,6 +462,16 @@ function buildImportPlanPrompt(sourceName: string, instructions?: string): strin
     'Preserve exact source data without alteration.',
     instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
   ].filter(Boolean).join('\n');
+}
+
+function buildImportTaskMessage(prompt: string, responseInstructions: string): string {
+  return [
+    prompt.trim(),
+    '',
+    '=== BEGIN RESPONSE INSTRUCTIONS ===',
+    responseInstructions.trim(),
+    '=== END RESPONSE INSTRUCTIONS ===',
+  ].join('\n');
 }
 
 function buildImportPlanContext(document: VisualDocument, sourceName: string, sourceText: string): string {
@@ -615,18 +652,22 @@ async function preparePreplannedImportSteps(
       client: llm.client,
       messages: [
         {
-          id: crypto.randomUUID(),
+          id: 'ai-import-preplan-source',
           role: 'user',
           content: buildImportPreplanDataSourceMessage(options.sourceName, options.sourceText, steps),
         },
         {
-          id: crypto.randomUUID(),
+          id: `ai-import-preplan-data-${groupIndex + 1}-task`,
           role: 'user',
-          content: buildImportPreplanDataTaskMessage(document, options.sourceName, options.instructions, groupSteps, groupIndex, groups.length),
+          content: buildImportTaskMessage(
+            buildImportPreplanDataTaskMessage(document, options.sourceName, options.instructions, groupSteps, groupIndex, groups.length),
+            buildImportPreplanDataResponseInstructions()
+          ),
         },
       ],
       context: '',
       responseInstructions: buildImportPreplanDataResponseInstructions(),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: `ai-import-preplan-data:${groupIndex + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
@@ -648,13 +689,17 @@ async function preparePreplannedImportSteps(
     client: llm.client,
     messages: [
       {
-        id: crypto.randomUUID(),
+        id: 'ai-import-missing-sections-task',
         role: 'user',
-        content: buildImportMissingSectionsPrompt(options.sourceName, options.instructions),
+        content: buildImportTaskMessage(
+          buildImportMissingSectionsPrompt(options.sourceName, options.instructions),
+          buildImportMissingSectionsResponseInstructions()
+        ),
       },
     ],
     context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted),
     responseInstructions: buildImportMissingSectionsResponseInstructions(),
+    systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
     mode: 'document-edit',
     debugLabel: 'ai-import-missing-sections',
     beforeRequest: beforeLlmCall?.('thinking'),
@@ -828,6 +873,13 @@ function buildImportMissingSectionsContext(
   return [
     buildImportGuidanceFrame(document),
     '',
+    '=== BEGIN SOURCE DOCUMENT ===',
+    `Source name: ${sourceName}`,
+    '```text',
+    sourceText,
+    '```',
+    '=== END SOURCE DOCUMENT ===',
+    '',
     '=== BEGIN ALREADY SEEN SECTIONS ===',
     extractedSteps.length > 0
       ? extractedSteps.map((step) => `- ${getImportPlanStepTargetId(step)}: ${step.extractedInformation}`).join('\n')
@@ -843,13 +895,6 @@ function buildImportMissingSectionsContext(
       : '- No unused body sections or reusable section templates remain.',
     '- blank section: use when no remaining starting point fits a source-backed missing section.',
     '=== END REMAINING STARTING POINTS ===',
-    '',
-    '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
-    '```text',
-    sourceText,
-    '```',
-    '=== END SOURCE DOCUMENT ===',
   ].join('\n');
 }
 
@@ -857,10 +902,12 @@ function buildImportMissingSectionsResponseInstructions(): string {
   return [
     'Return exactly one JSON object and no prose.',
     'Shape:',
-    '{"sections":{"Conference Talks":{"target":{"kind":"definition","name":"Resume Section"},"information":"Source-backed facts."},"Volunteer Work":{"target":{"kind":"blank","title":"Volunteer Work"},"information":"Source-backed facts."}}}',
+    '{"sections":{"Blip Records":{"target":{"kind":"definition","name":"Blip Section"},"information":"Source-backed facts."},"Widget Notes":{"target":{"kind":"blank","title":"Widget Notes"},"information":"Source-backed facts."}}}',
     '',
     '`sections` is an object whose keys are new section names.',
     '`target` may be a body section, definition section, or blank section using the same target shape as import plan steps.',
+    'Use a body or definition target only when it exactly matches one listed remaining starting point. Otherwise use a blank section target.',
+    'Do not invent body ids, definition names, reusable template names, or aliases.',
     '`information` is a concise text document of only the source facts for that missing section.',
     'Return {"sections":{}} when no source-backed sections are missing.',
   ].join('\n');
@@ -878,6 +925,12 @@ function parseImportMissingSectionsResponse(
     return [];
   }
   const seenTargets = new Set([...allPreplanSteps, ...extractedSteps].map((step) => formatImportPlanTarget(step.target)));
+  const seenSectionTitles = new Set(
+    [...allPreplanSteps, ...extractedSteps]
+      .flatMap((step) => [step.sectionTitle, step.target.title])
+      .map(normalizeImportMissingSectionTitle)
+      .filter(Boolean)
+  );
   const candidates = getImportTemplateSectionCandidates(document);
   const result: ImportPlanStep[] = [];
   for (const [sectionName, raw] of Object.entries(sections as Record<string, unknown>)) {
@@ -890,9 +943,16 @@ function parseImportMissingSectionsResponse(
       continue;
     }
     const title = sectionName.trim() || 'Imported Section';
-    const target = normalizeImportPlanTarget(value.target, candidates, title);
-    const candidate = findImportCandidateForTarget(candidates, target);
-    if (seenTargets.has(formatImportPlanTarget(target)) && candidate?.sectionDefinition?.repeatable !== true) {
+    if (seenSectionTitles.has(normalizeImportMissingSectionTitle(title))) {
+      continue;
+    }
+    const normalizedTarget = normalizeImportPlanTarget(value.target, candidates, title);
+    const candidate = findImportCandidateForTarget(candidates, normalizedTarget);
+    const target = normalizedTarget.kind !== 'blank' && !candidate
+      ? { kind: 'blank' as const, title }
+      : normalizedTarget;
+    const targetCandidate = findImportCandidateForTarget(candidates, target);
+    if (seenTargets.has(formatImportPlanTarget(target)) && targetCandidate?.sectionDefinition?.repeatable !== true) {
       continue;
     }
     const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, target);
@@ -905,6 +965,10 @@ function parseImportMissingSectionsResponse(
     });
   }
   return result;
+}
+
+function normalizeImportMissingSectionTitle(value: string | undefined): string {
+  return trimImportString(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 function isConditionalImportPlanStep(step: string): boolean {
@@ -1004,7 +1068,7 @@ function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candida
     sectionTitle,
     instruction: instruction || buildDefaultImportPlanInstruction(sectionTitle),
     target,
-    ...(importMode ? { importMode } : {}),
+    ...(importMode || templateStructure ? { importMode: importMode ?? 'template' } : {}),
     ...(templateStructureId ? { templateStructureId } : {}),
     ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
     ...(preplanGroupIndex !== undefined ? { preplanGroupIndex } : {}),
@@ -1140,17 +1204,23 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
       collectImportTemplateListStructures(flavor.template, candidate.componentDefs)
         .flatMap((list) => list.variables.map((variable) => variable.name))
     );
+    const flavorFillInVariables = collectImportTemplateSectionFillInVariables(flavor.template)
+      .filter((variable) => !flavor.variables.some((existing) => existing.name === variable.name));
     return {
       ...flavor,
-      variables: flavor.variables.filter((variable) => !flavorListVariableNames.has(variable.name)),
+      variables: mergeImportTemplateVariables([flavor.variables, flavorFillInVariables])
+        .filter((variable) => !flavorListVariableNames.has(variable.name)),
     };
   });
   const sectionVariables = (candidate.sectionDefinition
     ? extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition)
     : extractReusableTemplateVariables(candidate.section))
     .filter((variable) => !listVariableNames.has(variable.name));
+  const sectionFillInVariables = collectImportTemplateSectionFillInVariables(candidate.section)
+    .filter((variable) => !listVariableNames.has(variable.name) && !sectionVariables.some((existing) => existing.name === variable.name));
+  const effectiveSectionVariables = mergeImportTemplateVariables([sectionVariables, sectionFillInVariables]);
   const allSectionVariables = mergeImportTemplateVariables([
-    sectionVariables,
+    effectiveSectionVariables,
     ...sectionFlavors.map((flavor) => flavor.variables),
   ]);
   const properties: Record<string, ImportTemplateJsonSchemaProperty> = {};
@@ -1167,7 +1237,7 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
   }
   if (sectionFlavors.length === 0) {
-    for (const variable of sectionVariables) {
+    for (const variable of effectiveSectionVariables) {
       required.push(variable.name);
     }
   }
@@ -1191,7 +1261,7 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
       required,
       additionalProperties: false,
     },
-    sectionVariables,
+    sectionVariables: effectiveSectionVariables,
     sectionFlavors,
     lists,
     componentDefs: candidate.componentDefs,
@@ -1232,6 +1302,55 @@ function templateVariableToJsonSchemaProperty(variable: ReusableTemplateVariable
   };
 }
 
+function collectImportTemplateSectionFillInVariables(section: VisualSection): ReusableTemplateVariable[] {
+  const used = new Set<string>();
+  const variables: ReusableTemplateVariable[] = [];
+  collectImportTemplateFillInVariablesFromSection(section, used, variables);
+  return variables;
+}
+
+function collectImportTemplateFillInVariablesFromSection(section: VisualSection, used: Set<string>, variables: ReusableTemplateVariable[]): void {
+  collectImportTemplateFillInVariablesFromBlocks(section.blocks, used, variables);
+  for (const child of section.children) {
+    collectImportTemplateFillInVariablesFromSection(child, used, variables);
+  }
+}
+
+function collectImportTemplateFillInVariablesFromBlock(block: VisualBlock): ReusableTemplateVariable[] {
+  const variables: ReusableTemplateVariable[] = [];
+  collectImportTemplateFillInVariablesFromBlocks([block], new Set(), variables);
+  return variables;
+}
+
+function collectImportTemplateFillInVariablesFromBlocks(blocks: VisualBlock[], used: Set<string>, variables: ReusableTemplateVariable[]): void {
+  for (const block of blocks) {
+    collectImportTemplateFillInVariablesForBlock(block, used, variables);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.containerBlocks ?? [], used, variables);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.componentListBlocks ?? [], used, variables);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.gridItems?.map((item) => item.block) ?? [], used, variables);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableStubBlocks?.children ?? [], used, variables);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableContentBlocks?.children ?? [], used, variables);
+  }
+}
+
+function collectImportTemplateFillInVariablesForBlock(block: VisualBlock, used: Set<string>, variables: ReusableTemplateVariable[]): void {
+  const targets = collectImportTemplateFillInTargetsForBlock(block, used);
+  for (const target of targets) {
+    variables.push({ name: target.name, type: 'text', label: target.label });
+  }
+}
+
+function uniqueImportTemplateVariableName(base: string, used: Set<string>): string {
+  let name = base || 'value';
+  let index = 2;
+  while (used.has(name)) {
+    name = `${base || 'value'}_${index}`;
+    index += 1;
+  }
+  used.add(name);
+  return name;
+}
+
 function collectImportTemplateListStructures(section: VisualSection, componentDefs: ComponentDefinition[]): ImportTemplateListStructure[] {
   const lists: ImportTemplateListStructure[] = [];
   const usedKeys = new Set<string>();
@@ -1268,8 +1387,11 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
   const baseVariables = block.schema.componentListBlocks.length > 0
     ? extractReusableTemplateVariables(itemTemplate)
     : getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs);
+  const baseFillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate)
+    .filter((variable) => !baseVariables.some((existing) => existing.name === variable.name));
+  const effectiveBaseVariables = mergeImportTemplateVariables([baseVariables, baseFillInVariables]);
   const variables = mergeImportTemplateVariables([
-    baseVariables,
+    effectiveBaseVariables,
     ...flavors.map((flavor) => flavor.variables),
   ]);
   if (variables.length === 0) {
@@ -1289,7 +1411,7 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
     properties[variable.name] = templateVariableToJsonSchemaProperty(variable);
   }
   if (flavors.length === 0) {
-    for (const variable of baseVariables) {
+    for (const variable of effectiveBaseVariables) {
       required.push(variable.name);
     }
   }
@@ -1300,7 +1422,7 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
     title: block.schema.componentListItemLabel.trim() || itemComponent || key,
     listBlockId: block.schema.id.trim() || block.id,
     itemComponent,
-    baseVariables,
+    baseVariables: effectiveBaseVariables,
     variables,
     itemTemplate,
     flavors,
@@ -1321,10 +1443,13 @@ function getImportTemplateListFlavors(def: ComponentDefinition | undefined, item
     .filter((flavor): flavor is ComponentTemplateFlavor & { name: string } => !!flavor && typeof flavor === 'object' && typeof flavor.name === 'string' && flavor.name.trim().length > 0)
     .map((flavor) => {
       const itemTemplate = createImportTemplateFlavorBlock(flavor, itemComponent);
+      const variables = extractReusableTemplateVariablesFromFlavor(flavor);
+      const fillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate)
+        .filter((variable) => !variables.some((existing) => existing.name === variable.name));
       return {
         name: flavor.name.trim(),
         description: typeof flavor.description === 'string' ? flavor.description.trim() : '',
-        variables: extractReusableTemplateVariablesFromFlavor(flavor),
+        variables: mergeImportTemplateVariables([variables, fillInVariables]),
         itemTemplate,
       };
     })
@@ -1415,7 +1540,7 @@ function uniqueImportTemplateListKey(baseKey: string, usedKeys: Set<string>): st
 }
 
 function toImportJsonPropertyName(value: string): string {
-  return value.trim().replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'items';
+  return value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'items';
 }
 
 function buildImportXrefTargetPrompt(sourceName: string, instructions?: string): string {
@@ -1479,18 +1604,18 @@ function buildImportSectionInformationContext(
   return [
     buildImportGuidanceFrame(document),
     '',
-    buildImportSectionApplicationFrame(document, application),
-    '',
-    buildImportRelationshipFrame(document),
-    '',
-    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
-    '',
     '=== BEGIN SOURCE DOCUMENT ===',
     `Source name: ${sourceName}`,
     '```text',
     sourceText,
     '```',
     '=== END SOURCE DOCUMENT ===',
+    '',
+    buildImportSectionApplicationFrame(document, application),
+    '',
+    buildImportRelationshipFrame(document),
+    '',
+    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
     '',
     'Approved import section plan:',
     ...steps.map((step, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
@@ -1529,6 +1654,13 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
   return [
     buildImportGuidanceFrame(document),
     '',
+    '=== BEGIN HVY FORMAT REFERENCE ===',
+    'The following HVY document is a syntax and component reference only. It is not the task, not the source document, and not the output contract.',
+    'Use it to understand valid HVY section/component structure and examples. Follow the separate response instructions for what to return.',
+    '',
+    importHvyFormatReference.trim(),
+    '=== END HVY FORMAT REFERENCE ===',
+    '',
     buildImportSectionApplicationFrame(document, application),
     '',
     buildImportRelationshipFrame(document),
@@ -1540,13 +1672,6 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     '=== BEGIN SECTION INFORMATION ===',
     information,
     '=== END SECTION INFORMATION ===',
-    '',
-    '=== BEGIN HVY FORMAT REFERENCE ===',
-    'The following HVY document is a syntax and component reference only. It is not the task, not the source document, and not the output contract.',
-    'Use it to understand valid HVY section/component structure and examples. Follow the separate response instructions for what to return.',
-    '',
-    importHvyFormatReference.trim(),
-    '=== END HVY FORMAT REFERENCE ===',
   ].join('\n');
 }
 
@@ -1576,8 +1701,24 @@ function buildImportTemplateValuesContext(
   templateStructure: ImportTemplateStructureInternal,
   extractedInformation?: string
 ): string {
+  const sourceOrInformationFrame = extractedInformation?.trim()
+    ? [
+      '=== BEGIN SECTION INFORMATION ===',
+      extractedInformation.trim(),
+      '=== END SECTION INFORMATION ===',
+    ].join('\n')
+    : [
+      '=== BEGIN SOURCE DOCUMENT ===',
+      `Source name: ${sourceName}`,
+      '```text',
+      sourceText,
+      '```',
+      '=== END SOURCE DOCUMENT ===',
+    ].join('\n');
   return [
     buildImportGuidanceFrame(document),
+    '',
+    sourceOrInformationFrame,
     '',
     buildImportSectionApplicationFrame(document, application),
     '',
@@ -1589,21 +1730,6 @@ function buildImportTemplateValuesContext(
     '=== BEGIN TEMPLATE JSON SCHEMA ===',
     JSON.stringify(templateStructure.jsonSchema, null, 2),
     '=== END TEMPLATE JSON SCHEMA ===',
-    '',
-    extractedInformation?.trim()
-      ? [
-        '=== BEGIN SECTION INFORMATION ===',
-        extractedInformation.trim(),
-        '=== END SECTION INFORMATION ===',
-      ].join('\n')
-      : [
-        '=== BEGIN SOURCE DOCUMENT ===',
-        `Source name: ${sourceName}`,
-        '```text',
-        sourceText,
-        '```',
-        '=== END SOURCE DOCUMENT ===',
-      ].join('\n'),
     '',
     'Approved import section plan:',
     ...steps.map((planStep, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(planStep)} (${formatImportPlanTarget(planStep.target)})`),
@@ -2208,6 +2334,7 @@ function applyGeneratedImportTemplateSection(
     }
     adjustImportSectionLevel(generated, target.level);
     generated.key = target.key;
+    generated.customId = trimImportString(target.customId) || application.target.id || generated.customId;
     location.container.splice(location.index, 1, generated);
     return {
       message: `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`,
@@ -2235,6 +2362,7 @@ function instantiateImportTemplateSection(document: VisualDocument, template: Vi
     scalarValues[variable.name] = typeof value === 'string' ? value : '';
   }
   applyReusableSectionTemplateValues(section, scalarValues, sectionVariables);
+  applyImportTemplateFillInValuesToSection(section, scalarValues);
   const usedIds = collectImportUsedIds(document);
   if (section.customId.trim()) {
     usedIds.add(section.customId.trim());
@@ -2277,8 +2405,90 @@ function replaceImportTemplateListItems(document: VisualDocument, section: Visua
     const { [IMPORT_TEMPLATE_FLAVOR_FIELD]: _flavor, ...templateValues } = itemValues;
     const variables = flavor?.variables ?? list.baseVariables;
     applyReusableTemplateValues(item, templateValues, variables);
+    applyImportTemplateFillInValuesToBlock(item, templateValues);
     autoPopulateImportTemplateItemId(document, item, itemValues, variables, usedIds);
     return item;
+  });
+}
+
+function applyImportTemplateFillInValuesToSection(section: VisualSection, values: Record<string, string>): void {
+  const used = new Set<string>();
+  applyImportTemplateFillInValuesToBlocks(section.blocks, values, used);
+  for (const child of section.children) {
+    applyImportTemplateFillInValuesToSectionWithUsed(child, values, used);
+  }
+}
+
+function applyImportTemplateFillInValuesToSectionWithUsed(section: VisualSection, values: Record<string, string>, used: Set<string>): void {
+  applyImportTemplateFillInValuesToBlocks(section.blocks, values, used);
+  for (const child of section.children) {
+    applyImportTemplateFillInValuesToSectionWithUsed(child, values, used);
+  }
+}
+
+function applyImportTemplateFillInValuesToBlock(block: VisualBlock, values: Record<string, string>): void {
+  applyImportTemplateFillInValuesToBlocks([block], values, new Set());
+}
+
+function applyImportTemplateFillInValuesToBlocks(blocks: VisualBlock[], values: Record<string, string>, used: Set<string>): void {
+  for (const block of blocks) {
+    applyImportTemplateFillInValuesForBlock(block, values, used);
+    applyImportTemplateFillInValuesToBlocks(block.schema.containerBlocks ?? [], values, used);
+    applyImportTemplateFillInValuesToBlocks(block.schema.componentListBlocks ?? [], values, used);
+    applyImportTemplateFillInValuesToBlocks(block.schema.gridItems?.map((item) => item.block) ?? [], values, used);
+    applyImportTemplateFillInValuesToBlocks(block.schema.expandableStubBlocks?.children ?? [], values, used);
+    applyImportTemplateFillInValuesToBlocks(block.schema.expandableContentBlocks?.children ?? [], values, used);
+  }
+}
+
+function applyImportTemplateFillInValuesForBlock(block: VisualBlock, values: Record<string, string>, used: Set<string>): void {
+  const targets = collectImportTemplateFillInTargetsForBlock(block, used);
+  if (targets.length === 0) {
+    return;
+  }
+  const markerTargets = targets.filter((target) => typeof target.markerIndex === 'number');
+  for (const target of markerTargets) {
+    const value = values[target.name]?.trim();
+    if (value) {
+      block.text = applyTextFillInValueAtIndex(block.text, target.markerIndex!, value);
+    }
+  }
+  const wholeBlockTarget = targets.find((target) => target.markerIndex === undefined);
+  const wholeBlockValue = wholeBlockTarget ? values[wholeBlockTarget.name]?.trim() : '';
+  if (wholeBlockValue && block.schema.fillIn === true) {
+    block.text = wholeBlockValue;
+  }
+  if (block.schema.fillIn === true && !hasTextFillInMarker(block.text) && block.text.trim().length > 0) {
+    block.schema.fillIn = false;
+  }
+}
+
+function collectImportTemplateFillInTargetsForBlock(block: VisualBlock, used: Set<string>): ImportTemplateFillInTarget[] {
+  if (resolveBaseComponentFromMeta(block.schema.component, null) !== 'text') {
+    return [];
+  }
+  const markers = findTextFillInMarkers(block.text);
+  if (markers.length === 0 && block.schema.fillIn !== true) {
+    return [];
+  }
+  if (markers.length === 0) {
+    const label = trimImportString(block.schema.placeholder) || firstImportVisibleText(block) || trimImportString(block.schema.id) || 'value';
+    const name = uniqueImportTemplateVariableName(toImportJsonPropertyName(label), used);
+    return [{
+      name,
+      label: label.trim() || humanizeImportId(name) || 'Value',
+      blockId: trimImportString(block.schema.id),
+    }];
+  }
+  return markers.map((marker, markerIndex) => {
+    const label = marker.placeholder || trimImportString(block.schema.placeholder) || trimImportString(block.schema.id) || 'value';
+    const name = uniqueImportTemplateVariableName(toImportJsonPropertyName(label), used);
+    return {
+      name,
+      label: label.trim() || humanizeImportId(name) || 'Value',
+      blockId: trimImportString(block.schema.id),
+      markerIndex,
+    };
   });
 }
 
@@ -2506,13 +2716,17 @@ async function repairImportedSectionXrefs(
       client: llm.client,
       messages: [
         {
-          id: crypto.randomUUID(),
+          id: `ai-import-xref-repair-${index + 1}-task`,
           role: 'user',
-          content: buildImportXrefRepairPrompt(options.sourceName, options.instructions, section, index, repairSections.length),
+          content: buildImportTaskMessage(
+            buildImportXrefRepairPrompt(options.sourceName, options.instructions, section, index, repairSections.length),
+            buildImportXrefRepairResponseInstructions(section)
+          ),
         },
       ],
       context: buildImportXrefRepairContext(document, options.sourceName, options.sourceText, section, createdTargets),
       responseInstructions: buildImportXrefRepairResponseInstructions(section),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: `ai-import-xref-repair:${index + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
@@ -2566,14 +2780,14 @@ function buildImportXrefRepairContext(document: VisualDocument, sourceName: stri
   return [
     buildImportGuidanceFrame(document),
     '',
-    buildCreatedImportXrefTargetFrame(createdTargets),
-    '',
     '=== BEGIN SOURCE DOCUMENT ===',
     `Source name: ${sourceName}`,
     '```text',
     sourceText,
     '```',
     '=== END SOURCE DOCUMENT ===',
+    '',
+    buildCreatedImportXrefTargetFrame(createdTargets),
     '',
     '=== BEGIN CURRENT IMPORTED SECTION ===',
     serializeSectionFragment(section, document.meta),
@@ -2616,22 +2830,23 @@ function collectImportFillInTargets(document: VisualDocument, sectionKeys: strin
       continue;
     }
     visitBlocks([section], (block) => {
-      const blockId = block.schema.id.trim();
+      const blockId = trimImportString(block.schema.id);
       const fillInKeys = findTextFillInMarkers(block.text);
-      const isBlankPlaceholder = block.schema.placeholder.trim().length > 0
+      const placeholder = trimImportString(block.schema.placeholder);
+      const isBlankPlaceholder = placeholder.length > 0
         && block.text.trim().length === 0
         && resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'text';
       if (!blockId && block.schema.fillIn !== true && fillInKeys.length === 0 && !isBlankPlaceholder) {
         return;
       }
-      const key = blockId || uniqueImportGeneratedId(toImportStableId(`${formatSectionTitle(section.title)} ${block.schema.placeholder || 'placeholder'}`), new Set(targets.map((target) => target.key)));
+      const key = blockId || uniqueImportGeneratedId(toImportStableId(`${formatSectionTitle(section.title)} ${placeholder || 'placeholder'}`), new Set(targets.map((target) => target.key)));
       if (!blockId && key) {
         block.schema.id = key;
       }
       if (block.schema.fillIn === true) {
         targets.push({
           key,
-          label: block.schema.placeholder.trim() || firstImportVisibleText(block) || blockId,
+          label: placeholder || firstImportVisibleText(block) || blockId,
           sectionKey,
           sectionTitle: formatSectionTitle(section.title),
           blockId: key,
@@ -2640,7 +2855,7 @@ function collectImportFillInTargets(document: VisualDocument, sectionKeys: strin
       fillInKeys.forEach((marker, markerIndex) => {
         targets.push({
           key: `${key}:value:${markerIndex + 1}`,
-          label: marker.placeholder || block.schema.placeholder.trim() || blockId,
+          label: marker.placeholder || placeholder || blockId,
           sectionKey,
           sectionTitle: formatSectionTitle(section.title),
           blockId: key,
@@ -2650,7 +2865,7 @@ function collectImportFillInTargets(document: VisualDocument, sectionKeys: strin
       if (isBlankPlaceholder && block.schema.fillIn !== true && fillInKeys.length === 0) {
         targets.push({
           key,
-          label: block.schema.placeholder.trim(),
+          label: placeholder,
           sectionKey,
           sectionTitle: formatSectionTitle(section.title),
           blockId: key,
@@ -2687,13 +2902,17 @@ async function fillImportedSectionPlaceholders(
       client: llm.client,
       messages: [
         {
-          id: crypto.randomUUID(),
+          id: `ai-import-fill-ins-${index + 1}-task`,
           role: 'user',
-          content: buildImportFillInPrompt(options.sourceName, options.instructions, section, targets, index, sections.length),
+          content: buildImportTaskMessage(
+            buildImportFillInPrompt(options.sourceName, options.instructions, section, targets, index, sections.length),
+            buildImportFillInResponseInstructions(targets)
+          ),
         },
       ],
       context: buildImportFillInContext(document, options.sourceName, options.sourceText, section, createdTargets, targets),
       responseInstructions: buildImportFillInResponseInstructions(targets),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: `ai-import-fill-ins:${index + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
@@ -2723,18 +2942,18 @@ function buildImportFillInContext(document: VisualDocument, sourceName: string, 
   return [
     buildImportGuidanceFrame(document),
     '',
-    buildCreatedImportXrefTargetFrame(createdTargets),
-    '',
-    '=== BEGIN FILL-IN TARGETS ===',
-    targets.map((target) => `- ${target.key}: section="${target.sectionTitle}" block="${target.blockId}" label="${target.label}"`).join('\n'),
-    '=== END FILL-IN TARGETS ===',
-    '',
     '=== BEGIN SOURCE DOCUMENT ===',
     `Source name: ${sourceName}`,
     '```text',
     sourceText,
     '```',
     '=== END SOURCE DOCUMENT ===',
+    '',
+    buildCreatedImportXrefTargetFrame(createdTargets),
+    '',
+    '=== BEGIN FILL-IN TARGETS ===',
+    targets.map((target) => `- ${target.key}: section="${target.sectionTitle}" block="${target.blockId}" label="${target.label}"`).join('\n'),
+    '=== END FILL-IN TARGETS ===',
     '',
     '=== BEGIN CURRENT IMPORTED SECTION ===',
     serializeSectionFragment(section, document.meta),

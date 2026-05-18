@@ -345,7 +345,8 @@ function replaceTemplateStrings(value: unknown, values: Record<string, string>, 
 }
 
 function normalizeTemplatePlaceholderTextBlocks(block: VisualBlock): void {
-  if (block.schema.placeholder.trim() && !hasVisibleMarkdownText(block.text)) {
+  const placeholder = typeof block.schema.placeholder === 'string' ? block.schema.placeholder.trim() : '';
+  if (placeholder && !hasVisibleMarkdownText(block.text)) {
     block.text = '';
   }
   block.schema.containerBlocks?.forEach(normalizeTemplatePlaceholderTextBlocks);

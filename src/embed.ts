@@ -5,7 +5,7 @@ import './style.css';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { initCallbacks, initState, state } from './state';
 import type { AppState, ChatProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument } from './serialization';
+import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
@@ -67,6 +67,7 @@ export interface HvyMountOptions {
 export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
+  serializeDocumentBytes(): Uint8Array;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -452,6 +453,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     getDocument() {
       return mounted?.getDocument() ?? options.document;
     },
+    serializeDocumentBytes() {
+      return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
+    },
     buildImportPlan(importOptions) {
       return ready.then((mount) => mount.buildImportPlan(importOptions));
     },
@@ -543,6 +547,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getDocument() {
       return state.document;
     },
+    serializeDocumentBytes() {
+      return serializeDocumentBytes(state.document);
+    },
     buildImportPlan,
     importFromText,
     setLinkObserver,
@@ -576,7 +583,7 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument };
+export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type {
   BuildImportPlanOptions,
@@ -599,6 +606,7 @@ declare global {
     HVY?: {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       serializeDocument: typeof serializeDocument;
+      serializeDocumentBytes: typeof serializeDocumentBytes;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -610,6 +618,7 @@ declare global {
 window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
+  serializeDocumentBytes,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

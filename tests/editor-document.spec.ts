@@ -403,6 +403,54 @@ hvy_version: 0.1
   expect(Number(result.panelZIndex)).toBeGreaterThan(Number(result.overlayZIndex));
 });
 
+test('embedded runtime exposes current document bytes for host downloads', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Host download serialization test.
+`;
+    const encoder = new TextEncoder();
+    const viewerRoot = document.querySelector<HTMLElement>('#viewerMount');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!viewerRoot || !editorRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const viewerMount = mountHvyViewer({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+    });
+    const editorMount = mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const viewerDocument = new TextDecoder().decode(viewerMount.serializeDocumentBytes());
+    const editorDocument = new TextDecoder().decode(editorMount.serializeDocumentBytes());
+    return {
+      viewerHasSerializer: typeof viewerMount.serializeDocumentBytes,
+      editorHasSerializer: typeof editorMount.serializeDocumentBytes,
+      viewerText: viewerDocument,
+      editorText: editorDocument,
+    };
+  });
+
+  expect(result.viewerHasSerializer).toBe('function');
+  expect(result.editorHasSerializer).toBe('function');
+  expect(result.viewerText).toContain('Host download serialization test.');
+  expect(result.editorText).toContain('Host download serialization test.');
+});
+
 test('embedded component meta modal centers within the mounted app', async ({ page }) => {
   await page.goto('/');
 

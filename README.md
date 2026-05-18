@@ -177,6 +177,14 @@ HVY.mountHvy({
 });
 ```
 
+Embedded hosts can download the current mounted document as a complete `.hvy`
+byte stream, including attachments, through the mount handle:
+
+```js
+const mount = HVY.mountHvy({ root, document, mode: 'editor' });
+const bytes = mount.serializeDocumentBytes();
+```
+
 Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
 plugins:
 

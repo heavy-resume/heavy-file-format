@@ -474,10 +474,10 @@ hvy_version: 0.1
 
 test('buildImportPlanForDocument uses importPreplan groups to extract approved section information', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"summary":{"has_info":true,"information":"Summary facts."},"resume-awards":{"has_info":true,"information":"Award facts."},"missing-body":{"has_info":false,"information":"Source-backed generic resume section content is not present in the source text."}}}'
+    '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."},"resume-awards":{"import_selection":"has_data_include","information":"Award facts."},"missing-body":{"import_selection":"no_data_exclude","information":"Source-backed generic resume section content is not present in the source text."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-projects":{"has_info":true,"information":"Project facts."}}}'
+    '{"sections":{"resume-projects":{"import_selection":"has_data_include","information":"Project facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
   const document = deserializeDocument(`---
@@ -555,26 +555,71 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: resume-awards');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('=== BEGIN DOCUMENT AI IMPORT GUIDANCE ===');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"resume-awards"');
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"has_info"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"import_selection"');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('has_data_include');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('An omitted key, an empty string value');
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-plan');
 });
 
+test('buildImportPlanForDocument excludes sections marked exclude_from_import', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."}}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - [summary, private-notes, resume-awards]
+section_defs:
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      exclude_from_import: true
+      blocks: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy: {"id":"private-notes","exclude_from_import":true}-->
+#! Private Notes
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Summary and private notes',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.preplanTargetId)).toEqual(['summary']);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain('Private Notes');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).not.toContain('private-notes');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).not.toContain('resume-awards');
+});
+
 test('resume template importPreplan resolves expected grouped targets', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"header":{"has_info":true,"information":"Header facts."},"summary":{"has_info":true,"information":"Summary facts."},"locations":{"has_info":true,"information":"Location facts."}}}'
+    '{"sections":{"header":{"import_selection":"has_data_include","information":"Header facts."},"summary":{"import_selection":"has_data_include","information":"Summary facts."},"locations":{"import_selection":"has_data_include","information":"Location facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"skills":{"has_info":true,"information":"Skill facts."},"tools-technologies":{"has_info":true,"information":"Tool facts."},"languages":{"has_info":true,"information":"Language facts."},"top-skills-tools-technologies":{"has_info":true,"information":"Featured facts."}}}'
+    '{"sections":{"skills":{"import_selection":"has_data_include","information":"Skill facts."},"tools-technologies":{"import_selection":"has_data_include","information":"Tool facts."},"resume-languages":{"import_selection":"has_data_include","information":"Language facts."},"top-skills-tools-technologies":{"import_selection":"has_data_include","information":"Featured facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"history":{"has_info":true,"information":"History facts."},"resume-awards":{"has_info":true,"information":"Award facts."}}}'
+    '{"sections":{"history":{"import_selection":"has_data_include","information":"History facts."},"resume-awards":{"import_selection":"has_data_include","information":"Award facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-projects":{"has_info":true,"information":"Project facts."},"resume-publications":{"has_info":true,"information":"Publication facts."}}}'
+    '{"sections":{"resume-projects":{"import_selection":"has_data_include","information":"Project facts."},"resume-publications":{"import_selection":"has_data_include","information":"Publication facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"resume-certifications":{"has_info":true,"information":"Certification facts."},"education":{"has_info":true,"information":"Education facts."}}}'
+    '{"sections":{"resume-certifications":{"import_selection":"has_data_include","information":"Certification facts."},"education":{"import_selection":"has_data_include","information":"Education facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
@@ -597,7 +642,7 @@ test('resume template importPreplan resolves expected grouped targets', async ()
     [0, 'body', 'locations', undefined],
     [1, 'body', 'skills', undefined],
     [1, 'body', 'tools-technologies', undefined],
-    [1, 'body', 'languages', undefined],
+    [1, 'definition', 'languages', 'Languages'],
     [1, 'body', 'top-skills-tools-technologies', undefined],
     [2, 'body', 'history', undefined],
     [2, 'definition', 'awards', 'Awards'],
@@ -1094,7 +1139,7 @@ component_defs:
 
 test('importTextIntoDocument uses grouped importPreplan extraction and missing sections pass', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
-    '{"sections":{"summary":{"has_info":true,"information":"Imported summary facts."},"resume-awards":{"has_info":true,"information":"Award facts."}}}'
+    '{"sections":{"summary":{"import_selection":"has_data_include","information":"Imported summary facts."},"resume-awards":{"import_selection":"has_data_include","information":"Award facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"Conference Talks":{"target":{"kind":"definition","name":"Resume Section"},"information":"Talk facts."},"Volunteer Work":{"target":{"kind":"blank","title":"Volunteer Work"},"information":"Volunteer facts."}}}'

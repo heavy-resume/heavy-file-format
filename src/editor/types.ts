@@ -121,6 +121,7 @@ export interface VisualSection {
   description: string;
   location: SectionLocation;
   hideIfUnmodified?: boolean;
+  exclude_from_import?: boolean;
   templateKey?: string;
   blocks: VisualBlock[];
   children: VisualSection[];

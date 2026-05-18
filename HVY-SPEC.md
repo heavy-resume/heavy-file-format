@@ -125,7 +125,7 @@ Presentation keys in document metadata include:
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
 - `ai-import-guidance`: optional string with import-specific guidance for mapping source facts to existing body sections, section templates, component template records, and cross references. Importers MAY include this guidance in planning and execution prompts; readers that do not use AI SHOULD preserve and ignore it.
-- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
+- `importPreplan`: optional ordered list for AI import batching. Each entry is either a section target id string or a list of section target id strings. When present, importers SHOULD use it as the authoritative initial section import order instead of asking AI to discover the initial section list. A target id resolves first to an existing body section `id`, then to `section_defs[*].key`, then to `section_defs[*].template.id`. Sections marked `exclude_from_import` MUST NOT resolve as import targets. Importers MAY group targets from one list into a single source-information extraction call and SHOULD preserve and ignore invalid targets they cannot resolve. Readers that do not use AI SHOULD preserve and ignore it.
 
 Responsive rendering SHOULD be based on the rendered document container's inline size, not only the browser viewport. Renderers that support responsive behavior SHOULD establish a named CSS query container around the document surface, for example:
 
@@ -244,6 +244,7 @@ Section metadata also includes optional presentation keys such as:
 - `editorOnly`
 - `contained`
 - `hideIfUnmodified`
+- `exclude_from_import`
 - `css`
 - `location`
 - `templateKey`
@@ -255,6 +256,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `editorOnly` follows the same visibility rule as block `editorOnly`.
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
+`exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 `templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 

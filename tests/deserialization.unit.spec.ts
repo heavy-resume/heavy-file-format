@@ -51,6 +51,7 @@ section_defs:
       id: projects
       title: Projects
       level: 1
+      exclude_from_import: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -71,15 +72,17 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects"}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true}-->
 #! Projects
 `;
 
   const document = deserializeDocument(input, '.hvy');
 
   expect(document.sections[0]?.templateKey).toBe('resume-projects');
+  expect(document.sections[0]?.exclude_from_import).toBe(true);
   expect(document.meta.section_defs?.[0]?.key).toBe('resume-projects');
   expect(document.meta.section_defs?.[0]?.template.customId).toBe('projects');
+  expect(document.meta.section_defs?.[0]?.template.exclude_from_import).toBe(true);
   expect(document.meta.section_defs?.[0]?.template.blocks[0]?.text).toBe('# Projects');
   expect(document.meta.section_defs?.[1]?.repeatable).toBe(true);
   expect(document.meta.section_defs?.[1]?.templateVariables?.section_title?.label).toBe('Section title');

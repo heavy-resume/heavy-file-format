@@ -1601,7 +1601,7 @@ component_defs:
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record","tags":"education"}-->
 
-<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
+<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts","exclude_from_import":true}-->
 #! Template Maintenance
 
  <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->

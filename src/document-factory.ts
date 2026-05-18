@@ -183,6 +183,7 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
     description: typeof raw.description === 'string' ? raw.description : '',
     location: raw.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: raw.hideIfUnmodified === true,
+    exclude_from_import: raw.exclude_from_import === true,
     templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
     blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
     children: Array.isArray(raw.children)

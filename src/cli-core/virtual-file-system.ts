@@ -645,6 +645,7 @@ function sectionToCliJson(section: VisualSection): JsonObject {
     description: section.description,
     location: section.location,
     hideIfUnmodified: section.hideIfUnmodified === true,
+    exclude_from_import: section.exclude_from_import === true,
     templateKey: section.templateKey ?? '',
   };
 }
@@ -689,6 +690,7 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
   if (typeof value.hideIfUnmodified === 'boolean') section.hideIfUnmodified = value.hideIfUnmodified;
+  if (typeof value.exclude_from_import === 'boolean') section.exclude_from_import = value.exclude_from_import;
 }
 
 function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject {

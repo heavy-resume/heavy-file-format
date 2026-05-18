@@ -184,6 +184,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
+    exclude_from_import: sectionMeta.exclude_from_import === true,
     templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
@@ -988,6 +989,9 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): Jso
   if (section.hideIfUnmodified === true) {
     result.hideIfUnmodified = true;
   }
+  if (section.exclude_from_import === true) {
+    result.exclude_from_import = true;
+  }
   result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject)) : [];
   result.children = Array.isArray(section.children)
     ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject))
@@ -1217,6 +1221,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   }
   if (section.hideIfUnmodified === true) {
     meta.hideIfUnmodified = true;
+  }
+  if (section.exclude_from_import === true) {
+    meta.exclude_from_import = true;
   }
   if (section.templateKey && section.templateKey.trim().length > 0) {
     meta.templateKey = section.templateKey;

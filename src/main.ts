@@ -51,6 +51,14 @@ const app = appRoot;
 app.classList.add('hvy-document');
 setThemeRoot(app);
 const READER_HIGHLIGHT_GLOW_MS = 6000;
+const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: AppState['selectedExample'] }> = [
+  { id: 'guideBtn', label: 'Guide', selectedExample: 'guide' },
+  { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
+  { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
+  { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
+  { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
+  { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
+];
 let readerHighlightGlowObserver: IntersectionObserver | null = null;
 let readerHighlightGlowSignature = '';
 let readerHighlightGlowSeenTargets = new Set<string>();
@@ -576,28 +584,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   const markup = `
     <main class="layout reference-layout hvy-embed-layout">
-      <header class="topbar">
-        <div class="title-block">
-          <h1>HVY Reference Implementation</h1>
-          <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>.</p>
-        </div>
-        <div class="toolbar">
-          <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
-          <button id="defaultExampleBtn" type="button">Default Example</button>
-          <button id="crmExampleBtn" type="button">CRM Example</button>
-          <button id="resumeTemplateBtn" type="button">Resume Template</button>
-          <button id="resumeExampleBtn" type="button">Resume Example</button>
-          <button id="importReferenceBtn" type="button">Import Reference</button>
-          <button id="openLocalFileBtn" type="button">Open Local</button>
-          <label class="file-picker">
-            Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
-          </label>
-          <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
-          <button id="saveFileBtn" type="button">Save File</button>
-          <button id="downloadBtn" type="button">Download File</button>
-        </div>
-      </header>
+      ${renderTopbar()}
 
       <section class="workspace-shell">
         <div class="workspace-head">
@@ -788,6 +775,54 @@ function renderApp(): void {
   });
 
   void runPluginDocumentHooks('unknown');
+}
+
+function renderTopbar(): string {
+  return `
+    <header class="topbar">
+      <div class="title-block">
+        <h1>HVY Reference Implementation</h1>
+        <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>.</p>
+      </div>
+      <div class="toolbar">
+        <div class="toolbar-section toolbar-section-documents">
+          <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          ${renderDocumentMenu()}
+        </div>
+        <div class="toolbar-section toolbar-section-files">
+          <button id="openLocalFileBtn" type="button">Open Local</button>
+          <label class="file-picker">
+            Select File
+            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
+          </label>
+          <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+          <button id="saveFileBtn" type="button">Save File</button>
+          <button id="downloadBtn" type="button">Download File</button>
+        </div>
+      </div>
+    </header>
+  `;
+}
+
+function renderDocumentMenu(): string {
+  const current = DOCUMENT_MENU_ITEMS.find((item) => item.selectedExample === state.selectedExample);
+  const label = current?.label ?? 'Documents';
+  return `
+    <details class="document-menu">
+      <summary>
+        <span>Documents</span>
+        <strong>${escapeHtml(label)}</strong>
+      </summary>
+      <div class="document-menu-panel">
+        ${DOCUMENT_MENU_ITEMS
+          .map((item) => {
+            const selected = item.selectedExample === state.selectedExample;
+            return `<button id="${escapeAttr(item.id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`;
+          })
+          .join('')}
+      </div>
+    </details>
+  `;
 }
 
 function renderResponsivePreviewControls(): string {

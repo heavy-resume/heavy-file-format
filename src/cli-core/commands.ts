@@ -1094,6 +1094,7 @@ function replaceSectionContents(target: VisualSection, source: VisualSection): v
   target.description = source.description;
   target.location = source.location;
   target.hideIfUnmodified = source.hideIfUnmodified;
+  target.exclude_from_import = source.exclude_from_import;
   target.blocks = source.blocks;
   target.children = source.children;
   target.autoTail = source.autoTail;

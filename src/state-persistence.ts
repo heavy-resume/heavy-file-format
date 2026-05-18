@@ -173,6 +173,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
   return (
     value === 'default'
     || value === 'blank'
+    || value === 'guide'
     || value === 'crm'
     || value === 'resume-template'
     || value === 'resume-example'

@@ -170,6 +170,15 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-exclude-from-import' && target instanceof HTMLInputElement) {
+      if (!section) {
+        return;
+      }
+      section.exclude_from_import = target.checked;
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'section-contained' && target instanceof HTMLInputElement) {
       if (!section) {
         return;

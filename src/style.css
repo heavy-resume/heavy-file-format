@@ -102,6 +102,98 @@ body {
   align-items: center;
   gap: 0.55rem;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-section-files {
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--hvy-border-translucent);
+}
+
+.document-menu {
+  position: relative;
+}
+
+.document-menu summary {
+  min-height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.72rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-button-text);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.document-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.document-menu summary::after {
+  content: "";
+  width: 0.48rem;
+  height: 0.48rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-0.12rem);
+  transition: transform 140ms ease;
+}
+
+.document-menu[open] summary::after {
+  transform: rotate(225deg) translateY(-0.12rem);
+}
+
+.document-menu summary strong {
+  max-width: 10.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hvy-text);
+}
+
+.document-menu summary:hover,
+.document-menu summary:focus-visible {
+  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  box-shadow: 0 6px 16px var(--hvy-shadow);
+  transform: translateY(-1px);
+}
+
+.document-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 80;
+  min-width: 13rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
+  box-shadow: 0 14px 30px var(--hvy-shadow-md);
+}
+
+.document-menu-panel button {
+  width: 100%;
+  text-align: left;
 }
 
 .file-picker {
@@ -146,6 +238,34 @@ body {
     box-shadow 140ms ease,
     color 140ms ease,
     transform 140ms ease;
+}
+
+@media (max-width: 720px) {
+  .toolbar {
+    justify-content: stretch;
+  }
+
+  .toolbar-section,
+  .toolbar-section-files,
+  .document-menu,
+  .document-menu summary,
+  .toolbar input[type='text'],
+  .toolbar button,
+  .file-picker {
+    width: 100%;
+  }
+
+  .toolbar-section-files {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--hvy-border-translucent);
+    padding-top: 0.55rem;
+  }
+
+  .document-menu-panel {
+    left: 0;
+    right: 0;
+  }
 }
 
 .hvy-embed-layout :where(button:not(:disabled):hover) {

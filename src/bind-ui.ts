@@ -1,13 +1,14 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
+import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 import { state, getRenderApp, getRefreshReaderPanels } from './state';
 import { findSectionByKey } from './section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
-import { deserializeDocument, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
+import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
@@ -108,6 +109,11 @@ async function loadDefaultExampleDocument(): Promise<void> {
   replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), 'example.hvy', 'default');
 }
 
+function loadBundledTextDocument(raw: string, filename: string, selectedExample: typeof state.selectedExample): void {
+  currentFileHandle = null;
+  replaceLoadedDocument(raw, filename, selectedExample);
+}
+
 async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
@@ -201,55 +207,24 @@ export function bindUi(app: HTMLElement): void {
     });
   });
 
+  const guideBtn = app.querySelector<HTMLButtonElement>('#guideBtn');
+  guideBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledGuideHvy, 'hvy-guide.hvy', 'guide');
+  });
+
   const crmExampleBtn = app.querySelector<HTMLButtonElement>('#crmExampleBtn');
   crmExampleBtn?.addEventListener('click', () => {
-    state.document = deserializeDocument(bundledCrmHvy, '.hvy');
-    state.rawEditorText = serializeDocument(state.document);
-    state.rawEditorError = null;
-    state.rawEditorDiagnostics = [];
-    state.filename = 'crm.hvy';
-    state.selectedExample = 'crm';
-    state.history = [];
-    state.future = [];
-    clearChatConversation(state.chat);
-    resetTransientUiState();
-    currentFileHandle = null;
-    saveResumeState(state);
-    getRenderApp()();
+    loadBundledTextDocument(bundledCrmHvy, 'crm.hvy', 'crm');
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
   resumeTemplateBtn?.addEventListener('click', () => {
-    state.document = deserializeDocument(bundledResumeThvy, '.thvy');
-    state.rawEditorText = serializeDocument(state.document);
-    state.rawEditorError = null;
-    state.rawEditorDiagnostics = [];
-    state.filename = 'resume.thvy';
-    state.selectedExample = 'resume-template';
-    state.history = [];
-    state.future = [];
-    clearChatConversation(state.chat);
-    resetTransientUiState();
-    currentFileHandle = null;
-    saveResumeState(state);
-    getRenderApp()();
+    loadBundledTextDocument(bundledResumeThvy, 'resume.thvy', 'resume-template');
   });
 
   const resumeExampleBtn = app.querySelector<HTMLButtonElement>('#resumeExampleBtn');
   resumeExampleBtn?.addEventListener('click', () => {
-    state.document = deserializeDocument(bundledResumeHvy, '.hvy');
-    state.rawEditorText = serializeDocument(state.document);
-    state.rawEditorError = null;
-    state.rawEditorDiagnostics = [];
-    state.filename = 'resume.hvy';
-    state.selectedExample = 'resume-example';
-    state.history = [];
-    state.future = [];
-    clearChatConversation(state.chat);
-    resetTransientUiState();
-    currentFileHandle = null;
-    saveResumeState(state);
-    getRenderApp()();
+    loadBundledTextDocument(bundledResumeHvy, 'resume.hvy', 'resume-example');
   });
 
   const importReferenceBtn = app.querySelector<HTMLButtonElement>('#importReferenceBtn');

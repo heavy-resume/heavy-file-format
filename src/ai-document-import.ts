@@ -724,9 +724,9 @@ function buildImportPreplanDataTaskMessage(
     '=== BEGIN CURRENT TASK ===',
     'Extract and organize only source facts relevant to the listed target sections.',
     'Return one object keyed by the exact section ids listed in the response instructions.',
-    'For section ids with actual source facts, return an object with `has_info` and `information`.',
-    'Set `has_info` to true only when `information` contains concrete source-backed facts for that section.',
-    'If a section has no source-backed facts, omit the key or return an empty string for that key. This is the same as `has_info: false`.',
+    'For section ids with actual source facts, return an object with `import_selection` and `information`.',
+    'Set `import_selection` to `has_data_include` only when `information` contains concrete source-backed facts for that section.',
+    'If a section has no source-backed facts, omit the key or return an object with `import_selection: "no_data_exclude"`.',
     'Use this grouped pass to distinguish confusable categories before assigning facts, such as skills versus tools or technologies.',
     'Use only facts present in the imported source text. Do not invent dates, titles, entity names, labels, categories, metrics, links, or other factual details.',
     'Do not treat template availability, matched section names, placeholders, descriptions, or schema labels as source facts.',
@@ -752,9 +752,9 @@ function buildImportPreplanDataResponseInstructions(): string {
         additionalProperties: {
           type: 'object',
           additionalProperties: false,
-          required: ['has_info', 'information'],
+          required: ['import_selection', 'information'],
           properties: {
-            has_info: { type: 'boolean' },
+            import_selection: { type: 'string', enum: ['has_data_include', 'no_data_exclude'] },
             information: { type: 'string' },
           },
         },
@@ -767,11 +767,12 @@ function buildImportPreplanDataResponseInstructions(): string {
     JSON.stringify(schema),
     '',
     '`sections` must be an object keyed only by exact section ids listed in the latest user task.',
-    'Each value with source facts must be an object with `has_info` and `information`.',
-    '`has_info` must be true only when `information` contains concrete source facts for this section.',
+    'Each value must be an object with `import_selection` and `information`.',
+    '`import_selection` must be `has_data_include` only when `information` contains concrete source facts for this section.',
+    '`import_selection` must be `no_data_exclude` when the section has no concrete source facts.',
     '`information` must be a concise text document of only the imported facts used for that section.',
-    'Do not set `has_info` true for statements that merely say information is missing, absent, generic, unavailable, or not source-backed.',
-    'An omitted key, an empty string value, or an object with `has_info: false` means the section is excluded.',
+    'Do not use `has_data_include` for statements that merely say information is missing, absent, generic, unavailable, or not source-backed.',
+    'An omitted key, an empty string value, or an object with `import_selection: "no_data_exclude"` means the section is excluded.',
   ].join('\n');
 }
 
@@ -795,8 +796,8 @@ function parseImportPreplanSectionInformation(value: unknown): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return '';
   }
-  const section = value as { has_info?: unknown; information?: unknown };
-  if (section.has_info !== true) {
+  const section = value as { import_selection?: unknown; information?: unknown };
+  if (section.import_selection !== 'has_data_include') {
     return '';
   }
   return typeof section.information === 'string' ? section.information.trim() : '';
@@ -1708,6 +1709,9 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
   const sectionDefinitions = getImportSectionDefinitions(document);
   const appendSections = (sections: VisualSection[]): void => {
     for (const section of sections) {
+      if (section.exclude_from_import === true) {
+        continue;
+      }
       const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
       candidates.push({
         title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
@@ -1724,6 +1728,9 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
   };
   appendSections(document.sections);
   for (const definition of sectionDefinitions) {
+    if (definition.template.exclude_from_import === true) {
+      continue;
+    }
     candidates.push({
       title: trimImportString(definition.name) || trimImportString(definition.template.title) || trimImportString(definition.template.customId) || 'Untitled section',
       id: trimImportString(definition.template.customId),

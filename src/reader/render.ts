@@ -1727,6 +1727,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 />
                 Editor Only
               </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-exclude-from-import"
+                  ${section.exclude_from_import ? 'checked' : ''}
+                />
+                Exclude From Import
+              </label>
             </div>
           </div>
         </section>

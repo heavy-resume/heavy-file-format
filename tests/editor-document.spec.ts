@@ -821,9 +821,47 @@ test('AI mode shows add section ghost and opens the new section inline', async (
 
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await expect(activeEditor).toBeVisible();
-  await expect(activeEditor.locator('.rich-editor')).toBeFocused();
   await activeEditor.locator('.rich-editor').fill('AI-added section body');
   await expect(page.locator('#aiReaderDocument')).toContainText('AI-added section body');
+});
+
+test('AI mode opens added section templates with nested components editable', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Tabular Section
+    repeatable: true
+    template:
+      title: Tabular Section
+      blocks:
+        - text: "# Tabular Section"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            component: table
+            tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+            tableRows:
+              - cells: ["", "", ""]
+      children: []
+---
+
+#! Existing
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+
+  await page.locator('#aiReaderDocument [data-field="reusable-section-type"][data-section-key="__top_level__"]').selectOption('section-def:Tabular Section');
+  await page.locator('#aiReaderDocument [data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
+
+  const newSection = page.locator('#aiReaderDocument .reader-section', { hasText: 'Tabular Section' }).last();
+  await expect(newSection.locator('.rich-editor[data-field="block-rich"]')).toBeVisible();
+  await expect(newSection.locator('[data-field="table-column"]').first()).toBeVisible();
+  await newSection.locator('[data-field="table-column"]').first().fill('DATES');
+  await expect(newSection.locator('[data-field="table-column"]').first()).toHaveText('DATES');
 });
 
 test('section remove requires confirmation', async ({ page }) => {

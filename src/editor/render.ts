@@ -100,6 +100,8 @@ interface EditorRenderState {
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
+  aiEditorHostSectionKey?: string | null;
   componentPlacement: ComponentPlacementState | null;
   pendingEditorActivation: {
     sectionKey: string;
@@ -432,7 +434,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const componentLabel = component === 'plugin' ? getPluginBlockHeaderLabel(block) : component === 'carousel' ? 'Carousel' : component;
     const isActiveFrame = deps.isActiveEditorBlock(sectionKey, block.id);
     const isActiveDescendant = state.activeEditorBlock?.sectionKey === sectionKey && isDescendantActive(block, state.activeEditorBlock.blockId);
-    const isActive = isActiveFrame || isActiveDescendant;
+    const isAiSectionEditBlock = isAiHostedSectionBlock(sectionKey, block);
+    const isAiHostDescendant = isAiHostedBlockDescendant(sectionKey, block, rootSections ?? []);
+    const isActive = isActiveFrame || isActiveDescendant || isAiSectionEditBlock || isAiHostDescendant;
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -526,6 +530,29 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function canRenderActiveComponentInsertGhost(isActiveSelf: boolean, structurallyLocked: boolean): boolean {
     return isActiveSelf && state.currentView !== 'ai' && !structurallyLocked && !state.componentPlacement && !state.mobileAdjustmentMode;
+  }
+
+  function isAiHostedSectionBlock(sectionKey: string, block: VisualBlock): boolean {
+    return state.currentView === 'ai'
+      && state.aiEditorHostSectionKey === sectionKey
+      && deps.findSectionByKey(state.documentSections, sectionKey)?.blocks.some((candidate) => candidate === block) === true;
+  }
+
+  function isAiHostedBlockDescendant(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): boolean {
+    if (state.currentView !== 'ai') {
+      return false;
+    }
+    if (state.aiEditorHostSectionKey === sectionKey) {
+      const section = deps.findSectionByKey(state.documentSections, sectionKey);
+      return section?.blocks.some((candidate) => candidate !== block && isDescendantActive(candidate, block.id)) === true;
+    }
+    const host = state.aiEditorHostBlock;
+    if (!host || host.sectionKey !== sectionKey || host.blockId === block.id) {
+      return false;
+    }
+    const section = deps.findSectionByKey(rootSections, sectionKey);
+    const path = section ? findBlockPathIds(section.blocks, block.id) : null;
+    return path?.includes(host.blockId) === true;
   }
 
   function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {

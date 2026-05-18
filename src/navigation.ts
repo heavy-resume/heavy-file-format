@@ -512,6 +512,7 @@ function findBlockInSectionById(block: import('./editor/types').VisualBlock, blo
 export function resetTransientUiState(): void {
   state.activeEditorBlock = null;
   state.aiEditorHostBlock = null;
+  state.aiEditorHostSectionKey = null;
   state.componentPlacement = null;
   state.activeEditorSectionTitleKey = null;
   state.clearSectionTitleOnFocusKey = null;

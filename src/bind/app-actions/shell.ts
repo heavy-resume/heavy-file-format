@@ -42,6 +42,7 @@ const switchView: AppActionHandler = ({ actionButton }) => {
   if (view !== 'ai') {
     closeAiEditPopover();
     state.aiEditorHostBlock = null;
+    state.aiEditorHostSectionKey = null;
   }
   getRenderApp()();
   if (state.editorMode === 'cli') {

@@ -43,6 +43,7 @@ export function createTestState(document: VisualDocument): AppState {
     cliHistory: [],
     activeEditorBlock: null,
     aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],

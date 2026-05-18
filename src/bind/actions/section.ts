@@ -29,6 +29,10 @@ export function insertTopLevelSection(starter: string, flavorName?: string): voi
     setActiveEditorBlock(section.key, section.blocks[0].id);
     if (state.currentView === 'ai') {
       setAiEditorHostBlock(section.key, section.blocks[0].id);
+      state.aiEditorHostSectionKey = section.key;
+      if (state.pendingEditorActivation) {
+        state.pendingEditorActivation.immediateFocus = true;
+      }
     }
   } else {
     state.activeEditorSectionTitleKey = section.key;
@@ -97,6 +101,9 @@ const removeSubsectionAction: ActionHandler = ({ section, sectionKey }) => {
   if (state.aiEditorHostBlock?.sectionKey === sectionKey) {
     state.aiEditorHostBlock = null;
   }
+  if (state.aiEditorHostSectionKey === sectionKey) {
+    state.aiEditorHostSectionKey = null;
+  }
   if (state.componentPlacement?.sectionKey === sectionKey) {
     state.componentPlacement = null;
   }
@@ -118,6 +125,9 @@ const removeSection: ActionHandler = ({ section, sectionKey }) => {
   }
   if (state.aiEditorHostBlock?.sectionKey === sectionKey) {
     state.aiEditorHostBlock = null;
+  }
+  if (state.aiEditorHostSectionKey === sectionKey) {
+    state.aiEditorHostSectionKey = null;
   }
   if (state.componentPlacement?.sectionKey === sectionKey) {
     state.componentPlacement = null;

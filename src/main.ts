@@ -104,6 +104,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliHistory: [],
     activeEditorBlock: null,
     aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],
@@ -351,6 +352,12 @@ editorRenderer = createEditorRenderer(
     get activeEditorBlock() {
       return state.activeEditorBlock;
     },
+    get aiEditorHostBlock() {
+      return state.aiEditorHostBlock;
+    },
+    get aiEditorHostSectionKey() {
+      return state.aiEditorHostSectionKey;
+    },
     get componentPlacement() {
       return state.componentPlacement;
     },
@@ -436,6 +443,9 @@ readerRenderer = createReaderRenderer(
     },
     get aiEditorHostBlock() {
       return state.aiEditorHostBlock;
+    },
+    get aiEditorHostSectionKey() {
+      return state.aiEditorHostSectionKey;
     },
     get modalSectionKey() {
       return state.modalSectionKey;

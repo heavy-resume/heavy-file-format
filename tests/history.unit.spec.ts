@@ -48,6 +48,7 @@ function createHistoryTestState(): AppState {
     cliHistory: [],
     activeEditorBlock: null,
     aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],
     activeEditorBlockSnapshot: null,
     activeEditorBlockSnapshots: [],

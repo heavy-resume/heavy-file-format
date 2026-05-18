@@ -47,6 +47,8 @@ test('passive editor fallback renders plain reader content without re-entering A
     showAdvancedEditor: false,
     addComponentBySection: {},
     activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
     componentPlacement: null,
     pendingEditorActivation: null,
     expandableEditorPanels: {},

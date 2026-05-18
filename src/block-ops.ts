@@ -627,10 +627,12 @@ export function setActiveEditorBlock(sectionKey: string, blockId: string, option
 
 export function setAiEditorHostBlock(sectionKey: string, blockId: string): void {
   state.aiEditorHostBlock = { sectionKey, blockId };
+  state.aiEditorHostSectionKey = null;
 }
 
 export function clearAiEditorHostBlock(): void {
   state.aiEditorHostBlock = null;
+  state.aiEditorHostSectionKey = null;
 }
 
 export function markActiveEditorBlockAsNew(blockId: string): void {
@@ -720,6 +722,7 @@ export function clearActiveEditorBlock(blockId?: string): void {
   if (!blockId) {
     state.activeEditorBlock = null;
     state.aiEditorHostBlock = null;
+    state.aiEditorHostSectionKey = null;
     state.activeEditorBlockSnapshot = null;
     state.activeEditorBlockPath = [];
     state.activeEditorBlockSnapshots = [];
@@ -807,6 +810,7 @@ function closeActiveEditorPathFromIndex(index: number): void {
   state.activeEditorBlock = leaf ? { ...leaf } : null;
   if (!state.activeEditorBlock) {
     state.aiEditorHostBlock = null;
+    state.aiEditorHostSectionKey = null;
   }
   state.activeEditorBlockSnapshot = leaf
     ? state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === leaf.sectionKey && snapshot.blockId === leaf.blockId) ?? null

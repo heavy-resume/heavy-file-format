@@ -2891,12 +2891,12 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
   await expect(page.locator('.component-placement-target')).toHaveCount(3);
   await page.locator('.editor-section-head').first().click();
   await expect(page.locator('.component-placement-target')).toHaveCount(0);
 
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
   await expect(page.locator('.component-placement-target')).toHaveCount(3);
   await page.locator('[data-action="place-component"][data-placement="after"]').nth(1).click();
 
@@ -2937,7 +2937,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('#editorTree .editor-block-passive', { hasText: 'Alpha' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-copy"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
   await expect(page.locator('.editor-shell')).toHaveClass(/is-sidebar-closed/);
   await page.locator('.editor-sidebar-tab').click();
   await page.locator('.editor-sidebar [data-action="place-component"][data-placement="after"]').last().click();
@@ -2992,6 +2992,120 @@ hvy_version: 0.1
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/One/g)).toHaveLength(2);
   expect(raw.indexOf('One')).toBeLessThan(raw.indexOf('Two'));
+});
+
+test('component move and copy can place section blocks into a passive grid', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:grid {"id":"layout","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"one"}-->
+    One
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"two"}-->
+    Two
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Alpha' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Alpha');
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
+  await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(3);
+  await expect(page.locator('[data-placement-container="grid"]').first()).toContainText('Copy (in grid)');
+  await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(4);
+  await expect(page.locator('[data-placement-container="grid"]').first()).toContainText('Move (in grid)');
+  await page.locator('[data-placement-container="grid"][data-placement="after"]').last().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  const alphaMatches = [...raw.matchAll(/Alpha/g)].map((match) => match.index ?? -1);
+  expect(alphaMatches).toHaveLength(2);
+  expect(raw.match(/Beta/g)).toHaveLength(1);
+  expect(alphaMatches[0]).toBeLessThan(raw.indexOf('One'));
+  expect(alphaMatches[1]).toBeGreaterThan(raw.indexOf('One'));
+  expect(alphaMatches[1]).toBeLessThan(raw.indexOf('Two'));
+  expect(raw.indexOf('Beta')).toBeGreaterThan(raw.indexOf('Two'));
+});
+
+test('component move and copy can place section blocks into a passive container inside a grid', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:grid {"id":"layout","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:container {"id":"box","containerTitle":"Box"}-->
+    <!--hvy:text {"id":"inside"}-->
+     Inside
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"two"}-->
+    Two
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Alpha' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Alpha');
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
+  await expect(page.locator('[data-placement-container="container"]')).toHaveCount(2);
+  await expect(page.locator('[data-placement-container="container"]').first()).toContainText('Copy (in container)');
+  await page.locator('[data-placement-container="container"][data-placement="after"]').first().click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(page.locator('[data-placement-container="container"]')).toHaveCount(3);
+  await expect(page.locator('[data-placement-container="container"]').first()).toContainText('Move (in container)');
+  await page.locator('[data-placement-container="container"][data-placement="after"]').last().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  const alphaMatches = [...raw.matchAll(/Alpha/g)].map((match) => match.index ?? -1);
+  expect(alphaMatches).toHaveLength(2);
+  expect(raw.match(/Beta/g)).toHaveLength(1);
+  expect(alphaMatches[0]).toBeLessThan(raw.indexOf('<!--hvy:grid'));
+  expect(alphaMatches[1]).toBeGreaterThan(raw.indexOf('Inside'));
+  expect(alphaMatches[1]).toBeLessThan(raw.indexOf('<!--hvy:grid:1'));
+  expect(raw.indexOf('Beta')).toBeGreaterThan(alphaMatches[1]);
+  expect(raw.indexOf('Beta')).toBeLessThan(raw.indexOf('<!--hvy:grid:1'));
 });
 
 test('component placement supports expandable stub and content children', async ({ page }) => {
@@ -3070,7 +3184,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
   await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
   await page.locator('.editor-block-passive', { hasText: 'Skill notes' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move' }).click();
 
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(3);
   await expect(page.locator('[data-placement-container="section"]')).toHaveCount(0);

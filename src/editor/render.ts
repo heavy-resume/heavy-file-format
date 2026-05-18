@@ -384,7 +384,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (!pending) {
       return '';
     }
-    const label = `Place ${pending.mode} here`;
+    const label = `${capitalizePlacementMode(pending.mode)} (in ${formatPlacementContainerLabel(options.container)})`;
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
     )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
@@ -394,6 +394,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }>
       <span>${deps.escapeHtml(label)}</span>
     </button>`;
+  }
+
+  function capitalizePlacementMode(mode: ComponentPlacementState['mode']): string {
+    return mode === 'copy' ? 'Copy' : 'Move';
+  }
+
+  function formatPlacementContainerLabel(container: Parameters<ComponentRenderHelpers['renderComponentPlacementTarget']>[0]['container']): string {
+    if (container === 'component-list') {
+      return 'list';
+    }
+    if (container === 'expandable-stub') {
+      return 'expandable stub';
+    }
+    if (container === 'expandable-content') {
+      return 'expandable content';
+    }
+    return container;
   }
 
   function isDescendantActive(block: VisualBlock, targetBlockId: string): boolean {
@@ -724,7 +741,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
-      const body = block.schema.containerBlocks.map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections)).join('');
+      const body = renderPassiveContainerBlocks(sectionKey, block, rootSections);
       return body
         ? `<div class="reader-container-body">${body}</div>`
         : '<div class="container-inner-blocks is-empty is-passive-empty"><div class="container-empty-placeholder">Empty container</div></div>';
@@ -814,18 +831,36 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
       const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
+      const leadingPlacementTarget = state.componentPlacement && !block.schema.lock && block.schema.gridItems[0]
+        ? renderComponentPlacementTarget({
+            container: 'grid',
+            sectionKey,
+            parentBlockId: block.id,
+            placement: 'before',
+            targetGridItemId: block.schema.gridItems[0].id,
+          })
+        : '';
       const cells = block.schema.gridItems
         .map((item, index) => {
           const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+          const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
+            ? renderComponentPlacementTarget({
+                container: 'grid',
+                sectionKey,
+                parentBlockId: block.id,
+                placement: 'after',
+                targetGridItemId: item.id,
+              })
+            : '';
           return `<div class="reader-grid-cell is-passive-grid-cell" style="grid-column: ${deps.escapeAttr(gridColumn)};">${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections
-          )}</div>`;
+          )}</div>${trailingPlacementTarget}`;
         })
         .join('');
-      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
+      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${leadingPlacementTarget}${cells}</div>`;
     }
 
     if (base === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -1700,6 +1735,41 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="text-fill-in-editor text-fill-in-reader-editor" data-fill-parts="${deps.escapeAttr(JSON.stringify(parts))}">${html}</div>`;
     }
     return renderTextFragment(content);
+  }
+
+  function renderPassiveContainerBlocks(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
+    const blocks = block.schema.containerBlocks;
+    const output: string[] = [];
+    if (!block.schema.lock && blocks[0]) {
+      output.push(renderComponentPlacementTarget({
+        container: 'container',
+        sectionKey,
+        parentBlockId: block.id,
+        placement: 'before',
+        targetBlockId: blocks[0].id,
+      }));
+    }
+    for (const innerBlock of blocks) {
+      output.push(renderPassiveEditorBlock(sectionKey, innerBlock, rootSections));
+      if (!block.schema.lock) {
+        output.push(renderComponentPlacementTarget({
+          container: 'container',
+          sectionKey,
+          parentBlockId: block.id,
+          placement: 'after',
+          targetBlockId: innerBlock.id,
+        }));
+      }
+    }
+    if (!block.schema.lock && blocks.length === 0) {
+      output.push(renderComponentPlacementTarget({
+        container: 'container',
+        sectionKey,
+        parentBlockId: block.id,
+        placement: 'end',
+      }));
+    }
+    return output.join('');
   }
 
   function renderSyntaxHighlightedCode(content: string, languageName: string, options?: { badge?: string }): string {

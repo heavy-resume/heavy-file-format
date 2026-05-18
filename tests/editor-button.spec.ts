@@ -187,7 +187,7 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 });
 
-test('embedded editor and viewer keep independent sidebar hints and button runtime', async ({ page }) => {
+test('embedded editor and viewer keep independent sidebar hints and editor button runtime', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
@@ -196,13 +196,11 @@ test('embedded editor and viewer keep independent sidebar hints and button runti
   const firstDoc = page.locator('#docOne');
   const secondDoc = page.locator('#docTwo');
   const firstButton = firstDoc.locator('[data-action="run-button-ai-generate"]');
-  const secondButton = secondDoc.locator('[data-action="run-button-ai-generate"]');
   await expect(firstButton).toBeVisible({ timeout: 1_000 });
   await expect(secondDoc.locator('#readerDocument')).toBeVisible();
   await expect(secondDoc.locator('#editorTree')).toHaveCount(0);
-  await expect(secondButton).toBeVisible({ timeout: 1_000 });
   await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toContainText('Document One Side Notes');
-  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toContainText('Document Two Side Notes');
+  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toBeVisible();
 
   await firstDoc.locator('.editor-sidebar-help-balloon').click();
   await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toHaveClass(/is-closing/);
@@ -215,21 +213,30 @@ test('embedded editor and viewer keep independent sidebar hints and button runti
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveCount(0);
   await secondDoc.locator('.viewer-sidebar-tab').click();
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Sidebar note for the second embedded document.');
+  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
   await secondDoc.locator('.viewer-sidebar-tab').click();
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 
   await firstButton.click();
-  await secondButton.click();
 
-  await expect(secondDoc).toContainText('Document Two generated from: Second document source text.', { timeout: 3_500 });
   await expect(firstDoc).toContainText('Document One generated from: First document source text.', { timeout: 3_500 });
-  await expect(firstDoc).not.toContainText('Document Two generated from');
   await expect(secondDoc).not.toContainText('Document One generated from');
 });
 
 test('second embedded viewer action buttons remain clickable', async ({ page }) => {
   test.setTimeout(5_000);
+  const chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> };
+    chatRequests.push(payload);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: 'API answer: Avery Hart is the resume candidate.',
+      }),
+    });
+  });
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
@@ -263,15 +270,15 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   await page.waitForTimeout(220);
   await secondDoc.locator('.viewer-sidebar-tab').click();
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Sidebar note for the second embedded document.');
+  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
   await secondDoc.locator('.viewer-sidebar-tab').click();
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 
   await secondDoc.locator('.search-launcher').click();
   await expect(secondDoc.locator('.search-palette')).toBeVisible({ timeout: 1_000 });
-  await secondDoc.locator('[data-field="search-query"]').fill('Second document source text');
+  await secondDoc.locator('[data-field="search-query"]').fill('Avery Hart');
   await secondDoc.locator('#searchComposer').press('Enter');
-  await expect(secondDoc.locator('.search-result')).toContainText('Second document source text', { timeout: 1_000 });
+  await expect(secondDoc.locator('.search-result')).toContainText('Avery Hart', { timeout: 1_000 });
   await secondDoc.getByRole('button', { name: 'Close search panel' }).click();
   await expect(secondDoc.locator('.search-palette')).toHaveCount(0);
 
@@ -294,10 +301,13 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
 
   await secondDoc.locator('.chat-launcher').click();
   await expect(secondDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
-  await secondDoc.locator('.chat-launcher').click();
-  await expect(secondDoc.locator('.chat-panel')).toBeHidden();
-
-  await secondDoc.locator('[data-action="run-button-ai-generate"]').click();
-  await expect(secondDoc).toContainText('Document Two generated from: Second document source text.', { timeout: 3_500 });
-  await expect(firstDoc).not.toContainText('Document Two generated from');
+  await expect(secondDoc.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Ask about the current HVY document...');
+  await secondDoc.locator('[data-field="chat-input"]').fill('Who is the resume candidate?');
+  await secondDoc.locator('[data-field="chat-input"]').press('Enter');
+  await expect(secondDoc.locator('.chat-panel')).toContainText('API answer: Avery Hart is the resume candidate.', { timeout: 3_500 });
+  expect(chatRequests).toHaveLength(1);
+  expect(chatRequests[0]?.mode).toBe('qa');
+  expect(chatRequests[0]?.context).toContain('Avery Hart');
+  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('Who is the resume candidate?');
+  await expect(firstDoc).not.toContainText('API answer');
 });

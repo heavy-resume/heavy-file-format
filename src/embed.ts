@@ -151,6 +151,7 @@ function createEmbedState(
     editorMode: 'basic',
     responsivePreview: 'full',
     sessionStorageKey,
+    persistDocumentState: false,
     imageAttachmentMaxDimensions,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,

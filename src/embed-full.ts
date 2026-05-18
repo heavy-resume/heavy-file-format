@@ -132,6 +132,7 @@ function createEmbedState(
     editorMode: 'basic',
     responsivePreview: 'full',
     sessionStorageKey,
+    persistDocumentState: mode !== 'viewer',
     imageAttachmentMaxDimensions,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
@@ -210,15 +211,19 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
   if (!savedSession) {
     return initial;
   }
+  const shouldRestoreDocument = initial.persistDocumentState !== false && savedSession.document;
+  const document = shouldRestoreDocument ? savedSession.document! : initial.document;
   return {
     ...initial,
-    document: savedSession.document,
-    filename: savedSession.filename,
+    document,
+    filename: shouldRestoreDocument ? savedSession.filename : initial.filename,
     selectedExample: savedSession.selectedExample,
     currentView: initial.currentView,
     editorMode: savedSession.editorMode,
     showAdvancedEditor: savedSession.showAdvancedEditor,
-    rawEditorText: savedSession.rawEditorText || serializeDocument(savedSession.document),
+    rawEditorText: shouldRestoreDocument
+      ? savedSession.rawEditorText || serializeDocument(document)
+      : serializeDocument(document),
     templateValues: savedSession.templateValues,
     chat: {
       ...initial.chat,

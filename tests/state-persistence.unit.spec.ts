@@ -226,8 +226,8 @@ hvy_version: 0.1
     },
     { id: 'm3', role: 'assistant', content: 'Done.' },
   ]);
-  expect(loaded?.document.sections[0]?.title).toBe('Summary');
-  expect(loaded?.document.sections[0]?.blocks[0]?.text).toBe('Saved work');
+  expect(loaded?.document?.sections[0]?.title).toBe('Summary');
+  expect(loaded?.document?.sections[0]?.blocks[0]?.text).toBe('Saved work');
   expect(storage.has('hvy-editor-session-state-v1')).toBe(true);
   expect(legacyStorage.has('hvy-editor-resume-state-v1')).toBe(false);
 });
@@ -281,8 +281,8 @@ test('saveSessionState and loadSessionState isolate custom session storage keys'
 
   expect(storage.has('hvy-editor-session-state-v1:first')).toBe(true);
   expect(storage.has('hvy-editor-session-state-v1:second')).toBe(true);
-  expect(loadSessionState('first')?.document.sections[0]?.title).toBe('First Instance');
-  expect(loadSessionState('second')?.document.sections[0]?.title).toBe('Second Instance');
+  expect(loadSessionState('first')?.document?.sections[0]?.title).toBe('First Instance');
+  expect(loadSessionState('second')?.document?.sections[0]?.title).toBe('Second Instance');
   expect(loadSessionState()).toBeNull();
 });
 
@@ -302,4 +302,35 @@ test('saveSessionState skips persistence when sessionStorageKey is null', () => 
   saveSessionState(createPersistenceTestState('Temporary Instance', null));
 
   expect(storage.size).toBe(0);
+});
+
+test('saveSessionState can persist keyed viewer UI state without storing document bytes', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+
+  const viewerState = createPersistenceTestState('Viewer Instance', 'viewer');
+  saveSessionState({
+    ...viewerState,
+    currentView: 'viewer',
+    persistDocumentState: false,
+    chat: {
+      ...viewerState.chat,
+      panelOpen: true,
+    },
+  });
+
+  const payload = JSON.parse(storage.get('hvy-editor-session-state-v1:viewer') ?? '{}') as { documentBase64?: string };
+  const loaded = loadSessionState('viewer');
+  expect(payload.documentBase64).toBeUndefined();
+  expect(loaded?.document).toBeUndefined();
+  expect(loaded?.chat.panelOpen).toBe(true);
 });

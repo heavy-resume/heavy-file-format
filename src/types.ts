@@ -239,6 +239,7 @@ export interface AppState {
   editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   sessionStorageKey?: string | null;
+  persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   chat: ChatState;
   aiEdit: AiEditState;

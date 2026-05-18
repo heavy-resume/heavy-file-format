@@ -1,6 +1,8 @@
 import { findBlockByIds } from './block-ops';
 import { bindChangeControls } from './bind/handlers/change-controls';
+import { bindInputBlock } from './bind/handlers/input-block';
 import { bindInputMisc } from './bind/handlers/input-misc';
+import { bindKeydown } from './bind/handlers/keydown';
 import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
@@ -16,9 +18,11 @@ function bindReaderAppControls(app: HTMLElement): void {
     return;
   }
   readerAppControlsBound.add(app);
+  bindInputBlock(app);
   bindInputMisc(app);
   bindChangeControls(app);
   bindSubmit(app);
+  bindKeydown(app);
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

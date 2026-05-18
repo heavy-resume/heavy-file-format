@@ -788,7 +788,54 @@ hvy_version: 0.1
   expect(result.hasViewer).toBe(true);
   expect(result.hasEditor).toBe(false);
   expect(result.hasViewerShell).toBe(true);
-  expect(result.title).toBe('Saved Document');
+  expect(result.title).toBe('Fresh Viewer');
+});
+
+test('embedded viewer storage key does not persist stale document state', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const firstMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Viewer')), '.hvy'),
+      mode: 'viewer',
+      storageKey: 'viewer-refresh',
+    });
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    firstMount.destroy();
+    const secondMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Viewer')), '.hvy'),
+      mode: 'viewer',
+      storageKey: 'viewer-refresh',
+    });
+    const payload = JSON.parse(sessionStorage.getItem('hvy-editor-session-state-v1:viewer-refresh') ?? '{}') as { documentBase64?: string };
+    return {
+      title: secondMount.getDocument().sections[0]?.title,
+      hasDocumentBase64: typeof payload.documentBase64 === 'string',
+    };
+  });
+
+  expect(result.title).toBe('Fresh Viewer');
+  expect(result.hasDocumentBase64).toBe(false);
 });
 
 test('embedded runtime only registers plugins supplied by the host', async ({ page }) => {

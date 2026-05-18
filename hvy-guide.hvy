@@ -9,43 +9,52 @@ theme:
 text_line_styles:
   callout:
     label: Callout
-    css: "margin: 0.75rem 0; padding: 0.75rem 0.9rem; border-left: 0.22rem solid var(--hvy-accent); background: var(--hvy-surface-muted);"
+    css: "margin: 0.75rem 0; padding: 0.75rem 0.9rem; border-left: 0.22rem solid
+      var(--hvy-accent); background: var(--hvy-surface-muted);"
   compact:
     label: Compact
     css: "margin: 0.15rem 0;"
 ---
 
-<!--hvy: {"id":"welcome","lock":false,"expanded":true,"highlight":false}-->
+<!--hvy: {"id":"welcome","lock":false,"expanded":true,"highlight":false,"contained":false}-->
 #! Welcome To HVY
 
  <!--hvy:text {}-->
-  # Welcome to HVY
+  # Introducing the HVY File Format
 
  <!--hvy:text {}-->
-  HVY helps you build documents that are easy to read, reorganize, and explore. Instead of treating everything as one long page, HVY gives you sections, reusable content blocks, sidebars, references, search, and AI-assisted editing.
+  HVY is a versatile file built for information consumption. It additionally doubles as a workspace with scripting and plugin capabilities.
 
- <!--hvy:text {}-->
-  ^callout^ This guide is for using HVY. It explains what to press, what each mode is for, and how to think about sections and components while you work.
+ <!--hvy:grid {"css":"gap: 0.75rem; margin: 1rem 0;","gridColumns":3}-->
+  <!--hvy:grid:0 {"id":"griditem-ls4xsf"}-->
 
- <!--hvy:grid {"gridColumns":3,"css":"gap: 0.75rem; margin: 1rem 0;"}-->
-  <!--hvy:grid:0 {}-->
-   <!--hvy:container {"containerTitle":"Editor","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;"}-->
-    <!--hvy:text {}-->
-     ## Editor
-     
-     Use Editor mode to change the document.
-  <!--hvy:grid:1 {}-->
-   <!--hvy:container {"containerTitle":"Viewer","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;"}-->
+   <!--hvy:container {"css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;","containerTitle":"Viewer"}-->
     <!--hvy:text {}-->
      ## Viewer
      
-     Use Viewer mode to read and navigate.
-  <!--hvy:grid:2 {}-->
-   <!--hvy:container {"containerTitle":"AI","css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;"}-->
+     Shows the document without any editing features.
+
+    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
+
+  <!--hvy:grid:1 {"id":"griditem-keuvq0"}-->
+
+   <!--hvy:container {"css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;","containerTitle":"AI"}-->
     <!--hvy:text {}-->
-     ## AI
+     ## AI Assisted
      
-     Use AI mode to edit by selecting document content and requesting changes.
+     Double click / tap or right click / tap & hold to enter edit mode for a component. You can also request changes via the chat.
+
+    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
+
+  <!--hvy:grid:2 {"id":"griditem-kw907x"}-->
+
+   <!--hvy:container {"css":"padding: 0.85rem; border: 1px solid var(--hvy-border); border-radius: 0.5rem;","containerTitle":"Editor"}-->
+    <!--hvy:text {}-->
+     ## Editor
+     
+     For many changes, use editor mode. Can be either the basic or advanced view, which enables more editing.
+
+    <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
 
  <!--hvy:text {}-->
   ## Start With The Mode
@@ -55,24 +64,20 @@ text_line_styles:
   - Use **Editor** when you want direct control over sections, text, components, and settings.
   - Use **Viewer** when you want to experience the document the way a reader will.
   - Use **AI** when you want to point at part of the document and ask for a change in plain language.
-
- <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefDetail":"Create sections, add components, and change content.","xrefTarget":"editor-mode"}-->
-
- <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefDetail":"Read, navigate, expand details, and use search.","xrefTarget":"viewer-mode"}-->
-
- <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefDetail":"Request targeted edits and use chat assistance.","xrefTarget":"ai-mode"}-->
-
 <!--hvy: {"id":"core-ideas","lock":false,"expanded":true,"highlight":false}-->
 #! Core Ideas
 
  <!--hvy:text {}-->
   # Core Ideas
 
- <!--hvy:expandable {"id":"sections-card","expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {"id":"sections-card"}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Sections are major topics
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Sections are the main building blocks of a document. Use them for topics a reader might want to jump to, collapse, expand, or understand as a complete thought.
     
@@ -84,36 +89,44 @@ text_line_styles:
     - Skills
     - Next Steps
 
- <!--hvy:expandable {"id":"components-card","expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {"id":"components-card"}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Components are content inside a topic
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Components hold the actual content inside sections. A component might be text, an image, a table, a list, a reference card, an expandable detail panel, or an interactive plugin.
     
     When you add something with the component picker, you are choosing what kind of content belongs in that spot.
 
- <!--hvy:expandable {"id":"sidebar-card","expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {"id":"sidebar-card"}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Sidebars are for navigation and supporting material
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     The sidebar can hold navigation, quick reference material, or supporting sections that should stay available while the reader focuses on the main document.
     
     Put a section in the sidebar when it helps people move around, compare notes, or keep context nearby.
 
- <!--hvy:expandable {"id":"references-card","expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {"id":"references-card"}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## References connect related ideas
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Reference cards are visible links to another part of the document. Use them when a reader should be able to jump from one topic to a related section or item.
     
     References are better than repeating the same information in several places.
-
 <!--hvy: {"id":"editor-mode","lock":false,"expanded":true,"highlight":false}-->
 #! Editor Mode
 
@@ -167,7 +180,6 @@ text_line_styles:
   - Use components for structure instead of trying to make one text block do everything.
   - Use the sidebar for quick reference or secondary material, not for the whole document.
   - Preview the document in Viewer mode when you want to check the reading experience.
-
 <!--hvy: {"id":"viewer-mode","lock":false,"expanded":true,"highlight":false}-->
 #! Viewer Mode
 
@@ -201,7 +213,6 @@ text_line_styles:
   ## Check Different Widths
   
   When width controls are available, use them to see how the document feels on smaller or larger surfaces. This is useful before sharing a document with people who may read it on different devices.
-
 <!--hvy: {"id":"ai-mode","lock":false,"expanded":true,"highlight":false}-->
 #! AI Mode
 
@@ -236,7 +247,6 @@ text_line_styles:
   ## Review The Result
   
   AI assistance can help quickly, but you are still the editor. Review changes for accuracy, tone, and fit with nearby content.
-
 <!--hvy: {"id":"component-guide","lock":false,"expanded":true,"highlight":false}-->
 #! Component Guide
 
@@ -248,94 +258,147 @@ text_line_styles:
 
  <!--hvy:component-list {"id":"component-cards","componentListComponent":"expandable","componentListItemLabel":"component"}-->
   <!--hvy:component-list:0 {}-->
-   <!--hvy:expandable {"id":"component-text","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Text"},"groupKeys":{"Kind":"Writing"}}-->
+
+   <!--hvy:expandable {"id":"component-text","sortKeys":{"Name":"Text"},"groupKeys":{"Kind":"Writing"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Text
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Text for normal writing: paragraphs, headings, lists, notes, quotes, and code samples. If you are explaining something in words, start here.
+
   <!--hvy:component-list:1 {}-->
-   <!--hvy:expandable {"id":"component-image","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Image"},"groupKeys":{"Kind":"Media"}}-->
+
+   <!--hvy:expandable {"id":"component-image","sortKeys":{"Name":"Image"},"groupKeys":{"Kind":"Media"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Image
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Image for a single picture or visual. Add clear alternate text so the image still has meaning when someone cannot see it.
+
   <!--hvy:component-list:2 {}-->
-   <!--hvy:expandable {"id":"component-carousel","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Carousel"},"groupKeys":{"Kind":"Media"}}-->
+
+   <!--hvy:expandable {"id":"component-carousel","sortKeys":{"Name":"Carousel"},"groupKeys":{"Kind":"Media"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Carousel
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Carousel when several images belong together and should be browsed as a set.
+
   <!--hvy:component-list:3 {}-->
-   <!--hvy:expandable {"id":"component-table","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Table"},"groupKeys":{"Kind":"Data"}}-->
+
+   <!--hvy:expandable {"id":"component-table","sortKeys":{"Name":"Table"},"groupKeys":{"Kind":"Data"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Table
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Table for structured information with rows and columns. Tables are best for facts that readers may compare across categories.
+
   <!--hvy:component-list:4 {}-->
-   <!--hvy:expandable {"id":"component-reference","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Reference"},"groupKeys":{"Kind":"Navigation"}}-->
+
+   <!--hvy:expandable {"id":"component-reference","sortKeys":{"Name":"Reference"},"groupKeys":{"Kind":"Navigation"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Reference
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Reference to send the reader to another section or item in the document. It is useful when related material should stay connected without being duplicated.
+
   <!--hvy:component-list:5 {}-->
-   <!--hvy:expandable {"id":"component-container","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Container"},"groupKeys":{"Kind":"Structure"}}-->
+
+   <!--hvy:expandable {"id":"component-container","sortKeys":{"Name":"Container"},"groupKeys":{"Kind":"Structure"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Container
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Container to group several components together. Containers are useful for panels, grouped notes, or content that should travel as one unit.
+
   <!--hvy:component-list:6 {}-->
-   <!--hvy:expandable {"id":"component-list","expandableAlwaysShowStub":true,"sortKeys":{"Name":"List"},"groupKeys":{"Kind":"Structure"}}-->
+
+   <!--hvy:expandable {"id":"component-list","sortKeys":{"Name":"List"},"groupKeys":{"Kind":"Structure"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## List
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use List for repeated items that share the same shape, such as projects, tasks, skills, contacts, or resources.
+
   <!--hvy:component-list:7 {}-->
-   <!--hvy:expandable {"id":"component-grid","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Grid"},"groupKeys":{"Kind":"Layout"}}-->
+
+   <!--hvy:expandable {"id":"component-grid","sortKeys":{"Name":"Grid"},"groupKeys":{"Kind":"Layout"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Grid
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Grid when layout matters, such as side-by-side comparisons or paired labels and values. Avoid using grids just to make ordinary lists.
+
   <!--hvy:component-list:8 {}-->
-   <!--hvy:expandable {"id":"component-expandable","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Expandable"},"groupKeys":{"Kind":"Structure"}}-->
+
+   <!--hvy:expandable {"id":"component-expandable","sortKeys":{"Name":"Expandable"},"groupKeys":{"Kind":"Structure"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Expandable
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Expandable when a short summary should be visible first and details should open on demand.
+
   <!--hvy:component-list:9 {}-->
-   <!--hvy:expandable {"id":"component-plugin","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Plugin"},"groupKeys":{"Kind":"Interactive"}}-->
+
+   <!--hvy:expandable {"id":"component-plugin","sortKeys":{"Name":"Plugin"},"groupKeys":{"Kind":"Interactive"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Plugin
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Plugin when the document includes a special interactive tool, such as a graph, form, progress meter, script, or data-backed table.
+
   <!--hvy:component-list:10 {}-->
-   <!--hvy:expandable {"id":"component-button","expandableAlwaysShowStub":true,"sortKeys":{"Name":"Button"},"groupKeys":{"Kind":"Action"}}-->
+
+   <!--hvy:expandable {"id":"component-button","sortKeys":{"Name":"Button"},"groupKeys":{"Kind":"Action"}}-->
     <!--hvy:expandable:stub {}-->
+
      <!--hvy:text {}-->
       ## Button
+
     <!--hvy:expandable:content {}-->
+
      <!--hvy:text {}-->
       Use Button for an intentional action in the document, such as generating text or running a guided workflow. Buttons usually belong in authoring experiences, not ordinary reading flow.
-
 <!--hvy: {"id":"choosing-structure","lock":false,"expanded":true,"highlight":false}-->
 #! Choosing The Right Structure
 
@@ -371,59 +434,81 @@ text_line_styles:
   ## Use References Instead Of Repeating Yourself
   
   When another part of the document already explains something, use a Reference card. That keeps the document easier to maintain and gives readers a clear path to related content.
-
 <!--hvy: {"id":"quick-reference","lock":false,"expanded":true,"highlight":false,"location":"sidebar"}-->
 #! Quick Reference
 
  <!--hvy:text {}-->
   # Quick Reference
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Modes
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     - Editor changes the document.
     - Viewer reads and navigates.
     - AI selects content and requests changes.
+
    <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
+
    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
+
    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Editing
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Add sections for major topics. Add components for content inside those topics. Select a component when you need to edit, move, copy, or delete it.
+
    <!--hvy:xref-card {"xrefTitle":"Core Ideas","xrefTarget":"core-ideas"}-->
+
    <!--hvy:xref-card {"xrefTitle":"Choosing Structure","xrefTarget":"choosing-structure"}-->
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Components
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Start with Text. Use Expandable for summary/detail, List for repeated items, Grid for intentional layout, and Reference for jumps to related content.
+
    <!--hvy:xref-card {"xrefTitle":"Component Guide","xrefTarget":"component-guide"}-->
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## Search
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Search finds matching content. Filter helps focus the reading surface around matches.
+
    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
 
- <!--hvy:expandable {"expandableAlwaysShowStub":true}-->
+ <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
+
    <!--hvy:text {}-->
     ## AI Help
+
   <!--hvy:expandable:content {}-->
+
    <!--hvy:text {}-->
     Use AI mode for targeted document edits. Use chat for questions, planning, or broader assistance.
+
    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->

@@ -37,13 +37,13 @@ interface SessionStatePayload {
     session: HvyCliSessionState;
     history: HvyCliHistoryEntry[];
   };
-  documentBase64: string;
+  documentBase64?: string;
 }
 
 type SavedSearchState = Omit<SearchState, 'isLoading' | 'error' | 'requestNonce' | 'abortController'>;
 
 export interface LoadedSessionState {
-  document: VisualDocument;
+  document?: VisualDocument;
   filename: string;
   selectedExample?: SelectedExample;
   currentView: AppState['currentView'];
@@ -66,10 +66,12 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
       return null;
     }
     const parsed = JSON.parse(raw) as Partial<SessionStatePayload> | null;
-    if (!parsed || parsed.version !== 1 || typeof parsed.documentBase64 !== 'string') {
+    if (!parsed || parsed.version !== 1) {
       return null;
     }
-    const document = deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), '.hvy');
+    const document = typeof parsed.documentBase64 === 'string'
+      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), '.hvy')
+      : undefined;
     return {
       document,
       filename: typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy',
@@ -132,8 +134,10 @@ export function saveSessionState(state: AppState): void {
         session: state.cliSession,
         history: state.cliHistory,
       },
-      documentBase64: bytesToBase64(serializeDocumentBytes(state.document)),
     };
+    if (state.persistDocumentState !== false) {
+      payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
+    }
     window.sessionStorage.setItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
     removeLegacySessionState();
   } catch (error) {

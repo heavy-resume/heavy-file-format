@@ -157,6 +157,7 @@
     </div>
 
     <script type="module">
+      import resumeHvyUrl from '/examples/resume.hvy?url';
       import { deserializeDocumentBytes, mountHvy } from '/src/embed-full.ts';
 
       const encoder = new TextEncoder();
@@ -204,10 +205,19 @@ title: ${label}
         },
       });
 
-      function mountPair() {
+      async function loadResumeDocument() {
+        const response = await fetch(resumeHvyUrl);
+        if (!response.ok) {
+          throw new Error(`Could not load resume example: ${response.status} ${response.statusText}`);
+        }
+        return deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy');
+      }
+
+      async function mountPair() {
         mounted.splice(0).forEach((mount) => mount.destroy());
         const firstRoot = document.querySelector('#docOne');
         const secondRoot = document.querySelector('#docTwo');
+        const resumeDocument = await loadResumeDocument();
         mounted.push(
           mountHvy({
             root: firstRoot,
@@ -220,10 +230,9 @@ title: ${label}
         mounted.push(
           mountHvy({
             root: secondRoot,
-            document: deserializeDocumentBytes(encoder.encode(makeDocumentSource('Document Two', 'Second document source text.', 'Sidebar note for the second embedded document.')), '.hvy'),
+            document: resumeDocument,
             mode: 'viewer',
             storageKey: 'two-doc-reference-two',
-            chatClient: makeChatClient('Document Two'),
           })
         );
         writeLog('Mounted both documents.');
@@ -232,11 +241,11 @@ title: ${label}
       document.querySelector('#resetSessions').addEventListener('click', () => {
         sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-one');
         sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-two');
-        mountPair();
+        void mountPair();
         writeLog('Reset both keyed sessions.');
       });
 
-      mountPair();
+      void mountPair();
     </script>
   </body>
 </html>

@@ -166,15 +166,16 @@ function applySessionState(initial: AppState, savedSession: ReturnType<typeof lo
   if (!savedSession) {
     return initial;
   }
+  const document = savedSession.document ?? initial.document;
   return {
     ...initial,
-    document: savedSession.document,
+    document,
     filename: savedSession.filename,
     selectedExample: savedSession.selectedExample,
     currentView: savedSession.currentView,
     editorMode: savedSession.editorMode,
     showAdvancedEditor: savedSession.showAdvancedEditor,
-    rawEditorText: savedSession.rawEditorText || serializeDocument(savedSession.document),
+    rawEditorText: savedSession.rawEditorText || serializeDocument(document),
     templateValues: savedSession.templateValues,
     chat: {
       ...initial.chat,

@@ -238,6 +238,7 @@ export interface AppState {
   currentView: 'editor' | 'viewer' | 'ai';
   editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
+  sessionStorageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   chat: ChatState;
   aiEdit: AiEditState;

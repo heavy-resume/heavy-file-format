@@ -6,7 +6,7 @@ import { createBlankDocument } from './document-factory';
 import { getRenderApp } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
-import { saveResumeState } from './state-persistence';
+import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
 
 /**
@@ -573,6 +573,6 @@ export function resetToBlankDocument(): void {
   state.future = [];
   clearChatConversation(state.chat);
   resetTransientUiState();
-  saveResumeState(state);
+  saveSessionState(state);
   getRenderApp()();
 }

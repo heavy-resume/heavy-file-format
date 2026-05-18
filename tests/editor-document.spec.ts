@@ -485,6 +485,237 @@ hvy_version: 0.1
   expect(result.editorText).toContain('Host download serialization test.');
 });
 
+test('embedded viewer mounts keep independent documents and link observers', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="firstMount"></div><div id="secondMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const firstSource = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! First Summary
+
+ First embedded document with [First Link](https://first.example).
+`;
+    const secondSource = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Second Summary
+
+ Second embedded document with [Second Link](https://second.example).
+`;
+    const encoder = new TextEncoder();
+    const firstRoot = document.querySelector<HTMLElement>('#firstMount');
+    const secondRoot = document.querySelector<HTMLElement>('#secondMount');
+    if (!firstRoot || !secondRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const firstMount = mountHvyViewer({
+      root: firstRoot,
+      document: deserializeDocumentBytes(encoder.encode(firstSource), '.hvy'),
+      linkObserver: async () => ({ title: 'first-observer', href: '/first-rewrite' }),
+    });
+    const secondMount = mountHvyViewer({
+      root: secondRoot,
+      document: deserializeDocumentBytes(encoder.encode(secondSource), '.hvy'),
+      linkObserver: async () => ({ title: 'second-observer', href: '/second-rewrite' }),
+    });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+    firstMount.setPaletteOverrideId('paper');
+    secondMount.setPaletteOverrideId('spring');
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    return {
+      firstText: firstRoot.textContent,
+      secondText: secondRoot.textContent,
+      firstDocumentTitle: firstMount.getDocument().sections[0]?.title,
+      secondDocumentTitle: secondMount.getDocument().sections[0]?.title,
+      firstHref: firstRoot.querySelector('a')?.getAttribute('href'),
+      secondHref: secondRoot.querySelector('a')?.getAttribute('href'),
+      firstTitle: firstRoot.querySelector('a')?.getAttribute('title'),
+      secondTitle: secondRoot.querySelector('a')?.getAttribute('title'),
+      firstBg: firstRoot.style.getPropertyValue('--hvy-bg'),
+      secondBg: secondRoot.style.getPropertyValue('--hvy-bg'),
+    };
+  });
+
+  expect(result.firstText).toContain('First embedded document');
+  expect(result.firstText).not.toContain('Second embedded document');
+  expect(result.secondText).toContain('Second embedded document');
+  expect(result.secondText).not.toContain('First embedded document');
+  expect(result.firstDocumentTitle).toBe('First Summary');
+  expect(result.secondDocumentTitle).toBe('Second Summary');
+  expect(result.firstHref).toBe('/first-rewrite');
+  expect(result.secondHref).toBe('/second-rewrite');
+  expect(result.firstTitle).toBe('first-observer');
+  expect(result.secondTitle).toBe('second-observer');
+  expect(result.firstBg).not.toBe('');
+  expect(result.secondBg).not.toBe('');
+  expect(result.firstBg).not.toBe(result.secondBg);
+});
+
+test('embedded editor mounts isolate keyed session state', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="firstMount"></div><div id="secondMount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const encoder = new TextEncoder();
+    const firstRoot = document.querySelector<HTMLElement>('#firstMount');
+    const secondRoot = document.querySelector<HTMLElement>('#secondMount');
+    if (!firstRoot || !secondRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const firstMount = mountHvy({
+      root: firstRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('First Initial')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'first-editor',
+    });
+    const secondMount = mountHvy({
+      root: secondRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Second Initial')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'second-editor',
+    });
+    firstMount.getDocument().sections[0]!.title = 'First Saved';
+    secondMount.getDocument().sections[0]!.title = 'Second Saved';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    firstMount.destroy();
+    secondMount.destroy();
+    const firstResumeMount = mountHvy({
+      root: firstRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('First Fresh')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'first-editor',
+    });
+    const secondResumeMount = mountHvy({
+      root: secondRoot,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Second Fresh')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'second-editor',
+    });
+    return {
+      firstTitle: firstResumeMount.getDocument().sections[0]?.title,
+      secondTitle: secondResumeMount.getDocument().sections[0]?.title,
+      hasFirstStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1:first-editor')),
+      hasSecondStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1:second-editor')),
+      hasSharedStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1')),
+    };
+  });
+
+  expect(result.firstTitle).toBe('First Saved');
+  expect(result.secondTitle).toBe('Second Saved');
+  expect(result.hasFirstStorage).toBe(true);
+  expect(result.hasSecondStorage).toBe(true);
+  expect(result.hasSharedStorage).toBe(false);
+});
+
+test('embedded editor mounts do not persist session state without a storage key', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Temporary Initial
+
+ Temporary body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    mount.getDocument().sections[0]!.title = 'Temporary Saved';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    return {
+      storageKeys: Object.keys(sessionStorage),
+      title: mount.getDocument().sections[0]?.title,
+    };
+  });
+
+  expect(result.title).toBe('Temporary Saved');
+  expect(result.storageKeys).toEqual([]);
+});
+
+test('embedded editor storage key does not override explicit viewer mode', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const editorMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'mode-isolation',
+    });
+    editorMount.getDocument().sections[0]!.title = 'Saved Document';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    editorMount.destroy();
+    const viewerMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Viewer')), '.hvy'),
+      mode: 'viewer',
+      storageKey: 'mode-isolation',
+    });
+    return {
+      hasViewer: Boolean(root.querySelector('#readerDocument')),
+      hasEditor: Boolean(root.querySelector('#editorTree')),
+      hasViewerShell: Boolean(root.querySelector('.viewer-shell')),
+      title: viewerMount.getDocument().sections[0]?.title,
+    };
+  });
+
+  expect(result.hasViewer).toBe(true);
+  expect(result.hasEditor).toBe(false);
+  expect(result.hasViewerShell).toBe(true);
+  expect(result.title).toBe('Saved Document');
+});
+
 test('embedded runtime only registers plugins supplied by the host', async ({ page }) => {
   await page.goto('/');
 

@@ -19,7 +19,7 @@ import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './bind/handlers/click-misc';
-import { saveResumeState } from './state-persistence';
+import { saveSessionState } from './state-persistence';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
@@ -61,7 +61,7 @@ function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selec
   state.future = [];
   clearChatConversation(state.chat);
   resetTransientUiState();
-  saveResumeState(state);
+  saveSessionState(state);
   getRenderApp()();
 }
 
@@ -131,7 +131,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
     if (!response.ok) {
       throw new Error(`Could not save HVY guide document: ${response.status} ${response.statusText}`);
     }
-    saveResumeState(state);
+    saveSessionState(state);
     getRenderApp()();
     return;
   }
@@ -146,7 +146,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
     if (!response.ok) {
       throw new Error(`Could not save import reference document: ${response.status} ${response.statusText}`);
     }
-    saveResumeState(state);
+    saveSessionState(state);
     getRenderApp()();
     return;
   }
@@ -158,7 +158,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   const writable = await currentFileHandle.createWritable();
   await writable.write(bytes);
   await writable.close();
-  saveResumeState(state);
+  saveSessionState(state);
   getRenderApp()();
 }
 
@@ -277,7 +277,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerContainerState = {};
     state.readerExpandableState = {};
     state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
-    saveResumeState(state);
+    saveSessionState(state);
     getRenderApp()();
   };
 
@@ -300,7 +300,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
-    saveResumeState(state);
+    saveSessionState(state);
     getRenderApp()();
   });
 
@@ -322,13 +322,13 @@ export function bindUi(app: HTMLElement): void {
     clearChatConversation(state.chat);
     closeModal();
     resetTransientUiState();
-    saveResumeState(state);
+    saveSessionState(state);
     getRenderApp()();
   });
 
   downloadName.addEventListener('input', () => {
     state.filename = downloadName.value;
-    saveResumeState(state);
+    saveSessionState(state);
   });
 
   downloadBtn.addEventListener('click', () => {

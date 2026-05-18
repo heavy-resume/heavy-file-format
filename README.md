@@ -185,6 +185,19 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor' });
 const bytes = mount.serializeDocumentBytes();
 ```
 
+Embedded editor/AI instances do not persist reconnect/reload session state
+unless a stable `storageKey` is provided. Pass one per instance to persist
+without sharing a `sessionStorage` bucket:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  storageKey: 'customer-profile-editor',
+});
+```
+
 Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
 plugins:
 

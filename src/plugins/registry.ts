@@ -1,4 +1,4 @@
-import { state } from '../state';
+import { getActiveStateRuntime, state, type StateRuntime } from '../state';
 import type { HvyOutputGenerator, HvyPlugin } from './types';
 
 export interface DocumentPluginDefinition {
@@ -23,9 +23,25 @@ export function isDbTablePluginId(pluginId: string): boolean {
 
 // Host-supplied plugin objects. Keep insertion order — it drives the selector
 // order and hook tie-breaking.
-const hostPlugins: HvyPlugin[] = [];
+const fallbackHostPlugins: HvyPlugin[] = [];
+const hostPluginsByRuntime = new WeakMap<StateRuntime, HvyPlugin[]>();
+
+function getMutableHostPlugins(): HvyPlugin[] {
+  try {
+    const runtime = getActiveStateRuntime();
+    let plugins = hostPluginsByRuntime.get(runtime);
+    if (!plugins) {
+      plugins = [...fallbackHostPlugins];
+      hostPluginsByRuntime.set(runtime, plugins);
+    }
+    return plugins;
+  } catch {
+    return fallbackHostPlugins;
+  }
+}
 
 export function registerHostPlugin(plugin: HvyPlugin): void {
+  const hostPlugins = getMutableHostPlugins();
   const nextPlugins = [...hostPlugins];
   const nextExistingIndex = nextPlugins.findIndex((entry) => entry.id === plugin.id);
   if (nextExistingIndex >= 0) {
@@ -43,6 +59,7 @@ export function registerHostPlugin(plugin: HvyPlugin): void {
 }
 
 export function setHostPlugins(plugins: HvyPlugin[]): void {
+  const hostPlugins = getMutableHostPlugins();
   assertUniqueOutputGeneratorKeys(plugins);
   hostPlugins.length = 0;
   for (const plugin of plugins) {
@@ -51,18 +68,22 @@ export function setHostPlugins(plugins: HvyPlugin[]): void {
 }
 
 export function getHostPlugins(): HvyPlugin[] {
+  const hostPlugins = getMutableHostPlugins();
   return [...hostPlugins];
 }
 
 export function getRenderableHostPlugins(): HvyPlugin[] {
+  const hostPlugins = getMutableHostPlugins();
   return hostPlugins.filter((plugin) => typeof plugin.create === 'function' || (plugin.components?.length ?? 0) > 0);
 }
 
 export function getHostPlugin(pluginId: string): HvyPlugin | null {
+  const hostPlugins = getMutableHostPlugins();
   return hostPlugins.find((entry) => entry.id === pluginId) ?? null;
 }
 
 export function getAvailableOutputGenerators(): HvyOutputGenerator[] {
+  const hostPlugins = getMutableHostPlugins();
   return hostPlugins.flatMap((plugin) => plugin.outputGenerators ?? []);
 }
 

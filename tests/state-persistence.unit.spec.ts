@@ -1,13 +1,55 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { deserializeDocument } from '../src/serialization';
-import { loadResumeState, saveResumeState } from '../src/state-persistence';
+import { createDefaultSearchState } from '../src/search/state';
+import { loadSessionState, saveSessionState } from '../src/state-persistence';
 import type { AppState } from '../src/types';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test('saveResumeState and loadResumeState round trip the working document and lightweight UI state', () => {
+function createPersistenceTestState(documentTitle: string, sessionStorageKey: string | null): AppState {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${documentTitle}
+
+<!--hvy:text {}-->
+ ${documentTitle} body
+`, '.hvy');
+  return {
+    document,
+    filename: `${documentTitle.toLowerCase().replace(/\s+/g, '-')}.hvy`,
+    selectedExample: 'custom',
+    currentView: 'editor',
+    editorMode: 'basic',
+    responsivePreview: 'full',
+    sessionStorageKey,
+    showAdvancedEditor: false,
+    rawEditorText: '',
+    templateValues: {},
+    chat: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      draft: '',
+      messages: [],
+      panelOpen: false,
+      isSending: false,
+      error: null,
+      requestNonce: 0,
+      abortController: null,
+      cliSimEnabled: false,
+      cliSim: null,
+    },
+    search: createDefaultSearchState(),
+    cliDraft: '',
+    cliSession: { cwd: '/' },
+    cliHistory: [],
+  } as unknown as AppState;
+}
+
+test('saveSessionState and loadSessionState round trip the working document and lightweight UI state', () => {
   const storage = new Map<string, string>();
   const legacyStorage = new Map<string, string>([['hvy-editor-resume-state-v1', 'stale shared tab state']]);
   vi.stubGlobal('window', {
@@ -34,7 +76,7 @@ hvy_version: 0.1
  Saved work
 `, '.hvy');
 
-  saveResumeState({
+  saveSessionState({
     document,
     filename: 'saved.hvy',
     selectedExample: 'resume-example',
@@ -116,18 +158,18 @@ hvy_version: 0.1
     ],
   } as unknown as AppState);
 
-  const resumed = loadResumeState();
+  const loaded = loadSessionState();
 
-  expect(resumed?.filename).toBe('saved.hvy');
-  expect(resumed?.selectedExample).toBe('resume-example');
-  expect(resumed?.currentView).toBe('ai');
-  expect(resumed?.editorMode).toBe('raw');
-  expect(resumed?.showAdvancedEditor).toBe(true);
-  expect(resumed?.rawEditorText).toBe('raw text');
-  expect(resumed?.templateValues).toEqual({ name: 'Ada' });
-  expect(resumed?.chat.draft).toBe('continue this');
-  expect(resumed?.chat.panelOpen).toBe(true);
-  expect(resumed?.search).toMatchObject({
+  expect(loaded?.filename).toBe('saved.hvy');
+  expect(loaded?.selectedExample).toBe('resume-example');
+  expect(loaded?.currentView).toBe('ai');
+  expect(loaded?.editorMode).toBe('raw');
+  expect(loaded?.showAdvancedEditor).toBe(true);
+  expect(loaded?.rawEditorText).toBe('raw text');
+  expect(loaded?.templateValues).toEqual({ name: 'Ada' });
+  expect(loaded?.chat.draft).toBe('continue this');
+  expect(loaded?.chat.panelOpen).toBe(true);
+  expect(loaded?.search).toMatchObject({
     open: true,
     queryDraft: 'Python',
     submittedQuery: 'Python',
@@ -154,7 +196,7 @@ hvy_version: 0.1
     requestNonce: 0,
     abortController: null,
   });
-  expect(resumed?.cli).toEqual({
+  expect(loaded?.cli).toEqual({
     draft: 'ls /body',
     session: {
       cwd: '/body/summary',
@@ -168,7 +210,7 @@ hvy_version: 0.1
       { cwd: '/body/summary', command: 'cat missing', output: 'no such file', error: true },
     ],
   });
-  expect(resumed?.chat.messages).toEqual([
+  expect(loaded?.chat.messages).toEqual([
     { id: 'm1', role: 'user', content: 'Please edit.' },
     {
       id: 'm2',
@@ -184,13 +226,13 @@ hvy_version: 0.1
     },
     { id: 'm3', role: 'assistant', content: 'Done.' },
   ]);
-  expect(resumed?.document.sections[0]?.title).toBe('Summary');
-  expect(resumed?.document.sections[0]?.blocks[0]?.text).toBe('Saved work');
-  expect(storage.has('hvy-editor-resume-state-v2')).toBe(true);
+  expect(loaded?.document.sections[0]?.title).toBe('Summary');
+  expect(loaded?.document.sections[0]?.blocks[0]?.text).toBe('Saved work');
+  expect(storage.has('hvy-editor-session-state-v1')).toBe(true);
   expect(legacyStorage.has('hvy-editor-resume-state-v1')).toBe(false);
 });
 
-test('loadResumeState ignores legacy shared localStorage state from other tabs', () => {
+test('loadSessionState ignores legacy shared localStorage state from other tabs', () => {
   const sessionStorage = new Map<string, string>();
   const localStorage = new Map<string, string>([['hvy-editor-resume-state-v1', JSON.stringify({
     version: 1,
@@ -218,5 +260,46 @@ test('loadResumeState ignores legacy shared localStorage state from other tabs',
     },
   });
 
-  expect(loadResumeState()).toBeNull();
+  expect(loadSessionState()).toBeNull();
+});
+
+test('saveSessionState and loadSessionState isolate custom session storage keys', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+
+  saveSessionState(createPersistenceTestState('First Instance', 'first'));
+  saveSessionState(createPersistenceTestState('Second Instance', 'second'));
+
+  expect(storage.has('hvy-editor-session-state-v1:first')).toBe(true);
+  expect(storage.has('hvy-editor-session-state-v1:second')).toBe(true);
+  expect(loadSessionState('first')?.document.sections[0]?.title).toBe('First Instance');
+  expect(loadSessionState('second')?.document.sections[0]?.title).toBe('Second Instance');
+  expect(loadSessionState()).toBeNull();
+});
+
+test('saveSessionState skips persistence when sessionStorageKey is null', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+
+  saveSessionState(createPersistenceTestState('Temporary Instance', null));
+
+  expect(storage.size).toBe(0);
 });

@@ -3,8 +3,11 @@ import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSes
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchState } from './search/types';
 
-const RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v2';
-const LEGACY_RESUME_STORAGE_KEY = 'hvy-editor-resume-state-v1';
+const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
+const LEGACY_SESSION_STORAGE_KEYS = [
+  'hvy-editor-resume-state-v2',
+  'hvy-editor-resume-state-v1',
+];
 const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
   provider: 'openai',
   model: 'gpt-5.4-mini',
@@ -12,7 +15,7 @@ const DEFAULT_SAVED_CHAT_SETTINGS: ChatSettings = {
   compactionModel: 'gpt-5.4-nano',
 };
 
-interface ResumeStatePayload {
+interface SessionStatePayload {
   version: 1;
   savedAt: string;
   filename: string;
@@ -39,7 +42,7 @@ interface ResumeStatePayload {
 
 type SavedSearchState = Omit<SearchState, 'isLoading' | 'error' | 'requestNonce' | 'abortController'>;
 
-export interface LoadedResumeState {
+export interface LoadedSessionState {
   document: VisualDocument;
   filename: string;
   selectedExample?: SelectedExample;
@@ -48,21 +51,21 @@ export interface LoadedResumeState {
   showAdvancedEditor: boolean;
   rawEditorText: string;
   templateValues: Record<string, string>;
-  chat: ResumeStatePayload['chat'];
+  chat: SessionStatePayload['chat'];
   search: SearchState;
-  cli: ResumeStatePayload['cli'];
+  cli: SessionStatePayload['cli'];
 }
 
-export function loadResumeState(): LoadedResumeState | null {
+export function loadSessionState(storageKey?: string | null): LoadedSessionState | null {
   if (typeof window === 'undefined' || !window.sessionStorage) {
     return null;
   }
   try {
-    const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(getSessionStorageKey(storageKey));
     if (!raw) {
       return null;
     }
-    const parsed = JSON.parse(raw) as Partial<ResumeStatePayload> | null;
+    const parsed = JSON.parse(raw) as Partial<SessionStatePayload> | null;
     if (!parsed || parsed.version !== 1 || typeof parsed.documentBase64 !== 'string') {
       return null;
     }
@@ -94,17 +97,20 @@ export function loadResumeState(): LoadedResumeState | null {
       },
     };
   } catch (error) {
-    console.warn('[hvy:resume] failed to load saved state', error);
+    console.warn('[hvy:session] failed to load saved state', error);
     return null;
   }
 }
 
-export function saveResumeState(state: AppState): void {
+export function saveSessionState(state: AppState): void {
+  if (state.sessionStorageKey === null) {
+    return;
+  }
   if (typeof window === 'undefined' || !window.sessionStorage) {
     return;
   }
   try {
-    const payload: ResumeStatePayload = {
+    const payload: SessionStatePayload = {
       version: 1,
       savedAt: new Date().toISOString(),
       filename: state.filename,
@@ -128,23 +134,38 @@ export function saveResumeState(state: AppState): void {
       },
       documentBase64: bytesToBase64(serializeDocumentBytes(state.document)),
     };
-    window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(payload));
-    window.localStorage?.removeItem(LEGACY_RESUME_STORAGE_KEY);
+    window.sessionStorage.setItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
+    removeLegacySessionState();
   } catch (error) {
-    console.warn('[hvy:resume] failed to save state', error);
+    console.warn('[hvy:session] failed to save state', error);
   }
 }
 
-export function clearResumeState(): void {
+export function clearSessionState(storageKey?: string | null): void {
   if (typeof window === 'undefined') {
     return;
   }
   try {
-    window.sessionStorage?.removeItem(RESUME_STORAGE_KEY);
-    window.localStorage?.removeItem(LEGACY_RESUME_STORAGE_KEY);
+    window.sessionStorage?.removeItem(getSessionStorageKey(storageKey));
+    removeLegacySessionState();
   } catch {
     // Ignore storage failures.
   }
+}
+
+function removeLegacySessionState(): void {
+  for (const key of LEGACY_SESSION_STORAGE_KEYS) {
+    window.sessionStorage?.removeItem(key);
+    window.localStorage?.removeItem(key);
+  }
+}
+
+function getSessionStorageKey(storageKey?: string | null): string {
+  const suffix = typeof storageKey === 'string' ? storageKey.trim() : '';
+  if (!suffix) {
+    return SESSION_STORAGE_KEY;
+  }
+  return `${SESSION_STORAGE_KEY}:${suffix}`;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

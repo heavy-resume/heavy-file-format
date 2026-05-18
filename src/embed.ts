@@ -3,7 +3,15 @@ import './host-overrides.css';
 import './style.css';
 
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
-import { initCallbacks, initState, state } from './state';
+import {
+  activateStateRuntime,
+  createStateRuntime,
+  initCallbacks,
+  state,
+  runWithStateRuntime,
+  runWithStateRuntimeAsync,
+  type StateRuntime,
+} from './state';
 import type { AppState, ChatProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
@@ -61,6 +69,7 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
 }
 
@@ -130,7 +139,8 @@ function createDefaultSearchState(): AppState['search'] {
 function createEmbedState(
   document: VisualDocument,
   showAdvancedEditor = false,
-  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
+  sessionStorageKey?: string | null
 ): AppState {
   return {
     document,
@@ -139,6 +149,7 @@ function createEmbedState(
     currentView: 'viewer',
     editorMode: 'basic',
     responsivePreview: 'full',
+    sessionStorageKey,
     imageAttachmentMaxDimensions,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
@@ -378,12 +389,39 @@ async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<voi
   await runButtonVisibilityScripts(root);
 }
 
-function ensureEmbedRuntime(plugins: HvyPlugin[]): void {
+function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
+  root.addEventListener('click', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('input', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('change', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('keydown', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('focusin', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('submit', () => activateStateRuntime(runtime), { capture: true });
+}
+
+function ensureEmbedRuntime(
+  plugins: HvyPlugin[],
+  runtime: StateRuntime,
+  root: HTMLElement,
+  getLinkObserver: () => HvyLinkObserver | null
+): void {
   const renderer = ensureReaderRenderer();
   initCallbacks({
-    renderApp,
-    refreshReaderPanels,
-    refreshModalPreview,
+    renderApp: () => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      setThemeRoot(root);
+      renderApp();
+    }),
+    refreshReaderPanels: () => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      refreshReaderPanels();
+    }),
+    refreshModalPreview: () => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      refreshModalPreview();
+    }),
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer: renderer,
   });
@@ -523,58 +561,88 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ((options.mode ?? 'viewer') !== 'viewer') {
     return mountFullHvyProxy(options);
   }
+  const runtime = createStateRuntime(createEmbedState(
+    options.document,
+    options.showAdvancedEditor ?? false,
+    options.imageAttachmentMaxDimensions,
+    options.storageKey ?? null
+  ));
+  let linkObserver = options.linkObserver ?? null;
+  activateStateRuntime(runtime);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
-  initState(createEmbedState(options.document, options.showAdvancedEditor ?? false, options.imageAttachmentMaxDimensions));
-  currentLinkObserver = options.linkObserver ?? null;
+  currentLinkObserver = linkObserver;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
   }
-  ensureEmbedRuntime(options.plugins ?? []);
-  renderApp();
+  bindRuntimeActivation(options.root, runtime);
+  ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
+  runtime.callbacks.renderApp();
   return {
     destroy() {
-      options.root.innerHTML = '';
-      setHostPlugins([]);
-      resetPluginDocumentHookState();
-      if (currentRoot === options.root) {
-        currentRoot = null;
-        currentLinkObserver = null;
-        setThemeRoot(null);
-      }
+      runWithStateRuntime(runtime, () => {
+        options.root.innerHTML = '';
+        setHostPlugins([]);
+        resetPluginDocumentHookState();
+        if (currentRoot === options.root) {
+          currentRoot = null;
+          currentLinkObserver = null;
+          setThemeRoot(null);
+        }
+      });
     },
     getDocument() {
-      return state.document;
+      return runWithStateRuntime(runtime, () => state.document);
     },
     serializeDocumentBytes() {
-      return serializeDocumentBytes(state.document);
+      return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
     },
-    buildImportPlan,
-    importFromText,
-    setLinkObserver,
-    setPaletteOverrideId,
-    openThemeEditor(options = {}) {
-      void loadFullEmbed().then((module) => {
+    buildImportPlan(importOptions) {
+      return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));
+    },
+    importFromText(importOptions) {
+      return runWithStateRuntimeAsync(runtime, () => importFromText(importOptions));
+    },
+    setLinkObserver(observer) {
+      runWithStateRuntime(runtime, () => {
+        linkObserver = observer;
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setLinkObserver(observer);
+      });
+    },
+    setPaletteOverrideId(id) {
+      runWithStateRuntime(runtime, () => {
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setThemeRoot(options.root);
+        setPaletteOverrideId(id);
+      });
+    },
+    openThemeEditor(themeOptions = {}) {
+      void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
         const fullMount = module.mountHvy({
-          root: currentRoot ?? document.createElement('div'),
+          root: options.root,
           document: state.document,
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+          storageKey: state.sessionStorageKey,
         });
-        fullMount.openThemeEditor(options);
-      });
+        fullMount.openThemeEditor(themeOptions);
+      }));
     },
-    mountThemeEditor(root, options = {}) {
-      void loadFullEmbed().then((module) => {
+    mountThemeEditor(root, themeOptions = {}) {
+      void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
         const fullMount = module.mountHvy({
-          root: currentRoot ?? root,
+          root: options.root,
           document: state.document,
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+          storageKey: state.sessionStorageKey,
         });
-        fullMount.mountThemeEditor(root, options);
-      });
+        fullMount.mountThemeEditor(root, themeOptions);
+      }));
     },
   };
 }
@@ -612,6 +680,7 @@ declare global {
       plugins: typeof builtInPluginMap;
       builtInPlugins: typeof builtInPlugins;
     };
+    HVY_CHAT_CLIENT?: HostChatClient;
   }
 }
 

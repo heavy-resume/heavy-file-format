@@ -27,7 +27,7 @@ import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
-import { loadResumeState, saveResumeState } from './state-persistence';
+import { loadSessionState, saveSessionState } from './state-persistence';
 import { setHostPlugins } from './plugins/registry';
 import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
@@ -162,51 +162,51 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
   };
 }
 
-function applyResumeState(initial: AppState, resume: ReturnType<typeof loadResumeState>): AppState {
-  if (!resume) {
+function applySessionState(initial: AppState, savedSession: ReturnType<typeof loadSessionState>): AppState {
+  if (!savedSession) {
     return initial;
   }
   return {
     ...initial,
-    document: resume.document,
-    filename: resume.filename,
-    selectedExample: resume.selectedExample,
-    currentView: resume.currentView,
-    editorMode: resume.editorMode,
-    showAdvancedEditor: resume.showAdvancedEditor,
-    rawEditorText: resume.rawEditorText || serializeDocument(resume.document),
-    templateValues: resume.templateValues,
+    document: savedSession.document,
+    filename: savedSession.filename,
+    selectedExample: savedSession.selectedExample,
+    currentView: savedSession.currentView,
+    editorMode: savedSession.editorMode,
+    showAdvancedEditor: savedSession.showAdvancedEditor,
+    rawEditorText: savedSession.rawEditorText || serializeDocument(savedSession.document),
+    templateValues: savedSession.templateValues,
     chat: {
       ...initial.chat,
-      settings: resume.chat.settings,
-      draft: resume.chat.draft,
-      messages: resume.chat.messages,
-      panelOpen: resume.chat.panelOpen,
+      settings: savedSession.chat.settings,
+      draft: savedSession.chat.draft,
+      messages: savedSession.chat.messages,
+      panelOpen: savedSession.chat.panelOpen,
     },
-    search: resume.search.filterEnabled
+    search: savedSession.search.filterEnabled
       ? {
-          ...resume.search,
+          ...savedSession.search,
           filterEnabled: false,
           results: [],
           navigationResultIds: [],
           activeResultId: null,
-          isLoading: Boolean(resume.search.submittedQuery.trim()),
+          isLoading: Boolean(savedSession.search.submittedQuery.trim()),
         }
-      : resume.search,
-    cliDraft: resume.cli.draft,
-    cliSession: resume.cli.session,
-    cliHistory: resume.cli.history,
+      : savedSession.search,
+    cliDraft: savedSession.cli.draft,
+    cliSession: savedSession.cli.session,
+    cliHistory: savedSession.cli.history,
   };
 }
 
-function bindResumePersistence(): void {
-  window.addEventListener('beforeunload', () => saveResumeState(state));
+function bindSessionPersistence(): void {
+  window.addEventListener('beforeunload', () => saveSessionState(state));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
-      saveResumeState(state);
+      saveSessionState(state);
     }
   });
-  window.addEventListener('pagehide', () => saveResumeState(state));
+  window.addEventListener('pagehide', () => saveSessionState(state));
 }
 
 function renderContextMenu(): string {
@@ -1037,19 +1037,19 @@ initCallbacks({
 });
 
 async function bootstrap(): Promise<void> {
-  const resume = loadResumeState();
+  const savedSession = loadSessionState();
   setHostPlugins([...builtInPlugins, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
-  initState(applyResumeState(createInitialState(await createDefaultDocument()), resume));
-  bindResumePersistence();
-  saveResumeState(state);
+  initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
+  bindSessionPersistence();
+  saveSessionState(state);
   initColorModeSync();
   renderApp();
-  void refreshRestoredSearch(resume);
+  void refreshRestoredSearch(savedSession);
 }
 
-async function refreshRestoredSearch(resume: ReturnType<typeof loadResumeState>): Promise<void> {
-  const savedSearch = resume?.search;
+async function refreshRestoredSearch(savedSession: ReturnType<typeof loadSessionState>): Promise<void> {
+  const savedSearch = savedSession?.search;
   if (!savedSearch?.submittedQuery.trim()) {
     return;
   }
@@ -1059,7 +1059,7 @@ async function refreshRestoredSearch(resume: ReturnType<typeof loadResumeState>)
   if (savedSearch.filterEnabled) {
     await applySearchFilter({ enabled: true });
   }
-  saveResumeState(state);
+  saveSessionState(state);
 }
 
 bootstrap().catch((error) => {

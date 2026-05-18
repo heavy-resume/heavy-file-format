@@ -1,6 +1,6 @@
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../editor/types';
-import { getRenderApp, state } from '../state';
+import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
@@ -76,14 +76,33 @@ interface SqliteRuntime {
   persistPromise: Promise<void> | null;
 }
 
-const runtime: SqliteRuntime = {
-  documentRef: null,
-  db: null,
-  loading: false,
-  loadError: null,
-  loadPromise: null,
-  persistPromise: null,
-};
+function createSqliteRuntime(): SqliteRuntime {
+  return {
+    documentRef: null,
+    db: null,
+    loading: false,
+    loadError: null,
+    loadPromise: null,
+    persistPromise: null,
+  };
+}
+
+const fallbackRuntime: SqliteRuntime = createSqliteRuntime();
+const runtimeByStateRuntime = new WeakMap<StateRuntime, SqliteRuntime>();
+
+function getSqliteRuntime(): SqliteRuntime {
+  try {
+    const stateRuntime = getActiveStateRuntime();
+    let runtime = runtimeByStateRuntime.get(stateRuntime);
+    if (!runtime) {
+      runtime = createSqliteRuntime();
+      runtimeByStateRuntime.set(stateRuntime, runtime);
+    }
+    return runtime;
+  } catch {
+    return fallbackRuntime;
+  }
+}
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 export {
@@ -141,6 +160,7 @@ function renderDbTablePluginContent(
   tableName: string,
   readOnly: boolean
 ): string {
+  const runtime = getSqliteRuntime();
   if (tableName.trim().length === 0) {
     return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
   }
@@ -557,6 +577,7 @@ export async function setSqliteRowComponent(tableName: string, rowId: number, hv
 }
 
 function ensureSqliteRuntime(): void {
+  const runtime = getSqliteRuntime();
   if (runtime.documentRef === state.document && (runtime.db || runtime.loading || runtime.loadError)) {
     return;
   }
@@ -568,7 +589,7 @@ function ensureSqliteRuntime(): void {
 
   runtime.loading = true;
   runtime.loadError = null;
-  runtime.loadPromise = loadRuntimeDatabase()
+  runtime.loadPromise = loadRuntimeDatabase(state.document)
     .then(() => {
       runtime.loading = false;
       runtime.loadError = null;
@@ -583,6 +604,7 @@ function ensureSqliteRuntime(): void {
 
 async function getLoadedDatabase(): Promise<SqlJsDatabase> {
   ensureSqliteRuntime();
+  const runtime = getSqliteRuntime();
   if (runtime.loadPromise) {
     await runtime.loadPromise;
   }
@@ -592,9 +614,10 @@ async function getLoadedDatabase(): Promise<SqlJsDatabase> {
   return runtime.db;
 }
 
-async function loadRuntimeDatabase(): Promise<void> {
+async function loadRuntimeDatabase(document: VisualDocument): Promise<void> {
+  const runtime = getSqliteRuntime();
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(getAttachment(state.document, DB_ATTACHMENT_ID));
+  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   runtime.db = bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
 
@@ -632,16 +655,18 @@ async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null)
 }
 
 async function persistRuntimeDatabase(): Promise<void> {
+  const runtime = getSqliteRuntime();
   if (!runtime.db) {
     return;
   }
 
   const databaseBytes = runtime.db.export();
+  const document = state.document;
   runtime.persistPromise = (async () => {
     const encoded = await encodeAttachmentBytes(databaseBytes);
-    const previous = getAttachment(state.document, DB_ATTACHMENT_ID);
+    const previous = getAttachment(document, DB_ATTACHMENT_ID);
     setAttachment(
-      state.document,
+      document,
       DB_ATTACHMENT_ID,
       {
         ...(previous?.meta ?? {}),
@@ -683,6 +708,7 @@ async function transformBytes(bytes: Uint8Array, stream: CompressionStream | Dec
 }
 
 function resetRuntime(): void {
+  const runtime = getSqliteRuntime();
   try {
     runtime.db?.close();
   } catch {
@@ -1259,6 +1285,7 @@ function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): 
     },
     db.export()
   );
+  const runtime = getSqliteRuntime();
   if (runtime.documentRef === document) {
     resetRuntime();
     runtime.documentRef = document;

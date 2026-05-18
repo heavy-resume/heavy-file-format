@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveResumeState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveSessionState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
 import { applySearchFilter, submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
@@ -103,7 +103,7 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.error = null;
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
-      saveResumeState(state);
+      saveSessionState(state);
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
@@ -152,7 +152,7 @@ export function bindSubmit(app: HTMLElement): void {
                     content: message.content,
                   });
                   state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
-                  saveResumeState(state);
+                  saveSessionState(state);
                   getRenderApp()();
                 },
                 signal: abortController.signal,
@@ -181,7 +181,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
-        saveResumeState(state);
+        saveSessionState(state);
         if (isDocumentEditChat && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
@@ -204,7 +204,7 @@ export function bindSubmit(app: HTMLElement): void {
         });
         state.chat.abortController = null;
         state.chat.isSending = false;
-        saveResumeState(state);
+        saveSessionState(state);
         getRenderApp()();
       }
       return;

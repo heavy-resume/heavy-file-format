@@ -1,4 +1,5 @@
 import './chat.css';
+import { getActiveStateRuntime, type StateRuntime } from '../state';
 import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
@@ -70,18 +71,33 @@ export interface HostChatClient {
   toolTurn?(request: ProxyChatRequest, options?: { signal?: AbortSignal; debugLabel?: string }): Promise<ProxyChatResponse>;
 }
 
-let hostChatClient: HostChatClient | null = null;
+let fallbackHostChatClient: HostChatClient | null = null;
+const hostChatClientByRuntime = new WeakMap<StateRuntime, HostChatClient | null>();
+
+function getActiveRuntimeOrNull(): StateRuntime | null {
+  try {
+    return getActiveStateRuntime();
+  } catch {
+    return null;
+  }
+}
 
 export function setHostChatClient(client: HostChatClient | null): void {
-  hostChatClient = client;
+  const runtime = getActiveRuntimeOrNull();
+  if (!runtime) {
+    fallbackHostChatClient = client;
+    return;
+  }
+  hostChatClientByRuntime.set(runtime, client);
 }
 
 export function getHostChatClient(): HostChatClient | null {
-  return hostChatClient;
+  const runtime = getActiveRuntimeOrNull();
+  return runtime ? hostChatClientByRuntime.get(runtime) ?? null : fallbackHostChatClient;
 }
 
 export function hasHostChatClient(): boolean {
-  return hostChatClient !== null;
+  return getHostChatClient() !== null;
 }
 
 export function shouldRenderChatProviderControls(surface: ChatControlSurface = 'reference'): boolean {

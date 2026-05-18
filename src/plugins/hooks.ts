@@ -1,4 +1,4 @@
-import { getRenderApp, state } from '../state';
+import { getActiveStateRuntime, getRenderApp, runWithStateRuntime, runWithStateRuntimeAsync, state, type StateRuntime } from '../state';
 import { serializeDocument } from '../serialization';
 import type { VisualDocument } from '../types';
 import { refreshMountedPlugins } from './mount';
@@ -19,10 +19,39 @@ interface OrderedHookHandler {
   handlerOrder: number;
 }
 
-let lastHookDocument: VisualDocument | null = null;
-let lastHookSignature = '';
-let hookRun = Promise.resolve();
-let hookRunDepth = 0;
+interface HookRuntimeState {
+  lastHookDocument: VisualDocument | null;
+  lastHookSignature: string;
+  hookRun: Promise<void>;
+  hookRunDepth: number;
+}
+
+const fallbackHookState: HookRuntimeState = {
+  lastHookDocument: null,
+  lastHookSignature: '',
+  hookRun: Promise.resolve(),
+  hookRunDepth: 0,
+};
+const hookStateByRuntime = new WeakMap<StateRuntime, HookRuntimeState>();
+
+function getHookState(): HookRuntimeState {
+  try {
+    const runtime = getActiveStateRuntime();
+    let hookState = hookStateByRuntime.get(runtime);
+    if (!hookState) {
+      hookState = {
+        lastHookDocument: null,
+        lastHookSignature: '',
+        hookRun: Promise.resolve(),
+        hookRunDepth: 0,
+      };
+      hookStateByRuntime.set(runtime, hookState);
+    }
+    return hookState;
+  } catch {
+    return fallbackHookState;
+  }
+}
 
 function normalizeHandlers(value: HvyPluginHookHandler | HvyPluginHookHandler[] | undefined): HvyPluginHookHandler[] {
   if (!value) {
@@ -54,18 +83,20 @@ function getOrderedHandlers(hookName: DocumentHookName, plugins: HvyPlugin[]): O
 }
 
 function createHookContext(document: VisualDocument, changeReason: HvyPluginHookChangeReason): HvyDocumentHookContext {
+  const runtime = getActiveStateRuntime();
   return {
     document,
     view: state.currentView,
     changeReason,
     refreshPlugins: (pluginId) => refreshMountedPlugins(pluginId),
-    requestRerender: () => getRenderApp()(),
+    requestRerender: () => runWithStateRuntime(runtime, () => getRenderApp()()),
     isCurrentDocument: () => state.document === document,
   };
 }
 
 async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookContext): Promise<void> {
-  hookRunDepth += 1;
+  const hookState = getHookState();
+  hookState.hookRunDepth += 1;
   try {
     for (const { handler } of getOrderedHandlers(hookName, getHostPlugins())) {
       if (!ctx.isCurrentDocument()) {
@@ -78,43 +109,48 @@ async function runHookHandlers(hookName: DocumentHookName, ctx: HvyDocumentHookC
       }
     }
   } finally {
-    hookRunDepth = Math.max(0, hookRunDepth - 1);
+    hookState.hookRunDepth = Math.max(0, hookState.hookRunDepth - 1);
   }
 }
 
 export function resetPluginDocumentHookState(): void {
-  lastHookDocument = null;
-  lastHookSignature = '';
-  hookRun = Promise.resolve();
+  const hookState = getHookState();
+  hookState.lastHookDocument = null;
+  hookState.lastHookSignature = '';
+  hookState.hookRun = Promise.resolve();
 }
 
 export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason = 'unknown'): Promise<void> {
+  const runtime = getActiveStateRuntime();
+  const hookState = getHookState();
   const document = state.document;
   const signature = serializeDocument(document);
-  const hookName: DocumentHookName | null = lastHookDocument !== document
+  const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
-    : lastHookSignature !== signature
+    : hookState.lastHookSignature !== signature
       ? 'documentChange'
       : null;
 
-  lastHookDocument = document;
-  lastHookSignature = signature;
+  hookState.lastHookDocument = document;
+  hookState.lastHookSignature = signature;
 
-  if (hookRunDepth > 0) {
+  if (hookState.hookRunDepth > 0) {
     return Promise.resolve();
   }
 
   if (!hookName) {
-    return hookRun;
+    return hookState.hookRun;
   }
 
   const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
-  hookRun = hookRun.then(async () => {
-    await runHookHandlers(hookName, ctx);
-    if (ctx.isCurrentDocument()) {
-      lastHookDocument = document;
-      lastHookSignature = serializeDocument(document);
-    }
+  hookState.hookRun = hookState.hookRun.then(async () => {
+    await runWithStateRuntimeAsync(runtime, async () => {
+      await runHookHandlers(hookName, ctx);
+      if (ctx.isCurrentDocument()) {
+        hookState.lastHookDocument = document;
+        hookState.lastHookSignature = serializeDocument(document);
+      }
+    });
   });
-  return hookRun;
+  return hookState.hookRun;
 }

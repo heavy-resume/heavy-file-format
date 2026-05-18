@@ -33,6 +33,31 @@ export function incrementHistorySnapshotCount(): number { return ++historySnapsh
 export function incrementRecordHistoryCount(): number { return ++recordHistoryCount; }
 
 // Late-bound callbacks to avoid circular imports
+type RuntimeCallbacks = {
+  renderApp: () => void;
+  refreshReaderPanels: () => void;
+  refreshModalPreview: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  componentRenderHelpers: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readerRenderer: any;
+};
+
+export interface StateRuntime {
+  state: AppState;
+  callbacks: RuntimeCallbacks;
+}
+
+function createUninitializedCallbacks(): RuntimeCallbacks {
+  return {
+    renderApp: () => { throw new Error('renderApp not initialized'); },
+    refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
+    refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  };
+}
+
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
 let _refreshReaderPanels: () => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
@@ -67,16 +92,76 @@ export function initCallbacks(callbacks: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readerRenderer: any;
 }): void {
-  _renderApp = callbacks.renderApp;
-  _refreshReaderPanels = callbacks.refreshReaderPanels;
-  _refreshModalPreview = callbacks.refreshModalPreview;
-  _componentRenderHelpers = callbacks.componentRenderHelpers;
-  _readerRenderer = callbacks.readerRenderer;
+  if (!activeRuntime) {
+    activeRuntime = {
+      state,
+      callbacks: createUninitializedCallbacks(),
+    };
+  }
+  activeRuntime.callbacks = callbacks;
+  activateStateRuntime(activeRuntime);
 }
 
 // state is initialized lazily by main.ts after createDefaultDocument is available
 export let state: AppState;
+let activeRuntime: StateRuntime | null = null;
 
 export function initState(initial: AppState): void {
-  state = initial;
+  if (!activeRuntime) {
+    activeRuntime = {
+      state: initial,
+      callbacks: createUninitializedCallbacks(),
+    };
+  } else {
+    activeRuntime.state = initial;
+  }
+  activateStateRuntime(activeRuntime);
+}
+
+export function createStateRuntime(initial: AppState): StateRuntime {
+  return {
+    state: initial,
+    callbacks: createUninitializedCallbacks(),
+  };
+}
+
+export function getActiveStateRuntime(): StateRuntime {
+  if (!activeRuntime) {
+    throw new Error('state runtime not initialized');
+  }
+  return activeRuntime;
+}
+
+export function activateStateRuntime(runtime: StateRuntime): void {
+  activeRuntime = runtime;
+  state = runtime.state;
+  _renderApp = runtime.callbacks.renderApp;
+  _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
+  _refreshModalPreview = runtime.callbacks.refreshModalPreview;
+  _componentRenderHelpers = runtime.callbacks.componentRenderHelpers;
+  _readerRenderer = runtime.callbacks.readerRenderer;
+}
+
+export function runWithStateRuntime<T>(runtime: StateRuntime, action: () => T): T {
+  const previous = activeRuntime;
+  activateStateRuntime(runtime);
+  try {
+    return action();
+  } finally {
+    if (previous && previous !== runtime) {
+      activateStateRuntime(previous);
+    }
+  }
+}
+
+export async function runWithStateRuntimeAsync<T>(runtime: StateRuntime, action: () => Promise<T>): Promise<T> {
+  const previous = activeRuntime;
+  activateStateRuntime(runtime);
+  try {
+    return await action();
+  } finally {
+    if (previous && previous !== runtime) {
+      activateStateRuntime(previous);
+    }
+  }
 }

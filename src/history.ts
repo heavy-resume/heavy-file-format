@@ -1,7 +1,7 @@
 import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
 import { debugMeasure } from './utils';
 import type { VisualDocument } from './types';
-import { saveResumeState } from './state-persistence';
+import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 
@@ -36,7 +36,7 @@ export function commitHistorySnapshot(): void {
       state.history.shift();
     }
     state.future = [];
-    saveResumeState(state);
+    saveSessionState(state);
   }
 }
 
@@ -91,7 +91,7 @@ export function recordHistory(group?: string): void {
     }
     state.future = [];
     pushed = true;
-    saveResumeState(state);
+    saveSessionState(state);
   }
   console.debug('[hvy:perf] recordHistory', {
     recordId,

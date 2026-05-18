@@ -147,8 +147,9 @@ export function refreshMountedPlugins(pluginId?: string, sectionKey?: string, bl
 // Walk all plugin mount placeholders in the rendered DOM, instantiate factories
 // for any new mounts, reuse cached instances for existing ones, and reconcile
 // the cache by unmounting plugins whose placeholders are no longer present.
-export function reconcilePluginMounts(root: ParentNode): void {
+export function reconcilePluginMounts(root: ParentNode, options: { prune?: boolean } = {}): void {
   const seen = new Set<string>();
+  const seenModes = new Set<'editor' | 'reader'>();
   const placeholders = root.querySelectorAll<HTMLElement>('[data-hvy-plugin-mount="true"]');
 
   placeholders.forEach((placeholder) => {
@@ -162,6 +163,7 @@ export function reconcilePluginMounts(root: ParentNode): void {
 
     const key = mountKey(pluginId, mode, sectionKey, blockId);
     seen.add(key);
+    seenModes.add(mode);
 
     const existing = mounted.get(key);
     if (existing) {
@@ -224,9 +226,18 @@ export function reconcilePluginMounts(root: ParentNode): void {
     });
   });
 
+  if (options.prune === false) {
+    return;
+  }
+
+  const pruneAll = isFullPluginReconcileRoot(root);
+
   // Reconcile: anything cached but not seen this pass is orphaned.
   for (const [key, entry] of mounted) {
     if (seen.has(key)) {
+      continue;
+    }
+    if (!pruneAll && !seenModes.has(entry.mode)) {
       continue;
     }
     try {
@@ -239,6 +250,13 @@ export function reconcilePluginMounts(root: ParentNode): void {
     }
     mounted.delete(key);
   }
+}
+
+function isFullPluginReconcileRoot(root: ParentNode): boolean {
+  if (root instanceof Document) {
+    return true;
+  }
+  return root instanceof HTMLElement && root.id === 'app';
 }
 
 // Capture the currently-focused element if it's inside a cached plugin

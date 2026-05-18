@@ -27,6 +27,25 @@ test('default example button loads carousel component and graph plugin', async (
   await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
 });
 
+test('default example graph remounts after browser refresh', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  await page.getByRole('button', { name: 'Default Example' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('#readerDocument').evaluate((reader) => {
+    reader.scrollTop = reader.scrollHeight;
+  });
+  await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(300);
+  await page.locator('#readerDocument').evaluate((reader) => {
+    reader.scrollTop = reader.scrollHeight;
+  });
+  await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
+});
+
 test('component picker opens categories and adds selected component', async ({ page }) => {
   await page.goto('/');
   await page.waitForTimeout(300);
@@ -125,6 +144,9 @@ test('component picker adds graph plugin and renders a chart canvas', async ({ p
 
   await expect(page.locator('.editor-block-title', { hasText: 'Graph' }).first()).toBeVisible();
   await expect(page.locator('.hvy-graph-editor canvas').first()).toBeVisible();
+  await expect(page.locator('.hvy-graph-editor [data-graph-field="column"]').first()).not.toBeFocused();
+  await page.locator('.hvy-graph-editor [data-graph-field="column"]').first().click();
+  await expect(page.locator('.hvy-graph-editor [data-graph-field="column"]').first()).toBeFocused();
 });
 
 test('selected component shows insert above and below component affordances', async ({ page }) => {

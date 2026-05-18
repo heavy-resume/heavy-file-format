@@ -629,7 +629,7 @@ function syncEditorShell(ctx: HvyPluginContext, root: HTMLElement, config: Graph
 }
 
 function renderEditorShell(_ctx: HvyPluginContext, config: GraphConfig, csv: string): string {
-  return `<div class="hvy-graph-editor">
+  return `<div class="hvy-graph-editor" data-editor-activation-autofocus="false">
     <div class="hvy-graph-controls">
       <label><span>Type</span><select data-graph-field="type">
         ${GRAPH_TYPES.map((type) => `<option value="${type}"${config.type === type ? ' selected' : ''}>${type}</option>`).join('')}

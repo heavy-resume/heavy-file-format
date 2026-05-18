@@ -751,7 +751,7 @@ function renderApp(): void {
   virtualizeRenderedSections({
     root: app,
     afterRestore: (scope) => {
-      reconcilePluginMounts(scope);
+      reconcilePluginMounts(scope, { prune: false });
       void runButtonVisibilityScripts(scope);
       initializeCarouselReaders(scope);
     },
@@ -886,7 +886,7 @@ function refreshReaderPanels(): void {
     virtualizeRenderedSections({
       root: app,
       afterRestore: (scope) => {
-        reconcilePluginMounts(scope);
+        reconcilePluginMounts(scope, { prune: false });
         void runButtonVisibilityScripts(scope);
         initializeCarouselReaders(scope);
       },

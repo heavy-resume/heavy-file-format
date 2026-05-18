@@ -332,7 +332,7 @@ function renderApp(): void {
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
-      reconcilePluginMounts(scope);
+      reconcilePluginMounts(scope, { prune: false });
       void runButtonVisibilityScriptsIfNeeded(scope);
     },
   });
@@ -352,7 +352,7 @@ function refreshReaderPanels(): void {
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
-      reconcilePluginMounts(scope);
+      reconcilePluginMounts(scope, { prune: false });
       void runButtonVisibilityScriptsIfNeeded(scope);
     },
   });

@@ -6,7 +6,10 @@
 .hvy-graph-frame {
   position: relative;
   width: 100%;
+  aspect-ratio: 2 / 1;
+  box-sizing: border-box;
   min-height: 18rem;
+  max-height: 30rem;
   border: 1px solid var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-surface) 96%, var(--hvy-bg-alt) 4%);
   padding: 0.75rem;
@@ -14,7 +17,8 @@
 
 .hvy-graph-frame canvas {
   width: 100% !important;
-  min-height: 16rem;
+  height: 100% !important;
+  min-height: 0;
 }
 
 .hvy-graph-error,

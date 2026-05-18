@@ -222,7 +222,10 @@ function getPrimaryEditorActivationTarget(block: HTMLElement): HTMLElement | nul
     'select',
   ];
   for (const selector of selectors) {
-    const target = Array.from(block.querySelectorAll<HTMLElement>(selector)).find(isUsableEditorActivationTarget);
+    const target = Array.from(block.querySelectorAll<HTMLElement>(selector)).find((candidate) =>
+      !candidate.closest('[data-editor-activation-autofocus="false"]')
+      && isUsableEditorActivationTarget(candidate)
+    );
     if (target) {
       return target;
     }

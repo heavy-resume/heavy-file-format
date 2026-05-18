@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { buildGraphChartData, parseGraphCsv } from '../src/plugins/graph';
+import { buildGraphChartData, parseGraphCsv, shouldCollapseInlineGraphLegend } from '../src/plugins/graph';
 
 test('parseGraphCsv handles quoted cells and consistent rows', () => {
   const expectedResult = parseGraphCsv('Label,Value\n"Example, A",10\n"Example ""B""",20');
@@ -40,4 +40,10 @@ test('buildGraphChartData reports invalid numeric values without discarding CSV'
   const expectedResult = buildGraphChartData('Label,Value\nAlpha,nope', 'line');
 
   expect(expectedResult.error).toBe('line chart values must be numeric.');
+});
+
+test('shouldCollapseInlineGraphLegend preserves plot space for dense inline graphs', () => {
+  expect(shouldCollapseInlineGraphLegend(390, 252, 5)).toBe(true);
+  expect(shouldCollapseInlineGraphLegend(760, 360, 5)).toBe(false);
+  expect(shouldCollapseInlineGraphLegend(390, 252, 2)).toBe(false);
 });

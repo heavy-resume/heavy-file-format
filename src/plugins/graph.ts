@@ -28,6 +28,10 @@ interface GraphTheme {
   series: string[];
 }
 
+interface GraphChartOptionOverrides {
+  legend?: boolean;
+}
+
 export interface CsvParseResult {
   rows: string[][];
   error: string | null;
@@ -224,7 +228,7 @@ export function buildGraphChartData(csv: string, type: GraphType): GraphBuildRes
   return { data: { labels, datasets }, error: null };
 }
 
-function renderChartOptions(config: GraphConfig, theme: GraphTheme): Record<string, unknown> {
+function renderChartOptions(config: GraphConfig, theme: GraphTheme, overrides: GraphChartOptionOverrides = {}): Record<string, unknown> {
   const axisScales = config.type === 'pie' || config.type === 'doughnut' || config.type === 'polarArea' || config.type === 'radar'
     ? {}
     : {
@@ -246,11 +250,66 @@ function renderChartOptions(config: GraphConfig, theme: GraphTheme): Record<stri
     maintainAspectRatio: false,
     color: theme.text,
     plugins: {
-      legend: { display: config.legend, labels: { color: theme.text } },
+      legend: {
+        display: overrides.legend ?? config.legend,
+        labels: {
+          color: theme.text,
+          boxWidth: 10,
+          boxHeight: 10,
+          padding: 10,
+          usePointStyle: true,
+        },
+      },
       title: { color: theme.text, display: Boolean(config.title.trim()), text: config.title },
     },
     scales: axisScales,
   };
+}
+
+export function shouldCollapseInlineGraphLegend(width: number, height: number, datasetCount: number): boolean {
+  return datasetCount >= 4 && (width < 720 || height < 340);
+}
+
+function syncExternalGraphLegend(canvas: HTMLCanvasElement, data: Record<string, unknown>, visible: boolean): void {
+  const frame = canvas.closest<HTMLElement>('.hvy-graph-frame');
+  if (!frame) return;
+  let legend = frame.nextElementSibling instanceof HTMLElement && frame.nextElementSibling.classList.contains('hvy-graph-external-legend')
+    ? frame.nextElementSibling
+    : null;
+  if (!visible) {
+    legend?.setAttribute('hidden', '');
+    return;
+  }
+  if (!legend) {
+    legend = document.createElement('div');
+    legend.className = 'hvy-graph-external-legend';
+    frame.insertAdjacentElement('afterend', legend);
+  }
+  legend.removeAttribute('hidden');
+  legend.replaceChildren();
+  const datasets = Array.isArray(data.datasets) ? data.datasets : [];
+  datasets.forEach((dataset) => {
+    const source = dataset && typeof dataset === 'object' && !Array.isArray(dataset) ? dataset as Record<string, unknown> : {};
+    const item = document.createElement('span');
+    item.className = 'hvy-graph-legend-item';
+    const swatch = document.createElement('span');
+    swatch.className = 'hvy-graph-legend-swatch';
+    swatch.style.setProperty('--hvy-graph-legend-color', readLegendColor(source));
+    const label = document.createElement('span');
+    label.className = 'hvy-graph-legend-label';
+    label.textContent = typeof source.label === 'string' && source.label.trim() ? source.label : 'Series';
+    item.append(swatch, label);
+    legend.appendChild(item);
+  });
+}
+
+function readLegendColor(dataset: Record<string, unknown>): string {
+  const borderColor = dataset.borderColor;
+  if (typeof borderColor === 'string') return borderColor;
+  const backgroundColor = dataset.backgroundColor;
+  if (typeof backgroundColor === 'string') return backgroundColor;
+  if (Array.isArray(backgroundColor) && typeof backgroundColor[0] === 'string') return backgroundColor[0];
+  return 'var(--hvy-accent-1)';
 }
 
 function readGraphTheme(root: HTMLElement, config: GraphConfig): GraphTheme {
@@ -323,6 +382,20 @@ function renderChartFrame(): string {
   return '<div class="hvy-graph-frame"><canvas></canvas></div>';
 }
 
+function renderExpandedChartFrame(config: GraphConfig): string {
+  const title = config.title.trim() || 'Graph';
+  return `<div class="modal-root hvy-graph-expanded-modal-root">
+    <div class="modal-overlay" data-graph-expanded-action="close"></div>
+    <section class="modal-panel hvy-graph-expanded-modal" role="dialog" aria-modal="true" aria-labelledby="hvyGraphExpandedTitle">
+      <div class="hvy-graph-expanded-head">
+        <h3 id="hvyGraphExpandedTitle">${escapeHtml(title)}</h3>
+        <button type="button" class="ghost hvy-graph-expanded-close" data-graph-expanded-action="close" aria-label="Close graph">${closeIcon()}</button>
+      </div>
+      ${renderChartFrame()}
+    </section>
+  </div>`;
+}
+
 function renderError(message: string): string {
   return `<div class="hvy-graph-error">${escapeHtml(message)}</div>`;
 }
@@ -335,13 +408,25 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-graph hvy-graph-${ctx.mode}`;
   let chart: ChartInstance | null = null;
+  let expandedChart: ChartInstance | null = null;
   let chartType: GraphType | null = null;
   let renderVersion = 0;
+  let expandedKeydownListener: ((event: KeyboardEvent) => void) | null = null;
 
   const destroyChart = () => {
     chart?.destroy();
     chart = null;
     chartType = null;
+  };
+
+  const destroyExpandedChart = () => {
+    expandedChart?.destroy();
+    expandedChart = null;
+    if (expandedKeydownListener) {
+      document.removeEventListener('keydown', expandedKeydownListener);
+      expandedKeydownListener = null;
+    }
+    document.querySelector('.hvy-graph-expanded-modal-root')?.remove();
   };
 
   const ensureChartFrame = (): HTMLCanvasElement | null => {
@@ -377,11 +462,17 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     const theme = readGraphTheme(root, config);
     const styledData = styleGraphChartData(builtData, config.type, theme);
-    const options = renderChartOptions(config, theme);
+    const frameRect = canvas.parentElement?.getBoundingClientRect() ?? canvas.getBoundingClientRect();
+    const datasetCount = Array.isArray(builtData.datasets) ? builtData.datasets.length : 0;
+    const useExternalLegend = config.legend && shouldCollapseInlineGraphLegend(frameRect.width, frameRect.height, datasetCount);
+    const options = renderChartOptions(config, theme, {
+      legend: config.legend && !useExternalLegend,
+    });
     if (chart && chart.canvas === canvas && chartType === config.type) {
       chart.data = styledData as never;
       chart.options = options as never;
       chart.update();
+      syncExternalGraphLegend(canvas, styledData, useExternalLegend);
       return;
     }
     destroyChart();
@@ -390,7 +481,62 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       data: styledData as never,
       options,
     });
+    syncExternalGraphLegend(canvas, styledData, useExternalLegend);
     chartType = config.type;
+  };
+
+  const drawExpandedChart = async (
+    canvas: HTMLCanvasElement,
+    config: GraphConfig,
+    builtData: Record<string, unknown>,
+  ) => {
+    const module = await loadChartModule();
+    if (!canvas.isConnected) return;
+    const theme = readGraphTheme(root, config);
+    expandedChart?.destroy();
+    expandedChart = new module.Chart(canvas, {
+      type: config.type,
+      data: styleGraphChartData(builtData, config.type, theme) as never,
+      options: renderChartOptions(config, theme),
+    });
+  };
+
+  const openExpandedChart = (frame: HTMLElement) => {
+    if (ctx.mode !== 'reader' || !shouldOpenExpandedChart(frame)) return;
+    const config = readConfig(ctx.block.schema.pluginConfig);
+    const csv = ctx.block.text.trim().length > 0 ? ctx.block.text : DEFAULT_CSV;
+    const built = buildGraphChartData(csv, config.type);
+    if (built.error) return;
+    destroyExpandedChart();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderExpandedChartFrame(config);
+    const modal = wrapper.firstElementChild as HTMLElement | null;
+    if (!modal) return;
+    const closeExpandedChart = () => {
+      destroyExpandedChart();
+    };
+    modal.addEventListener('click', (event) => {
+      const action = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-graph-expanded-action]');
+      if (!action) return;
+      event.preventDefault();
+      closeExpandedChart();
+    });
+    expandedKeydownListener = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !modal.isConnected) return;
+      event.preventDefault();
+      closeExpandedChart();
+    };
+    const mount = root.closest<HTMLElement>('.viewer-shell, .editor-shell') ?? root.closest<HTMLElement>('.hvy-embed-layout') ?? root;
+    configureExpandedChartModal(modal, mount);
+    document.addEventListener('keydown', expandedKeydownListener);
+    mount.appendChild(modal);
+    modal.querySelector<HTMLButtonElement>('[data-graph-expanded-action="close"]')?.focus();
+    const canvas = modal.querySelector<HTMLCanvasElement>('canvas');
+    if (canvas) {
+      void drawExpandedChart(canvas, config, built.data).catch(() => {
+        destroyExpandedChart();
+      });
+    }
   };
 
   const renderPreview = () => {
@@ -448,6 +594,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 
   const onClick = (event: Event) => {
+    if (ctx.mode === 'reader') {
+      const frame = (event.target as HTMLElement | null)?.closest<HTMLElement>('.hvy-graph-frame');
+      if (frame && root.contains(frame)) {
+        openExpandedChart(frame);
+      }
+      return;
+    }
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-graph-action]');
     if (!button) return;
     const action = button.dataset.graphAction;
@@ -562,6 +715,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     root.addEventListener('dragstart', onDragStart);
     root.addEventListener('dragover', onDragOver);
     root.addEventListener('drop', onDrop);
+  } else {
+    root.addEventListener('click', onClick);
   }
 
   renderPreview();
@@ -570,6 +725,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     refresh: renderPreview,
     unmount: () => {
       destroyChart();
+      destroyExpandedChart();
       if (ctx.mode === 'editor') {
         root.removeEventListener('input', onInput);
         root.removeEventListener('change', onInput);
@@ -577,9 +733,26 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         root.removeEventListener('dragstart', onDragStart);
         root.removeEventListener('dragover', onDragOver);
         root.removeEventListener('drop', onDrop);
+      } else {
+        root.removeEventListener('click', onClick);
       }
     },
   };
+}
+
+function shouldOpenExpandedChart(frame: HTMLElement): boolean {
+  const width = frame.getBoundingClientRect().width;
+  return width <= 560 || (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches);
+}
+
+function configureExpandedChartModal(modal: HTMLElement, mount: HTMLElement): void {
+  const mountRect = mount.getBoundingClientRect();
+  const shouldRotate = mountRect.width <= 560 && mountRect.height > mountRect.width;
+  if (!shouldRotate) return;
+  const edgeInset = 16;
+  modal.classList.add('is-rotated');
+  modal.style.setProperty('--hvy-graph-expanded-rotated-width', `${Math.max(0, mountRect.height - edgeInset)}px`);
+  modal.style.setProperty('--hvy-graph-expanded-rotated-height', `${Math.max(0, mountRect.width - edgeInset)}px`);
 }
 
 function getEditableRows(csv: string): string[][] {

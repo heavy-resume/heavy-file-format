@@ -298,12 +298,14 @@ This static HVY table stores columns and rows directly in the document, so it us
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 The graph plugin stores chart attributes in JSON config and keeps the editable data as CSV text in the plugin body.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Pipeline by stage","xAxisLabel":"Stage","yAxisLabel":"Count","legend":true}}-->
-Stage,Applications,Interviews
-Applied,12,0
-Phone Screen,5,5
-Onsite,2,2
-Offer,1,1
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.graph","pluginConfig":{"type":"line","title":"Pipeline quality by week","xAxisLabel":"Week","yAxisLabel":"Count","legend":true,"colorScheme":"auto"}}-->
+Week,Applications,Recruiter Screens,Technical Interviews,Onsites,Offers
+Week 1,10,4,1,0,0
+Week 2,14,6,3,1,0
+Week 3,11,7,4,2,0
+Week 4,16,8,5,2,1
+Week 5,13,9,6,3,1
+Week 6,18,10,7,4,2
 
 <!--hvy:tail {"id":"image:carousel-slide-a.svg","mediaType":"image/svg+xml","length":341}-->
 <!--hvy:tail {"id":"image:carousel-slide-b.svg","mediaType":"image/svg+xml","length":403}-->

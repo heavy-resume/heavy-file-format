@@ -46,6 +46,105 @@ test('default example graph remounts after browser refresh', async ({ page }) =>
   await expect(page.locator('#readerDocument .hvy-graph-reader canvas').first()).toBeVisible();
 });
 
+test('viewer carousel stays confined inside phone preview', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  await page.getByRole('button', { name: 'Default Example' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  const carouselFrame = page.locator('#readerDocument .hvy-carousel-reader-frame').first();
+  await expect(carouselFrame.locator('img').first()).toBeVisible();
+
+  const confined = await page.evaluate(() => {
+    const reader = document.querySelector<HTMLElement>('#readerDocument');
+    const carousel = document.querySelector<HTMLElement>('#readerDocument .hvy-carousel-reader');
+    const frame = document.querySelector<HTMLElement>('#readerDocument .hvy-carousel-reader-frame');
+    if (!reader || !carousel || !frame) return null;
+    const readerBox = reader.getBoundingClientRect();
+    const carouselBox = carousel.getBoundingClientRect();
+    const frameBox = frame.getBoundingClientRect();
+    return {
+      readerClientWidth: reader.clientWidth,
+      readerScrollWidth: reader.scrollWidth,
+      carouselLeft: carouselBox.left - readerBox.left,
+      carouselRight: carouselBox.right - readerBox.right,
+      frameLeft: frameBox.left - readerBox.left,
+      frameRight: frameBox.right - readerBox.right,
+    };
+  });
+
+  expect(confined).not.toBeNull();
+  expect(confined!.readerScrollWidth).toBeLessThanOrEqual(confined!.readerClientWidth + 1);
+  expect(confined!.carouselLeft).toBeGreaterThanOrEqual(-1);
+  expect(confined!.carouselRight).toBeLessThanOrEqual(1);
+  expect(confined!.frameLeft).toBeGreaterThanOrEqual(-1);
+  expect(confined!.frameRight).toBeLessThanOrEqual(1);
+});
+
+test('viewer graph stays confined and expands inside phone preview', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(300);
+
+  await page.getByRole('button', { name: 'Default Example' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('#readerDocument').evaluate((reader) => {
+    reader.scrollTop = reader.scrollHeight;
+  });
+  const graphFrame = page.locator('#readerDocument .hvy-graph-reader .hvy-graph-frame').first();
+  await expect(graphFrame.locator('canvas')).toBeVisible();
+
+  const confined = await page.evaluate(() => {
+    const reader = document.querySelector<HTMLElement>('#readerDocument');
+    const frame = document.querySelector<HTMLElement>('#readerDocument .hvy-graph-reader .hvy-graph-frame');
+    if (!reader || !frame) return null;
+    const readerBox = reader.getBoundingClientRect();
+    const frameBox = frame.getBoundingClientRect();
+    return {
+      readerClientWidth: reader.clientWidth,
+      readerScrollWidth: reader.scrollWidth,
+      frameLeft: frameBox.left - readerBox.left,
+      frameRight: frameBox.right - readerBox.right,
+    };
+  });
+
+  expect(confined).not.toBeNull();
+  expect(confined!.readerScrollWidth).toBeLessThanOrEqual(confined!.readerClientWidth + 1);
+  expect(confined!.frameLeft).toBeGreaterThanOrEqual(-1);
+  expect(confined!.frameRight).toBeLessThanOrEqual(1);
+
+  await graphFrame.click();
+  await expect(page.locator('.viewer-shell .hvy-graph-expanded-modal-root')).toBeVisible();
+
+  const expanded = await page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>('.viewer-shell');
+    const modal = document.querySelector<HTMLElement>('.hvy-graph-expanded-modal-root');
+    const panel = document.querySelector<HTMLElement>('.hvy-graph-expanded-modal');
+    if (!shell || !modal || !panel) return null;
+    const shellBox = shell.getBoundingClientRect();
+    const modalBox = modal.getBoundingClientRect();
+    const panelBox = panel.getBoundingClientRect();
+    const leftGap = panelBox.left - shellBox.left;
+    const rightGap = shellBox.right - panelBox.right;
+    const topGap = panelBox.top - shellBox.top;
+    const bottomGap = shellBox.bottom - panelBox.bottom;
+    return {
+      modalInsideShell: modalBox.left >= shellBox.left - 1 && modalBox.right <= shellBox.right + 1,
+      rotated: modal.classList.contains('is-rotated'),
+      expandedPanelUsesWiderDimension: panelBox.height > panelBox.width,
+      horizontalMarginDelta: Math.abs(leftGap - rightGap),
+      verticalMarginDelta: Math.abs(topGap - bottomGap),
+    };
+  });
+
+  expect(expanded?.modalInsideShell).toBe(true);
+  expect(expanded?.rotated).toBe(true);
+  expect(expanded?.expandedPanelUsesWiderDimension).toBe(true);
+  expect(expanded?.horizontalMarginDelta).toBeLessThanOrEqual(2);
+  expect(expanded?.verticalMarginDelta).toBeLessThanOrEqual(2);
+});
+
 test('component picker opens categories and adds selected component', async ({ page }) => {
   await page.goto('/');
   await page.waitForTimeout(300);

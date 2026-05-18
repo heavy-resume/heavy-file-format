@@ -535,6 +535,9 @@ function requiresRemoveConfirmation(action: string): boolean {
     'remove-table-row',
     'remove-table-column',
     'sqlite-drop-column',
+    'image-delete-unused',
+    'image-delete-current',
+    'carousel-delete-image',
     'remove-component-def',
     'remove-section-def',
   ]).has(action);

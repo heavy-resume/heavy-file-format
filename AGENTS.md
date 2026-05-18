@@ -94,3 +94,5 @@ Playwright test timeouts:
 If you're writing AI instructions don't just throw a patchwork fix for a specific issue with a specific thing. Don't write real world examples since it risks being misleading. Make example names obviously fake.
 
 Don't make compatibilty fallbacks
+
+When creating an X, +, or -, use vector graphics instead of characters. There's plenty of existing examples.

@@ -11,6 +11,7 @@ import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
 export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
+export const DEFAULT_IMAGE_BLOCK_CSS = 'margin: 0.5rem auto; display: block;';
 
 export function defaultBlockSchema(component = 'text'): BlockSchema {
   return {
@@ -650,6 +651,9 @@ export function applyComponentDefaults(schema: BlockSchema, componentName: strin
   }
   if (base === 'grid') {
     ensureGridItems(schema);
+  }
+  if (base === 'image' && schema.css === DEFAULT_BLOCK_CSS) {
+    schema.css = DEFAULT_IMAGE_BLOCK_CSS;
   }
   if (base === 'component-list') {
     schema.componentListComponent = 'text';

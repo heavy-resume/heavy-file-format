@@ -4,7 +4,7 @@ import { findBlockContainerById, findBlockContainerInList, findSectionByKey } fr
 import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
-import { applyImagePreset } from '../../editor/components/image/image';
+import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
@@ -87,6 +87,32 @@ const imagePreset: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   }
   const preset = actionButton.dataset.imagePreset ?? '';
   applyImagePreset(sectionKey, blockId, preset);
+};
+
+const imageUseExisting: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  useExistingImageAttachment(sectionKey, blockId, actionButton.dataset.imageFilename ?? '');
+};
+
+const imageDeleteUnused: ActionHandler = ({ actionButton }) => {
+  deleteUnusedImageAttachment(actionButton.dataset.imageFilename ?? '');
+};
+
+const imageDeleteCurrent: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+  deleteCurrentImageAttachment(sectionKey, blockId, actionButton.dataset.imageFilename ?? '');
+};
+
+const imageTakePhoto: ActionHandler = ({ app, actionButton, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  openImageCameraCapture(app, {
+    title: 'Take photo',
+    filenamePrefix: 'photo',
+    onCapture: (file) => handleImageUpload(actionButton, file),
+  });
 };
 
 const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
@@ -389,6 +415,10 @@ export const blockActions: Record<string, ActionHandler> = {
   'add-empty-section-heading': addEmptySectionHeading,
   'toggle-schema': toggleSchema,
   'image-preset': imagePreset,
+  'image-use-existing': imageUseExisting,
+  'image-delete-unused': imageDeleteUnused,
+  'image-delete-current': imageDeleteCurrent,
+  'image-take-photo': imageTakePhoto,
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,

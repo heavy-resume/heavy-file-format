@@ -121,6 +121,7 @@
 
 .hvy-carousel-editor-controls,
 .hvy-carousel-upload-panel,
+.hvy-carousel-attachment-panel,
 .hvy-carousel-image-row {
   border: 1px solid var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
@@ -165,9 +166,22 @@
 .hvy-carousel-upload-panel {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.75rem;
+}
+
+.hvy-carousel-attachment-panel {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+}
+
+.hvy-carousel-attachment-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--hvy-text-alt);
 }
 
 .hvy-carousel-pick-label input {
@@ -175,6 +189,7 @@
 }
 
 .hvy-carousel-pick-button,
+.hvy-carousel-download,
 .hvy-carousel-row-actions button {
   display: inline-flex;
   align-items: center;
@@ -186,6 +201,38 @@
   background: color-mix(in srgb, var(--hvy-accent-1) 12%, var(--hvy-surface));
   color: var(--hvy-text);
   cursor: pointer;
+}
+
+.hvy-carousel-camera-button {
+  gap: 0.38rem;
+  border-color: var(--hvy-button-bg);
+  border-radius: 999px;
+  padding-inline: 0.78rem;
+  background: color-mix(in srgb, var(--hvy-button-bg) 92%, var(--hvy-surface));
+  color: var(--hvy-button-text);
+  font-weight: 700;
+  box-shadow: 0 0.28rem 0.75rem color-mix(in srgb, var(--hvy-button-bg) 18%, transparent);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.hvy-carousel-camera-button:hover,
+.hvy-carousel-camera-button:focus-visible {
+  background: color-mix(in srgb, var(--hvy-button-bg) 84%, var(--hvy-accent-1));
+  box-shadow:
+    0 0.42rem 0.95rem color-mix(in srgb, var(--hvy-button-bg) 24%, transparent),
+    0 0 0 0.18rem color-mix(in srgb, var(--hvy-button-bg) 20%, transparent);
+  transform: translateY(-1px);
+}
+
+.hvy-carousel-camera-button .hvy-ui-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2.15;
+}
+
+.hvy-carousel-download {
+  width: fit-content;
+  text-decoration: none;
 }
 
 .hvy-carousel-image-list {
@@ -202,6 +249,7 @@
 }
 
 .hvy-carousel-thumb {
+  position: relative;
   width: 6.5rem;
   aspect-ratio: 4 / 3;
   display: grid;

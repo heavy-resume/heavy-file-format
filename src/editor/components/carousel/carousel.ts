@@ -2,13 +2,13 @@ import './carousel.css';
 
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { CarouselImage, VisualBlock } from '../../types';
-import { getImageAttachmentId, inferImageMediaType, setAttachment } from '../../../attachments';
+import { getImageAttachmentId, inferImageMediaType, listImageFilenames, setAttachment } from '../../../attachments';
 import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
-import { arrowDownIcon, arrowUpIcon, closeIcon } from '../../../icons';
-import { getImageBlobUrl } from '../image/image';
+import { arrowDownIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
+import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 
 interface CarouselRuntimeState {
@@ -74,9 +74,20 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
     </div>
     <div class="hvy-carousel-upload-panel">
       <label class="hvy-carousel-pick-label">
-        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon" multiple data-field="carousel-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
+        <input type="file" accept="${IMAGE_ATTACHMENT_ACCEPT}" multiple data-field="carousel-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
         <span class="hvy-carousel-pick-button">Add Images</span>
       </label>
+      <button type="button" class="hvy-carousel-pick-button hvy-carousel-camera-button" data-action="carousel-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>Take Photo</span></button>
+    </div>
+    <div class="hvy-carousel-attachment-panel">
+      <div class="hvy-carousel-attachment-title">Attached images</div>
+      ${renderImageAttachmentPicker({
+        helpers,
+        action: 'carousel-add-existing',
+        sectionKey,
+        blockId: block.id,
+        emptyText: 'No attached images yet.',
+      })}
     </div>
     <div class="hvy-carousel-image-list">
       ${block.schema.carouselImages.length === 0 ? '<div class="hvy-carousel-empty">Add images to build a carousel.</div>' : ''}
@@ -97,12 +108,20 @@ function renderEditorImageRow(
   const thumb = url
     ? `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
     : `<span>Missing</span>`;
+  const download = url
+    ? `<a class="hvy-carousel-download" href="${helpers.escapeAttr(url)}" download="${helpers.escapeAttr(image.imageFile)}">Download</a>`
+    : '';
+  const deleteImage = getImageAttachmentReferenceCount(image.imageFile) === 1;
   return `<div class="hvy-carousel-image-row">
-    <div class="hvy-carousel-thumb">${thumb}</div>
+    <div class="hvy-carousel-thumb">
+      ${thumb}
+      ${deleteImage ? `<button type="button" class="hvy-carousel-delete-image image-attachment-delete" data-action="carousel-delete-image" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="Delete image attachment" aria-label="Delete image attachment ${helpers.escapeAttr(image.imageFile)}">${closeIcon()}</button>` : ''}
+    </div>
     <div class="hvy-carousel-row-fields">
       <label><span>Caption</span><input type="text" data-field="carousel-caption" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" value="${helpers.escapeAttr(image.caption)}"></label>
       <label><span>Alt text</span><input type="text" data-field="carousel-alt" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" value="${helpers.escapeAttr(image.imageAlt)}"></label>
       <span class="muted">${helpers.escapeHtml(image.imageFile)}</span>
+      ${download}
     </div>
     <div class="hvy-carousel-row-actions">
       <button type="button" data-action="carousel-move-up" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === 0 ? ' disabled' : ''} title="Move up">${arrowUpIcon()}</button>
@@ -205,17 +224,7 @@ function handleCarouselChange(event: Event): void {
       return isAllowedImageAttachmentMediaType(mediaType);
     });
     if (files.length === 0) return;
-    recordHistory(`carousel-upload:${block.id}`);
-    void Promise.all(files.map(async (file) => {
-      const mediaType = file.type || inferImageMediaType(file.name);
-      const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
-      setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: prepared.mediaType }, prepared.bytes);
-      return { imageFile: file.name, imageAlt: file.name, caption: '' };
-    })).then((images) => {
-      block.schema.carouselImages.push(...images);
-      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-      getRenderApp()();
-    });
+    void appendCarouselImageFiles(block, target.dataset.sectionKey ?? '', files, `carousel-upload:${block.id}`);
     return;
   }
   if (field === 'carousel-pause-on-hover') block.schema.carouselPauseOnHover = target.checked;
@@ -245,7 +254,34 @@ function handleCarouselClick(event: Event): void {
   if (!button) return;
   const block = resolveBlockContext(button)?.block ?? findBlockByIds(button.dataset.sectionKey ?? '', button.dataset.blockId ?? '');
   if (!block) return;
+  if (button.dataset.action === 'carousel-take-photo') {
+    const root = button.closest<HTMLElement>('.hvy-document') ?? document.body;
+    openImageCameraCapture(root, {
+      title: 'Take photo',
+      filenamePrefix: 'carousel-image',
+      onCapture: (file) => appendCarouselImageFiles(block, button.dataset.sectionKey ?? '', [file], `carousel-camera:${block.id}`),
+    });
+    return;
+  }
+  if (button.dataset.action === 'carousel-add-existing') {
+    const filename = button.dataset.imageFilename ?? '';
+    if (!filename || !listImageFilenames(state.document).includes(filename)) return;
+    recordHistory(`carousel:${block.id}:add-existing`);
+    block.schema.carouselImages.push({ imageFile: filename, imageAlt: filename, caption: '' });
+    syncReusableTemplateForBlock(button.dataset.sectionKey ?? '', block.id);
+    getRenderApp()();
+    return;
+  }
   const index = Number(button.dataset.carouselIndex);
+  if (button.dataset.action === 'carousel-delete-image') {
+    const image = block.schema.carouselImages[index];
+    if (!image || !removeImageAttachmentIfLastReference(image.imageFile)) return;
+    recordHistory(`carousel:${block.id}:delete-image`);
+    block.schema.carouselImages.splice(index, 1);
+    syncReusableTemplateForBlock(button.dataset.sectionKey ?? '', block.id);
+    getRenderApp()();
+    return;
+  }
   const nextImages = [...block.schema.carouselImages];
   if (button.dataset.action === 'carousel-remove') nextImages.splice(index, 1);
   if (button.dataset.action === 'carousel-move-up' && index > 0) [nextImages[index - 1], nextImages[index]] = [nextImages[index]!, nextImages[index - 1]!];
@@ -253,6 +289,19 @@ function handleCarouselClick(event: Event): void {
   recordHistory(`carousel:${block.id}:${button.dataset.action}`);
   block.schema.carouselImages = nextImages;
   syncReusableTemplateForBlock(button.dataset.sectionKey ?? '', block.id);
+  getRenderApp()();
+}
+
+async function appendCarouselImageFiles(block: VisualBlock, sectionKey: string, files: File[], historyGroup: string): Promise<void> {
+  recordHistory(historyGroup);
+  const images = await Promise.all(files.map(async (file) => {
+    const mediaType = file.type || inferImageMediaType(file.name);
+    const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
+    setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: prepared.mediaType }, prepared.bytes);
+    return { imageFile: file.name, imageAlt: file.name, caption: '' };
+  }));
+  block.schema.carouselImages.push(...images);
+  syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 }
 

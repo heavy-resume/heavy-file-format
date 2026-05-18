@@ -22,7 +22,7 @@ export { parseAttachedComponentBlocks } from '../../plugins/db-table-fragment';
 export { openAiEditPopover, closeAiEditPopover, submitAiEditRequest } from '../../ai-edit-popover';
 export { handleInlineCheckboxBackspace } from '../../editor/inline-checkbox';
 export { getRawEditorDiagnostics } from '../../raw-editor-diagnostics';
-export { applyImagePreset, handleImageUpload } from '../../editor/components/image/image';
+export { applyImagePreset, handleImageUpload, useExistingImageAttachment } from '../../editor/components/image/image';
 export { submitCliCommand } from '../../cli-ui/submit';
 export { restoreCliViewAfterRender } from '../../cli-ui/focus';
 

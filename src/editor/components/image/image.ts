@@ -7,6 +7,7 @@ import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
+import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 
@@ -80,7 +81,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         <div class="image-dropzone-hint">
           <span>Drop an image here or</span>
           <label class="image-pick-label">
-            <input type="file" accept="image/*" data-field="image-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" />
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon" data-field="image-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" />
             <span class="image-pick-button">choose a file</span>
           </label>
         </div>
@@ -194,10 +195,11 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   if (!block) return;
   const filename = file.name;
   if (!filename) return;
-  const bytes = new Uint8Array(await file.arrayBuffer());
   const mediaType = file.type || inferImageMediaType(filename);
+  if (!isAllowedImageAttachmentMediaType(mediaType)) return;
+  const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
   recordHistory(`image-upload:${blockId}`);
-  setImageAttachment(state.document, filename, mediaType, bytes);
+  setImageAttachment(state.document, filename, prepared.mediaType, prepared.bytes);
   block.schema.imageFile = filename;
   if (!block.schema.imageAlt) {
     block.schema.imageAlt = filename;

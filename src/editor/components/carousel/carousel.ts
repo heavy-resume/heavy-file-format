@@ -9,6 +9,7 @@ import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowUpIcon, closeIcon } from '../../../icons';
 import { getImageBlobUrl } from '../image/image';
+import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 
 interface CarouselRuntimeState {
   index: number;
@@ -73,7 +74,7 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
     </div>
     <div class="hvy-carousel-upload-panel">
       <label class="hvy-carousel-pick-label">
-        <input type="file" accept="image/*" multiple data-field="carousel-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon" multiple data-field="carousel-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
         <span class="hvy-carousel-pick-button">Add Images</span>
       </label>
     </div>
@@ -199,12 +200,16 @@ function handleCarouselChange(event: Event): void {
   const block = resolveBlockContext(target)?.block ?? null;
   if (!block) return;
   if (field === 'carousel-upload') {
-    const files = Array.from(target.files ?? []).filter((file) => /^image\//.test(file.type) || inferImageMediaType(file.name).startsWith('image/'));
+    const files = Array.from(target.files ?? []).filter((file) => {
+      const mediaType = file.type || inferImageMediaType(file.name);
+      return isAllowedImageAttachmentMediaType(mediaType);
+    });
     if (files.length === 0) return;
     recordHistory(`carousel-upload:${block.id}`);
     void Promise.all(files.map(async (file) => {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: file.type || inferImageMediaType(file.name) }, bytes);
+      const mediaType = file.type || inferImageMediaType(file.name);
+      const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
+      setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: prepared.mediaType }, prepared.bytes);
       return { imageFile: file.name, imageAlt: file.name, caption: '' };
     })).then((images) => {
       block.schema.carouselImages.push(...images);

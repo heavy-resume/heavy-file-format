@@ -15,6 +15,11 @@ export interface VisualDocument {
   attachments: DocumentAttachment[];
 }
 
+export interface ImageAttachmentMaxDimensions {
+  width?: number;
+  height?: number;
+}
+
 export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
 
 export interface ChatMessage {
@@ -233,6 +238,7 @@ export interface AppState {
   currentView: 'editor' | 'viewer' | 'ai';
   editorMode: 'basic' | 'mobile-adjustment' | 'advanced' | 'raw' | 'cli';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;

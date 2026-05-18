@@ -4,7 +4,7 @@ import './style.css';
 
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { initCallbacks, initState, state } from './state';
-import type { AppState, ChatProvider, VisualDocument } from './types';
+import type { AppState, ChatProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
@@ -61,6 +61,7 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
 }
 
 export interface HvyMount {
@@ -125,7 +126,11 @@ function createDefaultSearchState(): AppState['search'] {
   };
 }
 
-function createEmbedState(document: VisualDocument, showAdvancedEditor = false): AppState {
+function createEmbedState(
+  document: VisualDocument,
+  showAdvancedEditor = false,
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null
+): AppState {
   return {
     document,
     filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
@@ -133,6 +138,7 @@ function createEmbedState(document: VisualDocument, showAdvancedEditor = false):
     currentView: 'viewer',
     editorMode: 'basic',
     responsivePreview: 'full',
+    imageAttachmentMaxDimensions,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -516,7 +522,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
-  initState(createEmbedState(options.document, options.showAdvancedEditor ?? false));
+  initState(createEmbedState(options.document, options.showAdvancedEditor ?? false, options.imageAttachmentMaxDimensions));
   currentLinkObserver = options.linkObserver ?? null;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
@@ -543,13 +549,23 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setPaletteOverrideId,
     openThemeEditor(options = {}) {
       void loadFullEmbed().then((module) => {
-        const fullMount = module.mountHvy({ root: currentRoot ?? document.createElement('div'), document: state.document, mode: 'editor' });
+        const fullMount = module.mountHvy({
+          root: currentRoot ?? document.createElement('div'),
+          document: state.document,
+          mode: 'editor',
+          imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+        });
         fullMount.openThemeEditor(options);
       });
     },
     mountThemeEditor(root, options = {}) {
       void loadFullEmbed().then((module) => {
-        const fullMount = module.mountHvy({ root: currentRoot ?? root, document: state.document, mode: 'editor' });
+        const fullMount = module.mountHvy({
+          root: currentRoot ?? root,
+          document: state.document,
+          mode: 'editor',
+          imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+        });
         fullMount.mountThemeEditor(root, options);
       });
     },
@@ -576,7 +592,7 @@ export type {
   ImportPlanTarget,
   ImportPlanTargetKind,
 } from './ai-document-edit';
-export type { ToolLoopCompactionOptions } from './types';
+export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 
 declare global {
   interface Window {

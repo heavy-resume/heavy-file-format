@@ -6,7 +6,7 @@ import 'highlight.js/styles/github.css';
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { state, initState, initCallbacks } from './state';
-import type { AppState, VisualDocument } from './types';
+import type { AppState, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -86,6 +86,7 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
 }
 
 export interface HvyMount {
@@ -104,7 +105,12 @@ let readerRenderer: ReaderRenderer;
 let currentRoot: HTMLElement | null = null;
 let currentLinkObserver: HvyLinkObserver | null = null;
 
-function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdvancedEditor = false): AppState {
+function createEmbedState(
+  document: VisualDocument,
+  mode: HvyEmbedMode,
+  showAdvancedEditor = false,
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null
+): AppState {
   return {
     document,
     filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
@@ -112,6 +118,7 @@ function createEmbedState(document: VisualDocument, mode: HvyEmbedMode, showAdva
     currentView: mode,
     editorMode: 'basic',
     responsivePreview: 'full',
+    imageAttachmentMaxDimensions,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -544,7 +551,12 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
-  initState(createEmbedState(options.document, options.mode ?? 'viewer', options.showAdvancedEditor ?? false));
+  initState(createEmbedState(
+    options.document,
+    options.mode ?? 'viewer',
+    options.showAdvancedEditor ?? false,
+    options.imageAttachmentMaxDimensions
+  ));
   currentLinkObserver = options.linkObserver ?? null;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
@@ -596,7 +608,7 @@ export type {
   ImportPlanTarget,
   ImportPlanTargetKind,
 } from './ai-document-edit';
-export type { ToolLoopCompactionOptions } from './types';
+export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 
 declare global {
   interface Window {

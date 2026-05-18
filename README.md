@@ -164,6 +164,19 @@ HVY.mountHvy({
 });
 ```
 
+Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
+to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or
+disable resizing with `null`:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  imageAttachmentMaxDimensions: { width: 1600, height: 1200 },
+});
+```
+
 Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
 plugins:
 

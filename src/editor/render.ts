@@ -120,6 +120,7 @@ interface EditorRenderState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
   openTextLineStyleName: string | null;
+  paragraphStyleRecentNames: string[];
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;
@@ -959,7 +960,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (names.length === 0) {
       return '';
     }
-    const visibleNames = names.slice(0, 2);
+    const visibleNames = getRecentParagraphStyleNames(names);
     const pickerId = `paragraph-style-picker-${sectionKey}-${blockId}`.replace(/[^a-zA-Z0-9_-]/g, '-');
     const renderStyleButton = (name: string, extraClass = ''): string => {
       const style = styles[name];
@@ -1026,6 +1027,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
       </div>
     </div>`;
+  }
+
+  function getRecentParagraphStyleNames(names: string[]): string[] {
+    const available = new Set(names);
+    const recent = state.paragraphStyleRecentNames.filter((name) => available.has(name));
+    const remaining = names.filter((name) => !recent.includes(name));
+    return [...recent, ...remaining].slice(0, 2);
   }
 
   function renderParagraphStyleEditPanel(name: string, style: TextLineStyles[string]): string {

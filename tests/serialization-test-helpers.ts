@@ -63,6 +63,7 @@ export function createTestState(document: VisualDocument): AppState {
     addComponentBySection: {},
     metaPanelOpen: false,
     openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
     selectedReusableComponentName: null,
     templateValues: {},
     history: [],

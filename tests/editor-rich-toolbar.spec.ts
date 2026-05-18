@@ -261,6 +261,49 @@ test('paragraph style picker shows two recent choices and opens the full list', 
   await expect(toolbar.locator('.paragraph-style-edit-panel:not([hidden]) [data-field="text-line-style-css"]')).toHaveValue(/margin-bottom: 14px;/);
 });
 
+test('paragraph style recents carry across active text blocks', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+text_line_styles:
+  alpha:
+    label: Alpha Heading
+    css: "font-weight: 700;"
+  beta:
+    label: Beta Detail
+    css: "padding-left: 12px;"
+  gamma:
+    label: Gamma Note
+    css: "margin: 8px 0;"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"first-text"}-->
+  First body
+
+ <!--hvy:text {"id":"second-text"}-->
+  Second body
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-content[data-component-id="first-text"]').click();
+  let activeEditorBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  let toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
+  await toolbar.getByRole('button', { name: 'More paragraph styles' }).click();
+  await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
+
+  await page.locator('.editor-block-content[data-component-id="second-text"]').click();
+  activeEditorBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
+  await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
+});
+
 test('paragraph style toolbar compacts inside phone preview', async ({ page }) => {
   await page.goto('/');
 

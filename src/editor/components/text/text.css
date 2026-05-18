@@ -892,6 +892,7 @@
 .rich-editor h5,
 .rich-editor h6 {
   margin: 0.2rem 0 0.15rem;
+  font-weight: 700;
   line-height: 1.15;
 }
 

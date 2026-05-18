@@ -291,6 +291,7 @@ export interface AppState {
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
   openTextLineStyleName: string | null;
+  paragraphStyleRecentNames: string[];
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;

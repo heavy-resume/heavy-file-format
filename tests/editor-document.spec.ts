@@ -1593,6 +1593,37 @@ hvy_version: 0.1
 
   const margins = await page.locator('#readerDocument h3').evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).marginTop));
   expect(margins).toEqual(['0px', '15.2px']);
+
+  const weights = await page.locator('#readerDocument h3').evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).fontWeight));
+  expect(weights).toEqual(['700', '700']);
+});
+
+test('reader headings keep bold default weight', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  # Heading One
+  ## Heading Two
+  ### Heading Three
+  #### Heading Four
+  ##### Heading Five
+  ###### Heading Six
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const weights = await page
+    .locator('#readerDocument :is(h1, h2, h3, h4, h5, h6)')
+    .evaluateAll((headings) => headings.map((heading) => getComputedStyle(heading).fontWeight));
+  expect(weights).toEqual(['700', '700', '700', '700', '700', '700']);
 });
 
 test('grid cells stretch container cards and pin trailing xref cards', async ({ page }) => {

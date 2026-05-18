@@ -1655,6 +1655,10 @@ function updateParagraphStyleToolbarState(toolbar: HTMLElement, selectedStyleNam
   if (!selectedStyleName || !selectedButton) {
     return;
   }
+  state.paragraphStyleRecentNames = [
+    selectedStyleName,
+    ...state.paragraphStyleRecentNames.filter((name) => name !== selectedStyleName),
+  ].slice(0, 2);
   const recent = styleToolbar.querySelector<HTMLElement>('.paragraph-style-recent');
   if (!recent) {
     return;

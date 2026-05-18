@@ -310,6 +310,7 @@
 .reader-block h5,
 .reader-block h6 {
   margin: 0.2rem 0 0.15rem;
+  font-weight: 700;
   line-height: 1.15;
 }
 

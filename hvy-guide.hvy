@@ -45,7 +45,7 @@ text_line_styles:
     <!--hvy:text {}-->
      ## AI Assisted
      
-     Lets you see the page like in viewer but also edit it. Double click / tap or right click / tap & hold to enter edit mode for a component. You can also request changes via the chat.
+     Lets you see the page like in viewer but also edit it. Double <!--hvy:alt {"compact":"tap or tap and hold"}-->click or right click<!--/hvy:alt--> to enter edit mode for a component. You can also request changes via the chat.
 
     <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
 
@@ -185,12 +185,12 @@ text_line_styles:
  <!--hvy:text {}-->
   ## Insert, Move, Copy, And Delete
   
-  You can add content at the end of a section or insert content above or below an existing component. Move keeps the same component and places it somewhere else. Copy duplicates the component so you can reuse a similar structure. Delete removes the selected section or component. You can move sections between the sidebar and the main panel using the "Sidebar" and "Main" buttons respectively.
+  You can move sections between the sidebar and the main panel using the "Sidebar" and "Main" buttons respectively. You can move and copy components via the button, then around existing components press where you want it to move to or be copied to. Use the X in the corner to delete a component.
 
  <!--hvy:text {}-->
-  ## Use Advanced Settings When Needed
+  ## Use Advanced Mode When Needed
   
-  Basic editing is best for normal writing and rearranging. Advanced controls are useful when you need reusable templates, custom styling, extra labels, or deeper component options.
+  Advanced mode enables editing reusable templates, custom styling, extra labels, or deeper component options.
   
   If you are not sure whether a setting matters, leave it alone and keep editing in the simpler mode.
 
@@ -278,7 +278,9 @@ text_line_styles:
      <!--hvy:text {}-->
       ^indented^ Use Reference to send the reader to another section or item in the document. It is useful when related material should stay connected without being duplicated. This is a large, easy to see card that works best for lists.
       
-      ^indented^ Also sometimes called the "Xref" for "cross-reference"
+      ^indented^ Also sometimes called the "Xref" for "cross-reference."
+      
+      ^indented^ In order to reference something it needs an ID first. You can either ask one to be assigned using the AI mode, or use the advanced editor and press the "Meta" button to configure it.
 
   <!--hvy:component-list:5 {}-->
 
@@ -358,10 +360,10 @@ text_line_styles:
      <!--hvy:text {}-->
       ^indented^ Use Custom for reusable templates. Use it when you want a component pattern that can be reused across the document or adapted as a starting point for new content.
 <!--hvy: {"id":"choosing-structure","lock":false,"expanded":true,"highlight":false}-->
-#! Choosing The Right Structure
+#! Structural Tips
 
  <!--hvy:text {}-->
-  # Choosing The Right Structure
+  # Structural Tips
 
  <!--hvy:text {}-->
   ## Use Sections For Major Topics
@@ -406,11 +408,11 @@ text_line_styles:
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefDetail":"Editor changes the document.","xrefTarget":"editor-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Editor Mode","xrefDetail":"Editor changes the document.","xrefTarget":"editor-mode"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefDetail":"Viewer reads and navigates.","xrefTarget":"viewer-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Viewer Mode","xrefDetail":"Viewer reads and navigates.","xrefTarget":"viewer-mode"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefDetail":"AI selects content and requests changes.","xrefTarget":"ai-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"AI Mode","xrefDetail":"AI selects content and requests changes.","xrefTarget":"ai-mode"}-->
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -420,11 +422,11 @@ text_line_styles:
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefDetail":"Best for new content and advanced editing","xrefTarget":"editor-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Editor Mode","xrefDetail":"Best for new content and advanced editing","xrefTarget":"editor-mode"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefDetail":"Best for making small changes without clutter","xrefTarget":"ai-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"AI Mode","xrefDetail":"Best for making small changes without clutter","xrefTarget":"ai-mode"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefDetail":"See the document like someone else might","xrefTarget":"viewer-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Viewer Mode","xrefDetail":"See the document like someone else might","xrefTarget":"viewer-mode"}-->
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
@@ -434,51 +436,39 @@ text_line_styles:
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Text","xrefDetail":"Multipurpose text component","xrefTarget":"component-text"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Text","xrefDetail":"Multipurpose text component","xrefTarget":"component-text"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Image","xrefDetail":"Add an image","xrefTarget":"component-image"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Image","xrefDetail":"Add an image","xrefTarget":"component-image"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Carousel","xrefDetail":"Add many images","xrefTarget":"component-carousel"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Carousel","xrefDetail":"Add many images","xrefTarget":"component-carousel"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Container","xrefDetail":"Group components","xrefTarget":"component-container"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Container","xrefDetail":"Group components","xrefTarget":"component-container"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Grid","xrefDetail":"Arrange in a grid or have text both left and right aligned on the same line","xrefTarget":"component-grid"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Grid","xrefDetail":"Arrange in a grid or have text both left and right aligned on the same line","xrefTarget":"component-grid"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Expandable","xrefDetail":"Show a preview or provide a stub that expands to deeper content","xrefTarget":"component-expandable"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Expandable","xrefDetail":"Show a preview or provide a stub that expands to deeper content","xrefTarget":"component-expandable"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"List","xrefDetail":"Provide a list of components (often references)","xrefTarget":"component-list"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"List","xrefDetail":"Provide a list of components (often references)","xrefTarget":"component-list"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Table","xrefDetail":"Create a static table. DB tables are a plugin.","xrefTarget":"component-table"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Table","xrefDetail":"Create a static table. DB tables are a plugin.","xrefTarget":"component-table"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Reference (or Xref)","xrefDetail":"This is a reference / xref (cross-reference)","xrefTarget":"component-reference"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Reference (or Xref)","xrefDetail":"This is a reference / xref (cross-reference)","xrefTarget":"component-reference"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"Plugin","xrefDetail":"Add advanced controls that are outside the standard","xrefTarget":"component-plugin"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Plugin","xrefDetail":"Add advanced controls that are outside the standard","xrefTarget":"component-plugin"}-->
 
- <!--hvy:expandable {}-->
-  <!--hvy:expandable:stub {}-->
-
-   <!--hvy:text {}-->
-    ## Search
-
-  <!--hvy:expandable:content {}-->
-
-   <!--hvy:text {}-->
-    Search finds matching content. Filter helps focus the reading surface around matches.
-
-   <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Custom","xrefDetail":"Custom components / templates","xrefTarget":"component-custom"}-->
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {}-->
-    ## AI Help
+    ## Search / Filtering
 
   <!--hvy:expandable:content {}-->
 
-   <!--hvy:text {}-->
-    Use AI mode for targeted document edits. Use chat for questions, planning, or broader assistance.
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Search","xrefDetail":"Use search to highlight terms and navigate to them. Search results include a description provided by the containing components or sections.","xrefTarget":"search"}-->
 
-   <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
+   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Filtering","xrefDetail":"Filter to rearrange the document and show matching sections and components first.","xrefTarget":"filtering"}-->
 <!--hvy: {"id":"section-4brwub","lock":false,"expanded":true,"highlight":false}-->
 #! Styling
 
@@ -506,3 +496,33 @@ text_line_styles:
   ### Meta Information
   
   The document, sections, and components all have meta information. This includes placeholders for empty text, tags, a description for search, and more.
+  
+  ### Editor Only Components
+  
+  You can a component to be editor only. For example, you may want to display helpful hints on how to use a template, or run a script in editing mode only.
+<!--hvy: {"id":"search","lock":false,"expanded":true,"highlight":false}-->
+#! Search
+
+ <!--hvy:text {}-->
+  # Search
+
+ <!--hvy:text {}-->
+  You can search by word(s) by pressing the magnifying glass button or `cmd / ctrl + f.`
+  
+  The search term is highlighted and you can click results to get navigate to the entry.
+  
+  The description you see is provided by components via meta information.
+<!--hvy: {"id":"filtering","lock":false,"expanded":true,"highlight":false}-->
+#! Filtering
+
+ <!--hvy:text {}-->
+  # Filtering
+
+ <!--hvy:text {}-->
+  You can filter by word(s) by pressing the magnifying glass button or `cmd / ctrl + f.`
+  
+  There's two filter techniques.
+  
+  If shade is selected, sections / components without the term are shaded and may be displayed lower in the document.
+  
+  If hide is selected, then sections / components that do not match the term are not displayed.

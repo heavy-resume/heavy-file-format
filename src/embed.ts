@@ -197,6 +197,7 @@ function createEmbedState(
     addComponentBySection: {},
     metaPanelOpen: false,
     openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
     selectedReusableComponentName: null,
     templateValues: {},

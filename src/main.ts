@@ -133,6 +133,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     addComponentBySection: {},
     metaPanelOpen: false,
     openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
     selectedReusableComponentName: null,
     templateValues: {},
@@ -397,6 +398,9 @@ editorRenderer = createEditorRenderer(
     },
     get openTextLineStyleName() {
       return state.openTextLineStyleName;
+    },
+    get paragraphStyleRecentNames() {
+      return state.paragraphStyleRecentNames;
     },
   },
   {

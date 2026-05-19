@@ -1635,6 +1635,7 @@ component_defs:
 test('importTextIntoDocument rejects invalid forced template JSON without raw HVY fallback', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
   requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"section_title":"Awards","extra":"bad"}}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"section_title":"Awards","extra":"still bad"}}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 section_defs:
@@ -1667,7 +1668,11 @@ section_defs:
   expect(result.status).toBe('error');
   expect(result.message).toContain('invalid template values');
   expect(result.message).toContain('Extra keys: extra');
-  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(2);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(3);
+  const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(retryMessages).toContain('The previous response was invalid.');
+  expect(retryMessages).toContain('Template values must exactly match expected keys.');
+  expect(retryMessages).toContain('Previous response:');
   expect(serializeDocument(document)).not.toContain('Awards');
 });
 
@@ -2338,7 +2343,9 @@ hvy_version: 0.1
   expect(serialized).toContain('"id":"summary"');
   expect(serialized).toContain('Existing content');
   expect(serialized).toContain('"id":"imported-blank-summary"');
-  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Application: create an empty new section from scratch.');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Application: create a new blank section only if this step has distinct source-backed information');
+  expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).toContain('Section title candidate: Imported Summary');
+  expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages[0]?.content).toContain('treat the title as a candidate grouping, not an obligation to add content');
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.context).not.toContain('Application: replace existing body section.');
 });
 

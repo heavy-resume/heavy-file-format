@@ -327,7 +327,7 @@ export async function importTextIntoDocument(
           return { status: 'error', message: `Import section ${index + 1} does not have a usable template structure.` };
         }
         options.onProgress?.({ phase: 'thinking', message: `Filling template section ${index + 1} of ${steps.length}.` });
-        const valuesResponse = await requestProxyCompletion({
+        const valuesRequest = {
           settings: llm.settings,
           client: llm.client,
           messages: [
@@ -347,11 +347,41 @@ export async function importTextIntoDocument(
           debugLabel: `ai-import-template-values:${index + 1}`,
           beforeRequest: beforeLlmCall?.('thinking'),
           signal: options.signal,
-        });
+        };
+        let valuesResponse = await requestProxyCompletion(valuesRequest);
         throwIfAborted(options.signal);
-        const values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
+        let values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
         if (values.ok === false) {
-          return { status: 'error', message: `Import section ${index + 1} returned invalid template values. ${values.message}` };
+          options.onProgress?.({
+            phase: 'thinking',
+            message: `Template values for section ${index + 1} were invalid; retrying with the expected schema.`,
+          });
+          valuesResponse = await requestProxyCompletion({
+            ...valuesRequest,
+            messages: [
+              ...valuesRequest.messages,
+              {
+                id: `ai-import-template-values-${index + 1}-repair`,
+                role: 'user',
+                content: [
+                  'The previous response was invalid.',
+                  values.message,
+                  '',
+                  'Return one corrected JSON object using exactly the documented schema.',
+                  'Include every required key, omit keys that are not in the schema, and use empty strings or empty arrays when source data is unavailable.',
+                  '',
+                  `Previous response:\n${valuesResponse}`,
+                ].join('\n'),
+              },
+            ],
+            debugLabel: `ai-import-template-values:${index + 1}:repair`,
+            beforeRequest: beforeLlmCall?.('thinking'),
+          });
+          throwIfAborted(options.signal);
+          values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
+          if (values.ok === false) {
+            return { status: 'error', message: `Import section ${index + 1} returned invalid template values. ${values.message}` };
+          }
         }
         options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
         const result = applyGeneratedImportTemplateSection(document, application, templateStructure, values.value, options.onMutation);
@@ -548,7 +578,7 @@ function buildImportPlanResponseInstructions(): string {
     '',
     'Use `sectionId` only for an existing body section id from the template section outline.',
     'Use `templateName` only for a reusable/template section name from the template section outline.',
-    'When no listed section fits, include only `section` so execution creates a new blank section.',
+    'When no listed section fits a distinct source-backed topic, include only `section` so execution may create a new blank section.',
     'Each step should be a section to create from the source document. Try to fit data to the template and only add sections if needed. Things outside the intent of the source document can be discarded.',
     'Do not include `instruction` unless a section title alone would be ambiguous.',
     'If `instruction` is needed, keep it structural and very short. Do not list exact facts.',
@@ -852,8 +882,9 @@ function buildImportMissingSectionsPrompt(sourceName: string, instructions?: str
   return [
     `Identify missing import sections for "${sourceName}".`,
     '',
-    'Review what the preplanned import has already seen, then add only source-backed sections that are still missing.',
-    'You may choose a remaining body section, a reusable section template, or a blank section as the starting point for each missing section.',
+    'Review what the preplanned import has already seen, then add only source-backed sections that are still missing and needed.',
+    'You may choose a remaining body section, a reusable section template, or a blank section as the starting point.',
+    'Do not create a section thats basically the same or a subset of another section.',
     'Do not duplicate any section or fact already assigned to a preplanned section.',
     'Use only facts present in the imported source text.',
     instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
@@ -893,7 +924,7 @@ function buildImportMissingSectionsContext(
         return `- ${formatImportPlanTarget(target)}`;
       }).join('\n')
       : '- No unused body sections or reusable section templates remain.',
-    '- blank section: use when no remaining starting point fits a source-backed missing section.',
+    '- blank section: use only for a distinct source-backed missing topic that would not duplicate any already seen or remaining section.',
     '=== END REMAINING STARTING POINTS ===',
   ].join('\n');
 }
@@ -907,6 +938,7 @@ function buildImportMissingSectionsResponseInstructions(): string {
     '`sections` is an object whose keys are new section names.',
     '`target` may be a body section, definition section, or blank section using the same target shape as import plan steps.',
     'Use a body or definition target only when it exactly matches one listed remaining starting point. Otherwise use a blank section target.',
+    'Use a blank section target only for source-backed information that cannot reasonably belong to an existing, planned, body, or definition section.',
     'Do not invent body ids, definition names, reusable template names, or aliases.',
     '`information` is a concise text document of only the source facts for that missing section.',
     'Return {"sections":{}} when no source-backed sections are missing.',

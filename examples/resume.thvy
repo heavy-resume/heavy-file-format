@@ -37,6 +37,7 @@ ai-import-guidance: >-
   Languages section entries.
   Always write both sections of the summary - the short version and a longer version
   that's usually bullet points of highlights. For dates, use numeric formatting (mm/dd/YY or mm/YY)
+  Do not create a redundant skills and tools & technology section. Do not feel obligated to create additional sections.
 importPreplan:
   - [header, summary, locations]
   - [skills, tools-technologies, resume-languages, top-skills-tools-technologies]

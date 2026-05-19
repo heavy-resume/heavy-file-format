@@ -97,8 +97,9 @@ export function bindModal(app: HTMLElement): void {
     if (chooseSectionFlavorBtn && state.sectionTemplateFlavorModal) {
       const templateName = chooseSectionFlavorBtn.dataset.sectionTemplateName ?? state.sectionTemplateFlavorModal.templateName;
       const flavorName = chooseSectionFlavorBtn.dataset.sectionTemplateFlavor ?? '';
+      const location = state.sectionTemplateFlavorModal.location ?? 'main';
       closeModal();
-      insertTopLevelSection(templateName, flavorName);
+      insertTopLevelSection(templateName, flavorName, location);
       return;
     }
 

@@ -6,17 +6,20 @@ import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
 import type { ActionHandler } from './types';
+import type { SectionLocation } from '../../editor/types';
 
-const addTopLevelSection: ActionHandler = () => {
-  const starter = state.addComponentBySection.__top_level__ ?? 'blank';
-  if (openSectionFlavorChooserIfNeeded(starter)) {
+const addTopLevelSection: ActionHandler = ({ actionButton }) => {
+  const location: SectionLocation = actionButton.dataset.sectionLocation === 'sidebar' ? 'sidebar' : 'main';
+  const pickerKey = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
+  const starter = state.addComponentBySection[pickerKey] ?? 'blank';
+  if (openSectionFlavorChooserIfNeeded(starter, location)) {
     getRenderApp()();
     return;
   }
-  insertTopLevelSection(starter);
+  insertTopLevelSection(starter, undefined, location);
 };
 
-export function insertTopLevelSection(starter: string, flavorName?: string): void {
+export function insertTopLevelSection(starter: string, flavorName?: string, location: SectionLocation = 'main'): void {
   recordHistory();
   const section = starter === 'blank'
     ? createEmptySection(1, state.currentView === 'ai' ? 'text' : '', false)
@@ -24,6 +27,7 @@ export function insertTopLevelSection(starter: string, flavorName?: string): voi
   if (!section) {
     return;
   }
+  section.location = location;
   state.document.sections.push(section);
   if (section.blocks[0]) {
     setActiveEditorBlock(section.key, section.blocks[0].id);
@@ -41,7 +45,7 @@ export function insertTopLevelSection(starter: string, flavorName?: string): voi
   getRenderApp()();
 }
 
-function openSectionFlavorChooserIfNeeded(starter: string): boolean {
+function openSectionFlavorChooserIfNeeded(starter: string, location: SectionLocation): boolean {
   if (starter === 'blank') {
     return false;
   }
@@ -50,7 +54,7 @@ function openSectionFlavorChooserIfNeeded(starter: string): boolean {
   if (!definition || flavors.length < 2) {
     return false;
   }
-  state.sectionTemplateFlavorModal = { templateName: definition.name };
+  state.sectionTemplateFlavorModal = { templateName: definition.name, location };
   return true;
 }
 

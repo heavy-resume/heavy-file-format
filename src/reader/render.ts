@@ -200,7 +200,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const realSections = orderReaderSections(
         sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
-      const topLevelAddGhost = renderAiTopLevelSectionAddGhost();
+      const topLevelAddGhost = renderAiTopLevelSectionAddGhost('main');
       if (realSections.length === 0) {
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
@@ -215,17 +215,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     });
   }
 
-  function renderAiTopLevelSectionAddGhost(): string {
+  function renderAiTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
     if (state.currentView !== 'ai' || getActiveSearchFilterContext().filtering) {
       return '';
     }
+    const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
     const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
-    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
+    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
       <div class="ghost-plus-big">${plusIcon()}</div>
       <div class="ghost-label">Add Section</div>
       ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
-        <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
-          ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
+        <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(key)}" aria-label="Section type">
+          ${deps.renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank')}
         </select>
       </label>` : ''}
     </article>`;
@@ -242,11 +243,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const sidebarSections = orderReaderSections(
         sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
-      if (sidebarSections.length === 0) {
+      const topLevelAddGhost = renderAiTopLevelSectionAddGhost('sidebar');
+      if (sidebarSections.length === 0 && !topLevelAddGhost) {
         return '';
       }
       const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}</div></div>`;
+      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
     });
   }
 

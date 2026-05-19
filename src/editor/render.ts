@@ -189,11 +189,12 @@ export interface EditorRenderer {
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
   function renderSidebarEditorSections(sections: VisualSection[]): string {
     const sidebarSections = sections.filter((s) => !s.isGhost && s.location === 'sidebar');
-    if (sidebarSections.length === 0) {
-      return '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button.</div>';
-    }
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-    return `<div${surfaceAttrs}><div class="editor-tree-body editor-sidebar-tree-body">${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}</div></div>`;
+    return `<div${surfaceAttrs}><div class="editor-tree-body editor-sidebar-tree-body">
+      ${sidebarSections.length === 0 ? '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button, or add one below.</div>' : ''}
+      ${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}
+      ${renderTopLevelSectionAddGhost('sidebar')}
+    </div></div>`;
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
@@ -229,7 +230,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
     const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
     const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-    const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
     return `
       <div${surfaceAttrs}>
         <div class="editor-tree-body"${bodyStyle}>
@@ -238,18 +238,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             : ''
           }
           ${sectionCards}
-          ${state.mobileAdjustmentMode ? '' : `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="__top_level__">
-            <div class="ghost-plus-big">${plusIcon()}</div>
-            <div class="ghost-label">Add Section</div>
-            ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
-              <select data-field="reusable-section-type" data-section-key="__top_level__" aria-label="Section type">
-                ${deps.renderReusableSectionOptions(state.addComponentBySection.__top_level__ ?? 'blank')}
-              </select>
-            </label>` : ''}
-          </article>`}
+          ${renderTopLevelSectionAddGhost('main')}
         </div>
       </div>
     `;
+  }
+
+  function renderTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
+    if (state.mobileAdjustmentMode) {
+      return '';
+    }
+    const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
+    const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
+    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
+      <div class="ghost-plus-big">${plusIcon()}</div>
+      <div class="ghost-label">Add Section</div>
+      ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
+        <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(key)}" aria-label="Section type">
+          ${deps.renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank')}
+        </select>
+      </label>` : ''}
+    </article>`;
   }
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {

@@ -1458,6 +1458,25 @@ test('new section component picker opens on the first click', async ({ page }) =
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
 });
 
+test('edit sidebar add section creates a sidebar section', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.editor-shell')).toHaveClass(/is-sidebar-closed/);
+  await page.locator('.editor-sidebar-tab').click();
+
+  const sidebarAddSection = page.locator('.editor-sidebar [data-action="add-top-level-section"][data-section-location="sidebar"]');
+  await expect(sidebarAddSection).toBeVisible();
+  await sidebarAddSection.click();
+
+  const newSidebarSection = page.locator('.editor-sidebar .editor-section-card').last();
+  const titleInput = newSidebarSection.locator('[data-field="section-title"]');
+  await expect(titleInput).toBeFocused();
+  await titleInput.fill('Sidebar Added');
+
+  await expect(titleInput).toHaveValue('Sidebar Added');
+  await expect(newSidebarSection.locator('[data-action="toggle-section-location"]')).toHaveText('main →');
+});
+
 test('AI mode shows add section ghost and opens the new section inline', async ({ page }) => {
   await page.goto('/');
 
@@ -1481,6 +1500,25 @@ test('AI mode shows add section ghost and opens the new section inline', async (
   await expect(secondEditor).toBeVisible();
   await secondEditor.locator('.rich-editor').fill('Second AI section component');
   await expect(newSection).toContainText('Second AI section component');
+});
+
+test('AI mode sidebar add section creates a sidebar section', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
+  await page.locator('.viewer-sidebar-tab').click();
+
+  const sidebarAddSection = page.locator('#aiSidebarSections [data-action="add-top-level-section"][data-section-location="sidebar"]');
+  await expect(sidebarAddSection).toBeVisible();
+  await sidebarAddSection.click();
+
+  const sidebarEditor = page.locator('#aiSidebarSections .editor-block[data-active-editor-block="true"]');
+  await expect(sidebarEditor).toBeVisible();
+  await sidebarEditor.locator('.rich-editor').fill('AI sidebar section body');
+
+  await expect(page.locator('#aiSidebarSections')).toContainText('AI sidebar section body');
+  await expect(page.locator('#aiReaderDocument')).not.toContainText('AI sidebar section body');
 });
 
 test('AI mode opens added section templates with nested components editable', async ({ page }) => {

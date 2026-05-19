@@ -131,6 +131,7 @@ export interface ReusableTemplateModalState {
 
 export interface SectionTemplateFlavorModalState {
   templateName: string;
+  location?: 'main' | 'sidebar';
 }
 
 export interface SqliteRowComponentModalState {

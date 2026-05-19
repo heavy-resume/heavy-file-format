@@ -474,6 +474,82 @@ hvy_version: 0.1
   });
 });
 
+test('buildImportPlanForDocument runs a section-only model dedupe step', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Skills","sectionId":"skills"},{"section":"Skills Showcase"},{"section":"Tools","sectionId":"tools"}]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["skills","tools"]}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Skills, skills showcase, tools',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.sectionTitle)).toEqual(['Skills', 'Tools']);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-plan',
+    'ai-import-section-dedupe',
+  ]);
+  const dedupeCall = requestProxyCompletionMock.mock.calls[1]?.[0];
+  expect(dedupeCall?.context).toBe('');
+  expect(dedupeCall?.messages[0]?.content).toContain('Deduplicate this candidate import section list.');
+  expect(dedupeCall?.messages[0]?.content).toContain('prefer an existing body section over a reusable/template section');
+  expect(dedupeCall?.messages[0]?.content).toContain('- id="skills" section="Skills" target_kind="body"');
+  expect(dedupeCall?.messages[0]?.content).toContain('- id="skills-2" section="Skills Showcase" target_kind="body"');
+  expect(dedupeCall?.messages[0]?.content).toContain('- id="tools" section="Tools" target_kind="body"');
+  expect(dedupeCall?.messages[0]?.content).not.toContain('Skills, skills showcase, tools');
+  expect(dedupeCall?.messages[0]?.content).not.toContain('BEGIN TEMPLATE SECTIONS');
+  expect(dedupeCall?.responseInstructions).toContain('"keep":["section-id","another-section-id"]');
+  expect(dedupeCall?.responseInstructions).toContain('Use only these candidate ids: skills, skills-2, tools.');
+});
+
+test('buildImportPlanForDocument section dedupe can prefer an existing body section over a blank duplicate', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Skills","sectionId":"skills"},{"section":"Skills Showcase","target":{"kind":"blank","title":"Skills Showcase"}}]}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["skills"]}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Skills showcase',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.target)).toEqual([
+    { kind: 'body', id: 'skills', title: 'Skills', name: undefined },
+  ]);
+  const dedupePrompt = requestProxyCompletionMock.mock.calls[1]?.[0]?.messages[0]?.content ?? '';
+  expect(dedupePrompt).toContain('- id="skills" section="Skills" target_kind="body"');
+  expect(dedupePrompt).toContain('- id="skills-showcase" section="Skills Showcase" target_kind="blank"');
+  expect(dedupePrompt).toContain('Only keep a blank section when no body or reusable/template candidate covers that same role.');
+});
+
 test('buildImportPlanForDocument uses importPreplan groups to extract approved section information', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."},"resume-awards":{"import_selection":"has_data_include","information":"Award facts."},"missing-body":{"import_selection":"no_data_exclude","information":"Source-backed generic resume section content is not present in the source text."}}}'
@@ -482,6 +558,7 @@ test('buildImportPlanForDocument uses importPreplan groups to extract approved s
     '{"sections":{"resume-projects":{"import_selection":"has_data_include","information":"Project facts."}}}'
   );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["summary","resume-awards","resume-projects"]}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 importPreplan:
@@ -549,6 +626,7 @@ section_defs:
     'ai-import-preplan-data:1',
     'ai-import-preplan-data:2',
     'ai-import-missing-sections',
+    'ai-import-section-dedupe',
   ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toBe('');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toHaveLength(2);
@@ -563,6 +641,58 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-plan');
 });
 
+test('buildImportPlanForDocument dedupes repeated component-list scaffold items in importPreplan prompts', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"skills":{"import_selection":"has_data_include","information":"Skill facts."}}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - skills
+---
+
+<!--hvy: {"id":"skills","location":"sidebar"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"container","componentListItemLabel":"skill"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:container {"id":"accounting-and-auditing"}-->
+    <!--hvy:text {"placeholder":"### Skill name"}-->
+     ### Accounting and auditing
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:container {"id":"accounting-and-auditing"}-->
+    <!--hvy:text {"placeholder":"### Skill name"}-->
+     ### Accounting and auditing
+
+  <!--hvy:component-list:2 {}-->
+
+   <!--hvy:container {"id":"accounting-and-auditing"}-->
+    <!--hvy:text {"placeholder":"### Skill name"}-->
+     ### Accounting and auditing
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Accounting and auditing',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const prompt = requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content ?? '';
+  expect(result.status).toBe('ready');
+  expect(prompt.match(/<!--hvy:container \{"id":"accounting-and-auditing"\}-->/g)).toHaveLength(1);
+  expect(prompt).toContain('<!--hvy:component-list:0 {}-->');
+  expect(prompt).not.toContain('<!--hvy:component-list:1 {}-->');
+  expect(serializeDocument(document).match(/<!--hvy:container \{"id":"accounting-and-auditing"\}-->/g)).toHaveLength(3);
+});
+
 test('buildImportPlanForDocument preserves explicit blank missing-section targets', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."}}}'
@@ -570,6 +700,7 @@ test('buildImportPlanForDocument preserves explicit blank missing-section target
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"Patents":{"target":{"kind":"blank","title":"Patents"},"information":"Patent facts."}}}'
   );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["summary","patents"]}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 importPreplan:
@@ -668,8 +799,11 @@ test('resume template importPreplan resolves expected grouped targets', async ()
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"resume-certifications":{"import_selection":"has_data_include","information":"Certification facts."},"education":{"import_selection":"has_data_include","information":"Education facts."}}}'
   );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"resume-languages":{"import_selection":"no_data_exclude","information":"Language facts were already captured in the dedicated languages section."},"tabular-resume-section":{"import_selection":"no_data_exclude","information":"No distinct tabular resume source-backed section is needed."}}}'
+  );
   requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
-  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["header","summary","locations","skills","tools-technologies","resume-languages","top-skills-tools-technologies","history","resume-awards","resume-projects","resume-publications","resume-certifications","education"]}');
   const source = readFileSync(new URL('../examples/resume.thvy', import.meta.url), 'utf8');
   const document = deserializeDocument(source, '.thvy');
 
@@ -721,6 +855,7 @@ test('resume template importPreplan resolves expected grouped targets', async ()
     'ai-import-preplan-data:5',
     'ai-import-preplan-data:6',
     'ai-import-missing-sections',
+    'ai-import-section-dedupe',
   ]);
 });
 
@@ -728,6 +863,7 @@ test('buildImportPlanForDocument exposes forced template structure metadata for 
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"steps":[{"section":"Awards","templateName":"Award Section"},{"section":"Notes","templateName":"Notes"}]}'
   );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["award-section","notes"]}');
   const document = deserializeDocument(`---
 hvy_version: 0.1
 section_defs:
@@ -1280,6 +1416,7 @@ test('importTextIntoDocument uses grouped importPreplan extraction and missing s
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"Summary":{"target":{"kind":"definition","name":"Stale Section"},"information":"Duplicate summary facts."},"Conference Talks":{"target":{"kind":"definition","name":"Supplemental Section"},"information":"Talk facts."},"Volunteer Work":{"target":{"kind":"definition","name":"Stale Section"},"information":"Volunteer facts."}}}'
   );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"keep":["summary","resume-awards","supplemental-section","volunteer-work"]}');
   requestProxyCompletionMock.mockResolvedValueOnce('{"targets":[]}');
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {}-->\\n  Imported summary"}'
@@ -1390,6 +1527,7 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
     'ai-import-preplan-data:1',
     'ai-import-missing-sections',
+    'ai-import-section-dedupe',
     'ai-import-xref-targets',
     'ai-import-section-hvy:1',
     'ai-import-template-values:2',
@@ -1403,8 +1541,8 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: resume-awards');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"summary"');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('"resume-awards"');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
-  expect(requestProxyCompletionMock.mock.calls[4]?.[0]?.context).toContain('Award facts.');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('=== BEGIN SECTION INFORMATION ===');
+  expect(requestProxyCompletionMock.mock.calls[5]?.[0]?.context).toContain('Award facts.');
   const serialized = serializeDocument(document);
   expect(serialized).toContain('Imported summary');
   expect(serialized).toContain('# Awards');

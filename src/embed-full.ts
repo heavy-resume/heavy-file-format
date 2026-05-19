@@ -611,10 +611,10 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
 }
 
 function freshLoadMountedDocumentInPlace(): void {
-  const parsed = deserializeDocumentWithDiagnostics(serializeDocument(state.document), state.document.extension);
-  state.document.meta = parsed.document.meta;
-  state.document.sections.splice(0, state.document.sections.length, ...parsed.document.sections);
-  state.document.attachments = parsed.document.attachments;
+  const parsed = deserializeDocumentBytes(serializeDocumentBytes(state.document), state.document.extension);
+  state.document.meta = parsed.meta;
+  state.document.sections.splice(0, state.document.sections.length, ...parsed.sections);
+  state.document.attachments = parsed.attachments;
 }
 
 function refreshModalPreview(): void {}

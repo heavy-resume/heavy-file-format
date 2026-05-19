@@ -1265,6 +1265,74 @@ hvy_version: 0.1
   expect(result.serialized).toContain('#! Hook Updated Import');
 });
 
+test('embedded importFromText preserves binary tail attachments after status refresh', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const encoder = new TextEncoder();
+    const prefix = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+<!--hvy:tail {"id":"db","mediaType":"application/octet-stream","length":3}-->
+--HVY-TAIL--
+`;
+    const prefixBytes = encoder.encode(prefix);
+    const documentBytes = new Uint8Array(prefixBytes.length + 3);
+    documentBytes.set(prefixBytes, 0);
+    documentBytes.set([9, 8, 7], prefixBytes.length);
+    const responses = [
+      '{"targets":[]}',
+      '{"information":"Imported summary"}',
+      '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {\\"id\\":\\"intro\\"}-->\\n  Imported summary"}',
+    ];
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(documentBytes, '.hvy'),
+      mode: 'editor',
+    });
+    const importResult = await mount.importFromText({
+      sourceName: 'summary.txt',
+      sourceText: 'Imported summary',
+      steps: [{ section: 'Summary', sectionId: 'summary' }],
+      llm: {
+        settings: { provider: 'openai', model: 'mock-import-model' },
+        client: {
+          async complete() {
+            const output = responses.shift();
+            if (!output) {
+              throw new Error('Unexpected import LLM call.');
+            }
+            return { output };
+          },
+        },
+      },
+    });
+    const attachment = mount.getDocument().attachments.find((entry) => entry.id === 'db');
+    return {
+      importResult,
+      attachmentBytes: Array.from(attachment?.bytes ?? []),
+      serializedTailBytes: Array.from(mount.serializeDocumentBytes().slice(-3)),
+    };
+  });
+
+  expect(result.importResult.status).toBe('complete');
+  expect(result.attachmentBytes).toEqual([9, 8, 7]);
+  expect(result.serializedTailBytes).toEqual([9, 8, 7]);
+});
+
 test('embedded importFromText can force template JSON mode with mocked client', async ({ page }) => {
   await page.goto('/');
 

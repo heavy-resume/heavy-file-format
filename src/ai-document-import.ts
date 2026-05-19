@@ -234,7 +234,7 @@ export async function buildImportPlanForDocument(
     const llm = requireImportLlm(options.llm);
     throwIfAborted(options.signal);
     options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
-    const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal)?.('thinking');
+    const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
     const response = await requestProxyCompletion({
       settings: llm.settings,
       client: llm.client,
@@ -250,7 +250,7 @@ export async function buildImportPlanForDocument(
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: 'document-edit',
       debugLabel: 'ai-import-plan',
-      beforeRequest: beforeLlmCall,
+      beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
     });
     throwIfAborted(options.signal);
@@ -258,8 +258,13 @@ export async function buildImportPlanForDocument(
     if (steps.length === 0) {
       return { status: 'error', message: 'The import planner did not return a usable plan.' };
     }
+    options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, options.signal);
+    if (dedupedSteps.length === 0) {
+      return { status: 'error', message: 'The import planner did not return a usable plan after deduping.' };
+    }
     options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
-    return { status: 'ready', steps };
+    return { status: 'ready', steps: dedupedSteps };
   } catch (error) {
     if (isAbortError(error)) {
       return { status: 'aborted', message: 'Import planning was aborted.' };
@@ -611,6 +616,133 @@ function parseImportPlanSteps(response: string, document: VisualDocument): Impor
   }
 }
 
+async function dedupeImportPlanStepsWithModel(
+  steps: ImportPlanStep[],
+  llm: HvyImportLlmOptions,
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  signal?: AbortSignal
+): Promise<ImportPlanStep[]> {
+  if (steps.length <= 1) {
+    return steps;
+  }
+  const candidates = buildImportSectionDedupeCandidates(steps);
+  const response = await requestProxyCompletion({
+    settings: llm.settings,
+    client: llm.client,
+    messages: [
+      {
+        id: 'ai-import-section-dedupe-task',
+        role: 'user',
+        content: buildImportTaskMessage(buildImportSectionDedupePrompt(candidates), buildImportSectionDedupeResponseInstructions(candidates)),
+      },
+    ],
+    context: '',
+    responseInstructions: buildImportSectionDedupeResponseInstructions(candidates),
+    systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
+    mode: 'document-edit',
+    debugLabel: 'ai-import-section-dedupe',
+    beforeRequest: beforeLlmCall?.('thinking'),
+    signal,
+  });
+  throwIfAborted(signal);
+  const keepIds = parseImportSectionDedupeResponse(response, candidates);
+  const keepSet = new Set(keepIds);
+  return candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step);
+}
+
+interface ImportSectionDedupeCandidate {
+  id: string;
+  step: ImportPlanStep;
+}
+
+function buildImportSectionDedupeCandidates(steps: ImportPlanStep[]): ImportSectionDedupeCandidate[] {
+  const used = new Set<string>();
+  return steps.map((step) => {
+    const base = getImportSectionDedupeCandidateBaseId(step);
+    let id = base;
+    let suffix = 2;
+    while (used.has(id)) {
+      id = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    used.add(id);
+    return { id, step };
+  });
+}
+
+function getImportSectionDedupeCandidateBaseId(step: ImportPlanStep): string {
+  return slugImportSectionDedupeId(
+    step.preplanTargetId
+    || step.target.id
+    || step.target.name
+    || step.target.title
+    || step.sectionTitle
+  );
+}
+
+function slugImportSectionDedupeId(value: string | undefined): string {
+  return normalizeImportMissingSectionTitle(value).replace(/\s+/g, '-') || 'section';
+}
+
+function buildImportSectionDedupePrompt(candidates: ImportSectionDedupeCandidate[]): string {
+  return [
+    'Deduplicate this candidate import section list.',
+    '',
+    'You are given only section candidates. Do not infer from any source document. Do not use tools.',
+    'Keep one section for each distinct final document role.',
+    'When candidates have the same role, prefer an existing body section over a reusable/template section, and prefer either of those over a blank section.',
+    'Only keep a blank section when no body or reusable/template candidate covers that same role.',
+    'Prefer sections listed first.',
+    'Drop later candidates that are basically the same section, a renamed version, or a subset/showcase/summary of another candidate.',
+    'If two sections are genuinely different document roles, keep both.',
+    '',
+    'Candidate sections:',
+    ...candidates.map((candidate) => `- id="${candidate.id}" ${formatImportPlanSectionDedupeCandidate(candidate.step)}`),
+  ].join('\n');
+}
+
+function formatImportPlanSectionDedupeCandidate(step: ImportPlanStep): string {
+  const targetLabel = formatImportPlanTarget(step.target);
+  return [
+    `section="${step.sectionTitle}"`,
+    `target_kind="${step.target.kind}"`,
+    `target="${targetLabel}"`,
+  ].join(' ');
+}
+
+function buildImportSectionDedupeResponseInstructions(candidates: ImportSectionDedupeCandidate[]): string {
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    '{"keep":["section-id","another-section-id"]}',
+    '',
+    '`keep` must be an array of candidate id strings to keep.',
+    `Use only these candidate ids: ${candidates.map((candidate) => candidate.id).join(', ')}.`,
+    'Preserve the original order of kept candidates.',
+    'Do not include duplicate ids.',
+  ].join('\n');
+}
+
+function parseImportSectionDedupeResponse(response: string, candidates: ImportSectionDedupeCandidate[]): string[] {
+  const parsed = parseImportJsonObject(response);
+  const keep = parsed?.keep;
+  if (!Array.isArray(keep)) {
+    return [];
+  }
+  const allowed = new Set(candidates.map((candidate) => candidate.id));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of keep) {
+    const id = typeof value === 'string' ? value.trim() : '';
+    if (!allowed.has(id) || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push(id);
+  }
+  return candidates.map((candidate) => candidate.id).filter((id) => seen.has(id));
+}
+
 type ImportPreplanGroup = {
   steps: ImportPlanStep[];
 };
@@ -737,10 +869,12 @@ async function preparePreplannedImportSteps(
     signal: options.signal,
   });
   throwIfAborted(options.signal);
-  return [
-    ...extracted,
-    ...parseImportMissingSectionsResponse(missingResponse, document, steps, extracted),
-  ];
+  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted);
+  const candidates = [...extracted, ...missingSteps];
+  if (candidates.length <= 1) {
+    return candidates;
+  }
+  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, options.signal);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -885,7 +1019,6 @@ function buildImportMissingSectionsPrompt(sourceName: string, instructions?: str
     '',
     'Review what the preplanned import has already seen, then add only source-backed sections that are still missing and needed.',
     'You may choose a remaining body section, a reusable section template, or a blank section as the starting point.',
-    'Do not create a section thats basically the same or a subset of another section.',
     'Do not duplicate any section or fact already assigned to a preplanned section.',
     'Use only facts present in the imported source text.',
     instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
@@ -940,6 +1073,7 @@ function buildImportMissingSectionsResponseInstructions(): string {
     '`target` may be a body section, definition section, or blank section using the same target shape as import plan steps.',
     'Use a body or definition target only when it exactly matches one listed remaining starting point. Otherwise use a blank section target.',
     'Use a blank section target only for source-backed information that cannot reasonably belong to an existing, planned, body, or definition section.',
+    'Do not use a blank section target for a topic that is a renamed version, showcase, summary, or subset of an already seen body or definition section.',
     'Do not invent body ids, definition names, reusable template names, or aliases.',
     '`information` is a concise text document of only the source facts for that missing section.',
     'Return {"sections":{}} when no source-backed sections are missing.',
@@ -2015,11 +2149,60 @@ function buildImportSectionApplicationFrame(document: VisualDocument, applicatio
     application.target.name ? `Matched section name: ${application.target.name}` : '',
     '',
     '=== BEGIN MATCHED SECTION TEMPLATE ===',
-    serializeSectionFragment(application.target.section, document.meta),
+    serializeImportMatchedSectionTemplate(application.target.section, document.meta),
     '=== END MATCHED SECTION TEMPLATE ===',
     reusableDefinitionFrame,
     '=== END SECTION APPLICATION ===',
   ].filter(Boolean).join('\n');
+}
+
+function serializeImportMatchedSectionTemplate(section: VisualSection, documentMeta: VisualDocument['meta']): string {
+  const template = cloneImportPromptSection(section);
+  dedupeRedundantImportPromptBlocks(template.blocks, documentMeta);
+  template.children.forEach((child) => dedupeRedundantImportPromptSection(child, documentMeta));
+  return serializeSectionFragment(template, documentMeta);
+}
+
+function cloneImportPromptSection(section: VisualSection): VisualSection {
+  return {
+    ...section,
+    blocks: section.blocks.map((block) => cloneReusableBlock(block)),
+    children: section.children.map(cloneImportPromptSection),
+  };
+}
+
+function dedupeRedundantImportPromptSection(section: VisualSection, documentMeta: VisualDocument['meta']): void {
+  dedupeRedundantImportPromptBlocks(section.blocks, documentMeta);
+  section.children.forEach((child) => dedupeRedundantImportPromptSection(child, documentMeta));
+}
+
+function dedupeRedundantImportPromptBlocks(blocks: VisualBlock[], documentMeta: VisualDocument['meta']): void {
+  for (const block of blocks) {
+    dedupeRedundantImportPromptBlocks(block.schema.containerBlocks, documentMeta);
+    dedupeRedundantImportPromptBlocks(block.schema.componentListBlocks, documentMeta);
+    for (const item of block.schema.gridItems) {
+      dedupeRedundantImportPromptBlocks([item.block], documentMeta);
+    }
+    dedupeRedundantImportPromptBlocks(block.schema.expandableStubBlocks.children, documentMeta);
+    dedupeRedundantImportPromptBlocks(block.schema.expandableContentBlocks.children, documentMeta);
+
+    if (resolveBaseComponentFromMeta(block.schema.component, documentMeta) !== 'component-list') {
+      continue;
+    }
+    const seen = new Set<string>();
+    block.schema.componentListBlocks = block.schema.componentListBlocks.filter((item) => {
+      const key = getImportPromptListItemDedupeKey(item, documentMeta);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+}
+
+function getImportPromptListItemDedupeKey(block: VisualBlock, documentMeta: VisualDocument['meta']): string {
+  return serializeBlockFragment(block, documentMeta).replace(/\s+/g, ' ').trim();
 }
 
 function buildImportReusableDefinitionFrame(document: VisualDocument, section: VisualSection): string {

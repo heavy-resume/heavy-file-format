@@ -30,6 +30,7 @@ ai-import-guidance: >-
   Awards when the source has no distinct source-backed award-like item.
   Any sort of job goes under professional history.
   A skill is something you do. For example, programming.
+  Prefix skill IDs with skill- and tool ids with tool-.
   A tool / technology is something you use and would have experience with. Such as
   a programming language, machinery, etc.
   The Languages section is only for human languages someone can speak, read, write,

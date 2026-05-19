@@ -791,6 +791,49 @@ hvy_version: 0.1
   expect(result.title).toBe('Fresh Viewer');
 });
 
+test('embedded viewer sidebar stays open after remounting root from editor to viewer', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const editorMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'editor',
+      storageKey: 'sidebar-remount',
+    });
+    editorMount.destroy();
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'viewer',
+      storageKey: 'sidebar-remount',
+    });
+  });
+
+  await page.locator('#mount .viewer-sidebar-tab').click();
+
+  await expect(page.locator('#mount .viewer-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(page.locator('#mount .viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('embedded viewer storage key does not persist stale document state', async ({ page }) => {
   await page.goto('/');
 

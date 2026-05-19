@@ -93,6 +93,36 @@
         font-size: 0.92rem;
       }
 
+      .mode-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        padding: 0.16rem;
+        border: 1px solid #b19d83;
+        border-radius: 7px;
+        background: #fffaf2;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      }
+
+      .mode-button {
+        min-width: 4.2rem;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #4d4135;
+        padding: 0.34rem 0.52rem;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .mode-button[aria-pressed="true"] {
+        background: #6f4f2f;
+        color: #fffaf2;
+        box-shadow: 0 1px 2px rgba(35, 31, 26, 0.2);
+      }
+
       .mount-point {
         min-height: 0;
         height: 100%;
@@ -141,7 +171,11 @@
         <section class="doc-frame">
           <div class="doc-frame-header">
             <strong>Document One</strong>
-            <span>storageKey: two-doc-reference-one</span>
+            <div class="mode-control" role="group" aria-label="Document One mode">
+              <button type="button" class="mode-button" data-doc-one-mode="viewer" aria-pressed="false">Viewer</button>
+              <button type="button" class="mode-button" data-doc-one-mode="editor" aria-pressed="true">Editor</button>
+              <button type="button" class="mode-button" data-doc-one-mode="ai" aria-pressed="false">AI</button>
+            </div>
           </div>
           <div id="docOne" class="mount-point"></div>
         </section>
@@ -163,10 +197,17 @@
       const encoder = new TextEncoder();
       const eventLog = document.querySelector('#eventLog');
       const mounted = [];
+      let docOneMode = 'editor';
 
       const writeLog = (message) => {
         const timestamp = new Date().toLocaleTimeString();
         eventLog.textContent = `${timestamp} ${message}\n${eventLog.textContent}`;
+      };
+
+      const setDocOneModeButtons = () => {
+        document.querySelectorAll('[data-doc-one-mode]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.docOneMode === docOneMode ? 'true' : 'false');
+        });
       };
 
       const makeDocumentSource = (label, sourceText, sidebarText) => `---
@@ -213,30 +254,45 @@ title: ${label}
         return deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy');
       }
 
+      function mountFirstDocument() {
+        mounted[0]?.destroy();
+        const firstRoot = document.querySelector('#docOne');
+        mounted[0] = mountHvy({
+          root: firstRoot,
+          document: deserializeDocumentBytes(encoder.encode(makeDocumentSource('Document One', 'First document source text.', 'Sidebar note for the first embedded document.')), '.hvy'),
+          mode: docOneMode,
+          storageKey: 'two-doc-reference-one',
+          chatClient: makeChatClient('Document One'),
+        });
+        setDocOneModeButtons();
+        writeLog(`Mounted Document One in ${docOneMode} mode.`);
+      }
+
       async function mountPair() {
         mounted.splice(0).forEach((mount) => mount.destroy());
-        const firstRoot = document.querySelector('#docOne');
         const secondRoot = document.querySelector('#docTwo');
         const resumeDocument = await loadResumeDocument();
-        mounted.push(
-          mountHvy({
-            root: firstRoot,
-            document: deserializeDocumentBytes(encoder.encode(makeDocumentSource('Document One', 'First document source text.', 'Sidebar note for the first embedded document.')), '.hvy'),
-            mode: 'editor',
-            storageKey: 'two-doc-reference-one',
-            chatClient: makeChatClient('Document One'),
-          })
-        );
-        mounted.push(
+        mountFirstDocument();
+        mounted[1] =
           mountHvy({
             root: secondRoot,
             document: resumeDocument,
             mode: 'viewer',
             storageKey: 'two-doc-reference-two',
-          })
-        );
+          });
         writeLog('Mounted both documents.');
       }
+
+      document.querySelectorAll('[data-doc-one-mode]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextMode = button.dataset.docOneMode;
+          if (!nextMode || nextMode === docOneMode) {
+            return;
+          }
+          docOneMode = nextMode;
+          mountFirstDocument();
+        });
+      });
 
       document.querySelector('#resetSessions').addEventListener('click', () => {
         sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-one');

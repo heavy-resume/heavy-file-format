@@ -34,6 +34,7 @@ function bindReaderAppControls(app: HTMLElement): void {
     }
     const runtime = getActiveStateRuntime();
     event.preventDefault();
+    event.stopImmediatePropagation();
     void import('./bind/app-actions/registry').then(({ appActionRegistry }) => {
       runWithStateRuntime(runtime, () => {
         appActionRegistry[action]?.({
@@ -46,7 +47,7 @@ function bindReaderAppControls(app: HTMLElement): void {
         });
       });
     });
-  });
+  }, { capture: true });
 }
 
 export function bindReaderUi(app: HTMLElement): void {

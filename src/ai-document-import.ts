@@ -20,6 +20,7 @@ import {
   type ReusableTemplateVariable,
 } from './reusable-template-values';
 import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker } from './text-fill-in';
+import { runImportXrefPass } from './ai-import-xrefs';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -32,7 +33,19 @@ export interface HvyImportProgressEvent {
 export interface HvyImportLlmOptions {
   settings: ChatSettings;
   client?: HostChatClient | null;
+  stages?: Partial<Record<HvyImportLlmStage, ChatSettings>>;
 }
+
+export type HvyImportLlmStage =
+  | 'sectionPlanner'
+  | 'preplannedSectionPlanner'
+  | 'additionalSections'
+  | 'dedupe'
+  | 'sectionDataCollection'
+  | 'templateSectionWriter'
+  | 'rawSectionWriter'
+  | 'fillIns'
+  | 'xrefs';
 
 export interface HvyImportLlmStepEvent {
   callIndex: number;
@@ -146,13 +159,6 @@ const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
   'Do not use tools. Do not mutate anything directly.',
 ].join('\n');
 
-export interface PlannedImportXrefTarget {
-  id: string;
-  title: string;
-  kind?: string;
-  description: string;
-}
-
 interface AppliedImportSectionResult {
   message: string;
   sectionKey: string;
@@ -236,7 +242,7 @@ export async function buildImportPlanForDocument(
     options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
     const response = await requestProxyCompletion({
-      settings: llm.settings,
+      settings: getImportStageSettings(llm, 'sectionPlanner'),
       client: llm.client,
       messages: [
         {
@@ -278,6 +284,7 @@ export async function importTextIntoDocument(
   options: ImportFromTextOptions & {
     onMutation?: (group?: string) => void;
     onSectionApplied?: (result: string) => Promise<void> | void;
+    onImportFinalized?: (result: string) => Promise<void> | void;
   }
 ): Promise<ImportFromTextResult> {
   const steps = normalizeImportPlanSteps(options.steps, document);
@@ -296,30 +303,6 @@ export async function importTextIntoDocument(
     if (executableSteps.length === 0) {
       options.onProgress?.({ phase: 'complete', message: 'Imported 0 sections.' });
       return { status: 'complete', message: 'Imported 0 sections.' };
-    }
-    options.onProgress?.({ phase: 'thinking', message: 'Identifying planned xref targets.' });
-    const xrefResponse = await requestProxyCompletion({
-      settings: llm.settings,
-      client: llm.client,
-      messages: [
-        {
-          id: 'ai-import-xref-targets-task',
-          role: 'user',
-          content: buildImportTaskMessage(buildImportXrefTargetPrompt(options.sourceName, options.instructions), buildImportXrefTargetResponseInstructions()),
-        },
-      ],
-      context: buildImportXrefTargetContext(document, options.sourceName, options.sourceText, executableSteps),
-      responseInstructions: buildImportXrefTargetResponseInstructions(),
-      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: 'document-edit',
-      debugLabel: 'ai-import-xref-targets',
-      beforeRequest: beforeLlmCall?.('thinking'),
-      signal: options.signal,
-    });
-    throwIfAborted(options.signal);
-    const plannedXrefTargets = parseImportXrefTargetResponse(xrefResponse);
-    if (!plannedXrefTargets) {
-      return { status: 'error', message: 'Import did not return a usable planned xref target inventory.' };
     }
     const created: string[] = [];
     const appliedSections: AppliedImportSectionResult[] = [];
@@ -343,10 +326,10 @@ export async function importTextIntoDocument(
           },
         ];
         const valuesRequest: ProxyCompletionParams = {
-          settings: llm.settings,
+          settings: getImportStageSettings(llm, 'templateSectionWriter'),
           client: llm.client,
           messages: valuesMessages,
-          context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets, templateStructure, step.extractedInformation),
+          context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, templateStructure, step.extractedInformation),
           responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
           systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
           mode: 'document-edit',
@@ -400,7 +383,7 @@ export async function importTextIntoDocument(
       if (!information) {
         options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${executableSteps.length}.` });
         const informationResponse = await requestProxyCompletion({
-          settings: llm.settings,
+          settings: getImportStageSettings(llm, 'sectionDataCollection'),
           client: llm.client,
           messages: [
             {
@@ -412,7 +395,7 @@ export async function importTextIntoDocument(
               ),
             },
           ],
-          context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets),
+          context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application),
           responseInstructions: buildImportSectionInformationResponseInstructions(),
           systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
           mode: 'document-edit',
@@ -428,7 +411,7 @@ export async function importTextIntoDocument(
       }
       options.onProgress?.({ phase: 'thinking', message: `Generating HVY section ${index + 1} of ${executableSteps.length}.` });
       const hvyResponse = await requestProxyCompletion({
-        settings: llm.settings,
+        settings: getImportStageSettings(llm, 'rawSectionWriter'),
         client: llm.client,
         messages: [
           {
@@ -440,7 +423,7 @@ export async function importTextIntoDocument(
             ),
           },
         ],
-        context: buildImportSectionHvyContext(document, step.extractedInformation!, application, plannedXrefTargets),
+        context: buildImportSectionHvyContext(document, step.extractedInformation!, application),
         responseInstructions: buildImportSectionHvyResponseInstructions(),
         systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
         mode: 'document-edit',
@@ -460,18 +443,22 @@ export async function importTextIntoDocument(
       await options.onSectionApplied?.(result.message);
     }
     const importedSectionKeys = appliedSections.map((result) => result.sectionKey).filter(Boolean);
-    const createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
-    if (createdTargets.some((target) => target.kind !== 'section')) {
-      options.onProgress?.({ phase: 'thinking', message: 'Repairing imported xrefs.' });
-      await repairImportedSectionXrefs(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets);
-    }
+    let createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
     const fillInTargets = collectImportFillInTargets(document, importedSectionKeys);
     if (fillInTargets.length > 0) {
       options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
       await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets, fillInTargets);
     }
-    options.onProgress?.({ phase: 'complete', message: `Imported ${created.length} section${created.length === 1 ? '' : 's'}.` });
-    return { status: 'complete', message: `Imported ${created.length} section${created.length === 1 ? '' : 's'}.` };
+    createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
+    options.onProgress?.({ phase: 'thinking', message: 'Filling imported xref lists.' });
+    const xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets);
+    const message = `Imported ${created.length} section${created.length === 1 ? '' : 's'}.`;
+    if (fillInTargets.length > 0 || xrefsApplied > 0) {
+      options.onMutation?.('ai-edit:import-finalize');
+      await options.onImportFinalized?.(message);
+    }
+    options.onProgress?.({ phase: 'complete', message });
+    return { status: 'complete', message };
   } catch (error) {
     if (isAbortError(error)) {
       return { status: 'aborted', message: 'Import was aborted.' };
@@ -627,7 +614,7 @@ async function dedupeImportPlanStepsWithModel(
   }
   const candidates = buildImportSectionDedupeCandidates(steps);
   const response = await requestProxyCompletion({
-    settings: llm.settings,
+    settings: getImportStageSettings(llm, 'dedupe'),
     client: llm.client,
     messages: [
       {
@@ -811,7 +798,7 @@ async function preparePreplannedImportSteps(
   for (const [groupIndex, groupSteps] of groups.entries()) {
     options.onProgress?.({ phase: 'thinking', message: `Extracting import group ${groupIndex + 1} of ${groups.length}.` });
     const response = await requestProxyCompletion({
-      settings: llm.settings,
+      settings: getImportStageSettings(llm, 'preplannedSectionPlanner'),
       client: llm.client,
       messages: [
         {
@@ -848,7 +835,7 @@ async function preparePreplannedImportSteps(
   }
   options.onProgress?.({ phase: 'thinking', message: 'Checking for missing import sections.' });
   const missingResponse = await requestProxyCompletion({
-    settings: llm.settings,
+    settings: getImportStageSettings(llm, 'additionalSections'),
     client: llm.client,
     messages: [
       {
@@ -1710,40 +1697,6 @@ function toImportJsonPropertyName(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'items';
 }
 
-function buildImportXrefTargetPrompt(sourceName: string, instructions?: string): string {
-  return [
-    `Identify planned xref targets for import source "${sourceName}".`,
-    '',
-    'Read the approved section plan and source document, then list referenceable targets that later sections may create or reference.',
-    'A target can be a final section or any source-backed reusable record, item, entity, event, category, or other referenceable document object.',
-    'Use stable HVY ids that section generation can later use as exact `xrefTarget` values, even if the target section or record has not been generated yet.',
-    'Give each target a short title, optional kind/tag, and exactly one sentence describing what it is.',
-    'Use only source-backed targets. Do not include placeholders, conditionals, or speculative references.',
-    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
-  ].filter(Boolean).join('\n');
-}
-
-function buildImportXrefTargetContext(document: VisualDocument, sourceName: string, sourceText: string, steps: ImportPlanStep[]): string {
-  return [
-    buildImportGuidanceFrame(document),
-    '',
-    '=== BEGIN TEMPLATE SECTIONS ===',
-    'Template section inventory for resolving section targets; this is not an ordering requirement:',
-    buildImportTemplateSectionOutline(document),
-    '=== END TEMPLATE SECTIONS ===',
-    '',
-    'Approved import section plan:',
-    ...steps.map((step, index) => `${index + 1}. ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
-    '',
-    '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
-    '```text',
-    sourceText,
-    '```',
-    '=== END SOURCE DOCUMENT ===',
-  ].join('\n');
-}
-
 function buildImportSectionInformationPrompt(sourceName: string, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
   return [
     `Extract source information for one import section from "${sourceName}".`,
@@ -1765,8 +1718,7 @@ function buildImportSectionInformationContext(
   steps: ImportPlanStep[],
   activeIndex: number,
   createdSections: string[],
-  application: ImportStepApplication,
-  plannedXrefTargets: PlannedImportXrefTarget[]
+  application: ImportStepApplication
 ): string {
   return [
     buildImportGuidanceFrame(document),
@@ -1782,8 +1734,6 @@ function buildImportSectionInformationContext(
     '',
     buildImportRelationshipFrame(document),
     '',
-    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
-    '',
     'Approved import section plan:',
     ...steps.map((step, index) => `${index + 1}. ${index < activeIndex ? '[created]' : index === activeIndex ? '[current]' : '[pending]'} ${formatImportPlanStep(step)} (${formatImportPlanTarget(step.target)})`),
     ...(createdSections.length > 0 ? ['', 'Previously created section results:', ...createdSections] : []),
@@ -1798,7 +1748,7 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
     '',
     'Use the extracted section information as the source of truth for facts.',
     'Build the section as raw HVY using the matched template as structural guidance.',
-    'Reuse the template component shapes where they fit, including custom record components, component-list items, tables, containers, and xref-card components.',
+    'Reuse the template component shapes where they fit, including custom record components, component-list items, tables, and containers.',
     'IDs are for navigation and exact xref targets. Do not repeat IDs and do not add IDs to local layout/prose components just to name them.',
     'Do not put `id` on xref-card components; xref-card points at another component with `xrefTarget` and does not need its own navigation ID.',
     'When reusing a matched grid, preserve the template grid shape, `gridColumns`, slot count, and slot order. Do not add extra grid cells for prose, notes, accomplishments, or repeated records.',
@@ -1807,8 +1757,7 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
     'Do not close only the slots; close the containing component-template/custom component too, for example `<!-- /foo-record -->` after its expandable slots.',
     'Leave template fill-in placeholders alone when the source has no value for them. Do not replace a fill-in with an empty text block.',
     'When this section creates records that other sections may reference, give those records stable source-backed ids.',
-    'When this section references imported records, use `xref-card` with an exact `xrefTarget` from the existing or planned relationship inventory. Do not invent xref targets.',
-    'Do not manually create reciprocal/generated xrefs; document update scripts may create those after import mutations.',
+    'Do not create xref-card entries or fill xref component lists in this step. A final backend xref pass will create those after all sections and fill-ins are complete.',
     'Return exactly one top-level section. Do not return multiple sections. Do not return a component fragment without its section wrapper.',
     'Return raw HVY only; do not call or describe tools.',
     'Do not HTML-escape HVY directives. Use literal `<!--` and `-->`, not `&lt;!--` or `--&gt;`.',
@@ -1817,7 +1766,7 @@ function buildImportSectionHvyPrompt(sourceName: string, instructions: string | 
   ].filter(Boolean).join('\n');
 }
 
-function buildImportSectionHvyContext(document: VisualDocument, information: string, application: ImportStepApplication, plannedXrefTargets: PlannedImportXrefTarget[]): string {
+function buildImportSectionHvyContext(document: VisualDocument, information: string, application: ImportStepApplication): string {
   return [
     buildImportGuidanceFrame(document),
     '',
@@ -1831,8 +1780,6 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     buildImportSectionApplicationFrame(document, application),
     '',
     buildImportRelationshipFrame(document),
-    '',
-    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
     '',
     buildImportParagraphStyleFrame(document),
     '',
@@ -1864,7 +1811,6 @@ function buildImportTemplateValuesContext(
   activeIndex: number,
   createdSections: string[],
   application: ImportStepApplication,
-  plannedXrefTargets: PlannedImportXrefTarget[],
   templateStructure: ImportTemplateStructureInternal,
   extractedInformation?: string
 ): string {
@@ -1891,7 +1837,6 @@ function buildImportTemplateValuesContext(
     '',
     buildImportRelationshipFrame(document),
     '',
-    buildImportPlannedXrefTargetFrame(plannedXrefTargets),
     ...(hasImportTemplateFlavorOptions(templateStructure) ? ['', buildImportTemplateFlavorFrame(templateStructure)] : []),
     '',
     '=== BEGIN TEMPLATE JSON SCHEMA ===',
@@ -2441,17 +2386,6 @@ function buildImportRelationshipFrame(document: VisualDocument): string {
   ].join('\n');
 }
 
-function buildImportPlannedXrefTargetFrame(targets: PlannedImportXrefTarget[]): string {
-  return [
-    '=== BEGIN PLANNED XREF TARGETS ===',
-    'Planned xref targets from this import, including targets that may not exist in the document yet:',
-    targets.length > 0
-      ? targets.map((target) => `- ${target.id}: ${target.title}${target.kind ? ` [${target.kind}]` : ''} - ${target.description}`).join('\n')
-      : '- No planned xref targets were identified for this import.',
-    '=== END PLANNED XREF TARGETS ===',
-  ].join('\n');
-}
-
 function collectImportXrefTargets(document: VisualDocument): Array<{ id: string; title: string; detail: string; tags: string }> {
   const seen = new Set<string>();
   const targets: Array<{ id: string; title: string; detail: string; tags: string }> = [];
@@ -2914,130 +2848,6 @@ function collectCreatedImportXrefTargets(document: VisualDocument, sectionKeys: 
   return targets;
 }
 
-async function repairImportedSectionXrefs(
-  document: VisualDocument,
-  options: ImportFromTextOptions,
-  llm: HvyImportLlmOptions,
-  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
-  sectionKeys: string[],
-  createdTargets: CreatedImportXrefTarget[]
-): Promise<void> {
-  const repairSections = sectionKeys
-    .map((key) => findSectionByKey(document.sections, key))
-    .filter((section): section is VisualSection => !!section && sectionHasImportXrefs(document, section));
-  for (const [index, section] of repairSections.entries()) {
-    throwIfAborted(options.signal);
-    const response = await requestProxyCompletion({
-      settings: llm.settings,
-      client: llm.client,
-      messages: [
-        {
-          id: `ai-import-xref-repair-${index + 1}-task`,
-          role: 'user',
-          content: buildImportTaskMessage(
-            buildImportXrefRepairPrompt(options.sourceName, options.instructions, section, index, repairSections.length),
-            buildImportXrefRepairResponseInstructions(section)
-          ),
-        },
-      ],
-      context: buildImportXrefRepairContext(document, options.sourceName, options.sourceText, section, createdTargets),
-      responseInstructions: buildImportXrefRepairResponseInstructions(section),
-      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: 'document-edit',
-      debugLabel: `ai-import-xref-repair:${index + 1}`,
-      beforeRequest: beforeLlmCall?.('thinking'),
-      signal: options.signal,
-    });
-    throwIfAborted(options.signal);
-    const hvy = parseImportSectionHvyResponse(response);
-    if (!hvy) {
-      continue;
-    }
-    replaceImportedSectionFromHvy(document, section, hvy);
-  }
-}
-
-function sectionHasImportXrefs(document: VisualDocument, section: VisualSection): boolean {
-  let hasXref = false;
-  visitBlocks([section], (block) => {
-    if (resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card') {
-      hasXref = true;
-    }
-  });
-  return hasXref;
-}
-
-function replaceImportedSectionFromHvy(document: VisualDocument, target: VisualSection, hvy: string): void {
-  const generated = parseGeneratedImportSection(hvy, document.meta);
-  const location = findSectionContainer(document.sections, target.key);
-  if (!location) {
-    return;
-  }
-  adjustImportSectionLevel(generated, target.level);
-  generated.key = target.key;
-  location.container.splice(location.index, 1, generated);
-}
-
-function buildImportXrefRepairPrompt(sourceName: string, instructions: string | undefined, section: VisualSection, index: number, total: number): string {
-  return [
-    `Repair xrefs for imported section ${index + 1} of ${total} from "${sourceName}".`,
-    '',
-    `Section: ${formatSectionTitle(section.title)} (${getSectionId(section) || section.key})`,
-    '',
-    'Assign xref-card `xrefTarget` values only from the created target inventory.',
-    'Improve xref-card component lists when the source document clearly supports more precise or more complete references.',
-    'Do not invent targets, facts, or records. Leave uncertain xrefs unchanged or omit them from generated lists.',
-    'Preserve the section title, section id, component shapes, and non-xref content unless an xref repair requires a local adjustment.',
-    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
-  ].filter(Boolean).join('\n');
-}
-
-function buildImportXrefRepairContext(document: VisualDocument, sourceName: string, sourceText: string, section: VisualSection, createdTargets: CreatedImportXrefTarget[]): string {
-  return [
-    buildImportGuidanceFrame(document),
-    '',
-    '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
-    '```text',
-    sourceText,
-    '```',
-    '=== END SOURCE DOCUMENT ===',
-    '',
-    buildCreatedImportXrefTargetFrame(createdTargets),
-    '',
-    '=== BEGIN CURRENT IMPORTED SECTION ===',
-    serializeSectionFragment(section, document.meta),
-    '=== END CURRENT IMPORTED SECTION ===',
-  ].join('\n');
-}
-
-function buildImportXrefRepairResponseInstructions(section: VisualSection): string {
-  return [
-    'Return exactly one JSON object and no prose.',
-    'Shape:',
-    '{"hvy":"<!--hvy: {\\"id\\":\\"section-id\\"}-->\\n#! Section Title\\n\\n <!--hvy:text {}-->\\n  Section content"}',
-    '',
-    '`hvy` must be the complete repaired HVY section.',
-    'Return {"hvy":""} if no xref repair is needed.',
-    `The returned section must still be "${formatSectionTitle(section.title)}".`,
-  ].join('\n');
-}
-
-function buildCreatedImportXrefTargetFrame(createdTargets: CreatedImportXrefTarget[]): string {
-  return [
-    '=== BEGIN CREATED IMPORT TARGETS ===',
-    createdTargets.length > 0
-      ? createdTargets.map((target) => [
-        `- ${target.id}: ${target.title} [${target.kind}]`,
-        `  section: ${target.sectionTitle}${target.sectionId ? ` (${target.sectionId})` : ''}`,
-        target.component ? `  component: ${target.component}` : '',
-        target.text ? `  peek: ${target.text}` : '',
-      ].filter(Boolean).join('\n')).join('\n')
-      : '- No created import targets.',
-    '=== END CREATED IMPORT TARGETS ===',
-  ].join('\n');
-}
-
 function collectImportFillInTargets(document: VisualDocument, sectionKeys: string[]): ImportFillInTarget[] {
   const targets: ImportFillInTarget[] = [];
   for (const sectionKey of sectionKeys) {
@@ -3114,7 +2924,7 @@ async function fillImportedSectionPlaceholders(
     const targets = targetsBySection.get(section.key) ?? [];
     throwIfAborted(options.signal);
     const response = await requestProxyCompletion({
-      settings: llm.settings,
+      settings: getImportStageSettings(llm, 'fillIns'),
       client: llm.client,
       messages: [
         {
@@ -3177,6 +2987,21 @@ function buildImportFillInContext(document: VisualDocument, sourceName: string, 
   ].join('\n');
 }
 
+function buildCreatedImportXrefTargetFrame(createdTargets: CreatedImportXrefTarget[]): string {
+  return [
+    '=== BEGIN CREATED IMPORT TARGETS ===',
+    createdTargets.length > 0
+      ? createdTargets.map((target) => [
+        `- ${target.id}: ${target.title} [${target.kind}]`,
+        `  section: ${target.sectionTitle}${target.sectionId ? ` (${target.sectionId})` : ''}`,
+        target.component ? `  component: ${target.component}` : '',
+        target.text ? `  peek: ${target.text}` : '',
+      ].filter(Boolean).join('\n')).join('\n')
+      : '- No created import targets.',
+    '=== END CREATED IMPORT TARGETS ===',
+  ].join('\n');
+}
+
 function buildImportFillInResponseInstructions(targets: ImportFillInTarget[]): string {
   const fills = Object.fromEntries(targets.map((target) => [target.key, 'Source-backed HVY/text for this fill-in, or empty string.']));
   return [
@@ -3228,6 +3053,9 @@ function applyImportFillInResponses(section: VisualSection, targets: ImportFillI
       }
       if (typeof target.markerIndex === 'number') {
         block.text = applyTextFillInValueAtIndex(block.text, target.markerIndex, value);
+        if (block.schema.fillIn === true && !hasTextFillInMarker(block.text) && block.text.trim().length > 0) {
+          block.schema.fillIn = false;
+        }
       } else if (block.schema.fillIn === true) {
         block.text = value;
         block.schema.fillIn = false;
@@ -3415,20 +3243,6 @@ function buildImportSectionInformationResponseInstructions(): string {
   ].join('\n');
 }
 
-function buildImportXrefTargetResponseInstructions(): string {
-  return [
-    'Return exactly one JSON object and no prose.',
-    'Shape:',
-    '{"targets":[{"id":"foo-bar","title":"Foo Bar","kind":"bazz","description":"A nonsense word"}]}',
-    '',
-    '`id` must be a stable HVY id suitable for exact `xrefTarget` use.',
-    '`title` is the short display label.',
-    '`kind` is optional and should be a compact tag used for filtering like items.',
-    '`description` must be exactly one sentence about what the target is.',
-    'Return {"targets":[]} if no source-backed xref targets are useful.',
-  ].join('\n');
-}
-
 function buildImportSectionHvyResponseInstructions(): string {
   return [
     'Return exactly one JSON object and no prose.',
@@ -3589,54 +3403,6 @@ function validateImportTemplateObjectKeys(raw: Record<string, unknown>, expected
   return null;
 }
 
-function parseImportXrefTargetResponse(response: string): PlannedImportXrefTarget[] | null {
-  const parsed = parseImportJsonObject(response);
-  if (!parsed || !Array.isArray(parsed.targets)) {
-    return null;
-  }
-  const seen = new Set<string>();
-  const targets: PlannedImportXrefTarget[] = [];
-  for (const raw of parsed.targets) {
-    if (!raw || typeof raw !== 'object') {
-      continue;
-    }
-    const value = raw as Record<string, unknown>;
-    const id = sanitizeImportXrefId(value.id);
-    if (!id || seen.has(id)) {
-      continue;
-    }
-    const title = trimImportString(value.title) || id;
-    const kind = trimImportString(value.kind);
-    const description = normalizeImportXrefDescription(value.description);
-    if (!description) {
-      continue;
-    }
-    seen.add(id);
-    targets.push({
-      id,
-      title,
-      ...(kind ? { kind } : {}),
-      description,
-    });
-  }
-  return targets;
-}
-
-function sanitizeImportXrefId(value: unknown): string {
-  return typeof value === 'string'
-    ? value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
-    : '';
-}
-
-function normalizeImportXrefDescription(value: unknown): string {
-  const text = trimImportString(value).replace(/\s+/g, ' ');
-  if (!text) {
-    return '';
-  }
-  const sentence = text.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || text;
-  return sentence.length > 240 ? `${sentence.slice(0, 237).trim()}...` : sentence;
-}
-
 function parseImportSectionInformationResponse(response: string): string | null {
   const parsed = parseImportJsonObject(response);
   if (!parsed) {
@@ -3686,6 +3452,10 @@ function requireImportLlm(llm: HvyImportLlmOptions | undefined): HvyImportLlmOpt
     throw new Error('Import requires an LLM configuration.');
   }
   return llm;
+}
+
+function getImportStageSettings(llm: HvyImportLlmOptions, stage: HvyImportLlmStage): ChatSettings {
+  return llm.stages?.[stage] ?? llm.settings;
 }
 
 function createImportLlmStepper(

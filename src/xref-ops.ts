@@ -2,15 +2,27 @@ import type { VisualBlock } from './editor/types';
 import { state } from './state';
 import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
 import { resolveBaseComponentFromMeta } from './component-defs';
+import type { VisualDocument } from './types';
 
 export function normalizeXrefTarget(target: string): string {
   const trimmed = target.trim();
   return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
 }
 
-export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; label: string; title: string; detail: string }> {
+export interface XrefTargetOption {
+  value: string;
+  label: string;
+  title: string;
+  detail: string;
+}
+
+export function getXrefTargetOptions(tagFilter = ''): XrefTargetOption[] {
+  return getXrefTargetOptionsForDocument(state.document, tagFilter);
+}
+
+export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFilter = ''): XrefTargetOption[] {
   const seen = new Set<string>();
-  const options: Array<{ value: string; label: string; title: string; detail: string }> = [];
+  const options: XrefTargetOption[] = [];
   const requestedTags = normalizeTagFilter(tagFilter);
   const add = (value: string, title: string, detail = ''): void => {
     const normalized = normalizeXrefTarget(value);
@@ -21,7 +33,7 @@ export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; lab
     options.push({ value: normalized, title, detail, label: formatXrefOptionLabel(title, detail, normalized) });
   };
 
-  flattenSections(state.document.sections)
+  flattenSections(document.sections)
     .filter((section) => !section.isGhost)
     .filter((section) => section.customId.trim().length > 0)
     .filter((section) => matchesTagFilter(section.tags, requestedTags))
@@ -29,7 +41,7 @@ export function getXrefTargetOptions(tagFilter = ''): Array<{ value: string; lab
       add(getSectionId(section), formatSectionTitle(section.title), section.description.trim());
     });
 
-  visitBlocksForXrefOptions(requestedTags, add);
+  visitBlocksForXrefOptions(document, requestedTags, add);
 
   return options.sort(compareXrefTargetOptions);
 }
@@ -89,6 +101,7 @@ export function applyXrefTargetDefaults(block: VisualBlock): void {
 }
 
 function visitBlocksForXrefOptions(
+  document: VisualDocument,
   requestedTags: string[],
   add: (value: string, title: string, detail?: string) => void
 ): void {
@@ -104,7 +117,7 @@ function visitBlocksForXrefOptions(
       if (id.length > 0 && matchesTagFilter(combinedTags, requestedTags)) {
         add(id, describeBlockTarget(block), describeBlockTargetDetail(block));
       }
-      const childTags = shouldPropagateXrefTargetTags(block) ? combinedTags : inheritedTags;
+      const childTags = shouldPropagateXrefTargetTags(document, block) ? combinedTags : inheritedTags;
       visitList(block.schema.containerBlocks ?? [], childTags);
       visitList(block.schema.componentListBlocks ?? [], childTags);
       visitList((block.schema.gridItems ?? []).map((item) => item.block), childTags);
@@ -113,7 +126,7 @@ function visitBlocksForXrefOptions(
     });
   };
 
-  const visitSections = (sections: typeof state.document.sections, inheritedTags: string): void => {
+  const visitSections = (sections: VisualDocument['sections'], inheritedTags: string): void => {
     sections.forEach((section) => {
       const sectionTags = combineTags(inheritedTags, section.tags);
       visitList(section.blocks, sectionTags);
@@ -121,11 +134,11 @@ function visitBlocksForXrefOptions(
     });
   };
 
-  visitSections(state.document.sections, '');
+  visitSections(document.sections, '');
 }
 
-function shouldPropagateXrefTargetTags(block: VisualBlock): boolean {
-  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, state.document.meta);
+function shouldPropagateXrefTargetTags(document: VisualDocument, block: VisualBlock): boolean {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
   return baseComponent === 'component-list'
     || baseComponent === 'container'
     || baseComponent === 'grid';

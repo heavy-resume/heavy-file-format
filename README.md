@@ -257,6 +257,22 @@ if (plan.status === 'ready') {
 }
 ```
 
+Import calls can use different models for different pipeline stages. Any omitted
+stage falls back to `llm.settings`:
+
+```js
+const llm = {
+  settings: { provider: 'openai', model: 'gpt-5.4-mini' },
+  stages: {
+    sectionPlanner: { provider: 'openai', model: 'gpt-5.4-mini' },
+    templateSectionWriter: { provider: 'openai', model: 'gpt-5.4' },
+    rawSectionWriter: { provider: 'openai', model: 'gpt-5.4' },
+    xrefs: { provider: 'openai', model: 'gpt-5.4-mini' },
+  },
+  client: chatClient,
+};
+```
+
 For templates with `importPreplan`, `extractedInformation` is already populated
 during planning. That makes it suitable for a review popover or detail drawer,
 for example to catch a section whose source facts belong somewhere else before

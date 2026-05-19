@@ -36,7 +36,7 @@ ai-import-guidance: >-
   or otherwise communicate in. Programming languages are tools / technologies, not
   Languages section entries.
   Always write both sections of the summary - the short version and a longer version
-  that's usually bullet points of highlights.
+  that's usually bullet points of highlights. For dates, use numeric formatting (mm/dd/YY or mm/YY)
 importPreplan:
   - [header, summary, locations]
   - [skills, tools-technologies, resume-languages, top-skills-tools-technologies]

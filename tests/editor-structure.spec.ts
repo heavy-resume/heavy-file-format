@@ -827,6 +827,30 @@ hvy_version: 0.1
   expect(requestBox?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 1);
 });
 
+test('ai touch hint stays clear of lower right preview controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Touch hint target
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const shellBox = await page.locator('.viewer-shell').first().boundingBox();
+  const hintBox = await page.locator('.ai-view-hint').boundingBox();
+  expect(shellBox).not.toBeNull();
+  expect(hintBox).not.toBeNull();
+  expect(Math.round(hintBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.width * 0.5));
+});
+
 test('ai context menu allows native inspect gestures', async ({ page }) => {
   await page.goto('/');
 

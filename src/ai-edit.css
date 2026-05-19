@@ -31,7 +31,7 @@
 
 .hvy-preview-frame-phone .ai-view-hint,
 .hvy-preview-frame-tablet .ai-view-hint {
-  max-width: min(18rem, calc(100% - 2rem));
+  max-width: min(18rem, 50%, 50vw);
   border-radius: 14px;
 }
 
@@ -153,9 +153,9 @@
 
   .ai-view-hint {
     left: 1rem;
-    right: 1rem;
+    right: auto;
     bottom: 1rem;
-    max-width: none;
+    max-width: min(50%, 50vw);
     border-radius: 12px;
   }
 

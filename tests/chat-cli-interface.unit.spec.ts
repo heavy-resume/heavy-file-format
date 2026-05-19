@@ -26,6 +26,7 @@ test('chat cli persistent instructions stay model-facing', () => {
   expect(instructions).toContain('will become one .hvy file');
   expect(instructions).toContain('/scratchpad.txt is optional temporary working memory');
   expect(instructions).toContain('Do not use /scratchpad.txt to report completion');
+  expect(instructions).toContain('CSS values are inline declaration strings');
   expect(instructions).toContain('Use hvy request_structure');
   expect(instructions).toContain('man/help');
   expect(instructions).not.toContain('HVY quick reference');

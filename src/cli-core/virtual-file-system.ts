@@ -9,6 +9,8 @@ import { parseFormSpec, serializeFormSpec } from '../plugins/form';
 import { getTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
+import { getHvyReferenceDocs } from './reference-library';
+import { assertCssValueIsDeclarationString } from '../css-value-validation';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -46,6 +48,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
   addDir('/');
   addDir('/body');
   addDir('/attachments');
+  addDir('/docs');
 
   addFile(
     '/header.yaml',
@@ -56,6 +59,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
         throw new Error('/header.yaml must contain a YAML object.');
       }
       const componentDefs = document.meta.component_defs;
+      validateHeaderCssValues(parsed as JsonObject);
       document.meta = {
         ...(parsed as JsonObject),
         ...(componentDefs ? { component_defs: componentDefs } : {}),
@@ -64,6 +68,7 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
   );
 
   addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body', naming);
+  addDocsDirectory(entries, document.meta);
   addIdAliasEntries(entries, collectCanonicalIdAliases(document));
 
   document.attachments.forEach((attachment, index) => {
@@ -74,6 +79,51 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
   });
 
   return { entries };
+}
+
+function addDocsDirectory(entries: Map<string, HvyVirtualEntry>, meta: JsonObject): void {
+  for (const doc of getHvyReferenceDocs()) {
+    const filename = uniqueName(doc.filename, entries, '/docs');
+    entries.set(`/docs/${filename}`, {
+      kind: 'file',
+      path: `/docs/${filename}`,
+      read: () => `${doc.content.trimEnd()}\n`,
+    });
+  }
+  for (const definition of getComponentDefsFromMeta(meta)) {
+    if (!definition.name || definition.name === resolveBaseComponentFromMeta(definition.name, meta)) {
+      continue;
+    }
+    const filename = uniqueName(`about-${sanitizePathSegment(definition.name)}.txt`, entries, '/docs');
+    entries.set(`/docs/${filename}`, {
+      kind: 'file',
+      path: `/docs/${filename}`,
+      read: () => formatComponentAbout(meta, definition.name),
+    });
+  }
+}
+
+function validateHeaderCssValues(meta: JsonObject): void {
+  const sectionDefaults = meta.section_defaults;
+  if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults) && typeof (sectionDefaults as JsonObject).css === 'string') {
+    assertCssValueIsDeclarationString((sectionDefaults as JsonObject).css as string, 'section_defaults.css');
+  }
+  const componentDefaults = meta.component_defaults;
+  if (componentDefaults && typeof componentDefaults === 'object' && !Array.isArray(componentDefaults)) {
+    for (const [componentName, defaults] of Object.entries(componentDefaults)) {
+      if (defaults && typeof defaults === 'object' && !Array.isArray(defaults) && typeof (defaults as JsonObject).css === 'string') {
+        assertCssValueIsDeclarationString((defaults as JsonObject).css as string, `component_defaults.${componentName}.css`);
+      }
+    }
+  }
+  const textLineStyles = meta.text_line_styles;
+  if (textLineStyles && typeof textLineStyles === 'object' && !Array.isArray(textLineStyles)) {
+    for (const [styleName, style] of Object.entries(textLineStyles)) {
+      if (style && typeof style === 'object' && !Array.isArray(style) && typeof (style as JsonObject).css === 'string') {
+        assertCssValueIsDeclarationString((style as JsonObject).css as string, `text_line_styles.${styleName}.css`);
+      }
+    }
+  }
 }
 
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualBlock | null {
@@ -256,6 +306,7 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     path: `${blockPath}/${componentName}.css`,
     read: () => block.schema.css,
     write: (content) => {
+      assertCssValueIsDeclarationString(content, `${blockPath}/${componentName}.css`);
       block.schema.css = content.trim();
     },
   });
@@ -685,7 +736,10 @@ function applySectionJson(section: VisualSection, value: JsonObject): void {
   if (typeof value.expanded === 'boolean') section.expanded = value.expanded;
   if (typeof value.highlight === 'boolean') section.highlight = value.highlight;
   if (typeof value.contained === 'boolean') section.contained = value.contained;
-  if (typeof value.css === 'string') section.css = value.css;
+  if (typeof value.css === 'string') {
+    assertCssValueIsDeclarationString(value.css, 'section.json css');
+    section.css = value.css;
+  }
   if (typeof value.tags === 'string') section.tags = validateTags(value.tags, 'section.json tags');
   if (typeof value.description === 'string') section.description = value.description;
   if (value.location === 'sidebar' || value.location === 'main') section.location = value.location;
@@ -820,7 +874,10 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
 function applyBlockSchemaJson(schema: BlockSchema, component: string, value: JsonObject): void {
   schema.component = component;
   if (typeof value.id === 'string') schema.id = value.id;
-  if (typeof value.css === 'string') schema.css = value.css;
+  if (typeof value.css === 'string') {
+    assertCssValueIsDeclarationString(value.css, `${component}.json css`);
+    schema.css = value.css;
+  }
   if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
     schema.sortKeys = parseSortKeys(value.sortKeys);
   }

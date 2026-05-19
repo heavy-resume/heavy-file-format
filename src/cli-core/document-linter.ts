@@ -7,6 +7,7 @@ import { visitBlocks } from '../section-ops';
 import type { VisualDocument } from '../types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
+import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -47,6 +48,7 @@ export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliL
     .map((entry) => lintComponentFile(document, fs, entry.path)));
   return [
     ...lintHeader(document),
+    ...lintHeaderCssValues(document),
     ...lintSections(fs),
     ...componentIssues.flat(),
   ];
@@ -214,7 +216,20 @@ function parseDottedVersion(value: string): number[] | null {
 }
 
 function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
-  return [...fs.entries.values()]
+  const issues: HvyCliLintIssue[] = [];
+  for (const entry of [...fs.entries.values()].filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('/section.json'))) {
+    const sectionPath = entry.path.replace(/\/section\.json$/, '');
+    const section = readJsonFile(fs, entry.path);
+    if (cssValueLooksLikeSerializedJson(readTrimmedString(section.css))) {
+      issues.push({
+        key: `${sectionPath}:section-css-json`,
+        path: sectionPath,
+        component: 'section',
+        message: 'section css looks like serialized JSON. CSS must be an inline declaration string such as "margin: 0;", not component or section metadata.',
+      });
+    }
+  }
+  issues.push(...[...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => entry.kind === 'file' && entry.path.startsWith('/body/') && entry.path.endsWith('/section.json'))
     .filter((entry) => {
       const sectionPath = entry.path.replace(/\/section\.json$/, '');
@@ -234,11 +249,15 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
         component: 'section',
         message: 'section has no content.',
       };
-    });
+    }));
+  return issues;
 }
 
 function lintCoreComponent(params: { path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {
   const issues: HvyCliLintIssue[] = [];
+  if (cssValueLooksLikeSerializedJson(readTrimmedString(params.config.css))) {
+    issues.push(createLintIssue(params, 'css-json', 'component css looks like serialized JSON. CSS must be an inline declaration string such as "margin: 0;", not component metadata.'));
+  }
   if (params.baseComponent === 'text') {
     issues.push(...lintTextMarkdownBlocks(params));
   }
@@ -262,6 +281,43 @@ function lintCoreComponent(params: { path: string; component: string; baseCompon
     });
   }
   return issues;
+}
+
+function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
+  const issues: HvyCliLintIssue[] = [];
+  const sectionDefaults = document.meta.section_defaults;
+  if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults)) {
+    pushHeaderCssJsonIssue(issues, 'section_defaults.css', (sectionDefaults as JsonObject).css);
+  }
+  const componentDefaults = document.meta.component_defaults;
+  if (componentDefaults && typeof componentDefaults === 'object' && !Array.isArray(componentDefaults)) {
+    for (const [componentName, defaults] of Object.entries(componentDefaults)) {
+      if (defaults && typeof defaults === 'object' && !Array.isArray(defaults)) {
+        pushHeaderCssJsonIssue(issues, `component_defaults.${componentName}.css`, (defaults as JsonObject).css);
+      }
+    }
+  }
+  const textLineStyles = document.meta.text_line_styles;
+  if (textLineStyles && typeof textLineStyles === 'object' && !Array.isArray(textLineStyles)) {
+    for (const [styleName, style] of Object.entries(textLineStyles)) {
+      if (style && typeof style === 'object' && !Array.isArray(style)) {
+        pushHeaderCssJsonIssue(issues, `text_line_styles.${styleName}.css`, (style as JsonObject).css);
+      }
+    }
+  }
+  return issues;
+}
+
+function pushHeaderCssJsonIssue(issues: HvyCliLintIssue[], label: string, value: unknown): void {
+  if (!cssValueLooksLikeSerializedJson(readTrimmedString(value))) {
+    return;
+  }
+  issues.push({
+    key: `/header.yaml:${label}:css-json`,
+    path: '/header.yaml',
+    component: 'header',
+    message: `${label} looks like serialized JSON. CSS must be an inline declaration string such as "margin: 0;", not component or section metadata.`,
+  });
 }
 
 function lintTextMarkdownBlocks(params: { path: string; component: string; body: string }): HvyCliLintIssue[] {

@@ -5,6 +5,7 @@ import type { JsonObject } from './hvy/types';
 import type { HeaderEditToolRequest } from './ai-document-edit-types';
 import { DEFAULT_VIEW_END_LINE, DEFAULT_VIEW_START_LINE } from './ai-document-edit-types';
 import { applyComponentPatchEdits, buildGrepRegex, clampLineRange, formatNumberedFragment } from './ai-document-line-tools';
+import { assertCssValueIsDeclarationString } from './css-value-validation';
 
 export function executeGrepHeaderTool(
   request: Extract<HeaderEditToolRequest, { tool: 'grep_header' }>,
@@ -102,5 +103,9 @@ function assertOnlyCssDefaultFields(value: unknown, label: string): void {
   const unsupportedKeys = Object.keys(value).filter((key) => key !== 'css');
   if (unsupportedKeys.length > 0) {
     throw new Error(`${label} only supports the "css" field. Unsupported field${unsupportedKeys.length === 1 ? '' : 's'}: ${unsupportedKeys.join(', ')}.`);
+  }
+  const css = (value as JsonObject).css;
+  if (typeof css === 'string') {
+    assertCssValueIsDeclarationString(css, `${label}.css`);
   }
 }

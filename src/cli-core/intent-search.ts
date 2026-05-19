@@ -10,7 +10,7 @@ import type { HvyVirtualFileSystem } from './virtual-file-system';
 export interface HvyIntentSearchResult {
   path: string;
   id: string;
-  kind: 'section' | 'component' | 'section-template';
+  kind: 'section' | 'component' | 'section-template' | 'doc';
   type: string;
   score: number;
   reason: string;
@@ -22,7 +22,7 @@ interface SemanticRecord {
   key: string;
   path: string;
   id: string;
-  kind: 'section' | 'component' | 'section-template';
+  kind: 'section' | 'component' | 'section-template' | 'doc';
   type: string;
   title: string;
   description: string;
@@ -81,6 +81,23 @@ function buildSemanticRecords(document: VisualDocument, fs: HvyVirtualFileSystem
     if (entry.kind !== 'file') {
       continue;
     }
+    if (path.startsWith('/docs/')) {
+      const filename = path.split('/').pop() ?? path;
+      records.push(makeRecord({
+        key: `doc:${path}`,
+        path,
+        id: filename.replace(/\.[^.]+$/, ''),
+        kind: 'doc',
+        type: filename.endsWith('.hvy') ? 'recipe' : filename.startsWith('cheatsheet-') ? 'cheatsheet' : 'documentation',
+        title: titleFromDoc(filename, entry.read()),
+        description: `Read-only CLI documentation file ${filename}.`,
+        tags: 'docs reference cheatsheet recipe help',
+        body: entry.read(),
+        roleHints: ['read with cat', 'search with rg', 'documentation for choosing the right virtual file or command before editing'],
+        customTypeDescription: '',
+      }));
+      continue;
+    }
     if (path.endsWith('/section.json')) {
       const config = readJson(fs, path);
       const sectionPath = path.replace(/\/section\.json$/, '');
@@ -133,6 +150,11 @@ function buildSemanticRecords(document: VisualDocument, fs: HvyVirtualFileSystem
     }));
   }
   return records;
+}
+
+function titleFromDoc(filename: string, content: string): string {
+  const heading = content.split(/\r?\n/).find((line) => /^#\s+/.test(line));
+  return heading?.replace(/^#\s+/, '').trim() || filename.replace(/\.[^.]+$/, '').replace(/-/g, ' ');
 }
 
 function buildSectionTemplateRecords(document: VisualDocument): SemanticRecord[] {

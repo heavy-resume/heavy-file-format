@@ -34,6 +34,13 @@ export function getHvyRecipe(name: string): string | null {
   return getReferenceContent(recipeModules, name);
 }
 
+export function getHvyReferenceDocs(): Array<{ name: string; filename: string; content: string }> {
+  return [
+    ...getReferenceDocs(cheatsheetModules, 'cheatsheet', 'md'),
+    ...getReferenceDocs(recipeModules, 'recipe', 'hvy'),
+  ].sort((left, right) => left.filename.localeCompare(right.filename));
+}
+
 function getReferenceNames(modules: Record<string, string>): string[] {
   return Object.keys(modules).map(getReferenceNameFromPath).sort();
 }
@@ -45,6 +52,17 @@ function getReferenceContent(modules: Record<string, string>, name: string): str
   }
   const entry = Object.entries(modules).find(([path]) => getReferenceNameFromPath(path) === normalizedName);
   return entry ? entry[1].trim() : null;
+}
+
+function getReferenceDocs(modules: Record<string, string>, prefix: string, extension: string): Array<{ name: string; filename: string; content: string }> {
+  return Object.entries(modules).map(([path, content]) => {
+    const name = getReferenceNameFromPath(path);
+    return {
+      name,
+      filename: `${prefix}-${name}.${extension}`,
+      content: content.trim(),
+    };
+  });
 }
 
 function getReferenceNameFromPath(path: string): string {

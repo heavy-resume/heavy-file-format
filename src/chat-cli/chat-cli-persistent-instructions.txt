@@ -7,6 +7,7 @@ The HVY file contains a header, accessable through /header.yaml
 The HVY file body is in /body/*
 All sections and components contain metadata. This is accessible through the json file in the directory.
 A subset of that metadata is the css styling. When making changes always consider css styling, especially when copying structure.
+CSS values are inline declaration strings.
 Components may have body text. If you edit body text consider whether you're forgetting the styling.
 Use hvy request_structure, hvy search, man/help, cheatsheets, recipes, and component hints to choose edit targets.
 Use hvy lint to validate when you think the edit is ready to finish.

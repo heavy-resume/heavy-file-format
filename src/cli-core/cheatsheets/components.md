@@ -1,5 +1,12 @@
 # Components Cheatsheet
 
+Component directives store metadata as JSON on the `hvy:` comment. Individual `css` metadata values are still plain inline CSS declaration strings, not nested JSON:
+
+```markdown
+<!--hvy:COMPONENT_NAME {"id":"example","css":"margin: 0;"}-->
+TEXT_DATA (optional)
+```
+
 Create a top-level section:
 
 ```shell

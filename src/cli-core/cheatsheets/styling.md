@@ -2,6 +2,8 @@
 
 Prefer theme variables and reusable defaults over repeated one-off inline styling.
 
+Use component `css`, section `css`, `component_defaults`, and `section_defaults` for CSS properties. Use `theme.colors` for shared custom properties such as `--hvy-bg`, `--hvy-text`, and `--hvy-accent-1`.
+
 Inspect styling sources:
 
 ```shell

@@ -648,6 +648,16 @@ function expandVirtualPathGlob(fs: ReturnType<typeof buildHvyVirtualFileSystem>,
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function expandVirtualPathOperands(fs: ReturnType<typeof buildHvyVirtualFileSystem>, cwd: string, args: string[]): string[] {
+  return args.flatMap((arg) => {
+    if (!hasGlobPattern(arg)) {
+      return [arg];
+    }
+    const matches = expandVirtualPathGlob(fs, resolveVirtualPath(fs, cwd, arg));
+    return matches.length > 0 ? matches.map((entry) => entry.path) : [arg];
+  });
+}
+
 function globToPathRegExp(glob: string): RegExp {
   const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]');
   return new RegExp(`^${escaped}$`);
@@ -1228,7 +1238,7 @@ function commandCat(ctx: HvyCliCommandContext, args: string[]): string {
   if (args.length === 0) {
     throw new Error('cat: missing file operand');
   }
-  return args.map((arg) => getReadableFile(ctx, arg).read()).join('\n');
+  return expandVirtualPathOperands(ctx.fs, ctx.cwd, args).map((arg) => getReadableFile(ctx, arg).read()).join('\n');
 }
 
 function commandHvyPreview(ctx: HvyCliCommandContext, args: string[]): string {
@@ -1302,7 +1312,7 @@ function commandHeadTail(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>
   if (paths.length === 0) {
     throw new Error(`${command}: missing file operand`);
   }
-  return paths
+  return expandVirtualPathOperands(ctx.fs, ctx.cwd, paths)
     .map((path) => {
       const lines = getReadableFile(ctx, path).read().split('\n');
       return (command === 'head' ? lines.slice(0, count) : lines.slice(Math.max(0, lines.length - count))).join('\n');
@@ -1315,7 +1325,7 @@ function commandNl(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd:
   if (parsed.paths.length === 0) {
     throw new Error('nl: missing file operand');
   }
-  return parsed.paths
+  return expandVirtualPathOperands(ctx.fs, ctx.cwd, parsed.paths)
     .map((path) =>
       getReadableFile(ctx, path)
         .read()
@@ -2818,19 +2828,22 @@ function commandGrep(ctx: HvyCliCommandContext, args: string[]): string {
   const lines: string[] = [];
   const matchingFiles = new Set<string>();
   const roots = parsed.paths.length > 0 ? parsed.paths : ['.'];
-  for (const rawRoot of roots) {
+  for (const rawRoot of expandVirtualPathOperands(ctx.fs, ctx.cwd, roots)) {
     const root = resolveVirtualPath(ctx.fs, ctx.cwd, rawRoot);
     const entry = ctx.fs.entries.get(root);
     if (!entry) {
       throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, rawRoot, `grep: no such file or directory: ${root}`));
     }
-    const candidates: HvyVirtualFile[] = entry.kind === 'file'
-      ? [entry]
-      : [...ctx.fs.entries.values()]
-        .filter((candidate): candidate is HvyVirtualFile =>
-          candidate.kind === 'file' &&
-          (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)) &&
-          isSearchVisibleFile(candidate.path, root));
+    const candidates: HvyVirtualFile[] = [entry].flatMap((entry) => {
+      const root = entry.path;
+      return entry.kind === 'file'
+        ? [entry]
+        : [...ctx.fs.entries.values()]
+          .filter((candidate): candidate is HvyVirtualFile =>
+            candidate.kind === 'file' &&
+            (candidate.path === root || candidate.path.startsWith(root === '/' ? '/' : `${root}/`)) &&
+            isSearchVisibleFile(candidate.path, root));
+    });
     for (const candidate of candidates.sort((left, right) => left.path.localeCompare(right.path))) {
       candidate.read().split('\n').forEach((line, index) => {
         const matched = regex.test(line);
@@ -3336,6 +3349,9 @@ function formatDirectoryEntryDescription(fs: ReturnType<typeof buildHvyVirtualFi
   }
   if (path === '/attachments') {
     return 'document attachment metadata files';
+  }
+  if (path === '/docs') {
+    return 'read-only CLI documentation, cheatsheets, recipes, and reusable component docs';
   }
   if (fs.entries.has(`${path}/section.json`)) {
     return isTopLevelSectionPath(path) ? 'section' : 'subsection';

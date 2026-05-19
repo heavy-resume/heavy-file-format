@@ -2493,6 +2493,61 @@ Track applications
   expect(result.output).toContain('SQL tables/views live in the db-table backend; inspect or change them with hvy plugin db-table tables, hvy plugin db-table schema, and hvy plugin db-table exec.');
 });
 
+test('cli rejects css values that look like serialized JSON metadata', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  await expect(
+    executeHvyCliCommand(document, session, 'echo \'{"id":"intro","css":"margin: 0;"}\' > /body/summary/intro/text.css')
+  ).rejects.toThrow('text.css must be an inline CSS declaration string, not serialized component or section JSON.');
+
+  await expect(
+    executeHvyCliCommand(document, session, 'echo \'{"id":"intro","css":"{\\"id\\":\\"intro\\",\\"css\\":\\"margin: 0;\\"}","lock":false,"align":"left","slot":"center","tags":"","description":"","placeholder":""}\' > /body/summary/intro/text.json')
+  ).rejects.toThrow('text.json css must be an inline CSS declaration string, not serialized component or section JSON.');
+
+  await expect(
+    executeHvyCliCommand(document, session, 'echo \'{"id":"summary","title":"Summary","level":1,"lock":false,"editorOnly":false,"expanded":true,"highlight":false,"contained":false,"css":"{\\"id\\":\\"summary\\"}","tags":"","description":"","location":"main","hideIfUnmodified":false,"exclude_from_import":false,"templateKey":""}\' > /body/summary/section.json')
+  ).rejects.toThrow('section.json css must be an inline CSS declaration string, not serialized component or section JSON.');
+
+  await expect(executeHvyCliCommand(document, session, `cat > /header.yaml <<'YAML'
+hvy_version: 0.1
+section_defaults:
+  css: '{"id":"summary"}'
+YAML`)).rejects.toThrow('section_defaults.css must be an inline CSS declaration string, not serialized component or section JSON.');
+});
+
+test('hvy lint reports css values that look like serialized JSON metadata', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: '{"id":"section-defaults"}'
+component_defaults:
+  text:
+    css: '{"id":"component-defaults"}'
+text_line_styles:
+  role:
+    label: Role
+    css: '{"id":"role"}'
+---
+
+<!--hvy: {"id":"summary","css":"{\\"id\\":\\"summary\\"}"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro","css":"{\\"id\\":\\"intro\\",\\"css\\":\\"margin: 0;\\"}"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 5');
+  expect(result.output).toContain('[header] /header.yaml - section_defaults.css looks like serialized JSON.');
+  expect(result.output).toContain('[header] /header.yaml - component_defaults.text.css looks like serialized JSON.');
+  expect(result.output).toContain('[header] /header.yaml - text_line_styles.role.css looks like serialized JSON.');
+  expect(result.output).toContain('[section] /body/summary - section css looks like serialized JSON.');
+  expect(result.output).toContain('[text] /body/summary/intro - component css looks like serialized JSON.');
+});
+
 test('hvy lint reports unused header metadata for supported format versions', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2702,6 +2757,48 @@ test('hvy cheatsheets are discovered from markdown files', async () => {
   expect(dbTable).toContain('Do not search the document for `CREATE TABLE`');
   expect(dbTable).toContain('hvy plugin db-table exec');
   expect(unknown).toContain('Unknown cheatsheet "missing". Available cheatsheets: common-patterns, components, db-table, forms, header, reusable-component, scripting, styling');
+});
+
+test('cli exposes read-only docs and includes them in search', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: widget-record
+    baseType: text
+    description: Fake widget record template.
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const before = await executeHvyCliCommand(document, session, 'ls /');
+  expect(before.output).toContain('dir  docs | read-only CLI documentation, cheatsheets, recipes, and reusable component docs');
+
+  const toolCall = await executeHvyCliCommand(document, session, 'find /docs -maxdepth 1 -type f');
+  expect(toolCall.output).toContain('/docs/cheatsheet-styling.md');
+  expect(toolCall.output).toContain('/docs/about-widget-record.txt');
+
+  const after = await executeHvyCliCommand(document, session, 'cat /docs/about-widget-record.txt');
+  expect(after.output).toContain('component template: widget-record');
+  expect(after.output).toContain('Fake widget record template.');
+
+  const grep = await executeHvyCliCommand(document, session, 'rg properties /docs');
+  expect(grep.output).toContain('/docs/cheatsheet-styling.md');
+  expect(grep.output).toContain('CSS properties');
+
+  await executeHvyCliCommand(document, session, 'cd /docs');
+  const globGrep = await executeHvyCliCommand(document, session, 'grep properties *');
+  expect(globGrep.output).toContain('/docs/cheatsheet-styling.md');
+  expect(globGrep.output).toContain('CSS properties');
+
+  const findGrep = await executeHvyCliCommand(document, session, 'find /docs -type f -exec grep -l properties {} +');
+  expect(findGrep.output).toContain('/docs/cheatsheet-styling.md');
+
+  const search = await executeHvyCliCommand(document, session, 'hvy search properties --max 3');
+  expect(search.output).toContain('/docs/cheatsheet-styling.md');
+  expect(search.output).toContain('kind=doc type=cheatsheet');
 });
 
 test('hvy recipes are discovered from hvy files', async () => {

@@ -316,6 +316,8 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(headerInstructions).toContain('component_defs');
   expect(headerInstructions).toContain('Do not invent metadata fields.');
   expect(headerInstructions).toContain('For `section_defaults`, the only supported field is `css`');
+  expect(headerInstructions).toContain('CSS values must be declaration strings, never serialized JSON objects');
+  expect(headerInstructions).toContain('Do not put values like `{"id":"..."}` in any `css` field.');
   expect(headerInstructions).toContain('Do not use `section_defaults` to satisfy requests about visible spacing between existing sections');
   expect(headerInstructions).toContain('including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`');
   expect(headerInstructions).toContain('Use `grep_header` to search the YAML header with a regex pattern before viewing or patching a specific component template or section template definition.');
@@ -3838,6 +3840,27 @@ title: Existing
     tool: 'patch_header',
     edits: [{ op: 'replace', start_line: 3, end_line: 4, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
   }, document)).toThrow('section_defaults only supports the "css" field. Unsupported field: wrapper_style.');
+  expect(document.meta.section_defaults).toEqual({ css: 'margin: 0 0 0.5rem;' });
+  expect(document.meta.title).toBe('Existing');
+});
+
+test('executePatchHeaderTool rejects css values that look like serialized JSON metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  css: "margin: 0 0 0.5rem;"
+title: Existing
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  seedStateForDocument(document);
+
+  expect(() => executePatchHeaderTool({
+    tool: 'patch_header',
+    edits: [{ op: 'replace', start_line: 3, end_line: 3, text: '  css: \'{"id":"summary","css":"margin: 0;"}\'' }],
+  }, document)).toThrow('section_defaults.css must be an inline CSS declaration string, not serialized component or section JSON.');
   expect(document.meta.section_defaults).toEqual({ css: 'margin: 0 0 0.5rem;' });
   expect(document.meta.title).toBe('Existing');
 });

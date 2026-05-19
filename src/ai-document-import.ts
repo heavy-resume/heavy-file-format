@@ -1,9 +1,9 @@
-import { requestProxyCompletion, type HostChatClient } from './chat/chat';
+import { requestProxyCompletion, type HostChatClient, type ProxyCompletionParams } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
 import type { VisualBlock, VisualSection } from './editor/types';
 import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionByKey, findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
-import type { ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
+import type { ChatMessage, ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
@@ -327,19 +327,20 @@ export async function importTextIntoDocument(
           return { status: 'error', message: `Import section ${index + 1} does not have a usable template structure.` };
         }
         options.onProgress?.({ phase: 'thinking', message: `Filling template section ${index + 1} of ${steps.length}.` });
-        const valuesRequest = {
+        const valuesMessages: ChatMessage[] = [
+          {
+            id: `ai-import-template-values-${index + 1}-task`,
+            role: 'user',
+            content: buildImportTaskMessage(
+              buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
+              buildImportTemplateValuesResponseInstructions(templateStructure)
+            ),
+          },
+        ];
+        const valuesRequest: ProxyCompletionParams = {
           settings: llm.settings,
           client: llm.client,
-          messages: [
-            {
-              id: `ai-import-template-values-${index + 1}-task`,
-              role: 'user',
-              content: buildImportTaskMessage(
-                buildImportTemplateValuesPrompt(options.sourceName, options.instructions, step, index, executableSteps.length),
-                buildImportTemplateValuesResponseInstructions(templateStructure)
-              ),
-            },
-          ],
+          messages: valuesMessages,
           context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, plannedXrefTargets, templateStructure, step.extractedInformation),
           responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
           systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,

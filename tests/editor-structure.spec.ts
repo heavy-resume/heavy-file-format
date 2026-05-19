@@ -882,6 +882,67 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
 });
 
+test('ai context menu backdrop click is not swallowed after touch double tap', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Touch target summary words
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block', { hasText: 'Touch target summary words' });
+  await block.dispatchEvent('pointerup', {
+    bubbles: true,
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 160,
+    clientY: 160,
+  });
+  await block.dispatchEvent('pointerup', {
+    bubbles: true,
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 160,
+    clientY: 160,
+  });
+
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.waitForTimeout(420);
+  await page.locator('.hvy-context-popover-backdrop-target').dispatchEvent('click', {
+    bubbles: true,
+    cancelable: true,
+  });
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+});
+
+test('resume xref to sidebar record opens sidebar in viewer and ai modes', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.document-menu summary').click();
+  await page.getByRole('button', { name: 'Resume Example', exact: true }).click({ force: true });
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.locator('#readerDocument .reader-xref-card', { hasText: 'Developer Containers' }).first().click();
+  await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(page.locator('#readerSidebarSections #tool-developer-containers')).toBeVisible();
+
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
+  await page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'Developer Containers' }).first().click();
+  await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
+  await expect(page.locator('#aiSidebarSections #tool-developer-containers')).toBeVisible();
+});
+
 test('ai expandable click waits for double click edit gesture', async ({ page }) => {
   await page.goto('/');
 

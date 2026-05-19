@@ -37,7 +37,7 @@ text_line_styles:
      
      Shows the document without any editing features.
 
-    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefTarget":"viewer-mode"}-->
+    <!--hvy:xref-card {"xrefTitle":"Viewer Mode","xrefDetail":"Learn more about viewer mode","xrefTarget":"viewer-mode"}-->
 
   <!--hvy:grid:1 {"id":"griditem-keuvq0"}-->
 
@@ -47,7 +47,7 @@ text_line_styles:
      
      Lets you see the page like in viewer but also edit it. Double <!--hvy:alt {"compact":"tap or tap and hold"}-->click or right click<!--/hvy:alt--> to enter edit mode for a component. You can also request changes via the chat.
 
-    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefTarget":"ai-mode"}-->
+    <!--hvy:xref-card {"xrefTitle":"AI Mode","xrefDetail":"Learn more about AI mode","xrefTarget":"ai-mode"}-->
 
   <!--hvy:grid:2 {"id":"griditem-kw907x"}-->
 
@@ -57,7 +57,7 @@ text_line_styles:
      
      For many changes, use editor mode. Can be either the basic or advanced view, which enables more editing.
 
-    <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
+    <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefDetail":"Learn more about editor mode","xrefTarget":"editor-mode"}-->
 <!--hvy: {"id":"section-mcd0l4","lock":false,"expanded":true,"highlight":false}-->
 #! Basics
 
@@ -399,20 +399,6 @@ text_line_styles:
 
  <!--hvy:text {}-->
   # Quick Reference
-
- <!--hvy:expandable {}-->
-  <!--hvy:expandable:stub {}-->
-
-   <!--hvy:text {}-->
-    ## Modes
-
-  <!--hvy:expandable:content {}-->
-
-   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Editor Mode","xrefDetail":"Editor changes the document.","xrefTarget":"editor-mode"}-->
-
-   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"Viewer Mode","xrefDetail":"Viewer reads and navigates.","xrefTarget":"viewer-mode"}-->
-
-   <!--hvy:xref-card {"css":"margin: 0.5rem 0; padding-left: 0.5rem;","xrefTitle":"AI Mode","xrefDetail":"AI selects content and requests changes.","xrefTarget":"ai-mode"}-->
 
  <!--hvy:expandable {}-->
   <!--hvy:expandable:stub {}-->

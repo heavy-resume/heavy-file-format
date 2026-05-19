@@ -3,19 +3,34 @@ import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
+const AI_CONTEXT_CLICK_SUPPRESS_MS = 350;
 
 let lastAiTap: { sectionKey: string; blockId: string; x: number; y: number; time: number } | null = null;
-let suppressNextAiContextClick = false;
+let suppressNextAiContextClickUntil = 0;
 let aiLongPress: { pointerId: number; x: number; y: number; timer: number } | null = null;
 
 export function bindContextmenu(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
-    if (!suppressNextAiContextClick) {
+    if (suppressNextAiContextClickUntil <= 0) {
       return;
     }
-    suppressNextAiContextClick = false;
+    const shouldSuppress = window.performance.now() <= suppressNextAiContextClickUntil;
+    suppressNextAiContextClickUntil = 0;
+    if (!shouldSuppress) {
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
+  }, true);
+
+  app.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.hvy-context-popover-backdrop')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeReaderContextPopover(app);
   }, true);
 
   app.addEventListener('contextmenu', (event) => {
@@ -96,7 +111,7 @@ export function bindContextmenu(app: HTMLElement): void {
         openReaderContextPopover(app, event, false);
         if (state.contextMenu?.kind === 'ai') {
           dismissAiModeTip(app);
-          suppressNextAiContextClick = true;
+          suppressNextAiContextClickUntil = window.performance.now() + AI_CONTEXT_CLICK_SUPPRESS_MS;
         }
       }, AI_LONG_PRESS_MS),
     };
@@ -151,7 +166,7 @@ export function bindContextmenu(app: HTMLElement): void {
     openReaderContextPopover(app, event, false);
     if (state.contextMenu?.kind === 'ai') {
       dismissAiModeTip(app);
-      suppressNextAiContextClick = true;
+      suppressNextAiContextClickUntil = window.performance.now() + AI_CONTEXT_CLICK_SUPPRESS_MS;
     }
   });
 }

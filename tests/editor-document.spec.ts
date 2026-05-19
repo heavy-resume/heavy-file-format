@@ -834,6 +834,46 @@ hvy_version: 0.1
   await expect(page.locator('#mount .viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('guide internal links can navigate to the filtering section', async ({ page }) => {
+  const navigationErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes('[hvy:navigation] Unable to find reader target')) {
+      navigationErrors.push(message.text());
+    }
+  });
+
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const [{ default: guideText }, { deserializeDocumentBytes, mountHvy }] = await Promise.all([
+      import(/* @vite-ignore */ '/hvy-guide.hvy?raw'),
+      import(/* @vite-ignore */ '/src/embed-full.ts'),
+    ]);
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(guideText), '.hvy'),
+      mode: 'viewer',
+    });
+  });
+  await expect(page.locator('#readerDocument')).toContainText('Introducing the HVY File Format');
+  await page.evaluate(async () => {
+    const { navigateToReaderTarget } = await import(/* @vite-ignore */ '/src/navigation.ts');
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    navigateToReaderTarget({ targetId: 'filtering' }, root);
+  });
+
+  await expect(page.locator('#readerDocument #filtering')).toHaveCount(1);
+  expect(navigationErrors).toEqual([]);
+});
+
 test('embedded viewer storage key does not persist stale document state', async ({ page }) => {
   await page.goto('/');
 

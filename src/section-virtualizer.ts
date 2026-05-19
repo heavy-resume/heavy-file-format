@@ -73,6 +73,19 @@ export function flushVirtualizedSections(root: HTMLElement, afterRestore?: Secti
   });
 }
 
+export function restoreVirtualizedSection(root: HTMLElement, sectionKey: string, afterRestore?: SectionVirtualizerOptions['afterRestore']): void {
+  const placeholder = root.querySelector<HTMLElement>(
+    `[data-hvy-virtual-placeholder="true"][data-section-key="${CSS.escape(sectionKey)}"]`
+  );
+  if (!placeholder) {
+    return;
+  }
+  const observer = placeholderObservers.get(placeholder) ?? rootStates.get(root)?.observers[0];
+  if (observer) {
+    restoreVirtualSection(placeholder, observer, afterRestore);
+  }
+}
+
 function getVirtualSectionTargets(root: HTMLElement): Array<{ scroller: Element; sections: HTMLElement[] }> {
   const targets: Array<{ scroller: Element; sections: HTMLElement[] }> = [];
   for (const surface of SURFACES) {

@@ -8,6 +8,7 @@ import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
+import { restoreVirtualizedSection } from './section-virtualizer';
 
 /**
  * Directly update the sidebar open/closed state on the DOM without a full re-render,
@@ -130,6 +131,12 @@ export function navigateToReaderTarget(
   requestTargetHighlight(app, target, {
     sectionFound: sectionByIdRes.found || sectionByKeyRes.found,
     blockFound: blockBySchemaRes.found || blockByBlockIdRes.found,
+    sectionKey:
+      sectionByIdRes.sectionKey
+      ?? blockBySchemaRes.sectionKey
+      ?? blockByBlockIdRes.sectionKey
+      ?? sectionByKeyRes.sectionKey
+      ?? target.sectionKey,
   });
 }
 
@@ -140,10 +147,13 @@ export function getReaderTargetIds(app: HTMLElement): string[] {
 function requestTargetHighlight(
   app: HTMLElement,
   target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
-  context: { sectionFound: boolean; blockFound: boolean },
+  context: { sectionFound: boolean; blockFound: boolean; sectionKey?: string },
   attempt = 0
 ): void {
   const run = () => {
+    if (context.sectionKey) {
+      restoreVirtualizedSection(app, context.sectionKey);
+    }
     const element = findReaderTargetElement(app, target);
     if (!element) {
       if (attempt < 3) {
@@ -317,6 +327,7 @@ interface ExpandResult {
   found: boolean;
   changed: boolean;
   location: VisualSection['location'] | null;
+  sectionKey: string | null;
 }
 
 export function expandSectionPathById(sections: VisualSection[], sectionId: string): ExpandResult {
@@ -324,16 +335,16 @@ export function expandSectionPathById(sections: VisualSection[], sectionId: stri
     if (getSectionId(section) === sectionId) {
       const changed = !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: section.location };
+      return { found: true, changed, location: section.location, sectionKey: section.key };
     }
     const childRes = expandSectionPathById(section.children, sectionId);
     if (childRes.found) {
       const changed = childRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: childRes.location };
+      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
-  return { found: false, changed: false, location: null };
+  return emptyExpandResult();
 }
 
 export function expandSectionPathByKey(sections: VisualSection[], sectionKey: string): ExpandResult {
@@ -341,13 +352,13 @@ export function expandSectionPathByKey(sections: VisualSection[], sectionKey: st
     if (section.key === sectionKey) {
       const changed = !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: section.location };
+      return { found: true, changed, location: section.location, sectionKey: section.key };
     }
     const childRes = expandSectionPathByKey(section.children, sectionKey);
     if (childRes.found) {
       const changed = childRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: childRes.location };
+      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -359,16 +370,16 @@ export function expandBlockPathBySchemaId(sections: VisualSection[], schemaId: s
     if (blockRes.found) {
       const changed = blockRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: section.location };
+      return { found: true, changed, location: section.location, sectionKey: section.key };
     }
     const childRes = expandBlockPathBySchemaId(section.children, schemaId);
     if (childRes.found) {
       const changed = childRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: childRes.location };
+      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
-  return { found: false, changed: false, location: null };
+  return emptyExpandResult();
 }
 
 export function expandBlockPathByBlockId(sections: VisualSection[], blockId: string, sectionKey?: string): ExpandResult {
@@ -378,7 +389,7 @@ export function expandBlockPathByBlockId(sections: VisualSection[], blockId: str
       if (childRes.found) {
         const changed = childRes.changed || !section.expanded;
         section.expanded = true;
-        return { found: true, changed, location: childRes.location };
+        return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
       }
       continue;
     }
@@ -386,13 +397,13 @@ export function expandBlockPathByBlockId(sections: VisualSection[], blockId: str
     if (blockRes.found) {
       const changed = blockRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: section.location };
+      return { found: true, changed, location: section.location, sectionKey: section.key };
     }
     const childRes = expandBlockPathByBlockId(section.children, blockId, sectionKey);
     if (childRes.found) {
       const changed = childRes.changed || !section.expanded;
       section.expanded = true;
-      return { found: true, changed, location: childRes.location };
+      return { found: true, changed, location: childRes.location, sectionKey: childRes.sectionKey };
     }
   }
   return emptyExpandResult();
@@ -453,7 +464,7 @@ function sectionContainsBlock(section: VisualSection, blockId: string): boolean 
 }
 
 function emptyExpandResult(): ExpandResult {
-  return { found: false, changed: false, location: null };
+  return { found: false, changed: false, location: null, sectionKey: null };
 }
 
 export function closeModal(): void {

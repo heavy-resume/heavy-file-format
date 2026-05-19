@@ -979,7 +979,6 @@ component_defs:
               component: text
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
-          - component: skills-and-tools-tech-list
   - name: certification-record
     baseType: expandable
     description: Certification entry

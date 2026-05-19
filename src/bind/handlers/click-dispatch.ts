@@ -125,9 +125,7 @@ export function bindClickDispatch(app: HTMLElement): void {
       if (sectionKey && blockId && action) {
         const editable = getRichEditableForButton(app, richButton);
         if (editable) {
-          if (!hasSelectionInside(editable)) {
-            restoreRichToolbarSelection(editable);
-          }
+          restoreRichToolbarSelection(editable);
           if (action === 'link') {
             openLinkInlineModal(app, editable);
             return;

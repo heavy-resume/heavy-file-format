@@ -586,6 +586,8 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
     },
     onMutation: (group) => recordHistory(group ?? 'import:text'),
     onSectionApplied: refreshAfterImportMutation,
+    onImportFillInsApplied: refreshAfterImportMutation,
+    onImportXrefsApplied: refreshAfterImportMutation,
     onImportFinalized: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {

@@ -476,7 +476,7 @@ section_defs:
             component: table
             css: "margin: 0.5rem 0 0;"
             tags: table-header
-            tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
+            tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
             tableShowHeader: true
             tableRows: []
             lock: true
@@ -512,7 +512,7 @@ section_defs:
                 component: table
                 css: "margin: 0.5rem 0 0;"
                 tags: table-header
-                tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
+                tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
                 tableShowHeader: true
                 tableRows: []
                 lock: true
@@ -643,8 +643,8 @@ component_defs:
     templateVariables:
       role:
         label: Role / Title
-      years:
-        label: Year(s)
+      dates:
+        label: Dates
       accomplishments:
         label: Accomplishments
     schema:
@@ -660,10 +660,10 @@ component_defs:
             schema:
               component: table
               css: "margin: 0; margin-top: -1px;"
-              tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "YEAR(S)"]
+              tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
               tableShowHeader: false
               tableRows:
-                - cells: ["{% role %}", "{% organization %}", "{% years %}"]
+                - cells: ["{% role %}", "{% organization %}", "{% dates %}"]
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
@@ -718,8 +718,8 @@ component_defs:
     templateVariables:
       role:
         label: Role / Title
-      years:
-        label: Year(s)
+      date_range:
+        label: Dates
       accomplishments:
         label: Accomplishments
     schema:
@@ -1831,7 +1831,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Professional History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
  <!--hvy:component-list {"id":"history-list","css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
 
@@ -1841,7 +1841,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableShowHeader":false,"tableRows":[{"cells":["Senior Software Engineer","Northwind Labs","2024"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Senior Software Engineer","Northwind Labs","2024"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 

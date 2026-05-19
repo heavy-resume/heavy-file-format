@@ -181,6 +181,7 @@ interface ImportFillInTarget {
   sectionKey: string;
   sectionTitle: string;
   blockId: string;
+  block: VisualBlock;
   markerIndex?: number;
 }
 
@@ -284,6 +285,8 @@ export async function importTextIntoDocument(
   options: ImportFromTextOptions & {
     onMutation?: (group?: string) => void;
     onSectionApplied?: (result: string) => Promise<void> | void;
+    onImportFillInsApplied?: (result: string) => Promise<void> | void;
+    onImportXrefsApplied?: (result: string) => Promise<void> | void;
     onImportFinalized?: (result: string) => Promise<void> | void;
   }
 ): Promise<ImportFromTextResult> {
@@ -448,10 +451,14 @@ export async function importTextIntoDocument(
     if (fillInTargets.length > 0) {
       options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
       await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets, fillInTargets);
+      await options.onImportFillInsApplied?.('Filled remaining placeholders in imported sections.');
     }
     createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
     options.onProgress?.({ phase: 'thinking', message: 'Filling imported xref lists.' });
     const xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets);
+    if (xrefsApplied > 0) {
+      await options.onImportXrefsApplied?.(`Filled ${xrefsApplied} imported xref list${xrefsApplied === 1 ? '' : 's'}.`);
+    }
     const message = `Imported ${created.length} section${created.length === 1 ? '' : 's'}.`;
     if (fillInTargets.length > 0 || xrefsApplied > 0) {
       options.onMutation?.('ai-edit:import-finalize');
@@ -2862,44 +2869,52 @@ function collectImportFillInTargets(document: VisualDocument, sectionKeys: strin
       const isBlankPlaceholder = placeholder.length > 0
         && block.text.trim().length === 0
         && resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'text';
+      const useWholeBlockFillIn = block.schema.fillIn === true
+        && (fillInKeys.length === 0 || isImportPureFillInMarkerText(block.text));
       if (!blockId && block.schema.fillIn !== true && fillInKeys.length === 0 && !isBlankPlaceholder) {
         return;
       }
       const key = blockId || uniqueImportGeneratedId(toImportStableId(`${formatSectionTitle(section.title)} ${placeholder || 'placeholder'}`), new Set(targets.map((target) => target.key)));
-      if (!blockId && key) {
-        block.schema.id = key;
-      }
-      if (block.schema.fillIn === true) {
+      if (useWholeBlockFillIn) {
         targets.push({
           key,
           label: placeholder || firstImportVisibleText(block) || blockId,
           sectionKey,
           sectionTitle: formatSectionTitle(section.title),
-          blockId: key,
+          blockId: blockId || key,
+          block,
         });
       }
-      fillInKeys.forEach((marker, markerIndex) => {
-        targets.push({
-          key: `${key}:value:${markerIndex + 1}`,
-          label: marker.placeholder || placeholder || blockId,
-          sectionKey,
-          sectionTitle: formatSectionTitle(section.title),
-          blockId: key,
-          markerIndex,
+      if (!useWholeBlockFillIn) {
+        fillInKeys.forEach((marker, markerIndex) => {
+          targets.push({
+            key: `${key}:value:${markerIndex + 1}`,
+            label: marker.placeholder || placeholder || blockId,
+            sectionKey,
+            sectionTitle: formatSectionTitle(section.title),
+            blockId: blockId || key,
+            block,
+            markerIndex,
+          });
         });
-      });
+      }
       if (isBlankPlaceholder && block.schema.fillIn !== true && fillInKeys.length === 0) {
         targets.push({
           key,
           label: placeholder,
           sectionKey,
           sectionTitle: formatSectionTitle(section.title),
-          blockId: key,
+          blockId: blockId || key,
+          block,
         });
       }
     });
   }
   return targets;
+}
+
+function isImportPureFillInMarkerText(text: string): boolean {
+  return text.replace(/<!--\s*value\b[\s\S]*?-->/gi, '').trim().length === 0;
 }
 
 async function fillImportedSectionPlaceholders(
@@ -2945,7 +2960,7 @@ async function fillImportedSectionPlaceholders(
       signal: options.signal,
     });
     throwIfAborted(options.signal);
-    applyImportFillInResponses(section, targets, parseImportFillInResponse(response));
+    applyImportFillInResponses(targets, parseImportFillInResponse(response));
   }
 }
 
@@ -3030,38 +3045,26 @@ function parseImportFillInResponse(response: string): Map<string, string> {
   return result;
 }
 
-function applyImportFillInResponses(section: VisualSection, targets: ImportFillInTarget[], fills: Map<string, string>): void {
+function applyImportFillInResponses(targets: ImportFillInTarget[], fills: Map<string, string>): void {
   if (fills.size === 0) {
     return;
   }
-  const targetsByBlock = new Map<string, ImportFillInTarget[]>();
   for (const target of targets) {
-    const list = targetsByBlock.get(target.blockId) ?? [];
-    list.push(target);
-    targetsByBlock.set(target.blockId, list);
-  }
-  visitBlocks([section], (block) => {
-    const blockId = block.schema.id.trim();
-    const blockTargets = targetsByBlock.get(blockId);
-    if (!blockTargets) {
-      return;
+    const value = fills.get(target.key);
+    if (!value) {
+      continue;
     }
-    for (const target of blockTargets) {
-      const value = fills.get(target.key);
-      if (!value) {
-        continue;
-      }
-      if (typeof target.markerIndex === 'number') {
-        block.text = applyTextFillInValueAtIndex(block.text, target.markerIndex, value);
-        if (block.schema.fillIn === true && !hasTextFillInMarker(block.text) && block.text.trim().length > 0) {
-          block.schema.fillIn = false;
-        }
-      } else if (block.schema.fillIn === true) {
-        block.text = value;
+    const block = target.block;
+    if (typeof target.markerIndex === 'number') {
+      block.text = applyTextFillInValueAtIndex(block.text, target.markerIndex, value);
+      if (block.schema.fillIn === true && !hasTextFillInMarker(block.text) && block.text.trim().length > 0) {
         block.schema.fillIn = false;
       }
+    } else if (block.schema.fillIn === true) {
+      block.text = value;
+      block.schema.fillIn = false;
     }
-  });
+  }
 }
 
 function parseGeneratedImportSection(hvy: string, documentMeta: VisualDocument['meta']): VisualSection {

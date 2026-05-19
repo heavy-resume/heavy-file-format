@@ -645,9 +645,9 @@ test('hvy insert can create custom components without explicit ids', async () =>
   expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
   expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
-    .toBe('[\n  "TITLE",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "YEAR(S)"\n]\n');
+    .toBe('[\n  "TITLE",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "DATES"\n]\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
-    .toBe('TITLE | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | YEAR(S)\n |  | \n');
+    .toBe('TITLE | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | DATES\n |  | \n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
     .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });
@@ -2363,13 +2363,13 @@ hvy_version: 0.1
 <!--hvy: {"id":"history"}-->
 #! History
 
-<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableRows":[]}-->
 `, '.hvy');
   const session = createHvyCliSession();
 
   const result = await executeHvyCliCommand(document, session, 'hvy request_structure history-table');
 
-  expect(result.output).toContain('table.txt id=C2 | TITLE | ORGANIZATION | YEAR(S)');
+  expect(result.output).toContain('table.txt id=C2 | TITLE | ORGANIZATION | DATES');
   expect(result.output).not.toContain('hvy:alt');
 });
 

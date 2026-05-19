@@ -1947,6 +1947,11 @@ function toggleSelectionList(editable: HTMLElement): void {
   if (!block || block === editable || block.tagName === 'PRE') {
     return;
   }
+  const selectedBlocks = getSelectedEditableTextBlocks(editable);
+  if (selectedBlocks.length > 1) {
+    wrapSelectedBlocksInList(selectedBlocks);
+    return;
+  }
   const previousRange = getEditableSelectionRange(editable)?.cloneRange() ?? null;
   const previousTextSelection =
     previousRange && isRangeInsideElement(block, previousRange)
@@ -1974,6 +1979,42 @@ function toggleSelectionList(editable: HTMLElement): void {
     return;
   }
   placeCaretAtEnd(listItem);
+}
+
+function getSelectedEditableTextBlocks(editable: HTMLElement): HTMLElement[] {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed) {
+    return [];
+  }
+  const directChildren = Array.from(editable.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+  const selected = directChildren.filter((child) => range.intersectsNode(child));
+  return selected.every((child) => !/^(PRE|UL|OL)$/.test(child.tagName)) ? selected : [];
+}
+
+function wrapSelectedBlocksInList(blocks: HTMLElement[]): void {
+  const firstBlock = blocks[0];
+  if (!firstBlock?.parentNode) {
+    return;
+  }
+  const list = document.createElement('ul');
+  for (const block of blocks) {
+    const listItem = document.createElement('li');
+    while (block.firstChild) {
+      listItem.appendChild(block.firstChild);
+    }
+    if (!listItem.firstChild) {
+      listItem.appendChild(document.createTextNode('\u200b'));
+    }
+    list.appendChild(listItem);
+  }
+  firstBlock.parentNode.insertBefore(list, firstBlock);
+  for (const block of blocks) {
+    block.remove();
+  }
+  const lastItem = list.lastElementChild;
+  if (lastItem instanceof HTMLElement) {
+    placeCaretAtEnd(lastItem);
+  }
 }
 
 function unwrapListItem(item: HTMLLIElement): void {

@@ -534,6 +534,10 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
 async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const { deserializeDocumentWithDiagnostics } = await import('./serialization');
   const { importTextIntoDocument } = await import('./ai-document-edit');
+  const refreshAfterImportMutation = (): void => {
+    state.rawEditorText = serializeDocument(state.document);
+    renderApp();
+  };
   const result = await importTextIntoDocument(state.document, {
     ...options,
     llm: options.llm ?? { settings: state.chat.settings },
@@ -543,6 +547,10 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
       }
     },
     onMutation: (group) => recordHistory(group ?? 'import:text'),
+    onSectionApplied: refreshAfterImportMutation,
+    onImportFillInsApplied: refreshAfterImportMutation,
+    onImportXrefsApplied: refreshAfterImportMutation,
+    onImportFinalized: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {
     return result;

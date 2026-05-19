@@ -58,7 +58,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"history"}-->
 #! History
 
-<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableRows":[]}-->
 `, '.hvy');
 
   const expectedResult = buildDescriptionRequest({
@@ -68,7 +68,7 @@ hvy_version: 0.1
     kind: 'block',
   });
 
-  expect(expectedResult.contentSummary).toContain('TITLE ORGANIZATION YEAR(S)');
+  expect(expectedResult.contentSummary).toContain('TITLE ORGANIZATION DATES');
   expect(expectedResult.contentSummary).not.toContain('hvy:alt');
 });
 

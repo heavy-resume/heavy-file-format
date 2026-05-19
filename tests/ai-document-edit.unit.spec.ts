@@ -134,12 +134,12 @@ hvy_version: 0.1
 <!--hvy: {"id":"history"}-->
 #! History
 
-<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","YEAR(S)"],"tableRows":[]}-->
+<!--hvy:table {"id":"history-table","tableColumns":["TITLE","<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableRows":[]}-->
 `, '.hvy');
 
   const summary = summarizeDocumentStructure(document).summary;
 
-  expect(summary).toContain('columns: TITLE, ORGANIZATION, YEAR(S)');
+  expect(summary).toContain('columns: TITLE, ORGANIZATION, DATES');
   expect(summary).not.toContain('hvy:alt');
 });
 
@@ -1492,6 +1492,7 @@ component_defs:
 <!--hvy: {"id":"summary"}-->
 #! Summary
 `, '.hvy');
+  const finalStepCallbacks: string[] = [];
 
   const result = await importTextIntoDocument(document, {
     sourceName: 'resume.txt',
@@ -1503,6 +1504,12 @@ component_defs:
     llm: {
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: { complete: vi.fn() },
+    },
+    onImportXrefsApplied(resultMessage) {
+      finalStepCallbacks.push(resultMessage);
+    },
+    onImportFinalized(resultMessage) {
+      finalStepCallbacks.push(resultMessage);
     },
   });
 
@@ -1520,6 +1527,10 @@ component_defs:
   expect(serialized).toContain('"id":"widget"');
   expect(serialized).toContain('"xrefTarget":"widget"');
   expect(serialized).toContain('Used for reliable builds.');
+  expect(finalStepCallbacks).toEqual([
+    'Filled 1 imported xref list.',
+    'Imported 2 sections.',
+  ]);
 });
 
 test('importTextIntoDocument uses grouped importPreplan extraction and missing sections pass', async () => {
@@ -2136,6 +2147,39 @@ component_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('component_defs:');
 });
 
+test('importTextIntoDocument applies resume tool technology template values to repeated record details', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(JSON.stringify({
+    values: {
+      tool_tech_record: [
+        {
+          tool_technology: 'Python',
+          description: 'Programming language used for software development and automation.',
+          notes: '',
+        },
+      ],
+    },
+  }));
+  requestProxyCompletionMock.mockResolvedValueOnce('{"fills":{"tools-and-technologies-placeholder":"Python"}}');
+  const document = deserializeDocument(readFileSync('examples/resume.thvy', 'utf8'), '.thvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Python - Programming language used for software development and automation.',
+    steps: [{ section: 'Tools & Technologies', sectionId: 'tools-technologies', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(result.status).toBe('complete');
+  expect(serialized).toContain('<!--hvy:tool-tech-record {"id":"python"');
+  expect(serialized).toContain('^detail-heading^ #### Description');
+  expect(serialized).toContain('^detail-body^ Programming language used for software development and automation.');
+  expect(serialized).toContain('^detail-heading^ #### Notes');
+});
+
 test('importTextIntoDocument shows xref-card reusable examples with target fields', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"information":"Imported tools"}'
@@ -2459,6 +2503,7 @@ hvy_version: 0.1
 ---
 `, '.hvy');
   const intermediateSnapshots: string[] = [];
+  const fillInSnapshots: string[] = [];
   const finalizedSnapshots: string[] = [];
   const onMutation = vi.fn();
 
@@ -2474,6 +2519,9 @@ hvy_version: 0.1
     onSectionApplied() {
       intermediateSnapshots.push(serializeDocument(document));
     },
+    onImportFillInsApplied() {
+      fillInSnapshots.push(serializeDocument(document));
+    },
     onImportFinalized() {
       finalizedSnapshots.push(serializeDocument(document));
     },
@@ -2488,11 +2536,15 @@ hvy_version: 0.1
   ]);
   expect(intermediateSnapshots[0]).toContain('"fillIn":true');
   expect(intermediateSnapshots[0]).not.toContain('Worked on and owned a variety of different projects.');
+  expect(fillInSnapshots[0]).toContain('Worked on and owned a variety of different projects.');
+  expect(fillInSnapshots[0]).toContain('Shipped reliable internal systems.');
+  expect(fillInSnapshots[0]).not.toContain('"fillIn":true');
   expect(finalizedSnapshots[0]).toContain('Worked on and owned a variety of different projects.');
   expect(finalizedSnapshots[0]).toContain('Shipped reliable internal systems.');
   expect(finalizedSnapshots[0]).not.toContain('"fillIn":true');
-  expect(serialized).toContain('<!--hvy:text {"id":"professional-history-placeholder","css":"margin: 0.35rem 0;"}-->');
+  expect(serialized).toContain('<!--hvy:text {"css":"margin: 0.35rem 0;"}-->');
   expect(serialized).toContain('Worked on and owned a variety of different projects.');
+  expect(serialized).not.toContain('professional-history-placeholder');
   expect(serialized).not.toContain('<!-- value {"placeholder":"Description"} -->');
   expect(onMutation).toHaveBeenCalledWith('ai-edit:import-finalize');
 });

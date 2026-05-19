@@ -5,9 +5,13 @@ test('checkbox action inserts a single inline checkbox without coercing content 
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  const editorHandle = await editor.elementHandle();
+  expect(editorHandle).not.toBeNull();
 
   await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
     node.innerHTML = '<p>First item</p><p>Second item</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -16,7 +20,10 @@ test('checkbox action inserts a single inline checkbox without coercing content 
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
-  await page.getByRole('button', { name: 'Checkbox' }).first().click();
+  await editor
+    .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]')
+    .getByRole('button', { name: 'Checkbox' })
+    .click();
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
   await expect(editor.locator('p').nth(0)).toContainText('First item');
@@ -33,6 +40,7 @@ test('checkbox action inserts a checkbox at the current line and backspace remov
   await editor.evaluate((node) => {
     node.focus();
     node.innerHTML = '<p>Draft task</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -41,7 +49,10 @@ test('checkbox action inserts a checkbox at the current line and backspace remov
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
-  await page.getByRole('button', { name: 'Checkbox' }).first().click();
+  await editor
+    .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]')
+    .getByRole('button', { name: 'Checkbox' })
+    .click();
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
   await expect(editor.locator('p').first()).toContainText('Draft task');
@@ -83,7 +94,9 @@ test('list action still creates a normal list without checkbox coercion', async 
   const editor = page.locator('.rich-editor').first();
 
   await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
     node.innerHTML = '<p>Plain item</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -94,11 +107,52 @@ test('list action still creates a normal list without checkbox coercion', async 
     selection?.addRange(range);
   });
 
-  await page.getByRole('button', { name: 'List' }).first().click();
+  await editor
+    .locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]')
+    .getByRole('button', { name: 'List' })
+    .click();
 
   await expect(editor.locator('ul')).toHaveCount(1);
   await expect(editor.locator('li')).toHaveCount(1);
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(0);
+});
+
+test('list action converts every selected paragraph into bullets', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<p>Alpha item</p><p>Beta item</p><p>Gamma item</p>';
+    const paragraphs = node.querySelectorAll('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(paragraphs[0]!.firstChild!, 0);
+    range.setEnd(paragraphs[2]!.firstChild!, paragraphs[2]!.textContent!.length);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  const editorHandle = await editor.elementHandle();
+  expect(editorHandle).not.toBeNull();
+  await editorHandle!.evaluate((node) => {
+    const editorBlock = node.closest('.editor-block');
+    const listButton = editorBlock?.querySelector<HTMLButtonElement>('[data-rich-action="list"]');
+    listButton?.click();
+  });
+
+  const expectedResult = await editorHandle!.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+    paragraphCount: node.querySelectorAll('p').length,
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    items: ['Alpha item', 'Beta item', 'Gamma item'],
+    paragraphCount: 0,
+  });
 });
 
 test('tab indents list items inside the rich editor', async ({ page }) => {
@@ -108,7 +162,9 @@ test('tab indents list items inside the rich editor', async ({ page }) => {
   const editor = page.locator('.rich-editor').first();
 
   await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
     node.innerHTML = '<ul><li>Parent</li><li>Child</li></ul>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelectorAll('li')[1]?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -118,7 +174,6 @@ test('tab indents list items inside the rich editor', async ({ page }) => {
     selection?.addRange(range);
   });
 
-  await editor.focus();
   await page.keyboard.press('Tab');
 
   await expect(editor.locator('ul ul li')).toContainText('Child');

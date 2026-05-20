@@ -212,6 +212,26 @@ test('embedded editor and viewer keep independent document state', async ({ page
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 });
 
+test('embedded editor remains in editor view after activating a component beside a viewer mount', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.getByRole('button', { name: 'Reset sessions' }).click();
+
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+  await expect(secondDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
+
+  await firstDoc.locator('.editor-block-passive').first().click();
+
+  await expect(firstDoc.locator('#editorTree')).toBeVisible();
+  await expect(firstDoc.locator('#readerDocument')).toHaveCount(0);
+  await expect(firstDoc.locator('.editor-block[data-active-editor-block="true"]')).toBeVisible();
+  await firstDoc.locator('.chat-launcher').click();
+  await expect(firstDoc.locator('.chat-panel')).toHaveClass(/is-document-edit/);
+});
+
 test('two embedded docs can switch example sources independently', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');

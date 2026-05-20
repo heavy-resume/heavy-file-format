@@ -4,7 +4,14 @@ import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
-import { state, getRenderApp, getRefreshReaderPanels } from './state';
+import {
+  state,
+  getActiveStateRuntime,
+  getRenderApp,
+  getRefreshReaderPanels,
+  runWithStateRuntime,
+  runWithStateRuntimeAsync,
+} from './state';
 import { findSectionByKey } from './section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
@@ -170,6 +177,9 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
 }
 
 export function bindUi(app: HTMLElement): void {
+  const runtime = getActiveStateRuntime();
+  const runInBoundRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
+  const runInBoundRuntimeAsync = <T>(action: () => Promise<T>): Promise<T> => runWithStateRuntimeAsync(runtime, action);
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
   const fileInput = app.querySelector<HTMLInputElement>('#fileInput');
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
@@ -196,15 +206,17 @@ export function bindUi(app: HTMLElement): void {
   const runReaderAction = (event: Event, action: () => void): void => {
     clearPendingAiReaderAction();
     if (state.currentView !== 'ai') {
-      action();
+      runInBoundRuntime(action);
       return;
     }
     if (event instanceof MouseEvent && event.detail > 1) {
       return;
     }
     pendingAiReaderAction = window.setTimeout(() => {
-      pendingAiReaderAction = null;
-      action();
+      runInBoundRuntime(() => {
+        pendingAiReaderAction = null;
+        action();
+      });
     }, getAiEditorDoubleClickDelayMs());
   };
 
@@ -224,9 +236,13 @@ export function bindUi(app: HTMLElement): void {
 
   const defaultExampleBtn = app.querySelector<HTMLButtonElement>('#defaultExampleBtn');
   defaultExampleBtn?.addEventListener('click', () => {
-    void loadDefaultExampleDocument().catch((error: unknown) => {
-      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the default example.';
-      getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await loadDefaultExampleDocument();
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not load the default example.';
+        getRenderApp()();
+      }
     });
   });
 
@@ -252,45 +268,61 @@ export function bindUi(app: HTMLElement): void {
 
   const importReferenceBtn = app.querySelector<HTMLButtonElement>('#importReferenceBtn');
   importReferenceBtn?.addEventListener('click', () => {
-    void loadSourceDocumentFromServer(
-      IMPORT_REFERENCE_SOURCE_DOCUMENT,
-      'ai-import-hvy-format-reference.hvy',
-      'import-reference'
-    ).catch((error: unknown) => {
-      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the import reference document.';
-      getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await loadSourceDocumentFromServer(
+          IMPORT_REFERENCE_SOURCE_DOCUMENT,
+          'ai-import-hvy-format-reference.hvy',
+          'import-reference'
+        );
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not load the import reference document.';
+        getRenderApp()();
+      }
     });
   });
 
   const scriptingHelpBtn = app.querySelector<HTMLButtonElement>('#scriptingHelpBtn');
   scriptingHelpBtn?.addEventListener('click', () => {
-    void loadSourceDocumentFromServer(
-      SCRIPTING_HELP_SOURCE_DOCUMENT,
-      'scripting-help.hvy',
-      'scripting-help'
-    ).catch((error: unknown) => {
-      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the scripting help document.';
-      getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await loadSourceDocumentFromServer(
+          SCRIPTING_HELP_SOURCE_DOCUMENT,
+          'scripting-help.hvy',
+          'scripting-help'
+        );
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not load the scripting help document.';
+        getRenderApp()();
+      }
     });
   });
 
   if (openLocalFileBtn) {
     openLocalFileBtn.hidden = !supportsFileSystemAccess();
     openLocalFileBtn.addEventListener('click', () => {
-      void openLocalDocumentWithPicker().catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return;
+      void runInBoundRuntimeAsync(async () => {
+        try {
+          await openLocalDocumentWithPicker();
+        } catch (error: unknown) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            return;
+          }
+          state.rawEditorError = error instanceof Error ? error.message : 'Could not open the selected file.';
+          getRenderApp()();
         }
-        state.rawEditorError = error instanceof Error ? error.message : 'Could not open the selected file.';
-        getRenderApp()();
       });
     });
   }
 
   saveFileBtn?.addEventListener('click', () => {
-    void saveCurrentDocumentInPlace(downloadName).catch((error: unknown) => {
-      state.rawEditorError = error instanceof Error ? error.message : 'Could not save the current document.';
-      getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await saveCurrentDocumentInPlace(downloadName);
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not save the current document.';
+        getRenderApp()();
+      }
     });
   });
 
@@ -461,13 +493,13 @@ export function bindUi(app: HTMLElement): void {
           const select = target.closest<HTMLSelectElement>('select');
           if (select) {
             const blockId = select.dataset.blockId ?? '';
-            window.setTimeout(() => {
+            window.setTimeout(() => runInBoundRuntime(() => {
               const nextSelect = app.querySelector<HTMLSelectElement>(
                 `[data-field="${CSS.escape(select.dataset.field ?? 'component-list-reader-view')}"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
               );
               nextSelect?.focus();
               (nextSelect as (HTMLSelectElement & { showPicker?: () => void }) | null)?.showPicker?.();
-            }, 0);
+            }), 0);
           }
           return;
         }
@@ -673,18 +705,18 @@ export function bindUi(app: HTMLElement): void {
           // Animate collapse before re-rendering
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-collapsing');
-          window.setTimeout(() => {
+          window.setTimeout(() => runInBoundRuntime(() => {
             state.readerExpandableState[expandableStateKey] = false;
             getRefreshReaderPanels()();
-          }, 160);
+          }), 160);
         } else {
           state.readerExpandableState[expandableStateKey] = true;
           getRefreshReaderPanels()();
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-expanding');
-          window.setTimeout(() => {
+          window.setTimeout(() => runInBoundRuntime(() => {
             readerEl?.classList.remove('is-expanding');
-          }, 360);
+          }), 360);
         }
       });
       return;

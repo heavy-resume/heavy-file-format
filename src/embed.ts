@@ -400,9 +400,16 @@ async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<voi
 
 function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
   root.addEventListener('click', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('dblclick', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('mousedown', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('mouseup', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('pointerdown', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('pointerup', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('contextmenu', () => activateStateRuntime(runtime), { capture: true });
   root.addEventListener('input', () => activateStateRuntime(runtime), { capture: true });
   root.addEventListener('change', () => activateStateRuntime(runtime), { capture: true });
   root.addEventListener('keydown', () => activateStateRuntime(runtime), { capture: true });
+  root.addEventListener('keyup', () => activateStateRuntime(runtime), { capture: true });
   root.addEventListener('focusin', () => activateStateRuntime(runtime), { capture: true });
   root.addEventListener('submit', () => activateStateRuntime(runtime), { capture: true });
 }

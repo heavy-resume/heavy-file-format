@@ -247,7 +247,9 @@
 }
 
 .link-inline-modal.is-open {
-  display: block;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
 }
 
 .link-inline-overlay {
@@ -260,7 +262,8 @@
   position: relative;
   z-index: 1;
   width: min(420px, 94vw);
-  margin: 14vh auto 0;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
   border: 1px solid var(--hvy-border-input);
   border-radius: 10px;
   background: var(--hvy-surface);

@@ -610,7 +610,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
     return `
-      <div class="editor-block-passive" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
+      <div class="editor-block-passive hvy-link-observer-surface" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>

@@ -452,6 +452,75 @@ hvy_version: 0.1
   expect(result.previewLabel).toBe('Ready');
 });
 
+test('embedded edit modes asynchronously rewrite rendered links', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div><div id="aiMount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = (label: string, href: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ ${label} document with [${label} Link](${href}).
+`;
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    const aiRoot = document.querySelector<HTMLElement>('#aiMount');
+    if (!editorRoot || !aiRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const encoder = new TextEncoder();
+    mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(source('Editor', 'https://editor.example/report')), '.hvy'),
+      mode: 'editor',
+      async linkObserver(link) {
+        await Promise.resolve();
+        return {
+          href: `/editor-safe?url=${encodeURIComponent(link.href)}`,
+          title: `editor:${link.text.trim()}`,
+          attributes: { 'data-edit-link-reviewed': 'editor' },
+        };
+      },
+    });
+    mountHvy({
+      root: aiRoot,
+      document: deserializeDocumentBytes(encoder.encode(source('AI', 'https://ai.example/report')), '.hvy'),
+      mode: 'ai',
+      async linkObserver(link) {
+        await Promise.resolve();
+        return {
+          href: `/ai-safe?url=${encodeURIComponent(link.href)}`,
+          title: `ai:${link.text.trim()}`,
+          attributes: { 'data-edit-link-reviewed': 'ai' },
+        };
+      },
+    });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const editorLink = editorRoot.querySelector<HTMLAnchorElement>('#editorTree .editor-block-passive a');
+    const aiLink = aiRoot.querySelector<HTMLAnchorElement>('#aiReaderDocument a');
+    return {
+      editorHref: editorLink?.getAttribute('href') ?? '',
+      editorTitle: editorLink?.getAttribute('title') ?? '',
+      editorReviewed: editorLink?.getAttribute('data-edit-link-reviewed') ?? '',
+      aiHref: aiLink?.getAttribute('href') ?? '',
+      aiTitle: aiLink?.getAttribute('title') ?? '',
+      aiReviewed: aiLink?.getAttribute('data-edit-link-reviewed') ?? '',
+    };
+  });
+
+  expect(result.editorHref).toBe('/editor-safe?url=https%3A%2F%2Feditor.example%2Freport');
+  expect(result.editorTitle).toBe('editor:Editor Link');
+  expect(result.editorReviewed).toBe('editor');
+  expect(result.aiHref).toBe('/ai-safe?url=https%3A%2F%2Fai.example%2Freport');
+  expect(result.aiTitle).toBe('ai:AI Link');
+  expect(result.aiReviewed).toBe('ai');
+});
+
 test('embedded runtime keeps HVY modal panels above host modal overlays', async ({ page }) => {
   await page.goto('/');
 

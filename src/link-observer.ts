@@ -23,12 +23,14 @@ export type HvyLinkObserver = (
 ) => HvyLinkObserverResponse | null | undefined | false | Promise<HvyLinkObserverResponse | null | undefined | false>;
 
 const LINK_OBSERVED_ATTR = 'data-hvy-link-observed';
+const LINK_SURFACE_SELECTOR = '.hvy-reader-surface, .hvy-link-observer-surface';
 
 export function observeRenderedLinks(root: ParentNode, observer: HvyLinkObserver | null | undefined): void {
   if (!observer) {
     return;
   }
-  const anchors = [...root.querySelectorAll<HTMLAnchorElement>(`.hvy-reader-surface a[href]:not([${LINK_OBSERVED_ATTR}])`)];
+  const anchors = [...root.querySelectorAll<HTMLAnchorElement>(`:is(${LINK_SURFACE_SELECTOR}) a[href]:not([${LINK_OBSERVED_ATTR}])`)]
+    .filter((anchor) => !anchor.closest('[contenteditable="true"]'));
   anchors.forEach((anchor) => {
     anchor.setAttribute(LINK_OBSERVED_ATTR, 'pending');
     void applyLinkObserver(anchor, observer);
@@ -36,7 +38,7 @@ export function observeRenderedLinks(root: ParentNode, observer: HvyLinkObserver
 }
 
 export function resetObservedLinks(root: ParentNode): void {
-  root.querySelectorAll<HTMLAnchorElement>(`.hvy-reader-surface a[${LINK_OBSERVED_ATTR}]`).forEach((anchor) => {
+  root.querySelectorAll<HTMLAnchorElement>(`:is(${LINK_SURFACE_SELECTOR}) a[${LINK_OBSERVED_ATTR}]`).forEach((anchor) => {
     anchor.removeAttribute(LINK_OBSERVED_ATTR);
   });
 }

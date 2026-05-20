@@ -43,6 +43,38 @@ test('chat panel stays compact in phone viewer preview', async ({ page }) => {
   ).toBeLessThanOrEqual(72);
 });
 
+test('search launcher aligns with chat launcher in phone viewer preview', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 620 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+
+  const pane = page.locator('.full-pane');
+  const searchLauncher = page.getByRole('button', { name: 'Open search' });
+  const chatLauncher = page.getByRole('button', { name: 'Open chat' });
+  const expectedResult = await Promise.all([
+    pane.boundingBox(),
+    searchLauncher.boundingBox(),
+    chatLauncher.boundingBox(),
+  ]);
+  const [paneBox, searchBox, chatBox] = expectedResult;
+  expect(paneBox).not.toBeNull();
+  expect(searchBox).not.toBeNull();
+  expect(chatBox).not.toBeNull();
+  const searchRight = searchBox!.x + searchBox!.width;
+  const searchBottom = searchBox!.y + searchBox!.height;
+  const chatBottom = chatBox!.y + chatBox!.height;
+  const paneRight = paneBox!.x + paneBox!.width;
+  const paneBottom = paneBox!.y + paneBox!.height;
+
+  expect(Math.round(searchBottom)).toBe(Math.round(chatBottom));
+  expect(Math.round(chatBox!.x - searchRight)).toBeGreaterThanOrEqual(6);
+  expect(Math.round(chatBox!.x - searchRight)).toBeLessThanOrEqual(12);
+  expect(searchRight).toBeLessThanOrEqual(paneRight);
+  expect(searchBottom).toBeLessThanOrEqual(paneBottom);
+});
+
 test('chat stays scrolled to latest across full rerenders', async ({ page }) => {
   let responseIndex = 0;
   await page.setViewportSize({ width: 900, height: 640 });

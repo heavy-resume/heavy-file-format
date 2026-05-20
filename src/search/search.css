@@ -717,3 +717,45 @@
     gap: 0.4rem;
   }
 }
+
+.pane.hvy-preview-frame-phone .search-launcher {
+  right: 4.7rem;
+  bottom: 1rem;
+}
+
+.pane.hvy-preview-frame-phone .search-collapsed-bar {
+  grid-template-columns: 1fr;
+  border-radius: 18px;
+  padding: 0.45rem;
+}
+
+.pane.hvy-preview-frame-phone .search-nav-buttons {
+  justify-content: center;
+}
+
+.pane.hvy-preview-frame-phone .search-result-title,
+.pane.hvy-preview-frame-phone .search-result-context {
+  white-space: normal;
+}
+
+.pane.hvy-preview-frame-phone .search-palette {
+  width: min(46rem, calc(100% - 1rem));
+  padding: 0.65rem;
+}
+
+.pane.hvy-preview-frame-phone .search-close-button {
+  top: 0.65rem;
+  right: 0.65rem;
+}
+
+.pane.hvy-preview-frame-phone .search-category-toggle,
+.pane.hvy-preview-frame-phone .search-switch,
+.pane.hvy-preview-frame-phone .search-filter-mode {
+  min-height: 1.95rem;
+  padding: 0.32rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.pane.hvy-preview-frame-phone .search-tabbar {
+  gap: 0.4rem;
+}

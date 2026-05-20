@@ -91,7 +91,7 @@
 .component-list-view-picker select:focus-visible,
 .component-list-group-picker select:focus-visible {
   border-color: var(--hvy-border-alt);
-  background: var(--hvy-xref-card-hover-bg);
+  background: var(--hvy-surface-alt);
   color: var(--hvy-text);
 }
 

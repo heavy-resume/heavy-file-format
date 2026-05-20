@@ -57,6 +57,49 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('.editor-sidebar-panel')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
+test('native dropdown options use themed colors on UFO palette controls', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('hvy-palette-override-v1', 'ufo');
+  });
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+
+  await page.locator('.reader-xref-card').first().click();
+  const xrefTargetPicker = page.locator('.xref-target-picker select').first();
+  await expect(xrefTargetPicker).toBeVisible();
+
+  const expectedResult = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('#app')!;
+    const xrefOption = document.querySelector<HTMLOptionElement>('.xref-target-picker select option')!;
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = getComputedStyle(root).getPropertyValue('--hvy-surface');
+    probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-text');
+    root.append(probe);
+    const result = {
+      optionBackground: getComputedStyle(xrefOption).backgroundColor,
+      optionColor: getComputedStyle(xrefOption).color,
+      expectedBackground: getComputedStyle(probe).backgroundColor,
+      expectedColor: getComputedStyle(probe).color,
+    };
+    probe.remove();
+    return result;
+  });
+
+  expect(expectedResult.optionBackground).toBe(expectedResult.expectedBackground);
+  expect(expectedResult.optionColor).toBe(expectedResult.expectedColor);
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  const groupOptionColors = await page.evaluate(() => {
+    const groupOption = document.querySelector<HTMLOptionElement>('.component-list-group-picker select option')!;
+    return {
+      optionBackground: getComputedStyle(groupOption).backgroundColor,
+      optionColor: getComputedStyle(groupOption).color,
+    };
+  });
+  expect(groupOptionColors.optionBackground).toBe(expectedResult.expectedBackground);
+  expect(groupOptionColors.optionColor).toBe(expectedResult.expectedColor);
+});
+
 test('reference app can load the import HVY reference document', async ({ page }) => {
   await page.goto('/');
 

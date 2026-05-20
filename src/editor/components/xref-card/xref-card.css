@@ -71,6 +71,7 @@
   border: 1px solid var(--hvy-border-input);
   border-radius: 6px;
   background: var(--hvy-surface);
+  color: var(--hvy-text);
   padding: 0.34rem 0.45rem;
 }
 

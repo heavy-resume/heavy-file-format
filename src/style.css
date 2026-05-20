@@ -50,6 +50,16 @@ body {
   color: var(--hvy-button-text);
 }
 
+.hvy-embed-layout :where(select option) {
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+}
+
+.hvy-embed-layout :where(select option:checked) {
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-alt);
+}
+
 .hvy-embed-layout :where(input:disabled),
 .hvy-embed-layout :where(select:disabled),
 .hvy-embed-layout :where(textarea:disabled) {

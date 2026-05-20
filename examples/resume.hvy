@@ -2388,7 +2388,7 @@ component_defs:
           cards.set("tags", GENERATED_TAG)
           cards.set("css", "margin: 0;")
           cards.set("componentListComponent", card_component)
-          cards.set("componentListItemLabel", "reciprocal reference")
+          cards.set("componentListItemLabel", "reference")
           for source in sources:
               card = cards.append_child(card_component, None, "", "component-list")
               card.set("tags", GENERATED_TAG)

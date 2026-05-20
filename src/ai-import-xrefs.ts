@@ -1,7 +1,8 @@
-import { requestProxyCompletion, type HostChatClient } from './chat/chat';
+import { requestProxyCompletion, type HostChatClient, type ProxyCompletionParams } from './chat/chat';
 import { createEmptyBlock } from './document-factory';
 import { throwIfAborted } from './ai-document-loop-state';
 import type { ChatSettings, VisualDocument } from './types';
+import type { HvyImportTraceRecorder } from './ai-document-import';
 import {
   buildImportXrefBatches,
   type ImportXrefBatch,
@@ -47,6 +48,7 @@ export async function runImportXrefPass(
   options: ImportXrefPassOptions,
   llm: ImportXrefLlmOptions,
   beforeLlmCall: ImportXrefBeforeLlmCall,
+  traceRecorder: HvyImportTraceRecorder | undefined,
   sectionKeys: string[],
   createdTargets: ImportXrefCreatedTarget[]
 ): Promise<number> {
@@ -54,7 +56,7 @@ export async function runImportXrefPass(
   let applied = 0;
   for (const [index, batch] of batches.entries()) {
     throwIfAborted(options.signal);
-    const response = await requestProxyCompletion({
+    const request: ProxyCompletionParams = {
       settings: llm.stages?.xrefs ?? llm.settings,
       client: llm.client,
       messages: [
@@ -69,13 +71,15 @@ export async function runImportXrefPass(
       systemInstructions: [
         'You are performing the final HVY import xref pass.',
         'Return only the requested JSON object.',
-        'Do not use tools. Do not mutate anything directly.',
       ].join('\n'),
       mode: 'document-edit',
       debugLabel: `ai-import-xrefs:${index + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
-    });
+    };
+    const response = traceRecorder
+      ? await traceRecorder.recordCompletion('xrefs', 'thinking', request)
+      : await requestProxyCompletion(request);
     throwIfAborted(options.signal);
     applied += applyImportXrefResponse(document, batch, response);
   }

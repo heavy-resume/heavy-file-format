@@ -54,11 +54,51 @@ export interface HvyImportLlmStepEvent {
   phase: HvyLlmCallPhase;
 }
 
+export interface HvyImportTraceRequest {
+  settings: ChatSettings;
+  messages: ChatMessage[];
+  context: string;
+  responseInstructions: string;
+  systemInstructions?: string;
+  mode: ProxyCompletionParams['mode'];
+}
+
+export interface HvyImportTraceResponse {
+  output: string;
+}
+
+export interface HvyImportTraceCall {
+  callIndex: number;
+  stage: HvyImportLlmStage;
+  debugLabel: string;
+  phase: HvyLlmCallPhase;
+  request: HvyImportTraceRequest;
+  response?: HvyImportTraceResponse;
+  error?: string;
+}
+
+export interface HvyImportTraceRun {
+  calls: HvyImportTraceCall[];
+}
+
+export interface HvyImportTraceEvent {
+  type: 'call-start' | 'call-complete' | 'call-error';
+  run: HvyImportTraceRun;
+  call: HvyImportTraceCall;
+}
+
+export interface HvyImportTraceRecorder {
+  run: HvyImportTraceRun;
+  recordCompletion(stage: HvyImportLlmStage, phase: HvyLlmCallPhase, params: ProxyCompletionParams): Promise<string>;
+}
+
 export interface BuildImportPlanOptions {
   sourceName: string;
   sourceText: string;
   instructions?: string;
   llm?: HvyImportLlmOptions;
+  trace?: boolean;
+  onTraceEvent?: (event: HvyImportTraceEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
@@ -68,6 +108,7 @@ export interface BuildImportPlanResult {
   status: 'ready' | 'aborted' | 'error';
   steps?: ImportPlanStep[];
   message?: string;
+  trace?: HvyImportTraceRun;
 }
 
 export type ImportPlanTargetKind = 'body' | 'definition' | 'blank';
@@ -210,6 +251,8 @@ export interface ImportFromTextOptions {
   instructions?: string;
   steps: ImportPlanStepInput[];
   llm?: HvyImportLlmOptions;
+  trace?: boolean;
+  onTraceEvent?: (event: HvyImportTraceEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
@@ -218,12 +261,14 @@ export interface ImportFromTextOptions {
 export interface ImportFromTextResult {
   status: 'complete' | 'aborted' | 'error';
   message?: string;
+  trace?: HvyImportTraceRun;
 }
 
 export async function buildImportPlanForDocument(
   document: VisualDocument,
   options: BuildImportPlanOptions
 ): Promise<BuildImportPlanResult> {
+  const traceRecorder = createImportTraceRecorder(options);
   options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${options.sourceName}.` });
   try {
     const preplanSteps = buildImportPlanStepsFromPreplan(document);
@@ -232,18 +277,18 @@ export async function buildImportPlanForDocument(
       throwIfAborted(options.signal);
       const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
       options.onProgress?.({ phase: 'thinking', message: 'Extracting preplanned section information.' });
-      const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall);
+      const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall, traceRecorder);
       if (extractedSteps.length === 0) {
-        return { status: 'error', message: 'The import preplan did not return usable source-backed sections.' };
+        return withImportTrace({ status: 'error', message: 'The import preplan did not return usable source-backed sections.' }, options, traceRecorder);
       }
       options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
-      return { status: 'ready', steps: extractedSteps };
+      return withImportTrace({ status: 'ready', steps: extractedSteps }, options, traceRecorder);
     }
     const llm = requireImportLlm(options.llm);
     throwIfAborted(options.signal);
     options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
-    const response = await requestProxyCompletion({
+    const response = await requestTracedImportCompletion(traceRecorder, 'sectionPlanner', 'thinking', {
       settings: getImportStageSettings(llm, 'sectionPlanner'),
       client: llm.client,
       messages: [
@@ -264,20 +309,20 @@ export async function buildImportPlanForDocument(
     throwIfAborted(options.signal);
     const steps = parseImportPlanSteps(response, document);
     if (steps.length === 0) {
-      return { status: 'error', message: 'The import planner did not return a usable plan.' };
+      return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
-    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, options.signal);
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, options.signal, traceRecorder);
     if (dedupedSteps.length === 0) {
-      return { status: 'error', message: 'The import planner did not return a usable plan after deduping.' };
+      return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan after deduping.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
-    return { status: 'ready', steps: dedupedSteps };
+    return withImportTrace({ status: 'ready', steps: dedupedSteps }, options, traceRecorder);
   } catch (error) {
     if (isAbortError(error)) {
-      return { status: 'aborted', message: 'Import planning was aborted.' };
+      return withImportTrace({ status: 'aborted', message: 'Import planning was aborted.' }, options, traceRecorder);
     }
-    return { status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' };
+    return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' }, options, traceRecorder);
   }
 }
 
@@ -292,9 +337,10 @@ export async function importTextIntoDocument(
     onImportFinalized?: (result: string) => Promise<void> | void;
   }
 ): Promise<ImportFromTextResult> {
+  const traceRecorder = createImportTraceRecorder(options);
   const steps = normalizeImportPlanSteps(options.steps, document);
   if (steps.length === 0) {
-    return { status: 'error', message: 'Import requires at least one approved plan step.' };
+    return withImportTrace({ status: 'error', message: 'Import requires at least one approved plan step.' }, options, traceRecorder);
   }
   options.onProgress?.({ phase: 'starting', message: `Importing ${options.sourceName}.` });
   try {
@@ -307,7 +353,7 @@ export async function importTextIntoDocument(
     const executableSteps = steps;
     if (executableSteps.length === 0) {
       options.onProgress?.({ phase: 'complete', message: 'Imported 0 sections.' });
-      return { status: 'complete', message: 'Imported 0 sections.' };
+      return withImportTrace({ status: 'complete', message: 'Imported 0 sections.' }, options, traceRecorder);
     }
     const created: string[] = [];
     const appliedSections: AppliedImportSectionResult[] = [];
@@ -317,7 +363,7 @@ export async function importTextIntoDocument(
       if (step.importMode === 'template') {
         const templateStructure = resolveImportTemplateStructureForStep(document, step);
         if (!templateStructure) {
-          return { status: 'error', message: `Import section ${index + 1} does not have a usable template structure.` };
+          return withImportTrace({ status: 'error', message: `Import section ${index + 1} does not have a usable template structure.` }, options, traceRecorder);
         }
         options.onProgress?.({ phase: 'thinking', message: `Filling template section ${index + 1} of ${steps.length}.` });
         const valuesMessages: ChatMessage[] = [
@@ -342,7 +388,7 @@ export async function importTextIntoDocument(
           beforeRequest: beforeLlmCall?.('thinking'),
           signal: options.signal,
         };
-        let valuesResponse = await requestProxyCompletion(valuesRequest);
+        let valuesResponse = await requestTracedImportCompletion(traceRecorder, 'templateSectionWriter', 'thinking', valuesRequest);
         throwIfAborted(options.signal);
         let values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
         if (values.ok === false) {
@@ -350,7 +396,7 @@ export async function importTextIntoDocument(
             phase: 'thinking',
             message: `Template values for section ${index + 1} were invalid; retrying with the expected schema.`,
           });
-          valuesResponse = await requestProxyCompletion({
+          valuesResponse = await requestTracedImportCompletion(traceRecorder, 'templateSectionWriter', 'thinking', {
             ...valuesRequest,
             messages: [
               ...valuesRequest.messages,
@@ -374,7 +420,7 @@ export async function importTextIntoDocument(
           throwIfAborted(options.signal);
           values = parseImportTemplateValuesResponse(valuesResponse, templateStructure);
           if (values.ok === false) {
-            return { status: 'error', message: `Import section ${index + 1} returned invalid template values. ${values.message}` };
+            return withImportTrace({ status: 'error', message: `Import section ${index + 1} returned invalid template values. ${values.message}` }, options, traceRecorder);
           }
         }
         options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
@@ -387,7 +433,7 @@ export async function importTextIntoDocument(
       const information = step.extractedInformation;
       if (!information) {
         options.onProgress?.({ phase: 'thinking', message: `Extracting section data ${index + 1} of ${executableSteps.length}.` });
-        const informationResponse = await requestProxyCompletion({
+        const informationResponse = await requestTracedImportCompletion(traceRecorder, 'sectionDataCollection', 'thinking', {
           settings: getImportStageSettings(llm, 'sectionDataCollection'),
           client: llm.client,
           messages: [
@@ -411,7 +457,7 @@ export async function importTextIntoDocument(
         throwIfAborted(options.signal);
         step.extractedInformation = parseImportSectionInformationResponse(informationResponse) ?? undefined;
         if (!step.extractedInformation) {
-          return { status: 'error', message: `Import section ${index + 1} did not return usable section information.` };
+          return withImportTrace({ status: 'error', message: `Import section ${index + 1} did not return usable section information.` }, options, traceRecorder);
         }
       }
       options.onProgress?.({ phase: 'thinking', message: `Generating HVY section ${index + 1} of ${executableSteps.length}.` });
@@ -436,7 +482,7 @@ export async function importTextIntoDocument(
         beforeRequest: beforeLlmCall?.('thinking'),
         signal: options.signal,
       };
-      let hvyResponse = await requestProxyCompletion(hvyRequest);
+      let hvyResponse = await requestTracedImportCompletion(traceRecorder, 'rawSectionWriter', 'thinking', hvyRequest);
       throwIfAborted(options.signal);
       let generated = parseAndValidateImportGeneratedSectionResponse(hvyResponse, document.meta, application);
       if (generated.ok === false) {
@@ -444,7 +490,7 @@ export async function importTextIntoDocument(
           phase: 'thinking',
           message: `Generated HVY for section ${index + 1} was invalid; retrying with the validation error.`,
         });
-        hvyResponse = await requestProxyCompletion({
+        hvyResponse = await requestTracedImportCompletion(traceRecorder, 'rawSectionWriter', 'thinking', {
           ...hvyRequest,
           messages: [
             ...hvyRequest.messages,
@@ -469,7 +515,7 @@ export async function importTextIntoDocument(
         throwIfAborted(options.signal);
         generated = parseAndValidateImportGeneratedSectionResponse(hvyResponse, document.meta, application);
         if (generated.ok === false) {
-          return { status: 'error', message: `Import section ${index + 1} returned invalid HVY. ${generated.message}` };
+          return withImportTrace({ status: 'error', message: `Import section ${index + 1} returned invalid HVY. ${generated.message}` }, options, traceRecorder);
         }
       }
       options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
@@ -483,12 +529,12 @@ export async function importTextIntoDocument(
     const fillInTargets = collectImportFillInTargets(document, importedSectionKeys);
     if (fillInTargets.length > 0) {
       options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
-      await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets, fillInTargets);
+      await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets, fillInTargets);
       await options.onImportFillInsApplied?.('Filled remaining placeholders in imported sections.');
     }
     createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
     options.onProgress?.({ phase: 'thinking', message: 'Filling imported xref lists.' });
-    const xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, importedSectionKeys, createdTargets);
+    const xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets);
     if (xrefsApplied > 0) {
       await options.onImportXrefsApplied?.(`Filled ${xrefsApplied} imported xref list${xrefsApplied === 1 ? '' : 's'}.`);
     }
@@ -499,12 +545,12 @@ export async function importTextIntoDocument(
       await options.onImportFinalized?.(message);
     }
     options.onProgress?.({ phase: 'complete', message });
-    return { status: 'complete', message };
+    return withImportTrace({ status: 'complete', message }, options, traceRecorder);
   } catch (error) {
     if (isAbortError(error)) {
-      return { status: 'aborted', message: 'Import was aborted.' };
+      return withImportTrace({ status: 'aborted', message: 'Import was aborted.' }, options, traceRecorder);
     }
-    return { status: 'error', message: error instanceof Error ? error.message : 'Import failed.' };
+    return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import failed.' }, options, traceRecorder);
   }
 }
 
@@ -648,13 +694,14 @@ async function dedupeImportPlanStepsWithModel(
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  traceRecorder?: HvyImportTraceRecorder
 ): Promise<ImportPlanStep[]> {
   if (steps.length <= 1) {
     return steps;
   }
   const candidates = buildImportSectionDedupeCandidates(steps);
-  const response = await requestProxyCompletion({
+  const response = await requestTracedImportCompletion(traceRecorder, 'dedupe', 'thinking', {
     settings: getImportStageSettings(llm, 'dedupe'),
     client: llm.client,
     messages: [
@@ -832,13 +879,14 @@ async function preparePreplannedImportSteps(
   options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal'>,
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
-  beforeLlmCall: ReturnType<typeof createImportLlmStepper>
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  traceRecorder?: HvyImportTraceRecorder
 ): Promise<ImportPlanStep[]> {
   const extracted: ImportPlanStep[] = [];
   const groups = groupImportPreplanSteps(steps);
   for (const [groupIndex, groupSteps] of groups.entries()) {
     options.onProgress?.({ phase: 'thinking', message: `Extracting import group ${groupIndex + 1} of ${groups.length}.` });
-    const response = await requestProxyCompletion({
+    const response = await requestTracedImportCompletion(traceRecorder, 'preplannedSectionPlanner', 'thinking', {
       settings: getImportStageSettings(llm, 'preplannedSectionPlanner'),
       client: llm.client,
       messages: [
@@ -875,7 +923,7 @@ async function preparePreplannedImportSteps(
     }
   }
   options.onProgress?.({ phase: 'thinking', message: 'Checking for missing import sections.' });
-  const missingResponse = await requestProxyCompletion({
+  const missingResponse = await requestTracedImportCompletion(traceRecorder, 'additionalSections', 'thinking', {
     settings: getImportStageSettings(llm, 'additionalSections'),
     client: llm.client,
     messages: [
@@ -902,7 +950,7 @@ async function preparePreplannedImportSteps(
   if (candidates.length <= 1) {
     return candidates;
   }
-  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, options.signal);
+  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, options.signal, traceRecorder);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -3007,6 +3055,7 @@ async function fillImportedSectionPlaceholders(
   options: ImportFromTextOptions,
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  traceRecorder: HvyImportTraceRecorder | undefined,
   sectionKeys: string[],
   createdTargets: CreatedImportXrefTarget[],
   fillInTargets: ImportFillInTarget[]
@@ -3023,7 +3072,7 @@ async function fillImportedSectionPlaceholders(
   for (const [index, section] of sections.entries()) {
     const targets = targetsBySection.get(section.key) ?? [];
     throwIfAborted(options.signal);
-    const response = await requestProxyCompletion({
+    const response = await requestTracedImportCompletion(traceRecorder, 'fillIns', 'thinking', {
       settings: getImportStageSettings(llm, 'fillIns'),
       client: llm.client,
       messages: [
@@ -3544,6 +3593,100 @@ function requireImportLlm(llm: HvyImportLlmOptions | undefined): HvyImportLlmOpt
 
 function getImportStageSettings(llm: HvyImportLlmOptions, stage: HvyImportLlmStage): ChatSettings {
   return llm.stages?.[stage] ?? llm.settings;
+}
+
+function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace' | 'onTraceEvent'>): HvyImportTraceRecorder | undefined {
+  if (!options.trace && !options.onTraceEvent) {
+    return undefined;
+  }
+  const run: HvyImportTraceRun = { calls: [] };
+  const emit = (type: HvyImportTraceEvent['type'], call: HvyImportTraceCall): void => {
+    options.onTraceEvent?.({
+      type,
+      run: { calls: run.calls.map(copyImportTraceCall) },
+      call: copyImportTraceCall(call),
+    });
+  };
+  return {
+    run,
+    async recordCompletion(stage, phase, params) {
+      const call: HvyImportTraceCall = {
+        callIndex: run.calls.length + 1,
+        stage,
+        debugLabel: params.debugLabel?.trim() || 'chat',
+        phase,
+        request: copyImportTraceRequest(params),
+      };
+      run.calls.push(call);
+      emit('call-start', call);
+      try {
+        const output = await requestProxyCompletion(params);
+        call.response = { output };
+        emit('call-complete', call);
+        return output;
+      } catch (error) {
+        call.error = error instanceof Error ? error.message : String(error);
+        emit('call-error', call);
+        throw error;
+      }
+    },
+  };
+}
+
+function withImportTrace<Result extends BuildImportPlanResult | ImportFromTextResult>(
+  result: Result,
+  options: Pick<BuildImportPlanOptions, 'trace'>,
+  traceRecorder: HvyImportTraceRecorder | undefined
+): Result {
+  if (!options.trace || !traceRecorder) {
+    return result;
+  }
+  return {
+    ...result,
+    trace: traceRecorder.run,
+  };
+}
+
+async function requestTracedImportCompletion(
+  traceRecorder: HvyImportTraceRecorder | undefined,
+  stage: HvyImportLlmStage,
+  phase: HvyLlmCallPhase,
+  params: ProxyCompletionParams
+): Promise<string> {
+  if (!traceRecorder) {
+    return requestProxyCompletion(params);
+  }
+  return traceRecorder.recordCompletion(stage, phase, params);
+}
+
+function copyImportTraceRequest(params: ProxyCompletionParams): HvyImportTraceRequest {
+  return {
+    settings: { ...params.settings },
+    messages: params.messages.map((message) => ({ ...message })),
+    context: params.context,
+    responseInstructions: params.responseInstructions,
+    ...(params.systemInstructions !== undefined ? { systemInstructions: params.systemInstructions } : {}),
+    mode: params.mode,
+  };
+}
+
+function copyImportTraceCall(call: HvyImportTraceCall): HvyImportTraceCall {
+  return {
+    callIndex: call.callIndex,
+    stage: call.stage,
+    debugLabel: call.debugLabel,
+    phase: call.phase,
+    request: {
+      settings: { ...call.request.settings },
+      messages: call.request.messages.map((message) => ({ ...message })),
+      context: call.request.context,
+      responseInstructions: call.request.responseInstructions,
+      ...(call.request.systemInstructions !== undefined ? { systemInstructions: call.request.systemInstructions } : {}),
+      mode: call.request.mode,
+    },
+    ...(call.response ? { response: { ...call.response } } : {}),
+    ...(call.error !== undefined ? { error: call.error } : {}),
+  };
 }
 
 function createImportLlmStepper(

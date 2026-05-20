@@ -447,6 +447,59 @@ section_defs:
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
 });
 
+test('buildImportPlanForDocument returns exact import trace calls when requested', async () => {
+  requestProxyCompletionMock.mockImplementationOnce(async (request: { beforeRequest?: (debugLabel: string) => Promise<void> | void; debugLabel: string }) => {
+    await request.beforeRequest?.(request.debugLabel);
+    return '{"steps":[{"section":"Summary","sectionId":"summary"}]}';
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const beforeLlmCall = vi.fn();
+  const onTraceEvent = vi.fn();
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    llm: { settings },
+    trace: true,
+    onTraceEvent,
+    beforeLlmCall,
+  });
+
+  expect(result.status).toBe('ready');
+  expect(beforeLlmCall).toHaveBeenCalledTimes(1);
+  expect(beforeLlmCall).toHaveBeenNthCalledWith(1, {
+    callIndex: 1,
+    debugLabel: 'ai-import-plan',
+    phase: 'thinking',
+  });
+  expect(result.trace?.calls).toHaveLength(1);
+  expect(result.trace?.calls[0]).toMatchObject({
+    callIndex: 1,
+    stage: 'sectionPlanner',
+    debugLabel: 'ai-import-plan',
+    phase: 'thinking',
+    response: { output: '{"steps":[{"section":"Summary","sectionId":"summary"}]}' },
+  });
+  expect(result.trace?.calls[0]?.request).toEqual({
+    settings,
+    messages: requestProxyCompletionMock.mock.calls[0]?.[0]?.messages,
+    context: requestProxyCompletionMock.mock.calls[0]?.[0]?.context,
+    responseInstructions: requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions,
+    systemInstructions: requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions,
+    mode: 'document-edit',
+  });
+  expect(onTraceEvent.mock.calls.map((call) => call[0].type)).toEqual(['call-start', 'call-complete']);
+  expect(onTraceEvent.mock.calls[0]?.[0]?.call.response).toBeUndefined();
+  expect(onTraceEvent.mock.calls[1]?.[0]?.call.response?.output).toBe('{"steps":[{"section":"Summary","sectionId":"summary"}]}');
+});
+
 test('buildImportPlanForDocument rejects conditional plan steps', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"steps":["Create any additional Blip Section entries only if a source-backed extra section is needed; otherwise leave the template scaffold unmodified"]}'
@@ -1199,6 +1252,7 @@ text_line_styles:
   });
 
   expect(result.status).toBe('complete');
+  expect(result.trace).toBeUndefined();
   expect(serializeDocument(document)).toContain('"id":"imported-summary"');
   expect(serializeDocument(document)).toContain('Imported summary');
   expect(serializeDocument(document)).not.toContain('Existing content');
@@ -1293,6 +1347,7 @@ hvy_version: 0.1
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: { complete: vi.fn() },
     },
+    trace: true,
     onSectionApplied() {
       snapshots.push(serializeDocument(document));
     },
@@ -1304,6 +1359,32 @@ hvy_version: 0.1
     'ai-import-section-hvy:1',
     'ai-import-section-hvy:1:repair',
   ]);
+  expect(result.trace?.calls.map((call) => ({
+    callIndex: call.callIndex,
+    stage: call.stage,
+    debugLabel: call.debugLabel,
+    output: call.response?.output,
+  }))).toEqual([
+    {
+      callIndex: 1,
+      stage: 'sectionDataCollection',
+      debugLabel: 'ai-import-section-data:1',
+      output: '{"information":"Imported summary"}',
+    },
+    {
+      callIndex: 2,
+      stage: 'rawSectionWriter',
+      debugLabel: 'ai-import-section-hvy:1',
+      output: '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"css\\":\\"margin-top\\":0;\\"}-->\\n  Imported summary"}',
+    },
+    {
+      callIndex: 3,
+      stage: 'rawSectionWriter',
+      debugLabel: 'ai-import-section-hvy:1:repair',
+      output: '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"css\\":\\"margin-top: 0;\\"}-->\\n  Imported summary"}',
+    },
+  ]);
+  expect(result.trace?.calls[2]?.request.messages.at(-1)?.content).toContain('The previous response was invalid.');
   const repairMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
   expect(repairMessages).toContain('The previous response was invalid.');
   expect(repairMessages).toContain('Generated HVY section is invalid.');
@@ -1312,6 +1393,39 @@ hvy_version: 0.1
   expect(snapshots[0]).toContain('"css":"margin-top: 0;"');
   expect(snapshots[0]).toContain('Imported summary');
   expect(snapshots[0]).not.toContain('Existing content');
+});
+
+test('importTextIntoDocument records traced request errors without changing the result shape', async () => {
+  requestProxyCompletionMock.mockRejectedValueOnce(new Error('provider unavailable'));
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    trace: true,
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toBe('provider unavailable');
+  expect(result.trace?.calls).toHaveLength(1);
+  expect(result.trace?.calls[0]).toMatchObject({
+    callIndex: 1,
+    stage: 'sectionDataCollection',
+    debugLabel: 'ai-import-section-data:1',
+    error: 'provider unavailable',
+  });
+  expect(result.trace?.calls[0]?.response).toBeUndefined();
 });
 
 test('importTextIntoDocument repairs raw HVY that adds components to locked sections', async () => {
@@ -1738,6 +1852,7 @@ component_defs:
       settings: { provider: 'openai', model: 'gpt-5-mini' },
       client: { complete: vi.fn() },
     },
+    trace: true,
     onImportXrefsApplied(resultMessage) {
       finalStepCallbacks.push(resultMessage);
     },
@@ -1757,6 +1872,12 @@ component_defs:
     'ai-import-section-data:2',
     'ai-import-section-hvy:2',
     'ai-import-xrefs:1',
+  ]);
+  expect(result.trace?.calls.map((call) => [call.stage, call.debugLabel])).toEqual([
+    ['templateSectionWriter', 'ai-import-template-values:1'],
+    ['sectionDataCollection', 'ai-import-section-data:2'],
+    ['rawSectionWriter', 'ai-import-section-hvy:2'],
+    ['xrefs', 'ai-import-xrefs:1'],
   ]);
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.context).toContain('=== BEGIN CREATED IMPORT TARGETS ===');
   expect(requestProxyCompletionMock.mock.calls[3]?.[0]?.context).toContain('- widget: Widget [expandable]');

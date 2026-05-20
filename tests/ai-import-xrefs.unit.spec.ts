@@ -129,6 +129,7 @@ Summary
       client: { complete: vi.fn() },
     },
     undefined,
+    undefined,
     [document.sections[0]!.key],
     []
   );

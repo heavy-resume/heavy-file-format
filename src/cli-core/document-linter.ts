@@ -22,7 +22,6 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'sidebar_label',
   'reader_max_width',
   'theme',
-  'template',
   'component_defs',
   'section_defs',
   'component_defaults',

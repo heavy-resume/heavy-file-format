@@ -3,7 +3,7 @@ import { detectExtension } from './utils';
 import type { RawEditorDiagnostic } from './types';
 
 export function getRawEditorDiagnostics(source: string, filename: string): RawEditorDiagnostic[] {
-  const extension = detectExtension(filename, source);
+  const extension = detectExtension(filename);
   const { diagnostics } = deserializeDocumentWithDiagnostics(source, extension);
   return diagnostics.map((diagnostic) => ({
     severity: diagnostic.severity,

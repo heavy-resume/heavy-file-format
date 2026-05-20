@@ -17,7 +17,7 @@ Design goals:
 ## 2. File Types
 
 - `.hvy`: Concrete content document.
-- `.thvy`: Template document. Identical to `.hvy` with `template: true` in front matter.
+- `.thvy`: Template document. Identical to `.hvy` except for extension and media type.
 
 Rule: Any valid `.md` file is valid `.hvy`.
 
@@ -846,7 +846,7 @@ Rules:
 
 ## 6. Template & Schema (`.thvy`)
 
-A `.thvy` file is a `.hvy` file. The only distinction is `template: true` in front matter.
+A `.thvy` file is a `.hvy` file. The distinction is the `.thvy` extension or `text/thvy` media type.
 
 Template sections that contain scaffold content but should not appear in a finished viewer until changed MAY set `hideIfUnmodified: true` in section metadata. Viewer-oriented surfaces hide a flagged section, its descendants, sidebar/navigation entries, search results, and reader-view targets while the flag is present. If a user, agent, or structured authoring tool edits that section, a child section, or any descendant block, the tool SHOULD remove `hideIfUnmodified` from the edited section and any flagged ancestor sections. After the flag is removed and saved, the section renders normally.
 
@@ -856,7 +856,6 @@ This is not an emptiness test. A section can contain headers, placeholder rows, 
 
 Front matter MUST contain:
 - `hvy_version`
-- `template: true`
 
 `schema` is optional. When present, it describes expected placeholder fields.
 
@@ -865,7 +864,6 @@ Minimal example:
 ```yaml
 ---
 hvy_version: 0.1
-template: true
 ---
 ```
 
@@ -874,7 +872,6 @@ With optional schema:
 ```yaml
 ---
 hvy_version: 0.1
-template: true
 schema:
   type: object
   properties:
@@ -1256,7 +1253,7 @@ Normative behavior:
 6. Attach `<!--hvy:doc ...-->`, `<!--hvy:css ...-->`, block component directives such as `<!--hvy:text ...-->`, legacy `<!--hvy:block ...-->`, and `<!--hvy:expandable...-->` directives per placement rules.
 7. Extract CSS fenced blocks (language `css`) and optional preceding `hvy:css` metadata.
 8. Build section tree from directive types (`hvy:` = top-level, `hvy:subsection` = child).
-9. Validate template rules when extension is `.thvy`: require `hvy_version` and `template: true`.
+9. Validate template rules when extension is `.thvy`: require `hvy_version`.
 
 ## 10. Validation
 
@@ -1266,7 +1263,6 @@ Document is valid HVY if:
 - If `hvy:tail` directives are present, they form a consecutive block immediately preceding `--HVY-TAIL--`, and only appear in `.hvy`.
 
 Additional validity for `.thvy`:
-- `template: true` exists in front matter.
 - If `schema` is present, it is valid against the supported subset.
 
 ## 11. Recommended MIME and Media Types

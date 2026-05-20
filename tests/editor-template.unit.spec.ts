@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { defaultBlockSchema } from '../src/document-factory';
-import { hasTemplateFieldBlock, renderTemplateGhosts } from '../src/editor/template';
+import { getTemplateFields, hasTemplateFieldBlock, renderTemplateGhosts } from '../src/editor/template';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
 
 function makeSection(blocks: VisualBlock[], children: VisualSection[] = []): VisualSection {
@@ -25,6 +25,17 @@ function makeSection(blocks: VisualBlock[], children: VisualSection[] = []): Vis
     children,
   };
 }
+
+test('template fields come from schema without document template flag', () => {
+  expect(getTemplateFields({
+    schema: {
+      type: 'object',
+      properties: {
+        expected_result: { type: 'string' },
+      },
+    },
+  })).toEqual(['expected_result']);
+});
 
 test('template field detection treats container titles as existing template content', () => {
   const block: VisualBlock = {

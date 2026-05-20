@@ -29,7 +29,7 @@ export function makeId(prefix: string): string {
   return `${prefix}-${rand}`;
 }
 
-export function detectExtension(filename: string, fallbackContent: string): VisualDocument['extension'] {
+export function detectExtension(filename: string): VisualDocument['extension'] {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.thvy')) {
     return '.thvy';
@@ -42,9 +42,6 @@ export function detectExtension(filename: string, fallbackContent: string): Visu
   }
   if (lower.endsWith('.markdown')) {
     return '.md';
-  }
-  if (/template\s*:\s*true/m.test(fallbackContent)) {
-    return '.thvy';
   }
   return '.hvy';
 }

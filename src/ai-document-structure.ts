@@ -28,7 +28,6 @@ export function summarizeHeaderStructure(document: VisualDocument): HeaderStruct
   lines.push(`hvy_version: ${stringifyHeaderPreview(meta.hvy_version ?? 0.1)}`);
   lines.push(`reader_max_width: ${stringifyHeaderPreview(meta.reader_max_width)}`);
   lines.push(`sidebar_label: ${stringifyHeaderPreview(meta.sidebar_label)}`);
-  lines.push(`template: ${stringifyHeaderPreview(meta.template)}`);
   lines.push(`theme.colors set: ${describeHeaderObjectKeys((meta.theme as JsonObject | undefined)?.colors)}`);
   lines.push(`component_defaults: ${describeHeaderObjectKeys(meta.component_defaults as JsonObject | undefined)}`);
   lines.push(`section_defaults: ${describeHeaderObjectKeys(meta.section_defaults as JsonObject | undefined)}`);

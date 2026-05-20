@@ -47,8 +47,7 @@ function supportsFileSystemAccess(): boolean {
 }
 
 function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selectedExample: typeof state.selectedExample): void {
-  const textForExtension = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
-  const extension = detectExtension(filename, textForExtension);
+  const extension = detectExtension(filename);
   const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw) : raw;
   state.selectedExample = selectedExample;
   state.document = deserializeDocumentBytes(bytes, extension);
@@ -312,8 +311,7 @@ export function bindUi(app: HTMLElement): void {
     }
     currentFileHandle = null;
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const text = new TextDecoder().decode(bytes);
-    const extension = detectExtension(file.name, text);
+    const extension = detectExtension(file.name);
     state.filename = extension === '.md' ? normalizeMarkdownImportFilename(file.name) : file.name;
     state.selectedExample = 'custom';
     state.document = deserializeDocumentBytes(bytes, extension);

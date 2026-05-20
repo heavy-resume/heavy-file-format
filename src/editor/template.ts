@@ -8,9 +8,6 @@ interface TemplateRenderHelpers {
 }
 
 export function getTemplateFields(meta: JsonObject): string[] {
-  if (meta.template !== true) {
-    return [];
-  }
   const schema = meta.schema;
   if (!schema || typeof schema !== 'object') {
     return [];

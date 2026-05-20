@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { undoState, redoState } from '../../history';
+import { recordHistory, undoState, redoState } from '../../history';
 import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
@@ -11,6 +11,7 @@ import { clearActiveEditorBlock, setActiveEditorBlock, setAiEditorHostBlock } fr
 import type { AppActionHandler } from './types';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
+import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySectionsAfterRegularSections } from '../../section-ops';
 
 const undo: AppActionHandler = () => {
   undoState();
@@ -69,6 +70,7 @@ const closeAiEdit: AppActionHandler = () => {
 };
 
 const setEditorMode: AppActionHandler = ({ actionButton }) => {
+  const previousEditorMode = state.editorMode;
   const editorMode = actionButton.dataset.editorMode === 'cli'
     ? 'cli'
     : actionButton.dataset.editorMode === 'raw'
@@ -80,6 +82,9 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
     : 'basic';
   state.editorMode = state.editorMode === 'mobile-adjustment' && editorMode === 'mobile-adjustment' ? 'basic' : editorMode;
   state.showAdvancedEditor = state.editorMode === 'advanced';
+  if (previousEditorMode !== 'advanced' && state.editorMode === 'advanced') {
+    reorderScriptOnlySectionsForAdvancedMode();
+  }
   if (state.editorMode === 'mobile-adjustment') {
     state.componentPlacement = null;
   }
@@ -97,6 +102,14 @@ const setEditorMode: AppActionHandler = ({ actionButton }) => {
     restoreCliViewAfterRender();
   }
 };
+
+function reorderScriptOnlySectionsForAdvancedMode(): void {
+  if (!wouldMoveScriptOnlySectionsAfterRegularSections(state.document.sections, state.document.meta)) {
+    return;
+  }
+  recordHistory();
+  moveScriptOnlySectionsAfterRegularSections(state.document.sections, state.document.meta);
+}
 
 const toggleDocumentMeta: AppActionHandler = () => {
   state.metaPanelOpen = !state.metaPanelOpen;

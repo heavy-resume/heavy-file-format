@@ -16,6 +16,15 @@ async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
   await item.click({ force: true });
 }
 
+async function getTopLevelEditorSectionTitles(page: Page): Promise<string[]> {
+  return page.locator('#editorTree > .hvy-surface > .editor-tree-body > .editor-section-card').evaluateAll((cards) =>
+    cards.map((card) => {
+      const input = card.querySelector<HTMLInputElement>('.section-title-input');
+      return input ? input.value : card.querySelector('.section-title-passive')?.textContent?.trim();
+    })
+  );
+}
+
 function writeFileCommand(path: string, content: string): string {
   return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
@@ -1449,6 +1458,54 @@ hvy_version: 0.1
   await page.locator('[data-action="switch-view"][data-view="editor"]').click();
   await expect(page.getByRole('button', { name: 'Basic' })).toHaveClass(/secondary/);
   await expect(page.locator('#editorTree')).not.toContainText('maintenance script');
+});
+
+test('script-only sections render at the bottom of the editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"header-text"}-->
+  Header text
+
+<!--hvy: {"id":"maintenance"}-->
+#! Maintenance
+
+ <!--hvy:plugin {"id":"cleanup","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  print("maintenance script")
+
+<!--hvy: {"id":"body"}-->
+#! Body
+
+ <!--hvy:text {"id":"body-text"}-->
+  Body text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const basicEditorOrder = await getTopLevelEditorSectionTitles(page);
+  expect(basicEditorOrder).toEqual(['Header', 'Maintenance', 'Body']);
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  const advancedEditorOrder = await getTopLevelEditorSectionTitles(page);
+
+  expect(advancedEditorOrder).toEqual(['Header', 'Body', 'Maintenance']);
+
+  await page.getByRole('button', { name: 'Basic' }).click();
+  expect(await getTopLevelEditorSectionTitles(page)).toEqual(['Header', 'Body', 'Maintenance']);
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('#editorTree [data-action="add-top-level-section"]').click();
+  const afterAddEditorOrder = await getTopLevelEditorSectionTitles(page);
+
+  expect(afterAddEditorOrder).toEqual(['Header', 'Body', 'Maintenance', '']);
 });
 
 test('expandable reader toggles from the styled outer block padding', async ({ page }) => {

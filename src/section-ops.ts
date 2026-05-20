@@ -1,5 +1,8 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createEmptySection } from './document-factory';
+import type { JsonObject } from './hvy/types';
+import { resolveBaseComponentFromMeta } from './component-defs';
+import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   const output: VisualSection[] = [];
@@ -44,6 +47,62 @@ export function findSectionContainer(
   }
 
   return null;
+}
+
+export function moveScriptOnlySectionsAfterRegularSections(
+  sections: VisualSection[],
+  documentMeta: JsonObject | null
+): boolean {
+  let changed = reorderScriptOnlySectionsInContainer(sections, documentMeta);
+  for (const section of sections) {
+    if (moveScriptOnlySectionsAfterRegularSections(section.children, documentMeta)) {
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+export function wouldMoveScriptOnlySectionsAfterRegularSections(
+  sections: VisualSection[],
+  documentMeta: JsonObject | null
+): boolean {
+  return wouldReorderScriptOnlySectionsInContainer(sections, documentMeta)
+    || sections.some((section) => wouldMoveScriptOnlySectionsAfterRegularSections(section.children, documentMeta));
+}
+
+function reorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+  const reordered = [
+    ...sections.filter((section) => !isScriptOnlySection(section, documentMeta)),
+    ...sections.filter((section) => isScriptOnlySection(section, documentMeta)),
+  ];
+  const changed = reordered.some((section, index) => section !== sections[index]);
+  if (changed) {
+    sections.splice(0, sections.length, ...reordered);
+  }
+  return changed;
+}
+
+function wouldReorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+  let seenScriptOnly = false;
+  for (const section of sections) {
+    if (isScriptOnlySection(section, documentMeta)) {
+      seenScriptOnly = true;
+    } else if (seenScriptOnly) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isScriptOnlySection(section: VisualSection, documentMeta: JsonObject | null): boolean {
+  return section.blocks.length > 0
+    && section.children.length === 0
+    && section.blocks.every((block) => isScriptingBlock(block, documentMeta));
+}
+
+function isScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  return resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
+    && block.schema.plugin === SCRIPTING_PLUGIN_ID;
 }
 
 export function sectionContainsKey(section: VisualSection, sectionKey: string): boolean {

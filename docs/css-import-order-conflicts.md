@@ -52,7 +52,7 @@ The shared rules set:
 
 If `editor.css` lands after `grid.css` in a bundle, the base ghost rules can override the grid add ghost's `min-height` and `margin`. This is the closest remaining match to the component-list issue.
 
-Future fix candidate:
+Applied fix:
 
 ```css
 .ghost-section-card.grid-add-ghost {
@@ -83,11 +83,9 @@ Conflict:
 - `.compact-add-component-ghost` has specificity `0,1,0`.
 - `.active-component-insert-ghost` has specificity `0,1,0`.
 
-The compact rule sets `height`, `padding`, `min-height`, `width`, layout, and gap. The active-insert rule then overrides several of those properties. This is safe only because both rules currently live in `editor.css` and `active-component-insert-ghost` appears later.
+The compact rule sets `height`, `padding`, `min-height`, `width`, layout, and gap. The active-insert rule used to override several of those properties through a single-class selector, which was safe only because both rules lived in `editor.css` and `active-component-insert-ghost` appeared later.
 
-This is not currently an import-order bug, but it is fragile if these rules are ever split into component CSS files.
-
-Future fix candidate:
+Applied fix:
 
 ```css
 .compact-add-component-ghost.active-component-insert-ghost {
@@ -252,4 +250,24 @@ That combined selector has specificity `0,2,0`, so it is no longer dependent on 
 
 - Button variants such as `button.ghost`, `button.secondary`, and `button.danger` are mostly wrapped in `:where(...)` in `src/style.css`, which intentionally keeps base button specificity low. That reduces import-order risk for specialized button classes like `.remove-x`, `.table-add-button`, and `.search-apply-filter-button`.
 - Graph expanded modals already include scoped variants such as `.hvy-document .hvy-graph-expanded-modal`, so they do not have the same modal specificity problem as `.image-camera-modal`.
-- Several ghost variants in `src/editor/editor.css` are order-sensitive within that file, but not import-order-sensitive today because the base and variant rules are colocated. The highest-risk one is `active-component-insert-ghost` because it combines two variant classes on the same node.
+- Several ghost variants in `src/editor/editor.css` are order-sensitive within that file, but not import-order-sensitive today because the base and variant rules are colocated. The highest-risk one from this pass, `active-component-insert-ghost`, has been moved to a combined selector.
+
+## Action Items
+
+- [x] Harden the grid add ghost selector.
+   Update `src/editor/components/grid/grid.css` so the variant styles are attached to `.ghost-section-card.grid-add-ghost` instead of only `.grid-add-ghost`. Include any intended overrides for `.add-ghost` properties, especially `margin` and `padding`.
+
+- [x] Make active insert ghost self-contained.
+   Update `src/editor/editor.css` so active insert overrides use `.compact-add-component-ghost.active-component-insert-ghost`. This keeps the intended compact-insert layout stable if the compact and active styles are ever split across files.
+
+- [ ] Add scoped modal width rules for component metadata modals.
+   Update `src/modal.css` to include `.hvy-document .component-meta-modal` and `.hvy-document .section-meta-modal` alongside the unscoped modal variants.
+
+- [ ] Add scoped image camera modal rules.
+   Update `src/editor/components/image/image.css` to include `.hvy-document .image-camera-modal` for the modal panel overrides and `.hvy-document .image-camera-modal-root` for the root padding override.
+
+- [ ] Add regression coverage for order-sensitive bundled CSS.
+   Add a focused embedded-mode test that mounts the affected controls inside `.hvy-document` and asserts computed layout values for grid add ghost, component metadata modal width, and image camera modal sizing. This should catch future bundle-order drift rather than relying on source-file order.
+
+- [ ] Prefer combined selectors for same-node base plus variant classes going forward.
+   When markup uses a shared base class and a variant class on the same element, write the variant rule as `.base.variant` when it overrides base layout properties. Avoid relying on a single-class variant selector to beat a single-class base selector by import order.

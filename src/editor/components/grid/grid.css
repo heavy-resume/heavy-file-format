@@ -63,7 +63,7 @@
   min-height: 118px;
 }
 
-.grid-add-ghost {
+.ghost-section-card.grid-add-ghost {
   min-height: 100%;
   margin: 0;
   align-self: stretch;

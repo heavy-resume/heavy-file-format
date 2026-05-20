@@ -657,7 +657,7 @@
   line-height: 1;
 }
 
-.active-component-insert-ghost {
+.compact-add-component-ghost.active-component-insert-ghost {
   min-height: 0;
   height: 2rem;
   width: 100%;

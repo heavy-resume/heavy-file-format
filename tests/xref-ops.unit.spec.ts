@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { initState } from '../src/state';
-import { getXrefTargetOptions, isXrefTargetValid } from '../src/xref-ops';
+import { applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter, getXrefTargetOptions, isXrefTargetValid } from '../src/xref-ops';
 import { createTestState } from './serialization-test-helpers';
 import { createBlockFromReusableTemplateValues } from '../src/bind/actions/reusable-template';
 import { assignAutoBlockId } from '../src/auto-block-id';
@@ -202,14 +202,22 @@ component_defs:
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
- <!--hvy:skill-record {"id":"skill-python","tags":"skill","xrefTitle":"Python"}-->
+ <!--hvy:component-list {"tags":"skill","componentListComponent":"skill-record"}-->
 
-  <!--hvy:expandable:content {}-->
+  <!--hvy:component-list:0 {}-->
 
-   <!--hvy:text {"id":"skill-python-reciprocal-history-heading","tags":"reciprocal-xref-generated"}-->
-    #### Experience
+   <!--hvy:skill-record {"id":"skill-python","tags":"skill","xrefTitle":"Python"}-->
 
-   <!--hvy:xref-card {"id":"skill-python-from-history-acme","tags":"reciprocal-xref-generated","xrefTitle":"{% role %}","xrefDetail":"{% organization %}","xrefTarget":"history-acme"}-->
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"tags":"reciprocal-xref-generated"}-->
+      #### Experience
+
+     <!--hvy:component-list {"tags":"reciprocal-xref-generated","componentListComponent":"history-xref-card"}-->
+
+      <!--hvy:component-list:0 {}-->
+
+       <!--hvy:xref-card {"tags":"reciprocal-xref-generated","xrefTitle":"{% role %}","xrefDetail":"{% organization %}","xrefTarget":"history-acme"}-->
 `, '.hvy');
 
   initState(createTestState(document));
@@ -219,4 +227,89 @@ component_defs:
   expect(expectedResult.map((option) => option.value)).toEqual(['skill-python']);
   expect(expectedResult.map((option) => option.label).join('\n')).not.toContain('{% role %}');
   expect(expectedResult.map((option) => option.label).join('\n')).not.toContain('{% organization %}');
+});
+
+test('effective xref target tag filter falls back to reusable component definitions', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: history-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: history
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:history-record {"id":"history-acme","tags":"history","xrefTitle":"Acme"}-->
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:history-xref-card {"xrefTarget":"history-acme"}-->
+`, '.hvy');
+
+  const expectedResult = document.sections[1]?.blocks[0];
+
+  expect(expectedResult?.schema.xrefTargetTagFilter).toBe('history');
+  if (expectedResult) {
+    expectedResult.schema.xrefTargetTagFilter = '';
+  }
+  expect(expectedResult ? getEffectiveXrefTargetTagFilter(document, expectedResult) : '').toBe('history');
+});
+
+test('changing xref target refreshes auto-derived title and detail', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+ <!--hvy:text {"id":"tool-one","tags":"tool","xrefTitle":"Tool One","xrefDetail":"First detail"}-->
+
+ <!--hvy:text {"id":"tool-two","tags":"tool","xrefTitle":"Tool Two","xrefDetail":"Second detail"}-->
+
+ <!--hvy:xref-card {"xrefTargetTagFilter":"tool","xrefTarget":"tool-one"}-->
+`, '.hvy');
+  initState(createTestState(document));
+  const expectedResult = document.sections[0]?.blocks[2];
+  if (!expectedResult) {
+    throw new Error('Expected xref block');
+  }
+
+  applyXrefTargetDefaults(expectedResult);
+  expectedResult.schema.xrefTarget = 'tool-two';
+  applyXrefTargetDefaults(expectedResult, 'tool-one');
+
+  expect(expectedResult.schema.xrefTitle).toBe('Tool Two');
+  expect(expectedResult.schema.xrefDetail).toBe('Second detail');
+});
+
+test('changing xref target preserves manual title and detail overrides', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+ <!--hvy:text {"id":"tool-one","tags":"tool","xrefTitle":"Tool One","xrefDetail":"First detail"}-->
+
+ <!--hvy:text {"id":"tool-two","tags":"tool","xrefTitle":"Tool Two","xrefDetail":"Second detail"}-->
+
+ <!--hvy:xref-card {"xrefTargetTagFilter":"tool","xrefTarget":"tool-one","xrefTitle":"Custom title","xrefDetail":"Custom detail"}-->
+`, '.hvy');
+  initState(createTestState(document));
+  const expectedResult = document.sections[0]?.blocks[2];
+  if (!expectedResult) {
+    throw new Error('Expected xref block');
+  }
+
+  expectedResult.schema.xrefTarget = 'tool-two';
+  applyXrefTargetDefaults(expectedResult, 'tool-one');
+
+  expect(expectedResult.schema.xrefTitle).toBe('Custom title');
+  expect(expectedResult.schema.xrefDetail).toBe('Custom detail');
 });

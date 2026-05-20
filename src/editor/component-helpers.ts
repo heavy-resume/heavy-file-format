@@ -40,6 +40,7 @@ export interface ComponentRenderHelpers {
   getDocumentComponentCss: (componentName: string) => string;
   getXrefTargetOptions: (tagFilter?: string) => XrefTargetOption[];
   isXrefTargetValid: (target: string, tagFilter?: string) => boolean;
+  getEffectiveXrefTargetTagFilter?: (block: VisualBlock) => string;
   getTableColumns: (schema: BlockSchema) => string[];
   ensureContainerBlocks: (block: VisualBlock) => void;
   ensureComponentListBlocks: (block: VisualBlock) => void;

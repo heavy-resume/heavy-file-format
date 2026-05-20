@@ -603,6 +603,7 @@ export interface ScriptingRunResult {
 
 export interface RunUserScriptOptions {
   document: VisualDocument;
+  previousDocument?: VisualDocument | null;
   source: string;
   componentId?: string;
   pluginVersion?: string;
@@ -663,6 +664,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   }
   runtime = createScriptingRuntime({
     document: options.document,
+    previousDocument: options.previousDocument,
     maxLines: options.maxLines,
     changeReason: options.changeReason,
     form: options.form,

@@ -225,8 +225,8 @@ function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerE
   const shellRect = (app.querySelector<HTMLElement>('.viewer-shell') ?? app).getBoundingClientRect();
   const targetRect = fallbackRect
     ? {
-        left: Math.max(0, fallbackRect.left - shellRect.left),
-        top: Math.max(0, fallbackRect.top - shellRect.top),
+        left: fallbackRect.left - shellRect.left,
+        top: fallbackRect.top - shellRect.top,
         width: fallbackRect.width,
         height: fallbackRect.height,
       }

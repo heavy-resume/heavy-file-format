@@ -119,3 +119,22 @@ TypeScript
     },
   ]);
 });
+
+test('resume section xref lists filter skills and tools by reusable card target tags', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.hvy', 'utf8');
+  const document = deserializeDocument(input, '.hvy');
+  const history = document.sections.find((section) => section.customId === 'history');
+
+  expect(history).toBeTruthy();
+
+  const expectedResult = buildImportXrefBatches(document, [history!.key])
+    .flatMap((batch) => batch.lists)
+    .filter((list) => list.path.endsWith('/history-skills-list') || list.path.endsWith('/history-tools-technologies-list'));
+
+  expect(expectedResult).toHaveLength(2);
+  expect(expectedResult.find((list) => list.path.endsWith('/history-skills-list'))?.allowedTargets.map((target) => target.value)).toContain('skill-software-engineering');
+  expect(expectedResult.find((list) => list.path.endsWith('/history-skills-list'))?.allowedTargets.map((target) => target.value)).not.toContain('tool-python');
+  expect(expectedResult.find((list) => list.path.endsWith('/history-tools-technologies-list'))?.allowedTargets.map((target) => target.value)).toContain('tool-python');
+  expect(expectedResult.find((list) => list.path.endsWith('/history-tools-technologies-list'))?.allowedTargets.map((target) => target.value)).not.toContain('skill-software-engineering');
+});

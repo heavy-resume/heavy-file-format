@@ -5,7 +5,7 @@ import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, resolveVirtual
 import { serializeSectionFragment } from './serialization';
 import { formatSectionTitle, getSectionId } from './section-ops';
 import type { VisualDocument } from './types';
-import { getXrefTargetOptionsForDocument, type XrefTargetOption } from './xref-ops';
+import { getXrefTargetOptionsForDocument, getXrefTargetTagFilterForComponent, type XrefTargetOption } from './xref-ops';
 
 export interface ImportXrefTargetOption extends XrefTargetOption {
   path: string;
@@ -191,15 +191,7 @@ function isXrefComponentList(document: VisualDocument, block: VisualBlock): bool
 }
 
 function getXrefListTargetTagFilter(document: VisualDocument, block: VisualBlock): string {
-  const component = block.schema.componentListComponent.trim();
-  const definition = Array.isArray(document.meta.component_defs)
-    ? document.meta.component_defs.find((item) => item.name === component)
-    : null;
-  const schema = definition?.template?.schema ?? definition?.schema;
-  const filter = schema && typeof schema === 'object' && !Array.isArray(schema)
-    ? (schema as { xrefTargetTagFilter?: unknown }).xrefTargetTagFilter
-    : '';
-  return typeof filter === 'string' ? filter : '';
+  return getXrefTargetTagFilterForComponent(document, block.schema.componentListComponent);
 }
 
 function resolveTargetCliPath(fs: ReturnType<typeof buildHvyVirtualFileSystem>, targetId: string): string {

@@ -292,6 +292,24 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'def-xref-target-tag-filter' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
+      const defs = getComponentDefs();
+      const def = Number.isNaN(idx) ? null : defs[idx];
+      if (def) {
+        recordHistory(`def:${idx}:xref-target-tag-filter`);
+        if (def.template) {
+          def.template.schema.xrefTargetTagFilter = target.value;
+        } else {
+          const editableDef = def as unknown as { schema?: Record<string, unknown> };
+          editableDef.schema = editableDef.schema ?? {};
+          editableDef.schema.xrefTargetTagFilter = target.value;
+        }
+        state.document.meta.component_defs = defs;
+      }
+      return;
+    }
+
     if (field === 'def-flavor-name' && target instanceof HTMLInputElement) {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);

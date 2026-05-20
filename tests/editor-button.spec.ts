@@ -187,7 +187,7 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 });
 
-test('embedded editor and viewer keep independent sidebar hints and editor button runtime', async ({ page }) => {
+test('embedded editor and viewer keep independent document state', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
@@ -195,18 +195,12 @@ test('embedded editor and viewer keep independent sidebar hints and editor butto
 
   const firstDoc = page.locator('#docOne');
   const secondDoc = page.locator('#docTwo');
-  const firstButton = firstDoc.locator('[data-action="run-button-ai-generate"]');
-  await expect(firstButton).toBeVisible({ timeout: 1_000 });
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+  await expect(firstDoc.locator('#editorTree')).toContainText('Current Goal');
   await expect(secondDoc.locator('#readerDocument')).toBeVisible();
   await expect(secondDoc.locator('#editorTree')).toHaveCount(0);
-  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toContainText('Document One Side Notes');
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toBeVisible();
 
-  await firstDoc.locator('.editor-sidebar-help-balloon').click();
-  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toHaveClass(/is-closing/);
-  await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toBeVisible();
-  await page.waitForTimeout(220);
-  await expect(firstDoc.locator('.editor-sidebar-help-balloon')).toHaveCount(0);
   await secondDoc.locator('.viewer-sidebar-help-balloon').click();
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveClass(/is-closing/);
   await page.waitForTimeout(220);
@@ -216,11 +210,6 @@ test('embedded editor and viewer keep independent sidebar hints and editor butto
   await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
   await secondDoc.locator('.viewer-sidebar-tab').click();
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
-
-  await firstButton.click();
-
-  await expect(firstDoc).toContainText('Document One generated from: First document source text.', { timeout: 3_500 });
-  await expect(secondDoc).not.toContainText('Document One generated from');
 });
 
 test('second embedded viewer action buttons remain clickable', async ({ page }) => {

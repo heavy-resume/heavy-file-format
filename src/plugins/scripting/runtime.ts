@@ -95,6 +95,7 @@ export interface ScriptingCliApi {
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
+  previousDocument?: VisualDocument | null;
   changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
@@ -174,7 +175,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         if (options.changeReason === 'load') {
           return [];
         }
-        return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation);
+        return getUpdatedScriptingComponentHandles(
+          options.document,
+          options.previousDocument ?? null,
+          String(readScriptValue(args, 'component') ?? ''),
+          onMutation
+        );
       }
       if (name === 'get_components') {
         return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation);
@@ -381,17 +387,20 @@ class ScriptingComponentHandle {
   base_component: string;
   section_id: string;
   section_title: string;
+  removed: boolean;
 
   constructor(
     private document: VisualDocument,
     private location: ScriptingBlockLocation,
-    private markMutated: () => void
+    private markMutated: () => void,
+    removed = false
   ) {
     this.id = location.block.schema.id;
     this.component = location.block.schema.component;
     this.base_component = resolveBaseComponentFromMeta(location.block.schema.component, document.meta);
     this.section_id = location.section.customId || location.section.key;
     this.section_title = location.section.title;
+    this.removed = removed;
   }
 
   get(name: string): unknown {
@@ -421,7 +430,7 @@ class ScriptingComponentHandle {
   get_parent_by_tag(tag: string): ScriptingComponentHandle | ScriptingSectionHandle | null {
     for (const ancestor of [...this.location.ancestors].reverse()) {
       if (hasTag(ancestor.schema.tags, tag)) {
-        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated);
+        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
       }
     }
     return hasTag(this.location.section.tags, tag)
@@ -438,13 +447,20 @@ class ScriptingComponentHandle {
       if (excluded.some((tag) => hasTag(ancestor.schema.tags, tag))) {
         continue;
       }
-      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated);
+      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
     }
     return null;
   }
 
   first_table_cell(index = 0): string {
     return findFirstTableCell(this.location.block, Math.max(0, Math.floor(Number(index) || 0)));
+  }
+
+  fingerprint(): string {
+    return JSON.stringify({
+      text: this.location.block.text,
+      schema: this.location.block.schema,
+    });
   }
 
   remove_children_by_tag(tag: string, slot = 'expandable-content'): number {
@@ -508,7 +524,8 @@ class ScriptingSectionHandle {
 function getScriptingComponentHandles(
   document: VisualDocument,
   component: string,
-  markMutated: () => void
+  markMutated: () => void,
+  removed = false
 ): ScriptingComponentHandle[] {
   const query = component.trim();
   const matches: ScriptingComponentHandle[] = [];
@@ -516,7 +533,7 @@ function getScriptingComponentHandles(
     for (const block of blocks) {
       const base = resolveBaseComponentFromMeta(block.schema.component, document.meta);
       if (!query || block.schema.component === query || base === query || (query === 'xref' && base === 'xref-card')) {
-        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated));
+        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed));
       }
       const nextAncestors = [...ancestors, block];
       visit(block.schema.containerBlocks ?? [], section, nextAncestors);
@@ -532,6 +549,30 @@ function getScriptingComponentHandles(
   };
   document.sections.forEach(visitSection);
   return matches;
+}
+
+function getUpdatedScriptingComponentHandles(
+  document: VisualDocument,
+  previousDocument: VisualDocument | null,
+  component: string,
+  markMutated: () => void
+): ScriptingComponentHandle[] {
+  const current = getScriptingComponentHandles(document, component, markMutated);
+  if (!previousDocument) {
+    return current;
+  }
+  const previous = getScriptingComponentHandles(previousDocument, component, () => {}, true);
+  const previousById = new Map(previous.map((handle) => [handle.id, handle]));
+  const currentIds = new Set(current.map((handle) => handle.id).filter(Boolean));
+  const updated = current.filter((handle) => {
+    if (!handle.id) {
+      return true;
+    }
+    const previousHandle = previousById.get(handle.id);
+    return !previousHandle || previousHandle.fingerprint() !== handle.fingerprint();
+  });
+  const removed = previous.filter((handle) => handle.id && !currentIds.has(handle.id));
+  return [...updated, ...removed];
 }
 
 function getChildSlot(block: VisualBlock, slot: string): VisualBlock[] {

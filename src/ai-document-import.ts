@@ -287,6 +287,7 @@ export async function importTextIntoDocument(
     onSectionApplied?: (result: string) => Promise<void> | void;
     onImportFillInsApplied?: (result: string) => Promise<void> | void;
     onImportXrefsApplied?: (result: string) => Promise<void> | void;
+    onImportPrepared?: (result: string) => Promise<void> | void;
     onImportFinalized?: (result: string) => Promise<void> | void;
   }
 ): Promise<ImportFromTextResult> {
@@ -460,6 +461,7 @@ export async function importTextIntoDocument(
       await options.onImportXrefsApplied?.(`Filled ${xrefsApplied} imported xref list${xrefsApplied === 1 ? '' : 's'}.`);
     }
     const message = `Imported ${created.length} section${created.length === 1 ? '' : 's'}.`;
+    await options.onImportPrepared?.(message);
     if (fillInTargets.length > 0 || xrefsApplied > 0) {
       options.onMutation?.('ai-edit:import-finalize');
       await options.onImportFinalized?.(message);

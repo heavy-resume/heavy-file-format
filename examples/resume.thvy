@@ -659,8 +659,8 @@ component_defs:
     templateVariables:
       role:
         label: Role / Title
-      years:
-        label: DATES
+      date_range:
+        label: Dates
       accomplishments:
         label: Accomplishments
     schema:
@@ -679,7 +679,7 @@ component_defs:
               tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
               tableShowHeader: false
               tableRows:
-                - cells: ["{% role %}", "{% organization %}", "{% years %}"]
+                - cells: ["{% role %}", "{% organization %}", "{% date_range %}"]
       expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
@@ -1412,6 +1412,7 @@ component_defs:
         generator: hvy.resume.skill-description
         generatorLabel: Generate
     schema:
+      tags: skill
       xrefTitle: "{% skill %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
@@ -1445,6 +1446,7 @@ component_defs:
         generator: hvy.resume.tool-description
         generatorLabel: Generate
     schema:
+      tags: tool
       xrefTitle: "{% tool_technology %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
@@ -1628,72 +1630,82 @@ component_defs:
   GENERATED_TAG = "reciprocal-xref-generated"
   TARGET_TAGS = ["skill", "tool"]
 
-  def safe_id(value):
-      out = ""
-      for ch in value.lower():
-          out += ch if ("a" <= ch <= "z") or ("0" <= ch <= "9") else "-"
-      while "--" in out:
-          out = out.replace("--", "-")
-      return out.strip("-") or "item"
+  def xref_component_for_source(source):
+      if source.component.endswith("-record"):
+          return source.component[:-len("-record")] + "-xref-card"
+      return "xref-card"
 
-  targets = {}
-  groups = {}
-  for record in doc.tool.get_updated_components("skill-record"):
-      is_target = False
+  def is_generated(component):
+      return component.has_tag(GENERATED_TAG)
+
+  def is_target_record(record):
+      if not record.component.endswith("-record"):
+          return False
       for tag in TARGET_TAGS:
           if record.has_tag(tag):
-              is_target = True
-      if is_target:
-          targets[record.id] = record
-          groups[record.id] = {}
+              return True
+      return False
 
-  scanned_xrefs = 0
-  matched_xrefs = 0
+  changed_xrefs = []
   for xref in doc.tool.get_updated_components("xref"):
-      scanned_xrefs += 1
+      if not is_generated(xref):
+          changed_xrefs.append(xref)
+
+  if not changed_xrefs:
+      return
+
+  # Targets are the real skill/tool records where reciprocal cards are written.
+  targets = {}
+  for record in doc.tool.get_components():
+      if is_target_record(record):
+          targets[record.id] = record
+
+  # Groups collect the current real xrefs by target record and source section.
+  groups = {}
+  for target_id in targets:
+      groups[target_id] = {}
+
+  # Rebuild from current xrefs so changed, added, and removed xrefs all produce
+  # the same final reciprocal state.
+  for xref in doc.tool.get_components("xref"):
+      if is_generated(xref):
+          continue
       source_section = xref.get_parent_by_tag(SOURCE_TAG)
       target_id = str(xref.get("xrefTarget") or "")
-      target = targets.get(target_id)
-      if not source_section or not target:
+      if not source_section or target_id not in targets:
           continue
-      matched_xrefs += 1
-      source = xref.get_ancestor_record(" ".join(TARGET_TAGS)) or source_section
+      source = xref.get_ancestor_record() or source_section
       group_key = source.section_id
-      if group_key not in groups[target.id]:
-          groups[target.id][group_key] = []
+      if group_key not in groups[target_id]:
+          groups[target_id][group_key] = []
       seen = False
-      for item in groups[target.id][group_key]:
+      for item in groups[target_id][group_key]:
           if item.id == source.id:
               seen = True
       if not seen:
-          groups[target.id][group_key].append(source)
+          groups[target_id][group_key].append(source)
 
-  generated_cards = 0
-  for target_id in sorted(targets.keys()):
+  for target_id in targets:
       target = targets[target_id]
       target.remove_children_by_tag(GENERATED_TAG)
-      for group_key in sorted(groups[target_id].keys()):
+      for group_key in groups[target_id]:
           sources = groups[target_id][group_key]
           if not sources:
               continue
           first = sources[0]
-          group_id = target.id + "-reciprocal-" + safe_id(group_key)
           heading = target.append_child("text")
-          heading.set("id", group_id + "-heading")
           heading.set("tags", GENERATED_TAG)
           heading.set("css", "margin: 0;")
           heading.set("text", "^detail-heading^ #### " + first.section_title)
+          card_component = xref_component_for_source(first)
           cards = target.append_child("component-list")
-          cards.set("id", group_id + "-list")
           cards.set("tags", GENERATED_TAG)
           cards.set("css", "margin: 0;")
-          cards.set("componentListComponent", "xref-card")
+          cards.set("componentListComponent", card_component)
           cards.set("componentListItemLabel", "reciprocal reference")
           for source in sources:
-              card = cards.append_child("xref-card", None, "", "component-list")
-              card.set("id", target.id + "-from-" + safe_id(source.id))
+              card = cards.append_child(card_component, None, "", "component-list")
               card.set("tags", GENERATED_TAG)
               card.set("xrefTitle", source.get("xrefTitle") or source.first_table_cell(0) or source.id)
               card.set("xrefDetail", source.get("xrefDetail") or source.first_table_cell(1) or "")
               card.set("xrefTarget", source.id)
-              generated_cards += 1

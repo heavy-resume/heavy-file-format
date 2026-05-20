@@ -1,7 +1,7 @@
 import type { VisualBlock } from './editor/types';
 import { state } from './state';
 import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
-import { resolveBaseComponentFromMeta } from './component-defs';
+import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import type { VisualDocument } from './types';
 
 export function normalizeXrefTarget(target: string): string {
@@ -54,6 +54,24 @@ export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
   return getXrefTargetOptions(tagFilter).some((option) => option.value === normalized);
 }
 
+export function getXrefTargetTagFilterForComponent(document: VisualDocument, componentName: string): string {
+  const component = componentName.trim();
+  if (!component) {
+    return '';
+  }
+  const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
+  const schema = definition?.template?.schema ?? definition?.schema;
+  const filter = schema && typeof schema === 'object' && !Array.isArray(schema)
+    ? (schema as { xrefTargetTagFilter?: unknown }).xrefTargetTagFilter
+    : '';
+  return typeof filter === 'string' ? filter.trim() : '';
+}
+
+export function getEffectiveXrefTargetTagFilter(document: VisualDocument, block: VisualBlock): string {
+  const localFilter = block.schema.xrefTargetTagFilter.trim();
+  return localFilter || getXrefTargetTagFilterForComponent(document, block.schema.component);
+}
+
 export function describeBlockTarget(block: VisualBlock): string {
   const component = block.schema.component;
   const xrefTitle = cleanXrefDisplayValue(block.schema.xrefTitle);
@@ -83,19 +101,25 @@ export function describeBlockTargetDetail(block: VisualBlock): string {
   return '';
 }
 
-export function applyXrefTargetDefaults(block: VisualBlock): void {
+export function applyXrefTargetDefaults(block: VisualBlock, previousTarget = ''): void {
   const target = normalizeXrefTarget(block.schema.xrefTarget);
   if (!target) {
     return;
   }
-  const option = getXrefTargetOptions(block.schema.xrefTargetTagFilter).find((item) => item.value === target);
+  const options = getXrefTargetOptions(getEffectiveXrefTargetTagFilter(state.document, block));
+  const option = options.find((item) => item.value === target);
   if (!option) {
     return;
   }
-  if (!block.schema.xrefTitle.trim()) {
+  const previousOption = previousTarget
+    ? options.find((item) => item.value === normalizeXrefTarget(previousTarget))
+    : undefined;
+  const title = block.schema.xrefTitle.trim();
+  const detail = block.schema.xrefDetail.trim();
+  if (!title || title === previousOption?.title) {
     block.schema.xrefTitle = option.title;
   }
-  if (!block.schema.xrefDetail.trim()) {
+  if (!detail || detail === previousOption?.detail) {
     block.schema.xrefDetail = option.detail;
   }
 }

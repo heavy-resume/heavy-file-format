@@ -191,13 +191,15 @@
     </div>
 
     <script type="module">
+      import exampleHvyUrl from '/examples/example.hvy?url';
       import resumeHvyUrl from '/examples/resume.hvy?url';
       import { deserializeDocumentBytes, mountHvy } from '/src/embed-full.ts';
 
-      const encoder = new TextEncoder();
       const eventLog = document.querySelector('#eventLog');
       const mounted = [];
       let docOneMode = 'editor';
+      let docOneMountRequest = 0;
+      let docOneDocument = null;
 
       const writeLog = (message) => {
         const timestamp = new Date().toLocaleTimeString();
@@ -209,29 +211,6 @@
           button.setAttribute('aria-pressed', button.dataset.docOneMode === docOneMode ? 'true' : 'false');
         });
       };
-
-      const makeDocumentSource = (label, sourceText, sidebarText) => `---
-hvy_version: 0.1
-title: ${label}
----
-
-<!--hvy: {"id":"summary"}-->
-#! ${label}
-
- <!--hvy:text {"id":"source-text"}-->
-  ${sourceText}
-
- <!--hvy:text {"id":"generated-output"}-->
-  Waiting for generated output.
-
- <!--hvy:button {"id":"generate-summary","buttonLabel":"Generate output","buttonAction":"ai-generate","buttonPositionTargetId":"generated-output","buttonCss":"position: absolute; top: 0.25rem; right: 0.25rem; --hvy-button-content-padding: 0.28rem 0.46rem; --hvy-button-font-size: 0.78rem;","buttonInputCharLimit":600,"buttonOutputCharLimit":240,"buttonSourceScript":"return doc.component.get_text('source-text').strip()","buttonPrompt":"Return a short generated line for the embedded document that provided this input.","buttonTargetScript":"doc.component.set_text('generated-output', response.strip())"}-->
-
-<!--hvy: {"id":"side-notes","location":"sidebar"}-->
-#! ${label} Side Notes
-
- <!--hvy:text {"id":"side-note"}-->
-  ${sidebarText}
-`;
 
       const makeChatClient = (label) => ({
         async complete(request, options = {}) {
@@ -246,6 +225,18 @@ title: ${label}
         },
       });
 
+      async function loadExampleDocument() {
+        if (docOneDocument) {
+          return docOneDocument;
+        }
+        const response = await fetch(exampleHvyUrl);
+        if (!response.ok) {
+          throw new Error(`Could not load example document: ${response.status} ${response.statusText}`);
+        }
+        docOneDocument = deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy');
+        return docOneDocument;
+      }
+
       async function loadResumeDocument() {
         const response = await fetch(resumeHvyUrl);
         if (!response.ok) {
@@ -254,25 +245,38 @@ title: ${label}
         return deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy');
       }
 
-      function mountFirstDocument() {
+      function mountLoadedFirstDocument(exampleDocument) {
         mounted[0]?.destroy();
         const firstRoot = document.querySelector('#docOne');
         mounted[0] = mountHvy({
           root: firstRoot,
-          document: deserializeDocumentBytes(encoder.encode(makeDocumentSource('Document One', 'First document source text.', 'Sidebar note for the first embedded document.')), '.hvy'),
+          document: exampleDocument,
           mode: docOneMode,
-          storageKey: 'two-doc-reference-one',
+          storageKey: 'two-doc-reference-example',
           chatClient: makeChatClient('Document One'),
         });
         setDocOneModeButtons();
         writeLog(`Mounted Document One in ${docOneMode} mode.`);
       }
 
+      async function mountFirstDocument() {
+        const requestId = ++docOneMountRequest;
+        const exampleDocument = await loadExampleDocument();
+        if (requestId !== docOneMountRequest) {
+          return;
+        }
+        mountLoadedFirstDocument(exampleDocument);
+      }
+
       async function mountPair() {
         mounted.splice(0).forEach((mount) => mount.destroy());
         const secondRoot = document.querySelector('#docTwo');
-        const resumeDocument = await loadResumeDocument();
-        mountFirstDocument();
+        const [exampleDocument, resumeDocument] = await Promise.all([
+          loadExampleDocument(),
+          loadResumeDocument(),
+        ]);
+        docOneMountRequest += 1;
+        mountLoadedFirstDocument(exampleDocument);
         mounted[1] =
           mountHvy({
             root: secondRoot,
@@ -290,12 +294,13 @@ title: ${label}
             return;
           }
           docOneMode = nextMode;
-          mountFirstDocument();
+          setDocOneModeButtons();
+          void mountFirstDocument();
         });
       });
 
       document.querySelector('#resetSessions').addEventListener('click', () => {
-        sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-one');
+        sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-example');
         sessionStorage.removeItem('hvy-editor-session-state-v1:two-doc-reference-two');
         void mountPair();
         writeLog('Reset both keyed sessions.');

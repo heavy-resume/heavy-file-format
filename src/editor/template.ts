@@ -72,10 +72,10 @@ export function renderTemplateGhosts(
     .filter((field) => !hasTemplateFieldBlock(field, sections))
     .map(
       (field) => `
-      <article class="ghost-section-card template-ghost" data-action="add-template-field" data-template-field="${helpers.escapeAttr(field)}">
+      <div class="ghost-section-card template-ghost" data-action="add-template-field" data-template-field="${helpers.escapeAttr(field)}">
         <div class="ghost-plus-big">${plusIcon()}</div>
         <div class="ghost-label">Add Template Field: ${helpers.escapeHtml(field)}</div>
-      </article>
+      </div>
     `
     )
     .join('');

@@ -54,8 +54,9 @@ for xref in doc.tool.get_updated_components("xref"):
     source = xref.get_parent_by_tag("reciprocal-xref-source")
 ```
 
-`get_updated_components` returns nothing during initial document load. Use
-`doc.tool.get_components("xref")` only when the script intentionally needs a
+`get_updated_components` returns changed components plus removed component
+handles with `removed = True`. It returns nothing during initial document load.
+Use `doc.tool.get_components("xref")` only when the script intentionally needs a
 full scan.
 
 Form scripts also get:

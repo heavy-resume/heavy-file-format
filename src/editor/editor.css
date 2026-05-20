@@ -603,6 +603,7 @@
 
 .ghost-label {
   font-size: 0.9rem;
+  line-height: 1;
   color: var(--hvy-text-alt);
   text-align: center;
 }

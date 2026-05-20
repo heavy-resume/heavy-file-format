@@ -8,7 +8,7 @@ import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
-import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults } from './xref-ops';
+import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
 import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
@@ -280,8 +280,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-xref-target' && (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+    const previousTarget = block.schema.xrefTarget;
     block.schema.xrefTarget = normalizeXrefTarget(target.value);
-    applyXrefTargetDefaults(block);
+    applyXrefTargetDefaults(block, previousTarget);
     syncXrefEditorAfterTargetInput(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     return true;
@@ -878,6 +879,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
     getXrefTargetOptions,
     isXrefTargetValid,
+    getEffectiveXrefTargetTagFilter: (block) => getEffectiveXrefTargetTagFilter(state.document, block),
     getTableColumns,
     ensureContainerBlocks,
     ensureComponentListBlocks,

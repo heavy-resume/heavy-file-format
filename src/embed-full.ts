@@ -116,6 +116,7 @@ let editorRenderer: EditorRenderer;
 let readerRenderer: ReaderRenderer;
 let currentRoot: HTMLElement | null = null;
 let currentLinkObserver: HvyLinkObserver | null = null;
+const embedUiBindGenerations = new WeakMap<HTMLElement, number>();
 
 function createEmbedState(
   document: VisualDocument,
@@ -370,7 +371,7 @@ function ensureRenderers(): void {
   );
 }
 
-function renderApp(): void {
+function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   if (!currentRoot) return;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
@@ -444,7 +445,9 @@ function renderApp(): void {
   });
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
-  void runPluginDocumentHooks('unknown');
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
@@ -460,11 +463,16 @@ function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
 }
 
 function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
+  const bindGeneration = (embedUiBindGenerations.get(root) ?? 0) + 1;
+  embedUiBindGenerations.set(root, bindGeneration);
   if (state.currentView === 'viewer') {
     bindReaderUi(root);
     return;
   }
   void import('./bind-ui').then(({ bindUi }) => {
+    if (embedUiBindGenerations.get(root) !== bindGeneration) {
+      return;
+    }
     runWithStateRuntime(runtime, () => {
       bindUi(root);
     });
@@ -570,11 +578,14 @@ async function buildImportPlan(options: BuildImportPlanOptions): Promise<BuildIm
 
 async function importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult> {
   const refreshAfterImportMutation = async (): Promise<void> => {
-    await runPluginDocumentHooks('ai-edit');
     state.rawEditorText = serializeDocument(state.document);
     state.rawEditorError = null;
     state.rawEditorDiagnostics = [];
-    renderApp();
+    renderApp({ runDocumentHooks: false });
+  };
+  const runPreparedImportHooks = async (): Promise<void> => {
+    await runPluginDocumentHooks('ai-edit');
+    await refreshAfterImportMutation();
   };
   const result = await importTextIntoDocument(state.document, {
     ...options,
@@ -588,6 +599,7 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
     onSectionApplied: refreshAfterImportMutation,
     onImportFillInsApplied: refreshAfterImportMutation,
     onImportXrefsApplied: refreshAfterImportMutation,
+    onImportPrepared: runPreparedImportHooks,
     onImportFinalized: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {

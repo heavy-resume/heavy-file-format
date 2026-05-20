@@ -14,7 +14,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const placementMode = firstPlacementTarget.length > 0;
   const addGridGhost = block.schema.lock || placementMode
     ? ''
-    : `<article class="ghost-section-card add-ghost grid-add-ghost">
+    : `<div class="ghost-section-card add-ghost grid-add-ghost">
         ${helpers.renderAddComponentPicker({
           id: `grid:${sectionKey}:${block.id}`,
           action: 'add-grid-item',
@@ -22,7 +22,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
           blockId: block.id,
           label: 'Grid component type',
         })}
-      </article>`;
+      </div>`;
   return `
   <div class="editor-grid schema-grid">
     <label>

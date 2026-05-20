@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { createEmptyBlock } from '../src/document-factory';
 import { resolveBaseComponentFromMeta } from '../src/component-defs';
+import { visitBlocks } from '../src/section-ops';
 import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
@@ -539,6 +540,54 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
 
   expect(toolTitles).toContain('Python');
   expect(toolTitles).toContain('C/C++');
+});
+
+test('resume example keeps filled tool records aligned with the resume template type', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.hvy', 'utf8');
+  const document = deserializeDocument(input, '.hvy');
+  const toolsSection = document.sections.find((section) => section.customId === 'tools-technologies');
+
+  expect(toolsSection).toBeTruthy();
+  const toolsList = toolsSection!.blocks.find((block) => resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'component-list');
+
+  expect(toolsList?.schema.componentListComponent).toBe('tool-tech-record');
+  expect(toolsList?.schema.componentListItemLabel).toBe('tool / technology');
+  expect(toolsList?.schema.componentListBlocks.map((block) => block.schema.component)).toEqual([
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+  ]);
+});
+
+test('resume reciprocal xref script generates reusable source xref card types', async () => {
+  const fs = await import('node:fs/promises');
+  for (const path of ['examples/resume.hvy', 'examples/resume.thvy']) {
+    const input = await fs.readFile(path, 'utf8');
+    const document = deserializeDocument(input, path.endsWith('.thvy') ? '.thvy' : '.hvy');
+    let script = '';
+    visitBlocks(document.sections, (block) => {
+      if (block.schema.id === 'sync-reciprocal-xrefs') {
+        script = block.text;
+      }
+    });
+
+    expect(script, path).toContain('TARGET_TAGS = ["skill", "tool"]');
+    expect(script, path).toContain('record.has_tag(tag)');
+    expect(script, path).not.toContain('TARGET_COMPONENTS');
+    expect(script, path).toContain('source.component.endswith("-record")');
+    expect(script, path).toContain('source.component[:-len("-record")] + "-xref-card"');
+    expect(script, path).toContain('cards.set("componentListComponent", card_component)');
+    expect(script, path).toContain('card = cards.append_child(card_component, None, "", "component-list")');
+    expect(script, path).not.toContain('SOURCE_XREF_COMPONENTS');
+    expect(script, path).not.toContain('safe_id');
+    expect(script, path).not.toContain('card.set("id"');
+    expect(script, path).not.toContain('cards.set("componentListComponent", "xref-card")');
+  }
 });
 
 test('deserializes db-table query text from the plugin block body', () => {

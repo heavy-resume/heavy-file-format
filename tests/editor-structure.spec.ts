@@ -8,6 +8,14 @@ async function runCliCommand(page: Page, command: string): Promise<void> {
   await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
 }
 
+async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+  await page.locator('.document-menu summary').click();
+  const item = page.getByRole('button', { name, exact: true });
+  await expect(item).toBeVisible();
+  await item.click({ force: true });
+}
+
 function writeFileCommand(path: string, content: string): string {
   return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
@@ -328,7 +336,7 @@ hvy_version: 0.1
 test('ai resume summary placeholder expands parent before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
   const summaryPlaceholder = page.locator('#aiReaderDocument .reader-block-text').filter({ has: page.locator('h1', { hasText: 'Summary' }) }).first();
@@ -430,15 +438,36 @@ test('canceling a newly added featured xref removes it without opening list edit
 test('new featured xref populates title from target defaults', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await selectDocumentMenuItem(page, 'Resume Example');
 
   const topSkillsList = page.locator('[data-component-id="top-skills-list"]').first();
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
 
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(0);
   await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-software-engineering');
 
   await expect(activeEditor.locator('[data-field="block-xref-title"]')).toHaveText('Software Engineering');
+});
+
+test('new nested resume tool xref filters targets to tools', async ({ page }) => {
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Resume Example');
+
+  await page.locator('[data-component-id="history-northwind-labs-senior-software-engineer"] [data-action="toggle-editor-expandable"]').first().click();
+  await page.getByRole('button', { name: /Expanded/ }).first().click();
+  await page.locator('[data-component-id="history-tools-technologies-list"] [data-action="add-component-list-item"]', { hasText: 'Add Tool / Tech Reference' }).click();
+
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeEditor.locator('.editor-block-title').first()).toContainText('tool-tech-xref-card');
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="tool-python"]')).toHaveCount(1);
+  await expect(activeEditor.locator('[data-field="block-xref-target"] option[value="skill-software-engineering"]')).toHaveCount(0);
+  await activeEditor.locator('[data-field="block-xref-target"]').selectOption('tool-python');
+  await activeEditor.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-python"');
 });
 
 test('xref template picker explains when no tagged targets are available', async ({ page }) => {
@@ -507,7 +536,7 @@ component_defs:
   await expect(page.locator('#aiReaderDocument .reader-xref-card')).toHaveCount(0);
 });
 
-test('featured xref helper script reruns after adding a featured xref', async ({ page }) => {
+test('featured xref helper script reruns after committing a featured xref', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -556,6 +585,8 @@ component_defs:
   await page.locator('#aiReaderDocument [data-action="add-component-list-item"]', { hasText: 'Add Skill Reference' }).click();
   const activeEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
   await activeEditor.locator('[data-field="block-xref-target"]').selectOption('skill-foo');
+
+  await expect(page.locator('#aiReaderDocument')).toContainText('Tip: Add a featured skill');
   await activeEditor.getByRole('button', { name: 'Done' }).click();
 
   await expect(page.locator('#aiReaderDocument')).not.toContainText('Tip: Add a featured skill');
@@ -1238,6 +1269,53 @@ text_line_styles:
     }
     return Math.round(styledBox.y - cloneBox.y);
   }).toBeLessThan(2);
+});
+
+test('ai context clone preserves target position above preview top', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  Above-frame overlay target
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block', { hasText: 'Above-frame overlay target' });
+  const shell = page.locator('.viewer-shell').first();
+  await block.evaluate((element) => {
+    const shellElement = element.closest('.viewer-shell');
+    const readerDocument = element.closest('#aiReaderDocument') as HTMLElement | null;
+    const shellBox = shellElement?.getBoundingClientRect();
+    const blockBox = element.getBoundingClientRect();
+    if (!readerDocument || !shellBox) {
+      return;
+    }
+    readerDocument.style.transform = `translateY(-${Math.round(blockBox.top - shellBox.top + 18)}px)`;
+  });
+
+  const shellBox = await shell.boundingBox();
+  expect(shellBox).not.toBeNull();
+  await block.dispatchEvent('contextmenu', {
+    clientX: (shellBox?.x ?? 0) + 80,
+    clientY: (shellBox?.y ?? 0) + 8,
+    button: 2,
+  });
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+
+  const targetBox = await block.boundingBox();
+  const cloneBox = await page.locator('.hvy-context-popover-clone').boundingBox();
+  expect(targetBox).not.toBeNull();
+  expect(cloneBox).not.toBeNull();
+  expect(cloneBox?.y ?? 0).toBeLessThan(shellBox?.y ?? 0);
+  expect(Math.abs((targetBox?.y ?? 0) - (cloneBox?.y ?? 0))).toBeLessThan(1);
 });
 
 test('expandable pane meta owns always show and pane css controls', async ({ page }) => {

@@ -421,6 +421,45 @@ hvy_version: 0.1
   expect(all).toHaveLength(1);
 });
 
+test('createScriptingRuntime returns changed and removed components after updates', () => {
+  const previousDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+
+ <!--hvy:xref-card {"id":"history-acme-typescript","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
+    id: string;
+    removed: boolean;
+    get(name: string): unknown;
+  }>;
+
+  expect(updated.map((component) => ({
+    id: component.id,
+    removed: component.removed,
+    target: component.get('xrefTarget'),
+  }))).toEqual([
+    { id: 'history-acme-python', removed: false, target: 'tool-python' },
+    { id: 'history-acme-typescript', removed: true, target: 'tool-typescript' },
+  ]);
+});
+
 test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },

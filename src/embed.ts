@@ -321,7 +321,7 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
-function renderApp(): void {
+function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   if (!currentRoot) return;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
@@ -361,7 +361,9 @@ function renderApp(): void {
   });
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
-  void runPluginDocumentHooks('unknown');
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function refreshReaderPanels(): void {
@@ -536,7 +538,11 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
   const { importTextIntoDocument } = await import('./ai-document-edit');
   const refreshAfterImportMutation = (): void => {
     state.rawEditorText = serializeDocument(state.document);
-    renderApp();
+    renderApp({ runDocumentHooks: false });
+  };
+  const runPreparedImportHooks = async (): Promise<void> => {
+    await runPluginDocumentHooks('ai-edit');
+    refreshAfterImportMutation();
   };
   const result = await importTextIntoDocument(state.document, {
     ...options,
@@ -550,6 +556,7 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
     onSectionApplied: refreshAfterImportMutation,
     onImportFillInsApplied: refreshAfterImportMutation,
     onImportXrefsApplied: refreshAfterImportMutation,
+    onImportPrepared: runPreparedImportHooks,
     onImportFinalized: refreshAfterImportMutation,
   });
   if (result.status !== 'complete') {

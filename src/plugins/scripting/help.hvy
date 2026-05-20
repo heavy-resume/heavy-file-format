@@ -65,7 +65,7 @@ programmatically. Scripts cannot reach the network — they only see the
  - `get_css` / `get_properties` / `set_properties`.
  - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
  - `create_component` / `remove_component`.
- - `get_updated_components` — return script component handles for local traversal/mutation after document updates. On initial document load, this returns no components.
+ - `get_updated_components` — return changed and removed script component handles for local traversal/mutation after document updates. Removed handles have `removed = True`. On initial document load, this returns no components.
  - `get_components` — return all matching script component handles when a script explicitly needs a full scan.
  - `create_section` / `remove_section` / `reorder_section`.
 

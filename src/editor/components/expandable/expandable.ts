@@ -119,7 +119,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="container-inner-blocks">
             ${stubPlacementTargets}
           </div>
-          ${mobileAdjustment || stubPlacementMode ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || stubPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: stubAddKey,
                     action: 'add-expandable-stub-block',
@@ -127,7 +127,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                     blockId: block.id,
                     label: 'Expandable stub component type',
                   })}
-                </article>`}
+                </div>`}
         </div>`
             : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey
@@ -156,7 +156,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="container-inner-blocks">
             ${contentPlacementTargets}
           </div>
-          ${mobileAdjustment || contentPlacementMode ? '' : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || contentPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: contentAddKey,
                     action: 'add-expandable-content-block',
@@ -164,7 +164,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                     blockId: block.id,
                     label: 'Expandable content component type',
                   })}
-                </article>`}
+                </div>`}
         </div>`
             : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey

@@ -283,19 +283,22 @@ hvy_version: 0.1
       a { color: rgb(255, 0, 0); }
       ul, ol { list-style: none; padding-left: 0; }
       li { display: block; }
+      #mount { line-height: 3; }
     `;
     document.head.append(style);
     const button = root.querySelector<HTMLElement>('.viewer-sidebar-tab');
     const link = root.querySelector<HTMLElement>('.reader-block a');
     const list = root.querySelector<HTMLElement>('.reader-block ul');
     const listItem = root.querySelector<HTMLElement>('.reader-block li');
-    if (!button || !link || !list || !listItem) {
+    const paragraph = root.querySelector<HTMLElement>('.reader-block p');
+    if (!button || !link || !list || !listItem || !paragraph) {
       throw new Error('Expected embedded controls missing.');
     }
     const buttonStyle = getComputedStyle(button);
     const linkStyle = getComputedStyle(link);
     const listStyle = getComputedStyle(list);
     const listItemStyle = getComputedStyle(listItem);
+    const paragraphStyle = getComputedStyle(paragraph);
     return {
       hasBoundary: root.classList.contains('hvy-document'),
       hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
@@ -305,6 +308,8 @@ hvy_version: 0.1
       listStyleType: listStyle.listStyleType,
       listPaddingInlineStart: listStyle.paddingInlineStart,
       listItemDisplay: listItemStyle.display,
+      paragraphLineHeight: paragraphStyle.lineHeight,
+      paragraphFontSize: paragraphStyle.fontSize,
     };
   });
 
@@ -316,6 +321,56 @@ hvy_version: 0.1
   expect(result.listStyleType).toBe('disc');
   expect(result.listPaddingInlineStart).not.toBe('0px');
   expect(result.listItemDisplay).toBe('list-item');
+  expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
+});
+
+test('embedded AI component list add labels keep compact line height', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+component_defs:
+  - name: tool-tech-xref-card
+    baseType: xref-card
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:component-list {"componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference"}-->
+  <!--hvy:tool-tech-xref-card {"xrefTitle":"Placeholder Tool"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const style = document.createElement('style');
+    style.textContent = '#mount { line-height: 3; }';
+    document.head.append(style);
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.thvy'),
+      mode: 'ai',
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+    const label = root.querySelector<HTMLElement>('.component-list-add-ghost .ghost-label');
+    if (!label) {
+      throw new Error('Expected component list add label missing.');
+    }
+    const labelStyle = getComputedStyle(label);
+    return {
+      text: label.textContent?.trim(),
+      labelLineHeight: labelStyle.lineHeight,
+      labelFontSize: labelStyle.fontSize,
+    };
+  });
+
+  expect(result.text).toBe('Add Tool / Tech Reference');
+  expect(result.labelLineHeight).toBe(result.labelFontSize);
 });
 
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
@@ -1974,7 +2029,8 @@ test('resume editor script does not scan changed reciprocal xrefs on load', asyn
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const rawEditor = page.locator('#rawEditor');
-  await expect(rawEditor).toContainText('reciprocal-xrefs: targets", len(targets)');
+  await expect(rawEditor).toContainText('changed_xrefs = []');
+  await expect(rawEditor).toContainText('if not changed_xrefs:');
   await expect(rawEditor).not.toContainText('skill-software-engineering-from-history-northwind-labs-senior-software-engineer');
   await expect(rawEditor).not.toContainText('tool-python-from-education-bs-computer-science');
   await expect(rawEditor).not.toContainText('skill-software-engineering-from-top-skills-list');

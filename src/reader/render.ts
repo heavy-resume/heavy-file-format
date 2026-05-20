@@ -221,7 +221,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
     const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
-    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
+    return `<div class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
       <div class="ghost-plus-big">${plusIcon()}</div>
       <div class="ghost-label">Add Section</div>
       ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
@@ -229,7 +229,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           ${deps.renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank')}
         </select>
       </label>` : ''}
-    </article>`;
+    </div>`;
   }
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
@@ -519,7 +519,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.currentView !== 'ai' || section.lock || !isAiEditorHostSection(section.key)) {
       return '';
     }
-    return `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost">
       ${renderAddComponentPicker({
         id: `ai-section:${section.key}`,
         action: 'add-block',
@@ -530,7 +530,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         escapeHtml: deps.escapeHtml,
         getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
       })}
-    </article>`;
+    </div>`;
   }
 
   function renderAiActiveComponentListAddAffordance(section: VisualSection, block: VisualBlock): string {
@@ -541,12 +541,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     ) {
       return '';
     }
-    return `<article class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
+    return `<div class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
       section.key
     )}" data-block-id="${deps.escapeAttr(block.id)}">
       <div class="ghost-plus-big">${plusIcon()}</div>
       <div class="ghost-label">${deps.escapeHtml(getComponentListAddLabel(block))}</div>
-    </article>`;
+    </div>`;
   }
 
   function shouldRenderAiPassiveEditorAffordance(base: string, block: VisualBlock): boolean {
@@ -1565,7 +1565,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 ? `<div class="sqlite-row-component-modal-stack">
                     ${attachedBlocks.map((block) => deps.renderEditorBlock(rowModal.sectionKey, block)).join('')}
                   </div>
-                  <article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                  <div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     rowModal.sectionKey
                   )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
@@ -1580,13 +1580,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         ${deps.renderComponentOptions(state.addComponentBySection[addKey] ?? '')}
                       </select>
                     </label>
-                  </article>
+                  </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                     <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
                     <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
                   </div>`
-                : `<article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                : `<div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     state.sqliteRowComponentModal.sectionKey
                   )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
@@ -1601,7 +1601,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         ${deps.renderComponentOptions(state.addComponentBySection[addKey] ?? '')}
                       </select>
                     </label>
-                  </article>
+                  </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                   </div>`

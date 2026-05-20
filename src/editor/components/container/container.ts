@@ -52,7 +52,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
     ${
       block.schema.lock || placementMode
         ? ''
-        : `<article class="ghost-section-card add-ghost container-add-ghost">
+        : `<div class="ghost-section-card add-ghost container-add-ghost">
             ${helpers.renderAddComponentPicker({
               id: addKey,
               action: 'add-container-block',
@@ -60,7 +60,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
               blockId: block.id,
               label: 'Container component type',
             })}
-          </article>`
+          </div>`
     }
   `;
 };

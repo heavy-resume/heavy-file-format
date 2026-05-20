@@ -1508,6 +1508,10 @@ component_defs:
     onImportXrefsApplied(resultMessage) {
       finalStepCallbacks.push(resultMessage);
     },
+    onImportPrepared(resultMessage) {
+      finalStepCallbacks.push(`prepared: ${resultMessage}`);
+      expect(serializeDocument(document)).toContain('"xrefTarget":"widget"');
+    },
     onImportFinalized(resultMessage) {
       finalStepCallbacks.push(resultMessage);
     },
@@ -1529,6 +1533,7 @@ component_defs:
   expect(serialized).toContain('Used for reliable builds.');
   expect(finalStepCallbacks).toEqual([
     'Filled 1 imported xref list.',
+    'prepared: Imported 2 sections.',
     'Imported 2 sections.',
   ]);
 });

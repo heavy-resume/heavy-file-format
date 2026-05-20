@@ -2,13 +2,14 @@ import './xref-card.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const targetTagFilter = getEffectiveTargetTagFilter(block, helpers);
   const hasTarget = normalizeTargetValue(block.schema.xrefTarget).length > 0;
-  const targetOptions = helpers.getXrefTargetOptions(block.schema.xrefTargetTagFilter);
-  const hasNoFilteredTargets = !hasTarget && block.schema.xrefTargetTagFilter.trim().length > 0 && targetOptions.length === 0;
+  const targetOptions = helpers.getXrefTargetOptions(targetTagFilter);
+  const hasNoFilteredTargets = !hasTarget && targetTagFilter.length > 0 && targetOptions.length === 0;
   const titleOverride = block.schema.xrefTitle.trim().length > 0;
   const detailOverride = block.schema.xrefDetail.trim().length > 0;
   return `
-  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, block.schema.xrefTargetTagFilter) ? '' : 'is-invalid-target'} ${hasTarget ? '' : 'is-target-empty'}">
+  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, targetTagFilter) ? '' : 'is-invalid-target'} ${hasTarget ? '' : 'is-target-empty'}">
     <label class="xref-target-picker">
       <span>Target</span>
       <select
@@ -19,7 +20,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
       >
         ${renderTargetOptions(helpers, targetOptions, normalizeTargetValue(block.schema.xrefTarget))}
       </select>
-      ${hasNoFilteredTargets ? `<p class="xref-target-empty">No ${helpers.escapeHtml(block.schema.xrefTargetTagFilter.trim())} targets available yet.</p>` : ''}
+      ${hasNoFilteredTargets ? `<p class="xref-target-empty">No ${helpers.escapeHtml(targetTagFilter)} targets available yet.</p>` : ''}
     </label>
     <span class="xref-override-label">Title override</span>
     <strong
@@ -51,7 +52,7 @@ export const renderXrefCardReader: ComponentReaderRenderer = (_section, block, h
     getDisplayDetail(block, helpers),
     block.schema.xrefTarget,
     helpers,
-    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, block.schema.xrefTargetTagFilter) ? '' : 'is-invalid-target'}`
+    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, getEffectiveTargetTagFilter(block, helpers)) ? '' : 'is-invalid-target'}`
   );
 
 function renderXrefCardPreview(
@@ -99,7 +100,11 @@ function getDisplayDetail(block: Parameters<ComponentEditorRenderer>[1], helpers
 
 function getTargetOption(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers) {
   const target = normalizeTargetValue(block.schema.xrefTarget);
-  return helpers.getXrefTargetOptions(block.schema.xrefTargetTagFilter).find((option) => option.value === target);
+  return helpers.getXrefTargetOptions(getEffectiveTargetTagFilter(block, helpers)).find((option) => option.value === target);
+}
+
+function getEffectiveTargetTagFilter(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
+  return helpers.getEffectiveXrefTargetTagFilter?.(block) ?? block.schema.xrefTargetTagFilter.trim();
 }
 
 function normalizeTargetValue(target: string): string {

@@ -74,6 +74,7 @@ interface ComponentDef {
   tags?: string;
   description?: string;
   schema?: BlockSchema;
+  template?: VisualBlock;
   flavors?: Array<{
     name: string;
     description?: string;
@@ -250,7 +251,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
     const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
-    return `<article class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
+    return `<div class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
       <div class="ghost-plus-big">${plusIcon()}</div>
       <div class="ghost-label">Add Section</div>
       ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
@@ -258,7 +259,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${deps.renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank')}
         </select>
       </label>` : ''}
-    </article>`;
+    </div>`;
   }
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
@@ -293,14 +294,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : '';
     const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
-      : `<article class="ghost-section-card add-ghost compact-add-component-ghost">
+      : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
                     id: `section:${section.key}`,
                     action: 'add-block',
                     sectionKey: section.key,
                     label: 'Section component type',
                   })}
-              </article>`;
+              </div>`;
     return `
       <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
         ${subsectionToggle}
@@ -333,7 +334,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${state.mobileAdjustmentMode || section.lock
         ? ''
         : isNamedEmptySection
-          ? `<article class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
+          ? `<div class="ghost-section-card add-ghost empty-section-heading-ghost" data-action="add-empty-section-heading" data-section-key="${deps.escapeAttr(section.key)}">
                   <div class="empty-section-heading-watermark">${deps.escapeHtml(visibleTitle)}</div>
                   <div class="ghost-plus-big">${plusIcon()}</div>
                   <div class="ghost-label">${deps.escapeHtml(visibleTitle)}</div>
@@ -344,7 +345,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                       ${renderHeadingLevelOption('h3', emptyHeadingLevel, deps.escapeAttr)}
                     </select>
                   </label>
-                </article>
+                </div>
                 ${addComponentGhost}`
           : addComponentGhost
       }
@@ -583,7 +584,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {
-    return `<article class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
       <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
       ${renderComponentPicker({
         id: `block:${block.id}:${placement}`,
@@ -595,7 +596,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           'data-target-block-id': block.id,
         },
       })}
-    </article>`;
+    </div>`;
   }
 
   function renderPassiveEditorBlock(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {
@@ -1215,6 +1216,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     <span>Description</span>
                     <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
                   </label>
+                  ${
+                    deps.resolveBaseComponent(def.baseType) === 'xref-card'
+                      ? `<label>
+                    <span>Target Tag Filter</span>
+                    <input data-field="def-xref-target-tag-filter" data-def-index="${index}" placeholder="tag-name" value="${deps.escapeAttr(def.template?.schema.xrefTargetTagFilter ?? def.schema?.xrefTargetTagFilter ?? '')}" />
+                  </label>`
+                      : ''
+                  }
                   <div class="meta-panel-head">
                     <strong>Flavors</strong>
                   </div>
@@ -1512,6 +1521,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="component-list-group-preview-rem"
             value="${deps.escapeAttr(String(block.schema.componentListGroupCollapsedPreviewRem))}"
+          />
+        </label>`
+            : ''
+        }
+        ${
+          deps.resolveBaseComponent(component) === 'xref-card'
+            ? `<label>
+          <span>Target Tag Filter</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-xref-target-tag-filter"
+            placeholder="tag-name"
+            value="${deps.escapeAttr(block.schema.xrefTargetTagFilter)}"
           />
         </label>`
             : ''

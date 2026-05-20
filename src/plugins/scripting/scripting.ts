@@ -8,7 +8,7 @@ import type {
 import { SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
-import { serializeDocument } from '../../serialization';
+import { deserializeDocument, serializeDocument } from '../../serialization';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
@@ -242,6 +242,7 @@ interface ScriptingTarget {
 
 let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
 let lastScriptedSignature = '';
+let lastScriptedDocumentSnapshot = '';
 
 function visitBlocksInSection(
   section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: JsonObject } }>; children: unknown[] },
@@ -279,6 +280,7 @@ export function getRunnableScriptingTargetsForView(
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
   if (ctx.changeReason === 'load') {
     clearScriptingResults();
+    lastScriptedDocumentSnapshot = '';
     ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
   }
   const targets: ScriptingTarget[] = [];
@@ -293,6 +295,9 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
     return;
   }
+  const previousDocument = ctx.document === lastScriptedDocument && lastScriptedDocumentSnapshot
+    ? deserializeDocument(lastScriptedDocumentSnapshot, ctx.document.extension)
+    : null;
   lastScriptedDocument = ctx.document;
   lastScriptedSignature = signature;
   for (const target of runnableTargets) {
@@ -301,6 +306,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
     }
     const result = await runUserScript({
       document: ctx.document,
+      previousDocument,
       source: target.source,
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
@@ -322,6 +328,9 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       return;
     }
     storeScriptingResult(target.sectionKey, target.blockId, result, target.source);
+  }
+  if (ctx.isCurrentDocument()) {
+    lastScriptedDocumentSnapshot = serializeDocument(ctx.document);
   }
   ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
 }

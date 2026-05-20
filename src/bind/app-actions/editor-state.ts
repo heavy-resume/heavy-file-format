@@ -8,6 +8,7 @@ import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescr
 import { populateMissingDescriptions } from '../../descriptions/populate';
 import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
+import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -111,6 +112,9 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   }
   if (result === 'removed') {
     getRefreshReaderPanels()();
+  }
+  if (result === 'closed' || result === 'removed') {
+    runDocumentEditHooksAfterCommit();
   }
   getRenderApp()();
 };

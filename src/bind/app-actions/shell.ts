@@ -10,6 +10,7 @@ import { clearFilteringForTarget } from '../../search/actions';
 import { clearActiveEditorBlock, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
+import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
 const undo: AppActionHandler = () => {
   undoState();
@@ -37,6 +38,9 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     commitActiveEditorSession();
     state.pendingEditorActivation = null;
     state.componentPlacement = null;
+    if (state.currentView === 'editor') {
+      runDocumentEditHooksAfterCommit();
+    }
   }
   state.currentView = view;
   state.editorMode = view === 'ai' && nextEditorMode === 'advanced' ? 'basic' : nextEditorMode;

@@ -1,5 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
 import { commitTextFillInElement } from '../../text-fill-in-commit';
+import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -66,6 +67,7 @@ function deferCompletedFillInDeactivation(sectionKey: string, blockId: string): 
     if (deactivateEditorBlock(sectionKey, blockId) === 'unchanged') {
       return;
     }
+    runDocumentEditHooksAfterCommit();
     getRefreshReaderPanels()();
     getRenderApp()();
   }, 0);

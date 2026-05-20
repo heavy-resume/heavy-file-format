@@ -468,6 +468,8 @@ test('new nested resume tool xref filters targets to tools', async ({ page }) =>
   await activeEditor.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"tool-python"');
+  await expect(page.locator('#rawEditor')).toContainText('reciprocal-xref-generated');
+  await expect(page.locator('#rawEditor')).toContainText('"xrefTarget":"history-northwind-labs-senior-software-engineer"');
 });
 
 test('xref template picker explains when no tagged targets are available', async ({ page }) => {

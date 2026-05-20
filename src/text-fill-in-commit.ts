@@ -1,5 +1,5 @@
 import { findBlockByIds, handleBlockFieldInput } from './block-ops';
-import { runPluginDocumentHooks } from './plugins/hooks';
+import { runDocumentEditHooksAfterCommit } from './document-edit-hooks';
 import { state } from './state';
 import { saveSessionState } from './state-persistence';
 
@@ -23,7 +23,7 @@ export function commitTextFillInElement(target: HTMLElement | null | undefined, 
   const handled = handleBlockFieldInput(target);
   if (handled) {
     saveSessionState(state);
-    void runPluginDocumentHooks('edit');
+    runDocumentEditHooksAfterCommit();
   }
   const blockAfter = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
   console.debug('[hvy:fill-in-commit]', {

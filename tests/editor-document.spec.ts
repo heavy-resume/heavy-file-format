@@ -979,6 +979,66 @@ hvy_version: 0.1
   expect(result).toEqual(['load']);
 });
 
+test('embedded editor rich input runs document hooks when edit is done', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"role"}-->
+  Software Enginee
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const testWindow = window as Window & { testHookReasons?: string[] };
+    testWindow.testHookReasons = [];
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      storageKey: 'rich-hook-done',
+      plugins: [{
+        id: 'test.hooks',
+        displayName: 'Test Hooks',
+        create() {
+          return { element: document.createElement('div') };
+        },
+        hooks: {
+          documentLoad: { run: (ctx) => { testWindow.testHookReasons?.push(ctx.changeReason); } },
+          documentChange: { run: (ctx) => { testWindow.testHookReasons?.push(ctx.changeReason); } },
+        },
+      }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  await page.locator('#mount .editor-block-passive').first().click();
+  const activeBlock = page.locator('#mount .editor-block[data-active-editor-block="true"]').first();
+  const editor = activeBlock.locator('[data-field="block-rich"]').first();
+  await expect(editor).toBeVisible();
+  await editor.evaluate((element) => {
+    element.textContent = 'Software Engineer';
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'r' }));
+  });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await page.waitForFunction(() => (window as Window & { testHookReasons?: string[] }).testHookReasons?.length === 2);
+
+  const result = await page.evaluate(() => (window as Window & { testHookReasons?: string[] }).testHookReasons);
+
+  expect(result).toEqual(['load', 'edit']);
+});
+
 test('embedded viewer sidebar stays open after remounting root from editor to viewer', async ({ page }) => {
   await page.goto('/');
 

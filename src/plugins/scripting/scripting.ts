@@ -43,8 +43,10 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   helpButton.type = 'button';
   helpButton.className = 'ghost hvy-scripting-help-button';
   helpButton.textContent = 'Help';
-  helpButton.addEventListener('click', () => {
-    openScriptingHelpModal();
+  helpButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openScriptingHelpModal(helpButton);
   });
 
   const headActions = document.createElement('div');

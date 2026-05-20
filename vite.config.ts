@@ -14,6 +14,8 @@ const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const IMPORT_REFERENCE_FILE_PATH = resolve(process.cwd(), 'src/ai-import-hvy-format-reference.hvy');
 const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 const HVY_GUIDE_FILE_PATH = resolve(process.cwd(), 'hvy-guide.hvy');
+const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
+const SCRIPTING_HELP_FILE_PATH = resolve(process.cwd(), 'src/plugins/scripting/help.hvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.db-table',
@@ -255,6 +257,9 @@ function getSourceDocumentForRequest(url: string | undefined): { filePath: strin
   }
   if (url?.startsWith(HVY_GUIDE_API_PATH)) {
     return { filePath: HVY_GUIDE_FILE_PATH, label: 'HVY guide document' };
+  }
+  if (url?.startsWith(SCRIPTING_HELP_API_PATH)) {
+    return { filePath: SCRIPTING_HELP_FILE_PATH, label: 'scripting help document' };
   }
   return null;
 }

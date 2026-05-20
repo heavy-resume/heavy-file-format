@@ -450,15 +450,23 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const linkButton = page.locator('.editor-block', { has: editor }).getByRole('button', { name: 'Link' });
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p><a href="https://example.com">Link me</a></p>';
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const anchor = node.querySelector('a[href="https://example.com"]');
+    const textNode = anchor?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    (node as HTMLElement).focus();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
-  await editor.locator('a[href="https://example.com"]').click();
 
-  await linkButton.click();
+  await page.getByRole('button', { name: 'Link' }).first().click();
   const linkModal = page.locator('.link-inline-modal.is-open');
   const linkInput = linkModal.locator('#linkInlineInput');
   await expect(linkModal).toBeVisible();

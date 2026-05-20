@@ -25,11 +25,28 @@ import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
-import type { ReaderViewFilter } from './types';
+import type { ReaderViewFilter, SelectedExample } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
+const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
+const IMPORT_REFERENCE_SOURCE_DOCUMENT = {
+  apiPath: IMPORT_REFERENCE_API_PATH,
+  errorLabel: 'import reference document',
+};
+const SCRIPTING_HELP_SOURCE_DOCUMENT = {
+  apiPath: SCRIPTING_HELP_API_PATH,
+  errorLabel: 'scripting help document',
+};
+const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: string; errorLabel: string }>> = {
+  guide: {
+    apiPath: HVY_GUIDE_API_PATH,
+    errorLabel: 'HVY guide document',
+  },
+  'import-reference': IMPORT_REFERENCE_SOURCE_DOCUMENT,
+  'scripting-help': SCRIPTING_HELP_SOURCE_DOCUMENT,
+};
 
 interface HvyFileSystemFileHandle {
   name: string;
@@ -92,13 +109,17 @@ async function openLocalDocumentWithPicker(): Promise<void> {
   currentFileHandle = handle;
 }
 
-async function loadImportReferenceDocumentFromServer(): Promise<void> {
-  const response = await fetch(IMPORT_REFERENCE_API_PATH, { cache: 'no-store' });
+async function loadSourceDocumentFromServer(
+  source: { apiPath: string; errorLabel: string },
+  filename: string,
+  selectedExample: SelectedExample
+): Promise<void> {
+  const response = await fetch(source.apiPath, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Could not load import reference document: ${response.status} ${response.statusText}`);
+    throw new Error(`Could not load ${source.errorLabel}: ${response.status} ${response.statusText}`);
   }
   currentFileHandle = null;
-  replaceLoadedDocument(await response.text(), 'ai-import-hvy-format-reference.hvy', 'import-reference');
+  replaceLoadedDocument(await response.text(), filename, selectedExample);
 }
 
 async function loadDefaultExampleDocument(): Promise<void> {
@@ -120,8 +141,9 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   state.filename = normalized;
   downloadName.value = normalized;
   const bytes = serializeDocumentBytes(state.document);
-  if (state.selectedExample === 'guide') {
-    const response = await fetch(HVY_GUIDE_API_PATH, {
+  const sourceDocument = state.selectedExample ? SOURCE_DOCUMENTS_BY_EXAMPLE[state.selectedExample] : undefined;
+  if (sourceDocument) {
+    const response = await fetch(sourceDocument.apiPath, {
       method: 'PUT',
       headers: {
         'content-type': 'text/plain; charset=utf-8',
@@ -129,22 +151,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
       body: new TextDecoder().decode(bytes),
     });
     if (!response.ok) {
-      throw new Error(`Could not save HVY guide document: ${response.status} ${response.statusText}`);
-    }
-    saveSessionState(state);
-    getRenderApp()();
-    return;
-  }
-  if (state.selectedExample === 'import-reference') {
-    const response = await fetch(IMPORT_REFERENCE_API_PATH, {
-      method: 'PUT',
-      headers: {
-        'content-type': 'text/plain; charset=utf-8',
-      },
-      body: new TextDecoder().decode(bytes),
-    });
-    if (!response.ok) {
-      throw new Error(`Could not save import reference document: ${response.status} ${response.statusText}`);
+      throw new Error(`Could not save ${sourceDocument.errorLabel}: ${response.status} ${response.statusText}`);
     }
     saveSessionState(state);
     getRenderApp()();
@@ -245,8 +252,24 @@ export function bindUi(app: HTMLElement): void {
 
   const importReferenceBtn = app.querySelector<HTMLButtonElement>('#importReferenceBtn');
   importReferenceBtn?.addEventListener('click', () => {
-    void loadImportReferenceDocumentFromServer().catch((error: unknown) => {
+    void loadSourceDocumentFromServer(
+      IMPORT_REFERENCE_SOURCE_DOCUMENT,
+      'ai-import-hvy-format-reference.hvy',
+      'import-reference'
+    ).catch((error: unknown) => {
       state.rawEditorError = error instanceof Error ? error.message : 'Could not load the import reference document.';
+      getRenderApp()();
+    });
+  });
+
+  const scriptingHelpBtn = app.querySelector<HTMLButtonElement>('#scriptingHelpBtn');
+  scriptingHelpBtn?.addEventListener('click', () => {
+    void loadSourceDocumentFromServer(
+      SCRIPTING_HELP_SOURCE_DOCUMENT,
+      'scripting-help.hvy',
+      'scripting-help'
+    ).catch((error: unknown) => {
+      state.rawEditorError = error instanceof Error ? error.message : 'Could not load the scripting help document.';
       getRenderApp()();
     });
   });

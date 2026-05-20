@@ -2,8 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
-  await page.locator('.document-menu summary').click();
-  const item = page.getByRole('button', { name, exact: true });
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = true;
+    }
+  });
+  const item = page.locator('.document-menu-panel').getByRole('button', { name, exact: true });
   await expect(item).toBeVisible();
   await item.click({ force: true });
 }
@@ -61,6 +65,31 @@ test('reference app can load the import HVY reference document', async ({ page }
   await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
 });
 
+test('reference app can load the scripting help document', async ({ page }) => {
+  await page.route('**/api/scripting-help-document', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        contentType: 'text/plain; charset=utf-8',
+        body: `---
+hvy_version: 0.1
+title: Scripting Help Test
+---
+
+<!--hvy: {"id":"overview"}-->
+#! Scripting Help
+`,
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: '{"error":"Method not allowed."}' });
+  });
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Scripting Help');
+
+  await expect(page.locator('#downloadName')).toHaveValue('scripting-help.hvy');
+});
+
 test('reference app saves the import reference document through the server file endpoint', async ({ page }) => {
   let savedBody = '';
   let downloaded = false;
@@ -95,6 +124,46 @@ title: Import Reference Test
   await page.goto('/');
 
   await selectDocumentMenuItem(page, 'Import Reference');
+  await page.getByRole('button', { name: 'Save File' }).click();
+
+  await expect.poll(() => savedBody).toContain('hvy_version: 0.1');
+  expect(downloaded).toBe(false);
+});
+
+test('reference app saves the scripting help document through the server file endpoint', async ({ page }) => {
+  let savedBody = '';
+  let downloaded = false;
+  page.on('download', () => {
+    downloaded = true;
+  });
+  await page.route('**/api/scripting-help-document', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        contentType: 'text/plain; charset=utf-8',
+        body: `---
+hvy_version: 0.1
+title: Scripting Help Save Test
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`,
+      });
+      return;
+    }
+    if (route.request().method() === 'PUT') {
+      savedBody = route.request().postData() ?? '';
+      await route.fulfill({
+        contentType: 'application/json',
+        body: '{"ok":true}',
+      });
+      return;
+    }
+    await route.fulfill({ status: 405, body: '{"error":"Method not allowed."}' });
+  });
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Scripting Help');
   await page.getByRole('button', { name: 'Save File' }).click();
 
   await expect.poll(() => savedBody).toContain('hvy_version: 0.1');

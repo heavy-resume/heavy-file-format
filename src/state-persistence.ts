@@ -203,6 +203,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'resume-template'
     || value === 'resume-example'
     || value === 'import-reference'
+    || value === 'scripting-help'
     || value === 'custom'
   );
 }

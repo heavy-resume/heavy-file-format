@@ -1,7 +1,7 @@
 import helpHvyRaw from './help.hvy?raw';
 import { deserializeDocument } from '../../serialization';
 
-import { getReaderRenderer } from '../../state';
+import { getReaderRenderer, state } from '../../state';
 import { findSectionByKey } from '../../section-ops';
 
 let cachedDoc: ReturnType<typeof deserializeDocument> | null = null;
@@ -15,7 +15,9 @@ function getHelpDoc() {
 }
 
 function renderHelpHtml(): string {
+  const previousView = state.currentView;
   try {
+    state.currentView = 'viewer';
     const doc = getHelpDoc();
     const renderer = getReaderRenderer();
     if (renderer && renderer.renderReaderSections) {
@@ -25,52 +27,68 @@ function renderHelpHtml(): string {
     }
   } catch (error) {
     cachedHelpHtml = `<p>Failed to render help: ${error instanceof Error ? error.message : String(error)}</p>`;
+  } finally {
+    state.currentView = previousView;
   }
   return cachedHelpHtml || '';
 }
 
-let activeBackdrop: HTMLElement | null = null;
+let activeModalRoot: HTMLElement | null = null;
 
-export function openScriptingHelpModal(): void {
-  if (activeBackdrop) return;
-  const backdrop = document.createElement('div');
-  backdrop.className = 'hvy-scripting-help-modal-backdrop';
+export function openScriptingHelpModal(invoker?: HTMLElement | null): void {
+  if (activeModalRoot) return;
+  const modalRoot = document.createElement('div');
+  modalRoot.className = 'modal-root hvy-scripting-help-modal-root';
 
   const modal = document.createElement('div');
-  modal.className = 'hvy-scripting-help-modal';
+  modal.className = 'modal-panel hvy-scripting-help-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'scriptingHelpModalTitle');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.dataset.scriptingHelpAction = 'close';
 
   const head = document.createElement('div');
-  head.className = 'hvy-scripting-help-modal-head';
-  const title = document.createElement('strong');
+  head.className = 'modal-head';
+  const title = document.createElement('h3');
+  title.id = 'scriptingHelpModalTitle';
   title.textContent = 'Scripting plugin — Help';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'ghost';
+  close.dataset.scriptingHelpAction = 'close';
   close.textContent = 'Close';
+  const actions = document.createElement('div');
+  actions.className = 'modal-head-actions';
+  actions.appendChild(close);
   head.appendChild(title);
-  head.appendChild(close);
+  head.appendChild(actions);
 
   const body = document.createElement('div');
-  body.className = 'hvy-scripting-help-modal-body reader-pane';
+  body.className = 'hvy-scripting-help-modal-body reader-document hvy-reader-surface';
   body.innerHTML = renderHelpHtml();
 
   modal.appendChild(head);
   modal.appendChild(body);
-  backdrop.appendChild(modal);
+  modalRoot.appendChild(overlay);
+  modalRoot.appendChild(modal);
 
   const dismiss = () => {
-    backdrop.remove();
+    modalRoot.remove();
     document.removeEventListener('keydown', onKey);
-    activeBackdrop = null;
+    activeModalRoot = null;
+    invoker?.focus();
   };
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       dismiss();
     }
   };
-  close.addEventListener('click', dismiss);
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) {
+  modalRoot.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest<HTMLElement>('[data-scripting-help-action="close"]')) {
       dismiss();
     }
   });
@@ -93,6 +111,11 @@ export function openScriptingHelpModal(): void {
 
   document.addEventListener('keydown', onKey);
 
-  document.body.appendChild(backdrop);
-  activeBackdrop = backdrop;
+  const mount = invoker?.closest<HTMLElement>('.viewer-shell, .editor-shell')
+    ?? invoker?.closest<HTMLElement>('.hvy-embed-layout')
+    ?? document.querySelector<HTMLElement>('#app')
+    ?? document.body;
+  mount.appendChild(modalRoot);
+  activeModalRoot = modalRoot;
+  close.focus();
 }

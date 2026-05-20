@@ -15,7 +15,12 @@ import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, 
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 import { logClickTrace } from '../click-trace';
 
-const richToolbarSelections = new WeakMap<HTMLElement, Range>();
+interface RichToolbarSelection {
+  range: Range;
+  anchor: HTMLAnchorElement | null;
+}
+
+const richToolbarSelections = new WeakMap<HTMLElement, RichToolbarSelection>();
 
 export function bindClickDispatch(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
@@ -131,9 +136,15 @@ export function bindClickDispatch(app: HTMLElement): void {
       if (sectionKey && blockId && action) {
         const editable = getRichEditableForButton(app, richButton);
         if (editable) {
-          const restoredRange = restoreRichToolbarSelection(editable);
+          const restoredSelection = restoreRichToolbarSelection(editable);
           if (action === 'link') {
-            openLinkInlineModal(app, editable, '', restoredRange);
+            openLinkInlineModal(
+              app,
+              editable,
+              restoredSelection?.anchor?.getAttribute('href') ?? '',
+              restoredSelection?.range ?? null,
+              restoredSelection?.anchor ?? null
+            );
             return;
           }
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
@@ -497,7 +508,7 @@ function isRangeInside(editable: HTMLElement, range: Range): boolean {
   return editable.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editable;
 }
 
-function storeCurrentRichSelection(editable: HTMLElement): Range | null {
+function storeCurrentRichSelection(editable: HTMLElement): RichToolbarSelection | null {
   const selection = window.getSelection();
   if (!selection?.rangeCount) {
     return null;
@@ -507,19 +518,34 @@ function storeCurrentRichSelection(editable: HTMLElement): Range | null {
     return null;
   }
   const clone = range.cloneRange();
-  richToolbarSelections.set(editable, clone);
-  return clone;
+  const stored = {
+    range: clone,
+    anchor: findLinkAnchorForRange(editable, clone),
+  };
+  richToolbarSelections.set(editable, stored);
+  return stored;
 }
 
-function restoreRichToolbarSelection(editable: HTMLElement): Range | null {
-  const range = richToolbarSelections.get(editable);
-  if (!range || !isRangeInside(editable, range)) {
+function restoreRichToolbarSelection(editable: HTMLElement): RichToolbarSelection | null {
+  const stored = richToolbarSelections.get(editable);
+  if (!stored || !isRangeInside(editable, stored.range)) {
     return null;
   }
   const selection = window.getSelection();
   selection?.removeAllRanges();
-  selection?.addRange(range);
-  return range;
+  selection?.addRange(stored.range);
+  return stored;
+}
+
+function findLinkAnchorForRange(editable: HTMLElement, range: Range): HTMLAnchorElement | null {
+  for (const node of [range.startContainer, range.endContainer, range.commonAncestorContainer]) {
+    const element = node instanceof Element ? node : node.parentNode instanceof Element ? node.parentNode : null;
+    const anchor = element?.closest<HTMLAnchorElement>('a[href]') ?? null;
+    if (anchor && editable.contains(anchor)) {
+      return anchor;
+    }
+  }
+  return null;
 }
 
 function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HTMLElement | null {

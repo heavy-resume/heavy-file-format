@@ -58,6 +58,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
+  { id: 'scriptingHelpBtn', label: 'Scripting Help', selectedExample: 'scripting-help' },
 ];
 let readerHighlightGlowObserver: IntersectionObserver | null = null;
 let readerHighlightGlowSignature = '';

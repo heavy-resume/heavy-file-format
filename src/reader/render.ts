@@ -244,11 +244,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
       );
       const topLevelAddGhost = renderAiTopLevelSectionAddGhost('sidebar');
-      if (sidebarSections.length === 0 && !topLevelAddGhost) {
+      const sidebarSectionsHtml = sidebarSections.map((section) => renderReaderSection(section)).join('');
+      if (!sidebarSectionsHtml.trim() && !topLevelAddGhost) {
         return '';
       }
       const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
     });
   }
 

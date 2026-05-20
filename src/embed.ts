@@ -330,21 +330,24 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const capturedScroll = captureRenderScroll(root, state.paneScroll);
   state.paneScroll = capturedScroll.paneScroll;
   applyTheme();
+  const readerWarningsHtml = renderer.renderWarnings();
+  const readerSidebarSectionsHtml = renderer.renderSidebarSections(state.document.sections);
+  const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   capturePluginFocus();
   root.innerHTML = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
-          <div class="viewer-shell ${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-            <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
-            <aside class="viewer-sidebar">
-              <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
-              ${renderer.renderSidebarHelpBalloon(state.document.sections)}
-              <div class="viewer-sidebar-panel">
-                <div id="readerWarnings" class="reader-warnings">${renderer.renderWarnings()}</div>
-                <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${renderer.renderSidebarSections(state.document.sections)}</div>
-              </div>
-            </aside>
+          <div class="viewer-shell ${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+            ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
+              <aside class="viewer-sidebar">
+                <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
+                ${renderer.renderSidebarHelpBalloon(state.document.sections)}
+                <div class="viewer-sidebar-panel">
+                  <div id="readerWarnings" class="reader-warnings">${readerWarningsHtml}</div>
+                  <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${readerSidebarSectionsHtml}</div>
+                </div>
+              </aside>` : ''}
             <div id="readerDocument" class="reader-document hvy-reader-surface">${renderer.renderReaderSections(state.document.sections)}</div>
           </div>
         </div>

@@ -2856,6 +2856,7 @@ scripts:
     rows = doc.tool.db_query(query='SELECT * FROM chores')
     doc.tool.db_exec(sql="DELETE FROM chores")
     doc.tool.refresh()
+    doc.tool.get_components("text")
     doc.tool.made_up_tool()
 `, '.hvy');
   const session = createHvyCliSession();
@@ -2868,6 +2869,7 @@ scripts:
   expect(result.output).toContain('Use doc.db.execute(sql, params) instead.');
   expect(result.output).toContain('script uses unknown doc.tool.refresh. Valid doc.tool names: request_structure, grep, view_component');
   expect(result.output).toContain('Remove this call or use doc.rerender() only when explicitly needed.');
+  expect(result.output).not.toContain('script uses unknown doc.tool.get_components');
   expect(result.output).toContain('script uses unknown doc.tool.made_up_tool. Valid doc.tool names: request_structure, grep, view_component');
   expect(result.output).toContain('Run man hvy plugin scripting tool for details.');
 });
@@ -2882,7 +2884,9 @@ test('registered plugin help topics work without special-case command handlers',
   expect(manHelp).toContain('hvy insert INDEX plugin SECTION_PATH ID hvy.scripting');
   expect(manHelp).toContain('The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.');
   expect(manHelp).toContain('Document tools: request_structure, grep, view_component');
+  expect(manHelp).toContain('get_updated_components, get_components');
   expect(manHelp).toContain('Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql');
+  expect(manHelp).toContain('doc.component.get_text/set_text/is_empty reads and updates text-like components by HVY component id.');
   expect(manHelp).toContain('Example: summary = doc.tool.request_structure(); doc.header.set("script_summary", summary[:200])');
   expect(manHelp).toContain('For a specific doc.tool shape, run: man hvy plugin scripting tool TOOL_NAME');
   expect(directHelp).toBe(manHelp);
@@ -2894,6 +2898,7 @@ test('scripting plugin help can show one doc.tool shape at a time', async () => 
 
   const grepHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting tool grep')).output;
   const directHelp = (await executeHvyCliCommand(document, session, 'hvy plugin scripting tool patch_header')).output;
+  const componentsHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting tool get_components')).output;
   const listHelp = (await executeHvyCliCommand(document, session, 'man hvy plugin scripting tool')).output;
 
   expect(grepHelp).toContain('hvy plugin scripting tool grep');
@@ -2901,7 +2906,10 @@ test('scripting plugin help can show one doc.tool shape at a time', async () => 
   expect(grepHelp).toContain('{"tool":"grep","query":"Python|TypeScript"');
   expect(directHelp).toContain('Use from Brython as: doc.tool.patch_header(**tool_args)');
   expect(directHelp).toContain('{"tool":"patch_header","edits"');
+  expect(componentsHelp).toContain('Use from Brython as: doc.tool.get_components(**tool_args)');
+  expect(componentsHelp).toContain('returns all matching script component handles');
   expect(listHelp).toContain('Available tools: request_structure, grep, view_component');
+  expect(listHelp).toContain('get_updated_components, get_components');
 });
 
 test('db-table cli can execute modifying SQL and query rows', async () => {

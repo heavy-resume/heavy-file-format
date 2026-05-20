@@ -582,6 +582,9 @@ function renderApp(): void {
   const isRawEditor = state.editorMode === 'raw';
   const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
+  const readerWarningsHtml = readerRenderer.renderWarnings();
+  const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
+  const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
 
   stepStartedAt = performance.now();
   const templateFields = getTemplateFields(state.document.meta);
@@ -680,18 +683,18 @@ function renderApp(): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
-                   <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
-                   <aside class="viewer-sidebar">
-                     <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
-                     ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                     <div class="viewer-sidebar-panel">
-                       <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                       <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
-                       <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
-                       <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
-                     </div>
-                   </aside>
+              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`)}>
+                   ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
+                     <aside class="viewer-sidebar">
+                       <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
+                       ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
+                       <div class="viewer-sidebar-panel">
+                         <div id="readerWarnings" class="reader-warnings">${readerWarningsHtml}</div>
+                         <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
+                         <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
+                         <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
+                       </div>
+                     </aside>` : ''}
                    <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}

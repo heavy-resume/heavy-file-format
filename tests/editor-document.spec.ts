@@ -338,6 +338,11 @@ hvy_version: 0.1
  [Example link](https://example.com)
 
  - Embedded bullet
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ Sidebar content
 `;
     const documentBytes = new TextEncoder().encode(source);
     const root = document.querySelector<HTMLElement>('#mount');
@@ -391,6 +396,49 @@ hvy_version: 0.1
   expect(result.listPaddingInlineStart).not.toBe('0px');
   expect(result.listItemDisplay).toBe('list-item');
   expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
+});
+
+test('embedded viewer omits empty sidebar markup', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Viewer-only body.
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+    });
+    const shell = root.querySelector<HTMLElement>('.viewer-shell');
+    const readerDocument = root.querySelector<HTMLElement>('#readerDocument');
+    if (!readerDocument) {
+      throw new Error('Reader document missing.');
+    }
+    return {
+      hasNoSidebarClass: shell?.classList.contains('has-no-sidebar') ?? false,
+      sidebarCount: root.querySelectorAll('.viewer-sidebar').length,
+      sidebarTabCount: root.querySelectorAll('.viewer-sidebar-tab').length,
+      readerPaddingLeft: getComputedStyle(readerDocument).paddingLeft,
+    };
+  });
+
+  expect(result.hasNoSidebarClass).toBe(true);
+  expect(result.sidebarCount).toBe(0);
+  expect(result.sidebarTabCount).toBe(0);
+  expect(result.readerPaddingLeft).not.toBe('48px');
 });
 
 test('embedded AI component list add labels keep compact line height', async ({ page }) => {
@@ -1193,6 +1241,12 @@ hvy_version: 0.1
 #! Summary
 
  Body
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ <!--hvy:text {"id":"side-body"}-->
+  Sidebar body
 `;
     const root = document.querySelector<HTMLElement>('#mount');
     if (!root) {
@@ -2374,7 +2428,7 @@ hvy_version: 0.1
 test('resume section templates hide already used non-repeatable sections', async ({ page }) => {
   await page.goto('/');
 
-  await selectDocumentMenuItem(page, 'Resume Template');
+  await selectDocumentMenuItem(page, 'Resume Example');
   let options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
@@ -2558,7 +2612,7 @@ test('responsive preview controls resize document frame without resizing app chr
 test('responsive preview applies to pullout document surfaces', async ({ page }) => {
   await page.goto('/');
 
-  await selectDocumentMenuItem(page, 'Resume Template');
+  await selectDocumentMenuItem(page, 'Resume Example');
   await page.getByRole('button', { name: 'Phone 390' }).click();
 
   await page.locator('.editor-sidebar-tab').click();

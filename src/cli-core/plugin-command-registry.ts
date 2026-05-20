@@ -52,6 +52,7 @@ const SCRIPTING_DOC_TOOL_NAMES = [
   'create_component',
   'remove_component',
   'get_updated_components',
+  'get_components',
   'create_section',
   'remove_section',
   'reorder_section',
@@ -62,6 +63,7 @@ const SCRIPTING_DOC_TOOL_NAMES = [
 
 const SCRIPTING_HEADER_TOOL_HELP: Record<string, string> = {
   get_updated_components: 'doc.tool.get_updated_components("xref") returns script component handles after document updates; on initial load it returns none. Use doc.tool.get_components("xref") for an explicit full scan. Handles include get(name), set(name, value), has_tag(tag), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), remove_children_by_tag(tag), and append_child(component, config, text, slot).',
+  get_components: 'doc.tool.get_components("xref") returns all matching script component handles for an explicit full scan. The component filter can match component name or base component. Handles include id, component, base_component, section_id, section_title, get(name), set(name, value), has_tag(tag), get_parent_by_tag(tag), get_ancestor_record(excluded_tags), first_table_cell(index), remove_children_by_tag(tag, slot), and append_child(component, config, text, slot).',
   view_header: '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
   grep_header: '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
   patch_header: '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
@@ -407,9 +409,10 @@ registerHvyCliPluginCommands({
     'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
     'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
     'doc.tool.TOOL_NAME(**args) calls a synchronous subset of document-edit tools. args are Python keyword arguments matching the AI tool schema.',
-    'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, create_section, remove_section, reorder_section.',
+    'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, get_updated_components, get_components, create_section, remove_section, reorder_section.',
     'Header tools: view_header, grep_header, patch_header.',
     'Not exposed through doc.tool: edit_component, view_rendered_component, query_db_table, execute_sql, and other async tools.',
+    'doc.component.get_text/set_text/is_empty reads and updates text-like components by HVY component id.',
     'doc.header.get/set/remove/keys reads and writes front matter.',
     'doc.attachments.list/read/write/remove works with document attachments.',
     'doc.db.query(sql, params) and doc.db.execute(sql, params) access the current document SQL backend when available.',

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -243,6 +243,60 @@ test('round-trips trailing spaces in text block lines', () => {
   const expectedResult = serializeWithState(document);
   expect(expectedResult).toContain('  **Location:** \n');
   expect(expectedResult.endsWith('  **Target Location(s):** \n')).toBe(true);
+});
+
+test('serializes text block prose with natural 120-column wrapping', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"intro"}-->
+  ${'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega '.repeat(2).trim()}
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+  const textLines = expectedResult
+    .split('\n')
+    .filter((line) => line.includes('Alpha beta') || line.includes('omega'));
+
+  expect(textLines.length).toBeGreaterThan(1);
+  expect(textLines.every((line) => line.length <= 120)).toBe(true);
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()).toBe(
+    document.sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()
+  );
+});
+
+test('serialization wrapping preserves code plugin and fenced text bodies', () => {
+  const longCodeLine = 'const value = "' + 'x'.repeat(150) + '";';
+  const longScriptLine = 'doc.header.set("long_value", "' + 'y'.repeat(150) + '")';
+  const longFenceLine = 'fenced ' + 'z'.repeat(150);
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:code {"codeLanguage":"js"}-->
+  ${longCodeLine}
+
+ <!--hvy:plugin {"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  ${longScriptLine}
+
+ <!--hvy:text {"id":"fenced"}-->
+  \`\`\`text
+  ${longFenceLine}
+  \`\`\`
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain(longCodeLine);
+  expect(expectedResult).toContain(longScriptLine);
+  expect(expectedResult).toContain(longFenceLine);
 });
 
 test('serializes expandable stub and content meta fields on the expandable slot markers', () => {

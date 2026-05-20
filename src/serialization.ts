@@ -750,6 +750,8 @@ function shouldCloseFrameForIndent(
 
 const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
 const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
+const SERIALIZED_TEXT_WRAP_COLUMN = 120;
+const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 
 // Serialize a component def to clean YAML format:
 // - strips `component` from the root schema (redundant with `baseType`)
@@ -1380,7 +1382,7 @@ function serializeBlock(
   const blockDirective = override ?? serializeBlockDirective(block.schema, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
-  const text = indentMultiline(trimBoundaryNewlines(block.text), indent + 1);
+  const text = serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
@@ -1407,6 +1409,105 @@ function indentMultiline(text: string, indent: number): string {
     .split('\n')
     .map((line) => `${prefix}${line}`)
     .join('\n');
+}
+
+function serializeBlockText(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  const text = trimBoundaryNewlines(block.text);
+  if (text.length === 0) {
+    return '';
+  }
+  const wrapped = shouldWrapSerializedBlockText(block, documentMeta)
+    ? wrapSerializableText(text, Math.max(20, SERIALIZED_TEXT_WRAP_COLUMN - indent))
+    : text;
+  return indentMultiline(wrapped, indent);
+}
+
+function shouldWrapSerializedBlockText(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  if (SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS.has(block.schema.component)) {
+    return false;
+  }
+  if (block.schema.component === 'text') {
+    return true;
+  }
+  return !isBuiltinComponentName(block.schema.component) && resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'text';
+}
+
+function wrapSerializableText(text: string, column: number): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+
+  for (const line of lines) {
+    const parsedFence = parseMarkdownFenceLine(line);
+    if (parsedFence) {
+      result.push(line);
+      fence = fence ? null : parsedFence;
+      continue;
+    }
+    if (fence || shouldPreserveSerializedTextLine(line)) {
+      result.push(line);
+      continue;
+    }
+    result.push(...wrapSerializableTextLine(line, column));
+  }
+
+  return result.join('\n');
+}
+
+function shouldPreserveSerializedTextLine(line: string): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.length === 0 ||
+    / {2,}$/.test(line) ||
+    /^(\|| {0,3}[-*+]\s+\[[ xX]\]\s+)/.test(line) ||
+    /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line) ||
+    /^ {0,3}#{1,6}\s/.test(line) ||
+    /^ {0,3}>/.test(line) ||
+    /^ {4,}\S/.test(line) ||
+    /<!--\s*value\b/.test(line)
+  );
+}
+
+function wrapSerializableTextLine(line: string, column: number): string[] {
+  if (line.length <= column || !/\s/.test(line.trim())) {
+    return [line];
+  }
+
+  const leading = line.match(/^ */)?.[0] ?? '';
+  const markerMatch = line.slice(leading.length).match(/^(\^[-A-Za-z0-9_]+\^\s*)/);
+  const firstPrefix = `${leading}${markerMatch?.[1] ?? ''}`;
+  const restPrefix = leading;
+  let remaining = line.slice(firstPrefix.length).trimStart();
+  const wrapped: string[] = [];
+  let prefix = firstPrefix;
+
+  while (remaining.length > 0) {
+    const limit = Math.max(20, column - prefix.length);
+    if (remaining.length <= limit) {
+      wrapped.push(`${prefix}${remaining}`);
+      break;
+    }
+    const breakIndex = findWrapBreakIndex(remaining, limit);
+    wrapped.push(`${prefix}${remaining.slice(0, breakIndex).trimEnd()}`);
+    remaining = remaining.slice(breakIndex).trimStart();
+    prefix = restPrefix;
+  }
+
+  return wrapped.length > 0 ? wrapped : [line];
+}
+
+function findWrapBreakIndex(text: string, limit: number): number {
+  for (let index = Math.min(limit, text.length - 1); index > 0; index -= 1) {
+    if (/\s/.test(text[index])) {
+      return index;
+    }
+  }
+  for (let index = limit + 1; index < text.length; index += 1) {
+    if (/\s/.test(text[index])) {
+      return index;
+    }
+  }
+  return text.length;
 }
 
 function trimBoundaryNewlines(text: string): string {

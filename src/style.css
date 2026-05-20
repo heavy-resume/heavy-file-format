@@ -600,6 +600,10 @@ body {
   scrollbar-gutter: stable both-edges;
 }
 
+.viewer-shell.has-no-sidebar .reader-document {
+  padding-left: var(--hvy-document-edge-gutter);
+}
+
 .viewer-shell .reader-empty-state {
   align-self: center;
   justify-self: center;

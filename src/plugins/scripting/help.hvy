@@ -1,132 +1,147 @@
 ---
 hvy_version: 0.1
 title: Scripting Plugin Help
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0 0 0.5rem;"
+theme:
+  colors: {}
 ---
 
-<!--hvy: {"id":"overview","expanded":true}-->
+<!--hvy: {"id":"overview","lock":false,"expanded":true,"highlight":false}-->
 #! Overview
-# Introduction
-Give your HVY document advanced functionality with scripting. Have ... <TODO>
 
-The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask!
-
-The scripting plugin runs Python code (via Brython) once when the document
-loads. Use it to generate, mutate, or rearrange document content
-programmatically. Scripts cannot reach the network — they only see the
-`doc` API.
-
-<!--hvy: {"id":"doc-api","expanded":false}-->
+ <!--hvy:text {}-->
+  # Introduction
+  
+  Give your HVY document advanced functionality with scripting.
+  
+  The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask the AI to
+  write it!
+  
+  The scripting plugin runs Python code (via Brython) once when the document loads. Use it to generate, mutate, or
+  rearrange document content programmatically. Scripts do not have network access.
+<!--hvy: {"id":"doc-api","lock":false,"expanded":true,"highlight":false}-->
 #! The `doc` API
-# The `doc` API
 
-<!--hvy:text {}-->
- Your script runs with one global injected: `doc`. Everything you can do
- flows through it.
+ <!--hvy:text {}-->
+  # The `doc` API
 
- - `doc.tool.TOOL_NAME(**args)` — call a supported synchronous document tool.
-   Returns the tool's text result. Mutating tools update the document
-   immediately.
- - `doc.header.get(key)` / `doc.header.set(key, value)` /
-   `doc.header.remove(key)` / `doc.header.keys()` — read and write the
-   document's YAML front matter.
- - `doc.attachments.list()` — list attachment ids.
- - `doc.attachments.read(id)` — return the bytes of an attachment, or
-   `None` if not present.
- - `doc.attachments.write(id, bytes, meta=None)` — create or replace an
-   attachment.
- - `doc.attachments.remove(id)` — delete an attachment.
- - `doc.cli.run(command)` — run one synchronous virtual CLI command and
-   return stdout. Use this for commands such as `hvy insert`, `hvy remove`,
-   `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. Use `doc.db`
-   directly for SQL rather than `hvy plugin db-table query/exec`.
- - `doc.cli.write(path, content)` — replace a writable non-raw virtual file
-   such as `/id/example/text.json` or `/id/example/text.txt` and return the
-   write result.
- - Plugin-provided APIs may also be present on `doc` when the relevant plugin
-   is available. Use the relevant plugin's help for that API.
- - `doc.rerender()` — flush any pending re-render now (usually unnecessary;
-   the host re-renders automatically when the script finishes).
- - `print(...)` — write a line to the script run log shown below the script
-   in the editor. On failure, printed lines are shown above the traceback.
-
-<!--hvy: {"id":"tools","expanded":false}-->
+ <!--hvy:text {}-->
+  Your script runs with one global injected: `doc`. Everything you can do flows through it.
+  
+  - `doc.tool.TOOL_NAME(**args)` — call a supported synchronous document tool. Returns the tool's text result. Mutating
+  tools update the document immediately. See [tools API](#tools-api) below
+  - `doc.header.get(key)` / `doc.header.set(key, value)` / `doc.header.remove(key)` / `doc.header.keys()` — read and
+  write the document's YAML front matter.
+  - `doc.attachments.list()` — list attachment ids.
+  - `doc.attachments.read(id)` — return the bytes of an attachment, or `None` if not present.
+  - `doc.attachments.write(id, bytes, meta=None)` — create or replace an attachment.
+  - `doc.attachments.remove(id)` — delete an attachment.
+  - `doc.cli.run(command)` — run one synchronous virtual CLI command and return stdout. Use this for commands such as
+  `hvy insert`, `hvy remove`, `hvy request_structure`, `cat`, `rg`, `find`, and `sed`. Use `doc.db` directly for SQL
+  rather than `hvy plugin db-table query/exec`.
+  - `doc.cli.write(path, content)` — replace a writable non-raw virtual file such as `/id/example/text.json` or
+  `/id/example/text.txt` and return the write result.
+  - Plugin-provided APIs may also be present on `doc` when the relevant plugin is available. Use the relevant plugin's
+  help for that API.
+  - `doc.rerender()` — flush any pending re-render now (usually unnecessary; the host re-renders automatically when the
+  script finishes).
+  - `print(...)` — write a line to the script run log shown below the script in the editor. On failure, printed lines
+  are shown above the traceback.
+<!--hvy: {"id":"tools-api","lock":false,"expanded":true,"highlight":false}-->
 #! Available tools
 
-<!--hvy:text {}-->
- The scripting `doc.tool.TOOL_NAME(**args)` surface is a synchronous subset of
- the AI agent's document-edit tools. Pass tool arguments as Python keyword
- arguments; argument names match the AI tool schema.
-
- Document tools:
-
- - `request_structure` — get a structural summary.
- - `grep` — `query="...", flags="i"`.
- - `view_component` — `component_ref="C3"`.
- - `get_css` / `get_properties` / `set_properties`.
- - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
- - `create_component` / `remove_component`.
- - `get_updated_components` — return changed and removed script component handles for local traversal/mutation after document updates. Removed handles have `removed = True`. On initial document load, this returns no components.
- - `get_components` — return all matching script component handles when a script explicitly needs a full scan.
- - `create_section` / `remove_section` / `reorder_section`.
-
- Header tools:
-
- - `view_header`, `grep_header`, `patch_header`.
-
- `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`,
- and other async tools are not exposed through `doc.tool`.
-
-<!--hvy: {"id":"execution-model","expanded":false}-->
+ <!--hvy:text {}-->
+  # Tools
+  
+  The scripting `doc.tool.TOOL_NAME(**args)` surface is a synchronous subset of the AI agent's document-edit tools. Pass
+  tool arguments as Python keyword arguments; argument names match the AI tool schema.
+  
+  Document tools:
+  
+  - `request_structure` — get a structural summary.
+  - `grep` — `query="...", flags="i"`.
+  - `view_component` — `component_ref="C3"`.
+  - `get_css` / `get_properties` / `set_properties`.
+  - `patch_component` — `{ "component_ref": "C3", "edits": [...] }`.
+  - `create_component` / `remove_component`.
+  - `get_updated_components` — return changed and removed script component handles for local traversal/mutation after
+  document updates. Removed handles have `removed = True`. On initial document load, this returns no components.
+  - `get_components` — return all matching script component handles when a script explicitly needs a full scan.
+  - `create_section` / `remove_section` / `reorder_section`.
+  
+   Component handle helpers returned by `get_components` and
+   `get_updated_components`:
+  
+   - `handle.get(name)` / `handle.set(name, value)` — read or update `text` or a
+   schema property.
+   - `handle.has_tag(tag)` — test a component tag.
+   - `handle.get_parent_by_tag(tag)` — find the nearest tagged ancestor
+   component or section.
+   - `handle.get_ancestor_record(excluded_tags="")` — find the nearest ancestor
+   reusable record component.
+   - `handle.first_table_cell(index=0)` — read the first cell at `index` from a
+   nested table.
+   - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
+   tagged child components from a child slot.
+   - `handle.append_child(component, config=None, text="", slot="expandable-content")`
+   — append a child component and return its handle.
+  
+  Header tools:
+  
+  - `view_header`, `grep_header`, `patch_header`.
+  
+  `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`, and other async tools are not exposed
+  through `doc.tool`.
+<!--hvy: {"id":"execution-model","lock":false,"expanded":false,"highlight":false}-->
 #! Execution model
 
-<!--hvy:text {}-->
- Script source is wrapped in a generated function before Brython runs it, so
- `return` can stop the script early. Scripts receive a `doc` global and may
- define functions, local variables, loops, and conditionals like ordinary
- Python.
-
-<!--hvy: {"id":"line-budget","expanded":false}-->
+ <!--hvy:text {}-->
+  Script source is wrapped in a generated function before Brython runs it, so
+  `return` can stop the script early. Scripts receive a `doc` global and may
+  define functions, local variables, loops, and conditionals like ordinary
+  Python.
+<!--hvy: {"id":"line-budget","lock":false,"expanded":false,"highlight":false}-->
 #! Line budget
 
-<!--hvy:text {}-->
- Every executed statement bumps a counter. By default the budget is
- 100,000 lines. If your script exceeds it, execution stops with an error.
- Tight loops are bounded the same way as straight-line code: each pass
- through a loop body counts.
-
-<!--hvy: {"id":"examples","expanded":false}-->
+ <!--hvy:text {}-->
+  Every executed statement bumps a counter. By default the budget is
+  100,000 lines. If your script exceeds it, execution stops with an error.
+  Tight loops are bounded the same way as straight-line code: each pass
+  through a loop body counts.
+<!--hvy: {"id":"examples","lock":false,"expanded":false,"highlight":false}-->
 #! Examples
 
-<!--hvy:text {}-->
- Print the document's structural summary by writing it into the header:
-
- ```python
- summary = doc.tool.request_structure()
- doc.header.set("script_summary", summary[:200])
- ```
-
- Tag every section that mentions "TODO":
-
- ```python
- hits = doc.tool.grep(query="TODO", flags="i")
- doc.header.set("todo_hits", hits)
- ```
-
- Use the virtual CLI from a script:
-
- ```python
- out = doc.cli.run("hvy request_structure --collapse")
- doc.header.set("structure_preview", out[:200])
- ```
-
-<!--hvy: {"id":"limits","expanded":false}-->
+ <!--hvy:text {}-->
+  Print the document's structural summary by writing it into the header:
+  
+  ```python
+  summary = doc.tool.request_structure()
+  doc.header.set("script_summary", summary[:200])
+  ```
+  
+  Tag every section that mentions "TODO":
+  
+  ```python
+  hits = doc.tool.grep(query="TODO", flags="i")
+  doc.header.set("todo_hits", hits)
+  ```
+  
+  Use the virtual CLI from a script:
+  
+  ```python
+  out = doc.cli.run("hvy request_structure --collapse")
+  doc.header.set("structure_preview", out[:200])
+  ```
+<!--hvy: {"id":"limits","lock":false,"expanded":false,"highlight":false}-->
 #! Limits and security
 
-<!--hvy:text {}-->
- - No network: `fetch`, `XMLHttpRequest`, etc. are not exposed to scripts
-   in this version.
- - No DOM: scripts cannot reach the rendered HTML; mutate the document
-   through `doc` instead.
- - Errors abort the script and surface in the editor's status bar.
- - Scripts run synchronously on document load. Long scripts will block
-   the first paint until they finish.
+ <!--hvy:text {}-->
+  - No network: `fetch`, `XMLHttpRequest`, etc. are not exposed to scripts
+    in this version.
+  - No DOM: scripts cannot reach the rendered HTML; mutate the document
+    through `doc` instead.
+  - Errors abort the script and surface in the editor's status bar.
+  - Scripts run synchronously on document load. Long scripts will block
+    the first paint until they finish.

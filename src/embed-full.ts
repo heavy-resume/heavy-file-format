@@ -381,6 +381,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
+  const readerWarningsHtml = readerRenderer.renderWarnings();
+  const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
+  const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   capturePluginFocus();
   root.innerHTML = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
@@ -405,16 +408,16 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   </aside>
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
-              : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                  <div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
-                  <aside class="viewer-sidebar">
-                    <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
-                    ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="viewer-sidebar-panel">
-                      <div id="readerWarnings" class="reader-warnings">${readerRenderer.renderWarnings()}</div>
-                      <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderSidebarSections(state.document.sections)}</div>
-                    </div>
-                  </aside>
+              : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+                  ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
+                    <aside class="viewer-sidebar">
+                      <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
+                      ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
+                      <div class="viewer-sidebar-panel">
+                        <div id="readerWarnings" class="reader-warnings">${readerWarningsHtml}</div>
+                        <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
+                      </div>
+                    </aside>` : ''}
                   <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`

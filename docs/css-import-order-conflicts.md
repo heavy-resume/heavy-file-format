@@ -141,7 +141,7 @@ The variants use:
 
 Inside `.hvy-document`, `.hvy-document .modal-panel` can beat the variant width regardless of order. Other modal variants in the same file already include scoped companions, for example `.hvy-document .reusable-template-modal`.
 
-Future fix candidate:
+Applied fix:
 
 ```css
 .component-meta-modal,
@@ -173,7 +173,7 @@ Conflict:
 
 The image camera modal sets `width`, `max-height`, `display`, `grid-template-rows`, `gap`, `overflow`, and `padding`. In a `.hvy-document` host, the base modal panel rule can override at least `width`, `max-height`, `overflow`, and `padding`.
 
-Future fix candidate:
+Applied fix:
 
 ```css
 .image-camera-modal,
@@ -217,7 +217,7 @@ Most declarations match the base modal root, but padding differs:
 }
 ```
 
-Future fix candidate:
+Applied fix:
 
 ```css
 .image-camera-modal-root,
@@ -260,10 +260,10 @@ That combined selector has specificity `0,2,0`, so it is no longer dependent on 
 - [x] Make active insert ghost self-contained.
    Update `src/editor/editor.css` so active insert overrides use `.compact-add-component-ghost.active-component-insert-ghost`. This keeps the intended compact-insert layout stable if the compact and active styles are ever split across files.
 
-- [ ] Add scoped modal width rules for component metadata modals.
+- [x] Add scoped modal width rules for component metadata modals.
    Update `src/modal.css` to include `.hvy-document .component-meta-modal` and `.hvy-document .section-meta-modal` alongside the unscoped modal variants.
 
-- [ ] Add scoped image camera modal rules.
+- [x] Add scoped image camera modal rules.
    Update `src/editor/components/image/image.css` to include `.hvy-document .image-camera-modal` for the modal panel overrides and `.hvy-document .image-camera-modal-root` for the root padding override.
 
 - [ ] Add regression coverage for order-sensitive bundled CSS.

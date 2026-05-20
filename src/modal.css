@@ -32,7 +32,9 @@
 }
 
 .component-meta-modal,
-.section-meta-modal {
+.section-meta-modal,
+.hvy-document .component-meta-modal,
+.hvy-document .section-meta-modal {
   width: min(640px, calc(100% - 2rem));
 }
 

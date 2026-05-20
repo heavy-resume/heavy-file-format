@@ -858,6 +858,127 @@ hvy_version: 0.1
   expect(result.title).toBe('Fresh Viewer');
 });
 
+test('embedded editor persists latest rich input before immediate remount', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"role"}-->
+  Software Enginee
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    (window as Window & { testHvyMount?: ReturnType<typeof mountHvy>; testHvySource?: string }).testHvySource = source;
+    (window as Window & { testHvyMount?: ReturnType<typeof mountHvy> }).testHvyMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      storageKey: 'rich-remount',
+    });
+  });
+
+  await page.locator('#mount .editor-block-passive').first().click();
+  const editor = page.locator('#mount [data-field="block-rich"]').first();
+  await expect(editor).toBeVisible();
+  await editor.evaluate((element) => {
+    element.textContent = 'Software Engineer';
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'r' }));
+  });
+
+  const result = await page.evaluate(async () => {
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const root = document.querySelector<HTMLElement>('#mount');
+    const testWindow = window as Window & {
+      testHvyMount?: ReturnType<typeof mountHvy>;
+      testHvySource?: string;
+    };
+    if (!root || !testWindow.testHvyMount || !testWindow.testHvySource) {
+      throw new Error('Mounted editor missing.');
+    }
+    testWindow.testHvyMount.destroy();
+    const remount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(testWindow.testHvySource), '.hvy'),
+      mode: 'editor',
+      storageKey: 'rich-remount',
+    });
+    return remount.getDocument().sections[0]?.blocks[0]?.text;
+  });
+
+  expect(result).toBe('Software Engineer');
+});
+
+test('embedded editor rich input does not run document hooks per keystroke', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"role"}-->
+  Software Enginee
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const testWindow = window as Window & { testHookReasons?: string[] };
+    testWindow.testHookReasons = [];
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      storageKey: 'rich-hook-keystroke',
+      plugins: [{
+        id: 'test.hooks',
+        displayName: 'Test Hooks',
+        create() {
+          return { element: document.createElement('div') };
+        },
+        hooks: {
+          documentLoad: { run: (ctx) => { testWindow.testHookReasons?.push(ctx.changeReason); } },
+          documentChange: { run: (ctx) => { testWindow.testHookReasons?.push(ctx.changeReason); } },
+        },
+      }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  await page.locator('#mount .editor-block-passive').first().click();
+  const editor = page.locator('#mount [data-field="block-rich"]').first();
+  await expect(editor).toBeVisible();
+  await editor.evaluate((element) => {
+    element.textContent = 'Software Engineer';
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'r' }));
+  });
+  await page.waitForTimeout(50);
+
+  const result = await page.evaluate(() => (window as Window & { testHookReasons?: string[] }).testHookReasons);
+
+  expect(result).toEqual(['load']);
+});
+
 test('embedded viewer sidebar stays open after remounting root from editor to viewer', async ({ page }) => {
   await page.goto('/');
 

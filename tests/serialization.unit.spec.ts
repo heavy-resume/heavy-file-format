@@ -181,6 +181,44 @@ component_defs:
   expect(expectedResult).toContain('<!--hvy:skill-xref-card {"xrefTitle":"TypeScript","xrefTarget":"skill-typescript"}-->');
 });
 
+test('round-trips xref display fields on referenceable non-xref blocks', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    schema:
+      tags: skill
+      xrefTitle: "{% skill %}"
+      xrefDetail: "{% detail %}"
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:text {"id":"tool-typescript","tags":"tool","xrefTitle":"TypeScript","xrefDetail":"Primary language"}-->
+  TypeScript
+
+ <!--hvy:skill-record {"id":"skill-platform","tags":"skill","xrefTitle":"Platform Engineering","xrefDetail":"Core capability"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Platform Engineering
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Builds shared systems.
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('<!--hvy:text {"id":"tool-typescript","tags":"tool","xrefTitle":"TypeScript","xrefDetail":"Primary language"}-->');
+  expect(expectedResult).toContain('<!--hvy:skill-record {"id":"skill-platform","xrefTitle":"Platform Engineering","xrefDetail":"Core capability"}-->');
+});
+
 test('round-trips trailing spaces in text block lines', () => {
   const input = [
     '---',

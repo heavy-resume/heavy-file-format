@@ -322,6 +322,7 @@ function renderSidebarTabLabel(): string {
 }
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
+  void options;
   if (!currentRoot) return;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
@@ -361,9 +362,6 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   });
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
-  if (options.runDocumentHooks !== false) {
-    void runPluginDocumentHooks('unknown');
-  }
 }
 
 function refreshReaderPanels(): void {
@@ -384,7 +382,6 @@ function refreshReaderPanels(): void {
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
-  void runPluginDocumentHooks('unknown');
 }
 
 function refreshModalPreview(): void {}
@@ -601,6 +598,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
   runtime.callbacks.renderApp();
+  void runPluginDocumentHooks('load');
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {

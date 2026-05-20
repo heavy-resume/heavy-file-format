@@ -1,4 +1,5 @@
 import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
+import { commitTextFillInElement } from '../../text-fill-in-commit';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -19,6 +20,7 @@ export function bindFocus(app: HTMLElement): void {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (target.dataset.field === 'text-fill-in-value') {
+      commitTextFillInElement(target, 'focusout');
       const editor = target.closest<HTMLElement>('.text-fill-in-editor');
       const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
       if (editor && nextTarget && editor.contains(nextTarget)) {

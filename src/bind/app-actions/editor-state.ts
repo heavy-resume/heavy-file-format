@@ -7,6 +7,7 @@ import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
 import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
+import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -102,6 +103,7 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   }
   event.stopPropagation();
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  commitActiveTextFillIn('deactivate-block');
   const result = deactivateEditorBlock(sectionKey, blockId);
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;

@@ -212,6 +212,29 @@ test('embedded editor and viewer keep independent document state', async ({ page
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 });
 
+test('two embedded docs can switch example sources independently', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.getByRole('button', { name: 'Reset sessions' }).click();
+  await expect(page.locator('#eventLog')).toContainText('Reset both keyed sessions.');
+
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+  await expect(firstDoc).toContainText('Current Goal');
+  await expect(secondDoc.locator('#readerDocument')).toBeVisible();
+  await expect(secondDoc).toContainText('Skills');
+
+  await page.getByRole('button', { name: 'Resume' }).first().click();
+  await expect(firstDoc).toContainText('Avery Hart');
+  await expect(firstDoc).not.toContainText('Current Goal');
+
+  await page.getByRole('button', { name: 'Example' }).nth(1).click();
+  await expect(secondDoc).toContainText('Current Goal');
+  await expect(secondDoc).not.toContainText('Avery Hart');
+});
+
 test('second embedded viewer action buttons remain clickable', async ({ page }) => {
   test.setTimeout(5_000);
   const chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];

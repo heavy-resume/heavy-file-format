@@ -9,6 +9,7 @@ import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
 import { clearActiveEditorBlock, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
+import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 
 const undo: AppActionHandler = () => {
   undoState();
@@ -19,6 +20,7 @@ const redo: AppActionHandler = () => {
 };
 
 const switchView: AppActionHandler = ({ actionButton }) => {
+  commitActiveTextFillIn('switch-view');
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
   const nextEditorMode = requestedView === 'cli'

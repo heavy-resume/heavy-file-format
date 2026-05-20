@@ -96,3 +96,5 @@ If you're writing AI instructions don't just throw a patchwork fix for a specifi
 Don't make compatibilty fallbacks
 
 When creating an X, +, or -, use vector graphics instead of characters. There's plenty of existing examples.
+
+When making code changes and fixes, ask yourself if someone would get angry that the change or fix is too narrow.

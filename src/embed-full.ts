@@ -372,6 +372,7 @@ function ensureRenderers(): void {
 }
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
+  void options;
   if (!currentRoot) return;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
@@ -445,9 +446,6 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   });
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
-  if (options.runDocumentHooks !== false) {
-    void runPluginDocumentHooks('unknown');
-  }
 }
 
 function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
@@ -558,7 +556,6 @@ function refreshReaderPanels(): void {
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runPluginDocumentHooks('unknown');
 }
 
 function setLinkObserver(observer: HvyLinkObserver | null): void {
@@ -693,6 +690,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
   runtime.callbacks.renderApp();
+  void runPluginDocumentHooks('load');
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {

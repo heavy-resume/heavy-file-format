@@ -1278,10 +1278,10 @@ function serializeBlockSchema(
   addIfChanged(payload, 'visibleScript', schema.visibleScript, defaults.visibleScript);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
   addIfChanged(payload, 'fillIn', schema.fillIn, defaults.fillIn);
+  addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
+  addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
 
   if (component === 'xref-card') {
-    addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
-    addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
     addIfChanged(payload, 'xrefTargetTagFilter', schema.xrefTargetTagFilter, defaults.xrefTargetTagFilter);
   }

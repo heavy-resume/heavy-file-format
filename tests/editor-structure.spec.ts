@@ -2356,6 +2356,38 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('text fill-in commits focused DOM value before switching views', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"role","placeholder":"Role","fillIn":true}-->
+  # <!-- value -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="role"] .text-fill-in-box').click();
+  const fillIn = page.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIn).toBeFocused();
+  await fillIn.evaluate((element) => {
+    element.textContent = 'Software Engineer';
+    (element as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'AI' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Software Engineer');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
+});
+
 test('ai fill-in accepts typing in place without leaving the reader surface', async ({ page }) => {
   await page.goto('/');
 

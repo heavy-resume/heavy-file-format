@@ -1346,7 +1346,11 @@ component_defs:
   expect(serialized).toContain('# Awards');
   expect(serialized).toContain('<!--hvy:award-record');
   expect(serialized).toContain('"id":"best-tool"');
+  expect(serialized).toContain('"xrefTitle":"Best Tool"');
+  expect(serialized).toContain('"xrefDetail":"Engineering Guild"');
   expect(serialized).toContain('"id":"quality-prize"');
+  expect(serialized).toContain('"xrefTitle":"Quality Prize"');
+  expect(serialized).toContain('"xrefDetail":"QA Team"');
   expect(serialized).toContain('Best Tool');
   expect(serialized).toContain('Engineering Guild');
   expect(serialized).toContain('Quality Prize');

@@ -1329,9 +1329,10 @@ test('guide internal links can navigate to the filtering section', async ({ page
 
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
     const [{ default: guideText }, { deserializeDocumentBytes, mountHvy }] = await Promise.all([
       import(/* @vite-ignore */ '/hvy-guide.hvy?raw'),
-      import(/* @vite-ignore */ '/src/embed-full.ts'),
+      import(/* @vite-ignore */ modulePath),
     ]);
     const root = document.querySelector<HTMLElement>('#mount');
     if (!root) {
@@ -1345,7 +1346,8 @@ test('guide internal links can navigate to the filtering section', async ({ page
   });
   await expect(page.locator('#readerDocument')).toContainText('Introducing the HVY File Format');
   await page.evaluate(async () => {
-    const { navigateToReaderTarget } = await import(/* @vite-ignore */ '/src/navigation.ts');
+    const modulePath = '/src/navigation.ts';
+    const { navigateToReaderTarget } = await import(/* @vite-ignore */ modulePath);
     const root = document.querySelector<HTMLElement>('#mount');
     if (!root) {
       throw new Error('Mount root missing.');

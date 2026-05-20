@@ -49,14 +49,22 @@ export function openLinkInlineModal(
     return;
   }
 
+  const selection = window.getSelection();
+  const selectedRange = range ?? (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+  const selectedAnchor = anchor ?? findLinkAnchorForRange(editable, selectedRange);
+  const linkValue = initialValue || selectedAnchor?.getAttribute('href') || '';
+
   setPendingLinkEditable(editable);
-  setPendingLinkAnchor(anchor ?? null);
+  setPendingLinkAnchor(selectedAnchor ?? null);
   if (range) {
     setPendingLinkRange(range.cloneRange());
+  } else if (selectedAnchor && selectedRange?.collapsed) {
+    const anchorRange = document.createRange();
+    anchorRange.selectNodeContents(selectedAnchor);
+    setPendingLinkRange(anchorRange);
   } else {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      setPendingLinkRange(selection.getRangeAt(0).cloneRange());
+    if (selectedRange) {
+      setPendingLinkRange(selectedRange.cloneRange());
     } else {
       setPendingLinkRange(null);
     }
@@ -64,7 +72,7 @@ export function openLinkInlineModal(
 
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
-  input.value = initialValue;
+  input.value = linkValue;
   window.setTimeout(() => {
     input.focus();
     input.select();
@@ -111,4 +119,33 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
   }
   applyRichAction('link', pendingLinkEditable, link);
   closeLinkInlineModal(app);
+}
+
+function findLinkAnchorForRange(editable: HTMLElement, range: Range | null): HTMLAnchorElement | null {
+  if (!range) {
+    return null;
+  }
+  const startAnchor = findClosestEditableAnchor(editable, range.startContainer);
+  if (startAnchor) {
+    return startAnchor;
+  }
+  const endAnchor = findClosestEditableAnchor(editable, range.endContainer);
+  if (endAnchor) {
+    return endAnchor;
+  }
+  const ancestor = range.commonAncestorContainer;
+  if (ancestor instanceof HTMLAnchorElement && editable.contains(ancestor)) {
+    return ancestor;
+  }
+  if (ancestor instanceof Element) {
+    const anchor = ancestor.querySelector<HTMLAnchorElement>('a[href]');
+    return anchor && editable.contains(anchor) && range.intersectsNode(anchor) ? anchor : null;
+  }
+  return null;
+}
+
+function findClosestEditableAnchor(editable: HTMLElement, node: Node): HTMLAnchorElement | null {
+  const element = node instanceof Element ? node : node.parentNode instanceof Element ? node.parentNode : null;
+  const anchor = element?.closest<HTMLAnchorElement>('a[href]') ?? null;
+  return anchor && editable.contains(anchor) ? anchor : null;
 }

@@ -1314,6 +1314,184 @@ hvy_version: 0.1
   expect(snapshots[0]).not.toContain('Existing content');
 });
 
+test('importTextIntoDocument repairs raw HVY that adds components to locked sections', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported info"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"info\\",\\"lock\\":true}-->\\n#! Info\\n\\n <!--hvy:text {\\"id\\":\\"info-text\\"}-->\\n  Imported info\\n\\n <!--hvy:text {}-->\\n  "}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"info\\",\\"lock\\":true}-->\\n#! Info\\n\\n <!--hvy:text {\\"id\\":\\"info-text\\"}-->\\n  Imported info"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"info","lock":true}-->
+#! Info
+
+<!--hvy:text {"id":"info-text"}-->
+ Existing info
+`, '.hvy');
+  const snapshots: string[] = [];
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported info',
+    steps: [{ section: 'Info', sectionId: 'info' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    onSectionApplied() {
+      snapshots.push(serializeDocument(document));
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-section-data:1',
+    'ai-import-section-hvy:1',
+    'ai-import-section-hvy:1:repair',
+  ]);
+  const repairMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(repairMessages).toContain('Generated HVY changes locked template content.');
+  expect(repairMessages).toContain('Locked section direct blocks at /section/blocks cannot add or remove direct components; expected 1, received 2.');
+  expect(snapshots).toHaveLength(1);
+  expect(snapshots[0]).toContain('Imported info');
+  expect(snapshots[0]).not.toContain('Existing info');
+  expect(snapshots[0]).not.toContain('<!--hvy:text {}-->');
+});
+
+test('importTextIntoDocument lets raw HVY fill locked component content without structural changes', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported details"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"details\\"}-->\\n#! Details\\n\\n <!--hvy:text {\\"id\\":\\"locked-note\\",\\"lock\\":true}-->\\n  Imported locked note\\n\\n <!--hvy:text {\\"id\\":\\"open-note\\"}-->\\n  Imported details"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:text {"id":"locked-note","lock":true}-->
+ Existing locked note
+
+<!--hvy:text {"id":"open-note"}-->
+ Existing open note
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported details',
+    steps: [{ section: 'Details', sectionId: 'details' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-section-data:1',
+    'ai-import-section-hvy:1',
+  ]);
+  expect(serializeDocument(document)).toContain('Imported locked note');
+  expect(serializeDocument(document)).toContain('Imported details');
+  expect(serializeDocument(document)).not.toContain('Existing locked note');
+});
+
+test('importTextIntoDocument repairs raw HVY that structurally changes locked components', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported details"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"details\\"}-->\\n#! Details\\n\\n <!--hvy:container {\\"id\\":\\"locked-card\\",\\"lock\\":true}-->\\n\\n  <!--hvy:text {}-->\\n   Imported details\\n\\n  <!--hvy:text {}-->\\n   Extra generated child"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"details\\"}-->\\n#! Details\\n\\n <!--hvy:container {\\"id\\":\\"locked-card\\",\\"lock\\":true}-->\\n\\n  <!--hvy:text {}-->\\n   Imported details"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:container {"id":"locked-card","lock":true}-->
+
+ <!--hvy:text {}-->
+  Existing details
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported details',
+    steps: [{ section: 'Details', sectionId: 'details' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  const repairMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(repairMessages).toContain('Locked component container children at /section/blocks/0/containerBlocks cannot add or remove direct components; expected 1, received 2.');
+  expect(serializeDocument(document)).toContain('Imported details');
+  expect(serializeDocument(document)).not.toContain('Extra generated child');
+});
+
+test('importTextIntoDocument accepts locked section imports with the same expandable shape at the same path', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\",\\"lock\\":true}-->\\n#! Summary\\n\\n <!--hvy:expandable {\\"expandableAlwaysShowStub\\":true}-->\\n\\n  <!--hvy:expandable:stub {}-->\\n\\n   <!--hvy:text {}-->\\n    Imported headline\\n\\n  <!--hvy:expandable:content {}-->\\n\\n   <!--hvy:text {}-->\\n    Imported details"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","lock":true}-->
+#! Summary
+
+<!--hvy:expandable {"id":"template-summary-expandable","expandableAlwaysShowStub":true}-->
+
+ <!--hvy:expandable:stub {}-->
+
+  <!--hvy:text {"id":"template-summary-stub"}-->
+   Existing headline
+
+ <!--hvy:expandable:content {}-->
+
+  <!--hvy:text {"id":"template-summary-content"}-->
+   Existing details
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-section-data:1',
+    'ai-import-section-hvy:1',
+  ]);
+  expect(serializeDocument(document)).toContain('Imported headline');
+  expect(serializeDocument(document)).toContain('Imported details');
+  expect(serializeDocument(document)).not.toContain('Existing headline');
+});
+
 test('importTextIntoDocument forced template mode fills JSON and instantiates nested list records', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."},{"award":"Quality Prize","issuer":"QA Team","details":"Recognized for reliable releases."}]}}'

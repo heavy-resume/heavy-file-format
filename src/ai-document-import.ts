@@ -21,6 +21,7 @@ import {
 } from './reusable-template-values';
 import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker } from './text-fill-in';
 import { runImportXrefPass } from './ai-import-xrefs';
+import { validateLockedSectionStructure } from './locked-structure';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -437,11 +438,11 @@ export async function importTextIntoDocument(
       };
       let hvyResponse = await requestProxyCompletion(hvyRequest);
       throwIfAborted(options.signal);
-      let generated = parseImportGeneratedSectionResponse(hvyResponse, document.meta);
+      let generated = parseAndValidateImportGeneratedSectionResponse(hvyResponse, document.meta, application);
       if (generated.ok === false) {
         options.onProgress?.({
           phase: 'thinking',
-          message: `Generated HVY for section ${index + 1} was invalid; retrying with the parser error.`,
+          message: `Generated HVY for section ${index + 1} was invalid; retrying with the validation error.`,
         });
         hvyResponse = await requestProxyCompletion({
           ...hvyRequest,
@@ -466,7 +467,7 @@ export async function importTextIntoDocument(
           beforeRequest: beforeLlmCall?.('thinking'),
         });
         throwIfAborted(options.signal);
-        generated = parseImportGeneratedSectionResponse(hvyResponse, document.meta);
+        generated = parseAndValidateImportGeneratedSectionResponse(hvyResponse, document.meta, application);
         if (generated.ok === false) {
           return { status: 'error', message: `Import section ${index + 1} returned invalid HVY. ${generated.message}` };
         }
@@ -2857,6 +2858,43 @@ function parseImportGeneratedSectionResponse(
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
+}
+
+function parseAndValidateImportGeneratedSectionResponse(
+  response: string,
+  documentMeta: VisualDocument['meta'],
+  application: ImportStepApplication
+): { ok: true; section: VisualSection } | { ok: false; message: string } {
+  const generated = parseImportGeneratedSectionResponse(response, documentMeta);
+  if (generated.ok === false) {
+    return generated;
+  }
+  if (application.kind !== 'blank') {
+    preserveTemplateFillIns(generated.section, application.target.section);
+  }
+  const errors = validateGeneratedImportLocks(application, generated.section, documentMeta);
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      message: [
+        'Generated HVY changes locked template content.',
+        ...errors.map((error) => `- ${error}`),
+      ].join('\n'),
+    };
+  }
+  return generated;
+}
+
+function validateGeneratedImportLocks(
+  application: ImportStepApplication,
+  generated: VisualSection,
+  documentMeta: VisualDocument['meta']
+): string[] {
+  if (application.kind === 'blank') {
+    return [];
+  }
+  return validateLockedSectionStructure(application.target.section, generated, documentMeta)
+    .map((error) => error.message);
 }
 
 function collectCreatedImportXrefTargets(document: VisualDocument, sectionKeys: string[]): CreatedImportXrefTarget[] {

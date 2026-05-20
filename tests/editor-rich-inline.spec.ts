@@ -90,10 +90,10 @@ test('mobile adjustment mode writes text edits as alt annotations', async ({ pag
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode!);
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
   await page.getByRole('button', { name: 'Mobile Adjustment' }).click();
@@ -224,6 +224,7 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
   await boldButton.click();
@@ -263,6 +264,7 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
   await page.keyboard.press('Control+I');
   await page.keyboard.press('Control+U');
@@ -448,39 +450,40 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  const linkButton = page.locator('.editor-block', { has: editor }).getByRole('button', { name: 'Link' });
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Link me</p>';
-    const textNode = node.querySelector('p')?.firstChild;
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textNode!);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    (node as HTMLElement).focus();
+    node.innerHTML = '<p><a href="https://example.com">Link me</a></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
+  await editor.locator('a[href="https://example.com"]').click();
 
-  await page.getByRole('button', { name: 'Link' }).first().click();
-  await expect(page.locator('#linkInlineModal')).toHaveClass(/is-open/);
-  await page.locator('#linkInlineInput').fill('https://example.com');
+  await linkButton.click();
+  const linkModal = page.locator('.link-inline-modal.is-open');
+  const linkInput = linkModal.locator('#linkInlineInput');
+  await expect(linkModal).toBeVisible();
+  await expect(linkInput).toHaveValue('https://example.com');
+  await linkInput.fill('https://updated.example');
   await page.keyboard.press('Enter');
 
-  await expect(editor.locator('a[href="https://example.com"]')).toContainText('Link me');
+  await expect(editor.locator('a[href="https://updated.example"]')).toContainText('Link me');
+  await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(0);
 
+  await editor.fill('Altcut link');
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Altcut link</p>';
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode!);
+    (node as HTMLElement).focus();
     selection?.removeAllRanges();
     selection?.addRange(range);
-    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
 
   await page.keyboard.press('Control+K');
-  await expect(page.locator('#linkInlineModal')).toHaveClass(/is-open/);
-  await page.locator('#linkInlineInput').fill('#section-id');
+  await expect(linkModal).toBeVisible();
+  await linkInput.fill('#section-id');
   await page.keyboard.press('Enter');
 
   await expect(editor.locator('a[href="#section-id"]')).toContainText('Altcut link');

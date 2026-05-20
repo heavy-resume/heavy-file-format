@@ -37,6 +37,20 @@ export function bindClickDispatch(app: HTMLElement): void {
     openParagraphStyleEditor(toolbar, styleName);
   });
 
+  app.addEventListener('mouseup', (event) => {
+    const editable = (event.target as HTMLElement).closest<HTMLElement>('.rich-editor');
+    if (editable) {
+      storeCurrentRichSelection(editable);
+    }
+  });
+
+  app.addEventListener('keyup', (event) => {
+    const editable = (event.target as HTMLElement).closest<HTMLElement>('.rich-editor');
+    if (editable) {
+      storeCurrentRichSelection(editable);
+    }
+  });
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
@@ -47,12 +61,8 @@ export function bindClickDispatch(app: HTMLElement): void {
     });
     if (richButton) {
       const editable = getRichEditableForButton(app, richButton);
-      const selection = window.getSelection();
-      if (editable && selection?.rangeCount) {
-        const range = selection.getRangeAt(0);
-        if (isRangeInside(editable, range)) {
-          richToolbarSelections.set(editable, range.cloneRange());
-        }
+      if (editable) {
+        storeCurrentRichSelection(editable);
       }
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
@@ -63,12 +73,8 @@ export function bindClickDispatch(app: HTMLElement): void {
     if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
       const toolbar = actionButton.closest<HTMLElement>('.paragraph-style-toolbar');
       const editable = toolbar ? getRichEditableForButton(app, toolbar) : null;
-      const selection = window.getSelection();
-      if (editable && selection?.rangeCount) {
-        const range = selection.getRangeAt(0);
-        if (isRangeInside(editable, range)) {
-          richToolbarSelections.set(editable, range.cloneRange());
-        }
+      if (editable) {
+        storeCurrentRichSelection(editable);
       }
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:paragraph-style-preserved', {
@@ -125,9 +131,9 @@ export function bindClickDispatch(app: HTMLElement): void {
       if (sectionKey && blockId && action) {
         const editable = getRichEditableForButton(app, richButton);
         if (editable) {
-          restoreRichToolbarSelection(editable);
+          const restoredRange = restoreRichToolbarSelection(editable);
           if (action === 'link') {
-            openLinkInlineModal(app, editable);
+            openLinkInlineModal(app, editable, '', restoredRange);
             return;
           }
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
@@ -491,14 +497,29 @@ function isRangeInside(editable: HTMLElement, range: Range): boolean {
   return editable.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editable;
 }
 
-function restoreRichToolbarSelection(editable: HTMLElement): void {
+function storeCurrentRichSelection(editable: HTMLElement): Range | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  if (!isRangeInside(editable, range)) {
+    return null;
+  }
+  const clone = range.cloneRange();
+  richToolbarSelections.set(editable, clone);
+  return clone;
+}
+
+function restoreRichToolbarSelection(editable: HTMLElement): Range | null {
   const range = richToolbarSelections.get(editable);
   if (!range || !isRangeInside(editable, range)) {
-    return;
+    return null;
   }
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
+  return range;
 }
 
 function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HTMLElement | null {

@@ -198,7 +198,6 @@ const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
   'You are performing an HVY import workflow.',
   'Use the supplied import context only for this request.',
   'Return only the response format requested in the latest import task.',
-  'Do not use tools. Do not mutate anything directly.',
 ].join('\n');
 
 interface AppliedImportSectionResult {

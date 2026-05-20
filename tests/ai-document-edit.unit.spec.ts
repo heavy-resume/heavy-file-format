@@ -1263,6 +1263,57 @@ text_line_styles:
   });
 });
 
+test('importTextIntoDocument repairs malformed raw HVY section responses with parser errors', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"css\\":\\"margin-top\\":0;\\"}-->\\n  Imported summary"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"css\\":\\"margin-top: 0;\\"}-->\\n  Imported summary"}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Existing content
+`, '.hvy');
+  const snapshots: string[] = [];
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    onSectionApplied() {
+      snapshots.push(serializeDocument(document));
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-section-data:1',
+    'ai-import-section-hvy:1',
+    'ai-import-section-hvy:1:repair',
+  ]);
+  const repairMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';
+  expect(repairMessages).toContain('The previous response was invalid.');
+  expect(repairMessages).toContain('Generated HVY section is invalid.');
+  expect(repairMessages).toContain('Previous response:');
+  expect(snapshots).toHaveLength(1);
+  expect(snapshots[0]).toContain('"css":"margin-top: 0;"');
+  expect(snapshots[0]).toContain('Imported summary');
+  expect(snapshots[0]).not.toContain('Existing content');
+});
+
 test('importTextIntoDocument forced template mode fills JSON and instantiates nested list records', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","issuer":"Engineering Guild","details":"Won for developer tooling."},{"award":"Quality Prize","issuer":"QA Team","details":"Recognized for reliable releases."}]}}'

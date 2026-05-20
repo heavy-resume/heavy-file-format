@@ -414,7 +414,7 @@ export async function importTextIntoDocument(
         }
       }
       options.onProgress?.({ phase: 'thinking', message: `Generating HVY section ${index + 1} of ${executableSteps.length}.` });
-      const hvyResponse = await requestProxyCompletion({
+      const hvyRequest: ProxyCompletionParams = {
         settings: getImportStageSettings(llm, 'rawSectionWriter'),
         client: llm.client,
         messages: [
@@ -434,14 +434,45 @@ export async function importTextIntoDocument(
         debugLabel: `ai-import-section-hvy:${index + 1}`,
         beforeRequest: beforeLlmCall?.('thinking'),
         signal: options.signal,
-      });
+      };
+      let hvyResponse = await requestProxyCompletion(hvyRequest);
       throwIfAborted(options.signal);
-      const hvy = parseImportSectionHvyResponse(hvyResponse);
-      if (!hvy) {
-        return { status: 'error', message: `Import section ${index + 1} did not return a usable HVY section.` };
+      let generated = parseImportGeneratedSectionResponse(hvyResponse, document.meta);
+      if (generated.ok === false) {
+        options.onProgress?.({
+          phase: 'thinking',
+          message: `Generated HVY for section ${index + 1} was invalid; retrying with the parser error.`,
+        });
+        hvyResponse = await requestProxyCompletion({
+          ...hvyRequest,
+          messages: [
+            ...hvyRequest.messages,
+            {
+              id: `ai-import-section-hvy-${index + 1}-repair`,
+              role: 'user',
+              content: [
+                'The previous response was invalid.',
+                generated.message,
+                '',
+                'Return one corrected JSON object using exactly the documented schema.',
+                'The `hvy` value must contain exactly one complete valid HVY section.',
+                'Fix the parser or validation error directly. Do not include prose or markdown fences.',
+                '',
+                `Previous response:\n${hvyResponse}`,
+              ].join('\n'),
+            },
+          ],
+          debugLabel: `ai-import-section-hvy:${index + 1}:repair`,
+          beforeRequest: beforeLlmCall?.('thinking'),
+        });
+        throwIfAborted(options.signal);
+        generated = parseImportGeneratedSectionResponse(hvyResponse, document.meta);
+        if (generated.ok === false) {
+          return { status: 'error', message: `Import section ${index + 1} returned invalid HVY. ${generated.message}` };
+        }
       }
       options.onProgress?.({ phase: 'thinking', message: `Applying section ${index + 1}.` });
-      const result = applyGeneratedImportSection(document, application, hvy, options.onMutation);
+      const result = applyGeneratedImportSection(document, application, generated.section, options.onMutation);
       created.push(result.message);
       appliedSections.push(result);
       await options.onSectionApplied?.(result.message);
@@ -2783,10 +2814,9 @@ function combineImportTags(...values: string[]): string {
 function applyGeneratedImportSection(
   document: VisualDocument,
   application: ImportStepApplication,
-  hvy: string,
+  generated: VisualSection,
   onMutation?: (group?: string) => void
 ): AppliedImportSectionResult {
-  const generated = parseGeneratedImportSection(hvy, document.meta);
   if (application.kind !== 'blank') {
     preserveTemplateFillIns(generated, application.target.section);
   }
@@ -2812,6 +2842,21 @@ function applyGeneratedImportSection(
     message: `Inserted section "${generated.title}" (${getSectionId(generated)}) at the bottom.`,
     sectionKey: generated.key,
   };
+}
+
+function parseImportGeneratedSectionResponse(
+  response: string,
+  documentMeta: VisualDocument['meta']
+): { ok: true; section: VisualSection } | { ok: false; message: string } {
+  const hvy = parseImportSectionHvyResponse(response);
+  if (!hvy) {
+    return { ok: false, message: 'Return valid JSON with a top-level `hvy` string containing one complete HVY section.' };
+  }
+  try {
+    return { ok: true, section: parseGeneratedImportSection(hvy, documentMeta) };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function collectCreatedImportXrefTargets(document: VisualDocument, sectionKeys: string[]): CreatedImportXrefTarget[] {

@@ -358,19 +358,31 @@ component_defs:
     });
     await new Promise((resolve) => window.setTimeout(resolve, 120));
     const label = root.querySelector<HTMLElement>('.component-list-add-ghost .ghost-label');
+    const ghost = root.querySelector<HTMLElement>('.component-list-add-ghost');
+    const plus = root.querySelector<HTMLElement>('.component-list-add-ghost .ghost-plus-small');
     if (!label) {
       throw new Error('Expected component list add label missing.');
     }
+    if (!ghost || !plus) {
+      throw new Error('Expected compact component list add ghost missing.');
+    }
     const labelStyle = getComputedStyle(label);
+    const ghostStyle = getComputedStyle(ghost);
     return {
       text: label.textContent?.trim(),
       labelLineHeight: labelStyle.lineHeight,
       labelFontSize: labelStyle.fontSize,
+      ghostMinHeight: ghostStyle.minHeight,
+      ghostPaddingTop: ghostStyle.paddingTop,
+      plusClassName: plus.className,
     };
   });
 
   expect(result.text).toBe('Add Tool / Tech Reference');
   expect(result.labelLineHeight).toBe(result.labelFontSize);
+  expect(result.ghostMinHeight).toBe('0px');
+  expect(Number.parseFloat(result.ghostPaddingTop)).toBeLessThan(10);
+  expect(result.plusClassName).toContain('ghost-plus-small');
 });
 
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {

@@ -147,19 +147,10 @@
   min-width: 0;
 }
 
-.component-list-add-ghost {
+.ghost-section-card.component-list-add-ghost {
   min-height: 0;
   padding-block: 0.55rem;
-}
-
-.component-list-add-ghost .ghost-plus-big {
-  width: 36px;
-  height: 36px;
-}
-
-.component-list-add-ghost .ghost-plus-big .hvy-ui-icon {
-  width: 1.55rem;
-  height: 1.55rem;
+  align-content: center;
 }
 
 .reader-block.align-center .reader-component-list {

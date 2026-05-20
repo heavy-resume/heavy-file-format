@@ -22,7 +22,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
     : `<div class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
         sectionKey
       )}" data-block-id="${helpers.escapeAttr(block.id)}">
-        <div class="ghost-plus-big">${plusIcon()}</div>
+        <div class="ghost-plus-small">${plusIcon()}</div>
         <div class="ghost-label">${helpers.escapeHtml(getComponentListAddLabel(block))}</div>
       </div>`;
   return `

@@ -544,7 +544,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return `<div class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
       section.key
     )}" data-block-id="${deps.escapeAttr(block.id)}">
-      <div class="ghost-plus-big">${plusIcon()}</div>
+      <div class="ghost-plus-small">${plusIcon()}</div>
       <div class="ghost-label">${deps.escapeHtml(getComponentListAddLabel(block))}</div>
     </div>`;
   }

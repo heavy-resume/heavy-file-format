@@ -817,7 +817,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}"`;
       const addControl = `<div class="ghost-section-card add-ghost component-list-add-ghost passive-list-add-ghost"${actionAttr}>
-        <div class="ghost-plus-big">${plusIcon()}</div>
+        <div class="ghost-plus-small">${plusIcon()}</div>
         <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
       </div>`;
       if (!hasComponentListItems(block)) {
@@ -828,8 +828,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 .join('')}</div>`
             : deps.renderReaderBlock(section, block)
           : '';
-        return `${existingContent}<div class="ghost-section-card add-ghost passive-empty-list-ghost"${actionAttr}>
-          <div class="ghost-plus-big">${plusIcon()}</div>
+        return `${existingContent}<div class="ghost-section-card add-ghost component-list-add-ghost passive-empty-list-ghost"${actionAttr}>
+          <div class="ghost-plus-small">${plusIcon()}</div>
           <div class="ghost-label">${deps.escapeHtml(actionLabel)}</div>
         </div>`;
       }

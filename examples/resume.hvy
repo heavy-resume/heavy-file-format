@@ -2,8 +2,49 @@
 hvy_version: 0.1
 title: Resume Example
 reader_max_width: 60rem
+ai-context: >-
+  This is a resume document. Use the top-skills-tools-technologies section for featured
+  reference cards only; the skills, tools-technologies, and languages sidebar sections
+  are the main reusable libraries for detailed reference records. History and education
+  have body sections with structured component-lists for expandable record rows.
+  Projects, publications, awards, and certifications are section templates
+  that should be added only when source-backed content exists. Keep dated main-section
+  records in reverse chronological order with newest entries first. History should use
+  one expandable record per organization when roles are contiguous; put promotions,
+  title changes, or adjacent date ranges at the same organization inside that single
+  expanded record instead of creating duplicate organization rows. Use the tableform
+  History section flavor for longer histories with more items, and the linear History
+  section flavor for shorter histories. One project,
+  publication, certification, degree, skill, or tool should usually be represented as
+  one expandable reusable record. Local skills/tools lists inside history, project,
+  publication, certification, award, and education records are supporting references
+  and should not be treated as the main libraries.
+ai-import-guidance: >-
+  During resume import, map source-backed awards into the Awards section
+  template even when the source mentions awards inside work history, projects,
+  education, summaries, or other prose instead of providing an explicit Awards heading.
+  Treat those mentions as award-record items when they identify a distinct award,
+  recognition, honor, finalist placement, prize, or equivalent accolade. Do not create
+  Awards when the source has no distinct source-backed award-like item.
+  Any sort of job goes under professional history.
+  A skill is something you do. For example, programming.
+  A tool / technology is something you use and would have experience with. Such as
+  a programming language, machinery, etc.
 section_defaults:
   css: "margin: 0.5rem 0;"
+text_line_styles:
+  panel-heading:
+    label: Panel heading
+    css: "margin: 0 0 0.25rem;"
+  section-heading:
+    label: Section heading
+    css: "margin: 0.5rem 0 0.25rem;"
+  detail-heading:
+    label: Detail heading
+    css: "margin: 0.4rem 0 0.1rem;"
+  detail-body:
+    label: Detail body
+    css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
 theme:
   colors:
     --hvy-bg: "#0f1720"
@@ -28,6 +69,7 @@ theme:
     --hvy-border-alt: "#3d4756"
     --hvy-border-input: "#334152"
     --hvy-border-translucent: "rgba(42, 51, 64, 0.92)"
+    --hvy-ghost-border: "rgba(231, 238, 245, 0.22)"
     --hvy-xref-card-bg: "rgba(255, 255, 255, 0.04)"
     --hvy-xref-card-hover-bg: "rgba(255, 255, 255, 0.08)"
     --hvy-table-header: "#1f2a37"
@@ -46,29 +88,586 @@ theme:
     --hvy-success: "#4cae68"
     --hvy-success-bg: "#152b1e"
     --hvy-success-border: "#2e7a46"
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      lock: true
+      description: Project portfolio
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PROJECT
+              - DATES
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Project table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: project-record
+            componentListItemLabel: project
+            tags: project
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PROJECT
+                  - DATES
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Project table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-linear-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
+  - name: Publications
+    key: resume-publications
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      lock: true
+      description: Publications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PUBLICATION
+              - PUBLISHER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Publication table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PUBLICATION
+                  - PUBLISHER
+                  - DATE
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Publication table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-linear-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      level: 1
+      lock: true
+      description: Awards
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Awards"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - AWARD
+              - ISSUER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Award table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: award-record
+            componentListItemLabel: award
+            tags: award
+            componentListBlocks: []
+      children: []
+  - name: Certifications
+    key: resume-certifications
+    template:
+      id: certifications
+      title: Certifications
+      level: 1
+      lock: true
+      description: Certifications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Certifications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - "<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->"
+              - GIVEN BY
+              - OBTAINED
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Certification table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: certification-record
+            componentListItemLabel: certification
+            tags: certification
+            componentListBlocks: []
+      children: []
+  - name: Languages
+    key: resume-languages
+    template:
+      id: languages
+      title: Languages
+      level: 1
+      lock: false
+      expanded: false
+      location: sidebar
+      description: Spoken and written languages information
+      hideIfUnmodified: true
+      tags: languages
+      blocks:
+        - text: "# Languages"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: language-record
+            componentListItemLabel: language
+            tags: language
+            componentListBlocks: []
+      children: []
+  - name: Tabular Resume Section
+    key: tabular-resume-section
+    repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+      row_label:
+        label: Row label
+      row_summary:
+        label: Row summary
+      row_details:
+        label: Row details
+    template:
+      title: Tabular Resume Section
+      level: 1
+      lock: false
+      description: An additional resume section with a table with expandable rows.
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+            placeholder: "# Section title"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0;"
+            lock: false
+            tableColumns: ["ITEM", "SUMMARY"]
+            tableShowHeader: true
+            tableRows: []
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: resume-section-row
+            componentListItemLabel: row
+            componentListBlocks:
+              - text: ""
+                schema:
+                  component: expandable
+                  css: "margin: 0;"
+                  expandableAlwaysShowStub: true
+                  expandableExpanded: false
+                  expandableStubBlocks:
+                    children:
+                      - text: ""
+                        schema:
+                          component: table
+                          css: "margin: 0; margin-top: -1px;"
+                          tableColumns: ["ITEM", "SUMMARY"]
+                          tableShowHeader: false
+                          tableRows:
+                            - cells: ["{% row_label %}", "{% row_summary %}"]
+                  expandableContentBlocks:
+                    css: "padding: 0.5rem;"
+                    children:
+                      - text: "^section-heading^ ### {% row_label %}\n{% row_details | block %}"
+                        schema:
+                          component: text
+                          placeholder: "Row details"
+                          css: "margin: 0;"
+                      - text: "Delete this starter row if it is not needed."
+                        schema:
+                          component: text
+                          editorOnly: true
+                          css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
+      children: []
+  - name: History
+    key: resume-history
+    repeatable: false
+    template:
+      id: history
+      title: Professional History
+      level: 1
+      lock: true
+      description: Work history
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Professional History"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: History table header
+        - text: ""
+          schema:
+            id: history-list
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: history-record
+            componentListItemLabel: job
+            tags: history
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer histories (4 or more)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: History table header
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter histories (3 or less)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-linear-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks: []
+          children: []
 component_defs:
-  - name: history-record
+  - name: resume-section-row
     baseType: expandable
-    description: Expandable resume history record
+    description: Generic resume section table row
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;  margin-top: -1px;"
-              tableColumns: "YEAR, ORGANIZATION, TITLE"
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["ITEM", "SUMMARY"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", "", ""]
+                - cells: ["", ""]
       expandableContentBlocks:
-        lock: true
+        css: "padding: 0.5rem;"
         children:
           - text: ""
+            schema:
+              component: text
+              placeholder: "Row details"
+              css: "margin: 0;"
+          - text: "Delete this starter row if it is not needed."
+            schema:
+              component: text
+              editorOnly: true
+              css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
+  - name: skill-xref-card
+    baseType: xref-card
+    description: Skill reference
+    schema:
+      xrefTargetTagFilter: skill
+      css: "margin: 0.25rem 0;"
+  - name: tool-tech-xref-card
+    baseType: xref-card
+    description: Tool / technology reference
+    schema:
+      xrefTargetTagFilter: tool
+      css: "margin: 0.25rem 0;"
+  - name: history-xref-card
+    baseType: xref-card
+    description: Work history reference
+    schema:
+      xrefTargetTagFilter: history
+      css: "margin: 0.25rem 0;"
+  - name: education-xref-card
+    baseType: xref-card
+    description: Education reference
+    schema:
+      xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: award-xref-card
+    baseType: xref-card
+    description: Award reference
+    schema:
+      xrefTargetTagFilter: award
+      css: "margin: 0.25rem 0;"
+  - name: language-xref-card
+    baseType: xref-card
+    description: Language reference
+    schema:
+      xrefTargetTagFilter: language
+      css: "margin: 0.25rem 0;"
+  - name: certification-xref-card
+    baseType: xref-card
+    description: Certification reference
+    schema:
+      xrefTargetTagFilter: certification
+      css: "margin: 0.25rem 0;"
+  - name: publication-xref-card
+    baseType: xref-card
+    description: Publication reference
+    schema:
+      xrefTargetTagFilter: publication
+      css: "margin: 0.25rem 0;"
+  - name: project-xref-card
+    baseType: xref-card
+    description: Project reference
+    schema:
+      xrefTargetTagFilter: project
+      css: "margin: 0.25rem 0;"
+  - name: history-record
+    baseType: expandable
+    description: Work history organization entry
+    templateVariables:
+      role:
+        label: Role / Title
+      dates:
+        label: Dates
+      accomplishments:
+        label: Accomplishments
+    schema:
+      tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% role %}", "{% organization %}", "{% dates %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: "{% organization %}"
             schema:
               component: text
               placeholder: Organization
@@ -81,40 +680,108 @@ component_defs:
               gridItems:
                 - id: history-location
                   block:
-                    text: ""
+                    text: "{% location %}"
                     schema:
                       component: text
-                      placholder: location
+                      placeholder: location
                       css: "margin: 0;"
                 - id: history-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       placeholder: date range
                       css: "margin: 0; text-align: right;"
-          - text: ""
+          - text: "{% role %}"
             schema:
               component: text
+              placeholder: job title
               css: "margin: 0.35rem 0; font-weight: 700;"
-          - text: ""
+          - text: "{% description | block %}"
             schema:
               component: text
+              placeholder: description
               css: "margin: 0.35rem 0;"
-          - text: "#### Accomplishments"
+          - text: "^section-heading^ #### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
+          - text: "{% accomplishments | block %}"
+            schema:
+              component: text
+              placeholder: accomplishments
+              css: "margin: 0;"
+          - component: skills-and-tools-tech-list
+  - name: history-linear-record
+    baseType: expandable
+    description: Work history organization entry with an empty collapsed stub for linear history sections
+    templateVariables:
+      role:
+        label: Role / Title
+      date_range:
+        label: Dates
+      accomplishments:
+        label: Accomplishments
+    schema:
+      tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: "{% organization %}"
+            schema:
+              component: text
+              placeholder: Organization
+              css: "margin: 0 0 0.35rem;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: history-location
+                  block:
+                    text: "{% location %}"
+                    schema:
+                      component: text
+                      placeholder: location
+                      css: "margin: 0;"
+                - id: history-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      placeholder: date range
+                      css: "margin: 0; text-align: right;"
+          - text: "{% role %}"
+            schema:
+              component: text
+              placeholder: job title
+              css: "margin: 0.35rem 0; font-weight: 700;"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              placeholder: description
+              css: "margin: 0.35rem 0;"
+          - text: "^section-heading^ #### Accomplishments"
+            schema:
+              component: text
               css: "margin: 0;"
-              componentListBlocks: []
+          - text: "{% accomplishments | block %}"
+            schema:
+              component: text
+              placeholder: accomplishments
+              css: "margin: 0;"
           - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
-    description: Two-column skills and tools list
+    description: Related skills and tools
     schema:
       css: "margin: 0.5rem 0 0;"
       gridColumns: 2
@@ -124,49 +791,65 @@ component_defs:
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
-                - text: "#### Relevant Skills"
+              containerBlocks:
+                - text: "^panel-heading^ #### Relevant Skills"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: skill-xref-card
+                    componentListItemLabel: skill reference
+                    css: "margin: 0;"
+                    componentListBlocks: []
         - id: tools-technologies
           align: center
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
-                - text: "#### Tools and Technologies"
+              containerBlocks:
+                - text: "^panel-heading^ #### Tools and Technologies"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: tool-tech-xref-card
+                    componentListItemLabel: tool / tech reference
+                    css: "margin: 0;"
+                    componentListBlocks: []
   - name: education-record
     baseType: expandable
-    description: Expandable education record
+    description: Education entry
+    templateVariables:
+      institution:
+        label: School / University
+      date_range:
+        label: Date range
+      gpa:
+        label: GPA
     schema:
-      css: "margin: 0;"
+      tags: education
+      xrefTitle: "{% degree %}"
+      xrefDetail: "{% institution %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
-        children:
-          - text: ""
-            schema:
-              component: table
-              css: "margin: 0; margin-top: -1px;"
-              tableColumns: "DEGREE, INSTITUTION, LOCATION"
-              tableShowHeader: false
-              tableRows:
-                - cells: ["", "", ""]
+        children: []
       expandableContentBlocks:
-        lock: true
-        css: "padding: 0.5rem;"
         children:
+          - text: "^section-heading^ ### {% degree %}"
+            schema:
+              component: text
+              css: "margin: 0 0 0.25rem;"
+              placeholder: "Degree"
           - text: ""
             schema:
               component: grid
@@ -180,64 +863,371 @@ component_defs:
                       component: container
                       css: "margin: 0;"
                       containerBlocks:
-                        - text: ""
+                        - text: "{% institution %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "School / University"
-                        - text: ""
+                        - text: "{% location %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "Location"
-                        - text: ""
+                        - text: "{% gpa %}"
                           schema:
                             component: text
                             css: "margin: 0;"
                             placeholder: "GPA"
                 - id: education-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
-                      placeholder: "Start Year – End Year"
-          - text: ""
+                      placeholder: "Start Year - End Year"
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
           - component: skills-and-tools-tech-list
-          - text: "#### Classes"
+          - text: "^section-heading^ #### Classes"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
+              component: text
+              placeholder: classes
               css: "margin: 0;"
-              componentListBlocks: []
-  - name: project-record
+  - name: award-record
     baseType: expandable
-    description: Expandable project record
+    description: Award entry
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Given By
+      date:
+        label: Date
     schema:
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;  margin-top: -1px;"
-              tableColumns: "PROJECT, DATE"
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["AWARD", "ISSUER", "DATE"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", ""]
+                - cells: ["{% award %}", "{% issuer %}", "{% date %}"]
       expandableContentBlocks:
-        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: award-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% award %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Award"
+                        - text: "{% issuer %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Given by"
+                - id: award-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+  - name: certification-record
+    baseType: expandable
+    description: Certification entry
+    templateVariables:
+      name:
+        label: Certification name
+      obtained_from:
+        label: Obtained from
+      obtained_month:
+        label: Obtained month
+      obtained_year:
+        label: Obtained year
+    schema:
+      tags: certification
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% obtained_from %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->", "GIVEN BY", "OBTAINED"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: certification-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Certification name"
+                        - text: "{% obtained_from %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Obtained from"
+                - id: certification-obtained-date
+                  block:
+                    text: "{% obtained_month %}/{% obtained_year %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Obtained month / year"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+  - name: publication-record
+    baseType: expandable
+    description: Publication entry
+    templateVariables:
+      name:
+        label: Publication name
+      authors:
+        label: Authors
+      publisher:
+        label: Publisher
+      date:
+        label: Publication date
+      employer_short_name:
+        label: Employer short name
+      url:
+        label: Publication URL
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["PUBLICATION", "PUBLISHER", "DATE"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% publisher %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
+          - component: skills-and-tools-tech-list
+  - name: publication-linear-record
+    baseType: expandable
+    description: Publication entry with an empty collapsed stub for linear publication sections
+    templateVariables:
+      name:
+        label: Publication name
+      authors:
+        label: Authors
+      publisher:
+        label: Publisher
+      date:
+        label: Publication date
+      employer_short_name:
+        label: Employer short name
+      url:
+        label: Publication URL
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
+          - component: skills-and-tools-tech-list
+  - name: project-record
+    baseType: expandable
+    description: Project entry
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
+    schema:
+      tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["PROJECT", "DATES"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% project %}", "{% date_range %}"]
+      expandableContentBlocks:
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -248,135 +1238,261 @@ component_defs:
               gridItems:
                 - id: project-title
                   block:
-                    text: ""
+                    text: "{% project %}"
                     schema:
                       component: text
                       css: "margin: 0;"
+                      placeholder: "Project name"
                 - id: project-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
-          - text: ""
+                      placeholder: "Date range"
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
-          - text: ""
+              placeholder: "Project description"
+          - text: "{% link %}"
             schema:
               component: text
               css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
+          - component: skills-and-tools-tech-list
+  - name: project-linear-record
+    baseType: expandable
+    description: Project entry with an empty collapsed stub for linear project sections
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
+    schema:
+      tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: project-title
+                  block:
+                    text: "{% project %}"
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                      placeholder: "Project name"
+                - id: project-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date range"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Project description"
+          - text: "{% link %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
           - component: skills-and-tools-tech-list
   - name: skill-record-experience-section
     baseType: container
-    description: Skill record experience section
+    description: Related work history
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Experience"
+        - text: "^detail-heading^ #### Experience"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: history-xref-card
+            componentListItemLabel: history reference
             componentListBlocks: []
   - name: skill-record-education-section
     baseType: container
-    description: Skill record education section
+    description: Related education
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Education"
+        - text: "^detail-heading^ #### Education"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: education-xref-card
+            componentListItemLabel: education reference
             componentListBlocks: []
   - name: skill-record-projects-section
     baseType: container
-    description: Skill record projects section
+    description: Related projects
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Projects"
+        - text: "^detail-heading^ #### Projects"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: project-xref-card
+            componentListItemLabel: project reference
             componentListBlocks: []
   - name: skill-record-section
     baseType: container
-    description: Reusable skill record section with heading and repeatable entries
+    description: Skill detail group
+    templateVariables:
+      section_title:
+        label: Section title
     schema:
       css: "margin: 0;"
       containerBlocks:
-        - text: ""
+        - text: "^detail-heading^ {% section_title %}"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
             placeholder: "#### Section title"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
             componentListComponent: skill-record-entry
+            componentListItemLabel: detail
             componentListBlocks: []
   - name: skill-record
     baseType: expandable
-    description: Skill record
+    description: Skill details
+    templateVariables:
+      skill:
+        label: Skill
+      description:
+        label: Description
+        generator: hvy.resume.skill-description
+        generatorLabel: Generate
     schema:
+      tags: skill
+      xrefTitle: "{% skill %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
-        lock: true
         children:
-          - text: ""
+          - text: "### {% skill %}"
             schema:
               component: text
               css: "margin: 0;"
-              placeholder: "Skill name"
+              placeholder: "### Skill name"
       expandableContentBlocks:
         lock: false
         css: "padding: 0.5rem;"
         children:
-          - text: "#### Description"
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
-            css: "margin-left: 0.5rem;"
+              css: "margin: 0;"
+              placeholder: "Description and notes"
+  - name: tool-tech-record
+    baseType: expandable
+    description: Tool / technology details
+    templateVariables:
+      tool_technology:
+        label: Tool / Technology
+      description:
+        label: Description
+        generator: hvy.resume.tool-description
+        generatorLabel: Generate
+    schema:
+      tags: tool
+      xrefTitle: "{% tool_technology %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableStubBlocks:
+        children:
+          - text: "### {% tool_technology %}"
             schema:
               component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "What is it?"
-          - text: "#### Notes"
+              css: "margin: 0;"
+              placeholder: "### Tool / technology name"
+      expandableContentBlocks:
+        lock: false
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
+              css: "margin: 0;"
+              placeholder: "Description and notes"
+  - name: language-record
+    baseType: expandable
+    description: Language details
+    templateVariables:
+      language:
+        label: Language
+      proficiency:
+        label: Proficiency
+      notes:
+        label: Notes
+    schema:
+      tags: language
+      xrefTitle: "{% language %}"
+      xrefDetail: "{% proficiency %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "### {% language %}"
             schema:
               component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "Notes"
-          - component: skill-record-experience-section
-          - component: skill-record-education-section
-          - component: skill-record-projects-section
+              css: "margin: 0;"
+              placeholder: "### Language"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Proficiency
+              ^detail-body^ {% proficiency %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Proficiency and notes"
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","priority":true}-->
 #! Info
 
  <!--hvy:text {"css":"margin-bottom: 0;","align":"center"}-->
@@ -388,678 +1504,346 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center"}-->
   Senior Software Engineer
 
-<!--hvy: {"id":"summary","lock":true,"contained":true}-->
+<!--hvy: {"id":"summary","lock":true,"contained":true,"description":"Professional summary","priority":true}-->
 #! Summary
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
-   <!--hvy:text {"css":"margin-bottom: 0;"}-->
-    ## Summary
+   <!--hvy:text {"css":"margin-bottom: 0;","placeholder":"Add a short professional summary and elaborate in the expanded section"}-->
+    # Summary
 
    <!--hvy:text {"css":"margin-top: 0;"}-->
     Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.
 
-  <!--hvy:expandable:content {"lock":true}-->
+  <!--hvy:expandable:content {}-->
 
-   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ^detail-body^ Builds polished internal tools that reduce friction for engineers and product teams.
+    ^detail-body^ Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
+    ^detail-body^ Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
 
-    <!--hvy:component-list:0 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Builds polished internal tools that reduce friction for engineers and product teams.
-
-    <!--hvy:component-list:1 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Comfortable moving between frontend UX, platform design, and AI-assisted workflows.
-
-    <!--hvy:component-list:2 {}-->
-
-     <!--hvy:text {"css":"margin: 0;"}-->
-      Enjoys turning messy, high-context problems into repeatable systems and clear documentation.
-
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Location preferences"}-->
 #! Locations
 
- <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","placeholder":"location, target location","fillIn":true,"lock":true}-->
   **Location:** Seattle, WA
 
- <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-  **Target Location(s):** Remote, Seattle, San Francisco
+  **Target Location(s):** Greater Seattle Area, San Francisco
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
-#! Top Skills, Tools, and Technologies
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","priority":true}-->
+#! Featured Skills, Tools, and Technologies
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Featured
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
 
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:0 {}-->
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Skills
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
-      ## Skills
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference","css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:1 {}-->
+     <!--hvy:component-list:0 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
+      <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Software Engineering","xrefDetail":"Core strength","xrefTarget":"skill-software-engineering"}-->
 
-    <!--hvy:component-list:2 {}-->
+     <!--hvy:component-list:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
+      <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Library Development","xrefDetail":"Reusable systems","xrefTarget":"skill-library-development"}-->
 
-    <!--hvy:component-list:3 {}-->
+     <!--hvy:component-list:2 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
+      <!--hvy:skill-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"LLM Prompt Engineering","xrefDetail":"Product workflow design","xrefTarget":"skill-llm-prompt-engineering"}-->
 
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:0 {}-->
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Tools & Technologies
 
-     <!--hvy:text {"css":"margin: 0 0 0.35rem;"}-->
-      ## Tools & Technologies
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-    <!--hvy:component-list:1 {}-->
+     <!--hvy:component-list:0 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
+      <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"TypeScript","xrefDetail":"Primary application language","xrefTarget":"tool-typescript"}-->
 
-    <!--hvy:component-list:2 {}-->
+     <!--hvy:component-list:1 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
+      <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Python","xrefDetail":"Automation and prototyping","xrefTarget":"tool-python"}-->
 
-    <!--hvy:component-list:3 {}-->
+     <!--hvy:component-list:2 {}-->
 
-     <!--hvy:xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
+      <!--hvy:tool-tech-xref-card {"css":"margin: 0.35rem 0;","xrefTitle":"Developer Containers","xrefDetail":"Reproducible local environments","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Skills reference list"}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Skills
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","tags":"skill","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"skill-software-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-software-engineering","xrefTitle":"Software Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Software Engineering
+      ### Software Engineering
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Experience
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Senior Software Engineer","xrefDetail":"Northwind Labs","xrefTarget":"history-northwind-labs-senior-software-engineer"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"skill-reverse-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-reverse-engineering","xrefTitle":"Reverse Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Reverse Engineering
+      ### Reverse Engineering
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"skill-library-development","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-library-development","xrefTitle":"Library Development","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Library Development
+      ### Library Development
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","xrefTitle":"LLM Prompt Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      LLM Prompt Engineering
+      ### LLM Prompt Engineering
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"skill-project-management","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-project-management","xrefTitle":"Project Management","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":84},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Project Management
+      ### Project Management
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Tools and technologies reference list"}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Tools & Technologies
+  # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"tool-typescript","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-typescript","xrefTitle":"TypeScript","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      TypeScript
+      ### TypeScript
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Statically typed superset of JavaScript used for large-scale web applications, tooling, and shared platform packages.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Statically typed superset of JavaScript used for large-scale web applications, tooling, and shared platform packages.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Primary application language. Uses strict mode throughout with explicit types at API boundaries. Comfortable with both frontend and Node.js contexts.
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"tool-python","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-python","xrefTitle":"Python","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Python
+      ### Python
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ High-level dynamically typed language commonly used for scripting, automation, data processing, and AI/ML integrations.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used for automation scripts, prototyping, and AI API integrations. Comfortable with async patterns and CLI tooling.
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"tool-c-cpp","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-c-cpp","xrefTitle":"C/C++","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      C/C++
+      ### C/C++
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Systems programming languages used for performance-critical software, operating systems, compilers, and graphics work.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Education
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","xrefTarget":"education-bs-computer-science"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Systems programming languages used for performance-critical software, operating systems, compilers, and graphics work.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Background from coursework in operating systems, compilers, and computer graphics. Applied in academic projects; not a current primary language.
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"tool-developer-containers","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-developer-containers","xrefTitle":"Developer Containers","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      Developer Containers
+      ### Developer Containers
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","xrefTarget":"project-heavy-stack"}-->
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Docker-based development environments defined as code, providing reproducible and portable local setups with all dependencies pre-configured.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Built and maintained dev containers for multiple projects. Cut onboarding time from days to hours and ensured test parity with CI environments.
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"tool-openai-api","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-openai-api","xrefTitle":"OpenAI API","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      OpenAI API
+      ### OpenAI API
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      REST API providing access to OpenAI's language and embedding models for integration into applications and agent workflows.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ REST API providing access to OpenAI's language and embedding models for integration into applications and agent workflows.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used to power a deep research agent during a hackathon. Familiar with prompt construction, streaming, and managing token budgets.
 
   <!--hvy:component-list:5 {}-->
 
-   <!--hvy:skill-record {"id":"tool-github-codespaces","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-github-codespaces","xrefTitle":"GitHub Codespaces","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      GitHub Codespaces
+      ### GitHub Codespaces
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Cloud-hosted development environments that run VS Code in the browser backed by a remote container, eliminating local setup requirements.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Used as the hosting target for the Autonomous Agent Hackathon, allowing teammates to run the agent without any local environment setup.
 
   <!--hvy:component-list:6 {}-->
 
-   <!--hvy:skill-record {"id":"tool-superagi","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-superagi","xrefTitle":"SuperAGI","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
      <!--hvy:text {"css":"margin: 0;"}-->
-      SuperAGI
+      ### SuperAGI
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Description
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Description
+      ^detail-body^ Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
+      ^detail-heading^ #### Notes
+      ^detail-body^ Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
 
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Open-source autonomous agent framework that orchestrates multi-step AI tasks using tools, memory, and goal-driven loops.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Notes
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0 0 0.35rem; margin-left: 0.5rem;"}-->
-      Core technology used in the Autonomous Agent Hackathon. Designed the agent architecture and wrote all integration code connecting it to the research task pipeline.
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:text {"css":"margin: 0.4rem 0 0.1rem;"}-->
-      #### Projects
-
-    <!--hvy:expandable:content {}-->
-
-     <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","xrefTarget":"project-autonomous-agent-hackathon"}-->
-
-<!--hvy: {"id":"history","lock":true}-->
-#! History
+<!--hvy: {"id":"languages","lock":true,"expanded":false,"location":"sidebar","description":"Language reference list"}-->
+#! Languages
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # History
+  # Languages
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"language-record","componentListItemLabel":"language","tags":"language","componentListDefaultSortKey":"Proficiency","componentListDefaultSortDirection":"desc"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:history-record {"id":"history-northwind-labs-senior-software-engineer","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:language-record {"id":"language-english","xrefTitle":"English","xrefDetail":"Native","tags":"language","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"English","Proficiency":100},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ### English
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-heading^ #### Proficiency
+      ^detail-body^ Native
+      ^detail-heading^ #### Notes
+      ^detail-body^ Primary professional communication language.
+
+<!--hvy: {"id":"history","templateKey":"resume-history","lock":true,"description":"Work history","tags":"reciprocal-xref-source"}-->
+#! History
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Professional History
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
+
+ <!--hvy:component-list {"id":"history-list","css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:history-record {"id":"history-northwind-labs-senior-software-engineer","xrefTitle":"Senior Software Engineer","xrefDetail":"Northwind Labs","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Senior Software Engineer","Northwind Labs","2024"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 
@@ -1084,87 +1868,75 @@ component_defs:
      <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
       Led the developer platform for an AI-enabled product line, improving local setup, internal tooling, and release confidence across a fast-moving engineering team.
 
-     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
-      #### Accomplishments
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^section-heading^ #### Accomplishments
 
-     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-      <!--hvy:component-list:0 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Built a shared TypeScript platform package that reduced duplicated application code across three products.
-
-      <!--hvy:component-list:1 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Introduced reproducible developer containers and test workflows that cut onboarding time from days to hours.
-
-      <!--hvy:component-list:2 {}-->
-
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-body^ Built a shared TypeScript platform package that reduced duplicated application code across three products.
+      ^detail-body^ Introduced reproducible developer containers and test workflows that cut onboarding time from days to hours.
+      ^detail-body^ Partnered with design and product to ship AI-assisted editor workflows with measurable adoption.
 
      <!--hvy:skills-and-tools-tech-list {}-->
 
       <!--hvy:grid:0 {"id":"history-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+         #### Skills
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Skills
+        <!--hvy:component-list {"id":"history-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
-        <!--hvy:component-list:3 {}-->
+         <!--hvy:component-list:2 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"history-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+         #### Tools & Technologies
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools & Technologies
+        <!--hvy:component-list {"id":"history-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-        <!--hvy:component-list:3 {}-->
+         <!--hvy:component-list:2 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-<!--hvy: {"id":"projects","lock":true}-->
+<!--hvy: {"id":"projects","lock":true,"description":"Project portfolio","tags":"reciprocal-xref-source","templateKey":"resume-projects"}-->
 #! Projects
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Projects
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PROJECT","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Project table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record","tags":"project"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:project-record {"id":"project-heavy-stack","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:project-record {"id":"project-heavy-stack","xrefTitle":"Heavy Stack","xrefDetail":"05/2024 - present","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["PROJECT","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
 
@@ -1172,67 +1944,67 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-title"}-->
 
-       <!--hvy:text {"css":"margin: 0;"}-->
+       <!--hvy:text {"css":"margin: 0;","placeholder":"Project name"}-->
         ### Heavy Stack
 
       <!--hvy:grid:1 {"id":"project-date-range"}-->
 
-       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date range"}-->
         05/2024 - present
 
-     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Project description"}-->
       The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
 
-     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Project link"}-->
       [Visit webpage](https://github.com) (github.com)
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
       <!--hvy:grid:0 {"id":"project-relevant-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+        <!--hvy:component-list {"id":"project-relevant-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Reverse Engineering","xrefTarget":"skill-reverse-engineering"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+        <!--hvy:component-list {"id":"project-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-        <!--hvy:component-list:3 {}-->
+         <!--hvy:component-list:2 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:project-record {"id":"project-autonomous-agent-hackathon","css":"margin: 0; gap: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:project-record {"id":"project-autonomous-agent-hackathon","xrefTitle":"Autonomous Agent Hackathon","xrefDetail":"08/2023 - 08/2023","css":"margin: 0; gap: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PROJECT","DATES"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
 
     <!--hvy:expandable:content {"css": "padding: 0.5rem"}-->
 
@@ -1240,85 +2012,231 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-title-hackathon"}-->
 
-       <!--hvy:text {"css":"margin: 0;"}-->
+       <!--hvy:text {"css":"margin: 0;","placeholder":"Project name"}-->
         ### Autonomous Agent Hackathon
 
       <!--hvy:grid:1 {"id":"project-date-range-hackathon"}-->
 
-       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date range"}-->
         08/2023 - 08/2023
 
-     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Project description"}-->
       Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
 
-     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Project link"}-->
       [Visit webpage](https://lablab.ai) (lablab.ai)
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
       <!--hvy:grid:0 {"id":"project-relevant-skills-hackathon"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+        <!--hvy:component-list {"id":"project-relevant-skills-hackathon-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"LLM Prompt Engineering","xrefTarget":"skill-llm-prompt-engineering"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Project Management","xrefTarget":"skill-project-management"}-->
 
       <!--hvy:grid:1 {"id":"project-tools-technologies-hackathon"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+        <!--hvy:component-list {"id":"project-tools-technologies-hackathon-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Developer Containers","xrefTarget":"tool-developer-containers"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"OpenAI API","xrefTarget":"tool-openai-api"}-->
 
-        <!--hvy:component-list:3 {}-->
+         <!--hvy:component-list:2 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-        <!--hvy:component-list:4 {}-->
+         <!--hvy:component-list:3 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"GitHub Codespaces","xrefTarget":"tool-github-codespaces"}-->
 
-        <!--hvy:component-list:5 {}-->
+         <!--hvy:component-list:4 {}-->
 
-          <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
+           <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"SuperAGI","xrefTarget":"tool-superagi"}-->
 
-<!--hvy: {"id":"education","lock":true}-->
+<!--hvy: {"id":"publications","lock":true,"description":"Publications","tags":"reciprocal-xref-source","templateKey":"resume-publications"}-->
+#! Publications
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Publications
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["PUBLICATION","PUBLISHER","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Publication table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"publication-record","componentListItemLabel":"publication","tags":"publication"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:publication-record {"id":"publication-heavy-file-format-spec","xrefTitle":"Heavy File Format Specification","xrefDetail":"Heavy Resume","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PUBLICATION","PUBLISHER","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy File Format Specification","Heavy Resume","05/2024"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"publication-details-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;"}-->
+
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Publication name"}-->
+         ^section-heading^ ### Heavy File Format Specification
+
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Authors"}-->
+         AI
+
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Publisher"}-->
+         Heavy Resume
+
+        <!--hvy:text {"css":"margin: 0;","placeholder":"Employer short name"}-->
+         N/A
+
+      <!--hvy:grid:1 {"id":"publication-date-heavy-file-format-spec"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Publication date"}-->
+        05/2024
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
+      Defines a reusable document format for structured resumes, templates, reader views, and editable component records.
+
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Publication URL"}-->
+      [Read publication](https://github.com/heavy-resume/heavy-file-format/blob/main/HVY-SPEC.md) (github.com)
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"publication-relevant-skills-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
+
+        <!--hvy:component-list {"id":"publication-relevant-skills-heavy-file-format-spec-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Library Development","xrefTarget":"skill-library-development"}-->
+
+      <!--hvy:grid:1 {"id":"publication-tools-technologies-heavy-file-format-spec"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
+
+        <!--hvy:component-list {"id":"publication-tools-technologies-heavy-file-format-spec-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+
+<!--hvy: {"id":"certifications","lock":true,"description":"Certifications","tags":"reciprocal-xref-source","templateKey":"resume-certifications"}-->
+#! Certifications
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Certifications
+
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->","ISSUER","OBTAINED"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"Certification table header"}-->
+
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"certification-record","componentListItemLabel":"certification","tags":"certification"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:certification-record {"id":"certification-aws-certified-developer-associate","xrefTitle":"AWS Certified Developer - Associate","xrefDetail":"Amazon Web Services","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->","ISSUER","OBTAINED"],"tableShowHeader":false,"tableRows":[{"cells":["AWS Certified Developer - Associate","Amazon Web Services","04/2024"]}]}-->
+
+    <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
+
+     <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"certification-details-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;"}-->
+
+        <!--hvy:text {"css":"margin: 0 0 0.25rem;","placeholder":"Certification name"}-->
+         ^section-heading^ ### AWS Certified Developer - Associate
+
+        <!--hvy:text {"css":"margin: 0;","placeholder":"Obtained from"}-->
+         Amazon Web Services
+
+      <!--hvy:grid:1 {"id":"certification-obtained-date-aws-developer"}-->
+
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Obtained month / year"}-->
+        04/2024
+
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Description"}-->
+      Validates practical knowledge of cloud application development patterns, deployment workflows, and service integration fundamentals.
+
+     <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
+
+      <!--hvy:grid:0 {"id":"certification-relevant-skills-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
+
+        <!--hvy:component-list {"id":"certification-relevant-skills-aws-developer-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+
+      <!--hvy:grid:1 {"id":"certification-tools-technologies-aws-developer"}-->
+
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
+
+        <!--hvy:component-list {"id":"certification-tools-technologies-aws-developer-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
+
+         <!--hvy:component-list:0 {}-->
+
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+
+<!--hvy: {"id":"education","lock":true,"description":"Education","tags":"reciprocal-xref-source"}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record","tags":"education"}-->
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:education-record {"id":"education-bs-computer-science","css":"margin: 0;","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:education-record {"id":"education-bs-computer-science","xrefTitle":"B.S. Computer Science","xrefDetail":"University of Washington","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
+      ^section-heading^ ### B.S. Computer Science
 
     <!--hvy:expandable:content {}-->
 
@@ -1326,101 +2244,154 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"education-institution-details"}-->
 
-       <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
-
-        <!--hvy:component-list:0 {}-->
-
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          ### B.S. Computer Science
-
-        <!--hvy:component-list:1 {}-->
-
-         <!--hvy:text {"css":"margin: 0;"}-->
-          University of Washington
-
-        <!--hvy:component-list:2 {}-->
-
-         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
-          Seattle, WA
-
-        <!--hvy:component-list:3 {}-->
-
-         <!--hvy:text {"css":"margin: 0.15rem 0 0;"}-->
-          GPA: 3.8 / 4.0
+       <!--hvy:text {"css":"margin: 0;"}-->
+        ^detail-body^ University of Washington
+        ^detail-body^ Seattle, WA
+        ^detail-body^ GPA: 3.8 / 4.0
 
       <!--hvy:grid:1 {"id":"education-date-range"}-->
 
        <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
         09/2019 - 06/2023
 
+    <!--hvy:expandable:content {}-->
+
      <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
       Focused on systems programming, developer tooling, and human-computer interaction while building software for research and product-oriented team projects.
+
+    <!--hvy:expandable:content {}-->
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
 
       <!--hvy:grid:0 {"id":"education-relevant-skills"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Relevant Skills
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Relevant Skills
+        <!--hvy:component-list {"id":"education-relevant-skills-list","componentListComponent":"skill-xref-card","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
+          <!--hvy:skill-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Software Engineering","xrefTarget":"skill-software-engineering"}-->
 
       <!--hvy:grid:1 {"id":"education-tools-technologies"}-->
 
-       <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
+       <!--hvy:container {"css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:0 {}-->
+        <!--hvy:text {"css":"margin: 0;"}-->
+         ^panel-heading^ #### Tools and Technologies
 
-         <!--hvy:text {"css":"margin: 0 0 0.25rem;"}-->
-          #### Tools and Technologies
+        <!--hvy:component-list {"id":"education-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-        <!--hvy:component-list:1 {}-->
+         <!--hvy:component-list:0 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"Python","xrefTarget":"tool-python"}-->
 
-        <!--hvy:component-list:2 {}-->
+         <!--hvy:component-list:1 {}-->
 
-         <!--hvy:xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
+          <!--hvy:tool-tech-xref-card {"css":"margin: 0.25rem 0;","xrefTitle":"C/C++","xrefTarget":"tool-c-cpp"}-->
 
     <!--hvy:expandable:content {}-->
 
-     <!--hvy:text {"css":"margin: 0.5rem 0 0.25rem;"}-->
-      #### Classes
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^section-heading^ #### Classes
 
-     <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+    <!--hvy:expandable:content {}-->
 
-      <!--hvy:component-list:0 {}-->
+     <!--hvy:text {"css":"margin: 0;"}-->
+      ^detail-body^ Distributed Systems
+      ^detail-body^ Operating Systems
+      ^detail-body^ Compilers
+      ^detail-body^ Machine Learning
+      ^detail-body^ Computer Graphics
+      ^detail-body^ Human-Computer Interaction
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Distributed Systems
+<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts"}-->
+#! Template Maintenance
 
-      <!--hvy:component-list:1 {}-->
+ <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
+  SOURCE_TAG = "reciprocal-xref-source"
+  GENERATED_TAG = "reciprocal-xref-generated"
+  TARGET_TAGS = ["skill", "tool"]
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Operating Systems
+  def xref_component_for_source(source):
+      if source.component.endswith("-record"):
+          return source.component[:-len("-record")] + "-xref-card"
+      return "xref-card"
 
-      <!--hvy:component-list:2 {}-->
+  def is_generated(component):
+      return component.has_tag(GENERATED_TAG)
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Compilers
+  def is_target_record(record):
+      if not record.component.endswith("-record"):
+          return False
+      for tag in TARGET_TAGS:
+          if record.has_tag(tag):
+              return True
+      return False
 
-      <!--hvy:component-list:3 {}-->
+  changed_xrefs = []
+  for xref in doc.tool.get_updated_components("xref"):
+      if not is_generated(xref):
+          changed_xrefs.append(xref)
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Machine Learning
+  if not changed_xrefs:
+      return
 
-      <!--hvy:component-list:4 {}-->
+  # Targets are the real skill/tool records where reciprocal cards are written.
+  targets = {}
+  for record in doc.tool.get_components():
+      if is_target_record(record):
+          targets[record.id] = record
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Computer Graphics
+  # Groups collect the current real xrefs by target record and source section.
+  groups = {}
+  for target_id in targets:
+      groups[target_id] = {}
 
-      <!--hvy:component-list:5 {}-->
+  # Rebuild from current xrefs so changed, added, and removed xrefs all produce
+  # the same final reciprocal state.
+  for xref in doc.tool.get_components("xref"):
+      if is_generated(xref):
+          continue
+      source_section = xref.get_parent_by_tag(SOURCE_TAG)
+      target_id = str(xref.get("xrefTarget") or "")
+      if not source_section or target_id not in targets:
+          continue
+      source = xref.get_ancestor_record() or source_section
+      group_key = source.section_id
+      if group_key not in groups[target_id]:
+          groups[target_id][group_key] = []
+      seen = False
+      for item in groups[target_id][group_key]:
+          if item.id == source.id:
+              seen = True
+      if not seen:
+          groups[target_id][group_key].append(source)
 
-       <!--hvy:text {"css":"margin: 0.25rem 0;"}-->
-        Human-Computer Interaction
+  for target_id in targets:
+      target = targets[target_id]
+      target.remove_children_by_tag(GENERATED_TAG)
+      for group_key in groups[target_id]:
+          sources = groups[target_id][group_key]
+          if not sources:
+              continue
+          first = sources[0]
+          heading = target.append_child("text")
+          heading.set("tags", GENERATED_TAG)
+          heading.set("css", "margin: 0;")
+          heading.set("text", "^detail-heading^ #### " + first.section_title)
+          card_component = xref_component_for_source(first)
+          cards = target.append_child("component-list")
+          cards.set("tags", GENERATED_TAG)
+          cards.set("css", "margin: 0;")
+          cards.set("componentListComponent", card_component)
+          cards.set("componentListItemLabel", "reference")
+          for source in sources:
+              card = cards.append_child(card_component, None, "", "component-list")
+              card.set("tags", GENERATED_TAG)
+              card.set("xrefTitle", source.get("xrefTitle") or source.first_table_cell(0) or source.id)
+              card.set("xrefDetail", source.get("xrefDetail") or source.first_table_cell(1) or "")
+              card.set("xrefTarget", source.id)

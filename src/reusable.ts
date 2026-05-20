@@ -64,6 +64,12 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
     log();
     return;
   }
+  const reusableName = getReusableNameFromSectionKey(sectionKey);
+  if (!reusableName) {
+    skipped = 'document-instance';
+    log();
+    return;
+  }
   let stepStartedAt = performance.now();
   const owner = findReusableOwner(sectionKey, blockId);
   ownerMs = performance.now() - stepStartedAt;
@@ -79,7 +85,6 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
     log();
     return;
   }
-  const reusableName = getReusableNameFromSectionKey(sectionKey);
   stepStartedAt = performance.now();
   if (reusableName === def.name) {
     def.template = owner;
@@ -93,7 +98,7 @@ export function syncReusableTemplateForBlock(sectionKey: string, blockId: string
   state.document.meta.component_defs = defs;
   cloneMs = performance.now() - stepStartedAt;
   stepStartedAt = performance.now();
-  applyReusableTemplateToDocument(def.name, def.template, reusableName === def.name ? null : owner.id);
+  applyReusableTemplateToDocument(def.name, def.template, null);
   applyMs = performance.now() - stepStartedAt;
   log();
 }
@@ -129,25 +134,85 @@ export function saveReusableFromModal(
     findBlockByIds: (sectionKey: string, blockId: string) => VisualBlock | null;
     recordHistory: (group?: string) => void;
     closeModal: () => void;
-  }
+  },
+  options: { mode?: 'save-as-new' | 'update-existing' | 'add-flavor' } = {}
 ): void {
   const modal = state.reusableSaveModal;
   if (!modal) {
     return;
   }
+  const updateExisting = options.mode === 'update-existing' && !!modal.existingName;
   const input = app.querySelector<HTMLInputElement>('#reusableNameInput');
-  const draftName = (input?.value ?? modal.draftName).trim();
+  const draftName = (updateExisting ? modal.existingName ?? '' : input?.value ?? modal.draftName).trim();
   if (!draftName) {
     input?.focus();
     return;
   }
 
   if (modal.kind === 'component' && modal.blockId) {
+    if (options.mode === 'add-flavor' && modal.existingName) {
+      saveReusableComponentFlavor(modal.sectionKey, modal.blockId, modal.existingName, draftName, app, deps);
+      return;
+    }
     saveReusableComponent(modal.sectionKey, modal.blockId, draftName, deps);
     return;
   }
 
+  if (options.mode === 'add-flavor' && modal.existingName) {
+    saveReusableSectionFlavor(modal.sectionKey, modal.existingName, draftName, app, deps);
+    return;
+  }
   saveReusableSection(modal.sectionKey, draftName, deps);
+}
+
+function saveReusableComponentFlavor(
+  sectionKey: string,
+  blockId: string,
+  componentName: string,
+  flavorName: string,
+  app: HTMLElement,
+  deps: {
+    findBlockByIds: (sectionKey: string, blockId: string) => VisualBlock | null;
+    recordHistory: (group?: string) => void;
+    closeModal: () => void;
+  }
+): void {
+  const block = deps.findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return;
+  }
+  if (!flavorName.trim()) {
+    app.querySelector<HTMLInputElement>('#reusableNameInput')?.focus();
+    return;
+  }
+  const description = app.querySelector<HTMLTextAreaElement>('#reusableFlavorDescriptionInput')?.value ?? block.schema.description ?? '';
+  deps.recordHistory(`save-def-flavor:${blockId}`);
+  const defs = getComponentDefs();
+  const def = defs.find((item) => item.name === componentName);
+  if (!def) {
+    return;
+  }
+  const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+  const nextFlavor = {
+    name: flavorName,
+    description,
+    templateVariables: def.templateVariables,
+    schema: cloneReusableSchema(block.schema, componentName),
+  };
+  const existing = flavors.find((item) => item.name === flavorName);
+  if (existing) {
+    existing.description = nextFlavor.description;
+    existing.templateVariables = nextFlavor.templateVariables;
+    existing.schema = nextFlavor.schema;
+    delete existing.template;
+  } else {
+    flavors.push(nextFlavor);
+  }
+  def.flavors = flavors;
+  state.document.meta.component_defs = defs;
+  deps.closeModal();
+  getRenderApp()();
+  getRefreshReaderPanels()();
 }
 
 function saveReusableComponent(
@@ -216,6 +281,49 @@ function saveReusableSection(
   } else {
     defs.push({ name, template });
   }
+  state.document.meta.section_defs = defs;
+  deps.closeModal();
+  getRenderApp()();
+}
+
+function saveReusableSectionFlavor(
+  sectionKey: string,
+  sectionTemplateName: string,
+  flavorName: string,
+  app: HTMLElement,
+  deps: {
+    recordHistory: (group?: string) => void;
+    closeModal: () => void;
+  }
+): void {
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return;
+  }
+  const descriptionInput = app.querySelector<HTMLTextAreaElement>('#reusableFlavorDescriptionInput');
+  deps.recordHistory(`save-section-flavor:${sectionTemplateName}:${flavorName}`);
+  const defs = getSectionDefs();
+  const def = defs.find((candidate) => candidate.name === sectionTemplateName);
+  if (!def) {
+    return;
+  }
+  const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+  const template = cloneReusableSection(section);
+  const existing = flavors.find((candidate) => candidate.name === flavorName);
+  const nextFlavor = {
+    name: flavorName,
+    description: descriptionInput?.value.trim() || undefined,
+    templateVariables: def.templateVariables,
+    template,
+  };
+  if (existing) {
+    existing.description = nextFlavor.description;
+    existing.templateVariables = nextFlavor.templateVariables;
+    existing.template = nextFlavor.template;
+  } else {
+    flavors.push(nextFlavor);
+  }
+  def.flavors = flavors;
   state.document.meta.section_defs = defs;
   deps.closeModal();
   getRenderApp()();

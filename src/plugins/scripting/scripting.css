@@ -24,6 +24,26 @@
   text-transform: lowercase;
 }
 
+.hvy-scripting-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.hvy-scripting-editor-script-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border: 1px solid var(--hvy-border-input, #d1d5db);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  background: var(--hvy-surface-alt, #f3f4f6);
+  color: var(--hvy-text-muted, #4b5563);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
 .hvy-scripting-textarea {
   width: 100%;
   min-height: 12rem;
@@ -51,38 +71,35 @@
   font-family: var(--hvy-mono, ui-monospace, monospace);
 }
 
-.hvy-scripting-help-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.hvy-scripting-log-detail {
+  display: none;
+  margin: 0;
+  max-height: 12rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 0.7rem;
+  border-top: 1px solid var(--hvy-border-input, #d1d5db);
+  background: var(--hvy-code-bg, #f6f8fa);
+  color: var(--hvy-code-text, #111827);
+  font: 12px/1.45 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.hvy-scripting-help-modal {
-  background: var(--hvy-surface, #fff);
-  color: var(--hvy-text, #111827);
-  border-radius: 8px;
-  width: min(880px, 92vw);
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+.hvy-scripting-log-detail.is-visible {
+  display: block;
 }
 
-.hvy-scripting-help-modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--hvy-border, #e5e7eb);
+.hvy-scripting-help-modal,
+.hvy-document .hvy-scripting-help-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(920px, calc(100% - 2rem));
+  padding: 0.85rem;
 }
 
 .hvy-scripting-help-modal-body {
+  min-height: 0;
   overflow: auto;
-  padding: 1rem 1.25rem;
+  padding-top: 0.75rem;
 }
 
 .hvy-scripting-reader-shell {

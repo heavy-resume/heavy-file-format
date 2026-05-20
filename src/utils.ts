@@ -29,7 +29,7 @@ export function makeId(prefix: string): string {
   return `${prefix}-${rand}`;
 }
 
-export function detectExtension(filename: string, fallbackContent: string): VisualDocument['extension'] {
+export function detectExtension(filename: string): VisualDocument['extension'] {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.thvy')) {
     return '.thvy';
@@ -40,8 +40,8 @@ export function detectExtension(filename: string, fallbackContent: string): Visu
   if (lower.endsWith('.md')) {
     return '.md';
   }
-  if (/template\s*:\s*true/m.test(fallbackContent)) {
-    return '.thvy';
+  if (lower.endsWith('.markdown')) {
+    return '.md';
   }
   return '.hvy';
 }
@@ -51,6 +51,10 @@ export function normalizeFilename(input: string): string {
     return input;
   }
   return `${input}.hvy`;
+}
+
+export function normalizeMarkdownImportFilename(input: string): string {
+  return input.replace(/\.(md|markdown)$/i, '.hvy') || 'document.hvy';
 }
 
 export function downloadTextFile(filename: string, text: string): void {

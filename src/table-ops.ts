@@ -1,14 +1,6 @@
 import type { BlockSchema } from './editor/types';
 import { moveItem } from './utils';
 
-export function splitColumns(value: string): string[] {
-  const columns = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  return columns.length > 0 ? columns : ['Column 1', 'Column 2'];
-}
-
 export function normalizeTableColumns(columns: string[]): string[] {
   const cleaned = columns.map((column) => column.trim());
   const nonEmpty = cleaned.filter((column) => column.length > 0);
@@ -17,12 +9,12 @@ export function normalizeTableColumns(columns: string[]): string[] {
 }
 
 export function getTableColumns(schema: BlockSchema): string[] {
-  return normalizeTableColumns(splitColumns(schema.tableColumns));
+  return normalizeTableColumns(schema.tableColumns);
 }
 
 export function setTableColumns(schema: BlockSchema, columns: string[]): void {
   const normalized = normalizeTableColumns(columns);
-  schema.tableColumns = normalized.join(', ');
+  schema.tableColumns = normalized;
   schema.tableRows = schema.tableRows.map((row) => ({
     ...row,
     cells: normalized.map((_, index) => row.cells[index] ?? ''),
@@ -55,7 +47,7 @@ export function moveTableColumn(schema: BlockSchema, fromIndex: number, toIndex:
     cells: moveItem(nextColumns.map((_, index) => row.cells[index] ?? ''), fromIndex, toIndex),
   }));
   schema.tableRows = rows;
-  schema.tableColumns = nextColumns.join(', ');
+  schema.tableColumns = nextColumns;
 }
 
 export function moveTableRow(schema: BlockSchema, fromIndex: number, toIndex: number): void {

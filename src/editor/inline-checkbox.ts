@@ -54,6 +54,22 @@ function findInlineCheckboxRemovalTarget(
     return null;
   }
   if (node instanceof HTMLElement || node instanceof DocumentFragment) {
+    if (node instanceof HTMLInputElement && node.type === 'checkbox' && editable.contains(node)) {
+      const spacer = node.nextSibling instanceof Text && node.nextSibling.data.startsWith(' ') ? node.nextSibling : null;
+      return { checkbox: node, spacer, container: node.parentNode };
+    }
+    if (offset <= 1 && node === editable) {
+      const leading = findLeadingCheckbox(node, editable);
+      if (leading) {
+        return leading;
+      }
+    }
+    if (offset === 0) {
+      const leading = findLeadingCheckbox(node, editable);
+      if (leading) {
+        return leading;
+      }
+    }
     const previousNode = node.childNodes[offset - 1] ?? null;
     const nextNode = node.childNodes[offset] ?? null;
     if (previousNode instanceof HTMLInputElement && previousNode.type === 'checkbox' && editable.contains(previousNode)) {
@@ -66,6 +82,21 @@ function findInlineCheckboxRemovalTarget(
         return { checkbox, spacer: previousNode, container: node };
       }
     }
+  }
+  return null;
+}
+
+function findLeadingCheckbox(
+  node: HTMLElement | DocumentFragment,
+  editable: HTMLElement
+): { checkbox: HTMLInputElement; spacer: Node | null; container: Node | null } | null {
+  const firstNode = node.childNodes[0] ?? null;
+  if (firstNode instanceof HTMLInputElement && firstNode.type === 'checkbox' && editable.contains(firstNode)) {
+    const spacer = firstNode.nextSibling instanceof Text && firstNode.nextSibling.data.startsWith(' ') ? firstNode.nextSibling : null;
+    return { checkbox: firstNode, spacer, container: node };
+  }
+  if (firstNode instanceof HTMLElement) {
+    return findLeadingCheckbox(firstNode, editable);
   }
   return null;
 }

@@ -1,0 +1,16 @@
+Button components are authoring controls, usually marked editorOnly so they appear in the editor and document AI mode but not in the viewer.
+
+Use buttonAction "ai-generate" for safe model-backed generation. The button host makes the AI call; Brython scripts only decide visibility, prepare source text, and apply the returned text.
+
+Common fields:
+- buttonLabel: visible button label, default "Generate".
+- buttonAction: currently "ai-generate".
+- buttonVisibleScript: Brython Python source run on editor/AI refresh. Return truthy to show the button.
+- buttonSourceScript: Brython Python source run on click. Return the text input for generation. Empty text no-ops.
+- buttonPrompt: host prompt for the generation call.
+- buttonTargetScript: Brython Python source run after generation with injected response and source values.
+- buttonInputCharLimit and buttonOutputCharLimit: positive integer safety limits.
+- buttonPositionTargetId: component id whose wrapper should anchor the button.
+- buttonCss: declaration-only inline CSS. With buttonPositionTargetId, use absolute positioning such as position: absolute; top: 0.25rem; right: 0.25rem;. Use --hvy-button-content-padding and --hvy-button-font-size to tune the shared button label and generation status sizing.
+
+For targeting document components from scripts, use doc.component.get_text("component-id"), doc.component.set_text("component-id", text), and doc.component.is_empty("component-id").

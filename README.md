@@ -68,7 +68,17 @@ A browser-based reference app is included with:
 
 Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
+- Set `window.HVY_REFERENCE_CONFIG = { aiEditor: { doubleClickDelayMs: 400 } }` to tune how long AI mode waits before running single-click reader actions, leaving room for double-click edit gestures.
 - When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
+
+Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
+- `highlight`: adds reader highlight styling and expands/prioritizes parent containers.
+- `priority`: expands/prioritizes the target and its parent containers without adding the visual highlight.
+- `collapse`: forces a collapsed reader preview where practical.
+- `dimmed`: visually dims the target and moves it after non-dimmed siblings while preserving dimmed relative order; clicking/tapping activates the target visually without moving it.
+- `hidden`: omits the target and wins over visible modifiers.
+
+Priority affects ordering only for sections and component-list items, preserving the authored order of ordinary block containers so headers and context stay with their content. Invalid reader-view targets warn in the console. The resume reference app includes two faux role filters in [`examples/resume-views.json`](examples/resume-views.json), exposed by `TypeScript View`, `LLM Engineer View`, and `No View` buttons next to the reader preview controls when the Resume Example is selected.
 
 ### Run
 
@@ -79,6 +89,12 @@ npm run dev
 
 Open the local Vite URL shown in terminal.
 
+The CLI harness can load any HVY document for node-based inspection:
+
+```bash
+node scripts/hvy-cli.mjs --file examples/resume.hvy -- "find /body/tools-technologies"
+```
+
 For AI document chat in local development, configure provider credentials in `.env` for the local proxy:
 
 ```bash
@@ -86,7 +102,7 @@ OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 
 VITE_HVY_CHAT_PROVIDER=openai
-VITE_HVY_CHAT_MODEL=gpt-5-mini
+VITE_HVY_CHAT_MODEL=gpt-5.4-mini
 ```
 
 Notes:
@@ -117,6 +133,151 @@ npm run build
 npm run preview
 ```
 
+Built-in plugin objects are selected at build time from `hvy.build.json`. The
+default config includes every bundled plugin in the output file, but plugins are
+not enabled automatically:
+
+```json
+{
+  "plugins": [
+    "hvy.db-table",
+    "hvy.form",
+    "hvy.progress-bar",
+    "hvy.scripting",
+    "hvy.graph"
+  ]
+}
+```
+
+Use `HVY_BUILD_PLUGINS=hvy.form,hvy.progress-bar npm run build` for
+a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at another
+config file. Config files may also use `include` and `exclude` arrays with the
+same plugin ids.
+
+Embedded hosts enable plugins per mount:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [HVY.plugins.progressBar],
+});
+```
+
+Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
+to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or
+disable resizing with `null`:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  imageAttachmentMaxDimensions: { width: 1600, height: 1200 },
+});
+```
+
+Embedded hosts can download the current mounted document as a complete `.hvy`
+byte stream, including attachments, through the mount handle:
+
+```js
+const mount = HVY.mountHvy({ root, document, mode: 'editor' });
+const bytes = mount.serializeDocumentBytes();
+```
+
+Embedded editor/AI instances do not persist reconnect/reload session state
+unless a stable `storageKey` is provided. Pass one per instance to persist
+without sharing a `sessionStorage` bucket:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  storageKey: 'customer-profile-editor',
+});
+```
+
+Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
+plugins:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [customPlugin, HVY.plugins.form],
+});
+```
+
+Embedded hosts can observe rendered reader links asynchronously and return how
+the link should be rendered. Use this for URL validation, safe-link
+interstitials, previews, or host-specific routing:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  async linkObserver(link) {
+    if (!link.external) return null;
+    const safeUrl = `/safe-link?url=${encodeURIComponent(link.href)}`;
+    return {
+      href: safeUrl,
+      rel: 'noopener noreferrer',
+      attributes: { 'data-original-url': link.href },
+    };
+  },
+});
+```
+
+Return `{ html }` to replace the rendered link with sanitized HTML, or return
+`null` / `undefined` to keep the default rendering.
+
+Embedded hosts can run AI import as a reviewable two-stage flow. First build a
+plan, show the returned steps to the user, then pass the approved steps into the
+import call:
+
+```js
+const plan = await mount.buildImportPlan({
+  sourceName: file.name,
+  sourceText,
+  llm,
+});
+
+if (plan.status === 'ready') {
+  for (const step of plan.steps) {
+    console.log(step.sectionTitle, step.extractedInformation);
+  }
+
+  await mount.importFromText({
+    sourceName: file.name,
+    sourceText,
+    steps: plan.steps.filter((step) => userApproved(step)),
+    llm,
+  });
+}
+```
+
+Import calls can use different models for different pipeline stages. Any omitted
+stage falls back to `llm.settings`:
+
+```js
+const llm = {
+  settings: { provider: 'openai', model: 'gpt-5.4-mini' },
+  stages: {
+    sectionPlanner: { provider: 'openai', model: 'gpt-5.4-mini' },
+    templateSectionWriter: { provider: 'openai', model: 'gpt-5.4' },
+    rawSectionWriter: { provider: 'openai', model: 'gpt-5.4' },
+    xrefs: { provider: 'openai', model: 'gpt-5.4-mini' },
+  },
+  client: chatClient,
+};
+```
+
+For templates with `importPreplan`, `extractedInformation` is already populated
+during planning. That makes it suitable for a review popover or detail drawer,
+for example to catch a section whose source facts belong somewhere else before
+the import mutates the document.
+
 ## Notes
 
 - Markdown is treated as valid HVY.
@@ -127,7 +288,7 @@ npm run preview
 
 # Plugin / Callback Support
 
-HVY has a documented plugin block envelope plus a first plugin contract for `dev.heavy.db-table`.
+HVY has a documented plugin block envelope plus a first plugin contract for `hvy.db-table`.
 
 - The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.

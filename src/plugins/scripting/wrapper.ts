@@ -1,7 +1,9 @@
 import { loadBrython, getBrython } from './brython-loader';
-import { createScriptingRuntime, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
+import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
 import type { VisualDocument } from '../../types';
+import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
+import { hasDocumentDbTables } from '../db-table-model';
 
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
@@ -12,7 +14,13 @@ interface HvyScriptingGlobal {
   sources: Record<string, string>;
   instrumentedSources: Record<string, string>;
   errors: Record<string, string | null>;
+  results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
+}
+
+interface LoadedScriptingDbRuntime {
+  api: ScriptingDbApi;
+  dispose(): void;
 }
 
 declare global {
@@ -26,13 +34,16 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, callbacks: {} };
+    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, results: {}, callbacks: {} };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
     window.__HVY_SCRIPTING__.callbacks = {};
   }
   if (!window.__HVY_SCRIPTING__.instrumentedSources) {
     window.__HVY_SCRIPTING__.instrumentedSources = {};
+  }
+  if (!window.__HVY_SCRIPTING__.results) {
+    window.__HVY_SCRIPTING__.results = {};
   }
   return window.__HVY_SCRIPTING__;
 }
@@ -70,6 +81,13 @@ function withSuppressedBrythonConsoleNoise(run: () => void): void {
     console.warn = originalWarn;
     console.error = originalError;
   }
+}
+
+function shouldInitializeScriptingDb(document: VisualDocument, source: string): boolean {
+  if (hasDocumentDbTables(document)) {
+    return true;
+  }
+  return /\bdoc\s*\.\s*db\b|\bdb\b/u.test(source);
 }
 
 function isEscaped(line: string, index: number): boolean {
@@ -174,8 +192,9 @@ export function instrumentPythonSource(source: string): string {
   for (const line of lines) {
     const analysis = analyzePythonLine(line, bracketDepth, tripleQuote);
     const indentation = line.match(/^\s*/)?.[0] ?? '';
+    const trimmed = line.trimStart();
 
-    if (!analysis.isBlankOrComment && !statementOpen) {
+    if (!analysis.isBlankOrComment && !statementOpen && !isCompoundContinuationLine(trimmed)) {
       instrumented.push(`${indentation}__hvy_step__()`);
     }
 
@@ -190,6 +209,21 @@ export function instrumentPythonSource(source: string): string {
   }
 
   return instrumented.join('\n');
+}
+
+function isCompoundContinuationLine(trimmedLine: string): boolean {
+  return /^(elif|else|except|finally)\b/.test(trimmedLine);
+}
+
+export function wrapPythonSourceInFunction(source: string): string {
+  const lines = source.split('\n');
+  const body = lines.length > 0 && lines.some((line) => line.trim().length > 0)
+    ? lines.map((line) => `    ${line}`)
+    : ['    pass'];
+  return [
+    'def __hvy_user_main__():',
+    ...body,
+  ].join('\n');
 }
 
 function isImportStatementStart(line: string): boolean {
@@ -313,8 +347,12 @@ export function cleanScriptingErrorDetail(rawError: string): string {
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
 // unavailable in the current Brython build.
-export function buildPythonProgram(runtimeId: string, componentId?: string): string {
+export function buildPythonProgram(runtimeId: string, componentId?: string, injectedGlobals: Record<string, unknown> = {}): string {
   const traceLabel = getScriptingTraceLabel(componentId);
+  const injectedAssignments = Object.entries(injectedGlobals)
+    .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .map(([name, value]) => `    __hvy_user_globals__[${JSON.stringify(name)}] = ${toPythonLiteral(value)}`)
+    .join('\n');
   return `
 from browser import window as __hvy_window__
 
@@ -323,11 +361,180 @@ __hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
 __hvy_source__ = __hvy_globals__.sources['${runtimeId}']
 __hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
 __hvy_trace_enabled__ = False
+__hvy_builtin_eval__ = eval
+__hvy_forbidden_global_names__ = (
+    'window',
+    'document',
+    'browser',
+    '__BRYTHON__',
+    '__hvy_window__',
+    '__hvy_globals__',
+    '__hvy_runtime__',
+    '__hvy_source__',
+    '__hvy_instrumented_source__',
+    '__hvy_user_globals__',
+    '__hvy_user_main__',
+)
+
+
+def __hvy_sanitize_user_globals__():
+    try:
+        for __hvy_name__ in __hvy_forbidden_global_names__:
+            __hvy_user_globals__.pop(__hvy_name__, None)
+    except Exception:
+        pass
+
+
+def __hvy_user_step__():
+    __hvy_step_error__ = __hvy_runtime__.step()
+    if __hvy_step_error__:
+        raise RuntimeError(__hvy_step_error__)
+    __hvy_sanitize_user_globals__()
+
+
+def __hvy_safe_globals__():
+    __hvy_sanitize_user_globals__()
+    return {
+        __hvy_key__: __hvy_value__
+        for __hvy_key__, __hvy_value__ in __hvy_user_globals__.items()
+        if __hvy_key__ not in __hvy_forbidden_global_names__
+    }
+
+
+def __hvy_safe_eval__(expression, globals=None, locals=None):
+    if isinstance(expression, str) and expression.strip() in __hvy_forbidden_global_names__:
+        raise NameError("name '" + expression.strip() + "' is not defined")
+    if globals is not None or locals is not None:
+        raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")
+    __hvy_sanitize_user_globals__()
+    return __hvy_builtin_eval__(expression, __hvy_user_globals__, __hvy_user_globals__)
+
+
+def __hvy_blocked_import__(*args, **kwargs):
+    raise RuntimeError("Import statements are not allowed in HVY scripts.")
+
+
+def __hvy_print__(*values, sep=' ', end='\\n', file=None, flush=False):
+    if file is not None:
+        raise RuntimeError("print(file=...) is not supported in HVY scripts.")
+    text = str(sep).join([str(value) for value in values]) + str(end)
+    if text.endswith('\\n'):
+        text = text[:-1]
+    __hvy_runtime__.doc.log_json(__hvy_to_json__([text]))
+
+
+__hvy_safe_builtins__ = {
+    'abs': abs,
+    'all': all,
+    'any': any,
+    'bool': bool,
+    'dict': dict,
+    'enumerate': enumerate,
+    'float': float,
+    'int': int,
+    'isinstance': isinstance,
+    'len': len,
+    'list': list,
+    'max': max,
+    'min': min,
+    'print': __hvy_print__,
+    'range': range,
+    'round': round,
+    'set': set,
+    'sorted': sorted,
+    'str': str,
+    'sum': sum,
+    'tuple': tuple,
+    'zip': zip,
+    'BaseException': BaseException,
+    'Exception': Exception,
+    'RuntimeError': RuntimeError,
+    'TypeError': TypeError,
+    'ValueError': ValueError,
+}
+
+
+def __hvy_json_escape__(value):
+    out = '"'
+    for ch in str(value):
+        if ch == '\\\\':
+            out += '\\\\\\\\'
+        elif ch == '"':
+            out += '\\\\"'
+        elif ch == '\\n':
+            out += '\\\\n'
+        elif ch == '\\r':
+            out += '\\\\r'
+        elif ch == '\\t':
+            out += '\\\\t'
+        else:
+            out += ch
+    return out + '"'
+
+
+def __hvy_to_json__(value):
+    if value is None:
+        return 'null'
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return __hvy_json_escape__(value)
+    if isinstance(value, (list, tuple)):
+        return '[' + ','.join([__hvy_to_json__(item) for item in value]) + ']'
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            parts.append(__hvy_json_escape__(key) + ':' + __hvy_to_json__(item))
+        return '{' + ','.join(parts) + '}'
+    return __hvy_json_escape__(value)
+
+
+class __HvyToolProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+
+    def __call__(self, name, args=None, **kwargs):
+        if args is None:
+            merged = {}
+        elif isinstance(args, dict):
+            merged = dict(args)
+        else:
+            raise TypeError("doc.tool args must be a dict when provided")
+        merged.update(kwargs)
+        return self.__js_doc.tool_json(name, __hvy_to_json__(merged))
+
+    def __getattr__(self, name):
+        def __hvy_named_tool__(*args, **kwargs):
+            if len(args) == 0:
+                return self(name, None, **kwargs)
+            if len(args) == 1:
+                if name in ("get_updated_components", "get_components") and not isinstance(args[0], dict):
+                    merged = {"component": args[0]}
+                    merged.update(kwargs)
+                    return self(name, merged)
+                return self(name, args[0], **kwargs)
+            raise TypeError("doc.tool.NAME accepts at most one positional args dict")
+        return __hvy_named_tool__
+
+
+class __HvyDocProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+        self.tool = __HvyToolProxy__(js_doc)
+
+    def __getattr__(self, name):
+        return getattr(self.__js_doc, name)
 
 
 def __hvy_trace__(frame, event, arg):
+    if frame.f_code.co_filename != '<${traceLabel}>':
+        return None
     if event == 'line':
-        __hvy_runtime__.step()
+        __hvy_user_step__()
     return __hvy_trace__
 
 
@@ -343,15 +550,24 @@ try:
     __hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
-        '__hvy_step__': __hvy_runtime__.step,
-        'doc': __hvy_runtime__.doc,
+        '__hvy_step__': __hvy_user_step__,
+        '__import__': __hvy_blocked_import__,
+        '__builtins__': __hvy_safe_builtins__,
+        'doc': __HvyDocProxy__(__hvy_runtime__.doc),
+        'eval': __hvy_safe_eval__,
+        'globals': __hvy_safe_globals__,
         '__name__': '__hvy_script__',
     }
+${injectedAssignments}
+    __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
+    __hvy_entrypoint__ = __hvy_user_globals__.get('__hvy_user_main__')
+    __hvy_sanitize_user_globals__()
+    if __hvy_entrypoint__ is not None:
+        __hvy_globals__.results['${runtimeId}'] = __hvy_entrypoint__()
     __hvy_runtime__.doc.rerender()
 except Exception as __hvy_err__:
-    import traceback as __hvy_tb__
-    __hvy_globals__.errors['${runtimeId}'] = __hvy_tb__.format_exc()
+    __hvy_globals__.errors['${runtimeId}'] = __hvy_window__.__BRYTHON__.error_trace(__hvy_err__)
 finally:
     if __hvy_trace_enabled__:
         try:
@@ -362,21 +578,39 @@ finally:
 `;
 }
 
+function toPythonLiteral(value: unknown): string {
+  if (value === null || typeof value === 'undefined') {
+    return 'None';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'True' : 'False';
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return JSON.stringify(String(value));
+}
+
 export interface ScriptingRunResult {
   ok: boolean;
   error?: string;
   errorDetail?: string;
   linesExecuted: number;
   toolCalls: number;
+  logs?: string[];
+  returnValue?: unknown;
 }
 
 export interface RunUserScriptOptions {
   document: VisualDocument;
+  previousDocument?: VisualDocument | null;
   source: string;
   componentId?: string;
   pluginVersion?: string;
   maxLines?: number;
+  changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
+  injectedGlobals?: Record<string, unknown>;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -408,21 +642,49 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     };
   }
 
-  const runtime = createScriptingRuntime({ document: options.document, maxLines: options.maxLines, form: options.form });
+  let dbMutated = false;
+  let runtime: ScriptingRuntime | null = null;
+  let scriptingDb: LoadedScriptingDbRuntime | null = null;
+  if (shouldInitializeScriptingDb(options.document, options.source)) {
+    try {
+      const { createScriptingDbRuntime } = await import('../db-table');
+      scriptingDb = await createScriptingDbRuntime(options.document, () => {
+        dbMutated = true;
+        runtime?.markMutated();
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to initialize document database.',
+        errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to initialize document database.',
+        linesExecuted: 0,
+        toolCalls: 0,
+      };
+    }
+  }
+  runtime = createScriptingRuntime({
+    document: options.document,
+    previousDocument: options.previousDocument,
+    maxLines: options.maxLines,
+    changeReason: options.changeReason,
+    form: options.form,
+    db: scriptingDb?.api,
+  });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
   const sanitizedSource = stripPythonImports(options.source);
   scripting.runtimes[runtimeId] = runtime;
-  scripting.sources[runtimeId] = sanitizedSource;
-  scripting.instrumentedSources[runtimeId] = instrumentPythonSource(sanitizedSource);
+  scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
+  scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
   scripting.errors[runtimeId] = null;
+  scripting.results[runtimeId] = undefined;
 
   // Do not append this to the DOM or use type="text/python", otherwise 
   // Brython 3.14+ will detect the DOM mutation and run the script automatically 
   // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
   scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId);
+  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {});
 
   return new Promise((resolve) => {
     scripting.callbacks[runtimeId] = () => {
@@ -434,18 +696,26 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             errorDetail: cleanScriptingErrorDetail(error),
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
+            logs: [...runtime.stats.logs],
           }
         : {
             ok: true,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
+            returnValue: scripting.results[runtimeId],
+            logs: [...runtime.stats.logs],
           };
 
       delete scripting.runtimes[runtimeId];
       delete scripting.sources[runtimeId];
       delete scripting.instrumentedSources[runtimeId];
       delete scripting.errors[runtimeId];
+      delete scripting.results[runtimeId];
       delete scripting.callbacks[runtimeId];
+      scriptingDb?.dispose();
+      if (dbMutated) {
+        runtime.doc.rerender();
+      }
 
       resolve(result);
     };
@@ -464,7 +734,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           scriptElement,
           scriptElement.textContent || '',
           `hvy_script_${runtimeId}`,
-          window.location.href || 'http://localhost/hvy-plugin',
+          `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
           true
         );
       });

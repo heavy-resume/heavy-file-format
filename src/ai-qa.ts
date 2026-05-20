@@ -1,8 +1,8 @@
 import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS, buildChatDocumentContext, requestProxyCompletion } from './chat/chat';
-import { executeDbTableQueryTool, getDocumentDbTableNames } from './plugins/db-table';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 
 export const QA_TOOL_LOOP_MAX_STEPS = 4;
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 type QaToolRequest =
   | { tool: 'answer'; answer: string }
@@ -12,7 +12,7 @@ export function buildQaToolLoopFormatInstructions(dbTableNames: string[]): strin
   return [
     'You are answering a question about the current HVY document.',
     'You have read-only access to the attached DB via the `query_db_table` tool. Do not issue write statements.',
-    `Available DB tables: ${dbTableNames.join(', ')}.`,
+    `Available SQLite tables/views: ${dbTableNames.join(', ')}.`,
     '',
     'Reply with exactly one JSON object and nothing else. Do not wrap it in Markdown.',
     'Choose one tool at a time.',
@@ -98,10 +98,12 @@ export async function runQaToolLoop(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   question: string;
+  signal?: AbortSignal;
 }): Promise<string> {
-  const dbTableNames = getDocumentDbTableNames(params.document);
+  const dbTableNames = await loadDbTableRuntime()
+    .then(({ getDocumentDbTableObjectNames }) => getDocumentDbTableObjectNames(params.document));
   if (dbTableNames.length === 0) {
-    throw new Error('runQaToolLoop requires at least one DB table. Use requestChatCompletion for non-DB documents.');
+    throw new Error('runQaToolLoop requires at least one SQLite table or view. Use requestChatCompletion for non-DB documents.');
   }
 
   const context = buildChatDocumentContext(params.document);
@@ -109,7 +111,7 @@ export async function runQaToolLoop(params: {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
 
-  const formatInstructions = buildQaToolLoopFormatInstructions(dbTableNames);
+  const responseInstructions = buildQaToolLoopFormatInstructions(dbTableNames);
   let conversation: ChatMessage[] = [...params.messages];
 
   for (let iteration = 0; iteration < QA_TOOL_LOOP_MAX_STEPS; iteration += 1) {
@@ -117,9 +119,10 @@ export async function runQaToolLoop(params: {
       settings: params.settings,
       messages: conversation,
       context,
-      formatInstructions,
+      responseInstructions,
       mode: 'qa',
       debugLabel: `ai-qa:${iteration + 1}`,
+      signal: params.signal,
     });
 
     const parsed = parseQaToolRequest(response);
@@ -129,7 +132,7 @@ export async function runQaToolLoop(params: {
         {
           id: crypto.randomUUID(),
           role: 'user',
-          content: `The previous response was invalid and no tool was executed. ${parsed.message} Reply with a single JSON tool object.`,
+          content: `Return a single valid JSON tool object. ${parsed.message}`,
         },
       ];
       continue;
@@ -142,6 +145,7 @@ export async function runQaToolLoop(params: {
     let toolResult: string;
     try {
       assertReadOnlyQuery(parsed.value.query);
+      const { executeDbTableQueryTool } = await loadDbTableRuntime();
       toolResult = await executeDbTableQueryTool(params.document, {
         tableName: parsed.value.table_name,
         query: parsed.value.query,

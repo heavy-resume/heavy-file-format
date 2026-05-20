@@ -11,6 +11,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+dist-embed/
 downloads/
 eggs/
 .eggs/
@@ -210,7 +211,13 @@ __marimo__/
 node_modules/
 dist/
 *.tsbuildinfo
+dev-traces/
 
 # Playwright
 playwright-report/
 test-results/
+
+# Local browser smoke harness scratch files
+scratch/browser-smoke.mjs
+scratch/browser-harness.pid
+scratch/browser-harness.log

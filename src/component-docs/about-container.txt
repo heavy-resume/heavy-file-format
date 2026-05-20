@@ -1,0 +1,11 @@
+# Container Components #
+Groups nested HVY components.
+Use children-order.json to reorder container children.
+containerBlocks holds the child block array.
+containerTitle is an optional reader label.
+Reader collapse/expand controls are shown when the container has a border.
+The reference editor's Border toggle writes sane default border CSS to css.
+containerExpanded stores the default expanded state for bordered containers.
+containerCollapsedPreviewRem controls the collapsed preview height in rem units and defaults to 3.
+Child blocks are written directly under the container directive.
+Plain Markdown before the first child directive is treated as the first implicit child block.

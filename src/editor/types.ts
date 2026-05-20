@@ -7,6 +7,14 @@ export interface TableRow {
   cells: string[];
 }
 
+export interface CarouselImage {
+  imageFile: string;
+  imageAlt: string;
+  caption: string;
+}
+
+export type SortKeyValue = number | string;
+
 export interface GridItem {
   id: string;
   block: VisualBlock;
@@ -20,39 +28,70 @@ export interface ExpandablePart {
 export interface BlockSchema {
   id: string;
   component: string;
+  editorOnly: boolean;
   lock: boolean;
   align: Align;
   slot: Slot;
-  customCss: string;
+  css: string;
   codeLanguage: string;
   containerBlocks: VisualBlock[];
+  containerTitle: string;
+  containerExpanded: boolean;
+  containerCollapsedPreviewRem: number;
   componentListComponent: string;
+  componentListItemLabel: string;
   componentListBlocks: VisualBlock[];
+  componentListDefaultSortKey: string;
+  componentListDefaultSortDirection: 'asc' | 'desc';
+  componentListDefaultGroupKey: string;
+  componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
   gridItems: GridItem[];
+  sortKeys: Record<string, SortKeyValue>;
+  groupKeys: Record<string, string>;
   tags: string;
   description: string;
+  visibleScript: string;
   placeholder: string;
+  fillIn: boolean;
   metaOpen: boolean;
   xrefTitle: string;
   xrefDetail: string;
   xrefTarget: string;
+  xrefTargetTagFilter: string;
   plugin: string;
   pluginConfig: JsonObject;
   expandableStubComponent: string;
   expandableContentComponent: string;
   expandableStub: string;
   expandableStubCss: string;
+  expandableStubDescription: string;
   expandableStubBlocks: ExpandablePart;
   expandableAlwaysShowStub: boolean;
   expandableExpanded: boolean;
   expandableContentCss: string;
+  expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
-  tableColumns: string;
+  tableColumns: string[];
   tableShowHeader: boolean;
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
+  carouselImages: CarouselImage[];
+  carouselDurationMs: number;
+  carouselPauseOnHover: boolean;
+  carouselShowControls: boolean;
+  carouselShowIndicators: boolean;
+  buttonLabel: string;
+  buttonAction: 'ai-generate';
+  buttonVisibleScript: string;
+  buttonSourceScript: string;
+  buttonPrompt: string;
+  buttonTargetScript: string;
+  buttonInputCharLimit: number;
+  buttonOutputCharLimit: number;
+  buttonPositionTargetId: string;
+  buttonCss: string;
 }
 
 export interface VisualBlock {
@@ -68,6 +107,7 @@ export interface VisualSection {
   key: string;
   customId: string;
   contained: boolean;
+  editorOnly: boolean;
   lock: boolean;
   idEditorOpen: boolean;
   isGhost: boolean;
@@ -75,10 +115,14 @@ export interface VisualSection {
   level: number;
   expanded: boolean;
   highlight: boolean;
-  customCss: string;
+  priority?: boolean;
+  css: string;
   tags: string;
   description: string;
   location: SectionLocation;
+  hideIfUnmodified?: boolean;
+  exclude_from_import?: boolean;
+  templateKey?: string;
   blocks: VisualBlock[];
   children: VisualSection[];
   /** Editor-only: marks a subsection auto-generated to hold trailing blocks when a

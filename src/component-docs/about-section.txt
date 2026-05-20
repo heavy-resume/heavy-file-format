@@ -1,0 +1,9 @@
+# Sections #
+Sections are top-level or nested document region with a heading and ordered content.
+Sections may contain child sections and component blocks.
+Section level controls heading depth; section title is the visible heading text.
+Sections can be addressed by id and may carry description, tags, layout location, and CSS metadata.
+Sections should encompass atomic thoughts. They are intended to be reorganized based on the viewer.
+
+Sections can have their own subsections but components cannot. Subsections are visibly indented on the viewer.
+Use children-order.json to reorder child sections when it is present.

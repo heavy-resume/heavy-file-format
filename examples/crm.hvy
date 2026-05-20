@@ -5,7 +5,7 @@ reader_max_width: 70rem
 section_defaults:
   css: "margin: 0.5rem 0;"
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
@@ -18,43 +18,31 @@ plugins:
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Applied
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Applied
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     18 active applications
+   <!--hvy:text {"css":"margin: 0;"}-->
+    18 active applications
 
  <!--hvy:grid:1 {"id":"interviews"}-->
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Interviews
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Interviews
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     5 in progress
+   <!--hvy:text {"css":"margin: 0;"}-->
+    5 in progress
 
  <!--hvy:grid:2 {"id":"offers"}-->
 
   <!--hvy:container {"css":"margin: 0;"}-->
 
-   <!--hvy:container:0 {}-->
+   <!--hvy:text {"css":"margin: 0;"}-->
+    ## Offers
 
-    <!--hvy:text {"css":"margin: 0;"}-->
-     ## Offers
-
-   <!--hvy:container:1 {}-->
-
-    <!--hvy:text {"css":"margin: 0;"}-->
-     1 pending decision
+   <!--hvy:text {"css":"margin: 0;"}-->
+    1 pending decision
 
 <!--hvy:subsection {"id":"applications","highlight":true}-->
 #! Applications
@@ -62,7 +50,7 @@ plugins:
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 The SQLite plugin instance is the working CRM for the full pipeline. Company, URL, and status should all come from the attached SQLite table.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"job_applications"}}-->
 
 <!--hvy:subsection {"id":"contacts"}-->
 #! Contacts
@@ -70,7 +58,7 @@ The SQLite plugin instance is the working CRM for the full pipeline. Company, UR
 <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
 This second plugin instance points at a different table in the same attached SQLite file.
 
-<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"company_contacts"}}-->
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"company_contacts"}}-->
 
 <!--hvy:subsection {"id":"workflow"}-->
 #! Workflow

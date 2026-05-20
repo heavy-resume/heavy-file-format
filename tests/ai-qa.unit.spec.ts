@@ -16,8 +16,9 @@ vi.mock('../src/chat/chat', async () => {
   };
 });
 
-const { executeDbTableQueryToolMock } = vi.hoisted(() => ({
+const { executeDbTableQueryToolMock, getDocumentDbTableObjectNamesMock } = vi.hoisted(() => ({
   executeDbTableQueryToolMock: vi.fn(),
+  getDocumentDbTableObjectNamesMock: vi.fn(),
 }));
 
 vi.mock('../src/plugins/db-table', async () => {
@@ -25,12 +26,15 @@ vi.mock('../src/plugins/db-table', async () => {
   return {
     ...actual,
     executeDbTableQueryTool: executeDbTableQueryToolMock,
+    getDocumentDbTableObjectNames: getDocumentDbTableObjectNamesMock,
   };
 });
 
 beforeEach(() => {
   requestProxyCompletionMock.mockReset();
   executeDbTableQueryToolMock.mockReset();
+  getDocumentDbTableObjectNamesMock.mockReset();
+  getDocumentDbTableObjectNamesMock.mockResolvedValue(['work_items']);
 });
 
 const DOC_WITH_DB_TABLE = `---
@@ -40,7 +44,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
- <!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+ <!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `;
 
 const DOC_WITHOUT_DB_TABLE = `---
@@ -183,8 +187,9 @@ test('runQaToolLoop requires at least one DB table', async () => {
   const { runQaToolLoop } = await import('../src/ai-qa');
   const document = deserializeDocument(DOC_WITHOUT_DB_TABLE, '.hvy');
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  getDocumentDbTableObjectNamesMock.mockResolvedValueOnce([]);
 
   await expect(
     runQaToolLoop({ settings, document, messages: [], question: 'anything' })
-  ).rejects.toThrow(/requires at least one DB table/);
+  ).rejects.toThrow(/requires at least one SQLite table or view/);
 });

@@ -3,10 +3,24 @@ import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } f
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
 import { saveReusableFromModal } from './reusable';
-import { findBlockByIds } from './block-ops';
+import { findBlockByIds, markActiveEditorBlockAsNew, setActiveEditorBlock } from './block-ops';
 import { recordHistory } from './history';
-import { parseAttachedComponentBlocks, resetDbTableViewState, setSqliteRowComponent } from './plugins/db-table';
+import { resetDbTableViewState } from './plugins/db-table-model';
+import { parseAttachedComponentBlocks } from './plugins/db-table-fragment';
 import { serializeBlockFragment } from './serialization';
+import { ensureComponentListBlocks, ensureContainerBlocks, ensureExpandableBlocks } from './document-factory';
+import { createGridItem } from './grid-ops';
+import { syncReusableTemplateForBlock } from './reusable';
+import { createBlockFromReusableTemplateValues } from './bind/actions/reusable-template';
+import { insertTopLevelSection } from './bind/actions/section';
+import { assignAutoBlockId } from './auto-block-id';
+import { applyXrefTargetDefaults } from './xref-ops';
+import { getOutputGenerator } from './plugins/registry';
+import { getComponentDefsFromMeta } from './component-defs';
+import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
+import { resolveOutputGeneratorResponse } from './template-output-generators';
+
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 export function bindModal(app: HTMLElement): void {
   const modalRoot = app.querySelector<HTMLDivElement>('#modalRoot');
@@ -36,6 +50,56 @@ export function bindModal(app: HTMLElement): void {
         recordHistory,
         closeModal,
       });
+      return;
+    }
+
+    const updateReusableBtn = target.closest<HTMLElement>('[data-modal-action="update-reusable"]');
+    if (updateReusableBtn) {
+      saveReusableFromModal(
+        app,
+        {
+          findBlockByIds,
+          recordHistory,
+          closeModal,
+        },
+        { mode: 'update-existing' }
+      );
+      return;
+    }
+
+    const addReusableFlavorBtn = target.closest<HTMLElement>('[data-modal-action="add-reusable-flavor"]');
+    if (addReusableFlavorBtn) {
+      saveReusableFromModal(
+        app,
+        {
+          findBlockByIds,
+          recordHistory,
+          closeModal,
+        },
+        { mode: 'add-flavor' }
+      );
+      return;
+    }
+
+    const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
+    if (insertReusableTemplateBtn && state.reusableTemplateModal) {
+      insertReusableTemplateFromModal(modalRoot);
+      return;
+    }
+
+    const templateGeneratorBtn = target.closest<HTMLButtonElement>('[data-modal-action="run-template-generator"]');
+    if (templateGeneratorBtn && state.reusableTemplateModal) {
+      void runReusableTemplateGenerator(modalRoot, templateGeneratorBtn);
+      return;
+    }
+
+    const chooseSectionFlavorBtn = target.closest<HTMLElement>('[data-modal-action="choose-section-template-flavor"]');
+    if (chooseSectionFlavorBtn && state.sectionTemplateFlavorModal) {
+      const templateName = chooseSectionFlavorBtn.dataset.sectionTemplateName ?? state.sectionTemplateFlavorModal.templateName;
+      const flavorName = chooseSectionFlavorBtn.dataset.sectionTemplateFlavor ?? '';
+      const location = state.sectionTemplateFlavorModal.location ?? 'main';
+      closeModal();
+      insertTopLevelSection(templateName, flavorName, location);
       return;
     }
 
@@ -80,7 +144,8 @@ export function bindModal(app: HTMLElement): void {
         return;
       }
       recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized)
+      void loadDbTableRuntime()
+        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized))
         .then(() => {
           closeModal();
           getRenderApp()();
@@ -145,7 +210,8 @@ export function bindModal(app: HTMLElement): void {
     if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
       const modal = state.sqliteRowComponentModal;
       recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
-      void setSqliteRowComponent(modal.tableName, modal.rowId, '')
+      void loadDbTableRuntime()
+        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, ''))
         .then(() => {
           closeModal();
           getRenderApp()();
@@ -193,11 +259,15 @@ export function bindModal(app: HTMLElement): void {
     reusableNameInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        saveReusableFromModal(app, {
-          findBlockByIds,
-          recordHistory,
-          closeModal,
-        });
+        saveReusableFromModal(
+          app,
+          {
+            findBlockByIds,
+            recordHistory,
+            closeModal,
+          },
+          { mode: 'save-as-new' }
+        );
         return;
       }
       if (event.key === 'Escape') {
@@ -207,6 +277,8 @@ export function bindModal(app: HTMLElement): void {
       }
     });
   }
+
+  setupReusableTemplateGeneratorControls(modalRoot);
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
@@ -277,8 +349,187 @@ export function bindModal(app: HTMLElement): void {
     if (!section) {
       return;
     }
-    section.customCss = cssInput.value;
+    section.css = cssInput.value;
     getRefreshReaderPanels()();
     getRefreshModalPreview()();
   });
+}
+
+function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void {
+  if (!state.reusableTemplateModal) {
+    return;
+  }
+  updateReusableTemplateGeneratorButtons(modalRoot);
+  modalRoot.addEventListener('input', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.dataset.templateVariable) {
+      return;
+    }
+    updateReusableTemplateGeneratorButtons(modalRoot);
+  });
+}
+
+function updateReusableTemplateGeneratorButtons(modalRoot: HTMLDivElement): void {
+  modalRoot.querySelectorAll<HTMLButtonElement>('[data-modal-action="run-template-generator"]').forEach((button) => {
+    const targetVariable = button.dataset.templateVariableTarget ?? '';
+    const targetInput = targetVariable ? getTemplateInput(modalRoot, targetVariable) : null;
+    const hasTargetValue = (targetInput?.value ?? '').trim().length > 0;
+    button.hidden = hasTargetValue;
+    const requiredVariables = parseRequiredVariables(button.dataset.requiredVariables ?? '');
+    button.disabled = hasTargetValue || requiredVariables.some((key) => getTemplateInputValue(modalRoot, key).trim().length === 0) || button.dataset.busyState === 'busy';
+  });
+}
+
+async function runReusableTemplateGenerator(modalRoot: HTMLDivElement, button: HTMLButtonElement): Promise<void> {
+  const modal = state.reusableTemplateModal;
+  const generatorKey = button.dataset.templateGenerator ?? '';
+  const targetVariable = button.dataset.templateVariableTarget ?? '';
+  const generator = getOutputGenerator(generatorKey);
+  if (!modal || !generator || !targetVariable || button.disabled) {
+    return;
+  }
+  const variable = extractReusableTemplateVariablesFromDefinition(
+    getComponentDefsFromMeta(state.document.meta).find((item) => item.name === modal.component)
+  ).find((item) => item.name === targetVariable);
+  const outputInput = getTemplateInput(modalRoot, targetVariable);
+  if (!variable || !outputInput) {
+    return;
+  }
+
+  const status = modalRoot.querySelector<HTMLElement>(`[data-template-generator-status="${cssEscape(targetVariable)}"]`);
+  const setStatus = (message: string, error = false) => {
+    if (!status) {
+      return;
+    }
+    status.textContent = message;
+    status.classList.toggle('is-error', error);
+  };
+
+  button.dataset.busyState = 'busy';
+  const idleLabel = button.textContent ?? 'Generate';
+  button.dataset.idleLabel = idleLabel;
+  button.textContent = 'Generating...';
+  button.disabled = true;
+  outputInput.disabled = true;
+  setStatus('Generating...');
+  try {
+    const response = await generator.generate({
+      document: state.document,
+      component: modal.component,
+      variable: variable.name,
+      variableType: variable.type,
+      label: variable.label,
+      values: collectProvidedTemplateValues(modalRoot),
+      target: modal.target,
+    });
+    const output = await resolveOutputGeneratorResponse({
+      response,
+      settings: state.chat.settings,
+    });
+    outputInput.value = output;
+    outputInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    setStatus('Done.');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Generation failed.', true);
+  } finally {
+    button.dataset.busyState = 'idle';
+    button.textContent = button.dataset.idleLabel ?? 'Generate';
+    delete button.dataset.idleLabel;
+    outputInput.disabled = false;
+    updateReusableTemplateGeneratorButtons(modalRoot);
+  }
+}
+
+function collectProvidedTemplateValues(modalRoot: HTMLDivElement): Record<string, string> {
+  const values: Record<string, string> = {};
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-template-variable]').forEach((input) => {
+    const key = input.dataset.templateVariable;
+    const value = input.value.trim();
+    if (key && value.length > 0) {
+      values[key] = value;
+    }
+  });
+  return values;
+}
+
+function getTemplateInput(modalRoot: HTMLDivElement, key: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null {
+  return modalRoot.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-template-variable="${cssEscape(key)}"]`);
+}
+
+function getTemplateInputValue(modalRoot: HTMLDivElement, key: string): string {
+  return getTemplateInput(modalRoot, key)?.value ?? '';
+}
+
+function parseRequiredVariables(raw: string): string[] {
+  return raw.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
+}
+
+function insertReusableTemplateFromModal(modalRoot: HTMLDivElement): void {
+  const modal = state.reusableTemplateModal;
+  if (!modal) {
+    return;
+  }
+  const values: Record<string, string> = {};
+  modalRoot.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-template-variable]').forEach((input) => {
+    const key = input.dataset.templateVariable;
+    if (key) {
+      values[key] = input.value;
+    }
+  });
+  let newBlock;
+  try {
+    newBlock = createBlockFromReusableTemplateValues(modal.component, values);
+    applyXrefTargetDefaults(newBlock);
+  } catch (error) {
+    console.error('[hvy:template] failed to insert component template from template modal', error);
+    return;
+  }
+
+  const target = modal.target;
+  recordHistory(`reusable-template:${modal.component}`);
+  if (target.kind === 'section') {
+    const section = findSectionByKey(state.document.sections, target.sectionKey);
+    if (!section || section.lock) {
+      closeModal();
+      getRenderApp()();
+      return;
+    }
+    assignAutoBlockId(newBlock, { document: state.document, inheritedTags: section.tags, sourceValues: values });
+    section.blocks.push(newBlock);
+  } else {
+    const block = findBlockByIds(target.sectionKey, target.blockId);
+    if (!block || block.schema.lock) {
+      closeModal();
+      getRenderApp()();
+      return;
+    }
+    assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags, sourceValues: values });
+    if (target.kind === 'component-list') {
+      ensureComponentListBlocks(block);
+      block.schema.componentListBlocks.push(newBlock);
+    } else if (target.kind === 'container') {
+      ensureContainerBlocks(block);
+      block.schema.containerBlocks.push(newBlock);
+    } else if (target.kind === 'grid') {
+      block.schema.gridItems.push(createGridItem(block.schema.gridItems.length, block.schema.gridColumns, () => newBlock));
+      block.schema.gridItems[block.schema.gridItems.length - 1].block = newBlock;
+    } else {
+      ensureExpandableBlocks(block);
+      const expandableTarget = target.part === 'stub' ? block.schema.expandableStubBlocks.children : block.schema.expandableContentBlocks.children;
+      expandableTarget.push(newBlock);
+    }
+    syncReusableTemplateForBlock(target.sectionKey, target.blockId);
+  }
+  if (state.currentView !== 'ai') {
+    setActiveEditorBlock(target.sectionKey, newBlock.id, { targetOnly: target.kind !== 'section' });
+    markActiveEditorBlockAsNew(newBlock.id);
+  }
+  closeModal();
+  getRenderApp()();
 }

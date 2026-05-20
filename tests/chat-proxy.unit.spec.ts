@@ -3,34 +3,67 @@ import { expect, test } from 'vitest';
 import {
   buildAnthropicProxyRequest,
   buildOpenAiProxyRequest,
+  buildQwenProxyRequest,
   buildRepairPrompt,
+  extractAnthropicReasoningSummary,
   extractAnthropicText,
+  extractOpenAiReasoningSummary,
   extractOpenAiText,
+  formatAiCliLogEvent,
+  formatAiCliMessagesLogEvent,
+  formatFailedCliCommandLogEvent,
+  formatTraceEvent,
+  formatTraceTextEvent,
+  pruneTraceLines,
 } from '../proxy/chat-proxy';
+import {
+  appendProviderToolResultsToState,
+  buildInitialProviderToolState,
+  buildProviderToolProxyRequest,
+  extractProviderToolTurn,
+  type ProviderToolDefinition,
+} from '../src/chat/provider-tools';
 
 const request = {
   provider: 'openai' as const,
   model: 'gpt-5-mini',
   mode: 'qa' as const,
   context: 'Context body',
-  formatInstructions: 'Format as HVY.',
   messages: [
     { role: 'user' as const, content: 'What is this?' },
     { role: 'assistant' as const, content: 'A summary.' },
   ],
 };
 
-test('buildOpenAiProxyRequest includes developer context and conversation turns', () => {
-  expect(buildOpenAiProxyRequest(request)).toEqual({
+test('buildOpenAiProxyRequest includes request context as a user message and conversation turns', () => {
+  expect(buildOpenAiProxyRequest({
+    ...request,
+    messages: [
+      { role: 'system' as const, content: 'Use the CLI protocol.' },
+      ...request.messages,
+    ],
+  })).toEqual({
     model: 'gpt-5-mini',
-    instructions: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
+    reasoning: {
+      effort: 'low',
+      summary: 'auto',
+    },
     input: [
       {
-        role: 'developer',
+        role: 'system',
         content: [
           {
             type: 'input_text',
-            text: 'Document context:\n\nContext body',
+            text: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./),
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: 'Request context:\n\nContext body',
           },
         ],
       },
@@ -61,20 +94,174 @@ test('buildOpenAiProxyRequest includes developer context and conversation turns'
   });
 });
 
-test('buildAnthropicProxyRequest places context in system prompt and messages in order', () => {
+test('buildAnthropicProxyRequest places context as a user message and messages in order', () => {
   expect(
     buildAnthropicProxyRequest({
       ...request,
       provider: 'anthropic',
       model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'system' as const, content: 'Use the CLI protocol.' },
+        ...request.messages,
+      ],
     })
   ).toEqual({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    system: expect.stringMatching(/Response formatting instructions:\nFormat as HVY\./),
+    system: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./),
     messages: [
+      { role: 'user', content: 'Request context:\n\nContext body' },
       { role: 'user', content: 'What is this?' },
       { role: 'assistant', content: 'A summary.' },
+    ],
+  });
+});
+
+test('buildQwenProxyRequest uses OpenAI-compatible chat messages', () => {
+  expect(buildQwenProxyRequest({
+    ...request,
+    provider: 'qwen',
+    model: 'qwen-plus',
+    messages: [
+      { role: 'system' as const, content: 'Use the CLI protocol.' },
+      ...request.messages,
+    ],
+  })).toEqual({
+    model: 'qwen-plus',
+    messages: [
+      { role: 'system', content: expect.stringMatching(/Answer questions about the provided HVY document context\.[\s\S]*Use the CLI protocol\./) },
+      { role: 'user', content: 'Request context:\n\nContext body' },
+      { role: 'user', content: 'What is this?' },
+      { role: 'assistant', content: 'A summary.' },
+    ],
+  });
+});
+
+test('provider tool adapters build OpenAI Responses function calls and append outputs', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    strict: true,
+    inputSchema: {
+      type: 'object',
+      properties: { command: { type: 'string' } },
+      required: ['command'],
+      additionalProperties: false,
+    },
+  }];
+  const state = buildInitialProviderToolState({ ...request, tools });
+  expect(state.provider).toBe('openai');
+  expect(buildProviderToolProxyRequest({ ...request, tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{
+      type: 'function',
+      name: 'run_hvy_cli',
+      description: 'Run one HVY command.',
+      parameters: tools[0]?.inputSchema,
+      strict: true,
+    }],
+    input: expect.arrayContaining([
+      expect.objectContaining({ role: 'system' }),
+      expect.objectContaining({ role: 'user' }),
+    ]),
+  }));
+  const turn = extractProviderToolTurn('openai', {
+    output: [
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'Need inspect.' }] },
+      { type: 'function_call', call_id: 'call_1', name: 'run_hvy_cli', arguments: '{"command":"ls /"}' },
+    ],
+  });
+
+  expect(turn.toolCalls).toEqual([{ id: 'call_1', name: 'run_hvy_cli', arguments: { command: 'ls /' } }]);
+  expect(turn.reasoningSummary).toBe('Need inspect.');
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'call_1', output: '{"stdout":"ok","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'openai',
+    input: [
+      ...(state.provider === 'openai' ? state.input : []),
+      ...turn.nativeMessages,
+      { type: 'function_call_output', call_id: 'call_1', output: '{"stdout":"ok","stderr":"","exit_code":0}' },
+    ],
+  });
+});
+
+test('provider tool adapters build Anthropic tool_use and tool_result turns', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+  }];
+  const state = buildInitialProviderToolState({ ...request, provider: 'anthropic', tools });
+  expect(buildProviderToolProxyRequest({ ...request, provider: 'anthropic', tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{ name: 'run_hvy_cli', description: 'Run one HVY command.', input_schema: tools[0]?.inputSchema }],
+  }));
+  const turn = extractProviderToolTurn('anthropic', {
+    content: [
+      { type: 'text', text: 'I will inspect.' },
+      { type: 'tool_use', id: 'toolu_1', name: 'run_hvy_cli', input: { command: 'pwd' } },
+    ],
+  });
+
+  expect(turn.output).toBe('I will inspect.');
+  expect(turn.toolCalls).toEqual([{ id: 'toolu_1', name: 'run_hvy_cli', arguments: { command: 'pwd' } }]);
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'toolu_1', output: '{"stdout":"/","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'anthropic',
+    system: state.provider === 'anthropic' ? state.system : '',
+    messages: [
+      ...(state.provider === 'anthropic' ? state.messages : []),
+      { role: 'assistant', content: [
+        { type: 'text', text: 'I will inspect.' },
+        { type: 'tool_use', id: 'toolu_1', name: 'run_hvy_cli', input: { command: 'pwd' } },
+      ] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: '{"stdout":"/","stderr":"","exit_code":0}' }] },
+    ],
+  });
+});
+
+test('provider tool adapters build Qwen OpenAI-compatible tool calls', () => {
+  const tools: ProviderToolDefinition[] = [{
+    name: 'run_hvy_cli',
+    description: 'Run one HVY command.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+  }];
+  const state = buildInitialProviderToolState({ ...request, provider: 'qwen', tools });
+  expect(buildProviderToolProxyRequest({ ...request, provider: 'qwen', tools, toolState: state })).toEqual(expect.objectContaining({
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'run_hvy_cli',
+        description: 'Run one HVY command.',
+        parameters: tools[0]?.inputSchema,
+      },
+    }],
+  }));
+  const turn = extractProviderToolTurn('qwen', {
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'run_hvy_cli', arguments: '{"command":"pwd"}' },
+        }],
+      },
+    }],
+  });
+
+  expect(turn.toolCalls).toEqual([{ id: 'call_1', name: 'run_hvy_cli', arguments: { command: 'pwd' } }]);
+  expect(appendProviderToolResultsToState(state, turn, [{ callId: 'call_1', output: '{"stdout":"/","stderr":"","exit_code":0}' }])).toEqual({
+    provider: 'qwen',
+    messages: [
+      ...(state.provider === 'qwen' ? state.messages : []),
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'run_hvy_cli', arguments: '{"command":"pwd"}' },
+        }],
+      },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"stdout":"/","stderr":"","exit_code":0}' },
     ],
   });
 });
@@ -87,7 +274,12 @@ test('component edit requests use edit-specific system instructions', () => {
 
   expect(openAiRequest).toEqual(
     expect.objectContaining({
-      instructions: expect.stringMatching(/This is a component editing task, not a question answering task\./),
+      input: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          content: [expect.objectContaining({ text: expect.stringMatching(/This is a component editing task, not a question answering task\./) })],
+        }),
+      ]),
     })
   );
   expect(openAiRequest).toEqual(
@@ -105,7 +297,22 @@ test('document edit requests use document-edit-specific system instructions', ()
 
   expect(openAiRequest).toEqual(
     expect.objectContaining({
-      instructions: expect.stringMatching(/This is a document editing task, not a question answering task\./),
+      input: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          content: [expect.objectContaining({ text: expect.stringMatching(/Follow the supplied HVY document-edit protocol exactly\./) })],
+        }),
+      ]),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Edit the provided HVY document step by step using the available local tools\./),
+    })
+  );
+  expect(openAiRequest).toEqual(
+    expect.not.objectContaining({
+      instructions: expect.stringMatching(/Request exactly one next tool action at a time\./),
     })
   );
   expect(openAiRequest).toEqual(
@@ -128,6 +335,7 @@ test('proxy response extractors collect text from provider payloads', () => {
     extractOpenAiText({
       output: [
         {
+          type: 'message',
           content: [
             { type: 'output_text', text: 'OpenAI answer' },
           ],
@@ -137,12 +345,70 @@ test('proxy response extractors collect text from provider payloads', () => {
   ).toBe('OpenAI answer');
 
   expect(
+    extractOpenAiText({
+      output_text: 'Aggregated answer',
+      output: [
+        {
+          type: 'message',
+          content: [
+            { type: 'output_text', text: 'Ignored message answer' },
+          ],
+        },
+      ],
+    })
+  ).toBe('Aggregated answer');
+
+  expect(
+    extractOpenAiText({
+      output: [
+        {
+          type: 'message',
+          phase: 'commentary',
+          content: [
+            { type: 'output_text', text: '```shell\ncat /body/example/text.txt\n```' },
+          ],
+        },
+        {
+          type: 'message',
+          phase: 'final_answer',
+          content: [
+            { type: 'output_text', text: 'done Updated example.' },
+          ],
+        },
+      ],
+    })
+  ).toBe('```shell\ncat /body/example/text.txt\n```\n\ndone Updated example.');
+
+  expect(
     extractAnthropicText({
       content: [
         { type: 'text', text: 'Anthropic answer' },
       ],
     })
   ).toBe('Anthropic answer');
+});
+
+test('proxy response extractors collect provider reasoning summaries when present', () => {
+  expect(
+    extractOpenAiReasoningSummary({
+      output: [
+        {
+          type: 'reasoning',
+          summary: [
+            { type: 'summary_text', text: 'Checked matching files, then chose a targeted sed edit.' },
+          ],
+        },
+      ],
+    })
+  ).toBe('Checked matching files, then chose a targeted sed edit.');
+
+  expect(
+    extractAnthropicReasoningSummary({
+      content: [
+        { type: 'thinking', thinking: 'I should inspect the matching files before editing.' },
+      ],
+    })
+  ).toBe('I should inspect the matching files before editing.');
 });
 
 test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
@@ -169,4 +435,316 @@ test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
       },
     ])
   ).toContain('Return the full corrected HVY response body only.');
+});
+
+test('formatTraceEvent writes one ndjson event with timestamp and payload', () => {
+  const line = formatTraceEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'request_context',
+      payload: {
+        context: 'Context body',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line.endsWith('\n')).toBe(true);
+  expect(JSON.parse(line)).toEqual({
+    timestamp: '2026-05-02T12:00:00.000Z',
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'request_context',
+    payload: {
+      context: 'Context body',
+    },
+  });
+});
+
+test('formatTraceTextEvent writes readable progress lines', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'progress',
+      payload: {
+        content: 'Viewing component C6.',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit progress :: Viewing component C6.\n');
+});
+
+test('formatTraceTextEvent summarizes document walk chunks without dumping the full chunk body', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'client_event',
+      payload: {
+        event: 'document_walk_chunks',
+        chunks: 4,
+        context: 'Serialized document chunks...\nWalk note: section="Skills"',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit client_event :: event=document_walk_chunks chunks=4\n');
+});
+
+test('formatTraceTextEvent writes readable work ledger lines', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'work_ledger',
+      payload: {
+        summary: 'Read database table assignments.',
+        action: 'query_db_table(assignments)',
+        intent: 'Inspect assignments table.',
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit work_ledger :: did=Read database table assignments. action=query_db_table(assignments) intent=Inspect assignments table.\n');
+});
+
+test('formatTraceTextEvent writes provider token usage', () => {
+  const line = formatTraceTextEvent(
+    {
+      runId: 'run-1',
+      phase: 'document-edit',
+      type: 'provider_response',
+      payload: {
+        provider: 'openai',
+        ok: true,
+        status: 200,
+        payload: {
+          usage: {
+            input_tokens: 100,
+            output_tokens: 25,
+            total_tokens: 125,
+            input_tokens_details: {
+              cached_tokens: 40,
+            },
+            output_tokens_details: {
+              reasoning_tokens: 10,
+            },
+          },
+        },
+      },
+    },
+    new Date('2026-05-02T12:00:00.000Z')
+  );
+
+  expect(line).toBe('[2026-05-02T12:00:00.000Z] run-1 document-edit provider_response :: provider=openai ok=true status=200 usage=input_tokens=100,output_tokens=25,total_tokens=125,cached_tokens=40,reasoning_tokens=10\n');
+});
+
+test('formatAiCliLogEvent writes clean chat cli trace entries only for chat cli runs', () => {
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_user_query', query: 'Create a chore chart.' },
+  })).toBe('--------\nuser query\nCreate a chore chart.\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('--------\nCMD: pwd\n/\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: {
+      event: 'ai_cli_command',
+      command: 'cat /body/summary/intro/text.txt',
+      output: 'Hello',
+      modelMessage: 'result\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.',
+    },
+  })).toBe(
+    '--------\nCMD: cat /body/summary/intro/text.txt\nresult\nHello\n\nWhat is your next command?\n\nhints\ncomponent text: /body/summary/intro\n\nscratchpad.txt\nNo notes yet.\n'
+  );
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'provider_response',
+    payload: {
+      provider: 'openai',
+      ok: true,
+      status: 200,
+      payload: {
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          total_tokens: 125,
+        },
+      },
+    },
+  })).toBe('--------\ntoken usage\ninput_tokens=100, output_tokens=25, total_tokens=125\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'model_response',
+    payload: {
+      response: 'done Removed TypeScript references.',
+      reasoningSummary: 'Verified no matching xref files remained.',
+    },
+  })).toBe('--------\nmodel response\ndone Removed TypeScript references.\n\nreasoning summary\nVerified no matching xref files remained.\n');
+
+  expect(formatAiCliLogEvent({
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('');
+});
+
+test('formatFailedCliCommandLogEvent writes only failed chat cli commands', () => {
+  expect(formatFailedCliCommandLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_failed_command', command: 'sed -i bad file.txt', error: 'sed: unsupported command' },
+  })).toBe('--------\nrun: chat-cli-run-1\nCMD: sed -i bad file.txt\nsed: unsupported command\n');
+
+  expect(formatFailedCliCommandLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'client_event',
+    payload: { event: 'ai_cli_command', command: 'pwd', output: '/' },
+  })).toBe('');
+});
+
+test('formatAiCliMessagesLogEvent dumps exact chat cli provider request payloads as JSON', () => {
+  expect(formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'request_context',
+    payload: {
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      messages: [
+        { role: 'assistant', content: '```shell\nls /\n```' },
+        { role: 'user', content: '### BEGIN /scratchpad.txt  ###\nlast edited never\n\nYou havent written your plan yet.' },
+      ],
+      context: 'Current request:\nAdd Baking.',
+    },
+  })).toBe('');
+
+  const line = formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'provider_request',
+    payload: {
+      provider: 'openai',
+      request: {
+        model: 'gpt-5-mini',
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Request context:\n\nCurrent directory: /' }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Add Baking.' }],
+          },
+        ],
+      },
+    },
+  });
+
+  expect(line).toContain('--------\nprovider_request\n{');
+  expect(line).toContain('"input": [');
+  expect(line).not.toContain('"role": "developer"');
+  expect(line).toContain('"type": "input_text"');
+  expect(line).toContain('"text": "Request context:\\n\\nCurrent directory: /"');
+  expect(line).toContain('"role": "user"');
+  expect(line).toContain('"text": "Add Baking."');
+  expect(line).toContain('\\n');
+
+  expect(formatAiCliMessagesLogEvent({
+    runId: 'run-1',
+    phase: 'document-edit',
+    type: 'provider_request',
+    payload: { provider: 'openai', request: {} },
+  })).toBe('');
+});
+
+test('formatAiCliMessagesLogEvent includes provider responses as JSON', () => {
+  const providerResponseLine = formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'provider_response',
+    payload: {
+      provider: 'openai',
+      ok: true,
+      status: 200,
+      payload: {
+        output_text: 'done Updated file.\nSecond line.',
+      },
+    },
+  });
+
+  expect(providerResponseLine).toContain('--------\nprovider_response\n{');
+  expect(providerResponseLine).toContain('"provider": "openai"');
+  expect(providerResponseLine).toContain('"ok": true');
+  expect(providerResponseLine).toContain('"status": 200');
+  expect(providerResponseLine).toContain('"output_text": "done Updated file.\\nSecond line."');
+
+  const line = formatAiCliMessagesLogEvent({
+    runId: 'chat-cli-run-1',
+    phase: 'document-edit',
+    type: 'model_response',
+    payload: {
+      response: 'done Updated file.\nSecond line.',
+      reasoningSummary: 'Inspected then edited.\nValidated result.',
+    },
+  });
+
+  expect(line).toContain('--------\nmodel_response\n{');
+  expect(line).toContain('"response": "done Updated file.\\nSecond line."');
+  expect(line).toContain('"reasoningSummary": "Inspected then edited.\\nValidated result."');
+  expect(line).toContain('\\n');
+});
+
+test('buildOpenAiProxyRequest does not send trace run ids upstream', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    traceRunId: 'trace-1',
+  });
+
+  expect(JSON.stringify(openAiRequest)).not.toContain('trace-1');
+});
+
+test('pruneTraceLines removes the oldest 100 lines each time the trace exceeds 500 lines', () => {
+  const contents = Array.from({ length: 501 }, (_value, index) => `{"line":${index + 1}}`).join('\n') + '\n';
+
+  const pruned = pruneTraceLines(contents);
+
+  const lines = pruned.trimEnd().split('\n');
+  expect(lines).toHaveLength(401);
+  expect(lines[0]).toBe('{"line":101}');
+  expect(lines.at(-1)).toBe('{"line":501}');
+});
+
+test('pruneTraceLines prunes in 100-line chunks until an oversized trace is under the cap', () => {
+  const contents = Array.from({ length: 650 }, (_value, index) => `{"line":${index + 1}}`).join('\n') + '\n';
+
+  const pruned = pruneTraceLines(contents);
+
+  const lines = pruned.trimEnd().split('\n');
+  expect(lines).toHaveLength(450);
+  expect(lines[0]).toBe('{"line":201}');
+  expect(lines.at(-1)).toBe('{"line":650}');
 });

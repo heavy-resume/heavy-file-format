@@ -27,7 +27,7 @@ const applyRawEditor: AppActionHandler = () => {
     const previousAttachments = state.document.attachments;
     state.document = deserializeDocument(
       state.rawEditorText,
-      detectExtension(state.filename, state.rawEditorText)
+      detectExtension(state.filename)
     );
     for (const next of state.document.attachments) {
       if (next.bytes.length === 0) {

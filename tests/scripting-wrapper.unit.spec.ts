@@ -10,14 +10,17 @@ import {
   stripPythonImports,
   summarizeScriptingError,
   runUserScript,
+  wrapPythonSourceInFunction,
 } from '../src/plugins/scripting/wrapper';
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
+import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
+import { deserializeDocument } from '../src/serialization';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
     instrumentPythonSource(
-      `output = doc.tool("view_component", {"component_ref": "script-value"})
+      `output = doc.tool.view_component(component_ref="script-value")
 for line in output.split('\\n'):
     if "Script test value:" in line:
         parts = line.split('|', 1)
@@ -27,7 +30,7 @@ for line in output.split('\\n'):
     )
   ).toBe(
     `__hvy_step__()
-output = doc.tool("view_component", {"component_ref": "script-value"})
+output = doc.tool.view_component(component_ref="script-value")
 __hvy_step__()
 for line in output.split('\\n'):
     __hvy_step__()
@@ -64,6 +67,18 @@ if (
   );
 });
 
+test('buildPythonProgram exposes doc.tool attributes with keyword arguments', () => {
+  const expectedResult = buildPythonProgram('runtime-keyword-test');
+
+  expect(expectedResult).toContain('class __HvyToolProxy__:');
+  expect(expectedResult).toContain('def __call__(self, name, args=None, **kwargs):');
+  expect(expectedResult).toContain('def __getattr__(self, name):');
+  expect(expectedResult).toContain('merged.update(kwargs)');
+  expect(expectedResult).toContain('return self.__js_doc.tool_json(name, __hvy_to_json__(merged))');
+  expect(expectedResult).toContain('self.tool = __HvyToolProxy__(js_doc)');
+  expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
+});
+
 test('instrumentPythonSource skips blank lines and comments while preserving nested indentation', () => {
   expect(
     instrumentPythonSource(
@@ -86,11 +101,9 @@ try:
     # inside
     __hvy_step__()
     doc.header.set("phase", "start")
-__hvy_step__()
 except Exception:
     __hvy_step__()
     doc.header.set("phase", "error")
-__hvy_step__()
 finally:
     __hvy_step__()
     doc.header.set("phase", "done")
@@ -98,13 +111,40 @@ finally:
   );
 });
 
-test('buildPythonProgram prefers tracing and keeps instrumented fallback available', () => {
+test('buildPythonProgram traces user frames and falls back to instrumented source', () => {
   const program = buildPythonProgram('r7');
   expect(program).toContain("import sys as __hvy_sys__");
   expect(program).toContain("__hvy_sys__.settrace(__hvy_trace__)");
+  expect(program).toContain("if frame.f_code.co_filename != '<hvy-script>':");
   expect(program).toContain("__hvy_compilable_source__ = __hvy_source__ if __hvy_trace_enabled__ else __hvy_instrumented_source__");
   expect(program).not.toContain('NodeTransformer');
   expect(program).not.toContain('visit_Compare');
+});
+
+test('buildPythonProgram executes user code with restricted builtins', () => {
+  const program = buildPythonProgram('r7');
+
+  expect(program).toContain('__hvy_safe_builtins__ = {');
+  expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
+  expect(program).toContain("'__import__': __hvy_blocked_import__");
+  expect(program).toContain("'print': __hvy_print__");
+  expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
+  expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
+});
+
+test('wrapPythonSourceInFunction allows top-level return semantics', () => {
+  expect(
+    wrapPythonSourceInFunction(
+      `doc.header.set("phase", "before")
+return
+doc.header.set("phase", "after")`
+    )
+  ).toBe(
+    `def __hvy_user_main__():
+    doc.header.set("phase", "before")
+    return
+    doc.header.set("phase", "after")`
+  );
 });
 
 test('buildPythonProgram uses the component id in tracebacks when available', () => {
@@ -225,9 +265,9 @@ test('createScriptingRuntime exposes a supplied form API', () => {
   const runtime = createScriptingRuntime({
     document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
     form: {
-      get_value: (name) => (name === 'food' ? 'soup' : null),
+      get_value: (label) => (label === 'Food' ? 'soup' : null),
       set_value: () => {},
-      get_values: () => ({ food: 'soup' }),
+      get_values: () => ({ Food: 'soup' }),
       set_options: () => {},
       get_options: () => [{ label: 'Soup', value: 'soup' }],
       set_error: () => {},
@@ -235,7 +275,226 @@ test('createScriptingRuntime exposes a supplied form API', () => {
     },
   });
 
-  expect(runtime.doc.form.get_value('food')).toBe('soup');
-  expect(runtime.doc.form.get_values()).toEqual({ food: 'soup' });
-  expect(runtime.doc.form.get_options('food')).toEqual([{ label: 'Soup', value: 'soup' }]);
+  expect(runtime.doc.form.get_value('Food')).toBe('soup');
+  expect(runtime.doc.form.get_values()).toEqual({ Food: 'soup' });
+  expect(runtime.doc.form.get_options('Food')).toEqual([{ label: 'Soup', value: 'soup' }]);
+});
+
+test('createScriptingRuntime reports when the line budget is exceeded', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    maxLines: 2,
+  });
+
+  expect(runtime.step()).toBeNull();
+  expect(runtime.step()).toBeNull();
+  expect(runtime.step()).toContain('line budget (2)');
+  expect(runtime.stats.linesExecuted).toBe(3);
+});
+
+test('createScriptingRuntime stores script logs', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+  });
+
+  runtime.doc.log_json('["before",{"count":2}]');
+
+  expect(runtime.stats.logs).toEqual(['before {"count":2}']);
+});
+
+test('createScriptingRuntime component set_text clears stale fill-in state', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header","hideIfUnmodified":true}-->
+#! Header
+
+<!--hvy:text {"id":"pronunciation","fillIn":true}-->
+[<!-- value {"placeholder":"pronunciation"} -->]
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  runtime.doc.component.set_text('pronunciation', '[AY-vuh-ree HART]');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe('[AY-vuh-ree HART]');
+  expect(document.sections[0]?.blocks[0]?.schema.fillIn).toBe(false);
+  expect(document.sections[0]?.hideIfUnmodified).toBe(false);
+});
+
+test('createScriptingRuntime exposes a supplied database API', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    db: {
+      query: (sql, params) => [{ sql, params, title: 'Sweep' }],
+      execute: (sql, params) => `ran ${sql} with ${JSON.stringify(params)}`,
+    },
+  });
+
+  expect(runtime.doc.db.query('SELECT title FROM chores', { active: 1 })).toEqual([
+    { sql: 'SELECT title FROM chores', params: { active: 1 }, title: 'Sweep' },
+  ]);
+  expect(runtime.doc.db.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep'])).toBe(
+    'ran INSERT INTO chores (title) VALUES (?) with ["Sweep"]'
+  );
+});
+
+test('createScriptingRuntime exposes synchronous hvy cli commands', () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  expect(runtime.doc.cli.run('hvy insert 0 section / notes "Notes"')).toBe('/body/notes');
+  expect(runtime.doc.cli.run('hvy insert 0 text /notes intro')).toContain('/body/notes/intro: created');
+  expect(runtime.doc.cli.run('cat /notes/intro/text.txt')).toBe('');
+  expect(runtime.stats.toolCalls).toBe(3);
+});
+
+test('createScriptingRuntime exposes safe virtual file writes', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+ Before
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+
+  expect(runtime.doc.cli.run('cat /id/note/raw.hvy')).toContain('Before');
+  expect(runtime.doc.cli.write('/id/note/text.json', '{ "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
+  expect(() => runtime.doc.cli.write('/id/note/raw.hvy', '<!--hvy:text {"id":"note"}-->\n After')).toThrow(
+    'doc.cli.write does not write raw.hvy files.'
+  );
+
+  expect(runtime.doc.cli.run('cat /id/note/text.json')).toContain('"css": "margin: 0;"');
+});
+
+test('createScriptingRuntime exposes component handles for reciprocal xref scripts after updates', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:history-record {"id":"history-acme","xrefTitle":"Acme Platform","xrefDetail":"Staff Engineer"}-->
+
+  <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:skill-record {"id":"skill-python","tags":"skill"}-->
+  Python
+
+  <!--hvy:expandable:content {}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, changeReason: 'edit' });
+  const xref = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
+    get(name: string): unknown;
+    get_parent_by_tag(tag: string): { section_id: string } | null;
+  }>;
+
+  expect(xref[0]?.get('xrefTarget')).toBe('skill-python');
+  expect(xref[0]?.get_parent_by_tag('reciprocal-xref-source')?.section_id).toBe('history');
+  expect(runtime.stats.toolCalls).toBe(1);
+});
+
+test('createScriptingRuntime returns no updated components during document load', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, changeReason: 'load' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as unknown[];
+  const all = runtime.doc.tool('get_components', { component: 'xref' }) as unknown[];
+
+  expect(updated).toEqual([]);
+  expect(all).toHaveLength(1);
+});
+
+test('createScriptingRuntime returns changed and removed components after updates', () => {
+  const previousDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"skill-python"}-->
+
+ <!--hvy:xref-card {"id":"history-acme-typescript","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history","tags":"reciprocal-xref-source"}-->
+#! Experience
+
+ <!--hvy:xref-card {"id":"history-acme-python","xrefTarget":"tool-python"}-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'xref' }) as Array<{
+    id: string;
+    removed: boolean;
+    get(name: string): unknown;
+  }>;
+
+  expect(updated.map((component) => ({
+    id: component.id,
+    removed: component.removed,
+    target: component.get('xrefTarget'),
+  }))).toEqual([
+    { id: 'history-acme-python', removed: false, target: 'tool-python' },
+    { id: 'history-acme-typescript', removed: true, target: 'tool-typescript' },
+  ]);
+});
+
+test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    db: {
+      query: () => [],
+      execute: () => 'ok',
+    },
+  });
+
+  expect(() => runtime.doc.cli.run('hvy plugin db-table exec "CREATE TABLE things (id INTEGER)"')).toThrow(
+    'doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.'
+  );
+});
+
+test('scripting hooks run editor-only scripts in editor and AI views', () => {
+  const targets = [
+    {
+      sectionKey: 'section',
+      blockId: 'editor-script',
+      source: 'print("editor")',
+      editorOnly: true,
+      pluginVersion: SCRIPTING_PLUGIN_VERSION,
+      componentId: '',
+    },
+    {
+      sectionKey: 'section',
+      blockId: 'document-script',
+      source: 'print("document")',
+      editorOnly: false,
+      pluginVersion: SCRIPTING_PLUGIN_VERSION,
+      componentId: '',
+    },
+  ];
+
+  expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
+  expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
 });

@@ -1,23 +1,5 @@
-.plugin-chooser {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: 0.6rem;
-}
-
-.plugin-chooser select {
-  font: inherit;
-  padding: 0.2rem 0.35rem;
-}
-
-.plugin-chooser-empty {
-  margin-left: 0.6rem;
-  font-size: 0.85rem;
-  color: var(--hvy-text-muted);
-}
-
 .plugin-placeholder {
-  border: 1px dashed var(--hvy-border-alt);
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
   border-radius: 8px;
   background: var(--hvy-surface-alt);
   padding: 0.5rem;
@@ -38,9 +20,9 @@
 }
 
 .sqlite-plugin-grid-input:focus {
-  outline: 2px solid rgba(59, 130, 246, 0.28);
+  outline: 2px solid var(--hvy-focus-ring);
   outline-offset: -2px;
-  background: rgba(255, 255, 255, 0.65);
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-surface-tint) 18%);
 }
 
 .sqlite-plugin-grid-header {

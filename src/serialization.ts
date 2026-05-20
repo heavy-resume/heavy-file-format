@@ -2,14 +2,18 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { BlockSchema, GridItem, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { HvySection, JsonObject } from './hvy/types';
 import { parseHvy } from './hvy/parser';
+import { convertMarkdownToHvyDocument } from './markdown-import';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getSectionId } from './section-ops';
-import { resolveBaseComponent, isBuiltinComponentName } from './component-defs';
+import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
+  DEFAULT_READER_MAX_WIDTH,
+  DEFAULT_SECTION_CSS,
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
+  normalizeReusableSectionDefinitions,
 } from './document-factory';
 
 export interface HvyDiagnostic {
@@ -37,12 +41,26 @@ export function deserializeDocumentWithDiagnostics(
   text: string,
   extension: VisualDocument['extension']
 ): DeserializeDocumentResult {
+  if (extension === '.md') {
+    return {
+      document: convertMarkdownToHvyDocument(text),
+      diagnostics: [],
+    };
+  }
+
   const extractedTail = splitSerializedTailText(text);
   const parsed = parseHvy(extractedTail.text, extension);
   const meta = { ...parsed.meta };
   if (typeof meta.hvy_version === 'undefined') {
     meta.hvy_version = 0.1;
   }
+  if (typeof meta.reader_max_width === 'undefined') {
+    meta.reader_max_width = DEFAULT_READER_MAX_WIDTH;
+  }
+  if (typeof meta.section_defaults === 'undefined') {
+    meta.section_defaults = { css: DEFAULT_SECTION_CSS };
+  }
+  normalizeReusableSectionDefinitions(meta);
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
   const document: VisualDocument = {
@@ -64,6 +82,10 @@ export function deserializeDocumentBytesWithDiagnostics(
   bytes: Uint8Array,
   extension: VisualDocument['extension']
 ): DeserializeDocumentResult {
+  if (extension === '.md') {
+    return deserializeDocumentWithDiagnostics(new TextDecoder().decode(bytes), extension);
+  }
+
   const extractedTail = splitSerializedTailBytes(bytes);
   const result = deserializeDocumentWithDiagnostics(extractedTail.text, extension);
   result.document.attachments = extractedTail.attachments;
@@ -78,6 +100,10 @@ export function wrapHvyFragmentAsDocument(
   const title = options?.title?.trim() || 'Response';
   const meta: JsonObject = {
     hvy_version: 0.1,
+    reader_max_width: DEFAULT_READER_MAX_WIDTH,
+    section_defaults: {
+      css: DEFAULT_SECTION_CSS,
+    },
     ...(options?.meta ?? {}),
   };
   const frontMatter = stringifyYaml(meta).trimEnd();
@@ -120,12 +146,10 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'Put grid slots under `<!--hvy:grid {"gridColumns":2}-->`, then add `<!--hvy:grid:0 {}-->`.';
     case 'component_list_slot_without_parent':
       return 'Put list slots under `<!--hvy:component-list {"componentListComponent":"text"}-->`.';
-    case 'container_slot_without_parent':
-      return 'Put container slots under `<!--hvy:container {}-->`, then add `<!--hvy:container:0 {}-->`.';
+    case 'container_slots_not_supported':
+      return 'Put child blocks directly under `<!--hvy:container {}-->`; container slot directives are not used.';
     case 'table_detail_slots_not_supported':
       return 'Tables are non-interactive in HVY. Wrap the table in `<!--hvy:expandable {}-->` for reveal/hide behavior.';
-    case 'expandable_missing_stub':
-      return 'An expandable needs a stub slot like `<!--hvy:expandable:stub {}-->`.';
     case 'expandable_missing_content':
       return 'An expandable needs a content slot like `<!--hvy:expandable:content {}-->`.';
     case 'xref_card_missing_title':
@@ -146,6 +170,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     key: makeId('section'),
     customId,
     contained: sectionMeta.contained !== false,
+    editorOnly: sectionMeta.editorOnly === true,
     lock: sectionMeta.lock === true,
     idEditorOpen: false,
     isGhost: false,
@@ -153,10 +178,14 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     level: section.level,
     expanded: sectionMeta.expanded === false ? false : true,
     highlight: sectionMeta.highlight === true,
-    customCss: typeof sectionMeta.custom_css === 'string' ? sectionMeta.custom_css : '',
+    priority: sectionMeta.priority === true,
+    css: typeof sectionMeta.css === 'string' ? sectionMeta.css : '',
     tags: typeof sectionMeta.tags === 'string' ? sectionMeta.tags : '',
     description: typeof sectionMeta.description === 'string' ? sectionMeta.description : '',
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
+    hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
+    exclude_from_import: sectionMeta.exclude_from_import === true,
+    templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
   };
@@ -183,8 +212,7 @@ function parseBlocks(
     | { kind: 'component'; block: VisualBlock; attach: BlockAttach; indent: number }
     | { kind: 'slot-expandable'; parent: VisualBlock; part: 0 | 1; indent: number }
     | { kind: 'slot-grid'; parent: VisualBlock; meta: JsonObject; indent: number }
-    | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number }
-    | { kind: 'slot-container'; parent: VisualBlock; indent: number };
+    | { kind: 'slot-component-list'; parent: VisualBlock; slotIndex: number; indent: number };
 
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
@@ -196,6 +224,7 @@ function parseBlocks(
   let currentIndent = 0;
   let currentTextIndent = 0;
   let sequenceCounter = 0;
+  let markdownFence: { marker: string; length: number } | null = null;
 
   const resolveParsedBase = (componentName: string): string => {
     if (isBuiltinComponentName(componentName)) {
@@ -204,6 +233,12 @@ function parseBlocks(
     const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
     const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
     return typeof def?.baseType === 'string' ? def.baseType : 'text';
+  };
+  const schemaFromDirectivePayload = (componentName: string, parsed: JsonObject): BlockSchema => {
+    const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
+    const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
+    const defSchema = def?.schema && typeof def.schema === 'object' && !Array.isArray(def.schema) ? (def.schema as JsonObject) : null;
+    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
   };
 
   const flush = (): void => {
@@ -282,9 +317,6 @@ function parseBlocks(
     }
     if (frame.kind === 'slot-component-list') {
       return { kind: 'component-list', parent: frame.parent, slotIndex: frame.slotIndex };
-    }
-    if (frame.kind === 'slot-container') {
-      return { kind: 'container', parent: frame.parent };
     }
     const base = resolveParsedBase(frame.block.schema.component);
     if (base === 'component-list') {
@@ -403,6 +435,20 @@ function parseBlocks(
   };
 
   lines.forEach((line, lineIndex) => {
+    const fence = parseMarkdownFenceLine(line);
+    if (markdownFence) {
+      currentText.push(line);
+      if (fence && fence.marker === markdownFence.marker && fence.length >= markdownFence.length) {
+        markdownFence = null;
+      }
+      return;
+    }
+    if (fence) {
+      markdownFence = { marker: fence.marker, length: fence.length };
+      currentText.push(line);
+      return;
+    }
+
     const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
@@ -429,29 +475,18 @@ function parseBlocks(
         );
         const part: 0 | 1 = rawParts[0] === 'stub' ? 0 : 1;
         const keys = Object.keys(parsed);
-        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'customCss' || key === 'custom_css');
+        const slotMetadataOnly = keys.every((key) => key === 'lock' || key === 'css' || key === 'description');
         if (!slotMetadataOnly) {
           return;
         }
-        if (parsed.lock === true) {
-          if (part === 0) {
-            parent.schema.expandableStubBlocks.lock = true;
-          } else {
-            parent.schema.expandableContentBlocks.lock = true;
-          }
-        }
-        const slotCss =
-          typeof parsed.css === 'string'
-            ? parsed.css
-            : typeof parsed.customCss === 'string'
-            ? parsed.customCss
-            : typeof parsed.custom_css === 'string'
-            ? parsed.custom_css
-            : '';
+        const slotCss = typeof parsed.css === 'string' ? parsed.css : '';
+        const slotDescription = typeof parsed.description === 'string' ? parsed.description : '';
         if (part === 0) {
           parent.schema.expandableStubCss = slotCss;
+          parent.schema.expandableStubDescription = slotDescription;
         } else {
           parent.schema.expandableContentCss = slotCss;
+          parent.schema.expandableContentDescription = slotDescription;
         }
         frames.push({
           kind: 'slot-expandable',
@@ -503,20 +538,11 @@ function parseBlocks(
           slotIndex: indexes[0],
           indent: currentIndent,
         });
-      } else if (name === 'container' && indexes.length === 1) {
-        if (typeof parsed.component === 'string' || typeof parsed.type === 'string') {
-          return;
-        }
-        const parent = findOrCreateParentFrame(
-          'container',
-          lineIndex + 1,
-          'container_slot_without_parent',
-          'Container slot was provided without an enclosing container block.'
-        );
-        frames.push({
-          kind: 'slot-container',
-          parent,
-          indent: currentIndent,
+      } else if (name === 'container' && indexes.length > 0) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'container_slots_not_supported',
+          message: formatSectionDiagnostic(sectionLabel, lineIndex + 1, 'Container slot directives are not supported. Put child blocks directly under the container directive.'),
         });
       } else if (name === 'table' && indexes.length === 2) {
         diagnostics.push({
@@ -530,9 +556,10 @@ function parseBlocks(
         });
       } else {
         if (directive === 'block') {
-          openOrQueueBlock(schemaFromUnknown(parsed), getCurrentAttach());
+          const componentName = typeof parsed.component === 'string' ? parsed.component : 'text';
+          openOrQueueBlock(schemaFromDirectivePayload(componentName, parsed), getCurrentAttach());
         } else {
-          openOrQueueBlock(schemaFromUnknown({ ...parsed, component: directive }), getCurrentAttach());
+          openOrQueueBlock(schemaFromDirectivePayload(directive, parsed), getCurrentAttach());
         }
       }
     } catch {
@@ -558,7 +585,7 @@ function parseBlocks(
 
   return blocks.map((block, index) => ({
     ...block,
-    schema: schemaFromUnknown(schemas[index] ?? block.schema),
+    schema: schemaFromUnknown(schemas[index] ?? block.schema, new WeakSet<object>(), documentMeta),
   }));
 }
 
@@ -598,30 +625,23 @@ function escapeHvyJsonString(value: string): string {
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   for (const section of document.sections) {
-    validateSectionSemantics(section, diagnostics);
+    validateSectionSemantics(section, document.meta, diagnostics);
   }
 }
 
-function validateSectionSemantics(section: VisualSection, diagnostics: HvyDiagnostic[]): void {
+function validateSectionSemantics(section: VisualSection, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
   for (const block of section.blocks) {
-    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', diagnostics);
+    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', documentMeta, diagnostics);
   }
   for (const child of section.children) {
-    validateSectionSemantics(child, diagnostics);
+    validateSectionSemantics(child, documentMeta, diagnostics);
   }
 }
 
-function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagnostics: HvyDiagnostic[]): void {
-  const baseComponent = resolveBaseComponent(block.schema.component);
+function validateBlockSemantics(block: VisualBlock, sectionLabel: string, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
 
   if (baseComponent === 'expandable') {
-    if ((block.schema.expandableStubBlocks.children ?? []).length === 0) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'expandable_missing_stub',
-        message: `Section "${sectionLabel}": expandable block is missing stub content.`,
-      });
-    }
     if ((block.schema.expandableContentBlocks.children ?? []).length === 0) {
       diagnostics.push({
         severity: 'error',
@@ -649,19 +669,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, diagno
   }
 
   for (const child of block.schema.containerBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.componentListBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.expandableStubBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const child of block.schema.expandableContentBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, diagnostics);
+    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
   }
   for (const item of block.schema.gridItems ?? []) {
-    validateBlockSemantics(item.block, sectionLabel, diagnostics);
+    validateBlockSemantics(item.block, sectionLabel, documentMeta, diagnostics);
   }
 }
 
@@ -682,7 +702,21 @@ function normalizeParsedBlockText(lines: string[], indent: number): string {
     end -= 1;
   }
 
-  return stripCommonIndent(stripped.slice(start, end)).join('\n');
+  return normalizeEscapedMarkdownFenceLines(stripCommonIndent(stripped.slice(start, end))).join('\n');
+}
+
+function parseMarkdownFenceLine(line: string): { marker: '`' | '~'; length: number } | null {
+  const match = line.trim().match(/^\\?([`~]{3,})(?:[\w-]+)?\s*$/);
+  if (!match) {
+    return null;
+  }
+  const fence = match[1] ?? '';
+  const marker = fence[0] as '`' | '~' | undefined;
+  return marker ? { marker, length: fence.length } : null;
+}
+
+function normalizeEscapedMarkdownFenceLines(lines: string[]): string[] {
+  return lines.map((line) => line.replace(/^(\s*)\\(```+|~~~+)/, '$1$2'));
 }
 
 function stripCommonIndent(lines: string[]): string[] {
@@ -705,7 +739,6 @@ function shouldCloseFrameForIndent(
     | { kind: 'slot-expandable'; indent: number }
     | { kind: 'slot-grid'; indent: number }
     | { kind: 'slot-component-list'; indent: number }
-    | { kind: 'slot-container'; indent: number }
     | { kind: 'slot-table-details'; indent: number },
   indent: number
 ): boolean {
@@ -717,18 +750,37 @@ function shouldCloseFrameForIndent(
 
 const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
 const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
+const SERIALIZED_TEXT_WRAP_COLUMN = 120;
+const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 
 // Serialize a component def to clean YAML format:
-// - strips `component` from schema (redundant with `baseType`)
+// - strips `component` from the root schema (redundant with `baseType`)
 // - strips `template` (runtime-only)
 // - uses { component: name } shorthand for custom component blocks in nested lists
-function serializeComponentDef(raw: JsonObject): JsonObject {
+export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(raw)) {
     if (key === 'template') continue; // runtime-only; derived from schema
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+      }
+    } else if (key === 'flavors' && Array.isArray(value)) {
+      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject));
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  for (const [key, value] of Object.entries(flavor)) {
+    if (key === 'template') continue;
+    if (key === 'schema') {
+      if (value && typeof value === 'object') {
+        result.schema = cleanComponentDefSchema(value as JsonObject, true);
       }
     } else {
       result[key] = value;
@@ -737,20 +789,25 @@ function serializeComponentDef(raw: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefSchema(schema: JsonObject): JsonObject {
+function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === 'component') continue; // redundant with baseType
+    if (key === 'component' && stripRootComponent) continue; // redundant with baseType only on the reusable root
     if (key === 'schemaMode') continue; // editor state
     if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
     if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
       result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
     } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const part = value as { lock?: boolean; children?: JsonObject[] };
-      result[key] = {
+      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown };
+      const cleanPart: JsonObject = {
         lock: part.lock ?? false,
         children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
       };
+      const css = typeof part.css === 'string' ? part.css : '';
+      if (css.trim().length > 0) {
+        cleanPart.css = css;
+      }
+      result[key] = cleanPart;
     } else if (key === 'gridItems' && Array.isArray(value)) {
       result[key] = value.map((item) => {
         const obj = item as JsonObject;
@@ -783,20 +840,25 @@ function cleanComponentDefBlock(block: JsonObject): JsonObject {
   const result: JsonObject = {};
   if (typeof block.text === 'string') result.text = block.text;
   if (block.schema && typeof block.schema === 'object') {
-    result.schema = cleanComponentDefSchema(block.schema as JsonObject);
+    result.schema = cleanComponentDefSchema(block.schema as JsonObject, false);
   }
   return result;
 }
 
 export function serializeDocument(document: VisualDocument): string {
   const frontMatter = `---\n${serializeDocumentHeaderYaml(document)}\n---\n`;
-  const body = document.sections
-    .filter((section) => !section.isGhost)
-    .map((section) => serializeSection(section, 1))
-    .join('\n')
-    .trim();
+  const body = trimBoundaryNewlines(
+    document.sections
+      .filter((section) => !section.isGhost)
+      .map((section) => serializeSection(section, 1, document.meta))
+      .join('\n')
+  );
   const textBody = `${frontMatter}\n${body}\n`;
   return appendSerializedTailPreamble(textBody, document.attachments);
+}
+
+export function serializeSectionFragment(section: VisualSection, documentMeta: JsonObject | null = null): string {
+  return serializeSection(section, 1, documentMeta);
 }
 
 export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
@@ -833,7 +895,12 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
-      .map((def) => serializeComponentDef(def));
+      .map((def) => serializeComponentDefinition(def));
+  }
+  if (Array.isArray(serializedMeta.section_defs)) {
+    serializedMeta.section_defs = (serializedMeta.section_defs as unknown[])
+      .filter((def): def is JsonObject => !!def && typeof def === 'object')
+      .map((def) => serializeSectionDef(def));
   }
   const headerMeta = {
     ...serializedMeta,
@@ -842,8 +909,100 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   return stringifyYaml(headerMeta).trim();
 }
 
-export function serializeBlockFragment(block: VisualBlock): string {
-  return serializeBlock(block, 0).trim();
+function serializeSectionDef(raw: JsonObject): JsonObject {
+  const result: JsonObject = {};
+  if (typeof raw.name === 'string') {
+    result.name = raw.name;
+  }
+  if (typeof raw.key === 'string' && raw.key.trim().length > 0) {
+    result.key = raw.key;
+  }
+  if (raw.repeatable === true) {
+    result.repeatable = true;
+  }
+  if (raw.template && typeof raw.template === 'object') {
+    result.template = cleanSectionTemplate(raw.template as Partial<VisualSection> & JsonObject);
+  }
+  if (Array.isArray(raw.flavors)) {
+    const flavors = raw.flavors
+      .filter((flavor): flavor is JsonObject => !!flavor && typeof flavor === 'object')
+      .map((flavor) => {
+        const cleaned: JsonObject = {};
+        if (typeof flavor.name === 'string') {
+          cleaned.name = flavor.name;
+        }
+        if (typeof flavor.description === 'string' && flavor.description.trim().length > 0) {
+          cleaned.description = flavor.description;
+        }
+        if (flavor.templateVariables && typeof flavor.templateVariables === 'object') {
+          cleaned.templateVariables = flavor.templateVariables;
+        }
+        if (flavor.template && typeof flavor.template === 'object') {
+          cleaned.template = cleanSectionTemplate(flavor.template as Partial<VisualSection> & JsonObject);
+        }
+        return cleaned;
+      })
+      .filter((flavor) => typeof flavor.name === 'string' && flavor.name.trim().length > 0 && !!flavor.template);
+    if (flavors.length > 0) {
+      result.flavors = flavors;
+    }
+  }
+  return result;
+}
+
+function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): JsonObject {
+  const result: JsonObject = {};
+  const id = typeof section.customId === 'string' ? section.customId : typeof section.id === 'string' ? section.id : '';
+  if (id.trim().length > 0) {
+    result.id = id;
+  }
+  result.title = typeof section.title === 'string' ? section.title : 'Untitled Section';
+  result.level = typeof section.level === 'number' ? section.level : 1;
+  if (section.contained === false) {
+    result.contained = false;
+  }
+  if (section.editorOnly === true) {
+    result.editorOnly = true;
+  }
+  if (section.lock === true) {
+    result.lock = true;
+  }
+  if (section.expanded === false) {
+    result.expanded = false;
+  }
+  if (section.highlight === true) {
+    result.highlight = true;
+  }
+  if (section.priority === true) {
+    result.priority = true;
+  }
+  if (typeof section.css === 'string' && section.css.trim().length > 0) {
+    result.css = section.css;
+  }
+  if (typeof section.tags === 'string' && section.tags.trim().length > 0) {
+    result.tags = section.tags;
+  }
+  if (typeof section.description === 'string' && section.description.trim().length > 0) {
+    result.description = section.description;
+  }
+  if (section.location === 'sidebar') {
+    result.location = 'sidebar';
+  }
+  if (section.hideIfUnmodified === true) {
+    result.hideIfUnmodified = true;
+  }
+  if (section.exclude_from_import === true) {
+    result.exclude_from_import = true;
+  }
+  result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject)) : [];
+  result.children = Array.isArray(section.children)
+    ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject))
+    : [];
+  return result;
+}
+
+export function serializeBlockFragment(block: VisualBlock, documentMeta: JsonObject | null = null): string {
+  return trimBoundaryNewlines(serializeBlock(block, 0, documentMeta));
 }
 
 function stripEditorStateFromSerializedValue(value: unknown): unknown {
@@ -1033,7 +1192,7 @@ function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachment
   };
 }
 
-function serializeSection(section: VisualSection, level: number): string {
+function serializeSection(section: VisualSection, level: number, documentMeta: JsonObject | null): string {
   const heading = `#! ${section.title}`;
   const meta: JsonObject = {
     id: getSectionId(section),
@@ -1044,8 +1203,14 @@ function serializeSection(section: VisualSection, level: number): string {
   if (!section.contained) {
     meta.contained = false;
   }
-  if (section.customCss.trim().length > 0) {
-    meta.custom_css = section.customCss;
+  if (section.editorOnly) {
+    meta.editorOnly = true;
+  }
+  if (section.priority === true) {
+    meta.priority = true;
+  }
+  if (section.css.trim().length > 0) {
+    meta.css = section.css;
   }
   if (section.tags.trim().length > 0) {
     meta.tags = section.tags;
@@ -1056,16 +1221,25 @@ function serializeSection(section: VisualSection, level: number): string {
   if (section.location === 'sidebar') {
     meta.location = 'sidebar';
   }
+  if (section.hideIfUnmodified === true) {
+    meta.hideIfUnmodified = true;
+  }
+  if (section.exclude_from_import === true) {
+    meta.exclude_from_import = true;
+  }
+  if (section.templateKey && section.templateKey.trim().length > 0) {
+    meta.templateKey = section.templateKey;
+  }
 
   const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
-    .map((block) => serializeBlock(block, 1))
+    .map((block) => serializeBlock(block, 1, documentMeta))
     .join('\n\n');
 
   const children = section.children
     .filter((child) => !child.isGhost)
-    .map((child) => serializeSection(child, level + 1))
+    .map((child) => serializeSection(child, level + 1, documentMeta))
     .join('\n\n');
 
   return `${directive}\n${heading}\n\n${blockText}${children ? `\n\n${children}` : ''}`;
@@ -1079,41 +1253,57 @@ function serializeBlockSchema(
     omitComponentListBlocks?: boolean;
     omitExpandableBlocks?: boolean;
     omitGridItems?: boolean;
-  } = {}
+  } = {},
+  documentMeta: JsonObject | null = null
 ): JsonObject {
-  const component = resolveBaseComponent(schema.component);
-  const defaults = defaultBlockSchema(component);
+  const component = resolveBaseComponentFromMeta(schema.component, documentMeta);
+  const defaults = getSerializationSchemaDefaults(schema.component, component, documentMeta);
   const payload: JsonObject = {};
 
   addIfChanged(payload, 'id', schema.id, defaults.id);
   if (!options.omitComponent) {
     payload.component = schema.component;
   }
+  addIfChanged(payload, 'editorOnly', schema.editorOnly, defaults.editorOnly);
   addIfChanged(payload, 'lock', schema.lock, defaults.lock);
   addIfChanged(payload, 'align', schema.align, defaults.align);
   addIfChanged(payload, 'slot', schema.slot, defaults.slot);
-  addIfChanged(payload, 'css', schema.customCss, defaults.customCss);
+  addIfChanged(payload, 'css', schema.css, defaults.css);
+  if (Object.keys(schema.sortKeys).length > 0) {
+    payload.sortKeys = schema.sortKeys;
+  }
+  if (Object.keys(schema.groupKeys).length > 0) {
+    payload.groupKeys = schema.groupKeys;
+  }
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
+  addIfChanged(payload, 'visibleScript', schema.visibleScript, defaults.visibleScript);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
+  addIfChanged(payload, 'fillIn', schema.fillIn, defaults.fillIn);
+  addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
+  addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
 
   if (component === 'xref-card') {
-    addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
-    addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
-  }
-  if (component === 'code') {
-    addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
+    addIfChanged(payload, 'xrefTargetTagFilter', schema.xrefTargetTagFilter, defaults.xrefTargetTagFilter);
   }
   if (component === 'container') {
+    addIfChanged(payload, 'containerTitle', schema.containerTitle, defaults.containerTitle);
+    addIfChanged(payload, 'containerExpanded', schema.containerExpanded, defaults.containerExpanded);
+    addIfChanged(payload, 'containerCollapsedPreviewRem', schema.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem);
     if (!options.omitContainerBlocks) {
-      addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks);
+      addBlockArrayIfPresent(payload, 'containerBlocks', schema.containerBlocks, documentMeta);
     }
   }
   if (component === 'component-list') {
     addIfChanged(payload, 'componentListComponent', schema.componentListComponent, defaults.componentListComponent);
+    addIfChanged(payload, 'componentListItemLabel', schema.componentListItemLabel, defaults.componentListItemLabel);
+    addIfChanged(payload, 'componentListDefaultSortKey', schema.componentListDefaultSortKey, defaults.componentListDefaultSortKey);
+    addIfChanged(payload, 'componentListDefaultSortDirection', schema.componentListDefaultSortDirection, defaults.componentListDefaultSortDirection);
+    addIfChanged(payload, 'componentListDefaultGroupKey', schema.componentListDefaultGroupKey, defaults.componentListDefaultGroupKey);
+    addIfChanged(payload, 'componentListGroupCollapsedPreviewRem', schema.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem);
     if (!options.omitComponentListBlocks) {
-      addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks);
+      addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);
     }
   }
   if (component === 'grid') {
@@ -1121,7 +1311,7 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
-        block: serializeVisualBlock(item.block),
+        block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
   }
@@ -1137,7 +1327,7 @@ function serializeBlockSchema(
     // Stub/content blocks are serialized as nested block directives, not inline in schema JSON.
   }
   if (component === 'table') {
-    addIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
+    addArrayIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
     if (schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
@@ -1147,33 +1337,66 @@ function serializeBlockSchema(
     addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
     addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
   }
+  if (component === 'carousel') {
+    addArrayIfChanged(payload, 'carouselImages', schema.carouselImages, defaults.carouselImages);
+    addIfChanged(payload, 'carouselDurationMs', schema.carouselDurationMs, defaults.carouselDurationMs);
+    addIfChanged(payload, 'carouselPauseOnHover', schema.carouselPauseOnHover, defaults.carouselPauseOnHover);
+    addIfChanged(payload, 'carouselShowControls', schema.carouselShowControls, defaults.carouselShowControls);
+    addIfChanged(payload, 'carouselShowIndicators', schema.carouselShowIndicators, defaults.carouselShowIndicators);
+  }
+  if (component === 'button') {
+    addIfChanged(payload, 'buttonLabel', schema.buttonLabel, defaults.buttonLabel);
+    addIfChanged(payload, 'buttonAction', schema.buttonAction, defaults.buttonAction);
+    addIfChanged(payload, 'buttonVisibleScript', schema.buttonVisibleScript, defaults.buttonVisibleScript);
+    addIfChanged(payload, 'buttonSourceScript', schema.buttonSourceScript, defaults.buttonSourceScript);
+    addIfChanged(payload, 'buttonPrompt', schema.buttonPrompt, defaults.buttonPrompt);
+    addIfChanged(payload, 'buttonTargetScript', schema.buttonTargetScript, defaults.buttonTargetScript);
+    addIfChanged(payload, 'buttonInputCharLimit', schema.buttonInputCharLimit, defaults.buttonInputCharLimit);
+    addIfChanged(payload, 'buttonOutputCharLimit', schema.buttonOutputCharLimit, defaults.buttonOutputCharLimit);
+    addIfChanged(payload, 'buttonPositionTargetId', schema.buttonPositionTargetId, defaults.buttonPositionTargetId);
+    addIfChanged(payload, 'buttonCss', schema.buttonCss, defaults.buttonCss);
+  }
 
   return payload;
+}
+
+function getSerializationSchemaDefaults(componentName: string, baseComponent: string, documentMeta: JsonObject | null): BlockSchema {
+  const defaults = defaultBlockSchema(baseComponent);
+  if (!documentMeta || componentName === baseComponent) {
+    return defaults;
+  }
+  const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
+  const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
+  if (!def?.schema || typeof def.schema !== 'object' || Array.isArray(def.schema)) {
+    return defaults;
+  }
+  return schemaFromUnknown({ ...(def.schema as JsonObject), component: baseComponent });
 }
 
 function serializeBlock(
   block: VisualBlock,
   indent: number,
+  documentMeta: JsonObject | null,
   override?: { name: string; schema?: JsonObject }
 ): string {
-  const blockDirective = override ?? serializeBlockDirective(block.schema);
+  const blockDirective = override ?? serializeBlockDirective(block.schema, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
-  const nested = serializeNestedBlocks(block, indent + 1);
-  const text = indentMultiline(block.text.trim(), indent + 1);
+  const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
+  const text = serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
-function serializeBlockDirective(schema: BlockSchema): { name: string; schema: JsonObject } {
+function serializeBlockDirective(schema: BlockSchema, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
   const component = schema.component.trim();
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema) }),
+      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema)),
+    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema, documentMeta), documentMeta),
   };
 }
 
@@ -1188,22 +1411,129 @@ function indentMultiline(text: string, indent: number): string {
     .join('\n');
 }
 
+function serializeBlockText(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  const text = trimBoundaryNewlines(block.text);
+  if (text.length === 0) {
+    return '';
+  }
+  const wrapped = shouldWrapSerializedBlockText(block, documentMeta)
+    ? wrapSerializableText(text, Math.max(20, SERIALIZED_TEXT_WRAP_COLUMN - indent))
+    : text;
+  return indentMultiline(wrapped, indent);
+}
+
+function shouldWrapSerializedBlockText(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  if (SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS.has(block.schema.component)) {
+    return false;
+  }
+  if (block.schema.component === 'text') {
+    return true;
+  }
+  return !isBuiltinComponentName(block.schema.component) && resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'text';
+}
+
+function wrapSerializableText(text: string, column: number): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+
+  for (const line of lines) {
+    const parsedFence = parseMarkdownFenceLine(line);
+    if (parsedFence) {
+      result.push(line);
+      fence = fence ? null : parsedFence;
+      continue;
+    }
+    if (fence || shouldPreserveSerializedTextLine(line)) {
+      result.push(line);
+      continue;
+    }
+    result.push(...wrapSerializableTextLine(line, column));
+  }
+
+  return result.join('\n');
+}
+
+function shouldPreserveSerializedTextLine(line: string): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.length === 0 ||
+    / {2,}$/.test(line) ||
+    /^(\|| {0,3}[-*+]\s+\[[ xX]\]\s+)/.test(line) ||
+    /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line) ||
+    /^ {0,3}#{1,6}\s/.test(line) ||
+    /^ {0,3}>/.test(line) ||
+    /^ {4,}\S/.test(line) ||
+    /<!--\s*value\b/.test(line)
+  );
+}
+
+function wrapSerializableTextLine(line: string, column: number): string[] {
+  if (line.length <= column || !/\s/.test(line.trim())) {
+    return [line];
+  }
+
+  const leading = line.match(/^ */)?.[0] ?? '';
+  const markerMatch = line.slice(leading.length).match(/^(\^[-A-Za-z0-9_]+\^\s*)/);
+  const firstPrefix = `${leading}${markerMatch?.[1] ?? ''}`;
+  const restPrefix = leading;
+  let remaining = line.slice(firstPrefix.length).trimStart();
+  const wrapped: string[] = [];
+  let prefix = firstPrefix;
+
+  while (remaining.length > 0) {
+    const limit = Math.max(20, column - prefix.length);
+    if (remaining.length <= limit) {
+      wrapped.push(`${prefix}${remaining}`);
+      break;
+    }
+    const breakIndex = findWrapBreakIndex(remaining, limit);
+    wrapped.push(`${prefix}${remaining.slice(0, breakIndex).trimEnd()}`);
+    remaining = remaining.slice(breakIndex).trimStart();
+    prefix = restPrefix;
+  }
+
+  return wrapped.length > 0 ? wrapped : [line];
+}
+
+function findWrapBreakIndex(text: string, limit: number): number {
+  for (let index = Math.min(limit, text.length - 1); index > 0; index -= 1) {
+    if (/\s/.test(text[index])) {
+      return index;
+    }
+  }
+  for (let index = limit + 1; index < text.length; index += 1) {
+    if (/\s/.test(text[index])) {
+      return index;
+    }
+  }
+  return text.length;
+}
+
+function trimBoundaryNewlines(text: string): string {
+  if (text.trim().length === 0) {
+    return '';
+  }
+  return text.replace(/^\n+|\n+$/g, '');
+}
+
 function serializeSlotDirective(name: string, schema: JsonObject, indent: number): string {
   return `${' '.repeat(indent)}<!--hvy:${name} ${JSON.stringify(schema)}-->`;
 }
 
-function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualBlock, indent: number): string {
-  return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1)].join('\n\n');
+function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  return [serializeSlotDirective(name, schema, indent), serializeBlock(child, indent + 1, documentMeta)].join('\n\n');
 }
 
-function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1, lock: boolean): JsonObject {
+function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
   const payload: JsonObject = {};
   const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
-  if (lock) {
-    payload.lock = true;
-  }
+  const description = part === 0 ? expandableBlock.schema.expandableStubDescription : expandableBlock.schema.expandableContentDescription;
   if (css.trim().length > 0) {
     payload.css = css;
+  }
+  if (description.trim().length > 0) {
+    payload.description = description;
   }
   return payload;
 }
@@ -1212,64 +1542,62 @@ function serializeExpandablePart(
   expandableBlock: VisualBlock,
   children: VisualBlock[],
   part: 0 | 1,
-  lock: boolean,
-  indent: number
+  _lock: boolean,
+  indent: number,
+  documentMeta: JsonObject | null
 ): string {
   const name = `expandable:${part === 0 ? 'stub' : 'content'}`;
-  const payload = buildExpandablePartPayload(expandableBlock, part, lock);
+  const payload = buildExpandablePartPayload(expandableBlock, part);
   if (children.length === 0) {
     return Object.keys(payload).length > 0 ? serializeSlotDirective(name, payload, indent) : '';
   }
   return [
     serializeSlotDirective(name, payload, indent),
-    children.map((child) => serializeBlock(child, indent + 1)).join('\n\n'),
+    children.map((child) => serializeBlock(child, indent + 1, documentMeta)).join('\n\n'),
   ].join('\n\n');
 }
 
-function serializeGridItemBlock(item: GridItem, index: number, indent: number): string {
+function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
     {
       id: item.id,
     },
     item.block,
-    indent
+    indent,
+    documentMeta
   );
 }
 
-function serializeComponentListItemBlock(block: VisualBlock, index: number, indent: number): string {
-  return serializeSlotWithChild(`component-list:${index}`, {}, block, indent);
+function serializeComponentListItemBlock(block: VisualBlock, index: number, indent: number, documentMeta: JsonObject | null): string {
+  return serializeSlotWithChild(`component-list:${index}`, {}, block, indent, documentMeta);
 }
 
-function serializeContainerItemBlock(block: VisualBlock, index: number, indent: number): string {
-  return serializeSlotWithChild(`container:${index}`, {}, block, indent);
-}
-
-function serializeNestedBlocks(block: VisualBlock, indent: number): string {
-  const component = resolveBaseComponent(block.schema.component);
+function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
+  const component = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
   if (component === 'expandable') {
     const stub = block.schema.expandableStubBlocks;
     const content = block.schema.expandableContentBlocks;
-    const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent);
-    const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent);
+    const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent, documentMeta);
+    const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent, documentMeta);
     return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');
   }
   if (component === 'grid') {
-    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent)).join('\n\n');
+    return block.schema.gridItems.map((item, index) => serializeGridItemBlock(item, index, indent, documentMeta)).join('\n\n');
   }
   if (component === 'component-list') {
     return block.schema.componentListBlocks
-      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index, indent))
+      .map((innerBlock, index) => serializeComponentListItemBlock(innerBlock, index, indent, documentMeta))
       .join('\n\n');
   }
   if (component === 'container') {
-    return block.schema.containerBlocks.map((innerBlock, index) => serializeContainerItemBlock(innerBlock, index, indent)).join('\n\n');
+    return block.schema.containerBlocks.map((innerBlock) => serializeBlock(innerBlock, indent, documentMeta)).join('\n\n');
   }
   return '';
 }
 
-function nestedBlockOmitOptions(schema: BlockSchema): Parameters<typeof serializeBlockSchema>[1] {
-  const component = resolveBaseComponent(schema.component);
+function nestedBlockOmitOptions(schema: BlockSchema, documentMeta: JsonObject | null): Parameters<typeof serializeBlockSchema>[1] {
+  const component = resolveBaseComponentFromMeta(schema.component, documentMeta);
   return {
     omitContainerBlocks: component === 'container',
     omitComponentListBlocks: component === 'component-list',
@@ -1278,10 +1606,10 @@ function nestedBlockOmitOptions(schema: BlockSchema): Parameters<typeof serializ
   };
 }
 
-function serializeVisualBlock(block: VisualBlock): JsonObject {
+function serializeVisualBlock(block: VisualBlock, documentMeta: JsonObject | null = null): JsonObject {
   return {
     text: block.text,
-    schema: serializeBlockSchema(block.schema),
+    schema: serializeBlockSchema(block.schema, {}, documentMeta),
   };
 }
 
@@ -1290,11 +1618,11 @@ function serializeTableRow(row: TableRow): JsonObject {
   return serialized;
 }
 
-function addBlockArrayIfPresent(payload: JsonObject, key: string, blocks: VisualBlock[]): void {
+function addBlockArrayIfPresent(payload: JsonObject, key: string, blocks: VisualBlock[], documentMeta: JsonObject | null): void {
   if (blocks.length === 0) {
     return;
   }
-  payload[key] = blocks.map((block) => serializeVisualBlock(block));
+  payload[key] = blocks.map((block) => serializeVisualBlock(block, documentMeta));
 }
 
 function addIfChanged(payload: JsonObject, key: string, value: unknown, defaultValue: unknown): void {
@@ -1305,4 +1633,11 @@ function addIfChanged(payload: JsonObject, key: string, value: unknown, defaultV
     return;
   }
   payload[key] = value as JsonObject[keyof JsonObject];
+}
+
+function addArrayIfChanged(payload: JsonObject, key: string, value: unknown[], defaultValue: unknown[]): void {
+  if (value.length === defaultValue.length && value.every((item, index) => item === defaultValue[index])) {
+    return;
+  }
+  payload[key] = value;
 }

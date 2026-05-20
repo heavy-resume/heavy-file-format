@@ -1,13 +1,11 @@
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import type { HvyDocument, HvySection } from './types';
-import { normalizeMarkdownIndentation } from '../markdown';
+import { markdownToReaderHtml, normalizeMarkdownIndentation } from '../markdown';
 import { sanitizeCssBlock } from '../css-sanitizer';
-
-marked.setOptions({ gfm: true, breaks: false });
+import { getTextLineStylesFromMeta } from '../text-line-styles';
 
 export function renderDocument(document: HvyDocument): string {
-  const sections = document.sections.map(renderSection).join('');
+  const textLineStyles = getTextLineStylesFromMeta(document.meta);
+  const sections = document.sections.map((section) => renderSection(section, textLineStyles)).join('');
   if (sections.trim().length === 0) {
     return '<p class="muted">No sections detected yet. Add markdown headings to create atomic sections.</p>';
   }
@@ -23,9 +21,9 @@ export function buildRuntimeCss(document: HvyDocument): string {
   return blocks.join('\n\n');
 }
 
-function renderSection(section: HvySection): string {
-  const html = DOMPurify.sanitize(marked.parse(escapeRawHtml(normalizeMarkdownIndentation(section.contentMarkdown))) as string);
-  const children = section.children.map(renderSection).join('');
+function renderSection(section: HvySection, textLineStyles: ReturnType<typeof getTextLineStylesFromMeta>): string {
+  const html = markdownToReaderHtml(normalizeMarkdownIndentation(section.contentMarkdown), { textLineStyles, textLineStyleMode: 'viewer' });
+  const children = section.children.map((child) => renderSection(child, textLineStyles)).join('');
   const tags = Array.isArray(section.meta.tags) ? section.meta.tags.join(', ') : '';
 
   return `
@@ -43,10 +41,6 @@ function renderSection(section: HvySection): string {
       ${children}
     </section>
   `;
-}
-
-function escapeRawHtml(markdown: string): string {
-  return markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeHtml(value: string): string {

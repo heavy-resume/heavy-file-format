@@ -1,5 +1,8 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createEmptySection } from './document-factory';
+import type { JsonObject } from './hvy/types';
+import { resolveBaseComponentFromMeta } from './component-defs';
+import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   const output: VisualSection[] = [];
@@ -44,6 +47,62 @@ export function findSectionContainer(
   }
 
   return null;
+}
+
+export function moveScriptOnlySectionsAfterRegularSections(
+  sections: VisualSection[],
+  documentMeta: JsonObject | null
+): boolean {
+  let changed = reorderScriptOnlySectionsInContainer(sections, documentMeta);
+  for (const section of sections) {
+    if (moveScriptOnlySectionsAfterRegularSections(section.children, documentMeta)) {
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+export function wouldMoveScriptOnlySectionsAfterRegularSections(
+  sections: VisualSection[],
+  documentMeta: JsonObject | null
+): boolean {
+  return wouldReorderScriptOnlySectionsInContainer(sections, documentMeta)
+    || sections.some((section) => wouldMoveScriptOnlySectionsAfterRegularSections(section.children, documentMeta));
+}
+
+function reorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+  const reordered = [
+    ...sections.filter((section) => !isScriptOnlySection(section, documentMeta)),
+    ...sections.filter((section) => isScriptOnlySection(section, documentMeta)),
+  ];
+  const changed = reordered.some((section, index) => section !== sections[index]);
+  if (changed) {
+    sections.splice(0, sections.length, ...reordered);
+  }
+  return changed;
+}
+
+function wouldReorderScriptOnlySectionsInContainer(sections: VisualSection[], documentMeta: JsonObject | null): boolean {
+  let seenScriptOnly = false;
+  for (const section of sections) {
+    if (isScriptOnlySection(section, documentMeta)) {
+      seenScriptOnly = true;
+    } else if (seenScriptOnly) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isScriptOnlySection(section: VisualSection, documentMeta: JsonObject | null): boolean {
+  return section.blocks.length > 0
+    && section.children.length === 0
+    && section.blocks.every((block) => isScriptingBlock(block, documentMeta));
+}
+
+function isScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  return resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
+    && block.schema.plugin === SCRIPTING_PLUGIN_ID;
 }
 
 export function sectionContainsKey(section: VisualSection, sectionKey: string): boolean {
@@ -133,19 +192,24 @@ export function findBlockContainerById(
 export function findBlockContainerInList(
   blocks: VisualBlock[],
   blockId: string,
-  ownerBlockId: string | null
+  ownerBlockId: string | null,
+  seen = new Set<VisualBlock>()
 ): { container: VisualBlock[]; index: number; ownerBlockId: string | null } | null {
   const index = blocks.findIndex((block) => block.id === blockId);
   if (index >= 0) {
     return { container: blocks, index, ownerBlockId };
   }
   for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
     const nested =
-      findBlockContainerInList(block.schema.containerBlocks ?? [], blockId, block.id) ??
-      findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id) ??
-      findBlockContainerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, block.id) ??
-      findBlockContainerInList(block.schema.expandableStubBlocks?.children ?? [], blockId, block.id) ??
-      findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id);
+      findBlockContainerInList(block.schema.containerBlocks ?? [], blockId, block.id, seen) ??
+      findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id, seen) ??
+      findBlockContainerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, block.id, seen) ??
+      findBlockContainerInList(block.schema.expandableStubBlocks?.children ?? [], blockId, block.id, seen) ??
+      findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id, seen);
     if (nested) {
       return nested;
     }
@@ -369,19 +433,31 @@ export function formatSectionTitle(title: string): string {
 }
 
 export function visitBlocks(sections: VisualSection[], visitor: (block: VisualBlock) => void): void {
+  const seen = new Set<VisualBlock>();
   sections.forEach((section) => {
-    visitBlocksInList(section.blocks, visitor);
-    visitBlocks(section.children, visitor);
+    visitBlocksInList(section.blocks, visitor, seen);
+    visitBlocksWithSeen(section.children, visitor, seen);
   });
 }
 
-export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) => void): void {
+function visitBlocksWithSeen(sections: VisualSection[], visitor: (block: VisualBlock) => void, seen: Set<VisualBlock>): void {
+  sections.forEach((section) => {
+    visitBlocksInList(section.blocks, visitor, seen);
+    visitBlocksWithSeen(section.children, visitor, seen);
+  });
+}
+
+export function visitBlocksInList(blocks: VisualBlock[], visitor: (block: VisualBlock) => void, seen = new Set<VisualBlock>()): void {
   blocks.forEach((block) => {
+    if (seen.has(block)) {
+      return;
+    }
+    seen.add(block);
     visitor(block);
-    visitBlocksInList(block.schema.containerBlocks ?? [], visitor);
-    visitBlocksInList(block.schema.componentListBlocks ?? [], visitor);
-    visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor);
-    visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor);
-    visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor);
+    visitBlocksInList(block.schema.containerBlocks ?? [], visitor, seen);
+    visitBlocksInList(block.schema.componentListBlocks ?? [], visitor, seen);
+    visitBlocksInList((block.schema.gridItems ?? []).map((item) => item.block), visitor, seen);
+    visitBlocksInList(block.schema.expandableStubBlocks?.children ?? [], visitor, seen);
+    visitBlocksInList(block.schema.expandableContentBlocks?.children ?? [], visitor, seen);
   });
 }

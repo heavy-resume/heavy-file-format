@@ -1,26 +1,51 @@
 import './reader.css';
 import './sidebar.css';
 import { renderCodeReader } from '../editor/components/code/code';
+import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
+import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
+import { renderCarouselReader } from '../editor/components/carousel/carousel';
 import { renderPluginReader } from '../editor/components/plugin/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table/table';
 import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
+import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
-import { colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, THEME_COLOR_NAMES } from '../theme';
+import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
-import type { DbTableQueryModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { SearchState } from '../search/types';
+import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
+import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
-import { parseAttachedComponentBlocks } from '../plugins/db-table';
-import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { defaultBlockSchema } from '../document-factory';
+import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
+import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
+import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
+import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
+import { closeIcon, plusIcon } from '../icons';
+import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
+import {
+  createReaderViewContext,
+  getBlockReaderViewTargetKey,
+  getReaderViewModifiers,
+  isReaderViewPrioritized,
+  getSectionReaderViewTargetKey,
+  hasReaderViewModifier,
+  orderReaderViewTargets,
+  type ReaderViewContext,
+  type ReaderViewTargetKey,
+} from './view-filter';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -28,19 +53,31 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
+  contextMenu?: { kind: 'filter' | 'ai'; sectionKey: string; blockId?: string } | null;
+  activeEditorBlock?: { sectionKey: string; blockId: string } | null;
+  aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
+  aiEditorHostSectionKey?: string | null;
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
-  reusableSaveModal: {
-    kind: 'component' | 'section';
-    sectionKey: string;
-    blockId?: string;
-    draftName: string;
-  } | null;
+  reusableSaveModal: ReusableSaveModalState | null;
+  reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
+  themeModalMode: 'full' | 'advanced';
+  paletteOverrideId: string | null;
   theme: ThemeConfig;
   currentView: 'editor' | 'viewer' | 'ai';
+  showAdvancedEditor: boolean;
+  responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
+  readerExpandableState: Record<string, boolean>;
+  readerContainerState: Record<string, boolean>;
+  readerView: ReaderViewFilter;
+  readerViewActivatedTargets: Set<string>;
+  search: SearchState;
+  componentListReaderViews: Record<string, string>;
+  viewerSidebarHelpDismissed: boolean;
 }
 
 interface ReaderRenderDeps {
@@ -59,193 +96,1026 @@ interface ReaderRenderDeps {
   renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
+  renderReusableSectionOptions: (selected: string) => string;
+  getSectionDefs: () => unknown[];
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
+}
+
+export interface ReaderBlockRenderOptions {
+  suppressAiEditorDelegation?: boolean;
 }
 
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
   renderReaderSections: (sections: VisualSection[]) => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
+  renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
   renderReaderSection: (section: VisualSection) => string;
-  renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
+  renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
+  orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  orderReaderListBlocks: (blocks: VisualBlock[]) => VisualBlock[];
+  isReaderViewPrioritizedBlock: (block: VisualBlock) => boolean;
+  renderThemeEditor: (options?: { advanced?: boolean; includePalettePicker?: boolean; includeModalActions?: boolean }) => string;
   renderModal: () => string;
   renderLinkInlineModal: () => string;
   renderWarnings: () => string;
 }
 
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
-  function renderNavigation(sections: VisualSection[]): string {
-    const items = deps.flattenSections(sections).filter((section) => !section.isGhost && section.location !== 'sidebar');
-    if (items.length === 0) {
-      return '<div class="muted">Navigation will appear when sections exist.</div>';
-    }
+  let activeReaderViewContext: ReaderViewContext | null = null;
+  let activeSearchFilterContext: SearchFilterContext | null = null;
 
-    return `
-      <div class="nav-title">Navigation</div>
-      <div class="nav-list">
-        ${items
-          .map(
-            (section) =>
-              `<button type="button" class="nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
-                deps.formatSectionTitle(section.title)
-              )}</button>`
-          )
-          .join('')}
-      </div>
-    `;
+  function withReaderViewContext(render: () => string): string {
+    const previous = activeReaderViewContext;
+    const previousSearch = activeSearchFilterContext;
+    const sections = getViewerContextSections();
+    activeReaderViewContext = createReaderViewContext(
+      { meta: state.documentMeta, extension: '.hvy', sections, attachments: [] },
+      state.readerView
+    );
+    activeSearchFilterContext = createSearchFilterContext(sections, state.search);
+    try {
+      return render();
+    } finally {
+      activeReaderViewContext = previous;
+      activeSearchFilterContext = previousSearch;
+    }
+  }
+
+  function getActiveReaderViewContext(): ReaderViewContext {
+    if (!activeReaderViewContext) {
+      return createReaderViewContext(
+        { meta: state.documentMeta, extension: '.hvy', sections: getViewerContextSections(), attachments: [] },
+        state.readerView
+      );
+    }
+    return activeReaderViewContext;
+  }
+
+  function getActiveSearchFilterContext(): SearchFilterContext {
+    return activeSearchFilterContext ?? createSearchFilterContext(getViewerContextSections(), state.search);
+  }
+
+  function getViewerContextSections(): VisualSection[] {
+    if (state.currentView !== 'viewer') {
+      return state.documentSections;
+    }
+    return filterTemplateVisibleSections(state.documentSections);
+  }
+
+  function renderNavigation(sections: VisualSection[]): string {
+    return withReaderViewContext(() => {
+      const viewContext = getActiveReaderViewContext();
+      const items = deps.flattenSections(sections).filter((section) => {
+        if (section.isGhost || section.location === 'sidebar' || isViewerHiddenSection(section)) {
+          return false;
+        }
+        return !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(section), 'hidden');
+      });
+      if (items.length === 0) {
+        return '<div class="muted">Navigation will appear when sections exist.</div>';
+      }
+
+      return `
+        <div class="hvy-nav-title">Navigation</div>
+        <div class="hvy-nav-list">
+          ${items
+            .map(
+              (section) =>
+                `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+                  deps.formatSectionTitle(section.title)
+                )}</button>`
+            )
+            .join('')}
+        </div>
+      `;
+    });
   }
 
   function renderReaderSections(sections: VisualSection[]): string {
-    resetReaderTableStripeSequence();
-    const realSections = sections.filter((section) => !section.isGhost && section.location !== 'sidebar');
-    if (realSections.length === 0) {
-      return '<div class="muted">No content to display yet.</div>';
+    return withReaderViewContext(() => {
+      resetReaderTableStripeSequence();
+      const realSections = orderReaderSections(
+        sections.filter((section) => !section.isGhost && section.location !== 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
+      );
+      const topLevelAddGhost = renderAiTopLevelSectionAddGhost('main');
+      if (realSections.length === 0) {
+        return getActiveSearchFilterContext().filtering
+          ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
+          : topLevelAddGhost
+          ? `<div${renderResponsiveSurfaceAttrs('')}><div class="reader-document-body">${topLevelAddGhost}</div></div>`
+          : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
+      }
+      const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
+      const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
+      const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
+      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
+    });
+  }
+
+  function renderAiTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
+    if (state.currentView !== 'ai' || getActiveSearchFilterContext().filtering) {
+      return '';
     }
-    const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
-    const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
-    return `<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}</div>`;
+    const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
+    const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
+    return `<div class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
+      <div class="ghost-plus-big">${plusIcon()}</div>
+      <div class="ghost-label">Add Section</div>
+      ${hasReusableSectionOptions ? `<label class="ghost-component-picker">
+        <select data-field="reusable-section-type" data-section-key="${deps.escapeAttr(key)}" aria-label="Section type">
+          ${deps.renderReusableSectionOptions(state.addComponentBySection[key] ?? 'blank')}
+        </select>
+      </label>` : ''}
+    </div>`;
+  }
+
+  function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
+    const preview = state.responsivePreview;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
-    resetReaderTableStripeSequence();
-    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar');
-    return sidebarSections.map((section) => renderReaderSection(section)).join('');
+    return withReaderViewContext(() => {
+      resetReaderTableStripeSequence();
+      const sidebarSections = orderReaderSections(
+        sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section) && isSectionSearchVisible(getActiveSearchFilterContext(), section))
+      );
+      const topLevelAddGhost = renderAiTopLevelSectionAddGhost('sidebar');
+      const sidebarSectionsHtml = sidebarSections.map((section) => renderReaderSection(section)).join('');
+      if (!sidebarSectionsHtml.trim() && !topLevelAddGhost) {
+        return '';
+      }
+      const surfaceAttrs = renderResponsiveSurfaceAttrs('');
+      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
+    });
+  }
+
+  function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (state.viewerSidebarHelpDismissed) {
+      return '';
+    }
+    const sidebarSections = sections.filter((section) => !section.isGhost && section.location === 'sidebar' && !isViewerHiddenSection(section));
+    if (sidebarSections.length === 0) {
+      return '';
+    }
+    return `<div class="viewer-sidebar-help-balloon" role="note" aria-label="Sections in pullout">
+      <div class="viewer-sidebar-help-title">Contains</div>
+      <ul>
+        ${sidebarSections
+          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+          .join('')}
+      </ul>
+    </div>`;
   }
 
   function renderReaderSection(section: VisualSection): string {
+    if (isViewerHiddenSection(section)) {
+      return '';
+    }
+    const viewContext = getActiveReaderViewContext();
+    const targetKey = getSectionReaderViewTargetKey(section);
+    if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
+      return '';
+    }
+    const searchContext = getActiveSearchFilterContext();
+    if (!isSectionSearchVisible(searchContext, section)) {
+      return '';
+    }
     const effectiveId = deps.getSectionId(section);
     const temp = state.tempHighlights.has(effectiveId);
+    const modifiers = getReaderViewModifiers(viewContext, targetKey);
+    const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const searchDimmed = isSectionSearchDeprioritized(searchContext, section);
+    const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
+    const viewCollapseKey = `reader-view-collapse:${targetKey}`;
+    const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
+    const autoExpanded = !modifiers.has('collapse') && !section.expanded && shouldAutoExpandAuthoringSection(section);
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : section.expanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',
-      !section.contained || section.expanded ? '' : 'is-collapsed-preview',
-      section.highlight ? 'is-highlighted' : '',
+      modifiers.has('collapse')
+        ? (sectionExpanded ? '' : 'is-collapsed-preview')
+        : (!section.contained || sectionExpanded ? '' : 'is-collapsed-preview'),
+      section.highlight || modifiers.has('highlight') ? 'is-highlighted' : '',
+      isSectionSearchMatch(searchContext, section) ? 'is-search-match' : '',
+      dimmed ? 'is-reader-view-dimmed' : '',
+      searchDimmed ? 'is-search-deprioritized' : '',
       temp ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const contentClass = !section.contained || section.expanded ? 'reader-section-content' : 'reader-section-content reader-section-preview';
-    const content = `<div class="${contentClass}">${section.blocks
-      .map((block) => renderReaderBlock(section, block))
-      .join('')}${section.children.filter((child) => !child.isGhost).map((child) => renderReaderSection(child)).join('')}</div>`;
+    const contentClass = modifiers.has('collapse') || section.contained
+      ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
+      : 'reader-section-content';
+    const blocksHtml = renderReaderBlocks(section, section.blocks);
+    const childrenHtml = orderReaderSections(
+      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
+    ).map((child) => renderReaderSection(child)).join('');
+    if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
+      return '';
+    }
+    const content = `<div class="${contentClass}">${blocksHtml}${childrenHtml}${renderAiActiveSectionAddAffordance(section)}</div>`;
 
-    const toggleAttrs = section.contained && section.expanded
+    const viewCollapseAttrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(viewCollapseKey)}" aria-expanded="${viewExpanded ? 'true' : 'false'}"`;
+    const toggleAttrs = modifiers.has('collapse')
+      ? (sectionExpanded ? '' : ` ${viewCollapseAttrs}`)
+      : section.contained && sectionExpanded
       ? ''
       : section.contained
       ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
       : '';
 
-    const header = section.contained
+    const suppressSectionToggle = state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key;
+    const header = !suppressSectionToggle && (section.contained || modifiers.has('collapse'))
       ? `
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
-            <button type="button" class="tiny toggle-expand-button" data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}" aria-label="${
-          section.expanded ? 'Collapse section' : 'Expand section'
-        }">${section.expanded ? '+' : '-'}</button>
+            <button type="button" class="tiny toggle-expand-button" ${modifiers.has('collapse')
+              ? viewCollapseAttrs
+              : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${
+          sectionExpanded ? 'Collapse section' : 'Expand section'
+        }">${sectionExpanded ? '-' : '+'}</button>
           </div>
         </header>
       `
       : '';
-    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.customCss);
+    const sectionStyle = mergeDocumentCss(getDocumentSectionDefaultCss(state.documentMeta), section.css);
 
     return `
-      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" style="${deps.escapeAttr(sectionStyle)}"${toggleAttrs}>
+      <section id="${deps.escapeAttr(effectiveId)}" class="${classList}" data-hvy-virtual-section="reader" data-section-key="${deps.escapeAttr(section.key)}" style="${deps.escapeAttr(sectionStyle)}"${renderReaderViewTargetAttrs(targetKey, dimmed)}${toggleAttrs}>
         ${header}
         ${content}
       </section>
     `;
   }
 
-  function renderReaderBlock(section: VisualSection, block: VisualBlock): string {
-    const base = deps.resolveBaseComponent(block.schema.component);
-    if (base === 'quote' && block.text.trim().length === 0) {
+  function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
+    if (state.currentView !== 'ai' || !section.contained || section.children.length > 0) {
+      return false;
+    }
+    return section.blocks.some((block) =>
+      deps.resolveBaseComponent(block.schema.component) === 'component-list'
+      && !hasComponentListItems(block)
+    );
+  }
+
+  function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
+    if (isViewerHiddenBlock(block)) {
       return '';
     }
+    const viewContext = getActiveReaderViewContext();
+    const searchContext = getActiveSearchFilterContext();
+    const targetKey = getBlockReaderViewTargetKey(block);
+    if (hasReaderViewModifier(viewContext, targetKey, 'hidden')) {
+      return '';
+    }
+    if (!isBlockSearchVisible(searchContext, block)) {
+      return '';
+    }
+    const base = deps.resolveBaseComponent(block.schema.component);
+    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && (isAiEditorHostSection(section.key) || isAiEditorHostBlock(section.key, block.id))) {
+      return deps.renderEditorBlock(section.key, block);
+    }
+    if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && shouldRenderAiPassiveEditorAffordance(base, block)) {
+      return deps.renderEditorBlock(section.key, block);
+    }
+    const modifiers = getReaderViewModifiers(viewContext, targetKey);
+    const prioritized = isReaderViewPrioritized(viewContext, targetKey);
+    const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
+    const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
+    const readerExpanded = base === 'expandable'
+      ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
+      : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
+    const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
     const blockClass = [
       'reader-block',
       `reader-block-${base}`,
-      `align-${block.schema.align}`,
+      block.schema.align === 'left' ? '' : `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
       state.aiEditTarget.sectionKey === section.key && state.aiEditTarget.blockId === block.id ? 'is-ai-target' : '',
+      state.contextMenu?.kind === 'ai' && state.contextMenu.sectionKey === section.key && state.contextMenu.blockId === block.id ? 'is-context-menu-target' : '',
+      state.currentView === 'ai' && base === 'text' && isAiEditablePlaceholderTextBlock(block) ? 'is-ai-editable-placeholder' : '',
+      modifiers.has('highlight') ? 'is-highlighted' : '',
+      isBlockSearchMatch(searchContext, block) ? 'is-search-match' : '',
+      dimmed ? 'is-reader-view-dimmed' : '',
+      searchDimmed ? 'is-search-deprioritized' : '',
       blockDomId && state.tempHighlights.has(blockDomId) ? 'is-temp-highlighted' : '',
     ]
       .filter(Boolean)
       .map((part) => deps.escapeAttr(part))
       .join(' ');
-    const blockAttrs = `${idAttr} class="${blockClass}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}"`;
+    const expandableAttrs = base === 'expandable'
+      ? ` data-reader-action="toggle-expandable" aria-expanded="${readerExpanded ? 'true' : 'false'}"`
+      : '';
+    const anchor = getReaderButtonAnchor(section, block);
+    const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
     const helpers = deps.getComponentRenderHelpers();
+    const renderBlockShell = (body: string): string => {
+      const query = searchContext.filtering ? '' : searchContext.query;
+      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
+    };
+    const renderMaybeCollapsedBlockShell = (body: string): string => {
+      if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
+        return renderBlockShell(body);
+      }
+      return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body));
+    };
+    const renderNonEmptyBlockShell = (body: string): string => body.trim() ? renderBlockShell(body) : '';
+    const renderNonEmptyMaybeCollapsedBlockShell = (body: string): string =>
+      body.trim() ? renderMaybeCollapsedBlockShell(body) : '';
 
-    if (base === 'code') {
-      return `<div ${blockAttrs}>${renderCodeReader(section, block, helpers)}</div>`;
-    }
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
         if (state.currentView === 'viewer') {
-          return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+          return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
         }
         if (state.currentView === 'ai') {
           if (block.text.trim().length === 0) {
-            return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+            return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
           }
           const codeReader = renderCodeReader(
             section,
             { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock,
             helpers
           );
-          return `<div ${blockAttrs}>${codeReader}${renderPluginReader(section, block, helpers)}</div>`;
+          return renderMaybeCollapsedBlockShell(`${codeReader}${renderPluginReader(section, block, helpers)}`);
         }
         if (block.text.trim().length === 0) {
-          return `<div ${blockAttrs}><div class="plugin-placeholder">Empty script...</div></div>`;
+          return renderMaybeCollapsedBlockShell('<div class="plugin-placeholder">Empty script...</div>');
         }
-        return `<div ${blockAttrs}>${renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers)}</div>`;
+        return renderMaybeCollapsedBlockShell(renderCodeReader(section, { ...block, schema: { ...block.schema, codeLanguage: 'python' } } as VisualBlock, helpers));
       }
-      return `<div ${blockAttrs}>${renderPluginReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
+    }
+    if (base === 'button') {
+      return renderMaybeCollapsedBlockShell(renderButtonReader(section, block, helpers));
     }
     if (base === 'container') {
-      return `<div ${blockAttrs}>${renderContainerReader(section, block, helpers)}</div>`;
+      const readerBlock = modifiers.has('collapse')
+        ? { ...block, schema: { ...block.schema, containerExpanded: false } } as VisualBlock
+        : forceSearchExpanded
+        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
+        : prioritized
+        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
+        : block;
+      return renderNonEmptyBlockShell(renderContainerReader(section, readerBlock, helpers));
     }
     if (base === 'component-list') {
-      return `<div ${blockAttrs}>${renderComponentListReader(section, block, helpers)}</div>`;
+      const listHtml = renderComponentListReader(section, block, helpers);
+      const addAffordance = renderAiActiveComponentListAddAffordance(section, block);
+      return renderNonEmptyMaybeCollapsedBlockShell(`${listHtml}${addAffordance}`);
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
-      return `<div ${blockAttrs}>${renderGridReader(section, block, helpers)}</div>`;
+      return renderNonEmptyMaybeCollapsedBlockShell(renderGridReader(section, block, helpers));
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      return `<div ${blockAttrs}>${renderExpandableReader(section, block, helpers)}</div>`;
+      const readerBlock = {
+        ...block,
+        schema: {
+          ...block.schema,
+          expandableExpanded: readerExpanded,
+          expandableAlwaysShowStub: forceSearchExpanded ? true : block.schema.expandableAlwaysShowStub,
+        },
+      } as VisualBlock;
+      return renderNonEmptyBlockShell(renderExpandableReader(section, readerBlock, helpers));
     }
     if (base === 'table') {
       if (!areTablesEnabled()) {
-        return `<div ${blockAttrs}><div class="plugin-placeholder">Table rendering is disabled in this reference implementation.</div></div>`;
+        return renderMaybeCollapsedBlockShell('<div class="plugin-placeholder">Table rendering is disabled in this reference implementation.</div>');
       }
-      return `<div ${blockAttrs}>${renderTableReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderTableReader(section, block, helpers));
     }
     if (base === 'xref-card') {
-      return `<div ${blockAttrs}>${renderXrefCardReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderXrefCardReader(section, block, helpers));
     }
     if (base === 'image') {
-      return `<div ${blockAttrs}>${renderImageReader(section, block, helpers)}</div>`;
+      return renderMaybeCollapsedBlockShell(renderImageReader(section, block, helpers));
     }
-    return `<div ${blockAttrs}>${renderTextReader(section, block, helpers)}</div>`;
+    if (base === 'carousel') {
+      return renderMaybeCollapsedBlockShell(renderCarouselReader(section, block, helpers));
+    }
+    return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {
+    const host = state.aiEditorHostBlock ?? state.activeEditorBlock ?? null;
+    return host?.sectionKey === sectionKey && host.blockId === blockId;
+  }
+
+  function isAiEditorHostSection(sectionKey: string): boolean {
+    return state.aiEditorHostSectionKey === sectionKey;
+  }
+
+  function renderAiActiveSectionAddAffordance(section: VisualSection): string {
+    if (state.currentView !== 'ai' || section.lock || !isAiEditorHostSection(section.key)) {
+      return '';
+    }
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost">
+      ${renderAddComponentPicker({
+        id: `ai-section:${section.key}`,
+        action: 'add-block',
+        sectionKey: section.key,
+        label: 'Section component type',
+      }, {
+        escapeAttr: deps.escapeAttr,
+        escapeHtml: deps.escapeHtml,
+        getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
+      })}
+    </div>`;
+  }
+
+  function renderAiActiveComponentListAddAffordance(section: VisualSection, block: VisualBlock): string {
+    if (
+      state.currentView !== 'ai' ||
+      block.schema.lock ||
+      !hasComponentListItems(block)
+    ) {
+      return '';
+    }
+    return `<div class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${deps.escapeAttr(
+      section.key
+    )}" data-block-id="${deps.escapeAttr(block.id)}">
+      <div class="ghost-plus-small">${plusIcon()}</div>
+      <div class="ghost-label">${deps.escapeHtml(getComponentListAddLabel(block))}</div>
+    </div>`;
+  }
+
+  function shouldRenderAiPassiveEditorAffordance(base: string, block: VisualBlock): boolean {
+    if (base === 'text') {
+      return block.text.trim().length === 0;
+    }
+    if (base === 'component-list') {
+      if (!Array.isArray(block.schema.componentListBlocks)) {
+        block.schema.componentListBlocks = [];
+      }
+      return !hasComponentListItems(block);
+    }
+    return false;
+  }
+
+  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderBlocks(blocks)
+      .filter((block) => !isAnchoredReaderButton(section, block))
+      .map((block) => renderReaderBlock(section, block))
+      .join('');
+  }
+
+  function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderListBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+  }
+
+  function orderReaderSections(sections: VisualSection[]): VisualSection[] {
+    const viewContext = getActiveReaderViewContext();
+    const ordered = orderReaderViewTargets(
+      sections,
+      viewContext,
+      getSectionReaderViewTargetKey,
+      state.readerViewActivatedTargets
+    );
+    return orderSearchFilteredSections(ordered, getActiveSearchFilterContext(), {
+      isPriority: (section) => isSectionReaderPriority(section, viewContext, getSectionReaderViewTargetKey(section)),
+    });
+  }
+
+  function isSectionReaderPriority(section: VisualSection, viewContext: ReaderViewContext, targetKey: ReaderViewTargetKey): boolean {
+    return section.priority === true || isReaderViewPrioritized(viewContext, targetKey);
+  }
+
+  function orderReaderBlocks(blocks: VisualBlock[]): VisualBlock[] {
+    return orderReaderViewTargets(
+      blocks,
+      getActiveReaderViewContext(),
+      getBlockReaderViewTargetKey,
+      state.readerViewActivatedTargets,
+      { prioritize: false }
+    ).filter((block) => isBlockSearchVisible(getActiveSearchFilterContext(), block));
+  }
+
+  function orderReaderListBlocks(blocks: VisualBlock[]): VisualBlock[] {
+    return orderReaderViewTargets(
+      blocks,
+      getActiveReaderViewContext(),
+      getBlockReaderViewTargetKey,
+      state.readerViewActivatedTargets,
+      { prioritize: true }
+    ).filter((block) =>
+      isBlockSearchVisible(getActiveSearchFilterContext(), block)
+    );
+  }
+
+  function isViewerHiddenSection(section: VisualSection): boolean {
+    if (state.currentView === 'viewer') {
+      return section.editorOnly || isSectionHiddenByTemplateMarker(section);
+    }
+    return state.currentView === 'ai'
+      && !state.showAdvancedEditor
+      && section.editorOnly
+      && sectionContainsAdvancedOnlyScriptingBlock(section);
+  }
+
+  function isAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
+    return block.schema.editorOnly
+      && deps.resolveBaseComponent(block.schema.component) === 'plugin'
+      && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+  }
+
+  function sectionContainsAdvancedOnlyScriptingBlock(section: VisualSection): boolean {
+    return section.blocks.some(blockContainsAdvancedOnlyScriptingBlock)
+      || section.children.some(sectionContainsAdvancedOnlyScriptingBlock);
+  }
+
+  function blockContainsAdvancedOnlyScriptingBlock(block: VisualBlock): boolean {
+    return isAdvancedOnlyScriptingBlock(block)
+      || (block.schema.containerBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.componentListBlocks ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.gridItems ?? []).some((item) => blockContainsAdvancedOnlyScriptingBlock(item.block))
+      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock)
+      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsAdvancedOnlyScriptingBlock);
+  }
+
+  function isViewerHiddenBlock(block: VisualBlock): boolean {
+    if (state.currentView === 'viewer' && block.schema.editorOnly) {
+      return true;
+    }
+    return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);
+  }
+
+  function isAnchoredReaderButton(section: VisualSection | null, block: VisualBlock): boolean {
+    if (!section || state.currentView !== 'ai' || deps.resolveBaseComponent(block.schema.component) !== 'button') {
+      return false;
+    }
+    const targetId = block.schema.buttonPositionTargetId.trim();
+    return !!targetId && section.blocks.some((candidate) => candidate !== block && candidate.schema.id.trim() === targetId);
+  }
+
+  function getReaderButtonAnchor(section: VisualSection, block: VisualBlock): { className: string; attrs: string; overlay: string } {
+    if (state.currentView !== 'ai') {
+      return { className: '', attrs: '', overlay: '' };
+    }
+    const componentId = block.schema.id.trim();
+    const buttons = componentId
+      ? section.blocks.filter((candidate) =>
+          deps.resolveBaseComponent(candidate.schema.component) === 'button'
+          && candidate.schema.buttonPositionTargetId.trim() === componentId
+        )
+      : [];
+    if (buttons.length === 0) {
+      return { className: '', attrs: '', overlay: '' };
+    }
+    const helpers = deps.getComponentRenderHelpers();
+    return {
+      className: ' hvy-button-position-anchor',
+      attrs: ' data-hvy-button-anchor="true"',
+      overlay: `<div class="hvy-button-overlay-layer">${buttons.map((button) => renderButtonReader(section, button, helpers)).join('')}</div>`,
+    };
+  }
+
+  function isReaderViewPrioritizedBlock(block: VisualBlock): boolean {
+    return isReaderViewPrioritized(getActiveReaderViewContext(), getBlockReaderViewTargetKey(block));
+  }
+
+  function renderReaderViewTargetAttrs(targetKey: ReaderViewTargetKey, dimmed: boolean): string {
+    return ` data-reader-view-target="${deps.escapeAttr(targetKey)}"${dimmed ? ' data-reader-view-dimmed="true"' : ''}`;
+  }
+
+  function renderReaderViewCollapseWrapper(targetKey: ReaderViewTargetKey, block: VisualBlock, body: string): string {
+    const key = `reader-view-collapse:${targetKey}`;
+    const expanded = state.readerContainerState[key] ?? false;
+    const className = `reader-container reader-view-collapse-wrapper is-collapsible ${expanded ? 'is-expanded' : 'is-collapsed-preview'}`;
+    const title = block.schema.id.trim() || block.schema.xrefTitle.trim() || block.schema.containerTitle.trim() || block.schema.component;
+    const attrs = `data-reader-action="toggle-view-collapse" data-reader-view-target="${deps.escapeAttr(targetKey)}" data-reader-view-collapse-key="${deps.escapeAttr(key)}" aria-expanded="${expanded ? 'true' : 'false'}"`;
+    return `<div class="${deps.escapeAttr(className)}" style="--hvy-container-preview-rem: 5rem;">
+      <header class="reader-container-head">
+        <div class="reader-container-title">${deps.escapeHtml(title)}</div>
+        <div class="reader-container-actions">
+          <button type="button" class="tiny toggle-expand-button reader-container-toggle" ${attrs} aria-label="${expanded ? 'Collapse component' : 'Expand component'}">${expanded ? '-' : '+'}</button>
+        </div>
+      </header>
+      <div class="reader-container-body" ${expanded ? '' : attrs}>${body}</div>
+    </div>`;
   }
 
   function getBlockDomId(block: VisualBlock): string {
     return block.schema.id.trim();
   }
 
-  function renderThemeModal(): string {
+  function getReaderExpandableExpanded(sectionKey: string, block: VisualBlock, fallback = block.schema.expandableExpanded): boolean {
+    const key = `${sectionKey}:${block.id}`;
+    return state.readerExpandableState[key] ?? fallback;
+  }
+
+  function renderThemeEditor(options: { advanced?: boolean; includePalettePicker?: boolean; includeModalActions?: boolean } = {}): string {
+    const includePalettePicker = options.includePalettePicker ?? true;
+    const includeModalActions = options.includeModalActions ?? true;
     const theme = state.theme;
     const overrideNames = new Set(Object.keys(theme.colors));
+    const helpers = deps.getComponentRenderHelpers();
+    const previewSection: VisualSection = {
+      key: 'theme-preview-section',
+      customId: '',
+      contained: true,
+      editorOnly: false,
+      lock: true,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Theme Preview',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      blocks: [],
+      children: [],
+    };
+    const makePreviewBlock = (id: string, component: string, text: string, schema: Partial<BlockSchema> = {}): VisualBlock => ({
+      id,
+      text,
+      schema: {
+        ...defaultBlockSchema(component),
+        id,
+        ...schema,
+      },
+      schemaMode: false,
+    });
+    const previewTextBlock = makePreviewBlock('theme-preview-text', 'text', 'Paragraph with *alternate text* and a fill-in.');
+    const previewButtonBlock = makePreviewBlock('theme-preview-button', 'button', '', { buttonLabel: 'Generate' });
+    const previewFillInBlock = makePreviewBlock('theme-preview-fill-in', 'text', 'The answer is [____].', { fillIn: true });
+    const previewXrefTarget = state.documentSections[0] ? `#${deps.getSectionId(state.documentSections[0])}` : '#';
+    const previewXrefBlock = makePreviewBlock('theme-preview-xref', 'xref-card', '', {
+      xrefTitle: 'TypeScript',
+      xrefDetail: 'Primary language',
+      xrefTarget: previewXrefTarget,
+    });
+    const previewInvalidXrefBlock = makePreviewBlock('theme-preview-xref-invalid', 'xref-card', '', {
+      xrefTitle: 'Missing target',
+      xrefDetail: 'Invalid reference',
+      xrefTarget: '#missing-theme-preview-target',
+    });
+    const previewTableBlock = makePreviewBlock('theme-preview-table', 'table', '', {
+      tableColumns: ['Name', 'Role'],
+      tableShowHeader: true,
+      tableRows: [{ cells: ['Ada', 'Engineer'] }, { cells: ['Grace', 'Compiler'] }],
+    });
+    const previewCodeBlock = makePreviewBlock('theme-preview-code', 'code', 'const value = "HVY";', { codeLanguage: 'ts' });
+    const previewContainerBlock = makePreviewBlock('theme-preview-container', 'container', '', {
+      css: 'margin: 0.5rem 0; border: 1px solid var(--hvy-border);',
+      containerTitle: 'Container',
+      containerExpanded: false,
+      containerCollapsedPreviewRem: 3,
+      containerBlocks: [previewTextBlock],
+    });
+    const previewComponentListBlock = makePreviewBlock('theme-preview-component-list', 'component-list', '', {
+      componentListComponent: 'text',
+      componentListBlocks: [
+        makePreviewBlock('theme-preview-list-one', 'text', 'First grouped item', { sortKeys: { order: 1 }, groupKeys: { type: 'Examples' } }),
+        makePreviewBlock('theme-preview-list-two', 'text', 'Second grouped item', { sortKeys: { order: 2 }, groupKeys: { type: 'Examples' } }),
+      ],
+      componentListDefaultSortKey: 'order',
+      componentListDefaultGroupKey: 'type',
+      componentListGroupCollapsedPreviewRem: 5,
+    });
+    const addPreviewAttrs = (html: string, attrs: Record<string, string>): string => {
+      const extraClass = attrs.class;
+      const restAttrs = Object.entries(attrs)
+        .filter(([name]) => name !== 'class')
+        .map(([name, value]) => `${name}="${deps.escapeAttr(value)}"`)
+        .join(' ');
+      return html.replace(/<([a-z][\w:-]*)([^>]*)>/i, (_match, tagName: string, rawAttrs: string) => {
+        const attrsWithClass = extraClass
+          ? /\sclass="/i.test(rawAttrs)
+            ? rawAttrs.replace(/\sclass="([^"]*)"/i, (_classMatch, classValue: string) => ` class="${deps.escapeAttr(`${classValue} ${extraClass}`.trim())}"`)
+            : ` class="${deps.escapeAttr(extraClass)}"${rawAttrs}`
+          : rawAttrs;
+        const joiner = restAttrs ? ' ' : '';
+        return `<${tagName}${attrsWithClass}${joiner}${restAttrs}>`;
+      });
+    };
+    const renderDemoSurface = (html: string, stateName: string, filter: string, className = '') => addPreviewAttrs(html, {
+      class: `theme-demo-target ${className}`.trim(),
+      'data-theme-demo-state': stateName,
+      'data-action': 'theme-filter-to-colors',
+      'data-theme-filter': filter,
+    });
+    const renderDemoWrapper = (html: string, stateName: string, filter: string, className = '') => `
+      <div
+        class="theme-demo-target ${deps.escapeAttr(className)}"
+        data-theme-demo-state="${deps.escapeAttr(stateName)}"
+        data-action="theme-filter-to-colors"
+        data-theme-filter="${deps.escapeAttr(filter)}"
+      >${html}</div>`;
+    const containerPreview = renderDemoSurface(
+      renderContainerReader(previewSection, previewContainerBlock, helpers),
+      'collapsed',
+      '--hvy-surface --hvy-surface-alt --hvy-text-alt'
+    );
+    const componentListPreview = renderDemoWrapper(
+      renderComponentListReader(previewSection, previewComponentListBlock, helpers),
+      'controls',
+      '--hvy-surface-alt --hvy-border-input --hvy-shadow --hvy-text-muted',
+      'theme-demo-component-list'
+    );
+    const componentListHoverPreview = componentListPreview
+      .replace('data-theme-demo-state="controls"', 'data-theme-demo-state="hover"')
+      .replace('--hvy-surface-alt --hvy-border-input --hvy-shadow --hvy-text-muted', '--hvy-xref-card-hover-bg --hvy-border-alt --hvy-text');
+    const ghostInputPreview = renderDemoWrapper(
+      '<div class="theme-demo-ghost-input">Add component</div>',
+      'ghost',
+      '--hvy-surface-alt --hvy-ghost-border --hvy-text-muted',
+      'theme-demo-ghost-input-wrap'
+    );
+    const textPreview = renderDemoSurface(
+      renderTextReader(previewSection, previewTextBlock, helpers),
+      'rest',
+      '--hvy-text --hvy-text-alt --hvy-text-muted',
+      'theme-demo-rich-text'
+    );
+    const buttonRestPreview = renderDemoWrapper(
+      renderButtonReader(previewSection, previewButtonBlock, helpers),
+      'rest',
+      '--hvy-button-bg --hvy-button-text --hvy-border-alt',
+      'theme-demo-button-stack'
+    );
+    const buttonHoverPreview = renderDemoWrapper(
+      renderButtonReader(previewSection, previewButtonBlock, helpers),
+      'hover',
+      '--hvy-button-hover-bg --hvy-button-hover-text --hvy-focus --hvy-shadow-md',
+      'theme-demo-button-stack'
+    );
+    const fillInPreview = renderDemoSurface(
+      renderTextReader(previewSection, previewFillInBlock, helpers),
+      'fill-in',
+      '--hvy-text --hvy-text-muted --hvy-focus-ring'
+    );
+    const xrefPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewXrefBlock, helpers),
+      'rest',
+      '--hvy-xref-card-bg --hvy-border --hvy-text --hvy-text-alt --hvy-shadow'
+    );
+    const xrefHoverPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewXrefBlock, helpers),
+      'hover',
+      '--hvy-xref-card-hover-bg --hvy-focus --hvy-shadow-md'
+    );
+    const xrefInvalidPreview = renderDemoSurface(
+      renderXrefCardReader(previewSection, previewInvalidXrefBlock, helpers),
+      'invalid',
+      '--hvy-xref-card-bg --hvy-border-alt --hvy-text-muted'
+    );
+    resetReaderTableStripeSequence();
+    const tablePreview = renderDemoSurface(
+      renderTableReader(previewSection, previewTableBlock, helpers),
+      'header',
+      '--hvy-table-header --hvy-table-row-bg-1 --hvy-table-row-bg-2 --hvy-border-input --hvy-text'
+    );
+    const tableRowOnePreview = tablePreview.replace('data-theme-demo-state="header"', 'data-theme-demo-state="row-1"');
+    const tableRowTwoPreview = tablePreview.replace('data-theme-demo-state="header"', 'data-theme-demo-state="row-2"');
+    const codePreview = renderDemoSurface(
+      renderCodeReader(previewSection, previewCodeBlock, helpers),
+      'block',
+      '--hvy-code-bg --hvy-code-text --hvy-code-muted --hvy-code-string --hvy-code-builtin --hvy-code-keyword --hvy-code-function --hvy-code-number --hvy-border-input'
+    );
+    const codeSyntaxPreview = codePreview.replace('data-theme-demo-state="block"', 'data-theme-demo-state="syntax"');
+    const previewItems: Array<{
+      id: string;
+      label: string;
+      detail: string;
+      className: string;
+      variables: string[];
+      states: Array<{ id: string; label: string; variables: string[] }>;
+      html: string;
+    }> = [
+      {
+        id: 'container',
+        label: 'Container',
+        detail: 'Reader container shell, title, collapsed preview',
+        className: 'theme-preview-container-card',
+        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+        states: [
+          { id: 'collapsed', label: 'Collapsed', variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-text-alt'] },
+          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+        ],
+        html: containerPreview,
+      },
+      {
+        id: 'component-list',
+        label: 'Component List',
+        detail: 'Reader controls, hover state, and editor ghost input',
+        className: 'theme-preview-component-list-card',
+        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-ghost-border', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
+        states: [
+          { id: 'controls', label: 'Controls', variables: ['--hvy-surface-alt', '--hvy-border-input', '--hvy-shadow', '--hvy-text-muted'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
+          { id: 'ghost', label: 'Ghost', variables: ['--hvy-surface-alt', '--hvy-ghost-border', '--hvy-text-muted'] },
+        ],
+        html: `${componentListPreview}${componentListHoverPreview}${ghostInputPreview}`,
+      },
+      {
+        id: 'button',
+        label: 'Button',
+        detail: 'Primary button rest and hover states',
+        className: 'theme-preview-button-card',
+        variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
+        ],
+        html: `${buttonRestPreview}${buttonHoverPreview}`,
+      },
+      {
+        id: 'text',
+        label: 'Text',
+        detail: 'Rich text, fill-ins, quotes, and AI target state',
+        className: 'theme-preview-text-card',
+        variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
+          { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
+          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+        ],
+        html: `<div class="theme-demo-text">
+          ${textPreview}
+          ${fillInPreview}
+          <button type="button" class="theme-demo-target theme-demo-ai-target" data-theme-demo-state="target" data-action="theme-filter-to-colors" data-theme-filter="--hvy-surface --hvy-surface-tint --hvy-focus-ring --hvy-focus-glow" title="Filter to highlighted text target colors">AI target</button>
+        </div>`,
+      },
+      {
+        id: 'xref',
+        label: 'Xref Card',
+        detail: 'Reference card rest, invalid, and hover colors',
+        className: 'theme-preview-xref-card',
+        variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-border-alt', '--hvy-focus', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-shadow', '--hvy-shadow-md'],
+        states: [
+          { id: 'rest', label: 'Rest', variables: ['--hvy-xref-card-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'] },
+          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-focus', '--hvy-shadow-md'] },
+          { id: 'invalid', label: 'Invalid', variables: ['--hvy-xref-card-bg', '--hvy-border-alt', '--hvy-text-muted'] },
+        ],
+        html: `<div class="theme-demo-xref-stack">${xrefPreview}${xrefHoverPreview}${xrefInvalidPreview}</div>`,
+      },
+      {
+        id: 'highlights',
+        label: 'Highlights',
+        detail: 'Search result and xref jump states',
+        className: 'theme-preview-highlight-card',
+        variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
+        states: [
+          { id: 'search', label: 'Search', variables: ['--hvy-highlight-1'] },
+          { id: 'active', label: 'Active', variables: ['--hvy-highlight-2'] },
+          { id: 'jump', label: 'Xref Jump', variables: ['--hvy-button-bg', '--hvy-surface'] },
+        ],
+        html: `<div class="theme-demo-highlight">
+          <button type="button" class="theme-demo-target" data-theme-demo-state="search" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-1" title="Filter to inline highlight colors">Filtered match</button>
+          <button type="button" class="theme-demo-target theme-demo-highlight-active" data-theme-demo-state="active" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-2" title="Filter to active search result colors">active result</button>
+          <button type="button" class="theme-demo-target theme-demo-highlight-jump" data-theme-demo-state="jump" data-action="theme-filter-to-colors" data-theme-filter="--hvy-button-bg --hvy-surface" title="Filter to xref jump flash colors">xref jump</button>
+        </div>`,
+      },
+      {
+        id: 'table',
+        label: 'Table',
+        detail: 'Header and alternating rows',
+        className: 'theme-preview-table-card',
+        variables: ['--hvy-table-header', '--hvy-table-row-bg-1', '--hvy-table-row-bg-2', '--hvy-border-input', '--hvy-text'],
+        states: [
+          { id: 'header', label: 'Header', variables: ['--hvy-table-header', '--hvy-text', '--hvy-border-input'] },
+          { id: 'row-1', label: 'Row 1', variables: ['--hvy-table-row-bg-1', '--hvy-text', '--hvy-border-input'] },
+          { id: 'row-2', label: 'Row 2', variables: ['--hvy-table-row-bg-2', '--hvy-text', '--hvy-border-input'] },
+        ],
+        html: `<div class="theme-demo-table-stack">${tablePreview}${tableRowOnePreview}${tableRowTwoPreview}</div>`,
+      },
+      {
+        id: 'diagnostics',
+        label: 'Diagnostics',
+        detail: 'Reader warnings and raw editor errors',
+        className: 'theme-preview-diagnostics-card',
+        variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-danger', '--hvy-surface', '--hvy-border', '--hvy-text-alt'],
+        states: [
+          { id: 'warning', label: 'Warning', variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text'] },
+          { id: 'error', label: 'Error', variables: ['--hvy-danger', '--hvy-surface', '--hvy-border'] },
+        ],
+        html: `<div class="theme-demo-diagnostics">
+          <button type="button" class="theme-demo-target theme-demo-warning" data-theme-demo-state="warning" data-action="theme-filter-to-colors" data-theme-filter="--hvy-warning-bg --hvy-warning-border --hvy-warning-text" title="Filter to reader warning colors">Warning</button>
+          <button type="button" class="theme-demo-target theme-demo-error" data-theme-demo-state="error" data-action="theme-filter-to-colors" data-theme-filter="--hvy-danger --hvy-surface --hvy-border" title="Filter to raw editor error colors">Error</button>
+        </div>`,
+      },
+      {
+        id: 'code',
+        label: 'Code',
+        detail: 'Text code block and syntax colors',
+        className: 'theme-preview-code-card',
+        variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'],
+        states: [
+          { id: 'block', label: 'Block', variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-border-input'] },
+          { id: 'syntax', label: 'Syntax', variables: ['--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'] },
+        ],
+        html: `${codePreview}${codeSyntaxPreview}`,
+      },
+    ];
+    const previewPicker = previewItems.map((item, index) => `<button
+      type="button"
+      class="theme-component-picker-button${index === 0 ? ' is-active' : ''}"
+      data-action="theme-preview-select-component"
+      data-theme-component="${deps.escapeAttr(item.id)}"
+    >${deps.escapeHtml(item.label)}</button>`).join('');
+    const previewCards = previewItems.map((item, index) => {
+      const filter = item.variables.join(' ');
+      const stateButtons = item.states.map((previewState, stateIndex) => `<button
+        type="button"
+        class="theme-preview-state-button${stateIndex === 0 ? ' is-active' : ''}"
+        data-action="theme-preview-set-state"
+        data-theme-state="${deps.escapeAttr(previewState.id)}"
+        data-theme-filter="${deps.escapeAttr(previewState.variables.join(' '))}"
+      >${deps.escapeHtml(previewState.label)}</button>`).join('');
+      return `<article
+        class="theme-preview-card ${deps.escapeAttr(item.className)}${index === 0 ? ' is-active' : ''}"
+        data-theme-preview-component="${deps.escapeAttr(item.id)}"
+        data-theme-preview-state="${deps.escapeAttr(item.states[0]?.id ?? 'rest')}"
+      >
+        <span class="theme-preview-card-copy">
+          <strong>${deps.escapeHtml(item.label)}</strong>
+          <span>${deps.escapeHtml(item.detail)}</span>
+        </span>
+        <span class="theme-preview-state-row">${stateButtons}</span>
+        ${item.html}
+        <button
+          type="button"
+          class="theme-preview-all"
+          data-action="theme-filter-to-colors"
+          data-theme-filter="${deps.escapeAttr(filter)}"
+          title="${deps.escapeAttr(`Filter to all ${item.label} colors`)}"
+        >All ${deps.escapeHtml(item.label)} colors</button>
+      </article>`;
+    }).join('');
+    const matchedPaletteId = state.paletteOverrideId ?? getMatchedPaletteId(theme.colors);
+    const documentThemeSelected = state.paletteOverrideId === null;
+    const documentPaletteCard = `
+        <article class="theme-palette-card${documentThemeSelected ? ' is-selected' : ''}">
+          <div class="theme-palette-preview theme-palette-preview-document" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="theme-palette-copy">
+            <strong>Document Theme</strong>
+            <span>Use the theme stored in the current HVY file.</span>
+          </div>
+          <button
+            type="button"
+            class="${documentThemeSelected ? 'secondary' : 'ghost'}"
+            data-action="theme-clear-palette-override"
+            aria-pressed="${documentThemeSelected ? 'true' : 'false'}"
+          >${documentThemeSelected ? 'Applied' : 'Apply'}</button>
+        </article>
+      `;
+    const paletteCards = HVY_PALETTES.map((palette) => {
+      const isSelected = matchedPaletteId === palette.id;
+      const previewStyle = [
+        `--palette-preview-bg: ${palette.colors['--hvy-bg'] ?? 'transparent'}`,
+        `--palette-preview-bg-alt: ${palette.colors['--hvy-bg-alt'] ?? palette.colors['--hvy-bg'] ?? 'transparent'}`,
+        `--palette-preview-surface: ${palette.colors['--hvy-surface'] ?? 'transparent'}`,
+        `--palette-preview-text: ${palette.colors['--hvy-text'] ?? 'currentColor'}`,
+        `--palette-preview-accent: ${palette.colors['--hvy-accent-1'] ?? 'currentColor'}`,
+        `--palette-preview-accent-2: ${palette.colors['--hvy-accent-2'] ?? 'currentColor'}`,
+      ].join('; ');
+      return `
+        <article class="theme-palette-card${isSelected ? ' is-selected' : ''}" style="${deps.escapeAttr(previewStyle)}">
+          <div class="theme-palette-preview" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="theme-palette-copy">
+            <strong>${deps.escapeHtml(palette.name)}</strong>
+            <span>${deps.escapeHtml(palette.description)}</span>
+          </div>
+          <button
+            type="button"
+            class="${isSelected ? 'secondary' : 'ghost'}"
+            data-action="theme-apply-palette"
+            data-palette-id="${deps.escapeAttr(palette.id)}"
+            aria-pressed="${isSelected ? 'true' : 'false'}"
+          >${isSelected ? 'Applied' : 'Apply'}</button>
+        </article>
+      `;
+    }).join('');
     const rows = THEME_COLOR_NAMES.map((name) => {
       const isOverridden = overrideNames.has(name);
       const value = isOverridden ? theme.colors[name] : getResolvedThemeColor(name);
+      const resetValue = isOverridden ? getThemeResetColor(name) : '';
       const pickerValue = colorValueToPickerHex(value);
+      const alphaValue = colorValueToAlpha(value);
       return `
-        <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}">
+        <div class="theme-color-row${isOverridden ? ' theme-color-row--override' : ''}" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value}`)}">
           <div class="theme-color-meta">
             <strong>${deps.escapeHtml(getThemeColorLabel(name))}</strong>
             <span class="theme-color-var">${deps.escapeHtml(name)}</span>
@@ -266,10 +1136,26 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             placeholder="CSS color"
             aria-label="${deps.escapeAttr(getThemeColorLabel(name))} color value"
           />
-          <span class="theme-color-swatch" style="${value ? `background: ${deps.escapeAttr(value)};` : ''}" aria-hidden="true"></span>
+          <label class="theme-alpha-control" title="Alpha">
+            <span>A</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              data-field="theme-color-alpha"
+              data-color-name="${deps.escapeAttr(name)}"
+              value="${deps.escapeAttr(String(alphaValue))}"
+              aria-label="${deps.escapeAttr(getThemeColorLabel(name))} alpha"
+            />
+            <output>${deps.escapeHtml(String(Math.round(alphaValue * 100)))}</output>
+          </label>
           ${isOverridden
-            ? `<button type="button" class="ghost" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>`
-            : '<span class="theme-color-default muted">default</span>'}
+            ? `<span class="theme-color-reset-group">
+                <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>
+                <span class="theme-color-reset-swatch" style="${resetValue ? `background: ${deps.escapeAttr(resetValue)};` : ''}" title="${deps.escapeAttr(`Reset value: ${resetValue}`)}" aria-hidden="true"></span>
+              </span>`
+            : '<span class="theme-color-action theme-color-default muted">default</span>'}
         </div>
       `;
     }).join('');
@@ -277,7 +1163,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const customRows = customNames.map((name) => {
       const value = theme.colors[name] ?? '';
       return `
-        <div class="theme-color-row theme-color-row--override">
+        <div class="theme-color-row theme-color-row--override" data-theme-color-name="${deps.escapeAttr(name)}" data-theme-search="${deps.escapeAttr(`${name} ${getThemeColorLabel(name)} ${value} custom`)}">
           <input
             class="theme-color-name"
             data-field="theme-color-name"
@@ -299,20 +1185,41 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }).join('');
     return `
-      <div id="modalRoot" class="modal-root">
-        <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel theme-modal">
+        <section class="theme-modal${options.advanced ? ' theme-modal--advanced' : ''}">
           <div class="modal-head">
             <h3>Theme Colors</h3>
-            <button type="button" data-modal-action="close">Close</button>
+            ${includeModalActions ? '<button type="button" data-modal-action="close">Close</button>' : ''}
           </div>
           <p class="muted">
             Adjust the document theme with a color picker or by typing any valid CSS color value.
             Overrides are saved with the document.
           </p>
+          ${includePalettePicker
+            ? `<div class="theme-palette-grid" aria-label="Theme palettes">
+                ${documentPaletteCard}
+                ${paletteCards}
+              </div>`
+            : ''}
+          <div class="theme-component-preview-picker" aria-label="Theme component preview picker">
+            ${previewPicker}
+          </div>
+          <div class="theme-preview-grid" aria-label="Theme component preview">
+            ${previewCards}
+          </div>
+          <label class="theme-filter-shell">
+            <span>Filter Colors</span>
+            <input
+              type="search"
+              data-field="theme-color-filter"
+              placeholder="Type a token, role, component, or click a preview..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
           <div class="theme-color-list">
             ${rows}
           </div>
+          <div class="theme-filter-empty muted" hidden>No matching theme colors.</div>
           ${customRows
             ? `<div class="theme-custom-section">
                 <div class="theme-custom-head">
@@ -326,8 +1233,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             : ''}
           <div class="link-inline-actions">
             <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
-            <button type="button" class="secondary" data-modal-action="close">Done</button>
+            ${includeModalActions ? '<button type="button" class="secondary" data-modal-action="close">Done</button>' : ''}
           </div>
+        </section>
+    `;
+  }
+
+  function renderThemeModal(): string {
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel">
+          ${renderThemeEditor({
+            advanced: state.themeModalMode === 'advanced',
+            includePalettePicker: true,
+            includeModalActions: true,
+          })}
         </section>
       </div>
     `;
@@ -338,11 +1259,20 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderThemeModal();
     }
     if (state.reusableSaveModal) {
-      const title = state.reusableSaveModal.kind === 'section' ? 'Save As Reusable Section' : 'Save As Reusable Component';
+      const existingName = state.reusableSaveModal.existingName;
+      const title = existingName
+        ? state.reusableSaveModal.kind === 'component' ? 'Update Component Template' : 'Update Section Template'
+        : state.reusableSaveModal.kind === 'section'
+          ? 'Save As Section Template'
+          : 'Save As Component Template';
       const help =
-        state.reusableSaveModal.kind === 'section'
-          ? 'This saves a cloned section template, including its current blocks and nested subsections.'
-          : 'This saves a cloned component template, including pre-filled values and nested children.';
+        existingName
+          ? state.reusableSaveModal.kind === 'component'
+            ? `This component already uses "${deps.escapeHtml(existingName)}". Update that component template, save this component as a new template, or add it as a flavor.`
+            : `This section already uses "${deps.escapeHtml(existingName)}". Update that section template, save this section as a new template, or add it as a flavor.`
+          : state.reusableSaveModal.kind === 'section'
+            ? 'This saves a cloned section template, including its current blocks and nested subsections.'
+            : 'This saves a cloned component template, including pre-filled values and nested children.';
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
@@ -352,13 +1282,145 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <button type="button" data-modal-action="close">Close</button>
             </div>
             <p class="muted">${help}</p>
+            ${existingName
+              ? `<div class="reusable-existing-option">
+                  <div>
+                    <strong>${deps.escapeHtml(existingName)}</strong>
+                    <span>Update the existing ${state.reusableSaveModal.kind === 'component' ? 'component' : 'section'} template definition.</span>
+                  </div>
+                  <button type="button" class="secondary" data-modal-action="update-reusable">Update Existing</button>
+                </div>`
+              : ''}
             <label>
-              <span>Name</span>
+              <span>${existingName ? 'New Name' : 'Name'}</span>
               <input id="reusableNameInput" value="${deps.escapeAttr(state.reusableSaveModal.draftName)}" placeholder="Callout, Pricing Table, FAQ Section..." autofocus />
             </label>
+            ${existingName
+              ? `<label>
+                  <span>Flavor Description</span>
+                  <textarea id="reusableFlavorDescriptionInput" rows="3" placeholder="Describe when this flavor should be used."></textarea>
+                </label>`
+              : ''}
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-              <button type="button" class="secondary" data-modal-action="save-reusable">Save Reusable</button>
+              ${existingName ? '<button type="button" class="ghost" data-modal-action="add-reusable-flavor">Add Flavor</button>' : ''}
+              <button type="button" class="${existingName ? 'ghost' : 'secondary'}" data-modal-action="save-reusable">${existingName ? 'Save As New' : 'Save Template'}</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.reusableTemplateModal) {
+      const definition = getComponentDefsFromMeta(state.documentMeta).find((item) => item.name === state.reusableTemplateModal?.component);
+      const variables = extractReusableTemplateVariablesFromDefinition(definition);
+      const modalTitle = `Add ${humanizeComponentName(state.reusableTemplateModal.component)}`;
+      let hasUnavailablePicker = false;
+      let hasTargetPicker = false;
+      const fields = variables.map((variable) => {
+        const id = `reusableTemplateValue_${variable.name}`;
+        const label = deps.escapeHtml(variable.label);
+        const xrefTargetTagFilter = getTemplateVariableXrefTargetTagFilter(definition, variable.name);
+        const outputGenerator = variable.generator ? getOutputGenerator(variable.generator) : null;
+        const generatorButton = outputGenerator
+          ? `<button
+              type="button"
+              class="ghost template-generator-button"
+              data-modal-action="run-template-generator"
+              data-template-generator="${deps.escapeAttr(outputGenerator.key)}"
+              data-template-variable-target="${deps.escapeAttr(variable.name)}"
+              data-required-variables="${deps.escapeAttr((outputGenerator.requiredVariables ?? []).join(','))}"
+              aria-label="${deps.escapeAttr(variable.generatorLabel || outputGenerator.label || 'Generate')}"
+              disabled
+            >${deps.escapeHtml(variable.generatorLabel || outputGenerator.label || 'Generate')}</button>`
+          : '';
+        const status = outputGenerator
+          ? `<span class="template-generator-status" data-template-generator-status="${deps.escapeAttr(variable.name)}"></span>`
+          : '';
+        const labelHead = `<span class="template-field-label-row"><span>${label}</span>${generatorButton}</span>`;
+        if (xrefTargetTagFilter) {
+          hasTargetPicker = true;
+          const targetOptions = deps.getComponentRenderHelpers().getXrefTargetOptions(xrefTargetTagFilter);
+          if (targetOptions.length === 0) {
+            hasUnavailablePicker = true;
+          }
+          return `<label class="template-target-picker">
+              ${labelHead}
+              <input
+                id="${deps.escapeAttr(id)}"
+                data-template-variable="${deps.escapeAttr(variable.name)}"
+                list="${deps.escapeAttr(`${id}_targets`)}"
+                placeholder="${targetOptions.length === 0 ? 'No targets available' : 'Type or pick a target'}"
+                ${targetOptions.length === 0 ? 'disabled' : ''}
+              />
+              <datalist id="${deps.escapeAttr(`${id}_targets`)}">
+                ${targetOptions.map((option) => `<option value="${deps.escapeAttr(option.value)}" label="${deps.escapeAttr(option.label)}">${deps.escapeHtml(option.label)}</option>`).join('')}
+              </datalist>
+              ${status}
+              ${targetOptions.length === 0 ? `<p class="template-picker-empty">No ${deps.escapeHtml(xrefTargetTagFilter)} targets available yet.</p>` : ''}
+            </label>`;
+        }
+        return variable.type === 'block'
+          ? `<label>
+              ${labelHead}
+              <textarea id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" rows="5"></textarea>
+              ${status}
+            </label>`
+          : `<label>
+              ${labelHead}
+              <input id="${deps.escapeAttr(id)}" data-template-variable="${deps.escapeAttr(variable.name)}" />
+              ${status}
+            </label>`;
+      }).join('');
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal reusable-template-modal ${hasTargetPicker ? 'template-picker-modal' : ''}">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(modalTitle)}</h3>
+              <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
+            </div>
+            <div class="modal-field-stack">
+              ${fields}
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="insert-reusable-template" ${hasUnavailablePicker ? 'disabled' : ''}>Add</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.sectionTemplateFlavorModal) {
+      const definition = getSectionDefsFromMeta(state.documentMeta).find((item) => item.name === state.sectionTemplateFlavorModal?.templateName);
+      const flavors = (definition?.flavors ?? []).filter((flavor) => flavor.name.trim().length > 0 && !!flavor.template);
+      if (!definition || flavors.length === 0) {
+        return '';
+      }
+      const modalTitle = `Choose ${definition.name} Flavor`;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal section-template-flavor-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(modalTitle)}</h3>
+              <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
+            </div>
+            <p class="muted">Pick the section structure to insert.</p>
+            <div class="section-template-flavor-list">
+              ${flavors.map((flavor) => `
+                <button type="button" class="section-template-flavor-option" data-modal-action="choose-section-template-flavor" data-section-template-name="${deps.escapeAttr(definition.name)}" data-section-template-flavor="${deps.escapeAttr(flavor.name)}">
+                  <span class="section-template-flavor-name">${deps.escapeHtml(flavor.name)}</span>
+                  ${flavor.description?.trim()
+                    ? `<span class="section-template-flavor-description">${deps.escapeHtml(flavor.description.trim())}</span>`
+                    : '<span class="section-template-flavor-description muted">No description.</span>'
+                  }
+                </button>
+              `).join('')}
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close">Cancel</button>
             </div>
           </section>
         </div>
@@ -384,9 +1446,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
                   data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
                   aria-pressed="${block.schema.lock ? 'true' : 'false'}"
-                  title="${block.schema.lock ? 'Locked' : 'Unlocked'}"
-                  aria-label="${block.schema.lock ? 'Locked' : 'Unlock'}"
-                >${block.schema.lock ? '🔒 Locked' : '🔓 Unlock'}</button>
+                  title="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                  aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
                 <button type="button" data-modal-action="close">Close</button>
               </div>
             </div>
@@ -504,10 +1566,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 ? `<div class="sqlite-row-component-modal-stack">
                     ${attachedBlocks.map((block) => deps.renderEditorBlock(rowModal.sectionKey, block)).join('')}
                   </div>
-                  <article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                  <div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     rowModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select
@@ -519,16 +1581,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         ${deps.renderComponentOptions(state.addComponentBySection[addKey] ?? '')}
                       </select>
                     </label>
-                  </article>
+                  </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                     <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
                     <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
                   </div>`
-                : `<article class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                : `<div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
                     state.sqliteRowComponentModal.sectionKey
                   )}">
-                    <div class="ghost-plus-big"><span>+</span></div>
+                    <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
                       <select
@@ -540,7 +1602,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         ${deps.renderComponentOptions(state.addComponentBySection[addKey] ?? '')}
                       </select>
                     </label>
-                  </article>
+                  </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                   </div>`
@@ -549,7 +1611,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
                 ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
                     .map(
-                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.customCss))}">
+                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}">
                         ${renderReaderBlock(section, block)}
                       </div>`
                     )
@@ -589,9 +1651,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 data-modal-action="toggle-section-lock"
                 data-section-key="${deps.escapeAttr(section.key)}"
                 aria-pressed="${section.lock ? 'true' : 'false'}"
-                title="${section.lock ? 'Unlock schema' : 'Lock schema'}"
-                aria-label="${section.lock ? 'Unlock schema' : 'Lock schema'}"
-              >${section.lock ? '🔒 Unlock Schema' : '🔓 Lock Schema'}</button>
+                title="${section.lock ? 'Unlock' : 'Lock'}"
+                aria-label="${section.lock ? 'Unlock' : 'Lock'}"
+              >${section.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
               <button type="button" data-modal-action="close">Close</button>
             </div>
           </div>
@@ -608,7 +1670,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </label>
             <label>
               <span>Style via CSS</span>
-              <textarea id="modalCssInput">${deps.escapeHtml(section.customCss)}</textarea>
+              <textarea id="modalCssInput">${deps.escapeHtml(section.css)}</textarea>
             </label>
             <label>
               <span>Tags</span>
@@ -620,14 +1682,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               )}
             </label>
             <label>
-              <span>Description</span>
+              <span class="description-label-with-action">Description${
+                section.description.trim()
+                  ? ''
+                  : ` <button type="button" class="ghost inline-generate-description" data-action="generate-section-description" data-section-key="${deps.escapeAttr(section.key)}">Generate</button>`
+              }</span>
               <textarea
                 rows="3"
                 data-section-key="${deps.escapeAttr(section.key)}"
                 data-field="section-description"
               >${deps.escapeHtml(section.description)}</textarea>
             </label>
-            <div style="display: flex;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
               <label class="checkbox-label">
                 <input
                   type="checkbox"
@@ -636,6 +1702,42 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${section.contained ? 'checked' : ''}
                 />
                 Contained
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-highlight"
+                  ${section.highlight ? 'checked' : ''}
+                />
+                Highlight
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-priority"
+                  ${section.priority ? 'checked' : ''}
+                />
+                Priority
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-editor-only"
+                  ${section.editorOnly ? 'checked' : ''}
+                />
+                Editor Only
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  data-section-key="${deps.escapeAttr(section.key)}"
+                  data-field="section-exclude-from-import"
+                  ${section.exclude_from_import ? 'checked' : ''}
+                />
+                Exclude From Import
               </label>
             </div>
           </div>
@@ -680,12 +1782,42 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       .join('');
   }
 
+  function getTemplateVariableXrefTargetTagFilter(definition: ComponentDefinition | undefined, variableName: string): string {
+    const schema = definition?.template?.schema ?? definition?.schema;
+    const target = schema?.xrefTarget ?? '';
+    if (!schema || !target || !templateStringContainsVariable(target, variableName)) {
+      return '';
+    }
+    return schema.xrefTargetTagFilter.trim();
+  }
+
+  function templateStringContainsVariable(value: string, variableName: string): boolean {
+    const escaped = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`{%\\s*${escaped}\\s*(?:\\|\\s*(?:text|block)\\s*)?%}`).test(value);
+  }
+
+  function humanizeComponentName(name: string): string {
+    return name
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
   return {
     renderNavigation,
     renderReaderSections,
     renderSidebarSections,
+    renderSidebarHelpBalloon,
     renderReaderSection,
     renderReaderBlock,
+    renderReaderBlocks,
+    renderReaderListBlocks,
+    orderReaderBlocks,
+    orderReaderListBlocks,
+    isReaderViewPrioritizedBlock,
+    renderThemeEditor,
     renderModal,
     renderLinkInlineModal,
     renderWarnings,

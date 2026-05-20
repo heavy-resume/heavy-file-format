@@ -1,11 +1,15 @@
 import { expect, test } from 'vitest';
 
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
+import { createEmptyBlock } from '../src/document-factory';
+import { resolveBaseComponentFromMeta } from '../src/component-defs';
+import { visitBlocks } from '../src/section-ops';
+import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
 
-test('deserializes nested expandable slot children and part locks', () => {
+test('deserializes nested expandable slot children', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -15,7 +19,7 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
     ## Summary
@@ -30,12 +34,87 @@ hvy_version: 0.1
   const block = document.sections[0]?.blocks[0];
 
   expect(block.schema.component).toBe('expandable');
-  expect(block.schema.expandableStubBlocks.lock).toBe(true);
+  expect(block.schema.expandableStubBlocks.lock).toBe(false);
   expect(block.schema.expandableStubBlocks.children).toHaveLength(1);
   expect(block.schema.expandableStubBlocks.children[0]?.schema.component).toBe('text');
   expect(block.schema.expandableStubBlocks.children[0]?.text).toBe('## Summary');
   expect(block.schema.expandableContentBlocks.children).toHaveLength(1);
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
+});
+
+test('deserializes reusable section definitions and section template keys', () => {
+  const input = `---
+hvy_version: 0.1
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      exclude_from_import: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      title: Resume Section
+      level: 1
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true}-->
+#! Projects
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.templateKey).toBe('resume-projects');
+  expect(document.sections[0]?.exclude_from_import).toBe(true);
+  expect(document.meta.section_defs?.[0]?.key).toBe('resume-projects');
+  expect(document.meta.section_defs?.[0]?.template.customId).toBe('projects');
+  expect(document.meta.section_defs?.[0]?.template.exclude_from_import).toBe(true);
+  expect(document.meta.section_defs?.[0]?.template.blocks[0]?.text).toBe('# Projects');
+  expect(document.meta.section_defs?.[1]?.repeatable).toBe(true);
+  expect(document.meta.section_defs?.[1]?.templateVariables?.section_title?.label).toBe('Section title');
+});
+
+test('ignores expandable slot lock metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {"lock":true}-->
+
+   <!--hvy:text {}-->
+    ## Summary
+
+  <!--hvy:expandable:content {"lock":true}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block.schema.expandableStubBlocks.lock).toBe(false);
+  expect(block.schema.expandableContentBlocks.lock).toBe(false);
 });
 
 test('deserializes grid text without preserving structural indentation as code indentation', () => {
@@ -66,6 +145,24 @@ hvy_version: 0.1
   expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
 });
 
+test('empty grids do not automatically create text items', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.component).toBe('grid');
+  expect(grid?.schema.gridItems).toHaveLength(0);
+});
+
 test('deserializes fenced code while removing outer structural indentation', () => {
   const input = `---
 hvy_version: 0.1
@@ -85,6 +182,55 @@ hvy_version: 0.1
   expect(document.sections[0]?.blocks[0]?.text).toBe('```ts\n  const answer = 42;\n```');
 });
 
+test('deserializes escaped fenced code markers as Markdown fences', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {"id":"import-example-result","css":"margin: 0.5rem 0;"}-->
+  \\\`\`\`json
+
+  {"id":"import-example-result","css":"margin: 0.5rem 0;"}
+
+  \\\`\`\`
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.text).toBe(
+    '```json\n\n{"id":"import-example-result","css":"margin: 0.5rem 0;"}\n\n```'
+  );
+});
+
+test('does not treat hvy directive examples inside fenced code as components', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"snippet"}-->
+#! Snippet
+
+ <!--hvy:text {"id":"example"}-->
+  \`\`\`hvy
+  <!--hvy:text {"id":"import-example-result"}-->
+   Import example result: pending
+  \`\`\`
+
+  This is:
+  Import example result: pending
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+
+  expect(document.sections[0]?.blocks).toHaveLength(1);
+  expect(document.sections[0]?.blocks[0]?.schema.id).toBe('example');
+  expect(document.sections[0]?.blocks[0]?.text).toContain('<!--hvy:text {"id":"import-example-result"}-->');
+  expect(document.sections[0]?.blocks[0]?.text).toContain('This is:\nImport example result: pending');
+});
+
 test('deserializes reader_max_width from document front matter', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -101,24 +247,42 @@ reader_max_width: 60rem
   expect(document.meta.reader_max_width).toBe('60rem');
 });
 
+test('defaults reader_max_width for imported HVY without an explicit value', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.reader_max_width).toBe('60rem');
+  expect(document.meta.section_defaults).toEqual({
+    css: 'margin: 0 0 0.5rem;',
+  });
+});
+
 test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
 
   expect(block?.schema.component).toBe('plugin');
-  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
+  expect(block?.schema.plugin).toBe('hvy.db-table');
   expect(block?.schema.pluginConfig).toEqual({
     source: 'with-file',
     table: 'work_items',
@@ -129,15 +293,15 @@ test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
   const prefix = `---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
-<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:tail {"id":"db","plugin":"hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->
 --HVY-TAIL--
 `;
   const prefixBytes = new TextEncoder().encode(prefix);
@@ -151,7 +315,7 @@ plugins:
   expect(document.attachments).toHaveLength(1);
   expect(document.attachments[0]?.id).toBe('db');
   expect(document.attachments[0]?.meta).toEqual({
-    plugin: 'dev.heavy.db-table',
+    plugin: 'hvy.db-table',
     mediaType: 'application/vnd.sqlite3',
     encoding: 'gzip',
   });
@@ -177,7 +341,7 @@ section_defaults:
   });
 });
 
-test('deserializes expandable stub and content css fields', () => {
+test('deserializes expandable stub and content meta fields', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -187,12 +351,12 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->
 
    <!--hvy:text {}-->
     Content
@@ -202,7 +366,9 @@ hvy_version: 0.1
   const block = document.sections[0]?.blocks[0];
 
   expect(block.schema.expandableStubCss).toBe('padding: 0.25rem 0;');
+  expect(block.schema.expandableStubDescription).toBe('Collapsed summary row');
   expect(block.schema.expandableContentCss).toBe('margin-top: 0.5rem;');
+  expect(block.schema.expandableContentDescription).toBe('Detailed body');
 });
 
 test('deserializes uncontained section metadata', () => {
@@ -210,7 +376,7 @@ test('deserializes uncontained section metadata', () => {
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","contained":false,"css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:text {}-->
@@ -221,7 +387,7 @@ hvy_version: 0.1
   const section = document.sections[0];
 
   expect(section?.contained).toBe(false);
-  expect(section?.customCss).toBe('padding: 0 0.35rem;');
+  expect(section?.css).toBe('padding: 0 0.35rem;');
 });
 
 test('deserializes custom expandable components nested under component-list slots', () => {
@@ -272,6 +438,44 @@ component_defs:
   expect(record.schema.expandableStubBlocks.children[0]?.text).toBe('Software Engineering');
   expect(record.schema.expandableContentBlocks.children).toHaveLength(1);
   expect(record.schema.expandableContentBlocks.children[0]?.text).toBe('Description body');
+});
+
+test('reusable expandable components inherit slot css from component defs', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: education-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Description
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+`;
+
+  state.document = deserializeDocument(input, '.hvy');
+
+  const record = createEmptyBlock('education-record');
+
+  expect(record.schema.component).toBe('education-record');
+  expect(record.schema.expandableContentCss).toBe('padding: 0.5rem;');
+  expect(record.schema.expandableContentBlocks.children[0]?.schema.placeholder).toBe('Description');
 });
 
 test('deserializes component-list slot order separately from file order', () => {
@@ -326,29 +530,78 @@ test('resume education record keeps C/C++ inside the education tools list', asyn
   expect(skillsToolsBlock).toBeTruthy();
   expect(skillsToolsBlock!.schema.gridItems).toHaveLength(2);
 
-  const toolsList = skillsToolsBlock!.schema.gridItems[1]?.block;
+  const toolsContainer = skillsToolsBlock!.schema.gridItems[1]?.block;
+  const toolsList = toolsContainer?.schema.containerBlocks?.find((block) => block.schema.component === 'component-list');
   expect(toolsList?.schema.component).toBe('component-list');
 
   const toolTitles = toolsList!.schema.componentListBlocks
-    .filter((block) => block.schema.component === 'xref-card')
+    .filter((block) => resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'xref-card')
     .map((block) => block.schema.xrefTitle);
 
   expect(toolTitles).toContain('Python');
   expect(toolTitles).toContain('C/C++');
 });
 
+test('resume example keeps filled tool records aligned with the resume template type', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.hvy', 'utf8');
+  const document = deserializeDocument(input, '.hvy');
+  const toolsSection = document.sections.find((section) => section.customId === 'tools-technologies');
+
+  expect(toolsSection).toBeTruthy();
+  const toolsList = toolsSection!.blocks.find((block) => resolveBaseComponentFromMeta(block.schema.component, document.meta) === 'component-list');
+
+  expect(toolsList?.schema.componentListComponent).toBe('tool-tech-record');
+  expect(toolsList?.schema.componentListItemLabel).toBe('tool / technology');
+  expect(toolsList?.schema.componentListBlocks.map((block) => block.schema.component)).toEqual([
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+    'tool-tech-record',
+  ]);
+});
+
+test('resume reciprocal xref script generates reusable source xref card types', async () => {
+  const fs = await import('node:fs/promises');
+  for (const path of ['examples/resume.hvy', 'examples/resume.thvy']) {
+    const input = await fs.readFile(path, 'utf8');
+    const document = deserializeDocument(input, path.endsWith('.thvy') ? '.thvy' : '.hvy');
+    let script = '';
+    visitBlocks(document.sections, (block) => {
+      if (block.schema.id === 'sync-reciprocal-xrefs') {
+        script = block.text;
+      }
+    });
+
+    expect(script, path).toContain('TARGET_TAGS = ["skill", "tool"]');
+    expect(script, path).toContain('record.has_tag(tag)');
+    expect(script, path).not.toContain('TARGET_COMPONENTS');
+    expect(script, path).toContain('source.component.endswith("-record")');
+    expect(script, path).toContain('source.component[:-len("-record")] + "-xref-card"');
+    expect(script, path).toContain('cards.set("componentListComponent", card_component)');
+    expect(script, path).toContain('card = cards.append_child(card_component, None, "", "component-list")');
+    expect(script, path).not.toContain('SOURCE_XREF_COMPONENTS');
+    expect(script, path).not.toContain('safe_id');
+    expect(script, path).not.toContain('card.set("id"');
+    expect(script, path).not.toContain('cards.set("componentListComponent", "xref-card")');
+  }
+});
+
 test('deserializes db-table query text from the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -356,7 +609,7 @@ plugins:
 
   const block = document.sections[0]?.blocks[0];
 
-  expect(block?.schema.plugin).toBe('dev.heavy.db-table');
+  expect(block?.schema.plugin).toBe('hvy.db-table');
   expect(block?.schema.pluginConfig).toEqual({
     source: 'with-file',
     table: 'work_items',
@@ -368,14 +621,14 @@ test('deserializes db-table query window settings from plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
  SELECT company FROM work_items
 `, '.hvy');
 
@@ -432,7 +685,7 @@ Stub only`);
   );
 });
 
-test('expandable missing stub or content reports errors with concise hints', () => {
+test('expandable missing content reports an error while allowing an empty stub', () => {
   const result = deserializeDocumentWithDiagnostics(`---
 hvy_version: 0.1
 ---
@@ -453,6 +706,13 @@ hvy_version: 0.1
       expect.objectContaining({
         severity: 'error',
         code: 'expandable_missing_content',
+      }),
+    ])
+  );
+  expect(result.diagnostics).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'expandable_missing_stub',
       }),
     ])
   );

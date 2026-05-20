@@ -1,10 +1,65 @@
 ---
 hvy_version: 0.1
-template: true
-title: Resume Template
+title: Resume
 reader_max_width: 60rem
+ai-context: >-
+  This is a resume document. Use the top-skills-tools-technologies section for featured
+  reference cards only; the skills and tools-technologies sidebar sections
+  are the main reusable libraries for detailed reference records. Add the Languages
+  section template only when human language content exists. History and education
+  have body sections with structured component-lists for expandable record rows.
+  Projects, publications, awards, certifications, and languages are section templates
+  that should be added only when source-backed content exists. Keep dated main-section
+  records in reverse chronological order with newest entries first. History should use
+  one expandable record per organization when roles are contiguous; put promotions,
+  title changes, or adjacent date ranges at the same organization inside that single
+  expanded record instead of creating duplicate organization rows. Use the tableform
+  History section flavor for longer histories with more items, and the linear History
+  section flavor for shorter histories. One project,
+  publication, certification, degree, skill, or tool should usually be represented as
+  one expandable reusable record. Local skills/tools lists inside history, project,
+  publication, certification, award, and education records are supporting references
+  and should not be treated as the main libraries.
+ai-import-guidance: >-
+  During resume import, map source-backed awards into the Awards section
+  template even when the source mentions awards inside work history, projects,
+  education, summaries, or other prose instead of providing an explicit Awards heading.
+  Treat those mentions as award-record items when they identify a distinct award,
+  recognition, honor, finalist placement, prize, or equivalent accolade. Do not create
+  Awards when the source has no distinct source-backed award-like item.
+  Any sort of job goes under professional history.
+  A skill is something you do. For example, programming.
+  Prefix skill IDs with skill- and tool ids with tool-.
+  A tool / technology is something you use and would have experience with. Such as
+  a programming language, machinery, etc.
+  The Languages section is only for human languages someone can speak, read, write,
+  or otherwise communicate in. Programming languages are tools / technologies, not
+  Languages section entries.
+  Always write both sections of the summary - the short version and a longer version
+  that's usually bullet points of highlights. For dates, use numeric formatting (mm/dd/YY or mm/YY)
+  Do not create a redundant skills and tools & technology section. Do not feel obligated to create additional sections.
+importPreplan:
+  - [header, summary, locations]
+  - [skills, tools-technologies, resume-languages, top-skills-tools-technologies]
+  - [history, resume-awards]
+  - [resume-projects, resume-publications]
+  - [resume-certifications, education]
+  - [resume-languages, tabular-resume-section]
 section_defaults:
   css: "margin: 0.5rem 0;"
+text_line_styles:
+  panel-heading:
+    label: Panel heading
+    css: "margin: 0 0 0.25rem;"
+  section-heading:
+    label: Section heading
+    css: "margin: 0.5rem 0 0.25rem;"
+  detail-heading:
+    label: Detail heading
+    css: "margin: 0.4rem 0 0.1rem;"
+  detail-body:
+    label: Detail body
+    css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
 theme:
   colors:
     --hvy-bg: "#f5f9ff"
@@ -29,6 +84,7 @@ theme:
     --hvy-border-alt: "#b8c8d3"
     --hvy-border-input: "#c8d4dd"
     --hvy-border-translucent: "rgba(206, 217, 226, 0.92)"
+    --hvy-ghost-border: "rgba(107, 143, 160, 0.38)"
     --hvy-xref-card-bg: "#f3f5f8"
     --hvy-xref-card-hover-bg: "#eef8fb"
     --hvy-table-header: "#e5e7eb"
@@ -47,30 +103,586 @@ theme:
     --hvy-success: "#1c6231"
     --hvy-success-bg: "#e7f9ee"
     --hvy-success-border: "#95d8a9"
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      lock: true
+      description: Project portfolio
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PROJECT
+              - DATES
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Project table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: project-record
+            componentListItemLabel: project
+            tags: project
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PROJECT
+                  - DATES
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Project table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter project lists
+        template:
+          id: projects
+          title: Projects
+          level: 1
+          lock: true
+          description: Project portfolio
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Projects"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: project-linear-record
+                componentListItemLabel: project
+                tags: project
+                componentListBlocks: []
+          children: []
+  - name: Publications
+    key: resume-publications
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      lock: true
+      description: Publications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - PUBLICATION
+              - PUBLISHER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Publication table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns:
+                  - PUBLICATION
+                  - PUBLISHER
+                  - DATE
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: Publication table header
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter publication lists
+        template:
+          id: publications
+          title: Publications
+          level: 1
+          lock: true
+          description: Publications
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Publications"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: publication-linear-record
+                componentListItemLabel: publication
+                tags: publication
+                componentListBlocks: []
+          children: []
+  - name: Awards
+    key: resume-awards
+    template:
+      id: awards
+      title: Awards
+      level: 1
+      lock: true
+      description: Awards
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Awards"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - AWARD
+              - ISSUER
+              - DATE
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Award table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: award-record
+            componentListItemLabel: award
+            tags: award
+            componentListBlocks: []
+      children: []
+  - name: Certifications
+    key: resume-certifications
+    template:
+      id: certifications
+      title: Certifications
+      level: 1
+      lock: false
+      description: Certifications
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Certifications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns:
+              - "<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->"
+              - GIVEN BY
+              - OBTAINED
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: Certification table header
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: certification-record
+            componentListItemLabel: certification
+            tags: certification
+            componentListBlocks: []
+      children: []
+  - name: Languages
+    key: resume-languages
+    template:
+      id: languages
+      title: Languages
+      level: 1
+      lock: false
+      expanded: false
+      location: sidebar
+      description: Spoken and written languages information
+      hideIfUnmodified: true
+      tags: languages
+      blocks:
+        - text: "# Languages"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: language-record
+            componentListItemLabel: language
+            tags: language
+            componentListBlocks: []
+      children: []
+  - name: Tabular Resume Section
+    key: tabular-resume-section
+    repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+      row_label:
+        label: Row label
+      row_summary:
+        label: Row summary
+      row_details:
+        label: Row details
+    template:
+      title: Tabular Resume Section
+      level: 1
+      lock: false
+      description: An additional resume section with a table with expandable rows.
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# {% section_title %}"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+            placeholder: "# Section title"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0;"
+            lock: false
+            tableColumns: ["ITEM", "SUMMARY"]
+            tableShowHeader: true
+            tableRows: []
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: resume-section-row
+            componentListItemLabel: row
+            componentListBlocks:
+              - text: ""
+                schema:
+                  component: expandable
+                  css: "margin: 0;"
+                  expandableAlwaysShowStub: true
+                  expandableExpanded: false
+                  expandableStubBlocks:
+                    children:
+                      - text: ""
+                        schema:
+                          component: table
+                          css: "margin: 0; margin-top: -1px;"
+                          tableColumns: ["ITEM", "SUMMARY"]
+                          tableShowHeader: false
+                          tableRows:
+                            - cells: ["{% row_label %}", "{% row_summary %}"]
+                  expandableContentBlocks:
+                    css: "padding: 0.5rem;"
+                    children:
+                      - text: "^section-heading^ ### {% row_label %}\n{% row_details | block %}"
+                        schema:
+                          component: text
+                          placeholder: "Row details"
+                          css: "margin: 0;"
+                      - text: "Delete this starter row if it is not needed."
+                        schema:
+                          component: text
+                          editorOnly: true
+                          css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
+      children: []
+  - name: History
+    key: resume-history
+    repeatable: false
+    template:
+      id: history
+      title: Professional History
+      level: 1
+      lock: true
+      description: Work history
+      hideIfUnmodified: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Professional History"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+            tableShowHeader: true
+            tableRows: []
+            lock: true
+            description: History table header
+        - text: ""
+          schema:
+            id: history-list
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: history-record
+            componentListItemLabel: job
+            tags: history
+            componentListBlocks: []
+      children: []
+    flavors:
+      - name: tableform
+        description: Preferred for longer histories (4 or more)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                component: table
+                css: "margin: 0.5rem 0 0;"
+                tags: table-header
+                tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+                tableShowHeader: true
+                tableRows: []
+                lock: true
+                description: History table header
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks: []
+          children: []
+      - name: linear
+        description: Preferred for shorter histories (3 or less)
+        template:
+          id: history
+          title: Professional History
+          level: 1
+          lock: true
+          description: Work history
+          hideIfUnmodified: true
+          tags: reciprocal-xref-source
+          blocks:
+            - text: "# Professional History"
+              schema:
+                component: text
+                css: "margin: 0.5rem 0;"
+            - text: ""
+              schema:
+                id: history-list
+                component: component-list
+                css: "margin: 0;"
+                componentListComponent: history-linear-record
+                componentListItemLabel: job
+                tags: history
+                componentListBlocks: []
+          children: []
 component_defs:
-  - name: history-record
+  - name: resume-section-row
     baseType: expandable
-    description: Expandable resume history record
+    description: Generic resume section table row
     schema:
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;"
-              tableColumns: "YEAR, ORGANIZATION, TITLE"
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["ITEM", "SUMMARY"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", "", ""]
+                - cells: ["", ""]
       expandableContentBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
+            schema:
+              component: text
+              placeholder: "Row details"
+              css: "margin: 0;"
+          - text: "Delete this starter row if it is not needed."
+            schema:
+              component: text
+              editorOnly: true
+              css: "margin: 0.35rem 0 0; color: var(--hvy-text-muted); font-style: italic;"
+  - name: skill-xref-card
+    baseType: xref-card
+    description: Skill reference
+    schema:
+      xrefTargetTagFilter: skill
+      css: "margin: 0.25rem 0;"
+  - name: tool-tech-xref-card
+    baseType: xref-card
+    description: Tool / technology reference
+    schema:
+      xrefTargetTagFilter: tool
+      css: "margin: 0.25rem 0;"
+  - name: history-xref-card
+    baseType: xref-card
+    description: Work history reference
+    schema:
+      xrefTargetTagFilter: history
+      css: "margin: 0.25rem 0;"
+  - name: education-xref-card
+    baseType: xref-card
+    description: Education reference
+    schema:
+      xrefTargetTagFilter: education
+      css: "margin: 0.25rem 0;"
+  - name: award-xref-card
+    baseType: xref-card
+    description: Award reference
+    schema:
+      xrefTargetTagFilter: award
+      css: "margin: 0.25rem 0;"
+  - name: language-xref-card
+    baseType: xref-card
+    description: Language reference
+    schema:
+      xrefTargetTagFilter: language
+      css: "margin: 0.25rem 0;"
+  - name: certification-xref-card
+    baseType: xref-card
+    description: Certification reference
+    schema:
+      xrefTargetTagFilter: certification
+      css: "margin: 0.25rem 0;"
+  - name: publication-xref-card
+    baseType: xref-card
+    description: Publication reference
+    schema:
+      xrefTargetTagFilter: publication
+      css: "margin: 0.25rem 0;"
+  - name: project-xref-card
+    baseType: xref-card
+    description: Project reference
+    schema:
+      xrefTargetTagFilter: project
+      css: "margin: 0.25rem 0;"
+  - name: history-record
+    baseType: expandable
+    description: Work history organization entry
+    templateVariables:
+      role:
+        label: Role / Title
+      date_range:
+        label: Dates
+      accomplishments:
+        label: Accomplishments
+    schema:
+      tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["TITLE", "<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->", "DATES"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% role %}", "{% organization %}", "{% date_range %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: "{% organization %}"
             schema:
               component: text
               placeholder: Organization
@@ -83,42 +695,108 @@ component_defs:
               gridItems:
                 - id: history-location
                   block:
-                    text: ""
+                    text: "{% location %}"
                     schema:
                       component: text
                       placeholder: location
                       css: "margin: 0;"
                 - id: history-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       placeholder: date range
                       css: "margin: 0; text-align: right;"
-          - text: ""
+          - text: "{% role %}"
             schema:
               component: text
               placeholder: job title
               css: "margin: 0.35rem 0; font-weight: 700;"
-          - text: ""
+          - text: "{% description | block %}"
             schema:
               component: text
               placeholder: description
               css: "margin: 0.35rem 0;"
-          - text: "#### Accomplishments"
+          - text: "^section-heading^ #### Accomplishments"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
+          - text: "{% accomplishments | block %}"
+            schema:
+              component: text
+              placeholder: accomplishments
+              css: "margin: 0;"
+          - component: skills-and-tools-tech-list
+  - name: history-linear-record
+    baseType: expandable
+    description: Work history organization entry with an empty collapsed stub for linear history sections
+    templateVariables:
+      role:
+        label: Role / Title
+      date_range:
+        label: Dates
+      accomplishments:
+        label: Accomplishments
+    schema:
+      tags: history
+      xrefTitle: "{% role %}"
+      xrefDetail: "{% organization %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: "{% organization %}"
+            schema:
+              component: text
+              placeholder: Organization
+              css: "margin: 0 0 0.35rem;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
+              component: grid
+              css: "margin: 0.35rem 0;"
+              gridColumns: 2
+              gridItems:
+                - id: history-location
+                  block:
+                    text: "{% location %}"
+                    schema:
+                      component: text
+                      placeholder: location
+                      css: "margin: 0;"
+                - id: history-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      placeholder: date range
+                      css: "margin: 0; text-align: right;"
+          - text: "{% role %}"
+            schema:
+              component: text
+              placeholder: job title
+              css: "margin: 0.35rem 0; font-weight: 700;"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              placeholder: description
+              css: "margin: 0.35rem 0;"
+          - text: "^section-heading^ #### Accomplishments"
+            schema:
+              component: text
               css: "margin: 0;"
-              componentListBlocks: []
+          - text: "{% accomplishments | block %}"
+            schema:
+              component: text
+              placeholder: accomplishments
+              css: "margin: 0;"
           - component: skills-and-tools-tech-list
   - name: skills-and-tools-tech-list
     baseType: grid
-    description: Two-column skills and tools list
+    description: Related skills and tools
     schema:
       css: "margin: 0.5rem 0 0;"
       gridColumns: 2
@@ -128,49 +806,65 @@ component_defs:
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
-                - text: "#### Relevant Skills"
+              containerBlocks:
+                - text: "^panel-heading^ #### Relevant Skills"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: skill-xref-card
+                    componentListItemLabel: skill reference
+                    css: "margin: 0;"
+                    componentListBlocks: []
         - id: tools-technologies
           align: center
           block:
             text: ""
             schema:
-              component: component-list
-              componentListComponent: xref-card
+              component: container
               css: "margin: 0;"
-              componentListBlocks:
-                - text: "#### Tools and Technologies"
+              containerBlocks:
+                - text: "^panel-heading^ #### Tools and Technologies"
                   schema:
                     component: text
-                    css: "margin: 0 0 0.25rem;"
+                    css: "margin: 0;"
+                - text: ""
+                  schema:
+                    component: component-list
+                    componentListComponent: tool-tech-xref-card
+                    componentListItemLabel: tool / tech reference
+                    css: "margin: 0;"
+                    componentListBlocks: []
   - name: education-record
     baseType: expandable
-    description: Expandable education record
+    description: Education entry
+    templateVariables:
+      institution:
+        label: School / University
+      date_range:
+        label: Date range
+      gpa:
+        label: GPA
     schema:
-      css: "margin: 0;"
+      tags: education
+      xrefTitle: "{% degree %}"
+      xrefDetail: "{% institution %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
-        children:
-          - text: ""
-            schema:
-              component: table
-              css: "margin: 0;"
-              tableColumns: "DEGREE, INSTITUTION, LOCATION"
-              tableShowHeader: false
-              tableRows:
-                - cells: ["", "", ""]
+        children: []
       expandableContentBlocks:
-        lock: true
-        css: "padding: 0.5rem;"
         children:
+          - text: "^section-heading^ ### {% degree %}"
+            schema:
+              component: text
+              css: "margin: 0 0 0.25rem;"
+              placeholder: "Degree"
           - text: ""
             schema:
               component: grid
@@ -184,65 +878,371 @@ component_defs:
                       component: container
                       css: "margin: 0;"
                       containerBlocks:
-                        - text: ""
+                        - text: "{% institution %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "School / University"
-                        - text: ""
+                        - text: "{% location %}"
                           schema:
                             component: text
                             css: "margin: 0 0 0.25rem;"
                             placeholder: "Location"
-                        - text: ""
+                        - text: "{% gpa %}"
                           schema:
                             component: text
                             css: "margin: 0;"
                             placeholder: "GPA"
                 - id: education-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
-                      placeholder: "Start Year – End Year"
-          - text: ""
+                      placeholder: "Start Year - End Year"
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
               placeholder: "Description"
           - component: skills-and-tools-tech-list
-          - text: "#### Classes"
+          - text: "^section-heading^ #### Classes"
             schema:
               component: text
-              css: "margin: 0.5rem 0 0.25rem;"
+              css: "margin: 0;"
           - text: ""
             schema:
-              component: component-list
-              componentListComponent: text
+              component: text
+              placeholder: classes
               css: "margin: 0;"
-              componentListBlocks: []
-  - name: project-record
+  - name: award-record
     baseType: expandable
-    description: Expandable project record
+    description: Award entry
+    templateVariables:
+      award:
+        label: Award
+      issuer:
+        label: Given By
+      date:
+        label: Date
     schema:
+      tags: award
+      xrefTitle: "{% award %}"
+      xrefDetail: "{% issuer %}"
       css: "margin: 0;"
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
-        css: "padding: 0.5rem;"
         children:
           - text: ""
             schema:
               component: table
-              css: "margin: 0;"
-              tableColumns: "PROJECT, DATE"
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["AWARD", "ISSUER", "DATE"]
               tableShowHeader: false
               tableRows:
-                - cells: ["", ""]
+                - cells: ["{% award %}", "{% issuer %}", "{% date %}"]
       expandableContentBlocks:
-        lock: true
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: award-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% award %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Award"
+                        - text: "{% issuer %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Given by"
+                - id: award-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+  - name: certification-record
+    baseType: expandable
+    description: Certification entry
+    templateVariables:
+      name:
+        label: Certification name
+      obtained_from:
+        label: Obtained from
+      obtained_month:
+        label: Obtained month
+      obtained_year:
+        label: Obtained year
+    schema:
+      tags: certification
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% obtained_from %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["<!--hvy:alt {\"compact\":\"CERT\"}-->CERTIFICATION<!--/hvy:alt-->", "GIVEN BY", "OBTAINED"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% obtained_from %}", "{% obtained_month %}/{% obtained_year %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: certification-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Certification name"
+                        - text: "{% obtained_from %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Obtained from"
+                - id: certification-obtained-date
+                  block:
+                    text: "{% obtained_month %}/{% obtained_year %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Obtained month / year"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - component: skills-and-tools-tech-list
+  - name: publication-record
+    baseType: expandable
+    description: Publication entry
+    templateVariables:
+      name:
+        label: Publication name
+      authors:
+        label: Authors
+      publisher:
+        label: Publisher
+      date:
+        label: Publication date
+      employer_short_name:
+        label: Employer short name
+      url:
+        label: Publication URL
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["PUBLICATION", "PUBLISHER", "DATE"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% name %}", "{% publisher %}", "{% date %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
+          - component: skills-and-tools-tech-list
+  - name: publication-linear-record
+    baseType: expandable
+    description: Publication entry with an empty collapsed stub for linear publication sections
+    templateVariables:
+      name:
+        label: Publication name
+      authors:
+        label: Authors
+      publisher:
+        label: Publisher
+      date:
+        label: Publication date
+      employer_short_name:
+        label: Employer short name
+      url:
+        label: Publication URL
+    schema:
+      tags: publication
+      xrefTitle: "{% name %}"
+      xrefDetail: "{% publisher %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: publication-details
+                  block:
+                    text: ""
+                    schema:
+                      component: container
+                      css: "margin: 0;"
+                      containerBlocks:
+                        - text: "^section-heading^ ### {% name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publication name"
+                        - text: "{% authors %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Authors"
+                        - text: "{% publisher %}"
+                          schema:
+                            component: text
+                            css: "margin: 0 0 0.25rem;"
+                            placeholder: "Publisher"
+                        - text: "{% employer_short_name %}"
+                          schema:
+                            component: text
+                            css: "margin: 0;"
+                            placeholder: "Employer short name"
+                - id: publication-date
+                  block:
+                    text: "{% date %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Publication date"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Description"
+          - text: "{% url %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Publication URL"
+          - component: skills-and-tools-tech-list
+  - name: project-record
+    baseType: expandable
+    description: Project entry
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
+    schema:
+      tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      css: "margin: 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: ""
+            schema:
+              component: table
+              css: "margin: 0; margin-top: -1px;"
+              tableColumns: ["PROJECT", "DATES"]
+              tableShowHeader: false
+              tableRows:
+                - cells: ["{% project %}", "{% date_range %}"]
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
         children:
           - text: ""
             schema:
@@ -252,224 +1252,459 @@ component_defs:
               gridItems:
                 - id: project-title
                   block:
-                    text: ""
+                    text: "{% project %}"
                     schema:
                       component: text
                       css: "margin: 0;"
+                      placeholder: "Project name"
                 - id: project-date-range
                   block:
-                    text: ""
+                    text: "{% date_range %}"
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
-          - text: ""
+                      placeholder: "Date range"
+          - text: "{% description | block %}"
             schema:
               component: text
               css: "margin: 0.5rem 0;"
-          - text: ""
+              placeholder: "Project description"
+          - text: "{% link %}"
             schema:
               component: text
               css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
+          - component: skills-and-tools-tech-list
+  - name: project-linear-record
+    baseType: expandable
+    description: Project entry with an empty collapsed stub for linear project sections
+    templateVariables:
+      project:
+        label: Project name
+      date_range:
+        label: Date range
+      link:
+        label: Project link
+    schema:
+      tags: project
+      xrefTitle: "{% project %}"
+      xrefDetail: "{% date_range %}"
+      css: "margin: 0.35rem 0;"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children: []
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: grid
+              css: "margin: 0 0 0.35rem;"
+              gridColumns: 2
+              gridItems:
+                - id: project-title
+                  block:
+                    text: "{% project %}"
+                    schema:
+                      component: text
+                      css: "margin: 0;"
+                      placeholder: "Project name"
+                - id: project-date-range
+                  block:
+                    text: "{% date_range %}"
+                    schema:
+                      component: text
+                      css: "margin: 0; text-align: right;"
+                      placeholder: "Date range"
+          - text: "{% description | block %}"
+            schema:
+              component: text
+              css: "margin: 0.5rem 0;"
+              placeholder: "Project description"
+          - text: "{% link %}"
+            schema:
+              component: text
+              css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
           - component: skills-and-tools-tech-list
   - name: skill-record-experience-section
     baseType: container
-    description: Skill record experience section
+    description: Related work history
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Experience"
+        - text: "^detail-heading^ #### Experience"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: history-xref-card
+            componentListItemLabel: history reference
             componentListBlocks: []
   - name: skill-record-education-section
     baseType: container
-    description: Skill record education section
+    description: Related education
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Education"
+        - text: "^detail-heading^ #### Education"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: education-xref-card
+            componentListItemLabel: education reference
             componentListBlocks: []
   - name: skill-record-projects-section
     baseType: container
-    description: Skill record projects section
+    description: Related projects
     schema:
       css: "margin: 0;"
-
       containerBlocks:
-        - text: "#### Projects"
+        - text: "^detail-heading^ #### Projects"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
-            componentListComponent: xref-card
+            componentListComponent: project-xref-card
+            componentListItemLabel: project reference
             componentListBlocks: []
   - name: skill-record-section
     baseType: container
-    description: Reusable skill record section with heading and repeatable entries
+    description: Skill detail group
+    templateVariables:
+      section_title:
+        label: Section title
     schema:
       css: "margin: 0;"
       containerBlocks:
-        - text: ""
+        - text: "^detail-heading^ {% section_title %}"
           schema:
             component: text
-            css: "margin: 0.4rem 0 0.1rem;"
+            css: "margin: 0;"
             placeholder: "#### Section title"
         - text: ""
           schema:
             component: component-list
             css: "margin: 0;"
             componentListComponent: skill-record-entry
+            componentListItemLabel: detail
             componentListBlocks: []
   - name: skill-record
     baseType: expandable
-    description: Skill record
+    description: Skill details
+    templateVariables:
+      skill:
+        label: Skill
+      description:
+        label: Description
+        generator: hvy.resume.skill-description
+        generatorLabel: Generate
     schema:
+      tags: skill
+      xrefTitle: "{% skill %}"
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
-        lock: true
         children:
-          - text: ""
+          - text: "### {% skill %}"
             schema:
               component: text
               css: "margin: 0;"
-              placeholder: "Skill name"
+              placeholder: "### Skill name"
       expandableContentBlocks:
         lock: false
+        css: "padding: 0.5rem;"
         children:
-          - text: "#### Description"
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
-            css: "margin-left: 0.5rem;"
+              css: "margin: 0;"
+              placeholder: "Description and notes"
+  - name: tool-tech-record
+    baseType: expandable
+    description: Tool / technology details
+    templateVariables:
+      tool_technology:
+        label: Tool / Technology
+      description:
+        label: Description
+        generator: hvy.resume.tool-description
+        generatorLabel: Generate
+    schema:
+      tags: tool
+      xrefTitle: "{% tool_technology %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableStubBlocks:
+        children:
+          - text: "### {% tool_technology %}"
             schema:
               component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "What is it?"
-          - text: "#### Notes"
+              css: "margin: 0;"
+              placeholder: "### Tool / technology name"
+      expandableContentBlocks:
+        lock: false
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Description
+              ^detail-body^ {% description | block %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
             schema:
               component: text
-              css: "margin: 0.4rem 0 0.1rem;"
-          - text: ""
+              css: "margin: 0;"
+              placeholder: "Description and notes"
+  - name: language-record
+    baseType: expandable
+    description: Language details
+    templateVariables:
+      language:
+        label: Language
+      proficiency:
+        label: Proficiency
+      notes:
+        label: Notes
+    schema:
+      tags: language
+      xrefTitle: "{% language %}"
+      xrefDetail: "{% proficiency %}"
+      css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "### {% language %}"
             schema:
               component: text
-              css: "margin: 0 0 0.35rem; margin-left: 0.5rem;"
-              placeholder: "Notes"
-          - component: skill-record-experience-section
-          - component: skill-record-education-section
-          - component: skill-record-projects-section
+              css: "margin: 0;"
+              placeholder: "### Language"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: |-
+              ^detail-heading^ #### Proficiency
+              ^detail-body^ {% proficiency %}
+              ^detail-heading^ #### Notes
+              ^detail-body^ {% notes | block %}
+            schema:
+              component: text
+              css: "margin: 0;"
+              placeholder: "Proficiency and notes"
 ---
 
-<!--hvy: {"id":"header","lock":true,"contained":false}-->
+<!--hvy: {"id":"header","lock":true,"contained":false,"description":"Resume identity header","hideIfUnmodified":true,"priority":true}-->
 #! Info
 
- <!--hvy:text {"css":"margin-bottom: 0;","align":"center","placeholder":"# Name"}-->
+ <!--hvy:text {"id":"resume-name","css":"margin-bottom: 1rem;","align":"center","fillIn":true}-->
+  # <!-- value {"placeholder":"Name"} -->
 
- <!--hvy:text {"css":"margin-top: 0;","align":"center","placeholder":"[pronunciation]"}-->
+ <!--hvy:text {"id":"resume-pronunciation","css":"margin-top: 0;","align":"center","fillIn":true,"visibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value\" not in name"}-->
+  [<!-- value {"placeholder":"pronunciation"} -->]
 
- <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","placeholder":"title"}-->
+ <!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 50%; right: calc(50% + 3.75rem); transform: translateY(-50%); transform-origin: right center; padding: 0.04rem; --hvy-button-content-padding: 0.1rem 0.28rem; --hvy-button-font-size: 0.68rem;","buttonInputCharLimit":400,"buttonOutputCharLimit":120,"buttonVisibleScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\npronunciation = doc.component.get_text(\"resume-pronunciation\").replace(\"[\", \"\").replace(\"]\", \"\").replace(\"<!-- value {\\\"placeholder\\\":\\\"pronunciation\\\"} -->\", \"\").strip()\nreturn len(name) > 0 and \"<!-- value\" not in name and len(pronunciation) == 0","buttonSourceScript":"name = doc.component.get_text(\"resume-name\").replace(\"#\", \"\").strip()\nif \"<!-- value\" in name:\n    return \"\"\nreturn name","buttonPrompt":"Generate a concise pronunciation guide for this resume name. Return only the pronunciation text, using simple uppercase/lowercase syllables and hyphens. Do not include brackets, labels, or explanation.","buttonTargetScript":"clean = response.strip()\nif clean.startswith(\"[\") and clean.endswith(\"]\"):\n    clean = clean[1:-1].strip()\ndoc.component.set_text(\"resume-pronunciation\", \"[\" + clean + \"]\")"}-->
 
-<!--hvy: {"id":"summary","lock":true,"contained":true,"custom_css":"padding: 0 0.35rem;"}-->
+ <!--hvy:text {"css":"margin: 0.5rem 0; margin-top: 1rem;","align":"center","fillIn":true}-->
+  <!-- value {"placeholder":"title"} -->
+
+<!--hvy: {"id":"summary","lock":true,"contained":true,"css":"padding: 0 0.35rem;","description":"Professional summary","hideIfUnmodified":true,"priority":true}-->
 #! Summary
 
  <!--hvy:expandable {"css":"margin: 0.5rem 0;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
-     ## Summary
+     # Summary
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
-   <!--hvy:text {"css":"margin-top: 0;"}-->
+   <!--hvy:text {"css":"margin-top: 0;","placeholder":"Add a short professional summary and elaborate in the expanded section"}-->
 
-  <!--hvy:expandable:content {"lock":true}-->
+  <!--hvy:expandable:content {}-->
 
-   <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
+   <!--hvy:text {"css":"margin: 0;","placeholder":"Add expanded summary details such as accomplishments"}-->
 
-<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar"}-->
+<!--hvy: {"id":"locations","lock":true,"contained":true,"location":"sidebar","description":"Current location and target location","hideIfUnmodified":true}-->
 #! Locations
 
- <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-  **Location:**
+ <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","fillIn":true,"lock":true}-->
+  **Location:** <!-- value {"placeholder":"location"} -->
 
- <!--hvy:text {"css":"margin: 0.5rem 0;","lock":true}-->
-  **Target Location(s):**
+  **Target Location(s):** <!-- value {"placeholder":"target location"} -->
 
-<!--hvy: {"id":"top-skills-tools-technologies","lock":true}-->
-#! Top Skills, Tools, and Technologies
+<!--hvy: {"id":"top-skills-tools-technologies","lock":true,"description":"Featured skills and tools & technology experience","hideIfUnmodified":true,"priority":true}-->
+#! Featured Skills, Tools, and Technologies
+
+ <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+  # Featured
+
+ <!--hvy:text {"id":"featured-xref-helper","align":"center","editorOnly":true,"css":"margin: 0.35rem 0 0.5rem; color: var(--hvy-text-muted); font-style: italic;"}-->
+  Tip: Add a featured skill or tool / technology via the sidebar and link to it here
 
  <!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"lock":true}-->
   <!--hvy:grid:0 {"id":"top-skills"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-    ## Skills
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Skills
+    <!--hvy:component-list {"id":"top-skills-list","componentListComponent":"skill-xref-card","componentListItemLabel":"skill reference","css":"margin: 0;","align":"center"}-->
   <!--hvy:grid:1 {"id":"top-tools-technologies"}-->
 
-   <!--hvy:component-list {"componentListComponent":"xref-card","css":"margin: 0;","align":"center"}-->
-    ## Tools & Technologies
+   <!--hvy:container {"css":"margin: 0;","align":"center"}-->
+    <!--hvy:text {"align":"center","css":"margin: 0 0 0.35rem;"}-->
+     ## Tools & Technologies
+    <!--hvy:component-list {"id":"top-tools-technologies-list","componentListComponent":"tool-tech-xref-card","componentListItemLabel":"tool / tech reference","css":"margin: 0;","align":"center"}-->
 
-<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"skills","lock":true,"expanded":false,"location":"sidebar","description":"Skills reference list","hideIfUnmodified":true}-->
 #! Skills
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Skills
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record","componentListItemLabel":"skill","tags":"skill"}-->
 
-<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar"}-->
+<!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Tools and technologies reference list","hideIfUnmodified":true}-->
 #! Tools & Technologies
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Tools & Technologies
+  # Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"skill-record"}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"tool-tech-record","componentListItemLabel":"tool / technology","tags":"tool"}-->
 
-<!--hvy: {"id":"history","lock":true}-->
-#! History
-
- <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # History
-
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
-
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
-
-<!--hvy: {"id":"projects","lock":true}-->
-#! Projects
+<!--hvy: {"id":"history","templateKey":"resume-history","lock":true,"description":"Work history","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
+#! Professional History
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
-  # Projects
+  # Professional History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tags":"table-header","tableColumns":["TITLE","<!--hvy:alt {\"compact\":\"ORG\"}-->ORGANIZATION<!--/hvy:alt-->","DATES"],"tableShowHeader":true,"tableRows":[],"lock":true,"description":"History table header"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
+ <!--hvy:component-list {"id":"history-list","css":"margin: 0;","componentListComponent":"history-record","componentListItemLabel":"job","tags":"history"}-->
 
-<!--hvy: {"id":"education","lock":true}-->
+<!--hvy: {"id":"education","lock":true,"description":"Education","hideIfUnmodified":true,"tags":"reciprocal-xref-source"}-->
 #! Education
 
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record","componentListItemLabel":"education record","tags":"education"}-->
 
- <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
+<!--hvy: {"id":"template-maintenance","editorOnly":true,"lock":true,"contained":true,"description":"Template maintenance scripts","exclude_from_import":true}-->
+#! Template Maintenance
+
+ <!--hvy:plugin {"id":"remove-featured-xref-helper","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  def has_xref(list_id):
+      try:
+          raw = doc.tool.view_component(component_ref=list_id)
+      except Exception:
+          return False
+      return '"xrefTarget":"' in raw or '"xrefTarget": "' in raw
+
+  if has_xref("top-skills-list") or has_xref("top-tools-technologies-list"):
+      try:
+          doc.tool.remove_component(component_ref="featured-xref-helper")
+      except Exception:
+          pass
+      try:
+          doc.tool.remove_component(component_ref="remove-featured-xref-helper")
+      except Exception:
+          pass
+
+ <!--hvy:plugin {"id":"sync-reciprocal-xrefs","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","maxLines":200000}}-->
+  SOURCE_TAG = "reciprocal-xref-source"
+  GENERATED_TAG = "reciprocal-xref-generated"
+  TARGET_TAGS = ["skill", "tool"]
+
+  def xref_component_for_source(source):
+      if source.component.endswith("-record"):
+          return source.component[:-len("-record")] + "-xref-card"
+      return "xref-card"
+
+  def is_generated(component):
+      return component.has_tag(GENERATED_TAG)
+
+  def is_target_record(record):
+      if not record.component.endswith("-record"):
+          return False
+      for tag in TARGET_TAGS:
+          if record.has_tag(tag):
+              return True
+      return False
+
+  changed_xrefs = []
+  for xref in doc.tool.get_updated_components("xref"):
+      if not is_generated(xref):
+          changed_xrefs.append(xref)
+
+  if not changed_xrefs:
+      return
+
+  # Targets are the real skill/tool records where reciprocal cards are written.
+  targets = {}
+  for record in doc.tool.get_components():
+      if is_target_record(record):
+          targets[record.id] = record
+
+  # Groups collect the current real xrefs by target record and source section.
+  groups = {}
+  for target_id in targets:
+      groups[target_id] = {}
+
+  # Rebuild from current xrefs so changed, added, and removed xrefs all produce
+  # the same final reciprocal state.
+  for xref in doc.tool.get_components("xref"):
+      if is_generated(xref):
+          continue
+      source_section = xref.get_parent_by_tag(SOURCE_TAG)
+      target_id = str(xref.get("xrefTarget") or "")
+      if not source_section or target_id not in targets:
+          continue
+      source = xref.get_ancestor_record() or source_section
+      group_key = source.section_id
+      if group_key not in groups[target_id]:
+          groups[target_id][group_key] = []
+      seen = False
+      for item in groups[target_id][group_key]:
+          if item.id == source.id:
+              seen = True
+      if not seen:
+          groups[target_id][group_key].append(source)
+
+  for target_id in targets:
+      target = targets[target_id]
+      target.remove_children_by_tag(GENERATED_TAG)
+      for group_key in groups[target_id]:
+          sources = groups[target_id][group_key]
+          if not sources:
+              continue
+          first = sources[0]
+          heading = target.append_child("text")
+          heading.set("tags", GENERATED_TAG)
+          heading.set("css", "margin: 0;")
+          heading.set("text", "^detail-heading^ #### " + first.section_title)
+          card_component = xref_component_for_source(first)
+          cards = target.append_child("component-list")
+          cards.set("tags", GENERATED_TAG)
+          cards.set("css", "margin: 0;")
+          cards.set("componentListComponent", card_component)
+          cards.set("componentListItemLabel", "reference")
+          for source in sources:
+              card = cards.append_child(card_component, None, "", "component-list")
+              card.set("tags", GENERATED_TAG)
+              card.set("xrefTitle", source.get("xrefTitle") or source.first_table_cell(0) or source.id)
+              card.set("xrefDetail", source.get("xrefDetail") or source.first_table_cell(1) or "")
+              card.set("xrefTarget", source.id)

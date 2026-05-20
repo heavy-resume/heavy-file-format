@@ -2,6 +2,157 @@
   display: grid;
 }
 
+.reader-component-list.is-grouped-view {
+  gap: 0.5rem;
+}
+
+.component-list-reader-controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 0.35rem 0.4rem;
+  justify-self: start;
+  margin: 0 0 0.5rem 0.35rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+  box-shadow: 0 2px 8px var(--hvy-shadow);
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.component-list-reader-controls.has-sort-options.has-group-options {
+  grid-template-columns: auto auto auto;
+}
+
+.component-list-view-picker,
+.component-list-group-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--hvy-text-muted);
+  font-size: 0.85rem;
+}
+
+.component-list-view-picker select,
+.component-list-group-picker select {
+  min-width: 9rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font-size: 0.85rem;
+  padding-left: 0.5rem;
+  padding-block: 0.28rem;
+  cursor: pointer;
+}
+
+.component-list-view-picker > span,
+.component-list-group-picker > span {
+  padding-left: 0.5rem;
+}
+
+.component-list-group-picker select {
+  min-width: 8rem;
+}
+
+.component-list-reverse-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--hvy-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.component-list-reverse-button .hvy-ui-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.component-list-reverse-button:hover,
+.component-list-reverse-button.is-active {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-xref-card-hover-bg);
+  color: var(--hvy-text);
+}
+
+.component-list-view-picker select:hover,
+.component-list-group-picker select:hover,
+.component-list-view-picker select:focus-visible,
+.component-list-group-picker select:focus-visible {
+  border-color: var(--hvy-border-alt);
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text);
+}
+
+.component-list-type-summary {
+  color: var(--hvy-text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.component-list-type-summary strong {
+  color: var(--hvy-text-alt);
+}
+
+.component-list-view-editor {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0.6rem;
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+}
+
+.component-list-view-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.component-list-view-editor-head label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.component-list-view-rows {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.component-list-view-row {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.8fr) minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(6rem, 0.8fr) minmax(6rem, 1fr) 4.5rem;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.component-list-view-row input,
+.component-list-view-row select {
+  min-width: 0;
+}
+
+.ghost-section-card.component-list-add-ghost {
+  min-height: 0;
+  padding-block: 0.55rem;
+  align-content: center;
+}
+
 .reader-block.align-center .reader-component-list {
   grid-template-columns: min(100%, 20rem);
   justify-content: space-around;
@@ -10,4 +161,65 @@
 .reader-block.align-center .reader-xref-card {
   width: 100%;
   text-align: left;
+}
+
+@container hvy-surface (inline-size <= 50rem) {
+  .component-list-reader-controls {
+    grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
+    justify-self: center;
+    width: min(100%, 28rem);
+  }
+
+  .component-list-reader-controls.has-sort-options.has-group-options {
+    grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
+  }
+
+  .component-list-view-picker,
+  .component-list-group-picker {
+    display: contents;
+  }
+
+  .component-list-view-picker > span {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .component-list-view-picker select {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .component-list-group-picker > span {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .component-list-group-picker select {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .component-list-reverse-button {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .component-list-reader-controls.has-group-options:not(.has-sort-options) {
+    grid-template-columns: 4.1rem minmax(0, 1fr);
+  }
+
+  .component-list-view-picker select,
+  .component-list-group-picker select {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 800px) {
+  .component-list-view-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }

@@ -1,4 +1,5 @@
 import { HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS } from './chat/chat';
+import { getPluginAiHintForBlock, getRegisteredPluginAiHints } from './ai-plugin-hints';
 import { resolveBaseComponent } from './component-defs';
 import type { VisualBlock } from './editor/types';
 import type { RawEditorDiagnostic, VisualDocument } from './types';
@@ -44,11 +45,22 @@ export function buildAiEditPrompt(request: string): string {
 }
 
 export function buildAiEditFormatInstructions(): string {
+  const pluginHints = getRegisteredPluginAiHints();
   return [
     HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
     '',
     'You are revising a single HVY component, not a whole document.',
     'Return exactly one HVY component fragment.',
+    pluginHints.length > 0
+      ? [
+          'Available plugins for replacement components:',
+          ...pluginHints.map((plugin) => {
+            const hint = plugin.hint.trim();
+            return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
+          }),
+          'Only use registered plugin ids from this list. Do not invent plugin component directives.',
+        ].join('\n')
+      : 'No plugins are currently registered. Do not create plugin blocks or invent plugin component directives.',
     'Do not include YAML front matter, section comments, section headings, code fences, or prose outside the component.',
     'Every HVY directive payload must be strict JSON with double-quoted keys and strings.',
     'Keep HVY field value types correct. Booleans must stay booleans, strings must stay strings, and arrays/objects must keep the documented shape.',
@@ -87,15 +99,19 @@ export function formatAiEditIssueSummary(issues: RawEditorDiagnostic[]): string 
 
 export function getAiEditComponentGuidance(block: VisualBlock): string {
   const base = resolveBaseComponent(block.schema.component);
+  if (base === 'plugin') {
+    return getPluginAiHintForBlock(block);
+  }
   if (base === 'table') {
     return [
-      '- Use `tableColumns` as a comma-separated string, for example `"Foo, Bar"`.',
-      '- Use `tableRows` as an array of rows with `cells` arrays.',
-      '- Each table row only contains `cells`, which is an array of strings.',
+      '- In the CLI, edit tableColumns.json and tableRows.json for static table data; table.txt is only a read-only preview.',
+      '- tableColumns.json is a JSON array of strings, for example ["Name","Status"].',
+      '- tableRows.json is a JSON array of row objects, for example [{"cells":["Alpha","Open"]}].',
+      '- Raw HVY schema/config uses the same tableColumns and tableRows shapes as the CLI JSON files.',
       '- Do not invent row-level interaction or detail fields for tables.',
-      '- Do not invent `columns` or `rows` keys.',
+      '- Do not invent columns or rows keys.',
       '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
-      '- Do not use GitHub-flavored Markdown table syntax or pipe-delimited pseudo-tables as a shortcut.',
+      '- Do not write YAML, Markdown tables, or pipe-delimited rows into table.txt.',
       '- If converting a table to nested expandables, keep the column header in the outer expandable stub only.',
       '- Put one expandable per data row inside the outer expandable content, and do not wrap the header as its own row expandable.',
     ].join('\n');
@@ -103,6 +119,7 @@ export function getAiEditComponentGuidance(block: VisualBlock): string {
   if (base === 'xref-card') {
     return [
       '- Use `xrefTitle`, optional `xrefDetail`, and `xrefTarget`.',
+      '- Preserve `xrefTargetTagFilter` when a custom xref-card component uses it to constrain target picking.',
       '- Do not replace an xref-card with a plain markdown link.',
     ].join('\n');
   }

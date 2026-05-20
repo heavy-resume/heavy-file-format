@@ -1,7 +1,29 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
+import type { VisualBlock } from '../../types';
+import { closeIcon } from '../../../icons';
 
-export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
+export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const firstPlacementTarget = helpers.renderComponentPlacementTarget({
+    container: 'grid',
+    sectionKey,
+    parentBlockId: block.id,
+    placement: block.schema.gridItems.length > 0 ? 'before' : 'end',
+    targetGridItemId: block.schema.gridItems[0]?.id,
+  });
+  const placementMode = firstPlacementTarget.length > 0;
+  const addGridGhost = block.schema.lock || placementMode
+    ? ''
+    : `<div class="ghost-section-card add-ghost grid-add-ghost">
+        ${helpers.renderAddComponentPicker({
+          id: `grid:${sectionKey}:${block.id}`,
+          action: 'add-grid-item',
+          sectionKey,
+          blockId: block.id,
+          label: 'Grid component type',
+        })}
+      </div>`;
+  return `
   <div class="editor-grid schema-grid">
     <label>
       <span>Grid Columns</span>
@@ -13,9 +35,12 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     </label>
   </div>
   <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
-    ${block.schema.gridItems
-      .map(
-        (item) => `<div class="grid-field-row">
+    ${[
+      firstPlacementTarget,
+      ...block.schema.gridItems.map(
+        (item) => {
+          const canChangeComponent = isBlankDefaultGridItem(item.block);
+          return `<div class="grid-field-row">
           <div class="grid-field-head">
             <div class="section-drag-title">
               <div class="editor-order-controls">
@@ -29,54 +54,72 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             </div>
             <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
               sectionKey
-            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}">×</button>
+            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
+              item.id
+            )}" aria-label="Remove grid component" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>
           </div>
           <div class="grid-item-controls">
-            <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-              block.id
-            )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
-              ${helpers.renderComponentOptions(item.block.schema.component)}
-            </select>
+            ${
+              canChangeComponent
+                ? `<select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+                    block.id
+                  )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
+                    ${helpers.renderComponentOptions(item.block.schema.component)}
+                  </select>`
+                : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
+            }
           </div>
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
           </div>
-        </div>`
-      )
-      .join('')}
+        </div>
+        ${helpers.renderComponentPlacementTarget({
+          container: 'grid',
+          sectionKey,
+          parentBlockId: block.id,
+          placement: 'after',
+          targetGridItemId: item.id,
+        })}`;
+        }
+      ),
+      addGridGhost,
+    ].join('')}
   </div>
-  ${
-    block.schema.lock
-      ? ''
-      : `<article class="ghost-section-card add-ghost grid-add-ghost" data-action="add-grid-item" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}">
-          <div class="ghost-plus-big"><span>+</span></div>
-          <div class="ghost-label">Add Grid Component</div>
-          <label class="ghost-component-picker">
-            <select aria-label="Grid component type" data-field="new-grid-component-type" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-          block.id
-        )}">
-              ${helpers.renderComponentOptions(helpers.getSelectedAddComponent(block.id, 'text'))}
-            </select>
-          </label>
-        </article>`
-  }
 `;
+};
+
+function isBlankDefaultGridItem(block: VisualBlock): boolean {
+  if ((block.schema.component || 'text') !== 'text') {
+    return false;
+  }
+  return block.text.trim().length === 0
+    && block.schema.placeholder.trim().length === 0
+    && !block.schema.fillIn
+    && block.schema.containerBlocks.length === 0
+    && block.schema.componentListBlocks.length === 0
+    && block.schema.gridItems.length === 0
+    && block.schema.expandableStubBlocks.children.length === 0
+    && block.schema.expandableContentBlocks.children.length === 0
+    && block.schema.tableRows.length === 0
+    && block.schema.imageFile.trim().length === 0
+    && block.schema.plugin.trim().length === 0;
+}
 
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
-  const cells = block.schema.gridItems
+  const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
+    .map((item) => ({ html: helpers.renderReaderBlock(_section, item) }))
+    .filter((item) => item.html.trim().length > 0);
+  const cells = visibleCells
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-      const placementClass = columns <= 1 ? ' is-single-track' : columnIndex === columns ? ' is-terminal-track' : ' is-flow-track';
-      return `<div class="reader-grid-cell${placementClass}" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${helpers.renderReaderBlock(
-        _section,
-        item.block
-      )}</div>`;
+      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${item.html}</div>`;
     })
     .join('');
+  if (!cells.trim()) {
+    return '';
+  }
   return `<div class="reader-grid-layout" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
 };

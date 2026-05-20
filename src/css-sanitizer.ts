@@ -41,6 +41,7 @@ const AT_RULE_PATTERN = new RegExp(
   `@(?:${NETWORK_AT_RULES.join('|')})\\b`,
   'i'
 );
+const INLINE_AT_RULE_PATTERN = /@[a-z-]+\b/i;
 
 /** Returns true if the given fragment, after escape decoding, can trigger a network fetch. */
 export function cssFragmentTriggersNetwork(fragment: string): boolean {
@@ -73,13 +74,19 @@ export function sanitizeInlineCss(input: string, options?: CssSanitizeOptions): 
   if (!input) {
     return input;
   }
-  if (shouldAllow(options)) {
-    return input;
-  }
   // Inline styles are a sequence of declarations separated by `;`. They cannot contain
   // at-rules or selector blocks, so we filter the declarations and rejoin.
   const declarations = input.split(';');
-  const safe = declarations.filter((declaration) => declaration.trim().length === 0 || !cssFragmentTriggersNetwork(declaration));
+  const safe = declarations.filter((declaration) => {
+    const trimmed = declaration.trim();
+    if (trimmed.length === 0) {
+      return true;
+    }
+    if (INLINE_AT_RULE_PATTERN.test(decodeCssEscapes(trimmed))) {
+      return false;
+    }
+    return shouldAllow(options) || !cssFragmentTriggersNetwork(trimmed);
+  });
   return safe.join(';');
 }
 

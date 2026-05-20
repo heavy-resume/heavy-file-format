@@ -19,6 +19,19 @@
   text-transform: lowercase;
 }
 
+.reader-code-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
 .reader-block pre {
   margin: 0;
   overflow: auto;
@@ -32,6 +45,9 @@
   font-size: 0.86rem;
   line-height: 1.45;
   color: var(--hvy-code-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .reader-block pre code.hljs {
@@ -81,16 +97,19 @@
   color: var(--hvy-code-number);
 }
 
+.reader-code-block .hljs-title,
+.reader-code-block .hljs-title.class_,
+.reader-code-block .hljs-title.class_.inherited__,
+.reader-code-block .hljs-title.function_ {
+  color: var(--hvy-code-function);
+}
+
 .reader-code-block .hljs-keyword,
 .reader-code-block .hljs-doctag,
 .reader-code-block .hljs-template-tag,
 .reader-code-block .hljs-type,
 .reader-code-block .hljs-variable.language_,
-.reader-code-block .hljs-section,
-.reader-code-block .hljs-title,
-.reader-code-block .hljs-title.class_,
-.reader-code-block .hljs-title.class_.inherited__,
-.reader-code-block .hljs-title.function_ {
+.reader-code-block .hljs-section {
   color: var(--hvy-code-keyword);
 }
 

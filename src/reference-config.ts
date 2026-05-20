@@ -1,10 +1,20 @@
+import type { HvySearchProvider } from './search/types';
+import type { HvyDescriptionProvider } from './descriptions/types';
+
 export interface ReferenceAppFeatures {
   tables: boolean;
   allowExternalCss: boolean;
 }
 
+export interface ReferenceAppAiEditorConfig {
+  doubleClickDelayMs: number;
+}
+
 export interface ReferenceAppConfig {
   features: ReferenceAppFeatures;
+  aiEditor: ReferenceAppAiEditorConfig;
+  searchProvider?: HvySearchProvider | null;
+  descriptionProvider?: HvyDescriptionProvider | null;
 }
 
 declare global {
@@ -17,6 +27,9 @@ const defaultConfig: ReferenceAppConfig = {
   features: {
     tables: true,
     allowExternalCss: false,
+  },
+  aiEditor: {
+    doubleClickDelayMs: 250,
   },
 };
 
@@ -43,7 +56,29 @@ export function getReferenceAppConfig(): ReferenceAppConfig {
         globalConfig?.features?.allowExternalCss ??
         defaultConfig.features.allowExternalCss,
     },
+    aiEditor: {
+      doubleClickDelayMs: normalizeDelayMs(
+        runtimeOverride?.aiEditor?.doubleClickDelayMs ??
+          globalConfig?.aiEditor?.doubleClickDelayMs ??
+          defaultConfig.aiEditor.doubleClickDelayMs,
+        defaultConfig.aiEditor.doubleClickDelayMs,
+      ),
+    },
+    searchProvider:
+      runtimeOverride?.searchProvider ??
+      globalConfig?.searchProvider ??
+      defaultConfig.searchProvider ??
+      null,
+    descriptionProvider:
+      runtimeOverride?.descriptionProvider ??
+      globalConfig?.descriptionProvider ??
+      defaultConfig.descriptionProvider ??
+      null,
   };
+}
+
+function normalizeDelayMs(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
 }
 
 export function areTablesEnabled(): boolean {
@@ -52,4 +87,8 @@ export function areTablesEnabled(): boolean {
 
 export function isExternalCssAllowed(): boolean {
   return getReferenceAppConfig().features.allowExternalCss === true;
+}
+
+export function getAiEditorDoubleClickDelayMs(): number {
+  return getReferenceAppConfig().aiEditor.doubleClickDelayMs;
 }

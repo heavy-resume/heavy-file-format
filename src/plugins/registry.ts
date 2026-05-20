@@ -1,51 +1,94 @@
-import { state } from '../state';
-import type { HvyPluginRegistration } from './types';
+import { getActiveStateRuntime, state, type StateRuntime } from '../state';
+import type { HvyOutputGenerator, HvyPlugin } from './types';
 
 export interface DocumentPluginDefinition {
   id: string;
   source: string;
 }
 
-export const DB_TABLE_PLUGIN_ID = 'dev.heavy.db-table';
-export const FORM_PLUGIN_ID = 'dev.heavy.form';
-export const PROGRESS_BAR_PLUGIN_ID = 'dev.heavy.progress-bar';
-export const SCRIPTING_PLUGIN_ID = 'dev.heavy.scripting';
+export const DB_TABLE_PLUGIN_ID = 'hvy.db-table';
+export const FORM_PLUGIN_ID = 'hvy.form';
+export const PROGRESS_BAR_PLUGIN_ID = 'hvy.progress-bar';
+export const SCRIPTING_PLUGIN_ID = 'hvy.scripting';
+export const GRAPH_PLUGIN_ID = 'hvy.graph';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
 export const BUILTIN_SCRIPTING_PLUGIN_SOURCE = 'builtin://scripting';
+export const BUILTIN_GRAPH_PLUGIN_SOURCE = 'builtin://graph';
 
 export function isDbTablePluginId(pluginId: string): boolean {
   return pluginId === DB_TABLE_PLUGIN_ID;
 }
 
-// Host-supplied plugin registrations. The reference embedding sets these at
-// startup; third-party hosts can append their own. Keep insertion order — it
-// drives the order shown in the selector.
-const hostPluginRegistrations: HvyPluginRegistration[] = [];
+// Host-supplied plugin objects. Keep insertion order — it drives the selector
+// order and hook tie-breaking.
+const fallbackHostPlugins: HvyPlugin[] = [];
+const hostPluginsByRuntime = new WeakMap<StateRuntime, HvyPlugin[]>();
 
-export function registerHostPlugin(registration: HvyPluginRegistration): void {
-  const existingIndex = hostPluginRegistrations.findIndex((entry) => entry.id === registration.id);
-  if (existingIndex >= 0) {
-    hostPluginRegistrations[existingIndex] = registration;
+function getMutableHostPlugins(): HvyPlugin[] {
+  try {
+    const runtime = getActiveStateRuntime();
+    let plugins = hostPluginsByRuntime.get(runtime);
+    if (!plugins) {
+      plugins = [...fallbackHostPlugins];
+      hostPluginsByRuntime.set(runtime, plugins);
+    }
+    return plugins;
+  } catch {
+    return fallbackHostPlugins;
+  }
+}
+
+export function registerHostPlugin(plugin: HvyPlugin): void {
+  const hostPlugins = getMutableHostPlugins();
+  const nextPlugins = [...hostPlugins];
+  const nextExistingIndex = nextPlugins.findIndex((entry) => entry.id === plugin.id);
+  if (nextExistingIndex >= 0) {
+    nextPlugins[nextExistingIndex] = plugin;
   } else {
-    hostPluginRegistrations.push(registration);
+    nextPlugins.push(plugin);
+  }
+  assertUniqueOutputGeneratorKeys(nextPlugins);
+  const existingIndex = hostPlugins.findIndex((entry) => entry.id === plugin.id);
+  if (existingIndex >= 0) {
+    hostPlugins[existingIndex] = plugin;
+  } else {
+    hostPlugins.push(plugin);
   }
 }
 
-export function setHostPlugins(registrations: HvyPluginRegistration[]): void {
-  hostPluginRegistrations.length = 0;
-  for (const registration of registrations) {
-    hostPluginRegistrations.push(registration);
+export function setHostPlugins(plugins: HvyPlugin[]): void {
+  const hostPlugins = getMutableHostPlugins();
+  assertUniqueOutputGeneratorKeys(plugins);
+  hostPlugins.length = 0;
+  for (const plugin of plugins) {
+    hostPlugins.push(plugin);
   }
 }
 
-export function getHostPlugins(): HvyPluginRegistration[] {
-  return [...hostPluginRegistrations];
+export function getHostPlugins(): HvyPlugin[] {
+  const hostPlugins = getMutableHostPlugins();
+  return [...hostPlugins];
 }
 
-export function getHostPlugin(pluginId: string): HvyPluginRegistration | null {
-  return hostPluginRegistrations.find((entry) => entry.id === pluginId) ?? null;
+export function getRenderableHostPlugins(): HvyPlugin[] {
+  const hostPlugins = getMutableHostPlugins();
+  return hostPlugins.filter((plugin) => typeof plugin.create === 'function' || (plugin.components?.length ?? 0) > 0);
+}
+
+export function getHostPlugin(pluginId: string): HvyPlugin | null {
+  const hostPlugins = getMutableHostPlugins();
+  return hostPlugins.find((entry) => entry.id === pluginId) ?? null;
+}
+
+export function getAvailableOutputGenerators(): HvyOutputGenerator[] {
+  const hostPlugins = getMutableHostPlugins();
+  return hostPlugins.flatMap((plugin) => plugin.outputGenerators ?? []);
+}
+
+export function getOutputGenerator(key: string): HvyOutputGenerator | null {
+  return getAvailableOutputGenerators().find((generator) => generator.key === key) ?? null;
 }
 
 export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
@@ -66,7 +109,7 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
     .filter((candidate): candidate is DocumentPluginDefinition => candidate !== null);
 
   if (normalized.length === 0) {
-    return hostPluginRegistrations.map((entry) => ({
+    return getRenderableHostPlugins().map((entry) => ({
       id: entry.id,
       source:
         entry.id === DB_TABLE_PLUGIN_ID
@@ -77,7 +120,9 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
             ? BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE
             : entry.id === SCRIPTING_PLUGIN_ID
               ? BUILTIN_SCRIPTING_PLUGIN_SOURCE
-              : `host://${entry.id}`,
+              : entry.id === GRAPH_PLUGIN_ID
+                ? BUILTIN_GRAPH_PLUGIN_SOURCE
+                : `host://${entry.id}`,
     }));
   }
 
@@ -95,5 +140,24 @@ export function getPluginDisplayName(pluginId: string): string {
   if (pluginId === FORM_PLUGIN_ID) {
     return 'Form';
   }
+  if (pluginId === GRAPH_PLUGIN_ID) {
+    return 'Graph';
+  }
   return pluginId;
+}
+
+function assertUniqueOutputGeneratorKeys(plugins: HvyPlugin[]): void {
+  const seen = new Set<string>();
+  for (const plugin of plugins) {
+    for (const generator of plugin.outputGenerators ?? []) {
+      const key = generator.key.trim();
+      if (!key) {
+        throw new Error(`Output generator key for plugin "${plugin.id}" cannot be blank.`);
+      }
+      if (seen.has(key)) {
+        throw new Error(`Duplicate output generator key "${key}".`);
+      }
+      seen.add(key);
+    }
+  }
 }

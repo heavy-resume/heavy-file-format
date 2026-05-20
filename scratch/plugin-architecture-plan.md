@@ -41,7 +41,7 @@ interface HvyPluginInstance {
 type HvyPluginFactory = (ctx: HvyPluginContext) => HvyPluginInstance;
 
 interface HvyPluginRegistration {
-  id: string;                    // e.g. 'dev.heavy.db-table'
+  id: string;                    // e.g. 'hvy.db-table'
   displayName: string;           // shown in selector
   create: HvyPluginFactory;
 }
@@ -206,7 +206,7 @@ Do NOT mention progress-bar in the spec — it's reference-impl only.
 
 ## Scripting plugin (round 3 — landed)
 
-A `dev.heavy.scripting` plugin now exists. Code is held in `block.text` as
+A `hvy.scripting` plugin now exists. Code is held in `block.text` as
 Python; on document load (driven by a `lastScriptedDocument` guard inside
 `renderApp`) it runs once via Brython 3.14.0, lazy-loaded from CDN.
 

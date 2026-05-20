@@ -1,46 +1,58 @@
 import './xref-card.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 
-export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => `
-  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}">
+export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const targetTagFilter = getEffectiveTargetTagFilter(block, helpers);
+  const hasTarget = normalizeTargetValue(block.schema.xrefTarget).length > 0;
+  const targetOptions = helpers.getXrefTargetOptions(targetTagFilter);
+  const hasNoFilteredTargets = !hasTarget && targetTagFilter.length > 0 && targetOptions.length === 0;
+  const titleOverride = block.schema.xrefTitle.trim().length > 0;
+  const detailOverride = block.schema.xrefDetail.trim().length > 0;
+  return `
+  <div class="xref-card-editor editor-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, targetTagFilter) ? '' : 'is-invalid-target'} ${hasTarget ? '' : 'is-target-empty'}">
+    <label class="xref-target-picker">
+      <span>Target</span>
+      <select
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="block-xref-target"
+        ${hasNoFilteredTargets ? 'disabled' : ''}
+      >
+        ${renderTargetOptions(helpers, targetOptions, normalizeTargetValue(block.schema.xrefTarget))}
+      </select>
+      ${hasNoFilteredTargets ? `<p class="xref-target-empty">No ${helpers.escapeHtml(targetTagFilter)} targets available yet.</p>` : ''}
+    </label>
+    <span class="xref-override-label">Title override</span>
     <strong
       contenteditable="true"
+      spellcheck="true"
       data-inline-text="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-xref-title"
-    >${helpers.escapeHtml(block.schema.xrefTitle || 'Untitled')}</strong>
+      ${hasTarget ? '' : 'aria-disabled="true"'}
+    >${helpers.escapeHtml(titleOverride ? block.schema.xrefTitle : hasTarget ? getDisplayTitle(block, helpers) : 'Pick a target first')}</strong>
+    <span class="xref-override-label">Detail override</span>
     <span
       contenteditable="true"
+      spellcheck="true"
       data-inline-text="true"
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-xref-detail"
-    >${helpers.escapeHtml(block.schema.xrefDetail || 'Add detail')}</span>
-    <label class="xref-target-picker">
-      <span>Target</span>
-      <input
-        list="${helpers.escapeAttr(getDatalistId(block.id))}"
-        data-section-key="${helpers.escapeAttr(sectionKey)}"
-        data-block-id="${helpers.escapeAttr(block.id)}"
-        data-field="block-xref-target"
-        value="${helpers.escapeAttr(normalizeTargetValue(block.schema.xrefTarget))}"
-        placeholder="Start typing a target"
-      />
-      <datalist id="${helpers.escapeAttr(getDatalistId(block.id))}">
-        ${renderTargetOptions(helpers)}
-      </datalist>
-    </label>
+      ${hasTarget ? '' : 'aria-disabled="true"'}
+    >${helpers.escapeHtml(detailOverride ? block.schema.xrefDetail : hasTarget ? getDisplayDetail(block, helpers) : '')}</span>
   </div>
 `;
+};
 
 export const renderXrefCardReader: ComponentReaderRenderer = (_section, block, helpers) =>
   renderXrefCardPreview(
-    block.schema.xrefTitle,
-    block.schema.xrefDetail,
+    getDisplayTitle(block, helpers),
+    getDisplayDetail(block, helpers),
     block.schema.xrefTarget,
     helpers,
-    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget) ? '' : 'is-invalid-target'}`
+    `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, getEffectiveTargetTagFilter(block, helpers)) ? '' : 'is-invalid-target'}`
   );
 
 function renderXrefCardPreview(
@@ -60,18 +72,39 @@ function renderXrefCardPreview(
   </a>`;
 }
 
-function renderTargetOptions(helpers: ComponentRenderHelpers): string {
-  return helpers
-    .getXrefTargetOptions()
-    .map(
-      (option) =>
-        `<option value="${helpers.escapeAttr(option.value)}" label="${helpers.escapeAttr(option.label)}">${helpers.escapeHtml(option.label)}</option>`
-    )
+function renderTargetOptions(
+  helpers: ComponentRenderHelpers,
+  options: ReturnType<ComponentRenderHelpers['getXrefTargetOptions']>,
+  selectedTarget: string
+): string {
+  const optionHtml = options
+    .map((option) => {
+      const selected = option.value === selectedTarget ? ' selected' : '';
+      return `<option value="${helpers.escapeAttr(option.value)}"${selected}>${helpers.escapeHtml(option.title)}</option>`;
+    })
     .join('');
+  const hasSelectedOption = !selectedTarget || options.some((option) => option.value === selectedTarget);
+  const missingSelectedOption = hasSelectedOption
+    ? ''
+    : `<option value="${helpers.escapeAttr(selectedTarget)}" selected>${helpers.escapeHtml(selectedTarget)}</option>`;
+  return `<option value="">Pick a target</option>${missingSelectedOption}${optionHtml}`;
 }
 
-function getDatalistId(blockId: string): string {
-  return `xref-targets-${blockId}`;
+function getDisplayTitle(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
+  return block.schema.xrefTitle.trim() || getTargetOption(block, helpers)?.title || 'Untitled';
+}
+
+function getDisplayDetail(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
+  return block.schema.xrefDetail.trim() || getTargetOption(block, helpers)?.detail || '';
+}
+
+function getTargetOption(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers) {
+  const target = normalizeTargetValue(block.schema.xrefTarget);
+  return helpers.getXrefTargetOptions(getEffectiveTargetTagFilter(block, helpers)).find((option) => option.value === target);
+}
+
+function getEffectiveTargetTagFilter(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
+  return helpers.getEffectiveXrefTargetTagFilter?.(block) ?? block.schema.xrefTargetTagFilter.trim();
 }
 
 function normalizeTargetValue(target: string): string {

@@ -45,6 +45,20 @@ const removeComponentDef: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const removeComponentDefFlavor: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const flavorIndex = Number.parseInt(actionButton.dataset.flavorIndex ?? '', 10);
+  const defs = getComponentDefs();
+  const def = Number.isNaN(defIndex) ? null : defs[defIndex];
+  if (!def || Number.isNaN(flavorIndex) || !Array.isArray(def.flavors)) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:flavor:${flavorIndex}:remove`);
+  def.flavors.splice(flavorIndex, 1);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
 const removeSectionDef: AppActionHandler = ({ actionButton }) => {
   recordHistory();
   const defIndex = Number.parseInt(actionButton.dataset.sectionDefIndex ?? '', 10);
@@ -60,6 +74,20 @@ const removeSectionDef: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const removeSectionDefFlavor: AppActionHandler = ({ actionButton }) => {
+  recordHistory();
+  const idx = Number.parseInt(actionButton.dataset.sectionDefIndex ?? '', 10);
+  const flavorIndex = Number.parseInt(actionButton.dataset.flavorIndex ?? '', 10);
+  const defs = getSectionDefs();
+  const def = Number.isNaN(idx) ? null : defs[idx];
+  if (!def || Number.isNaN(flavorIndex) || !Array.isArray(def.flavors)) {
+    return;
+  }
+  def.flavors.splice(flavorIndex, 1);
+  state.document.meta.section_defs = defs;
+  getRenderApp()();
+};
+
 const openSaveComponentDef: AppActionHandler = ({ actionButton }) => {
   const sectionKey = actionButton.dataset.sectionKey;
   const blockId = actionButton.dataset.blockId;
@@ -70,14 +98,34 @@ const openSaveComponentDef: AppActionHandler = ({ actionButton }) => {
   if (!block) {
     return;
   }
+  const existingName =
+    !isBuiltinComponent(block.schema.component) && getComponentDefs().some((def) => def.name === block.schema.component)
+      ? block.schema.component
+      : '';
   state.reusableSaveModal = {
     kind: 'component',
     sectionKey,
     blockId,
-    draftName: isBuiltinComponent(block.schema.component) ? '' : block.schema.component,
+    draftName: existingName
+      ? getReusableCopyName(existingName)
+      : isBuiltinComponent(block.schema.component)
+        ? ''
+        : block.schema.component,
+    existingName: existingName || undefined,
   };
   getRenderApp()();
 };
+
+function getReusableCopyName(name: string): string {
+  const names = new Set(getComponentDefs().map((def) => def.name));
+  let candidate = `${name}-copy`;
+  let index = 2;
+  while (names.has(candidate)) {
+    candidate = `${name}-copy-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
 
 const openSaveSectionDef: AppActionHandler = ({ actionButton }) => {
   const sectionKey = actionButton.dataset.sectionKey;
@@ -88,10 +136,14 @@ const openSaveSectionDef: AppActionHandler = ({ actionButton }) => {
   if (!section) {
     return;
   }
+  const existing = typeof section.templateKey === 'string'
+    ? getSectionDefs().find((def) => (def.key || def.name) === section.templateKey)
+    : undefined;
   state.reusableSaveModal = {
     kind: 'section',
     sectionKey,
-    draftName: isDefaultUntitledSectionTitle(section.title) ? '' : section.title.trim(),
+    draftName: existing ? `${existing.name}-copy` : isDefaultUntitledSectionTitle(section.title) ? '' : section.title.trim(),
+    existingName: existing?.name,
   };
   getRenderApp()();
 };
@@ -119,7 +171,9 @@ const addTemplateField: AppActionHandler = ({ actionButton }) => {
 export const reusableActions: Record<string, AppActionHandler> = {
   'add-component-def': addComponentDef,
   'remove-component-def': removeComponentDef,
+  'remove-component-def-flavor': removeComponentDefFlavor,
   'remove-section-def': removeSectionDef,
+  'remove-section-def-flavor': removeSectionDefFlavor,
   'open-save-component-def': openSaveComponentDef,
   'open-save-section-def': openSaveSectionDef,
   'remove-tag': removeTag,

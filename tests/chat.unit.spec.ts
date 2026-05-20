@@ -3,9 +3,13 @@ import { expect, test } from 'vitest';
 import {
   buildChatDocumentContext,
   buildProxyChatRequest,
+  closeChatPanel,
+  createDefaultChatState,
   getEnvChatSettings,
   mergeChatSettings,
+  stopChatRequest,
   stripDocumentHeaderAndComments,
+  toggleChatPanelOpen,
 } from '../src/chat/chat';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
@@ -58,6 +62,26 @@ hvy_version: 0.1
   expect(buildChatDocumentContext(document)).not.toContain('<!--hvy:text');
 });
 
+test('buildChatDocumentContext prepends document ai context from metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+ai-context: This resume uses top-skills-tools-technologies as featured skills.
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello there
+`, '.hvy');
+
+  const context = buildChatDocumentContext(document);
+
+  expect(context).toContain('Document context:\nThis resume uses top-skills-tools-technologies as featured skills.');
+  expect(context).toContain('Document body:\n<!--hvy: {"id":"summary"');
+  expect(context).not.toContain('ai-context:');
+});
+
 test('buildChatDocumentContext keeps xref-card content under skills headings', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -100,7 +124,6 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
       provider: 'openai',
       model: 'gpt-5-mini',
       context: 'Context body',
-      formatInstructions: 'Format as HVY.',
       mode: 'qa',
       messages: [
         { id: '1', role: 'user', content: 'What is this?' },
@@ -111,7 +134,6 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
     provider: 'openai',
     model: 'gpt-5-mini',
     context: 'Context body',
-    formatInstructions: 'Format as HVY.',
     mode: 'qa',
     messages: [
       { id: '1', role: 'user', content: 'What is this?', error: undefined },
@@ -125,10 +147,38 @@ test('getEnvChatSettings prepopulates provider and model from vite env vars', ()
     getEnvChatSettings({
       VITE_HVY_CHAT_PROVIDER: 'anthropic',
       VITE_HVY_CHAT_MODEL: 'claude-custom',
-    } as ImportMetaEnv)
+      VITE_HVY_CHAT_COMPACTION_PROVIDER: 'openai',
+      VITE_HVY_CHAT_COMPACTION_MODEL: 'gpt-5.4-nano',
+    } as unknown as ImportMetaEnv)
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-custom',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
+  });
+});
+
+test('getEnvChatSettings exposes tool-loop compaction settings from vite env vars', () => {
+  expect(
+    getEnvChatSettings({
+      VITE_HVY_CHAT_PROVIDER: 'openai',
+      VITE_HVY_CHAT_MODEL: 'gpt-dev',
+      VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: '12',
+      VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES: '6',
+      VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS: '9000',
+      VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS: '1200',
+    } as unknown as ImportMetaEnv)
+  ).toEqual({
+    provider: 'openai',
+    model: 'gpt-dev',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
+    toolLoopCompaction: {
+      compactAfterMessages: 12,
+      keepRecentMessages: 6,
+      latestToolResultContextChars: 9000,
+      toolResultChatChars: 1200,
+    },
   });
 });
 
@@ -141,6 +191,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'openai',
     model: 'gpt-dev',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 
   expect(
@@ -150,6 +202,8 @@ test('getEnvChatSettings falls back to provider-specific model and then built-in
   ).toEqual({
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
 });
 
@@ -162,13 +216,65 @@ test('mergeChatSettings keeps env defaults when localStorage values are empty st
       },
       {
         provider: 'openai',
-        model: 'gpt-5-mini',
+        model: 'gpt-5.4-mini',
+        compactionProvider: 'openai',
+        compactionModel: 'gpt-5.4-nano',
       }
     )
   ).toEqual({
     provider: 'openai',
-    model: 'gpt-5-mini',
+    model: 'gpt-5.4-mini',
+    compactionProvider: 'openai',
+    compactionModel: 'gpt-5.4-nano',
   });
+});
+
+test('stopChatRequest aborts the current question and records the stop', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.isSending = true;
+  chat.abortController = abortController;
+  chat.error = 'Still working';
+
+  expect(stopChatRequest(chat)).toBe(true);
+
+  expect(abortController.signal.aborted).toBe(true);
+  expect(chat.isSending).toBe(false);
+  expect(chat.abortController).toBe(null);
+  expect(chat.error).toBe(null);
+  expect(chat.requestNonce).toBe(1);
+  expect(chat.messages.at(-1)).toMatchObject({
+    role: 'assistant',
+    content: 'Stopped.',
+    progress: true,
+  });
+});
+
+test('closing the chat panel stops an in-flight question', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.abortController = abortController;
+
+  closeChatPanel(chat);
+
+  expect(chat.panelOpen).toBe(false);
+  expect(abortController.signal.aborted).toBe(true);
+  expect(chat.isSending).toBe(false);
+});
+
+test('toggling an open chat panel closes and stops the request', () => {
+  const chat = createDefaultChatState();
+  const abortController = new AbortController();
+  chat.panelOpen = true;
+  chat.isSending = true;
+  chat.abortController = abortController;
+
+  toggleChatPanelOpen(chat);
+
+  expect(chat.panelOpen).toBe(false);
+  expect(abortController.signal.aborted).toBe(true);
 });
 
 test('wrapChatResponseAsDocument injects chat response component defaults into front matter', () => {

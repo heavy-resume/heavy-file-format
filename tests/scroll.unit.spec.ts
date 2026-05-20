@@ -9,6 +9,7 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
     editorSidebarTop: 2,
     viewerSidebarTop: 3,
     readerTop: 4,
+    windowLeft: 6,
     windowTop: 5,
   };
   const elementsBySelector = new Map<string, { scrollTop: number }>([
@@ -18,7 +19,7 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
   const app = {
     querySelector: vi.fn((selector: string) => elementsBySelector.get(selector) ?? null),
   } as unknown as HTMLElement;
-  vi.stubGlobal('window', { scrollY: 987 });
+  vi.stubGlobal('window', { scrollX: 789, scrollY: 987 });
 
   const result = capturePaneScroll(previous, app);
 
@@ -27,6 +28,7 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
     editorSidebarTop: 2,
     viewerSidebarTop: 321,
     readerTop: 654,
+    windowLeft: 789,
     windowTop: 987,
   });
   vi.unstubAllGlobals();

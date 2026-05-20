@@ -1,4 +1,4 @@
-import { appEventsBound, setAppEventsBound } from '../state';
+import { setAppEventsBound } from '../state';
 import { bindScrollHandler } from './handlers/scroll';
 import { bindInputBlock } from './handlers/input-block';
 import { bindChangeControls } from './handlers/change-controls';
@@ -16,8 +16,10 @@ import { bindDnd } from './handlers/dnd';
 import { bindClickMisc } from './handlers/click-misc';
 import { bindResize } from './handlers/resize';
 
+const boundAppRoots = new WeakSet<HTMLElement>();
+
 export function bindAppEvents(app: HTMLElement): void {
-  if (appEventsBound) {
+  if (boundAppRoots.has(app)) {
     return;
   }
 
@@ -38,5 +40,6 @@ export function bindAppEvents(app: HTMLElement): void {
   bindClickMisc(app);
   bindResize(app);
 
+  boundAppRoots.add(app);
   setAppEventsBound(true);
 }

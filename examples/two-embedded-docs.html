@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HVY Two Embedded Documents</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f4f0e8;
+        color: #231f1a;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      .page-shell {
+        height: 100vh;
+        padding: 1rem;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 1rem;
+        overflow: hidden;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        width: 100%;
+        margin: 0 auto;
+        max-width: 1500px;
+      }
+
+      .topbar h1 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      .topbar button {
+        border: 1px solid #857665;
+        border-radius: 7px;
+        background: #fffaf2;
+        color: #231f1a;
+        padding: 0.45rem 0.7rem;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .two-doc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        min-height: 0;
+        height: 100%;
+        width: 100%;
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+
+      .doc-frame {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        border: 1px solid #c5b9a9;
+        border-radius: 8px;
+        background: #fffaf2;
+        overflow: hidden;
+      }
+
+      .doc-frame-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid #d9ceb8;
+        background: #ede3d1;
+      }
+
+      .doc-frame-title {
+        display: grid;
+        gap: 0.18rem;
+        min-width: 0;
+      }
+
+      .doc-frame-header strong {
+        font-size: 0.92rem;
+      }
+
+      .doc-frame-subtitle {
+        color: #685844;
+        font-size: 0.74rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .doc-frame-controls {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+
+      .mode-control,
+      .source-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        padding: 0.16rem;
+        border: 1px solid #b19d83;
+        border-radius: 7px;
+        background: #fffaf2;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      }
+
+      .mode-button,
+      .source-button {
+        min-width: 4.2rem;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #4d4135;
+        padding: 0.34rem 0.52rem;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .source-button {
+        min-width: 4.7rem;
+      }
+
+      .mode-button[aria-pressed="true"],
+      .source-button[aria-pressed="true"] {
+        background: #6f4f2f;
+        color: #fffaf2;
+        box-shadow: 0 1px 2px rgba(35, 31, 26, 0.2);
+      }
+
+      .mount-point {
+        min-height: 0;
+        height: 100%;
+      }
+
+      .event-log {
+        width: 100%;
+        max-width: 1500px;
+        max-height: 5.5rem;
+        overflow: auto;
+        margin: 0 auto;
+        padding: 0.75rem;
+        border: 1px solid #c5b9a9;
+        border-radius: 8px;
+        background: #fffaf2;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 0.82rem;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 900px) {
+        .page-shell {
+          height: auto;
+          min-height: 100vh;
+          overflow: visible;
+        }
+
+        .two-doc-grid {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+
+        .doc-frame-header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .doc-frame-controls {
+          justify-content: flex-start;
+        }
+
+        .mount-point {
+          height: 680px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="topbar">
+        <h1>Two Embedded HVY Documents</h1>
+        <button type="button" id="resetSessions">Reset sessions</button>
+      </div>
+      <div class="two-doc-grid">
+        <section class="doc-frame">
+          <div class="doc-frame-header">
+            <div class="doc-frame-title">
+              <strong>Document One</strong>
+              <span class="doc-frame-subtitle" data-doc-storage-label="one"></span>
+            </div>
+            <div class="doc-frame-controls">
+              <div class="source-control" role="group" aria-label="Document One example">
+                <button type="button" class="source-button" data-doc-one-source="example" aria-pressed="true">Example</button>
+                <button type="button" class="source-button" data-doc-one-source="resume" aria-pressed="false">Resume</button>
+              </div>
+              <div class="mode-control" role="group" aria-label="Document One mode">
+                <button type="button" class="mode-button" data-doc-one-mode="viewer" aria-pressed="false">Viewer</button>
+                <button type="button" class="mode-button" data-doc-one-mode="editor" aria-pressed="true">Editor</button>
+                <button type="button" class="mode-button" data-doc-one-mode="ai" aria-pressed="false">AI</button>
+              </div>
+            </div>
+          </div>
+          <div id="docOne" class="mount-point"></div>
+        </section>
+        <section class="doc-frame">
+          <div class="doc-frame-header">
+            <div class="doc-frame-title">
+              <strong>Document Two</strong>
+              <span class="doc-frame-subtitle" data-doc-storage-label="two"></span>
+            </div>
+            <div class="doc-frame-controls">
+              <div class="source-control" role="group" aria-label="Document Two example">
+                <button type="button" class="source-button" data-doc-two-source="example" aria-pressed="false">Example</button>
+                <button type="button" class="source-button" data-doc-two-source="resume" aria-pressed="true">Resume</button>
+              </div>
+            </div>
+          </div>
+          <div id="docTwo" class="mount-point"></div>
+        </section>
+      </div>
+      <pre id="eventLog" class="event-log">Ready.</pre>
+    </div>
+
+    <script type="module">
+      import exampleHvyUrl from '/examples/example.hvy?url';
+      import resumeHvyUrl from '/examples/resume.hvy?url';
+      import { deserializeDocumentBytes, mountHvy } from '/src/embed-full.ts';
+
+      const eventLog = document.querySelector('#eventLog');
+      const mounted = [];
+      const documentCache = [
+        { example: null, resume: null },
+        { example: null, resume: null },
+      ];
+      const documentSources = {
+        example: { label: 'Example', url: exampleHvyUrl },
+        resume: { label: 'Resume', url: resumeHvyUrl },
+      };
+      let docOneMode = 'editor';
+      let docOneSource = 'example';
+      let docTwoSource = 'resume';
+      let docOneMountRequest = 0;
+      let docTwoMountRequest = 0;
+
+      const writeLog = (message) => {
+        const timestamp = new Date().toLocaleTimeString();
+        eventLog.textContent = `${timestamp} ${message}\n${eventLog.textContent}`;
+      };
+
+      const getStorageKey = (slot, source) => `two-doc-reference-${slot === 0 ? 'one' : 'two'}-${source}`;
+
+      const setDocOneModeButtons = () => {
+        document.querySelectorAll('[data-doc-one-mode]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.docOneMode === docOneMode ? 'true' : 'false');
+        });
+      };
+
+      const setSourceButtons = () => {
+        document.querySelectorAll('[data-doc-one-source]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.docOneSource === docOneSource ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-doc-two-source]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.docTwoSource === docTwoSource ? 'true' : 'false');
+        });
+        const docOneLabel = document.querySelector('[data-doc-storage-label="one"]');
+        const docTwoLabel = document.querySelector('[data-doc-storage-label="two"]');
+        docOneLabel.textContent = `storageKey: ${getStorageKey(0, docOneSource)}`;
+        docTwoLabel.textContent = `storageKey: ${getStorageKey(1, docTwoSource)}`;
+      };
+
+      const makeChatClient = (label) => ({
+        async complete(request, options = {}) {
+          if (options.signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          await new Promise((resolve) => setTimeout(resolve, label === 'Document One' ? 260 : 60));
+          const input = String(request.context || '').split('\n').slice(1).join(' ').trim();
+          const output = `${label} generated from: ${input}`;
+          writeLog(`${label} complete() -> ${output}`);
+          return { output };
+        },
+      });
+
+      async function loadDocument(slot, source) {
+        const cache = documentCache[slot];
+        if (cache[source]) {
+          return cache[source];
+        }
+        const definition = documentSources[source];
+        const response = await fetch(definition.url);
+        if (!response.ok) {
+          throw new Error(`Could not load ${definition.label.toLowerCase()} document: ${response.status} ${response.statusText}`);
+        }
+        cache[source] = deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy');
+        return cache[source];
+      }
+
+      function mountLoadedFirstDocument(documentToMount) {
+        mounted[0]?.destroy();
+        const firstRoot = document.querySelector('#docOne');
+        mounted[0] = mountHvy({
+          root: firstRoot,
+          document: documentToMount,
+          mode: docOneMode,
+          storageKey: getStorageKey(0, docOneSource),
+          chatClient: makeChatClient('Document One'),
+        });
+        setDocOneModeButtons();
+        setSourceButtons();
+        writeLog(`Mounted Document One ${documentSources[docOneSource].label} in ${docOneMode} mode.`);
+      }
+
+      async function mountFirstDocument(options = {}) {
+        const requestId = ++docOneMountRequest;
+        const documentToMount = options.preserveCurrent && mounted[0]
+          ? mounted[0].getDocument()
+          : await loadDocument(0, docOneSource);
+        if (requestId !== docOneMountRequest) {
+          return;
+        }
+        mountLoadedFirstDocument(documentToMount);
+      }
+
+      async function mountSecondDocument() {
+        const requestId = ++docTwoMountRequest;
+        const documentToMount = await loadDocument(1, docTwoSource);
+        if (requestId !== docTwoMountRequest) {
+          return;
+        }
+        mounted[1]?.destroy();
+        const secondRoot = document.querySelector('#docTwo');
+        mounted[1] = mountHvy({
+          root: secondRoot,
+          document: documentToMount,
+          mode: 'viewer',
+          storageKey: getStorageKey(1, docTwoSource),
+          chatClient: makeChatClient('Document Two'),
+        });
+        setSourceButtons();
+        writeLog(`Mounted Document Two ${documentSources[docTwoSource].label} in viewer mode.`);
+      }
+
+      async function mountPair() {
+        mounted.splice(0).forEach((mount) => mount.destroy());
+        const [firstDocument, secondDocument] = await Promise.all([
+          loadDocument(0, docOneSource),
+          loadDocument(1, docTwoSource),
+        ]);
+        docOneMountRequest += 1;
+        docTwoMountRequest += 1;
+        mountLoadedFirstDocument(firstDocument);
+        mounted[1]?.destroy();
+        const secondRoot = document.querySelector('#docTwo');
+        mounted[1] = mountHvy({
+          root: secondRoot,
+          document: secondDocument,
+          mode: 'viewer',
+          storageKey: getStorageKey(1, docTwoSource),
+          chatClient: makeChatClient('Document Two'),
+        });
+        setSourceButtons();
+        writeLog('Mounted both documents.');
+      }
+
+      document.querySelectorAll('[data-doc-one-mode]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextMode = button.dataset.docOneMode;
+          if (!nextMode || nextMode === docOneMode) {
+            return;
+          }
+          docOneMode = nextMode;
+          setDocOneModeButtons();
+          void mountFirstDocument({ preserveCurrent: true });
+        });
+      });
+
+      document.querySelectorAll('[data-doc-one-source]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextSource = button.dataset.docOneSource;
+          if (!nextSource || nextSource === docOneSource) {
+            return;
+          }
+          docOneSource = nextSource;
+          setSourceButtons();
+          void mountFirstDocument();
+        });
+      });
+
+      document.querySelectorAll('[data-doc-two-source]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextSource = button.dataset.docTwoSource;
+          if (!nextSource || nextSource === docTwoSource) {
+            return;
+          }
+          docTwoSource = nextSource;
+          setSourceButtons();
+          void mountSecondDocument();
+        });
+      });
+
+      document.querySelector('#resetSessions').addEventListener('click', () => {
+        [
+          'hvy-editor-session-state-v1:two-doc-reference-example',
+          'hvy-editor-session-state-v1:two-doc-reference-two',
+          'hvy-editor-session-state-v1:two-doc-reference-one-example',
+          'hvy-editor-session-state-v1:two-doc-reference-one-resume',
+          'hvy-editor-session-state-v1:two-doc-reference-two-example',
+          'hvy-editor-session-state-v1:two-doc-reference-two-resume',
+        ].forEach((key) => sessionStorage.removeItem(key));
+        documentCache.forEach((cache) => {
+          cache.example = null;
+          cache.resume = null;
+        });
+        void mountPair();
+        writeLog('Reset both keyed sessions.');
+      });
+
+      setSourceButtons();
+      void mountPair();
+    </script>
+  </body>
+</html>

@@ -1,18 +1,13 @@
-import { requestProxyCompletion } from './chat/chat';
-import {
-  DbTableAiSummary,
-  executeDbTableQueryTool,
-  executeDbTableWriteSql,
-  getDbTableAiSummary,
-} from './plugins/db-table';
+import { requestProxyCompletion, type HostChatClient } from './chat/chat';
+import type { DbTableAiSummary } from './plugins/db-table';
 import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
 import { serializeBlockFragment } from './serialization';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import type { VisualBlock } from './editor/types';
-import type { AiEditRequestResult } from './ai-edit';
-import { parseAiBlockEditResponse } from './ai-edit';
+import { parseAiBlockEditResponse, type AiEditRequestResult } from './ai-component-edit-common';
 
 export const AI_DB_TABLE_EDIT_MAX_STEPS = 6;
+const loadDbTableRuntime = () => import('./plugins/db-table');
 
 type DbTableEditTool =
   | { tool: 'query_db_table'; query?: string; limit?: number; reason?: string }
@@ -26,8 +21,8 @@ export function isDbTablePluginBlock(block: VisualBlock): boolean {
 
 export function buildDbTableEditFormatInstructions(tableName: string): string {
   return [
-    'You are revising a `db-table` plugin component. The component renders rows from a SQLite table attached to the HVY document.',
-    'Editing *data* in the table means running SQL against the attached database, not changing the HVY fragment.',
+    'You are revising a `db-table` plugin component. The component renders dynamic data-backed rows from a table or view attached to the HVY document.',
+    'Editing *data* in the table means running SQL against the current backend, not changing the HVY fragment.',
     'Editing the component\'s *configuration* (the stored SQL query, queryLimit, queryDynamicWindow, etc.) means returning a new HVY fragment.',
     '',
     'Reply with exactly one JSON object and nothing else. Do not wrap it in Markdown.',
@@ -43,7 +38,7 @@ export function buildDbTableEditFormatInstructions(tableName: string): string {
     'Tool shapes:',
     '{"tool":"query_db_table","query":"SELECT * FROM ' + tableName + ' WHERE status = \\"Open\\"","limit":10,"reason":"optional"}',
     '{"tool":"execute_sql","sql":"UPDATE ' + tableName + ' SET status = \'Done\' WHERE id = 3","reason":"optional"}',
-    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"dev.heavy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
+    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"hvy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');
 }
@@ -138,6 +133,8 @@ export async function requestAiDbTableEdit(params: {
   block: VisualBlock;
   request: string;
   onBeforeMutation?: () => void;
+  client?: HostChatClient | null;
+  beforeLlmCall?: (debugLabel: string) => Promise<void> | void;
 }): Promise<AiEditRequestResult> {
   const tableName = typeof params.block.schema.pluginConfig.table === 'string'
     ? params.block.schema.pluginConfig.table.trim()
@@ -147,14 +144,15 @@ export async function requestAiDbTableEdit(params: {
   }
 
   const storedQuery = params.block.text.trim();
-  const summary = await getDbTableAiSummary(params.document, tableName, { activeQuery: storedQuery || undefined });
+  const summary = await loadDbTableRuntime()
+    .then(({ getDbTableAiSummary }) => getDbTableAiSummary(params.document, tableName, { activeQuery: storedQuery || undefined }));
   const originalFragment = serializeBlockFragment(params.block);
   const context = buildDbTableEditContext({
     document: params.document,
     fragment: originalFragment,
     summary,
   });
-  const formatInstructions = buildDbTableEditFormatInstructions(tableName);
+  const responseInstructions = buildDbTableEditFormatInstructions(tableName);
 
   let mutationRecorded = false;
   const recordMutationOnce = (): void => {
@@ -184,9 +182,11 @@ export async function requestAiDbTableEdit(params: {
       settings: params.settings,
       messages: conversation,
       context,
-      formatInstructions,
+      responseInstructions,
       mode: 'component-edit',
       debugLabel: `ai-db-table-edit:${iteration + 1}`,
+      client: params.client,
+      beforeRequest: params.beforeLlmCall,
     });
 
     const parsed = parseDbTableEditToolRequest(response);
@@ -196,7 +196,7 @@ export async function requestAiDbTableEdit(params: {
         {
           id: crypto.randomUUID(),
           role: 'user',
-          content: `The previous response was invalid and no tool was executed. ${parsed.message} Reply with a single JSON tool object.`,
+          content: `Return a single valid JSON tool object. ${parsed.message}`,
         },
       ];
       continue;
@@ -232,12 +232,14 @@ export async function requestAiDbTableEdit(params: {
     let toolResult: string;
     try {
       if (parsed.value.tool === 'query_db_table') {
+        const { executeDbTableQueryTool } = await loadDbTableRuntime();
         toolResult = await executeDbTableQueryTool(params.document, {
           tableName,
           query: parsed.value.query,
           limit: parsed.value.limit,
         });
       } else {
+        const { executeDbTableWriteSql } = await loadDbTableRuntime();
         recordMutationOnce();
         toolResult = await executeDbTableWriteSql(parsed.value.sql);
       }

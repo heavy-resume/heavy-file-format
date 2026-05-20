@@ -1,23 +1,59 @@
-import initSqlJs from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../editor/types';
-import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
-import { visitBlocks } from '../section-ops';
-import { getRenderApp, state } from '../state';
+import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
+import { validateDbTableObjectName } from './db-table-identifiers';
+import { validateAttachedComponentHvy } from './db-table-fragment';
+import { formatQueryResultTable } from './db-table-format';
+import type { ScriptingDbApi } from './scripting/runtime';
+import { closeIcon, plusIcon } from '../icons';
+import {
+  clampDbTableOffset,
+  clearDbTableViewState,
+  DB_TABLE_ESTIMATED_ROW_HEIGHT,
+  DB_TABLE_MAX_QUERY_ROWS,
+  DB_TABLE_WINDOW_SIZE,
+  getDbTableQueryDynamicWindow,
+  getDbTableQueryLimit,
+  getDbTableViewState,
+  getDocumentDbTableNames,
+  getPluginConfigValue,
+} from './db-table-model';
 
 import './db-table.css';
 
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
-type SqlJsStatic = Awaited<ReturnType<typeof initSqlJs>>;
-type SqlJsDatabase = InstanceType<SqlJsStatic['Database']>;
+type SqliteBindValue = number | string | Uint8Array | null;
+type SqliteBindParams = SqliteBindValue[] | Record<string, SqliteBindValue> | null;
+interface SqlJsQueryResult {
+  columns: string[];
+  values: unknown[][];
+}
+interface SqlJsStatement {
+  bind(params?: SqliteBindParams): boolean;
+  getColumnNames(): string[];
+  step(): boolean;
+  getAsObject(): Record<string, unknown>;
+  free(): void;
+}
+interface SqlJsDatabase {
+  close(): void;
+  export(): Uint8Array;
+  exec(sql: string, params?: SqliteBindParams): SqlJsQueryResult[];
+  prepare(sql: string, params?: SqliteBindParams): SqlJsStatement;
+  run(sql: string, params?: SqliteBindParams): void;
+  getRowsModified(): number;
+}
+interface SqlJsStatic {
+  Database: new (bytes?: Uint8Array) => SqlJsDatabase;
+}
+type InitSqlJs = (config: { locateFile: () => string }) => Promise<SqlJsStatic>;
 
 interface SqliteTableSnapshot {
+  objectType: 'table' | 'view';
   columns: string[];
   rowIds: number[];
   rows: string[][];
@@ -40,73 +76,43 @@ interface SqliteRuntime {
   persistPromise: Promise<void> | null;
 }
 
-const runtime: SqliteRuntime = {
-  documentRef: null,
-  db: null,
-  loading: false,
-  loadError: null,
-  loadPromise: null,
-  persistPromise: null,
-};
+function createSqliteRuntime(): SqliteRuntime {
+  return {
+    documentRef: null,
+    db: null,
+    loading: false,
+    loadError: null,
+    loadPromise: null,
+    persistPromise: null,
+  };
+}
+
+const fallbackRuntime: SqliteRuntime = createSqliteRuntime();
+const runtimeByStateRuntime = new WeakMap<StateRuntime, SqliteRuntime>();
+
+function getSqliteRuntime(): SqliteRuntime {
+  try {
+    const stateRuntime = getActiveStateRuntime();
+    let runtime = runtimeByStateRuntime.get(stateRuntime);
+    if (!runtime) {
+      runtime = createSqliteRuntime();
+      runtimeByStateRuntime.set(stateRuntime, runtime);
+    }
+    return runtime;
+  } catch {
+    return fallbackRuntime;
+  }
+}
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
-const DB_TABLE_WINDOW_SIZE = 50;
-const DB_TABLE_MAX_QUERY_ROWS = 99;
-const DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT = 50;
-const DB_TABLE_FORWARD_SCROLL_TRIGGER = 75;
-const DB_TABLE_BACKWARD_SCROLL_TRIGGER = 25;
-const DB_TABLE_ESTIMATED_ROW_HEIGHT = 40;
-
-interface DbTableViewState {
-  offset: number;
-  scrollTop: number;
-  sortColumn: string | null;
-  sortDirection: 'asc' | 'desc' | null;
-}
-
-const dbTableViewState = new Map<string, DbTableViewState>();
-
-function getDbTableViewKey(sectionKey: string, blockId: string): string {
-  return `${sectionKey}:${blockId}`;
-}
-
-function getDbTableViewState(sectionKey: string, blockId: string): DbTableViewState {
-  const key = getDbTableViewKey(sectionKey, blockId);
-  const existing = dbTableViewState.get(key);
-  if (existing) {
-    return existing;
-  }
-  const created: DbTableViewState = {
-    offset: 0,
-    scrollTop: 0,
-    sortColumn: null,
-    sortDirection: null,
-  };
-  dbTableViewState.set(key, created);
-  return created;
-}
-
-function getPluginConfigValue(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === 'string' ? value : '';
-}
-
-export function getDbTableQueryDynamicWindow(config: Record<string, unknown>): boolean {
-  return typeof config.queryDynamicWindow === 'boolean' ? config.queryDynamicWindow : true;
-}
-
-export function getDbTableQueryLimit(config: Record<string, unknown>): number {
-  const rawValue = config.queryLimit;
-  const parsed = typeof rawValue === 'number'
-    ? rawValue
-    : typeof rawValue === 'string'
-      ? Number.parseInt(rawValue, 10)
-      : NaN;
-  if (!Number.isFinite(parsed)) {
-    return DB_TABLE_DEFAULT_STATIC_QUERY_LIMIT;
-  }
-  return clampDbTableQueryLimit(parsed);
-}
+export {
+  getDbTableQueryDynamicWindow,
+  getDbTableQueryLimit,
+  getDocumentDbTableNames,
+  resetDbTableViewState,
+  restoreDbTableFrameScroll,
+  toggleDbTableSort,
+} from './db-table-model';
 
 export function renderDbTablePluginEditor(sectionKey: string, block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table');
@@ -154,8 +160,13 @@ function renderDbTablePluginContent(
   tableName: string,
   readOnly: boolean
 ): string {
+  const runtime = getSqliteRuntime();
   if (tableName.trim().length === 0) {
     return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
+  }
+  const tableNameError = validateDbTableObjectName(tableName);
+  if (tableNameError) {
+    return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(tableNameError)}</div>`;
   }
 
   if (runtime.loadError) {
@@ -167,11 +178,16 @@ function renderDbTablePluginContent(
   }
 
   try {
-    if (ensureTableExists(runtime.db, tableName)) {
-      void persistRuntimeDatabase();
+    const objectType = getDbObjectType(runtime.db, tableName);
+    if (!objectType) {
+      if (readOnly) {
+        return `<div class="plugin-placeholder">DB table error: table or view "${helpers.escapeHtml(tableName)}" does not exist.</div>`;
+      }
+      return renderMissingTablePrompt(sectionKey, block.id, tableName, helpers);
     }
     const viewState = getDbTableViewState(sectionKey, block.id);
     const snapshot = readTableSnapshot(runtime.db, tableName, {
+      objectType,
       query: block.text,
       offset: viewState.offset,
       dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
@@ -189,6 +205,27 @@ function renderDbTablePluginContent(
   }
 }
 
+function renderMissingTablePrompt(
+  sectionKey: string,
+  blockId: string,
+  tableName: string,
+  helpers: ComponentRenderHelpers
+): string {
+  return `
+    <div class="plugin-placeholder db-table-missing">
+      <span>Table or view "${helpers.escapeHtml(tableName)}" does not exist.</span>
+      <button
+        type="button"
+        class="secondary"
+        data-action="db-table-create-table"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(blockId)}"
+        data-table-name="${helpers.escapeAttr(tableName)}"
+      >Create Table</button>
+    </div>
+  `;
+}
+
 function renderEditableTable(
   sectionKey: string,
   blockId: string,
@@ -197,7 +234,8 @@ function renderEditableTable(
   helpers: ComponentRenderHelpers
 ): string {
   const queryActive = snapshot.queryActive;
-  const tableDisabledAttr = queryActive ? ' disabled' : '';
+  const readOnlySource = queryActive || snapshot.objectType === 'view';
+  const tableDisabledAttr = readOnlySource ? ' disabled' : '';
   const topSpacerHeight = snapshot.offset * DB_TABLE_ESTIMATED_ROW_HEIGHT;
   const remainingRows = Math.max(snapshot.totalRows - (snapshot.offset + snapshot.rows.length), 0);
   const bottomSpacerHeight = remainingRows * DB_TABLE_ESTIMATED_ROW_HEIGHT;
@@ -274,6 +312,8 @@ function renderEditableTable(
             ? snapshot.dynamicWindow
               ? 'Query preview is read-only and is capped to fewer than 100 rows.'
               : `Query preview is read-only. Rows limited to ${snapshot.queryLimit}.`
+            : snapshot.objectType === 'view'
+              ? 'This database view is read-only. Create or edit the source tables to change rows.'
             : 'Rows and columns persist in the attached database file.'
         }</span>
       </div>
@@ -313,6 +353,18 @@ function renderEditableTable(
                           title="Sort by ${helpers.escapeAttr(column)}"
                           ${queryActive ? 'disabled' : ''}
                         >${snapshot.sortColumn === column ? (snapshot.sortDirection === 'desc' ? '↓' : '↑') : '↕'}</button>
+                        <button
+                          type="button"
+                          class="ghost db-table-delete-column-button"
+                          data-action="sqlite-drop-column"
+                          data-section-key="${helpers.escapeAttr(sectionKey)}"
+                          data-block-id="${helpers.escapeAttr(blockId)}"
+                          data-table-name="${helpers.escapeAttr(tableName)}"
+                          data-column-name="${helpers.escapeAttr(column)}"
+                          aria-label="Delete column ${helpers.escapeAttr(column)}"
+                          title="Delete column ${helpers.escapeAttr(column)}"
+                          ${readOnlySource || snapshot.columns.length <= 1 ? 'disabled' : ''}
+                        >${closeIcon()}</button>
                       </div>
                     </th>`
                 )
@@ -327,7 +379,7 @@ function renderEditableTable(
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   title="Add column"
                   ${tableDisabledAttr}
-                >+</button>
+                >${plusIcon()}</button>
               </th>
             </tr>
           </thead>
@@ -345,7 +397,7 @@ function renderEditableTable(
                   data-block-id="${helpers.escapeAttr(blockId)}"
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   ${tableDisabledAttr}
-                >+ Add Row</button>
+                >${plusIcon()} Add Row</button>
               </td>
             </tr>
           </tbody>
@@ -403,9 +455,23 @@ function renderReadOnlyTable(
 
 export async function addDbTableRow(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   await persistRuntimeDatabase();
+}
+
+export async function createDbTable(tableName: string): Promise<boolean> {
+  const trimmed = tableName.trim();
+  const tableNameError = validateDbTableObjectName(trimmed);
+  if (tableNameError) {
+    throw new Error(tableNameError);
+  }
+  const db = await getLoadedDatabase();
+  const created = ensureTableExists(db, trimmed);
+  if (created) {
+    await persistRuntimeDatabase();
+  }
+  return created;
 }
 
 export async function materializeDbTableDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
@@ -414,7 +480,7 @@ export async function materializeDbTableDraftRow(tableName: string, columnName: 
   }
 
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
   const rowIdResult = db.exec('SELECT last_insert_rowid()');
   const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
@@ -428,7 +494,7 @@ export async function materializeDbTableDraftRow(tableName: string, columnName: 
 
 export async function addDbTableColumn(tableName: string): Promise<void> {
   const db = await getLoadedDatabase();
-  ensureTableExists(db, tableName);
+  ensureWritableTableExists(db, tableName);
   const nextName = getNextColumnName(getTableColumns(db, tableName));
   db.run(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(nextName)} TEXT`);
   await persistRuntimeDatabase();
@@ -441,6 +507,7 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
   }
 
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   const columns = getTableColumns(db, tableName);
   if (columns.includes(trimmedNext)) {
     throw new Error(`Column "${trimmedNext}" already exists.`);
@@ -451,6 +518,7 @@ export async function renameDbTableColumn(tableName: string, oldName: string, ne
 
 export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   const columns = getTableColumns(db, tableName);
   if (!columns.includes(columnName)) {
     return;
@@ -464,6 +532,7 @@ export async function dropDbTableColumn(tableName: string, columnName: string): 
 
 export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
   const db = await getLoadedDatabase();
+  requireWritableTable(db, tableName);
   db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
   await persistRuntimeDatabase();
 }
@@ -507,18 +576,8 @@ export async function setSqliteRowComponent(tableName: string, rowId: number, hv
   await persistRuntimeDatabase();
 }
 
-export function parseAttachedComponentBlocks(hvy: string): VisualBlock[] {
-  const trimmed = hvy.trim();
-  if (trimmed.length === 0) {
-    return [];
-  }
-
-  validateAttachedComponentHvy(trimmed);
-  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(trimmed), '.hvy');
-  return parsed.document.sections[0]?.blocks ?? [];
-}
-
 function ensureSqliteRuntime(): void {
+  const runtime = getSqliteRuntime();
   if (runtime.documentRef === state.document && (runtime.db || runtime.loading || runtime.loadError)) {
     return;
   }
@@ -530,7 +589,7 @@ function ensureSqliteRuntime(): void {
 
   runtime.loading = true;
   runtime.loadError = null;
-  runtime.loadPromise = loadRuntimeDatabase()
+  runtime.loadPromise = loadRuntimeDatabase(state.document)
     .then(() => {
       runtime.loading = false;
       runtime.loadError = null;
@@ -545,6 +604,7 @@ function ensureSqliteRuntime(): void {
 
 async function getLoadedDatabase(): Promise<SqlJsDatabase> {
   ensureSqliteRuntime();
+  const runtime = getSqliteRuntime();
   if (runtime.loadPromise) {
     await runtime.loadPromise;
   }
@@ -554,19 +614,31 @@ async function getLoadedDatabase(): Promise<SqlJsDatabase> {
   return runtime.db;
 }
 
-async function loadRuntimeDatabase(): Promise<void> {
+async function loadRuntimeDatabase(document: VisualDocument): Promise<void> {
+  const runtime = getSqliteRuntime();
   const SQL = await getSqlJs();
-  const bytes = await getAttachmentDatabaseBytes(getAttachment(state.document, DB_ATTACHMENT_ID));
+  const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   runtime.db = bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
 }
 
 async function getSqlJs(): Promise<SqlJsStatic> {
   if (!sqlJsPromise) {
+    const [{ default: initSqlJs }, { default: sqlWasmUrl }] = await Promise.all([
+      import('sql.js') as Promise<{ default: InitSqlJs }>,
+      import('sql.js/dist/sql-wasm.wasm?url') as Promise<{ default: string }>,
+    ]);
     sqlJsPromise = initSqlJs({
-      locateFile: () => sqlWasmUrl,
+      locateFile: () => locateSqlWasmFile(sqlWasmUrl),
     });
   }
   return sqlJsPromise;
+}
+
+function locateSqlWasmFile(sqlWasmUrl: string): string {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return new URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
+  }
+  return sqlWasmUrl;
 }
 
 async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null): Promise<Uint8Array> {
@@ -583,16 +655,18 @@ async function getAttachmentDatabaseBytes(attachment: DocumentAttachment | null)
 }
 
 async function persistRuntimeDatabase(): Promise<void> {
+  const runtime = getSqliteRuntime();
   if (!runtime.db) {
     return;
   }
 
   const databaseBytes = runtime.db.export();
+  const document = state.document;
   runtime.persistPromise = (async () => {
     const encoded = await encodeAttachmentBytes(databaseBytes);
-    const previous = getAttachment(state.document, DB_ATTACHMENT_ID);
+    const previous = getAttachment(document, DB_ATTACHMENT_ID);
     setAttachment(
-      state.document,
+      document,
       DB_ATTACHMENT_ID,
       {
         ...(previous?.meta ?? {}),
@@ -634,6 +708,7 @@ async function transformBytes(bytes: Uint8Array, stream: CompressionStream | Dec
 }
 
 function resetRuntime(): void {
+  const runtime = getSqliteRuntime();
   try {
     runtime.db?.close();
   } catch {
@@ -644,13 +719,14 @@ function resetRuntime(): void {
   runtime.loadError = null;
   runtime.loadPromise = null;
   runtime.persistPromise = null;
-  dbTableViewState.clear();
+  clearDbTableViewState();
 }
 
 function readTableSnapshot(
   db: SqlJsDatabase,
   tableName: string,
   options: {
+    objectType?: 'table' | 'view';
     query: string;
     offset: number;
     dynamicWindow: boolean;
@@ -661,8 +737,13 @@ function readTableSnapshot(
 ): SqliteTableSnapshot {
   const normalizedQuery = options.query.trim().replace(/;+\s*$/u, '');
   const queryActive = normalizedQuery.length > 0;
+  const objectType = options.objectType ?? getDbObjectType(db, tableName);
+  if (!objectType) {
+    throw new Error(`Table or view "${tableName}" does not exist.`);
+  }
+  const readOnlySource = queryActive || objectType === 'view';
   const dynamicWindow = queryActive ? options.dynamicWindow : true;
-  const queryLimit = clampDbTableQueryLimit(options.queryLimit);
+  const queryLimit = getDbTableQueryLimit({ queryLimit: options.queryLimit });
   const columns = queryActive ? getQueryColumns(db, normalizedQuery) : getTableColumns(db, tableName);
   const totalRows = queryActive
     ? getQueryRowCount(db, normalizedQuery, dynamicWindow ? DB_TABLE_MAX_QUERY_ROWS : queryLimit)
@@ -670,19 +751,21 @@ function readTableSnapshot(
   const offset = queryActive && !dynamicWindow ? 0 : clampDbTableOffset(options.offset, totalRows);
   const rowIds: number[] = [];
   const rows: string[][] = [];
-  const rowComponentIds = queryActive ? new Set<number>() : getRowComponentIdSet(db, tableName);
-  const sortColumn = !queryActive && options.sortColumn && columns.includes(options.sortColumn) ? options.sortColumn : null;
+  const rowComponentIds = readOnlySource ? new Set<number>() : getRowComponentIdSet(db, tableName);
+  const sortColumn = !readOnlySource && options.sortColumn && columns.includes(options.sortColumn) ? options.sortColumn : null;
   const sortDirection = sortColumn ? (options.sortDirection === 'desc' ? 'desc' : 'asc') : null;
   const statement = db.prepare(
     queryActive
       ? `SELECT * FROM (${normalizedQuery}) AS hvy_query LIMIT ${dynamicWindow ? DB_TABLE_WINDOW_SIZE : queryLimit} OFFSET ${offset}`
+      : objectType === 'view'
+        ? `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${DB_TABLE_WINDOW_SIZE} OFFSET ${offset}`
       : `SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(tableName)}${buildSortClause(sortColumn, sortDirection)} LIMIT ${DB_TABLE_WINDOW_SIZE} OFFSET ${offset}`
   );
 
   try {
     while (statement.step()) {
       const row = statement.getAsObject() as Record<string, unknown>;
-      if (!queryActive) {
+      if (!readOnlySource) {
         rowIds.push(Number(row.__hvy_rowid__ ?? 0));
       }
       rows.push(columns.map((column) => stringifySqliteValue(row[column])));
@@ -692,10 +775,11 @@ function readTableSnapshot(
   }
 
   return {
+    objectType,
     columns,
     rowIds,
     rows,
-    rowHasAttachedComponent: queryActive ? rows.map(() => false) : rowIds.map((rowId) => rowComponentIds.has(rowId)),
+    rowHasAttachedComponent: readOnlySource ? rows.map(() => false) : rowIds.map((rowId) => rowComponentIds.has(rowId)),
     totalRows,
     offset,
     queryActive,
@@ -732,13 +816,42 @@ function getTableColumns(db: SqlJsDatabase, tableName: string): string[] {
 }
 
 function ensureTableExists(db: SqlJsDatabase, tableName: string): boolean {
-  if (tableExists(db, tableName)) {
+  if (getDbObjectType(db, tableName)) {
     return false;
   }
 
   const columns = getDefaultColumnsForTable(tableName);
   db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
   return true;
+}
+
+function ensureWritableTableExists(db: SqlJsDatabase, tableName: string): boolean {
+  const objectType = getDbObjectType(db, tableName);
+  if (objectType === 'view') {
+    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
+  }
+  if (objectType === 'table') {
+    return false;
+  }
+
+  const columns = getDefaultColumnsForTable(tableName);
+  db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
+  return true;
+}
+
+function requireExistingDbObject(db: SqlJsDatabase, tableName: string): 'table' | 'view' {
+  const objectType = getDbObjectType(db, tableName);
+  if (!objectType) {
+    throw new Error(`DB object "${tableName}" does not exist. Create a table or view named "${tableName}" first.`);
+  }
+  return objectType;
+}
+
+function requireWritableTable(db: SqlJsDatabase, tableName: string): void {
+  const objectType = requireExistingDbObject(db, tableName);
+  if (objectType === 'view') {
+    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
+  }
 }
 
 function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
@@ -772,12 +885,25 @@ function getRowComponentIdSet(db: SqlJsDatabase, tableName: string): Set<number>
   return ids;
 }
 
-function tableExists(db: SqlJsDatabase, tableName: string): boolean {
-  const result = db.exec('SELECT name FROM sqlite_master WHERE type = ? AND name = ?', ['table', tableName]);
-  return (result[0]?.values.length ?? 0) > 0;
+function getDbObjectType(db: SqlJsDatabase, tableName: string): 'table' | 'view' | null {
+  const result = db.exec(
+    "SELECT type FROM sqlite_schema WHERE name = ? AND type IN ('table', 'view') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END LIMIT 1",
+    [tableName]
+  );
+  const type = String(result[0]?.values[0]?.[0] ?? '');
+  return type === 'table' || type === 'view' ? type : null;
 }
 
 function getDefaultColumnsForTable(tableName: string): string[] {
+  if (/\bchores?\b/i.test(tableName)) {
+    return ['description', 'assignee', 'status', 'created_at'];
+  }
+  if (/\bassignments?\b/i.test(tableName)) {
+    return ['chore', 'person', 'assigned_at', 'status'];
+  }
+  if (/\bcompletions?\b/i.test(tableName)) {
+    return ['chore', 'person', 'completed_at'];
+  }
   if (/\b(job[_ -]?applications?|contacts?)\b/i.test(tableName)) {
     return ['Company', 'URL', 'Status'];
   }
@@ -801,15 +927,6 @@ function buildSortClause(sortColumn: string | null, sortDirection: 'asc' | 'desc
   return ` ORDER BY ${quoteIdentifier(sortColumn)} ${sortDirection.toUpperCase()}`;
 }
 
-function clampDbTableOffset(offset: number, totalRows: number): number {
-  const maxOffset = Math.max(totalRows - DB_TABLE_WINDOW_SIZE, 0);
-  return Math.max(0, Math.min(offset, maxOffset));
-}
-
-function clampDbTableQueryLimit(value: number): number {
-  return Math.max(1, Math.min(Math.floor(value), DB_TABLE_MAX_QUERY_ROWS));
-}
-
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
@@ -824,134 +941,87 @@ function stringifySqliteValue(value: unknown): string {
   return String(value);
 }
 
-export function resetDbTableViewState(sectionKey: string, blockId: string): void {
-  dbTableViewState.set(getDbTableViewKey(sectionKey, blockId), {
-    offset: 0,
-    scrollTop: 0,
-    sortColumn: null,
-    sortDirection: null,
-  });
-}
-
-export function toggleDbTableSort(sectionKey: string, blockId: string, columnName: string): void {
-  const viewState = getDbTableViewState(sectionKey, blockId);
-  if (viewState.sortColumn !== columnName) {
-    viewState.sortColumn = columnName;
-    viewState.sortDirection = 'asc';
-  } else if (viewState.sortDirection === 'asc') {
-    viewState.sortDirection = 'desc';
-  } else {
-    viewState.sortColumn = null;
-    viewState.sortDirection = null;
+export async function getDocumentDbTableObjectNames(document: VisualDocument): Promise<string[]> {
+  const attachment = getAttachment(document, DB_ATTACHMENT_ID);
+  if (!attachment || attachment.bytes.length === 0) {
+    return [];
   }
-  viewState.offset = 0;
-  viewState.scrollTop = 0;
-}
-
-export function handleDbTableFrameScroll(frame: HTMLElement): boolean {
-  if (frame.dataset.dbTableDynamicWindow === 'false') {
-    return false;
-  }
-  const sectionKey = frame.dataset.sectionKey ?? '';
-  const blockId = frame.dataset.blockId ?? '';
-  if (sectionKey.length === 0 || blockId.length === 0) {
-    return false;
-  }
-  const viewState = getDbTableViewState(sectionKey, blockId);
-  viewState.scrollTop = frame.scrollTop;
-  const firstVisibleRow = Math.floor(frame.scrollTop / DB_TABLE_ESTIMATED_ROW_HEIGHT);
-  let nextOffset = viewState.offset;
-  if (firstVisibleRow > viewState.offset + DB_TABLE_FORWARD_SCROLL_TRIGGER) {
-    nextOffset += DB_TABLE_WINDOW_SIZE;
-  } else if (viewState.offset > 0 && firstVisibleRow < viewState.offset + DB_TABLE_BACKWARD_SCROLL_TRIGGER) {
-    nextOffset -= DB_TABLE_WINDOW_SIZE;
-  }
-  nextOffset = Math.max(0, nextOffset);
-  if (nextOffset === viewState.offset) {
-    return false;
-  }
-  viewState.offset = nextOffset;
-  return true;
-}
-
-export function restoreDbTableFrameScroll(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>('[data-db-table-frame="true"]').forEach((frame) => {
-    const sectionKey = frame.dataset.sectionKey ?? '';
-    const blockId = frame.dataset.blockId ?? '';
-    if (sectionKey.length === 0 || blockId.length === 0) {
-      return;
+  const db = await openDocumentDatabase(document);
+  try {
+    const result = db.exec(
+      "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+      [SQLITE_ROW_COMPONENTS_TABLE]
+    );
+    return (result[0]?.values ?? [])
+      .map((row) => String(row[0] ?? '').trim())
+      .filter((name) => name.length > 0);
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral AI schema inspection databases.
     }
-    const viewState = getDbTableViewState(sectionKey, blockId);
-    frame.scrollTop = viewState.scrollTop;
-  });
-}
-
-function validateAttachedComponentHvy(hvy: string): void {
-  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(hvy), '.hvy');
-  const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-  if (errors.length > 0) {
-    throw new Error(errors.map((diagnostic) => diagnostic.message).join(' '));
-  }
-
-  if (parsed.document.sections.length !== 1) {
-    throw new Error('Attached row HVY must contain exactly one section wrapper after parsing.');
-  }
-
-  const section = parsed.document.sections[0];
-  if (!section || section.children.length > 0 || section.blocks.length === 0) {
-    throw new Error('Attached row HVY must contain one or more HVY component fragments.');
   }
 }
 
-export function getDocumentDbTableNames(document: VisualDocument): string[] {
-  const tableNames = new Set<string>();
-  visitBlocks(document.sections, (block) => {
-    if (block.schema.component !== 'plugin' || block.schema.plugin !== DB_TABLE_PLUGIN_ID) {
-      return;
+export async function materializeDocumentDbTables(document: VisualDocument): Promise<string[]> {
+  const tableNames = getDocumentDbTableNames(document);
+  if (tableNames.length === 0) {
+    return [];
+  }
+
+  const db = await openDocumentDatabase(document);
+  try {
+    const created: string[] = [];
+    for (const tableName of tableNames) {
+      if (ensureTableExists(db, tableName)) {
+        created.push(tableName);
+      }
     }
-    const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table').trim();
-    if (tableName.length > 0) {
-      tableNames.add(tableName);
+    if (created.length > 0) {
+      await persistDocumentDatabase(document, db);
     }
-  });
-  return [...tableNames];
+    return created;
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral materialization databases.
+    }
+  }
 }
 
-export function hasDocumentDbTables(document: VisualDocument): boolean {
-  return getDocumentDbTableNames(document).length > 0;
-}
-
-export function formatQueryResultTable(columns: string[], rows: string[][]): string {
-  return [
-    columns.join(' | '),
-    columns.map(() => '---').join(' | '),
-    ...rows.map((row) => row.map((cell) => cell.replaceAll('\n', '\\n').replaceAll('|', '\\|')).join(' | ')),
-  ].join('\n');
-}
+export { formatQueryResultTable } from './db-table-format';
 
 export async function executeDbTableQueryTool(
   document: VisualDocument,
   request: { tableName?: string; query?: string; limit?: number }
 ): Promise<string> {
-  const availableTables = getDocumentDbTableNames(document);
+  const availableTables = await getDocumentDbTableObjectNames(document);
   if (availableTables.length === 0) {
-    throw new Error('No DB tables are available in this document.');
+    throw new Error('No SQLite tables or views are available in this document.');
   }
 
   const db = await openDocumentDatabase(document);
   try {
     const requestedTable = request.tableName?.trim() ?? '';
     if (requestedTable.length > 0 && !availableTables.includes(requestedTable)) {
-      throw new Error(`Unknown DB table "${requestedTable}". Available tables: ${availableTables.join(', ')}.`);
+      throw new Error(`Unknown SQLite table/view "${requestedTable}". Available SQLite tables/views: ${availableTables.join(', ')}.`);
+    }
+    if (requestedTable.length > 0) {
+      requireExistingDbObject(db, requestedTable);
     }
 
     const normalizedQuery = (request.query ?? '').trim().replace(/;+\s*$/u, '');
     const tableName = requestedTable || (availableTables.length === 1 ? (availableTables[0] ?? '') : '');
     if (normalizedQuery.length === 0 && tableName.length === 0) {
-      throw new Error(`Specify table_name when querying DB tables. Available tables: ${availableTables.join(', ')}.`);
+      throw new Error(`Specify table_name when querying SQLite tables/views. Available SQLite tables/views: ${availableTables.join(', ')}.`);
     }
 
     const limit = Math.max(1, Math.min(Math.floor(request.limit ?? 10), 25));
+    if (normalizedQuery.length === 0) {
+      requireExistingDbObject(db, tableName);
+    }
     const query = normalizedQuery.length > 0 ? normalizedQuery : `SELECT * FROM ${quoteIdentifier(tableName)}`;
     const statement = db.prepare(`SELECT * FROM (${query}) AS hvy_query LIMIT ${limit}`);
     const columns = statement.getColumnNames();
@@ -967,7 +1037,7 @@ export async function executeDbTableQueryTool(
     }
 
     return [
-      `Available DB tables: ${availableTables.join(', ')}`,
+      `Available SQLite tables/views: ${availableTables.join(', ')}`,
       `Executed query: ${query}`,
       `Returned rows: ${rows.length}${rows.length === limit ? ` (limited to ${limit})` : ''}`,
       '',
@@ -1004,6 +1074,7 @@ export async function getDbTableAiSummary(
 
   const db = await openDocumentDatabase(document);
   try {
+    requireExistingDbObject(db, tableName);
     const pragma = db.exec(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
     const pragmaRows = pragma[0]?.values ?? [];
     const schema = pragmaRows.map((row) => ({
@@ -1045,6 +1116,86 @@ export async function getDbTableAiSummary(
   }
 }
 
+export async function getDbTableRenderedText(document: VisualDocument, block: VisualBlock): Promise<string> {
+  if (block.schema.component !== 'plugin' || block.schema.plugin !== DB_TABLE_PLUGIN_ID) {
+    return 'This component is not a DB table plugin.';
+  }
+
+  const availableTables = getDocumentDbTableNames(document);
+  const tableName = getPluginConfigValue(block.schema.pluginConfig, 'table').trim();
+  const query = block.text.trim().replace(/;+\s*$/u, '');
+  if (tableName.length === 0) {
+    return [
+      'DB table plugin rendered output:',
+      'Error: missing pluginConfig.table.',
+      `Configured db-table component targets: ${availableTables.join(', ') || '(none)'}`,
+    ].join('\n');
+  }
+  if (!availableTables.includes(tableName)) {
+    return [
+      'DB table plugin rendered output:',
+      `Error: unknown table "${tableName}".`,
+      `Configured db-table component targets: ${availableTables.join(', ') || '(none)'}`,
+    ].join('\n');
+  }
+
+  const db = await openDocumentDatabase(document);
+  try {
+    let objectType: 'table' | 'view';
+    try {
+      objectType = requireExistingDbObject(db, tableName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
+      return [
+        'DB table plugin rendered output:',
+        `Table: ${tableName}`,
+        `Query: ${query || '(all rows)'}`,
+        `DB table error: ${message}`,
+      ].join('\n');
+    }
+
+    let snapshot: SqliteTableSnapshot;
+    try {
+      snapshot = readTableSnapshot(db, tableName, {
+        objectType,
+        query,
+        offset: 0,
+        dynamicWindow: getDbTableQueryDynamicWindow(block.schema.pluginConfig),
+        queryLimit: getDbTableQueryLimit(block.schema.pluginConfig),
+        sortColumn: null,
+        sortDirection: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database table render error.';
+      const columns = getTableColumns(db, tableName);
+      return [
+        'DB table plugin rendered output:',
+        `Table: ${tableName}`,
+        `Query: ${query || '(all rows)'}`,
+        `DB table error: ${message}`,
+        `Known table columns: ${columns.join(', ') || '(none)'}`,
+      ].join('\n');
+    }
+
+    const rows = snapshot.rows.slice(0, 10);
+    return [
+      'DB table plugin rendered output:',
+      `Table: ${tableName}`,
+      `Query: ${query || '(all rows)'}`,
+      `Columns: ${snapshot.columns.join(', ') || '(none)'}`,
+      `Rows shown: ${rows.length} of ${snapshot.totalRows}`,
+      '',
+      snapshot.columns.length === 0 ? '(no columns rendered)' : formatQueryResultTable(snapshot.columns, rows),
+    ].join('\n');
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral rendered inspection databases.
+    }
+  }
+}
+
 export async function executeDbTableWriteSql(sql: string): Promise<string> {
   const trimmed = sql.trim().replace(/;+\s*$/u, '');
   if (trimmed.length === 0) {
@@ -1058,14 +1209,198 @@ export async function executeDbTableWriteSql(sql: string): Promise<string> {
   const db = await getLoadedDatabase();
   db.run(trimmed);
   const changes = Number(db.exec('SELECT changes()')[0]?.values[0]?.[0] ?? 0);
+  const schemaSummary = summarizeRuntimeDatabaseSchema(db);
   await persistRuntimeDatabase();
-  return `Executed: ${trimmed}\nRows affected: ${changes}`;
+  return [`Executed: ${trimmed}`, `Rows affected: ${changes}`, '', schemaSummary].join('\n');
+}
+
+function summarizeRuntimeDatabaseSchema(db: SqlJsDatabase): string {
+  const objectRows = db.exec(
+    "SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+    [SQLITE_ROW_COMPONENTS_TABLE]
+  )[0]?.values ?? [];
+  const objects = objectRows
+    .map((row) => ({
+      name: String(row[0] ?? '').trim(),
+      type: String(row[1] ?? '').trim(),
+    }))
+    .filter((object) => object.name.length > 0);
+  if (objects.length === 0) {
+    return 'SQLite schema now:\n(none)';
+  }
+  const lines = objects.map((object) => {
+    const columns = getTableColumns(db, object.name);
+    const columnSummary = columns.length > 0 ? columns.join(', ') : '(no columns)';
+    return `- ${object.name} (${object.type}): ${columnSummary}`;
+  });
+  return [
+    `Available SQLite tables/views: ${objects.map((object) => object.name).join(', ')}`,
+    'SQLite schema now:',
+    ...lines,
+  ].join('\n');
+}
+
+function normalizeScriptingSqlParams(params: unknown): SqliteBindParams {
+  if (params == null) {
+    return null;
+  }
+  if (Array.isArray(params)) {
+    return params.map((value) => normalizeScriptingSqlValue(value));
+  }
+  if (typeof params === 'object') {
+    const normalized: Record<string, SqliteBindValue> = {};
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      normalized[key] = normalizeScriptingSqlValue(value);
+    }
+    return normalized;
+  }
+  throw new Error('SQL params must be a list or object.');
+}
+
+function normalizeScriptingSqlValue(value: unknown): SqliteBindValue {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error('SQL params may only contain strings, numbers, booleans, bytes, or null.');
+}
+
+function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): void {
+  const previous = getAttachment(document, DB_ATTACHMENT_ID);
+  setAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    {
+      ...(previous?.meta ?? {}),
+      plugin: DB_TABLE_PLUGIN_ID,
+      mediaType: 'application/vnd.sqlite3',
+    },
+    db.export()
+  );
+  const runtime = getSqliteRuntime();
+  if (runtime.documentRef === document) {
+    resetRuntime();
+    runtime.documentRef = document;
+  }
+}
+
+export async function validateDocumentDbSql(
+  document: VisualDocument,
+  sql: string,
+  mode: 'query' | 'execute'
+): Promise<void> {
+  const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+  if (trimmed.length === 0) {
+    throw new Error(`doc.db.${mode} requires non-empty SQL.`);
+  }
+  const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+  if (mode === 'query' && leading !== 'SELECT' && leading !== 'WITH') {
+    throw new Error('doc.db.query should use read-only SELECT/WITH SQL.');
+  }
+  if (mode === 'execute' && (leading === 'SELECT' || leading === 'WITH')) {
+    throw new Error('Use doc.db.query for read-only SELECT/WITH SQL. doc.db.execute is for writes.');
+  }
+  const db = await openDocumentDatabase(document);
+  try {
+    const statement = db.prepare(trimmed);
+    statement.free();
+  } finally {
+    try {
+      db.close();
+    } catch {
+      // Ignore close failures for ephemeral lint databases.
+    }
+  }
+}
+
+export interface ScriptingDbRuntime {
+  api: ScriptingDbApi;
+  dispose(): void;
+}
+
+export async function createScriptingDbRuntime(
+  document: VisualDocument,
+  onMutation?: () => void
+): Promise<ScriptingDbRuntime> {
+  const db = await openDocumentDatabase(document);
+  const api: ScriptingDbApi = {
+    query: (sql, params) => {
+      const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+      if (trimmed.length === 0) {
+        throw new Error('doc.db.query requires a non-empty SQL query.');
+      }
+      const statement = db.prepare(trimmed, normalizeScriptingSqlParams(params));
+      const columns = statement.getColumnNames();
+      const rows: Record<string, unknown>[] = [];
+      try {
+        while (statement.step()) {
+          const row = statement.getAsObject() as Record<string, unknown>;
+          rows.push(Object.fromEntries(columns.flatMap((column, index) => [
+            [column, row[column] ?? null],
+            [String(index), row[column] ?? null],
+          ])));
+        }
+      } finally {
+        statement.free();
+      }
+      return rows;
+    },
+    execute: (sql, params) => {
+      const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
+      if (trimmed.length === 0) {
+        throw new Error('doc.db.execute requires a non-empty SQL statement.');
+      }
+      const leading = trimmed.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? '';
+      if (leading === 'SELECT' || leading === 'WITH') {
+        throw new Error('Use doc.db.query for read-only SELECT statements. doc.db.execute is for writes.');
+      }
+      db.run(trimmed, normalizeScriptingSqlParams(params));
+      const rowsAffected = db.getRowsModified();
+      persistScriptingDatabase(document, db);
+      onMutation?.();
+      return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
+    },
+  };
+  return {
+    api,
+    dispose: () => {
+      try {
+        db.close();
+      } catch {
+        // Ignore close failures for scripting databases.
+      }
+    },
+  };
 }
 
 async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsDatabase> {
   const SQL = await getSqlJs();
   const bytes = await getAttachmentDatabaseBytes(getAttachment(document, DB_ATTACHMENT_ID));
   return bytes.length > 0 ? new SQL.Database(bytes) : new SQL.Database();
+}
+
+async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDatabase): Promise<void> {
+  const encoded = await encodeAttachmentBytes(db.export());
+  const previous = getAttachment(document, DB_ATTACHMENT_ID);
+  setAttachment(
+    document,
+    DB_ATTACHMENT_ID,
+    {
+      ...(previous?.meta ?? {}),
+      plugin: DB_TABLE_PLUGIN_ID,
+      mediaType: 'application/vnd.sqlite3',
+      ...(encoded.encoding ? { encoding: encoded.encoding } : {}),
+    },
+    encoded.bytes
+  );
 }
 
 export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {

@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels } from '../state';
+import { state, getRenderApp, getRefreshReaderPanels, getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../state';
 import { findBlockByIds } from '../block-ops';
 import { recordHistory } from '../history';
 import { syncReusableTemplateForBlock } from '../reusable';
@@ -8,7 +8,7 @@ import { getHostPlugin } from './registry';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
-  HvyPluginRegistration,
+  HvyPlugin,
 } from './types';
 import type { JsonObject } from '../hvy/types';
 
@@ -30,7 +30,29 @@ interface MountedPlugin {
 }
 
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
-const mounted = new Map<string, MountedPlugin>();
+const fallbackMounted = new Map<string, MountedPlugin>();
+const mountedByRuntime = new WeakMap<StateRuntime, Map<string, MountedPlugin>>();
+
+function getMountedPlugins(): Map<string, MountedPlugin> {
+  try {
+    const runtime = getActiveStateRuntime();
+    let mounted = mountedByRuntime.get(runtime);
+    if (!mounted) {
+      mounted = new Map<string, MountedPlugin>();
+      mountedByRuntime.set(runtime, mounted);
+    }
+    return mounted;
+  } catch {
+    return fallbackMounted;
+  }
+}
+
+function getPluginEditorDetailLevel(mode: 'editor' | 'reader'): number {
+  if (mode !== 'editor') {
+    return 0;
+  }
+  return state.showAdvancedEditor ? 2 : 1;
+}
 
 function mountKey(pluginId: string, mode: 'editor' | 'reader', sectionKey: string, blockId: string): string {
   return `${MOUNT_KEY_PREFIX}|${pluginId}|${mode}|${sectionKey}|${blockId}`;
@@ -54,42 +76,50 @@ export function renderPluginMountPlaceholder(
 }
 
 function buildContext(
-  registration: HvyPluginRegistration,
+  plugin: HvyPlugin,
   mode: 'editor' | 'reader',
   sectionKey: string,
   blockId: string
 ): HvyPluginContext | null {
+  const runtime = getActiveStateRuntime();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
     return null;
   }
 
-  const requestRerender = () => getRenderApp()();
+  const requestRerender = () => runWithStateRuntime(runtime, () => getRenderApp()());
 
   const setConfig = (patch: JsonObject) => {
-    const current = findBlockByIds(sectionKey, blockId);
-    if (!current) return;
-    current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
-    syncReusableTemplateForBlock(sectionKey, blockId);
-    recordHistory(`plugin-config:${registration.id}:${sectionKey}:${blockId}`);
-    getRefreshReaderPanels()();
-    requestRerender();
+    runWithStateRuntime(runtime, () => {
+      const current = findBlockByIds(sectionKey, blockId);
+      if (!current) return;
+      current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
+      getRefreshReaderPanels()();
+      refreshMountedPlugins(plugin.id, sectionKey, blockId);
+    });
   };
 
   const setText = (text: string) => {
-    const current = findBlockByIds(sectionKey, blockId);
-    if (!current) return;
-    current.text = text;
-    syncReusableTemplateForBlock(sectionKey, blockId);
-    recordHistory(`plugin-text:${registration.id}:${sectionKey}:${blockId}`);
-    getRefreshReaderPanels()();
-    requestRerender();
+    runWithStateRuntime(runtime, () => {
+      const current = findBlockByIds(sectionKey, blockId);
+      if (!current) return;
+      current.text = text;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
+      getRefreshReaderPanels()();
+      refreshMountedPlugins(plugin.id, sectionKey, blockId);
+    });
   };
 
   return {
     mode,
-    get advanced() {
-      return state.showAdvancedEditor;
+    get editor() {
+      return {
+        mode: mode === 'editor' ? 'edit' as const : 'view' as const,
+        detailLevel: getPluginEditorDetailLevel(mode),
+      };
     },
     sectionKey,
     block,
@@ -115,11 +145,33 @@ function buildContext(
   };
 }
 
+export function refreshMountedPlugins(pluginId?: string, sectionKey?: string, blockId?: string): void {
+  const mounted = getMountedPlugins();
+  for (const entry of mounted.values()) {
+    if (pluginId && entry.pluginId !== pluginId) {
+      continue;
+    }
+    if (sectionKey && entry.sectionKey !== sectionKey) {
+      continue;
+    }
+    if (blockId && entry.blockId !== blockId) {
+      continue;
+    }
+    try {
+      entry.instance.refresh?.();
+    } catch (error) {
+      console.error('[hvy:plugin] refresh threw', error);
+    }
+  }
+}
+
 // Walk all plugin mount placeholders in the rendered DOM, instantiate factories
 // for any new mounts, reuse cached instances for existing ones, and reconcile
 // the cache by unmounting plugins whose placeholders are no longer present.
-export function reconcilePluginMounts(root: ParentNode): void {
+export function reconcilePluginMounts(root: ParentNode, options: { prune?: boolean } = {}): void {
+  const mounted = getMountedPlugins();
   const seen = new Set<string>();
+  const seenModes = new Set<'editor' | 'reader'>();
   const placeholders = root.querySelectorAll<HTMLElement>('[data-hvy-plugin-mount="true"]');
 
   placeholders.forEach((placeholder) => {
@@ -133,6 +185,7 @@ export function reconcilePluginMounts(root: ParentNode): void {
 
     const key = mountKey(pluginId, mode, sectionKey, blockId);
     seen.add(key);
+    seenModes.add(mode);
 
     const existing = mounted.get(key);
     if (existing) {
@@ -167,6 +220,12 @@ export function reconcilePluginMounts(root: ParentNode): void {
       return;
     }
 
+    if (!registration.create) {
+      placeholder.textContent = `Plugin "${pluginId}" does not provide a renderable component.`;
+      placeholder.classList.add('hvy-plugin-missing');
+      return;
+    }
+
     let instance: HvyPluginInstance;
     try {
       instance = registration.create(ctx);
@@ -189,9 +248,18 @@ export function reconcilePluginMounts(root: ParentNode): void {
     });
   });
 
+  if (options.prune === false) {
+    return;
+  }
+
+  const pruneAll = isFullPluginReconcileRoot(root);
+
   // Reconcile: anything cached but not seen this pass is orphaned.
   for (const [key, entry] of mounted) {
     if (seen.has(key)) {
+      continue;
+    }
+    if (!pruneAll && !seenModes.has(entry.mode)) {
       continue;
     }
     try {
@@ -206,12 +274,20 @@ export function reconcilePluginMounts(root: ParentNode): void {
   }
 }
 
+function isFullPluginReconcileRoot(root: ParentNode): boolean {
+  if (root instanceof Document) {
+    return true;
+  }
+  return root instanceof HTMLElement && root.id === 'app';
+}
+
 // Capture the currently-focused element if it's inside a cached plugin
 // element, and stash it on that mount entry so the next reconcile pass can
 // restore focus before the plugin's refresh() runs. We have to do this BEFORE
 // `app.innerHTML = ...` wipes the DOM (which detaches the focused element
 // and moves document.activeElement back to body).
 export function capturePluginFocus(): void {
+  const mounted = getMountedPlugins();
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) {
     return;
@@ -254,6 +330,7 @@ function applySavedFocus(saved: SavedFocus): void {
 }
 
 export function unmountAllPlugins(): void {
+  const mounted = getMountedPlugins();
   for (const entry of mounted.values()) {
     try {
       entry.instance.unmount?.();

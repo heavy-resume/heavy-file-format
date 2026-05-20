@@ -1,6 +1,7 @@
 import type { JsonObject } from '../hvy/types';
 import type { VisualBlock } from '../editor/types';
-import type { DocumentAttachment, VisualDocument } from '../types';
+import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
+import type { ReusableTemplateVariableType } from '../reusable-template-values';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -27,9 +28,15 @@ export interface HvyPluginHeaderApi {
   set(key: string, value: unknown): void;
 }
 
+export interface HvyPluginEditorContext {
+  mode: 'view' | 'edit';
+  // Conventional levels: 0 = hidden/compact, 1 = basic, 2 = advanced.
+  detailLevel: number;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
-  advanced: boolean;
+  editor: HvyPluginEditorContext;
   sectionKey: string;
   block: VisualBlock;
   document: HvyPluginDocumentApi;
@@ -39,12 +46,15 @@ export interface HvyPluginContext {
   // deeply with the visual document tree can do so. Most plugins should not
   // reach for this and use the typed APIs above instead.
   rawDocument: VisualDocument;
-  // Persist a config field. Updates block.schema.pluginConfig and triggers a
-  // re-render through the host.
+  // Persist a config field. Updates block.schema.pluginConfig, refreshes this
+  // plugin instance in place, and refreshes reader panels. It must not force a
+  // full app re-render on ordinary typing because that drops focus/caret state.
   setConfig(patch: JsonObject): void;
-  // Persist plugin-interpreted text (block.text). Triggers a re-render.
+  // Persist plugin-interpreted text (block.text), refreshing this plugin
+  // instance in place and reader panels without a full app re-render.
   setText(text: string): void;
-  // Ask the host to re-render. Use sparingly; setConfig/setText already do.
+  // Ask the host to re-render. Use sparingly for structural shell changes only;
+  // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;
 }
 
@@ -64,13 +74,90 @@ export interface HvyPluginInstance {
 
 export type HvyPluginFactory = (ctx: HvyPluginContext) => HvyPluginInstance;
 
-export interface HvyPluginRegistration {
+export interface HvyPluginComponentDefinition {
+  id?: string;
+  displayName?: string;
+  create: HvyPluginFactory;
+}
+
+export interface HvyOutputGeneratorRequest {
+  document: VisualDocument;
+  component: string;
+  variable: string;
+  variableType: ReusableTemplateVariableType;
+  label: string;
+  values: Record<string, string>;
+  target: ReusableTemplateModalState['target'];
+}
+
+export interface HvyOutputGeneratorResponse {
+  answer?: string;
+  prompt?: string;
+  responseInstructions?: string;
+  inputCharLimit?: number;
+  outputCharLimit?: number;
+}
+
+export interface HvyOutputGenerator {
+  key: string;
+  label?: string;
+  requiredVariables?: string[];
+  generate(request: HvyOutputGeneratorRequest): Promise<HvyOutputGeneratorResponse> | HvyOutputGeneratorResponse;
+}
+
+export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
+
+export interface HvyDocumentHookContext {
+  document: VisualDocument;
+  view: 'editor' | 'viewer' | 'ai';
+  changeReason: HvyPluginHookChangeReason;
+  refreshPlugins(pluginId?: string): void;
+  requestRerender(): void;
+  isCurrentDocument(): boolean;
+}
+
+export interface HvyPluginHookHandler {
+  priority?: number;
+  run(ctx: HvyDocumentHookContext): void | Promise<void>;
+}
+
+export interface HvyPluginHooks {
+  documentLoad?: HvyPluginHookHandler | HvyPluginHookHandler[];
+  documentChange?: HvyPluginHookHandler | HvyPluginHookHandler[];
+}
+
+export interface HvyPlugin {
   // Stable identifier serialized into the document as block.schema.plugin.
-  // Convention: reverse-DNS, e.g. 'dev.heavy.db-table'.
+  // Convention: namespace-qualified, e.g. 'hvy.db-table'.
   id: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
-  // Factory invoked once per mount. The host caches the returned instance per
-  // (sectionKey, blockId) and reuses it across re-renders.
-  create: HvyPluginFactory;
+  // Optional capability list for renderable plugin components.
+  components?: HvyPluginComponentDefinition[];
+  // Optional output generators used by authoring UI such as reusable template forms.
+  outputGenerators?: HvyOutputGenerator[];
+  // Compatibility/default component factory invoked once per mount. The host
+  // caches the returned instance per (sectionKey, blockId) and reuses it across
+  // re-renders.
+  create?: HvyPluginFactory;
+  // Optional document lifecycle hooks. Handlers are ordered by per-handler
+  // priority, then by the host plugin list order.
+  hooks?: HvyPluginHooks;
+  // Optional guidance included in the AI document outline for plugin blocks.
+  // Keep this short and action-oriented; it helps the document-edit loop know
+  // which serialized fields to patch when users report plugin-rendered errors.
+  aiHint?: string | ((block: VisualBlock) => string);
+  // Optional longer help. This is exposed through AI tools on demand instead of
+  // being included in every prompt.
+  aiHelp?: string | ((block?: VisualBlock) => string);
+  // Optional read-only documentation file exposed by CLI virtual plugin
+  // component directories. The file itself should live next to the plugin
+  // implementation so plugin docs are easy to find and update.
+  documentation?: {
+    filename: string;
+    text: string;
+  };
 }
+
+/** @deprecated Use HvyPlugin. */
+export type HvyPluginRegistration = HvyPlugin;

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -40,6 +40,47 @@ hvy_version: 0.1
   expect(fragment).not.toContain('hvy_version:');
 });
 
+test('round-trips reusable section metadata and template keys', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Projects
+    key: resume-projects
+    template:
+      id: projects
+      title: Projects
+      level: 1
+      exclude_from_import: true
+      tags: reciprocal-xref-source
+      blocks:
+        - text: "# Projects"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+      children: []
+  - name: Resume Section
+    key: resume-section
+    repeatable: true
+    template:
+      title: Resume Section
+      level: 1
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true}-->
+#! Projects
+`, '.hvy');
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('key: resume-projects');
+  expect(expectedResult).toContain('exclude_from_import: true');
+  expect(expectedResult).toContain('repeatable: true');
+  expect(expectedResult).toContain('"exclude_from_import":true,"templateKey":"resume-projects"');
+  expect(expectedResult).not.toContain('idEditorOpen');
+});
+
 test('serializes slot markers without child component payloads', () => {
   const input = `---
 hvy_version: 0.1
@@ -59,10 +100,8 @@ hvy_version: 0.1
 
    <!--hvy:container {}-->
 
-    <!--hvy:container:0 {}-->
-
-     <!--hvy:text {}-->
-      Detail body
+    <!--hvy:text {}-->
+     Detail body
 `;
 
   const document = deserializeDocument(input, '.hvy');
@@ -77,7 +116,190 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
-test('serializes expandable stub and content css fields on the expandable slot markers', () => {
+test('round-trips component-list display defaults, sort keys, and container collapse fields', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":4}-->
+
+ <!--hvy:component-list:0 {}>
+
+  <!--hvy:text {"sortKeys":{"Job Match":92},"groupKeys":{"Category":"Database"}}-->
+   PostgreSQL
+
+<!--hvy:container {"containerTitle":"Details","containerExpanded":false,"containerCollapsedPreviewRem":2.5}-->
+
+ <!--hvy:text {}-->
+  Detail
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('"componentListDefaultSortKey":"Job Match"');
+  expect(expectedResult).toContain('"componentListDefaultSortDirection":"desc"');
+  expect(expectedResult).toContain('"componentListDefaultGroupKey":"Category"');
+  expect(expectedResult).toContain('"componentListGroupCollapsedPreviewRem":4');
+  expect(expectedResult).toContain('"sortKeys":{"Job Match":92}');
+  expect(expectedResult).toContain('"groupKeys":{"Category":"Database"}');
+  expect(expectedResult).toContain('"containerTitle":"Details"');
+  expect(expectedResult).toContain('"containerExpanded":false');
+  expect(expectedResult).toContain('"containerCollapsedPreviewRem":2.5');
+});
+
+test('round-trips reusable xref-card target tag filters', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: skill-xref-card
+    baseType: xref-card
+    schema:
+      xrefTargetTagFilter: skill
+---
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+ <!--hvy:component-list {"componentListComponent":"skill-xref-card"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-xref-card {"xrefTitle":"TypeScript","xrefTarget":"skill-typescript","xrefTargetTagFilter":"skill"}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const expectedResult = serializeWithState(document);
+
+  expect(document.meta.component_defs?.[0]?.schema).toMatchObject({ xrefTargetTagFilter: 'skill' });
+  expect(document.sections[0]?.blocks[0]?.schema.componentListComponent).toBe('skill-xref-card');
+  expect(document.sections[0]?.blocks[0]?.schema.componentListBlocks[0]?.schema.xrefTargetTagFilter).toBe('skill');
+  expect(expectedResult).toContain('xrefTargetTagFilter: skill');
+  expect(expectedResult).toContain('<!--hvy:skill-xref-card {"xrefTitle":"TypeScript","xrefTarget":"skill-typescript"}-->');
+});
+
+test('round-trips xref display fields on referenceable non-xref blocks', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    schema:
+      tags: skill
+      xrefTitle: "{% skill %}"
+      xrefDetail: "{% detail %}"
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:text {"id":"tool-typescript","tags":"tool","xrefTitle":"TypeScript","xrefDetail":"Primary language"}-->
+  TypeScript
+
+ <!--hvy:skill-record {"id":"skill-platform","tags":"skill","xrefTitle":"Platform Engineering","xrefDetail":"Core capability"}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Platform Engineering
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Builds shared systems.
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('<!--hvy:text {"id":"tool-typescript","tags":"tool","xrefTitle":"TypeScript","xrefDetail":"Primary language"}-->');
+  expect(expectedResult).toContain('<!--hvy:skill-record {"id":"skill-platform","xrefTitle":"Platform Engineering","xrefDetail":"Core capability"}-->');
+});
+
+test('round-trips trailing spaces in text block lines', () => {
+  const input = [
+    '---',
+    'hvy_version: 0.1',
+    '---',
+    '',
+    '<!--hvy: {"id":"locations"}-->',
+    '#! Locations',
+    '',
+    ' <!--hvy:text {"css":"margin: 0.5rem 0; line-height: 1.5;","lock":true}-->',
+    '  **Location:** ',
+    '',
+    '  **Target Location(s):** ',
+    '',
+  ].join('\n');
+
+  const document = deserializeDocument(input, '.hvy');
+  const block = document.sections[0]?.blocks[0];
+
+  expect(block?.text).toBe('**Location:** \n\n**Target Location(s):** ');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('  **Location:** \n');
+  expect(expectedResult.endsWith('  **Target Location(s):** \n')).toBe(true);
+});
+
+test('serializes text block prose with natural 120-column wrapping', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"intro"}-->
+  ${'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega '.repeat(2).trim()}
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+  const textLines = expectedResult
+    .split('\n')
+    .filter((line) => line.includes('Alpha beta') || line.includes('omega'));
+
+  expect(textLines.length).toBeGreaterThan(1);
+  expect(textLines.every((line) => line.length <= 120)).toBe(true);
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()).toBe(
+    document.sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()
+  );
+});
+
+test('serialization wrapping preserves code plugin and fenced text bodies', () => {
+  const longCodeLine = 'const value = "' + 'x'.repeat(150) + '";';
+  const longScriptLine = 'doc.header.set("long_value", "' + 'y'.repeat(150) + '")';
+  const longFenceLine = 'fenced ' + 'z'.repeat(150);
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:code {"codeLanguage":"js"}-->
+  ${longCodeLine}
+
+ <!--hvy:plugin {"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  ${longScriptLine}
+
+ <!--hvy:text {"id":"fenced"}-->
+  \`\`\`text
+  ${longFenceLine}
+  \`\`\`
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain(longCodeLine);
+  expect(expectedResult).toContain(longScriptLine);
+  expect(expectedResult).toContain(longFenceLine);
+});
+
+test('serializes expandable stub and content meta fields on the expandable slot markers', () => {
   const input = `---
 hvy_version: 0.1
 ---
@@ -87,12 +309,12 @@ hvy_version: 0.1
 
  <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
-  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->
+  <!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->
 
    <!--hvy:text {}-->
     Stub
 
-  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->
+  <!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->
 
    <!--hvy:text {}-->
     Content
@@ -101,10 +323,12 @@ hvy_version: 0.1
   const document = deserializeDocument(input, '.hvy');
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:expandable:stub {"css":"padding: 0.25rem 0;"}-->');
-  expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;"}-->');
+  expect(output).toContain('<!--hvy:expandable:stub {"css":"padding: 0.25rem 0;","description":"Collapsed summary row"}-->');
+  expect(output).toContain('<!--hvy:expandable:content {"css":"margin-top: 0.5rem;","description":"Detailed body"}-->');
   expect(output).not.toContain('"expandableStubCss"');
   expect(output).not.toContain('"expandableContentCss"');
+  expect(output).not.toContain('"expandableStubDescription"');
+  expect(output).not.toContain('"expandableContentDescription"');
 });
 
 test('preserves reader_max_width in document front matter on round-trip', () => {
@@ -129,34 +353,98 @@ test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
+});
+
+test('round-trips editor-only button fields', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header","editorOnly":true}-->
+#! Header Tools
+
+<!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true,"buttonLabel":"Generate","buttonAction":"ai-generate","buttonPositionTargetId":"resume-pronunciation","buttonCss":"position: absolute; top: 0.25rem; right: 0.25rem;","buttonInputCharLimit":120,"buttonOutputCharLimit":80,"buttonVisibleScript":"return True","buttonSourceScript":"return doc.component.get_text('resume-name')","buttonPrompt":"Return pronunciation only.","buttonTargetScript":"doc.component.set_text('resume-pronunciation', response)"}-->
+`, '.hvy');
+
+  const section = document.sections[0];
+  const button = section?.blocks[0];
+
+  expect(section?.editorOnly).toBe(true);
+  expect(button?.schema.component).toBe('button');
+  expect(button?.schema.editorOnly).toBe(true);
+  expect(button?.schema.buttonLabel).toBe('Generate');
+  expect(button?.schema.buttonAction).toBe('ai-generate');
+  expect(button?.schema.buttonPositionTargetId).toBe('resume-pronunciation');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('<!--hvy: {"id":"header","lock":false,"expanded":true,"highlight":false,"editorOnly":true}-->');
+  expect(expectedResult).toContain('<!--hvy:button {"id":"generate-pronunciation-button","editorOnly":true');
+  expect(expectedResult).toContain('"buttonVisibleScript":"return True"');
+  expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
+});
+
+test('round-trips block visibility scripts', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+<!--hvy:text {"id":"dependent","visibleScript":"return not doc.component.is_empty('name')"}-->
+Dependent text
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.visibleScript).toBe("return not doc.component.is_empty('name')");
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('"visibleScript":"return not doc.component.is_empty');
+});
+
+test('section priority round-trips as section metadata', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header","priority":true}-->
+#! Header
+`, '.hvy');
+
+  expect(document.sections[0]?.priority).toBe(true);
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('"priority":true');
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.priority).toBe(true);
 });
 
 test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
  SELECT company, status
  FROM work_items
  WHERE status != 'Rejected'
@@ -164,7 +452,7 @@ plugins:
 
   const output = serializeWithState(document);
 
-  expect(output).toContain('<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
+  expect(output).toContain('<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).toContain('SELECT company, status');
   expect(output).toContain("WHERE status != 'Rejected'");
 });
@@ -173,14 +461,14 @@ test('serializes db-table query window settings in plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: dev.heavy.db-table
+  - id: hvy.db-table
     source: builtin://db-table
 ---
 
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items","queryDynamicWindow":false,"queryLimit":25}}-->
  SELECT company FROM work_items
 `, '.hvy');
 
@@ -198,14 +486,14 @@ hvy_version: 0.1
 <!--hvy: {"id":"data"}-->
 #! Data
 
-<!--hvy:plugin {"plugin":"dev.heavy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->
 `, '.hvy');
 
   document.attachments = [
     {
       id: 'db',
       meta: {
-        plugin: 'dev.heavy.db-table',
+        plugin: 'hvy.db-table',
         mediaType: 'application/vnd.sqlite3',
         encoding: 'gzip',
       },
@@ -218,7 +506,7 @@ hvy_version: 0.1
   const tailLength = document.attachments[0].bytes.length;
   const serializedPrefix = new TextDecoder().decode(serializedBytes.slice(0, serializedBytes.length - tailLength));
 
-  expect(serializedText).toContain('<!--hvy:tail {"id":"db","plugin":"dev.heavy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->');
+  expect(serializedText).toContain('<!--hvy:tail {"id":"db","plugin":"hvy.db-table","mediaType":"application/vnd.sqlite3","encoding":"gzip","length":7}-->');
   expect(serializedText).toContain(HVY_TAIL_SENTINEL);
   expect(serializedPrefix).toContain(HVY_TAIL_SENTINEL);
   expect(Array.from(serializedBytes.slice(-tailLength))).toEqual([31, 139, 8, 0, 72, 86, 89]);
@@ -244,6 +532,30 @@ section_defaults:
   expect(output).toContain('css: "margin: 0.5rem 0;"');
 });
 
+test('preserves text_line_styles in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+text_line_styles:
+  role:
+    label: Role heading
+    css: "font-weight: 700;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ ^role^ #### Foo
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('text_line_styles:');
+  expect(output).toContain('role:');
+  expect(output).toContain('label: Role heading');
+  expect(output).toContain('^role^ #### Foo');
+});
+
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
   const wrapped = wrapHvyFragmentAsDocument('<!--hvy:text {}-->\n Hello', {
     meta: {
@@ -256,6 +568,7 @@ test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => 
   });
 
   expect(wrapped).toContain('hvy_version: 0.1');
+  expect(wrapped).toContain('reader_max_width: 60rem');
   expect(wrapped).toContain('component_defaults:');
   expect(wrapped).toContain('xref-card:');
   expect(wrapped).toContain('css: "padding: 0.5rem;"');
@@ -345,6 +658,33 @@ component_defs:
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
 });
 
+test('component def expandable slot css survives header serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: education-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Description
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('expandableContentBlocks:');
+  expect(output).toContain('css: "padding: 0.5rem;"');
+});
+
 test('component-list numeric slot indexes control display order with file order breaking ties', () => {
   const input = `---
 hvy_version: 0.1
@@ -382,12 +722,139 @@ hvy_version: 0.1
   ]);
 });
 
+test('component-list item labels round-trip through directives', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const listBlock = document.sections[0]?.blocks[0];
+  const output = serializeWithState(document);
+
+  expect(listBlock.schema.componentListItemLabel).toBe('skill');
+  expect(output).toContain('<!--hvy:component-list {"componentListComponent":"skill-record","componentListItemLabel":"skill"}-->');
+});
+
+test('component template definitions preserve nested builtin component types', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      component: history-record
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells:
+                    - ""
+                    - ""
+                    - ""
+      expandableContentBlocks:
+        lock: false
+        children: []
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).not.toContain('component: history-record');
+  expect(output).toContain('component: table');
+  expect(output).toContain('tableColumns:\n                - YEAR\n                - ORGANIZATION\n                - TITLE');
+});
+
+test('component template definitions preserve template value tokens in schema strings', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: history-record
+    baseType: expandable
+    schema:
+      description: "{% description | block %}"
+      expandableStubBlocks:
+        lock: false
+        children:
+          - text: ""
+            schema:
+              component: table
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
+              tableRows:
+                - cells: ["{% years %}", "{% organization | text %}", "{% role %}"]
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).toContain('description: "{% description | block %}"');
+  expect(output).toContain('- "{% years %}"');
+  expect(output).toContain('- "{% organization | text %}"');
+  expect(output).toContain('- "{% role %}"');
+});
+
+test('component template definitions preserve flavor schemas and descriptions', () => {
+  const input = `---
+hvy_version: 0.1
+component_defs:
+  - name: award-record
+    baseType: expandable
+    schema:
+      component: award-record
+      expandableStubBlocks:
+        children:
+          - text: "{% award %}"
+            schema:
+              component: text
+    flavors:
+      - name: detailed
+        description: Use when the source has award details.
+        schema:
+          component: award-record
+          expandableContentBlocks:
+            children:
+              - text: "{% details | block %}"
+                schema:
+                  component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+
+  expect(output).toContain('flavors:');
+  expect(output).toContain('name: detailed');
+  expect(output).toContain('description: Use when the source has award details.');
+  expect(output).not.toContain('component: award-record');
+  expect(output).toContain('text: "{% details | block %}"');
+});
+
 test('serializes uncontained section metadata without changing section shape on round-trip', () => {
   const input = `---
 hvy_version: 0.1
 ---
 
-<!--hvy: {"id":"summary","contained":false,"custom_css":"padding: 0 0.35rem;"}-->
+<!--hvy: {"id":"summary","contained":false,"css":"padding: 0 0.35rem;"}-->
 #! Summary
 
  <!--hvy:text {}-->
@@ -398,9 +865,9 @@ hvy_version: 0.1
   const output = serializeWithState(document);
   const roundTripped = deserializeDocument(output, '.hvy');
 
-  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"custom_css":"padding: 0 0.35rem;"}-->');
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":false,"css":"padding: 0 0.35rem;"}-->');
   expect(roundTripped.sections[0]?.contained).toBe(false);
-  expect(roundTripped.sections[0]?.customCss).toBe('padding: 0 0.35rem;');
+  expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
@@ -421,6 +888,20 @@ test('round-trips migrated example files without reintroducing slot-level compon
     );
     expect(output, path).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
   }
+});
+
+test('resume template uses fill-in heading text for the default name', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/resume.thvy', 'utf8');
+  const document = deserializeDocument(input, '.thvy');
+  const header = document.sections.find((section) => section.customId === 'header');
+  const name = header?.blocks[0];
+  const pronunciation = header?.blocks[1];
+
+  expect(name?.text.trim()).toBe('# <!-- value {"placeholder":"Name"} -->');
+  expect(name?.schema.placeholder).toBe('');
+  expect(name?.schema.fillIn).toBe(true);
+  expect(pronunciation?.schema.visibleScript).toContain('doc.component.get_text("resume-name")');
 });
 
 test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {
@@ -480,7 +961,7 @@ hvy_version: 0.1
   document.attachments = [
     {
       id: 'db',
-      meta: { plugin: 'dev.heavy.db-table', mediaType: 'application/vnd.sqlite3', encoding: 'gzip' },
+      meta: { plugin: 'hvy.db-table', mediaType: 'application/vnd.sqlite3', encoding: 'gzip' },
       bytes: new Uint8Array([1, 2, 3, 4]),
     },
     {
@@ -537,4 +1018,34 @@ hvy_version: 0.1
   expect(Array.from(result.document.attachments[0].bytes)).toEqual([1, 2, 3, 4]);
   expect(result.document.attachments[1].id).toBe('image:a.png');
   expect(Array.from(result.document.attachments[1].bytes)).toEqual([10, 20, 30]);
+});
+
+test('round-trips carousel component config with image tail attachments', async () => {
+  const { deserializeDocumentBytesWithDiagnostics } = await import('../src/serialization');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:carousel {"carouselDurationMs":2500,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
+`, '.hvy');
+  document.attachments = [
+    { id: 'image:a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2]) },
+    { id: 'image:b.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([3, 4]) },
+  ];
+
+  const bytes = serializeDocumentBytes(document);
+  const expectedResult = deserializeDocumentBytesWithDiagnostics(bytes, '.hvy').document;
+  const block = expectedResult.sections[0]?.blocks[0];
+
+  expect(block?.schema.component).toBe('carousel');
+  expect(block?.schema.carouselDurationMs).toBe(2500);
+  expect(block?.schema.carouselImages).toMatchObject([
+      { imageFile: 'a.png', caption: 'A' },
+      { imageFile: 'b.png', imageAlt: 'B alt' },
+  ]);
+  expect(expectedResult.attachments.map((attachment) => attachment.id)).toEqual(['image:a.png', 'image:b.png']);
+  expect(Array.from(expectedResult.attachments[1]?.bytes ?? [])).toEqual([3, 4]);
 });

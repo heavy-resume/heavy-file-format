@@ -55,18 +55,16 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
               css: "margin: 0;  margin-top: -1px;"
-              tableColumns: "YEAR, ORGANIZATION, TITLE"
+              tableColumns: ["YEAR", "ORGANIZATION", "TITLE"]
               tableShowHeader: false
               tableRows:
                 - cells: ["", "", ""]
       expandableContentBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -153,18 +151,16 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
               css: "margin: 0; margin-top: -1px;"
-              tableColumns: "DEGREE, INSTITUTION, LOCATION"
+              tableColumns: ["DEGREE", "INSTITUTION", "LOCATION"]
               tableShowHeader: false
               tableRows:
                 - cells: ["", "", ""]
       expandableContentBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -226,18 +222,16 @@ component_defs:
       expandableAlwaysShowStub: true
       expandableExpanded: false
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
               component: table
               css: "margin: 0;  margin-top: -1px;"
-              tableColumns: "PROJECT, DATE"
+              tableColumns: ["PROJECT", "DATE"]
               tableShowHeader: false
               tableRows:
                 - cells: ["", ""]
       expandableContentBlocks:
-        lock: true
         css: "padding: 0.5rem;"
         children:
           - text: ""
@@ -252,20 +246,24 @@ component_defs:
                     schema:
                       component: text
                       css: "margin: 0;"
+                      placeholder: "Project name"
                 - id: project-date-range
                   block:
                     text: ""
                     schema:
                       component: text
                       css: "margin: 0; text-align: right;"
+                      placeholder: "Date range"
           - text: ""
             schema:
               component: text
               css: "margin: 0.5rem 0;"
+              placeholder: "Project description"
           - text: ""
             schema:
               component: text
               css: "margin: 0.35rem 0;"
+              placeholder: "Project link"
           - component: skills-and-tools-tech-list
   - name: skill-record-experience-section
     baseType: container
@@ -341,7 +339,6 @@ component_defs:
     schema:
       css: "margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);"
       expandableStubBlocks:
-        lock: true
         children:
           - text: ""
             schema:
@@ -393,7 +390,7 @@ component_defs:
 
  <!--hvy:expandable {"css":"padding:0.25rem;","expandableAlwaysShowStub":true,"expandableExpanded":false,"lock":true}-->
 
-  <!--hvy:expandable:stub {"lock":true}-->
+  <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {"css":"margin-bottom: 0;"}-->
     ## Summary
@@ -401,7 +398,7 @@ component_defs:
    <!--hvy:text {"css":"margin-top: 0;"}-->
     Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.
 
-  <!--hvy:expandable:content {"lock":true}-->
+  <!--hvy:expandable:content {}-->
 
    <!--hvy:component-list {"componentListComponent":"text","css":"margin: 0;"}-->
 
@@ -1049,7 +1046,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # History
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":["YEAR","ORGANIZATION","TITLE"],"tableShowHeader":true,"tableRows":[],"lock":true}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"history-record"}-->
 
@@ -1059,7 +1056,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"YEAR, ORGANIZATION, TITLE","tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["YEAR","ORGANIZATION","TITLE"],"tableShowHeader":false,"tableRows":[{"cells":["2024","Northwind Labs","Senior Software Engineer"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding: 0.5rem;"}-->
 
@@ -1154,7 +1151,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Projects
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"PROJECT, DATE","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":["PROJECT","DATE"],"tableShowHeader":true,"tableRows":[],"lock":true}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"project-record"}-->
 
@@ -1164,7 +1161,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
+     <!--hvy:table {"css":"margin: 0;  margin-top: -1px;","tableColumns":["PROJECT","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Heavy Stack","05/2024 - present"]}]}-->
 
     <!--hvy:expandable:content {"css":"padding:0.5rem"}-->
 
@@ -1172,18 +1169,18 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-title"}-->
 
-       <!--hvy:text {"css":"margin: 0;"}-->
+       <!--hvy:text {"css":"margin: 0;","placeholder":"Project name"}-->
         ### Heavy Stack
 
       <!--hvy:grid:1 {"id":"project-date-range"}-->
 
-       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date range"}-->
         05/2024 - present
 
-     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Project description"}-->
       The Heavy Stack is the production version of the developer container used for Heavy Resume. It has various features such as hot reloading for both the application and testing, the ability to record user actions for playback later, as well as a functioning dev container with databases and everything set up and ready to go.
 
-     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Project link"}-->
       [Visit webpage](https://github.com) (github.com)
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
@@ -1232,7 +1229,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"PROJECT, DATE","tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["PROJECT","DATE"],"tableShowHeader":false,"tableRows":[{"cells":["Autonomous Agent Hackathon","08/2023 - 08/2023"]}]}-->
 
     <!--hvy:expandable:content {"css": "padding: 0.5rem"}-->
 
@@ -1240,18 +1237,18 @@ component_defs:
 
       <!--hvy:grid:0 {"id":"project-title-hackathon"}-->
 
-       <!--hvy:text {"css":"margin: 0;"}-->
+       <!--hvy:text {"css":"margin: 0;","placeholder":"Project name"}-->
         ### Autonomous Agent Hackathon
 
       <!--hvy:grid:1 {"id":"project-date-range-hackathon"}-->
 
-       <!--hvy:text {"css":"margin: 0; text-align: right;"}-->
+       <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date range"}-->
         08/2023 - 08/2023
 
-     <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.5rem 0;","placeholder":"Project description"}-->
       Hackathon project that involved using SuperAGI to do deep research. I had the idea, wrote all of the code, and did a substantial portion of the video presentation.
 
-     <!--hvy:text {"css":"margin: 0.35rem 0;"}-->
+     <!--hvy:text {"css":"margin: 0.35rem 0;","placeholder":"Project link"}-->
       [Visit webpage](https://lablab.ai) (lablab.ai)
 
      <!--hvy:skills-and-tools-tech-list {"css":"margin: 0.5rem 0 0;","gridColumns":2}-->
@@ -1308,7 +1305,7 @@ component_defs:
  <!--hvy:text {"css":"margin: 0.5rem 0;"}-->
   # Education
 
- <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":true,"tableRows":[],"lock":true}-->
+ <!--hvy:table {"css":"margin: 0.5rem 0 0;","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":true,"tableRows":[],"lock":true}-->
 
  <!--hvy:component-list {"css":"margin: 0;","componentListComponent":"education-record"}-->
 
@@ -1318,7 +1315,7 @@ component_defs:
 
     <!--hvy:expandable:stub {}-->
 
-     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":"DEGREE, INSTITUTION, LOCATION","tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
+     <!--hvy:table {"css":"margin: 0; margin-top: -1px;","tableColumns":["DEGREE","INSTITUTION","LOCATION"],"tableShowHeader":false,"tableRows":[{"cells":["B.S. Computer Science","University of Washington","Seattle, WA"]}]}-->
 
     <!--hvy:expandable:content {}-->
 

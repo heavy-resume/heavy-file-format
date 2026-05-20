@@ -33,8 +33,10 @@
 
 .component-meta-modal,
 .section-meta-modal,
-.hvy-document .component-meta-modal,
-.hvy-document .section-meta-modal {
+.modal-panel.component-meta-modal,
+.modal-panel.section-meta-modal,
+.hvy-document .modal-panel.component-meta-modal,
+.hvy-document .modal-panel.section-meta-modal {
   width: min(640px, calc(100% - 2rem));
 }
 

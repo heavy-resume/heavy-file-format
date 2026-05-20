@@ -146,8 +146,10 @@ Applied fix:
 ```css
 .component-meta-modal,
 .section-meta-modal,
-.hvy-document .component-meta-modal,
-.hvy-document .section-meta-modal {
+.modal-panel.component-meta-modal,
+.modal-panel.section-meta-modal,
+.hvy-document .modal-panel.component-meta-modal,
+.hvy-document .modal-panel.section-meta-modal {
   width: min(640px, calc(100% - 2rem));
 }
 ```
@@ -177,7 +179,8 @@ Applied fix:
 
 ```css
 .image-camera-modal,
-.hvy-document .image-camera-modal {
+.modal-panel.image-camera-modal,
+.hvy-document .modal-panel.image-camera-modal {
   width: min(38rem, calc(100% - 1rem));
   max-height: calc(100% - 1rem);
   overflow: hidden;
@@ -221,7 +224,8 @@ Applied fix:
 
 ```css
 .image-camera-modal-root,
-.hvy-document .image-camera-modal-root {
+.modal-root.image-camera-modal-root,
+.hvy-document .modal-root.image-camera-modal-root {
   padding: 0.75rem;
 }
 ```
@@ -252,6 +256,12 @@ That combined selector has specificity `0,2,0`, so it is no longer dependent on 
 - Graph expanded modals already include scoped variants such as `.hvy-document .hvy-graph-expanded-modal`, so they do not have the same modal specificity problem as `.image-camera-modal`.
 - Several ghost variants in `src/editor/editor.css` are order-sensitive within that file, but not import-order-sensitive today because the base and variant rules are colocated. The highest-risk one from this pass, `active-component-insert-ghost`, has been moved to a combined selector.
 
+## CSS Convention
+
+When markup puts a shared base class and a variant class on the same element, variant rules that override base layout properties should include both classes in the selector. Prefer `.base.variant` over `.variant` for overrides of `display`, `min-height`, `height`, `width`, `padding`, `margin`, grid/flex alignment, and modal sizing.
+
+Use scoped base-plus-variant companions when a variant needs to beat a scoped base selector. For example, pair `.modal-panel.image-camera-modal` with `.hvy-document .modal-panel.image-camera-modal` when the base rule includes `.hvy-document .modal-panel`.
+
 ## Action Items
 
 - [x] Harden the grid add ghost selector.
@@ -261,13 +271,13 @@ That combined selector has specificity `0,2,0`, so it is no longer dependent on 
    Update `src/editor/editor.css` so active insert overrides use `.compact-add-component-ghost.active-component-insert-ghost`. This keeps the intended compact-insert layout stable if the compact and active styles are ever split across files.
 
 - [x] Add scoped modal width rules for component metadata modals.
-   Update `src/modal.css` to include `.hvy-document .component-meta-modal` and `.hvy-document .section-meta-modal` alongside the unscoped modal variants.
+   Update `src/modal.css` to include `.hvy-document .modal-panel.component-meta-modal` and `.hvy-document .modal-panel.section-meta-modal` alongside the unscoped modal variants.
 
 - [x] Add scoped image camera modal rules.
-   Update `src/editor/components/image/image.css` to include `.hvy-document .image-camera-modal` for the modal panel overrides and `.hvy-document .image-camera-modal-root` for the root padding override.
+   Update `src/editor/components/image/image.css` to include `.hvy-document .modal-panel.image-camera-modal` for the modal panel overrides and `.hvy-document .modal-root.image-camera-modal-root` for the root padding override.
 
-- [ ] Add regression coverage for order-sensitive bundled CSS.
+- [x] Add regression coverage for order-sensitive bundled CSS.
    Add a focused embedded-mode test that mounts the affected controls inside `.hvy-document` and asserts computed layout values for grid add ghost, component metadata modal width, and image camera modal sizing. This should catch future bundle-order drift rather than relying on source-file order.
 
-- [ ] Prefer combined selectors for same-node base plus variant classes going forward.
+- [x] Prefer combined selectors for same-node base plus variant classes going forward.
    When markup uses a shared base class and a variant class on the same element, write the variant rule as `.base.variant` when it overrides base layout properties. Avoid relying on a single-class variant selector to beat a single-class base selector by import order.

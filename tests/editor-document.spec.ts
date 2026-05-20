@@ -1098,6 +1098,93 @@ hvy_version: 0.1
   expect(Math.abs(placement.modalCenterY - placement.rootCenterY)).toBeLessThan(12);
 });
 
+test('embedded variant CSS keeps layout overrides independent of import order', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount" style="width: 900px; height: 680px;"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"summary-text"}-->
+  Embedded CSS regression target.
+
+ <!--hvy:grid {"id":"layout","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"grid-text"}-->
+    Grid cell.
+
+ <!--hvy:image {"id":"photo"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      showAdvancedEditor: true,
+    });
+  });
+
+  const mount = page.locator('#mount');
+  await expect(mount).toHaveClass(/hvy-document/);
+
+  await mount.evaluate((root) => {
+    const ghost = document.createElement('div');
+    ghost.className = 'ghost-section-card add-ghost grid-add-ghost';
+    ghost.textContent = 'Grid add ghost fixture';
+    root.append(ghost);
+  });
+  const gridGhostStyles = await mount.locator('.grid-add-ghost').evaluate((ghost) => {
+    const styles = getComputedStyle(ghost);
+    return {
+      alignSelf: styles.alignSelf,
+      marginTop: styles.marginTop,
+      minHeight: styles.minHeight,
+    };
+  });
+  expect(gridGhostStyles.alignSelf).toBe('stretch');
+  expect(gridGhostStyles.marginTop).toBe('0px');
+  expect(gridGhostStyles.minHeight).toBe('100%');
+
+  await mount.locator('.editor-block-passive', { hasText: 'Embedded CSS regression target.' }).click();
+  await mount.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
+  const componentMetaWidth = await mount.locator('.component-meta-modal').evaluate((modal) => getComputedStyle(modal).width);
+  expect(Number.parseFloat(componentMetaWidth)).toBeCloseTo(640, 0);
+  await mount.locator('.component-meta-modal [data-modal-action="close"]').click();
+
+  await mount.locator('.editor-block-passive', { hasText: 'No image attached.' }).click();
+  await mount.locator('[data-action="image-take-photo"]').click();
+  const cameraStyles = await mount.locator('.image-camera-modal').evaluate((modal) => {
+    const root = modal.closest<HTMLElement>('.image-camera-modal-root');
+    const rootStyles = root ? getComputedStyle(root) : null;
+    const styles = getComputedStyle(modal);
+    return {
+      display: styles.display,
+      gap: styles.gap,
+      overflow: styles.overflow,
+      paddingTop: styles.paddingTop,
+      rootPaddingTop: rootStyles?.paddingTop ?? '',
+      width: styles.width,
+    };
+  });
+  expect(cameraStyles.display).toBe('grid');
+  expect(cameraStyles.gap).toBe('9.6px');
+  expect(cameraStyles.overflow).toBe('hidden');
+  expect(cameraStyles.paddingTop).toBe('12px');
+  expect(cameraStyles.rootPaddingTop).toBe('12px');
+  expect(Number.parseFloat(cameraStyles.width)).toBeCloseTo(608, 0);
+});
+
 test('embedded editor runtime registers built-in graph plugin', async ({ page }) => {
   await page.goto('/');
 

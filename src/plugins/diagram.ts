@@ -92,7 +92,7 @@ function getRenderHost(ctx: HvyPluginContext, root: HTMLElement): HTMLElement {
 }
 
 function syncEditorShell(root: HTMLElement, source: string): void {
-  if (!root.querySelector('.hvy-diagram-editor')) {
+  if (!root.querySelector('.hvy-diagram-editor-shell')) {
     root.innerHTML = renderEditorShell(source);
   }
   const textarea = root.querySelector<HTMLTextAreaElement>('[data-diagram-field="source"]');
@@ -102,7 +102,7 @@ function syncEditorShell(root: HTMLElement, source: string): void {
 }
 
 function renderEditorShell(source: string): string {
-  return `<div class="hvy-diagram-editor" data-editor-activation-autofocus="false">
+  return `<div class="hvy-diagram-editor-shell" data-editor-activation-autofocus="false">
     <div class="hvy-diagram-source-panel">
       <label for="hvyDiagramSource">Mermaid</label>
       <textarea id="hvyDiagramSource" data-diagram-field="source" spellcheck="false">${escapeHtml(source)}</textarea>

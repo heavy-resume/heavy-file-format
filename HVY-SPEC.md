@@ -1224,6 +1224,40 @@ Plugin-specific rules:
 - Invalid CSV or non-numeric chart values SHOULD render an inline plugin error
   while preserving the original plugin text body.
 
+### 7.9 Diagram plugin contract
+
+The built-in diagram plugin is `hvy.diagram`. Diagram source lives in the
+plugin text body as Mermaid text. `pluginConfig.syntax` is optional and defaults
+to `"mermaid"`.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: hvy.diagram
+    source: builtin://diagram
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+flowchart TD
+  start[Start] --> review{Review}
+  review -->|Approved| ship[Ship]
+  review -->|Needs work| edit[Edit]
+  edit --> review
+```
+
+Plugin-specific rules:
+- The plugin text body MUST be interpreted as Mermaid source.
+- `pluginConfig.syntax` MAY be omitted. When present, clients MUST treat
+  `"mermaid"` as Mermaid source. Other syntax values are reserved.
+- Invalid Mermaid source SHOULD render an inline plugin error while preserving
+  the original plugin text body.
+- Renderers MUST sanitize the generated SVG/HTML before inserting it into the
+  document.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:

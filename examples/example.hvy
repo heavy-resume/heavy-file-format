@@ -15,6 +15,8 @@ plugins:
     source: builtin://scripting
   - id: hvy.graph
     source: builtin://graph
+  - id: hvy.diagram
+    source: builtin://diagram
 ---
 
 <!--hvy: {"id":"overview"}-->
@@ -306,6 +308,22 @@ Week 3,11,7,4,2,0
 Week 4,16,8,5,2,1
 Week 5,13,9,6,3,1
 Week 6,18,10,7,4,2
+
+<!--hvy:subsection {"id":"diagram-example"}-->
+#! Diagram Example
+
+<!--hvy:text {"css":"margin: 0.5rem 0;"}-->
+The diagram plugin stores Mermaid source as editable text in the plugin body and renders it as a diagram.
+
+<!--hvy:plugin {"css":"margin: 0.5rem 0;","plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+flowchart TD
+  research[Research roles] --> apply[Send applications]
+  apply --> screen{Recruiter screen?}
+  screen -->|Yes| prep[Prepare interview notes]
+  screen -->|No| follow[Schedule follow-up]
+  prep --> interview[Interview]
+  follow --> apply
+
 
 <!--hvy:tail {"id":"image:carousel-slide-a.svg","mediaType":"image/svg+xml","length":341}-->
 <!--hvy:tail {"id":"image:carousel-slide-b.svg","mediaType":"image/svg+xml","length":403}-->

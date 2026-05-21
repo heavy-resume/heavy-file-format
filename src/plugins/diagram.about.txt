@@ -1,0 +1,14 @@
+Diagram source lives in plugin.txt as Mermaid text.
+
+pluginConfig.syntax is optional and defaults to "mermaid".
+
+Example:
+
+flowchart TD
+  start[Start] --> review{Review}
+  review -->|Approved| ship[Ship]
+  review -->|Needs work| edit[Edit]
+  edit --> review
+
+Supported diagram syntax is Mermaid. Invalid source should render as an inline
+error while preserving the original plugin.txt body.

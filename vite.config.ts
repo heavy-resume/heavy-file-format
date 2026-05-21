@@ -23,6 +23,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.progress-bar',
   'hvy.scripting',
   'hvy.graph',
+  'hvy.diagram',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -76,6 +77,13 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'graphPlugin',
     modulePath: 'src/plugins/graph.ts',
     displayName: 'Graph',
+  },
+  {
+    id: 'hvy.diagram',
+    key: 'diagram',
+    exportName: 'diagramPlugin',
+    modulePath: 'src/plugins/diagram.ts',
+    displayName: 'Diagram',
   },
 ];
 

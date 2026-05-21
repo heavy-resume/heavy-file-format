@@ -1,0 +1,117 @@
+.hvy-diagram {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  color: var(--hvy-text);
+}
+
+.hvy-diagram-frame {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: clamp(14rem, 48cqw, 30rem);
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 96%, var(--hvy-bg-alt) 4%);
+  padding: 1rem;
+}
+
+.hvy-diagram-frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  color: var(--hvy-text);
+}
+
+.hvy-diagram-error,
+.hvy-diagram-empty,
+.hvy-diagram-loading {
+  padding: 0.85rem;
+  border: 1px dashed var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 74%, transparent);
+  color: var(--hvy-text-alt);
+}
+
+.hvy-diagram-error {
+  white-space: pre-wrap;
+  border-color: color-mix(in srgb, var(--hvy-danger) 58%, var(--hvy-border));
+  background: color-mix(in srgb, var(--hvy-danger) 10%, var(--hvy-surface));
+  color: var(--hvy-text);
+}
+
+.hvy-diagram-editor-shell {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  grid-template-columns: repeat(2, minmax(min(20rem, 100%), 1fr));
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.hvy-diagram-source-panel,
+.hvy-diagram-preview-panel {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
+  padding: 0.75rem;
+}
+
+.hvy-diagram-source-panel {
+  grid-template-rows: auto minmax(12rem, 1fr);
+  gap: 0.45rem;
+}
+
+.hvy-diagram-source-panel label {
+  color: var(--hvy-text-alt);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.hvy-diagram-source-panel textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 12rem;
+  resize: vertical;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  padding: 0.65rem 0.7rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.hvy-diagram-preview-panel {
+  min-height: 14rem;
+}
+
+.hvy-diagram-preview-panel .hvy-diagram-frame {
+  height: 100%;
+  min-height: 14rem;
+}
+
+@container (max-width: 42rem) {
+  .hvy-diagram-editor-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .hvy-diagram-frame {
+    padding: 0.65rem;
+  }
+}

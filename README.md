@@ -144,7 +144,8 @@ not enabled automatically:
     "hvy.form",
     "hvy.progress-bar",
     "hvy.scripting",
-    "hvy.graph"
+    "hvy.graph",
+    "hvy.diagram"
   ]
 }
 ```

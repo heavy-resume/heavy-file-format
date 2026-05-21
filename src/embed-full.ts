@@ -70,7 +70,7 @@ import { renderSearchLauncher, renderSearchPalette } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory } from './history';
+import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
 import { loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
@@ -113,6 +113,8 @@ export interface HvyMount {
   serializeDocumentBytes(): Uint8Array;
   markSaved(): void;
   isDirty(): boolean;
+  undo(): void;
+  redo(): void;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -737,6 +739,12 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     isDirty() {
       return isDocumentDirty(runtime);
+    },
+    undo() {
+      runWithStateRuntime(runtime, () => undoState());
+    },
+    redo() {
+      runWithStateRuntime(runtime, () => redoState());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

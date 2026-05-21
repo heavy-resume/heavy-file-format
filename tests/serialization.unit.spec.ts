@@ -349,6 +349,69 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('serializes reusable section template block schemas without runtime-only component defaults', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: publications-section
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            lock: true
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            description: Publication table header
+            tableColumns: ["PUBLICATION", "PUBLISHER", "DATE"]
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+      children: []
+component_defs:
+  - name: publication-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Publication details
+---
+
+<!--hvy: {"id":"root"}-->
+#! Root
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('component: text');
+  expect(output).toContain('component: table');
+  expect(output).toContain('component: component-list');
+  expect(output).toContain('tableColumns:');
+  expect(output).toContain('componentListComponent: publication-record');
+  expect(output).toContain('css: "padding: 0.5rem;"');
+  expect(output).not.toContain('codeLanguage: ts');
+  expect(output).not.toContain('containerBlocks: []');
+  expect(output).not.toContain('expandableStubComponent: container');
+  expect(output).not.toContain('buttonLabel: Generate');
+  expect(output).not.toContain('carouselDurationMs: 3000');
+});
+
 test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

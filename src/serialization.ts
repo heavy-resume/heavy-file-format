@@ -748,8 +748,6 @@ function shouldCloseFrameForIndent(
   return frame.indent > indent;
 }
 
-const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
-const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
 const SERIALIZED_TEXT_WRAP_COLUMN = 120;
 const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 
@@ -759,14 +757,15 @@ const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 // - uses { component: name } shorthand for custom component blocks in nested lists
 export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   const result: JsonObject = {};
+  const baseType = typeof raw.baseType === 'string' ? raw.baseType : undefined;
   for (const [key, value] of Object.entries(raw)) {
     if (key === 'template') continue; // runtime-only; derived from schema
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
       }
     } else if (key === 'flavors' && Array.isArray(value)) {
-      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject));
+      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject, baseType));
     } else {
       result[key] = value;
     }
@@ -774,13 +773,13 @@ export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
+function cleanComponentDefFlavor(flavor: JsonObject, baseType?: string): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(flavor)) {
     if (key === 'template') continue;
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
       }
     } else {
       result[key] = value;
@@ -789,35 +788,44 @@ function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false): JsonObject {
-  const result: JsonObject = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === 'component' && stripRootComponent) continue; // redundant with baseType only on the reusable root
-    if (key === 'schemaMode') continue; // editor state
-    if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
-    if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
-      result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
-    } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown };
-      const cleanPart: JsonObject = {
-        lock: part.lock ?? false,
-        children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
-      };
-      const css = typeof part.css === 'string' ? part.css : '';
-      if (css.trim().length > 0) {
-        cleanPart.css = css;
-      }
-      result[key] = cleanPart;
-    } else if (key === 'gridItems' && Array.isArray(value)) {
-      result[key] = value.map((item) => {
-        const obj = item as JsonObject;
-        return obj.block ? { ...obj, block: cleanComponentDefBlock(obj.block as JsonObject) } : obj;
-      });
-    } else {
-      result[key] = value;
-    }
+function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false, componentHint?: string): JsonObject {
+  const componentName = stripRootComponent && componentHint
+    ? componentHint
+    : typeof schema.component === 'string'
+      ? schema.component
+      : componentHint ?? 'text';
+  const parsed = schemaFromUnknown({ ...schema, component: componentName });
+  const result = serializeBlockSchema(parsed, { omitComponent: stripRootComponent });
+  const baseComponent = resolveBaseComponentFromMeta(parsed.component, null);
+  if (baseComponent === 'expandable') {
+    addCleanExpandablePart(result, 'expandableStubBlocks', parsed.expandableStubBlocks, parsed.expandableStubCss, parsed.expandableStubDescription);
+    addCleanExpandablePart(result, 'expandableContentBlocks', parsed.expandableContentBlocks, parsed.expandableContentCss, parsed.expandableContentDescription);
   }
   return result;
+}
+
+function addCleanExpandablePart(
+  result: JsonObject,
+  key: 'expandableStubBlocks' | 'expandableContentBlocks',
+  part: BlockSchema['expandableStubBlocks'],
+  css: string,
+  description: string
+): void {
+  const children = part.children.map((block) => cleanComponentDefBlock(block as unknown as JsonObject));
+  if (children.length === 0 && part.lock !== true && css.trim().length === 0 && description.trim().length === 0) {
+    return;
+  }
+  const cleanPart: JsonObject = { children };
+  if (part.lock === true) {
+    cleanPart.lock = true;
+  }
+  if (css.trim().length > 0) {
+    cleanPart.css = css;
+  }
+  if (description.trim().length > 0) {
+    cleanPart.description = description;
+  }
+  result[key] = cleanPart;
 }
 
 function cleanComponentDefBlock(block: JsonObject): JsonObject {

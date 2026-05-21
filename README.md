@@ -200,6 +200,10 @@ const mount = HVY.mountHvy({
 
 await saveDocument(mount.serializeDocumentBytes());
 mount.markSaved();
+
+// Hosts can also route their own undo/redo controls through the mounted editor.
+mount.undo();
+mount.redo();
 ```
 
 Embedded editor/AI instances do not persist reconnect/reload session state

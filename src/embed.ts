@@ -45,7 +45,7 @@ import {
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory } from './history';
+import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import {
   initDocumentChangeTracking,
@@ -87,6 +87,8 @@ export interface HvyMount {
   serializeDocumentBytes(): Uint8Array;
   markSaved(): void;
   isDirty(): boolean;
+  undo(): void;
+  redo(): void;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -525,6 +527,12 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     isDirty() {
       return mounted?.isDirty() ?? false;
     },
+    undo() {
+      withMount((mount) => mount.undo());
+    },
+    redo() {
+      withMount((mount) => mount.redo());
+    },
     buildImportPlan(importOptions) {
       return ready.then((mount) => mount.buildImportPlan(importOptions));
     },
@@ -649,6 +657,12 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     isDirty() {
       return isDocumentDirty(runtime);
+    },
+    undo() {
+      runWithStateRuntime(runtime, () => undoState());
+    },
+    redo() {
+      runWithStateRuntime(runtime, () => redoState());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

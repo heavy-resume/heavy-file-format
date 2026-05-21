@@ -114,7 +114,7 @@ test('cli ls expands virtual path globs', async () => {
   await executeHvyCliCommand(document, session, 'cd /body/tools-technologies/component-list-1/tool-typescript');
   const result = await executeHvyCliCommand(document, session, 'ls ../tool-python/*.css');
 
-  expect(result.output).toContain('file skill-record.css [w] | skill-record component CSS mirrored from config');
+  expect(result.output).toContain('file tool-tech-record.css [w] | tool-tech-record component CSS mirrored from config');
   expect(result.output).not.toContain('file text.css');
   expect(result.output).not.toContain('no such file or directory');
 });
@@ -333,7 +333,7 @@ test('cli exposes component template documentation in about files', async () => 
   expect(about.output).toContain('Component template YAML:');
   expect(about.output).toContain('```yaml');
   expect(about.output).toContain('- name: skill-record');
-  expect(about.output).toContain('description: Skill or tool details');
+  expect(about.output).toContain('description: Skill details');
   expect(about.output).toContain('Virtual directory mapping:');
   expect(about.output).toContain('- /skill-record contains one skill-record component instance.');
   expect(about.output).toContain('- expandable-stub/ contains the always-visible summary children.');
@@ -470,7 +470,7 @@ test('hvy help insert explains component creation commands', async () => {
   expect(result.output).toContain('hvy insert -1 grid . a-grid');
   expect(result.output).toContain('hvy insert -2 table . a-table');
   expect(result.output).not.toContain('/body/skills/component-list-1');
-  expect(result.output).not.toContain('/body/history/component-list-2');
+  expect(result.output).not.toContain('/body/history/history-list');
   expect(result.output).not.toContain('hvy insert -1 component PARENT_PATH ID COMPONENT');
 });
 
@@ -632,23 +632,23 @@ test('hvy insert can create custom components without explicit ids', async () =>
   const generated = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 history-record /body/history/component-list-2 --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
+    'hvy insert 0 history-record /body/history/history-list --using-template \'{"dates":"","organization":"","role":"","location":"","date_range":"","description":"","accomplishments":""}\''
   );
   const positionalId = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert 0 history-record /body/history/component-list-2 history-heavy-resume-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
+    'hvy insert 0 history-record /body/history/history-list history-heavy-resume-founder --using-template \'{"dates":"","organization":"","role":"","location":"","date_range":"","description":"","accomplishments":""}\''
   );
 
-  expect(generated.output).toContain('/body/history/component-list-2/history-record-1: created');
-  expect(generated.cwd).toBe('/body/history/component-list-2/history-record-1');
-  expect(positionalId.output).toContain('/body/history/component-list-2/history-heavy-resume-founder: created');
-  expect(positionalId.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
+  expect(generated.output).toContain('/body/history/history-list/history-record-1: created');
+  expect(generated.cwd).toBe('/body/history/history-list/history-record-1');
+  expect(positionalId.output).toContain('/body/history/history-list/history-heavy-resume-founder: created');
+  expect(positionalId.cwd).toBe('/body/history/history-list/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy-resume-founder/expandable-stub/table-0/tableColumns.json')).output)
     .toBe('[\n  "TITLE",\n  "<!--hvy:alt {\\"compact\\":\\"ORG\\"}-->ORGANIZATION<!--/hvy:alt-->",\n  "DATES"\n]\n');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-heavy-resume-founder/expandable-stub/table-0/table.txt')).output)
     .toBe('TITLE | <!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt--> | DATES\n |  | \n');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/children-order.json')).output)
+  expect((await executeHvyCliCommand(document, session, 'cat /body/history/history-list/children-order.json')).output)
     .toMatch(/history-heavy-resume-founder[\s\S]*history-record-1[\s\S]*history-northwind-labs-senior-software-engineer/);
 });
 
@@ -659,12 +659,12 @@ test('hvy insert -1 changes cwd to the newly created component', async () => {
   const created = await executeHvyCliCommand(
     document,
     session,
-    'hvy insert -1 history-record /body/history/component-list-2 --id history-heavy-resume-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\''
+    'hvy insert -1 history-record /body/history/history-list --id history-heavy-resume-founder --using-template \'{"dates":"","organization":"","role":"","location":"","date_range":"","description":"","accomplishments":""}\''
   );
 
-  expect(created.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
-  expect(session.cwd).toBe('/body/history/component-list-2/history-heavy-resume-founder');
-  expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/history/component-list-2/history-heavy-resume-founder');
+  expect(created.cwd).toBe('/body/history/history-list/history-heavy-resume-founder');
+  expect(session.cwd).toBe('/body/history/history-list/history-heavy-resume-founder');
+  expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/history/history-list/history-heavy-resume-founder');
   expect((await executeHvyCliCommand(document, session, 'ls')).output).toContain('file raw.hvy [w]');
 });
 
@@ -773,7 +773,7 @@ test('hvy preview accepts structural directories inside a component', async () =
   const result = await executeHvyCliCommand(document, session, 'hvy preview /body/tools-technologies/component-list-1/tool-typescript/expandable-content');
 
   expect(result.output).toContain('Preview command: hvy preview /body/tools-technologies/component-list-1/tool-typescript');
-  expect(result.output).toContain('<!--hvy:skill-record');
+  expect(result.output).toContain('<!--hvy:tool-tech-record');
   expect(result.output).toContain('#### Description');
   expect(result.output).toContain('#### Notes');
 });
@@ -1234,30 +1234,30 @@ test('component raw.hvy edits preserve omitted placeholders on unchanged empty t
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/component-list-2 --id history-placeholder-repro --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
-  const before = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  await executeHvyCliCommand(document, session, 'hvy insert 0 history-record /body/history/history-list --id history-placeholder-repro --using-template \'{"dates":"","organization":"","role":"","location":"","date_range":"","description":"","accomplishments":""}\'');
+  const before = await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-placeholder-repro/raw.hvy');
   expect(before.output).toContain('"placeholder":"Description"');
 
-  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+  await executeHvyCliCommand(document, session, `cat > /body/history/history-list/history-placeholder-repro/raw.hvy <<'EOF'
 ${before.output.replace(',"placeholder":"Description"', '')}
 EOF`);
 
-  const afterOmitted = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  const afterOmitted = await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-placeholder-repro/raw.hvy');
   expect(afterOmitted.output).toContain('"placeholder":"Description"');
 
-  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+  await executeHvyCliCommand(document, session, `cat > /body/history/history-list/history-placeholder-repro/raw.hvy <<'EOF'
 ${afterOmitted.output.replace('"placeholder":"Description"', '"placeholder":"alternate description"')}
 EOF`);
 
-  const afterChanged = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  const afterChanged = await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-placeholder-repro/raw.hvy');
   expect(afterChanged.output).toContain('"placeholder":"alternate description"');
   expect(afterChanged.output).not.toContain('"placeholder":"description"');
 
-  await executeHvyCliCommand(document, session, `cat > /body/history/component-list-2/history-placeholder-repro/raw.hvy <<'EOF'
+  await executeHvyCliCommand(document, session, `cat > /body/history/history-list/history-placeholder-repro/raw.hvy <<'EOF'
 ${afterChanged.output.replace('"placeholder":"alternate description"', '"placeholder":""')}
 EOF`);
 
-  const afterRemoved = await executeHvyCliCommand(document, session, 'cat /body/history/component-list-2/history-placeholder-repro/raw.hvy');
+  const afterRemoved = await executeHvyCliCommand(document, session, 'cat /body/history/history-list/history-placeholder-repro/raw.hvy');
   expect(afterRemoved.output).not.toContain('"placeholder":"alternate description"');
   expect(afterRemoved.output).not.toContain('"placeholder":"description"');
 });
@@ -1393,10 +1393,10 @@ test('cli exposes resume component-list items by stable section paths', async ()
   expect((await executeHvyCliCommand(document, session, 'ls /body')).output).toContain('dir  tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'cd tools-technologies')).cwd).toBe('/body/tools-technologies');
   expect((await executeHvyCliCommand(document, session, 'pwd')).output).toBe('/body/tools-technologies');
-  expect((await executeHvyCliCommand(document, session, 'find component-list-1/tool-typescript -name skill-record.txt')).output).toContain(
-    '/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt'
+  expect((await executeHvyCliCommand(document, session, 'find component-list-1/tool-typescript -name tool-tech-record.txt')).output).toContain(
+    '/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt'
   );
-  expect((await executeHvyCliCommand(document, session, 'cat component-list-1/tool-typescript/skill-record.txt')).output).toContain('Primary application language.');
+  expect((await executeHvyCliCommand(document, session, 'cat component-list-1/tool-typescript/tool-tech-record.txt')).output).toContain('Primary application language.');
 });
 
 test('cli shows labeled tags for resume header tables without changing directory identity', async () => {
@@ -1437,7 +1437,7 @@ test('cli accepts body section aliases from root and mutates resume virtual file
   const result = await executeHvyCliCommand(document, session, 'sed s/Primary/Core/ /tools-technologies/component-list-1/tool-typescript/expandable-content/text-0/text.txt');
   expect(result.mutated).toBe(true);
   expect(result.output).toBe('/body/tools-technologies/component-list-1/tool-typescript/expandable-content/text-0/text.txt: updated');
-  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/component-list-1/tool-typescript/skill-record.txt')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'cat /tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt')).output).toContain(
     'Core application language.'
   );
 });
@@ -1455,8 +1455,8 @@ test('cli rm recursively removes virtual body directories', async () => {
   expect(result.mutated).toBe(true);
   expect(result.output).toContain('/body/tools-technologies/component-list-1/tool-typescript: removed');
   expect(result.output).toContain('Run: hvy prune-xref tool-typescript');
-  expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name skill-record.txt')).output).not.toContain(
-    '/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt'
+  expect((await executeHvyCliCommand(document, session, 'find /body/tools-technologies -name tool-tech-record.txt')).output).not.toContain(
+    '/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt'
   );
   expect(serializeDocument(document)).not.toContain('id":"tool-typescript"');
 
@@ -1476,8 +1476,8 @@ test('cli suggests nearby paths when a path is missing', async () => {
   await expect(executeHvyCliCommand(document, session, 'hvy remove /body/tools-technologies/component-list-1/tool-typescriptx'))
     .rejects.toThrow(/Did you mean\?\n\s+Closest existing parent: \/body\/tools-technologies\/component-list-1\n\s+\/body\/tools-technologies\/component-list-1\/tool-typescript/);
 
-  await expect(executeHvyCliCommand(document, session, 'cat /body/tools-technologies/component-list-1/tool-typescript/skill-recrod.txt'))
-    .rejects.toThrow(/Did you mean\?\n(?:.*\n)*\s+\/body\/tools-technologies\/component-list-1\/tool-typescript\/skill-record\.txt/);
+  await expect(executeHvyCliCommand(document, session, 'cat /body/tools-technologies/component-list-1/tool-typescript/tool-tech-recrod.txt'))
+    .rejects.toThrow(/Did you mean\?\n(?:.*\n)*\s+\/body\/tools-technologies\/component-list-1\/tool-typescript\/tool-tech-record\.txt/);
 });
 
 test('cli find supports common filters and warns about ignored options', async () => {
@@ -1488,10 +1488,10 @@ test('cli find supports common filters and warns about ignored options', async (
   expect(directories).toContain('/body/tools-technologies/component-list-1/tool-typescript');
   expect(directories).not.toContain('/body/tools-technologies/component-list-1/tool-typescript/expandable-content');
 
-  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -type f -name skill-record.txt')).output;
-  expect(files).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  const files = (await executeHvyCliCommand(document, session, 'find /body/tools-technologies/component-list-1/tool-typescript -type f -name tool-tech-record.txt')).output;
+  expect(files).toContain('/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt');
 
-  expect((await executeHvyCliCommand(document, session, 'find /body -mtime 1 -name skill-record.txt')).output).toContain(
+  expect((await executeHvyCliCommand(document, session, 'find /body -mtime 1 -name tool-tech-record.txt')).output).toContain(
     'Warning: find ignored unsupported option -mtime'
   );
   expect((await executeHvyCliCommand(document, session, 'ls -lah /body')).output).toContain('Warning: ls ignored unsupported option -lah');
@@ -1505,23 +1505,23 @@ test('cli rg supports common ripgrep flags and hvy read aliases cat', async () =
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();
 
-  const read = await executeHvyCliCommand(document, session, 'hvy read /body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  const read = await executeHvyCliCommand(document, session, 'hvy read /body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt');
   expect(read.output).toContain('TypeScript');
 
   const lineNumber = await executeHvyCliCommand(document, session, 'rg -n "TypeScript\\|Typescript" /body/tools-technologies');
-  expect(lineNumber.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:### TypeScript');
+  expect(lineNumber.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt:1:### TypeScript');
   expect(lineNumber.output).not.toContain('Warning: rg ignored unsupported option -n');
 
   const filesOnly = await executeHvyCliCommand(document, session, 'rg "TypeScript" /body/tools-technologies -l');
-  expect(filesOnly.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  expect(filesOnly.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt');
   expect(filesOnly.output).not.toContain(':1:TypeScript');
 
   const combined = await executeHvyCliCommand(document, session, 'rg -rn "TypeScript" /body/tools-technologies');
   expect(combined.output).not.toContain('Warning: rg ignored unsupported option -r');
-  expect(combined.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt:1:### TypeScript');
+  expect(combined.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt:1:### TypeScript');
 
   const listFilesAlias = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body/tools-technologies --list-files');
-  expect(listFilesAlias.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/skill-record.txt');
+  expect(listFilesAlias.output).toContain('/body/tools-technologies/component-list-1/tool-typescript/tool-tech-record.txt');
   expect(listFilesAlias.output).not.toContain(':1:TypeScript');
 
   const piped = await executeHvyCliCommand(document, session, 'rg -r "TypeScript" /body -l | head -3');
@@ -2108,7 +2108,7 @@ test('cli ignores stderr merge redirection in request_structure pipelines', asyn
   const result = await executeHvyCliCommand(
     document,
     session,
-    'hvy request_structure /body/top-skills-tools-technologies --describe 2>&1 | head -5'
+    'hvy request_structure /body/top-skills-tools-technologies --describe 2>&1 | head -8'
   );
 
   expect(result.output).toContain('Custom component types:');
@@ -2216,7 +2216,7 @@ test('hvy request_structure lists reusable section templates with availability',
 
   expect(result.output).toContain('Reusable section templates:');
   expect(result.output).toContain('- Certifications key=resume-certifications available - Certifications section template');
-  expect(result.output).toContain('- Resume Section key=resume-section repeatable variables=section_title, row_label, row_summary, row_details - Additional resume section section template');
+  expect(result.output).toContain('- Tabular Resume Section key=tabular-resume-section repeatable variables=section_title, row_label, row_summary, row_details - An additional resume section with a table with expandable rows. section template');
 });
 
 test('hvy search ranks global skill library and top skills above local skill lists', async () => {
@@ -2390,10 +2390,10 @@ test('hvy insert section applies reusable section template variables', async () 
   const session = createHvyCliSession();
 
   await expect(
-    executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-section')
-  ).rejects.toThrow('hvy insert section: section template "resume-section" requires --using-template with expected keys: section_title, row_label, row_summary, row_details');
+    executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template tabular-resume-section')
+  ).rejects.toThrow('hvy insert section: section template "tabular-resume-section" requires --using-template with expected keys: section_title, row_label, row_summary, row_details');
 
-  const created = await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template resume-section --using-template \'{"section_title":"Awards","row_label":"Best Paper","row_summary":"2024","row_details":"Presented at the annual conference."}\'');
+  const created = await executeHvyCliCommand(document, session, 'hvy insert -1 section /body --from-template tabular-resume-section --using-template \'{"section_title":"Awards","row_label":"Best Paper","row_summary":"2024","row_details":"Presented at the annual conference."}\'');
   const expectedResult = (await executeHvyCliCommand(document, session, `cat ${created.output}/raw.hvy`)).output;
 
   expect(expectedResult).toContain('# Awards');
@@ -2402,7 +2402,7 @@ test('hvy insert section applies reusable section template variables', async () 
   expect(expectedResult).toContain('"tableRows":[{"cells":["Best Paper","2024"]}]');
   expect(expectedResult).toContain('Presented at the annual conference.');
   expect(expectedResult).toContain('Delete this starter row if it is not needed.');
-  expect((await executeHvyCliCommand(document, session, `cat ${created.output}/section.json`)).output).toContain('"templateKey": "resume-section"');
+  expect((await executeHvyCliCommand(document, session, `cat ${created.output}/section.json`)).output).toContain('"templateKey": "tabular-resume-section"');
 });
 
 test('hvy insert section rejects duplicate non-repeatable section templates', async () => {

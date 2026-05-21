@@ -13,6 +13,7 @@ import {
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
+  normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
 
@@ -60,6 +61,7 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.section_defaults === 'undefined') {
     meta.section_defaults = { css: DEFAULT_SECTION_CSS };
   }
+  normalizeReusableComponentDefinitions(meta);
   normalizeReusableSectionDefinitions(meta);
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
@@ -1291,6 +1293,9 @@ function serializeBlockSchema(
   addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
   addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
 
+  if (component === 'code') {
+    addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
+  }
   if (component === 'xref-card') {
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
     addIfChanged(payload, 'xrefTargetTagFilter', schema.xrefTargetTagFilter, defaults.xrefTargetTagFilter);
@@ -1535,8 +1540,8 @@ function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualB
 
 function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
   const payload: JsonObject = {};
-  const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
-  const description = part === 0 ? expandableBlock.schema.expandableStubDescription : expandableBlock.schema.expandableContentDescription;
+  const css = part === 0 ? expandableBlock.schema.expandableStubCss ?? '' : expandableBlock.schema.expandableContentCss ?? '';
+  const description = part === 0 ? expandableBlock.schema.expandableStubDescription ?? '' : expandableBlock.schema.expandableContentDescription ?? '';
   if (css.trim().length > 0) {
     payload.css = css;
   }
@@ -1584,8 +1589,8 @@ function serializeComponentListItemBlock(block: VisualBlock, index: number, inde
 function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
   const component = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
   if (component === 'expandable') {
-    const stub = block.schema.expandableStubBlocks;
-    const content = block.schema.expandableContentBlocks;
+    const stub = block.schema.expandableStubBlocks ?? { lock: false, children: [] };
+    const content = block.schema.expandableContentBlocks ?? { lock: false, children: [] };
     const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent, documentMeta);
     const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent, documentMeta);
     return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');

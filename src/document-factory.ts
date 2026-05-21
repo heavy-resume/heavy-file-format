@@ -1,8 +1,8 @@
-import type { Align, BlockSchema, CarouselImage, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
+import type { Align, BaseBlockSchema, BlockSchema, BuiltinComponentName, CarouselImage, ExpandablePart, Slot, SortKeyValue, TableRow, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
-import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
+import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
@@ -13,8 +13,9 @@ export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
 export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
 export const DEFAULT_IMAGE_BLOCK_CSS = 'margin: 0.5rem auto; display: block;';
 
-export function defaultBlockSchema(component = 'text'): BlockSchema {
-  return {
+export function defaultBlockSchema(component = 'text', baseComponent: BuiltinComponentName = normalizeBuiltinComponent(component)): BlockSchema {
+  const base: BaseBlockSchema = {
+    kind: baseComponent,
     id: '',
     component,
     editorOnly: false,
@@ -22,20 +23,6 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     align: 'left',
     slot: 'center',
     css: DEFAULT_BLOCK_CSS,
-    codeLanguage: 'ts',
-    containerBlocks: [],
-    containerTitle: '',
-    containerExpanded: true,
-    containerCollapsedPreviewRem: 3,
-    componentListComponent: 'text',
-    componentListItemLabel: '',
-    componentListBlocks: [],
-    componentListDefaultSortKey: '',
-    componentListDefaultSortDirection: 'asc',
-    componentListDefaultGroupKey: '',
-    componentListGroupCollapsedPreviewRem: 5,
-    gridColumns: 2,
-    gridItems: [],
     sortKeys: {},
     groupKeys: {},
     tags: '',
@@ -46,42 +33,90 @@ export function defaultBlockSchema(component = 'text'): BlockSchema {
     metaOpen: false,
     xrefTitle: '',
     xrefDetail: '',
-    xrefTarget: '',
-    xrefTargetTagFilter: '',
-    plugin: '',
-    pluginConfig: {},
-    expandableStubComponent: 'container',
-    expandableContentComponent: 'container',
-    expandableStub: '',
-    expandableStubCss: '',
-    expandableStubDescription: '',
-    expandableStubBlocks: { lock: false, children: [] },
-    expandableAlwaysShowStub: true,
-    expandableExpanded: false,
-    expandableContentCss: '',
-    expandableContentDescription: '',
-    expandableContentBlocks: { lock: false, children: [] },
-    tableColumns: ['Column 1', 'Column 2'],
-    tableShowHeader: true,
-    tableRows: [],
-    imageFile: '',
-    imageAlt: '',
-    carouselImages: [],
-    carouselDurationMs: 3000,
-    carouselPauseOnHover: true,
-    carouselShowControls: true,
-    carouselShowIndicators: true,
-    buttonLabel: 'Generate',
-    buttonAction: 'ai-generate',
-    buttonVisibleScript: '',
-    buttonSourceScript: '',
-    buttonPrompt: '',
-    buttonTargetScript: '',
-    buttonInputCharLimit: 4000,
-    buttonOutputCharLimit: 1000,
-    buttonPositionTargetId: '',
-    buttonCss: '',
   };
+  switch (baseComponent) {
+    case 'code':
+      return { ...base, kind: 'code', codeLanguage: 'ts' } as unknown as BlockSchema;
+    case 'container':
+      return {
+        ...base,
+        kind: 'container',
+        containerBlocks: [],
+        containerTitle: '',
+        containerExpanded: true,
+        containerCollapsedPreviewRem: 3,
+      } as unknown as BlockSchema;
+    case 'component-list':
+      return {
+        ...base,
+        kind: 'component-list',
+        componentListComponent: 'text',
+        componentListItemLabel: '',
+        componentListBlocks: [],
+        componentListDefaultSortKey: '',
+        componentListDefaultSortDirection: 'asc',
+        componentListDefaultGroupKey: '',
+        componentListGroupCollapsedPreviewRem: 5,
+      } as unknown as BlockSchema;
+    case 'grid':
+      return { ...base, kind: 'grid', gridColumns: 2, gridItems: [] } as unknown as BlockSchema;
+    case 'expandable':
+      return {
+        ...base,
+        kind: 'expandable',
+        expandableStubComponent: 'container',
+        expandableContentComponent: 'container',
+        expandableStub: '',
+        expandableStubCss: '',
+        expandableStubDescription: '',
+        expandableStubBlocks: { lock: false, children: [] },
+        expandableAlwaysShowStub: true,
+        expandableExpanded: false,
+        expandableContentCss: '',
+        expandableContentDescription: '',
+        expandableContentBlocks: { lock: false, children: [] },
+      } as unknown as BlockSchema;
+    case 'table':
+      return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
+    case 'image':
+      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '' } as unknown as BlockSchema;
+    case 'carousel':
+      return {
+        ...base,
+        kind: 'carousel',
+        carouselImages: [],
+        carouselDurationMs: 3000,
+        carouselPauseOnHover: true,
+        carouselShowControls: true,
+        carouselShowIndicators: true,
+      } as unknown as BlockSchema;
+    case 'button':
+      return {
+        ...base,
+        kind: 'button',
+        buttonLabel: 'Generate',
+        buttonAction: 'ai-generate',
+        buttonVisibleScript: '',
+        buttonSourceScript: '',
+        buttonPrompt: '',
+        buttonTargetScript: '',
+        buttonInputCharLimit: 4000,
+        buttonOutputCharLimit: 1000,
+        buttonPositionTargetId: '',
+        buttonCss: '',
+      } as unknown as BlockSchema;
+    case 'plugin':
+      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
+    case 'xref-card':
+      return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
+    case 'text':
+    default:
+      return { ...base, kind: 'text' } as unknown as BlockSchema;
+  }
+}
+
+function normalizeBuiltinComponent(component: string): BuiltinComponentName {
+  return isBuiltinComponentName(component) ? component as BuiltinComponentName : 'text';
 }
 
 export function parseExpandablePart(raw: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): ExpandablePart {
@@ -226,6 +261,47 @@ export function normalizeReusableSectionDefinitions(meta: JsonObject): void {
     .filter((item) => item.name.trim().length > 0);
 }
 
+export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
+  const defs = meta.component_defs;
+  if (!Array.isArray(defs)) {
+    return;
+  }
+  meta.component_defs = defs
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const raw = item as JsonObject;
+      const name = typeof raw.name === 'string' ? raw.name : '';
+      const baseType = typeof raw.baseType === 'string' ? raw.baseType : 'text';
+      const normalized: JsonObject = {
+        ...raw,
+        name,
+        baseType,
+      };
+      if (raw.schema && typeof raw.schema === 'object' && !Array.isArray(raw.schema)) {
+        normalized.schema = schemaFromUnknown({ ...(raw.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
+      }
+      if (Array.isArray(raw.flavors)) {
+        normalized.flavors = raw.flavors
+          .filter((flavor) => flavor && typeof flavor === 'object')
+          .map((flavor) => {
+            const rawFlavor = flavor as JsonObject;
+            const flavorName = typeof rawFlavor.name === 'string' ? rawFlavor.name : '';
+            const normalizedFlavor: JsonObject = {
+              ...rawFlavor,
+              name: flavorName,
+            };
+            if (rawFlavor.schema && typeof rawFlavor.schema === 'object' && !Array.isArray(rawFlavor.schema)) {
+              normalizedFlavor.schema = schemaFromUnknown({ ...(rawFlavor.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
+            }
+            return normalizedFlavor;
+          })
+          .filter((flavor) => typeof flavor.name === 'string' && flavor.name.trim().length > 0);
+      }
+      return normalized;
+    })
+    .filter((item) => typeof item.name === 'string' && item.name.trim().length > 0);
+}
+
 export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), documentMeta?: JsonObject | null): BlockSchema {
   if (!value || typeof value !== 'object') {
     return defaultBlockSchema('text');
@@ -236,12 +312,12 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   seen.add(value);
   const candidate = value as JsonObject;
   const component = typeof candidate.component === 'string' ? candidate.component : 'text';
-  const defaults = defaultBlockSchema(component);
+  const baseComponent = resolveBaseComponentFromMeta(component, documentMeta) as BuiltinComponentName;
+  const defaults = defaultBlockSchema(component, normalizeBuiltinComponent(baseComponent));
   const rows = Array.isArray(candidate.tableRows) ? candidate.tableRows : [];
-  const gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
   const parseNestedVisualBlock = (raw: unknown): VisualBlock => parseVisualBlock(raw, seen, documentMeta);
-  const parsedGridItems = _parseGridItems(candidate, gridColumns, component, _createBlockSkip, parseNestedVisualBlock);
-  return {
+  const schema: BlockSchema = {
+    ...defaults,
     component,
     id: typeof candidate.id === 'string' ? candidate.id : defaults.id,
     editorOnly: candidate.editorOnly === true,
@@ -249,26 +325,6 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     align: coerceAlign(typeof candidate.align === 'string' ? candidate.align : 'left'),
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
-    codeLanguage: typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : defaults.codeLanguage,
-    containerBlocks: Array.isArray(candidate.containerBlocks)
-      ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
-      : [],
-    containerTitle: typeof candidate.containerTitle === 'string' ? candidate.containerTitle : defaults.containerTitle,
-    containerExpanded: candidate.containerExpanded !== false,
-    containerCollapsedPreviewRem: parsePositiveNumber(candidate.containerCollapsedPreviewRem, defaults.containerCollapsedPreviewRem),
-    componentListComponent:
-      typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : defaults.componentListComponent,
-    componentListItemLabel:
-      typeof candidate.componentListItemLabel === 'string' ? candidate.componentListItemLabel : defaults.componentListItemLabel,
-    componentListBlocks: Array.isArray(candidate.componentListBlocks)
-      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
-      : [],
-    componentListDefaultSortKey: typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : defaults.componentListDefaultSortKey,
-    componentListDefaultSortDirection: candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc',
-    componentListDefaultGroupKey: typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : defaults.componentListDefaultGroupKey,
-    componentListGroupCollapsedPreviewRem: parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem),
-    gridColumns,
-    gridItems: parsedGridItems,
     sortKeys: parseSortKeys(candidate.sortKeys),
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
@@ -279,65 +335,110 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     metaOpen: candidate.metaOpen === true,
     xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
     xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
-    xrefTarget: typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : defaults.xrefTarget,
-    xrefTargetTagFilter:
-      typeof candidate.xrefTargetTagFilter === 'string' ? candidate.xrefTargetTagFilter : defaults.xrefTargetTagFilter,
-    plugin: typeof candidate.plugin === 'string' ? candidate.plugin : defaults.plugin,
-    pluginConfig:
+  };
+
+  if (schema.kind === 'code') {
+    schema.codeLanguage = typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : schema.codeLanguage;
+  }
+  if (schema.kind === 'container') {
+    schema.containerBlocks = Array.isArray(candidate.containerBlocks)
+      ? candidate.containerBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
+      : [];
+    schema.containerTitle = typeof candidate.containerTitle === 'string' ? candidate.containerTitle : schema.containerTitle;
+    schema.containerExpanded = candidate.containerExpanded !== false;
+    schema.containerCollapsedPreviewRem = parsePositiveNumber(candidate.containerCollapsedPreviewRem, schema.containerCollapsedPreviewRem);
+  }
+  if (schema.kind === 'component-list') {
+    schema.componentListComponent =
+      typeof candidate.componentListComponent === 'string' ? candidate.componentListComponent : schema.componentListComponent;
+    schema.componentListItemLabel =
+      typeof candidate.componentListItemLabel === 'string' ? candidate.componentListItemLabel : schema.componentListItemLabel;
+    schema.componentListBlocks = Array.isArray(candidate.componentListBlocks)
+      ? candidate.componentListBlocks.map((block) => parseVisualBlock(block, seen, documentMeta))
+      : [];
+    schema.componentListDefaultSortKey = typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : schema.componentListDefaultSortKey;
+    schema.componentListDefaultSortDirection = candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc';
+    schema.componentListDefaultGroupKey = typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : schema.componentListDefaultGroupKey;
+    schema.componentListGroupCollapsedPreviewRem = parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, schema.componentListGroupCollapsedPreviewRem);
+  }
+  if (schema.kind === 'grid') {
+    schema.gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
+    schema.gridItems = _parseGridItems(candidate, schema.gridColumns, component, _createBlockSkip, parseNestedVisualBlock);
+  }
+  if (schema.kind === 'plugin') {
+    schema.plugin = typeof candidate.plugin === 'string' ? candidate.plugin : schema.plugin;
+    schema.pluginConfig =
       candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)
         ? (candidate.pluginConfig as JsonObject)
-        : defaults.pluginConfig,
-    expandableStubComponent:
-      typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : defaults.expandableStubComponent,
-    expandableContentComponent:
-      typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : defaults.expandableContentComponent,
-    expandableStub: typeof candidate.expandableStub === 'string' ? candidate.expandableStub : defaults.expandableStub,
-    expandableStubCss:
+        : schema.pluginConfig;
+  }
+  if (schema.kind === 'expandable') {
+    schema.expandableStubComponent =
+      typeof candidate.expandableStubComponent === 'string' ? candidate.expandableStubComponent : schema.expandableStubComponent;
+    schema.expandableContentComponent =
+      typeof candidate.expandableContentComponent === 'string' ? candidate.expandableContentComponent : schema.expandableContentComponent;
+    schema.expandableStub = typeof candidate.expandableStub === 'string' ? candidate.expandableStub : schema.expandableStub;
+    schema.expandableStubCss =
       typeof candidate.expandableStubCss === 'string'
         ? candidate.expandableStubCss
-        : readExpandablePartCss(candidate.expandableStubBlocks) || defaults.expandableStubCss,
-    expandableStubDescription:
+        : readExpandablePartCss(candidate.expandableStubBlocks) || schema.expandableStubCss;
+    schema.expandableStubDescription =
       typeof candidate.expandableStubDescription === 'string'
         ? candidate.expandableStubDescription
-        : readExpandablePartDescription(candidate.expandableStubBlocks) || defaults.expandableStubDescription,
-    expandableStubBlocks: parseExpandablePart(candidate.expandableStubBlocks, seen, documentMeta),
-    expandableAlwaysShowStub: candidate.expandableAlwaysShowStub !== false,
-    expandableExpanded: candidate.expandableExpanded === true,
-    expandableContentCss:
+        : readExpandablePartDescription(candidate.expandableStubBlocks) || schema.expandableStubDescription;
+    schema.expandableStubBlocks = parseExpandablePart(candidate.expandableStubBlocks, seen, documentMeta);
+    schema.expandableAlwaysShowStub = candidate.expandableAlwaysShowStub !== false;
+    schema.expandableExpanded = candidate.expandableExpanded === true;
+    schema.expandableContentCss =
       typeof candidate.expandableContentCss === 'string'
         ? candidate.expandableContentCss
-        : readExpandablePartCss(candidate.expandableContentBlocks) || defaults.expandableContentCss,
-    expandableContentDescription:
+        : readExpandablePartCss(candidate.expandableContentBlocks) || schema.expandableContentCss;
+    schema.expandableContentDescription =
       typeof candidate.expandableContentDescription === 'string'
         ? candidate.expandableContentDescription
-        : readExpandablePartDescription(candidate.expandableContentBlocks) || defaults.expandableContentDescription,
-    expandableContentBlocks: parseExpandablePart(candidate.expandableContentBlocks, seen, documentMeta),
-    tableColumns: parseTableColumns(candidate.tableColumns, defaults.tableColumns),
-    tableShowHeader: candidate.tableShowHeader !== false,
-    tableRows: rows.map((row) => {
+        : readExpandablePartDescription(candidate.expandableContentBlocks) || schema.expandableContentDescription;
+    schema.expandableContentBlocks = parseExpandablePart(candidate.expandableContentBlocks, seen, documentMeta);
+  }
+  if (schema.kind === 'table') {
+    schema.tableColumns = parseTableColumns(candidate.tableColumns, schema.tableColumns);
+    schema.tableShowHeader = candidate.tableShowHeader !== false;
+    schema.tableRows = rows.map((row) => {
       const mapped = row as JsonObject;
       return {
         cells: Array.isArray(mapped.cells) ? mapped.cells.map((cell) => String(cell ?? '')) : createDefaultTableRow(2).cells,
       };
-    }),
-    imageFile: typeof candidate.imageFile === 'string' ? candidate.imageFile : defaults.imageFile,
-    imageAlt: typeof candidate.imageAlt === 'string' ? candidate.imageAlt : defaults.imageAlt,
-    carouselImages: parseCarouselImages(candidate.carouselImages),
-    carouselDurationMs: parsePositiveNumber(candidate.carouselDurationMs, defaults.carouselDurationMs),
-    carouselPauseOnHover: candidate.carouselPauseOnHover !== false,
-    carouselShowControls: candidate.carouselShowControls !== false,
-    carouselShowIndicators: candidate.carouselShowIndicators !== false,
-    buttonLabel: typeof candidate.buttonLabel === 'string' ? candidate.buttonLabel : defaults.buttonLabel,
-    buttonAction: 'ai-generate',
-    buttonVisibleScript: typeof candidate.buttonVisibleScript === 'string' ? candidate.buttonVisibleScript : defaults.buttonVisibleScript,
-    buttonSourceScript: typeof candidate.buttonSourceScript === 'string' ? candidate.buttonSourceScript : defaults.buttonSourceScript,
-    buttonPrompt: typeof candidate.buttonPrompt === 'string' ? candidate.buttonPrompt : defaults.buttonPrompt,
-    buttonTargetScript: typeof candidate.buttonTargetScript === 'string' ? candidate.buttonTargetScript : defaults.buttonTargetScript,
-    buttonInputCharLimit: parsePositiveNumber(candidate.buttonInputCharLimit, defaults.buttonInputCharLimit),
-    buttonOutputCharLimit: parsePositiveNumber(candidate.buttonOutputCharLimit, defaults.buttonOutputCharLimit),
-    buttonPositionTargetId: typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : defaults.buttonPositionTargetId,
-    buttonCss: typeof candidate.buttonCss === 'string' ? candidate.buttonCss : defaults.buttonCss,
-  };
+    });
+  }
+  if (schema.kind === 'image') {
+    schema.imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile : schema.imageFile;
+    schema.imageAlt = typeof candidate.imageAlt === 'string' ? candidate.imageAlt : schema.imageAlt;
+    schema.css = typeof candidate.css === 'string' ? candidate.css : schema.css;
+  }
+  if (schema.kind === 'carousel') {
+    schema.carouselImages = parseCarouselImages(candidate.carouselImages);
+    schema.carouselDurationMs = parsePositiveNumber(candidate.carouselDurationMs, schema.carouselDurationMs);
+    schema.carouselPauseOnHover = candidate.carouselPauseOnHover !== false;
+    schema.carouselShowControls = candidate.carouselShowControls !== false;
+    schema.carouselShowIndicators = candidate.carouselShowIndicators !== false;
+  }
+  if (schema.kind === 'button') {
+    schema.buttonLabel = typeof candidate.buttonLabel === 'string' ? candidate.buttonLabel : schema.buttonLabel;
+    schema.buttonAction = 'ai-generate';
+    schema.buttonVisibleScript = typeof candidate.buttonVisibleScript === 'string' ? candidate.buttonVisibleScript : schema.buttonVisibleScript;
+    schema.buttonSourceScript = typeof candidate.buttonSourceScript === 'string' ? candidate.buttonSourceScript : schema.buttonSourceScript;
+    schema.buttonPrompt = typeof candidate.buttonPrompt === 'string' ? candidate.buttonPrompt : schema.buttonPrompt;
+    schema.buttonTargetScript = typeof candidate.buttonTargetScript === 'string' ? candidate.buttonTargetScript : schema.buttonTargetScript;
+    schema.buttonInputCharLimit = parsePositiveNumber(candidate.buttonInputCharLimit, schema.buttonInputCharLimit);
+    schema.buttonOutputCharLimit = parsePositiveNumber(candidate.buttonOutputCharLimit, schema.buttonOutputCharLimit);
+    schema.buttonPositionTargetId = typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : schema.buttonPositionTargetId;
+    schema.buttonCss = typeof candidate.buttonCss === 'string' ? candidate.buttonCss : schema.buttonCss;
+  }
+  if (schema.kind === 'xref-card') {
+    schema.xrefTarget = typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : schema.xrefTarget;
+    schema.xrefTargetTagFilter =
+      typeof candidate.xrefTargetTagFilter === 'string' ? candidate.xrefTargetTagFilter : schema.xrefTargetTagFilter;
+  }
+  return schema;
 }
 
 function parseCarouselImages(raw: unknown): CarouselImage[] {
@@ -483,30 +584,54 @@ export function createBlankDocument(): VisualDocument {
 // Clone/reusable functions (mutually recursive with schemaFromUnknown)
 
 export function cloneReusableSchema(schema: BlockSchema, componentName = schema.component): BlockSchema {
-  const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject);
+  const cloned = schemaFromUnknown(
+    { ...(JSON.parse(JSON.stringify(schema)) as JsonObject), component: componentName },
+    new WeakSet<object>(),
+    { component_defs: getComponentDefs() as unknown as JsonObject[] }
+  );
   cloned.component = componentName;
-  cloned.containerBlocks = cloned.containerBlocks.map((block) => cloneReusableBlock(block));
-  cloned.componentListBlocks = cloned.componentListBlocks.map((block) => cloneReusableBlock(block));
-  cloned.gridItems = cloned.gridItems.map((item) => ({
-    ...item,
-    block: cloneReusableBlock(item.block),
-  }));
-  cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlock(block));
-  cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlock(block));
+  if (cloned.kind === 'container') {
+    cloned.containerBlocks = (cloned.containerBlocks ?? []).map((block) => cloneReusableBlock(block));
+  }
+  if (cloned.kind === 'component-list') {
+    cloned.componentListBlocks = (cloned.componentListBlocks ?? []).map((block) => cloneReusableBlock(block));
+  }
+  if (cloned.kind === 'grid') {
+    cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
+      ...item,
+      block: cloneReusableBlock(item.block),
+    }));
+  }
+  if (cloned.kind === 'expandable') {
+    cloned.expandableStubBlocks = cloned.expandableStubBlocks ?? { lock: false, children: [] };
+    cloned.expandableContentBlocks = cloned.expandableContentBlocks ?? { lock: false, children: [] };
+    cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlock(block));
+    cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlock(block));
+  }
   return cloned;
 }
 
 function cloneReusableSchemaFromMeta(schema: BlockSchema, componentName: string, documentMeta: JsonObject): BlockSchema {
   const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject, new WeakSet<object>(), documentMeta);
   cloned.component = componentName;
-  cloned.containerBlocks = cloned.containerBlocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
-  cloned.componentListBlocks = cloned.componentListBlocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
-  cloned.gridItems = cloned.gridItems.map((item) => ({
-    ...item,
-    block: cloneReusableBlockFromMeta(item.block, documentMeta),
-  }));
-  cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
-  cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  if (cloned.kind === 'container') {
+    cloned.containerBlocks = (cloned.containerBlocks ?? []).map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  }
+  if (cloned.kind === 'component-list') {
+    cloned.componentListBlocks = (cloned.componentListBlocks ?? []).map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  }
+  if (cloned.kind === 'grid') {
+    cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
+      ...item,
+      block: cloneReusableBlockFromMeta(item.block, documentMeta),
+    }));
+  }
+  if (cloned.kind === 'expandable') {
+    cloned.expandableStubBlocks = cloned.expandableStubBlocks ?? { lock: false, children: [] };
+    cloned.expandableContentBlocks = cloned.expandableContentBlocks ?? { lock: false, children: [] };
+    cloned.expandableStubBlocks.children = cloned.expandableStubBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+    cloned.expandableContentBlocks.children = cloned.expandableContentBlocks.children.map((block) => cloneReusableBlockFromMeta(block, documentMeta));
+  }
   return cloned;
 }
 
@@ -519,7 +644,7 @@ export function cloneReusableBlock(block: VisualBlock): VisualBlock {
   };
 }
 
-function cloneReusableBlockFromMeta(block: VisualBlock, documentMeta: JsonObject): VisualBlock {
+export function cloneReusableBlockFromMeta(block: VisualBlock, documentMeta: JsonObject): VisualBlock {
   return {
     id: makeId('block'),
     text: block.text,
@@ -561,7 +686,7 @@ export function getReusableTemplate(def: ComponentDefinition): VisualBlock {
   if (def.template) {
     return def.template;
   }
-  const fallbackSchema = def.schema ? cloneReusableSchema(def.schema, def.name) : defaultBlockSchema(def.name);
+  const fallbackSchema = def.schema ? cloneReusableSchema(def.schema, def.name) : defaultBlockSchema(def.name, normalizeBuiltinComponent(resolveBaseComponent(def.name)));
   def.template = {
     id: makeId('block'),
     text: '',
@@ -595,7 +720,7 @@ function instantiateReusableBlockFromMeta(componentName: string, documentMeta: J
   }
   const fallbackSchema = def.schema
     ? cloneReusableSchemaFromMeta(schemaFromUnknown({ ...(def.schema as unknown as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta), componentName, documentMeta)
-    : defaultBlockSchema(componentName);
+    : defaultBlockSchema(componentName, normalizeBuiltinComponent(resolveBaseComponentFromMeta(componentName, documentMeta)));
   const template = def.template ?? {
     id: makeId('block'),
     text: '',

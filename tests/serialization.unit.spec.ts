@@ -432,6 +432,74 @@ plugins:
   expect(output).not.toContain('"pluginUrl"');
 });
 
+test('serializes only fields owned by the block component', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"mixed"}-->
+#! Mixed
+
+<!--hvy:text {"id":"plain","tableRows":[{"cells":["Wrong"]}],"plugin":"hvy.db-table","pluginConfig":{"table":"wrong"},"imageFile":"wrong.png","containerBlocks":[{"text":"Wrong","schema":{"component":"text"}}]}-->
+Plain text
+
+<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}],"plugin":"hvy.db-table","imageFile":"wrong.png"}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:text {"id":"plain"}-->');
+  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}]}-->');
+  expect(output).not.toContain('"plugin":"hvy.db-table"');
+  expect(output).not.toContain('"pluginConfig"');
+  expect(output).not.toContain('"imageFile":"wrong.png"');
+  expect(output).not.toContain('"containerBlocks"');
+  expect(output).not.toContain('"tableRows":[{"cells":["Wrong"]}]');
+});
+
+test('serializes custom component schemas using their resolved base type fields', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-text-card
+    baseType: text
+    schema:
+      css: "margin: 0;"
+      tableRows:
+        - cells: ["Wrong"]
+      pluginConfig:
+        table: wrong
+  - name: fake-table-card
+    baseType: table
+    schema:
+      tableColumns: ["Name"]
+      tableRows:
+        - cells: ["Ada"]
+      imageFile: wrong.png
+---
+
+<!--hvy: {"id":"custom"}-->
+#! Custom
+
+<!--hvy:fake-text-card {"id":"plain","tableRows":[{"cells":["Wrong"]}],"pluginConfig":{"table":"wrong"}}-->
+Custom text
+
+<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}],"imageFile":"wrong.png"}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('name: fake-text-card');
+  expect(output).toContain('name: fake-table-card');
+  expect(output).toContain('tableColumns:');
+  expect(output).toContain('<!--hvy:fake-text-card {"id":"plain"}-->');
+  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}]}-->');
+  expect(output).not.toContain('pluginConfig:');
+  expect(output).not.toContain('imageFile: wrong.png');
+  expect(output).not.toContain('"pluginConfig"');
+  expect(output).not.toContain('"imageFile"');
+});
+
 test('round-trips editor-only button fields', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

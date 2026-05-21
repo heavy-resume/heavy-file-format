@@ -42,6 +42,48 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('drops fields that do not belong to the deserialized component schema', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-text-card
+    baseType: text
+    schema:
+      css: "margin: 0;"
+      tableRows:
+        - cells: ["Wrong"]
+      pluginConfig:
+        table: wrong
+---
+
+<!--hvy: {"id":"mixed"}-->
+#! Mixed
+
+<!--hvy:text {"id":"plain","tableRows":[{"cells":["Wrong"]}],"pluginConfig":{"table":"wrong"},"imageFile":"wrong.png","containerBlocks":[{"text":"Wrong","schema":{"component":"text"}}]}-->
+Plain text
+
+<!--hvy:fake-text-card {"id":"custom","tableRows":[{"cells":["Wrong"]}],"pluginConfig":{"table":"wrong"}}-->
+Custom text
+`, '.hvy');
+
+  const textSchema = document.sections[0]?.blocks[0]?.schema as unknown as Record<string, unknown>;
+  const customSchema = document.sections[0]?.blocks[1]?.schema as unknown as Record<string, unknown>;
+  const componentDefSchema = document.meta.component_defs?.[0]?.schema as unknown as Record<string, unknown>;
+
+  expect(textSchema.kind).toBe('text');
+  expect(textSchema.tableRows).toBeUndefined();
+  expect(textSchema.pluginConfig).toBeUndefined();
+  expect(textSchema.imageFile).toBeUndefined();
+  expect(textSchema.containerBlocks).toBeUndefined();
+  expect(customSchema.kind).toBe('text');
+  expect(customSchema.component).toBe('fake-text-card');
+  expect(customSchema.tableRows).toBeUndefined();
+  expect(customSchema.pluginConfig).toBeUndefined();
+  expect(componentDefSchema.kind).toBe('text');
+  expect(componentDefSchema.tableRows).toBeUndefined();
+  expect(componentDefSchema.pluginConfig).toBeUndefined();
+});
+
 test('deserializes reusable section definitions and section template keys', () => {
   const input = `---
 hvy_version: 0.1

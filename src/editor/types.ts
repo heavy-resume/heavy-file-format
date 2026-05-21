@@ -25,7 +25,22 @@ export interface ExpandablePart {
   children: VisualBlock[];
 }
 
-export interface BlockSchema {
+export type BuiltinComponentName =
+  | 'text'
+  | 'code'
+  | 'container'
+  | 'component-list'
+  | 'grid'
+  | 'expandable'
+  | 'table'
+  | 'image'
+  | 'carousel'
+  | 'button'
+  | 'plugin'
+  | 'xref-card';
+
+export interface BaseBlockSchema {
+  kind: BuiltinComponentName;
   id: string;
   component: string;
   editorOnly: boolean;
@@ -33,6 +48,130 @@ export interface BlockSchema {
   align: Align;
   slot: Slot;
   css: string;
+  sortKeys: Record<string, SortKeyValue>;
+  groupKeys: Record<string, string>;
+  tags: string;
+  description: string;
+  visibleScript: string;
+  placeholder: string;
+  fillIn: boolean;
+  metaOpen: boolean;
+  xrefTitle: string;
+  xrefDetail: string;
+}
+
+export interface TextBlockSchema extends BaseBlockSchema {
+  kind: 'text';
+}
+
+export interface CodeBlockSchema extends BaseBlockSchema {
+  kind: 'code';
+  codeLanguage: string;
+}
+
+export interface ContainerBlockSchema extends BaseBlockSchema {
+  kind: 'container';
+  containerBlocks: VisualBlock[];
+  containerTitle: string;
+  containerExpanded: boolean;
+  containerCollapsedPreviewRem: number;
+}
+
+export interface ComponentListBlockSchema extends BaseBlockSchema {
+  kind: 'component-list';
+  componentListComponent: string;
+  componentListItemLabel: string;
+  componentListBlocks: VisualBlock[];
+  componentListDefaultSortKey: string;
+  componentListDefaultSortDirection: 'asc' | 'desc';
+  componentListDefaultGroupKey: string;
+  componentListGroupCollapsedPreviewRem: number;
+}
+
+export interface GridBlockSchema extends BaseBlockSchema {
+  kind: 'grid';
+  gridColumns: number;
+  gridItems: GridItem[];
+}
+
+export interface ExpandableBlockSchema extends BaseBlockSchema {
+  kind: 'expandable';
+  expandableStubComponent: string;
+  expandableContentComponent: string;
+  expandableStub: string;
+  expandableStubCss: string;
+  expandableStubDescription: string;
+  expandableStubBlocks: ExpandablePart;
+  expandableAlwaysShowStub: boolean;
+  expandableExpanded: boolean;
+  expandableContentCss: string;
+  expandableContentDescription: string;
+  expandableContentBlocks: ExpandablePart;
+}
+
+export interface TableBlockSchema extends BaseBlockSchema {
+  kind: 'table';
+  tableColumns: string[];
+  tableShowHeader: boolean;
+  tableRows: TableRow[];
+}
+
+export interface ImageBlockSchema extends BaseBlockSchema {
+  kind: 'image';
+  imageFile: string;
+  imageAlt: string;
+}
+
+export interface CarouselBlockSchema extends BaseBlockSchema {
+  kind: 'carousel';
+  carouselImages: CarouselImage[];
+  carouselDurationMs: number;
+  carouselPauseOnHover: boolean;
+  carouselShowControls: boolean;
+  carouselShowIndicators: boolean;
+}
+
+export interface ButtonBlockSchema extends BaseBlockSchema {
+  kind: 'button';
+  buttonLabel: string;
+  buttonAction: 'ai-generate';
+  buttonVisibleScript: string;
+  buttonSourceScript: string;
+  buttonPrompt: string;
+  buttonTargetScript: string;
+  buttonInputCharLimit: number;
+  buttonOutputCharLimit: number;
+  buttonPositionTargetId: string;
+  buttonCss: string;
+}
+
+export interface PluginBlockSchema extends BaseBlockSchema {
+  kind: 'plugin';
+  plugin: string;
+  pluginConfig: JsonObject;
+}
+
+export interface XrefCardBlockSchema extends BaseBlockSchema {
+  kind: 'xref-card';
+  xrefTarget: string;
+  xrefTargetTagFilter: string;
+}
+
+export type ComponentBlockSchema =
+  | TextBlockSchema
+  | CodeBlockSchema
+  | ContainerBlockSchema
+  | ComponentListBlockSchema
+  | GridBlockSchema
+  | ExpandableBlockSchema
+  | TableBlockSchema
+  | ImageBlockSchema
+  | CarouselBlockSchema
+  | ButtonBlockSchema
+  | PluginBlockSchema
+  | XrefCardBlockSchema;
+
+interface RuntimeSchemaFieldAccess {
   codeLanguage: string;
   containerBlocks: VisualBlock[];
   containerTitle: string;
@@ -47,16 +186,6 @@ export interface BlockSchema {
   componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
   gridItems: GridItem[];
-  sortKeys: Record<string, SortKeyValue>;
-  groupKeys: Record<string, string>;
-  tags: string;
-  description: string;
-  visibleScript: string;
-  placeholder: string;
-  fillIn: boolean;
-  metaOpen: boolean;
-  xrefTitle: string;
-  xrefDetail: string;
   xrefTarget: string;
   xrefTargetTagFilter: string;
   plugin: string;
@@ -93,6 +222,8 @@ export interface BlockSchema {
   buttonPositionTargetId: string;
   buttonCss: string;
 }
+
+export type BlockSchema = ComponentBlockSchema & RuntimeSchemaFieldAccess;
 
 export interface VisualBlock {
   id: string;

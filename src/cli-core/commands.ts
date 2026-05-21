@@ -18,7 +18,7 @@ import { getHvyCliPluginCommandRegistration } from './plugin-command-registry';
 import { fixHvyCliLintIssues, formatHvyCliLintIssues, runHvyCliLinter } from './document-linter';
 import { serializeBlockFragment } from '../serialization';
 import { formatHvyRequestStructureForDirectory } from './request-structure';
-import { cloneReusableBlock } from '../document-factory';
+import { cloneReusableBlockFromMeta } from '../document-factory';
 import { formatHvyComponentDescriptionHistory } from './component-description-history';
 import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSectionFragment } from '../serialization';
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
@@ -1555,7 +1555,7 @@ function copyVirtualComponentDirectory(ctx: HvyCliCommandContext, sourcePath: st
     throw new Error(formatMissingPathMessage(ctx.fs, ctx.cwd, parentPath, `cp: no writable component container: ${parentPath}`, 'dir'));
   }
   const destinationId = finalPath.split('/').pop() ?? '';
-  const clonedBlock = cloneReusableBlock(sourceBlock);
+  const clonedBlock = cloneReusableBlockFromMeta(sourceBlock, ctx.document.meta);
   clonedBlock.schema.id = destinationId;
   target.insert(clonedBlock);
   return `${sourcePath} -> ${finalPath}: copied`;

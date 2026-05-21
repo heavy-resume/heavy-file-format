@@ -545,6 +545,73 @@ component_defs:
   expect(result.plusClassName).toContain('ghost-plus-small');
 });
 
+test('reader UI binding handles AI sidebar reader surfaces', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"><div id="aiSidebarSections"></div></div>';
+    const bindReaderUiPath = '/src/bind-reader-ui.ts';
+    const serializationPath = '/src/serialization.ts';
+    const statePath = '/src/state.ts';
+    const [{ bindReaderUi }, { deserializeDocumentBytes }, stateModule] = await Promise.all([
+      import(/* @vite-ignore */ bindReaderUiPath),
+      import(/* @vite-ignore */ serializationPath),
+      import(/* @vite-ignore */ statePath),
+    ]);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ <!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   Stub
+  <!--hvy:expandable:content {}-->
+   Hidden details
+`;
+    const documentModel = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    const sectionKey = documentModel.sections[0]?.key;
+    const blockId = documentModel.sections[0]?.blocks[0]?.id;
+    if (!sectionKey || !blockId) {
+      throw new Error('Expected expandable block missing.');
+    }
+    documentModel.sections[0]!.blocks[0]!.schema.expandableExpanded = false;
+    stateModule.initState({
+      document: documentModel,
+      currentView: 'ai',
+      componentListReaderViews: {},
+      readerExpandableState: {},
+      readerContainerState: {},
+      viewerSidebarHelpDismissed: true,
+      editorSidebarHelpDismissed: true,
+    } as never);
+    let refreshCount = 0;
+    stateModule.initCallbacks({
+      renderApp: () => {},
+      refreshReaderPanels: () => { refreshCount += 1; },
+      refreshModalPreview: () => {},
+      componentRenderHelpers: {},
+      readerRenderer: {},
+    });
+    const sidebar = document.querySelector<HTMLElement>('#aiSidebarSections');
+    if (!sidebar) {
+      throw new Error('AI sidebar surface missing.');
+    }
+    sidebar.innerHTML = `<div data-reader-action="toggle-expandable" data-section-key="${sectionKey}" data-block-id="${blockId}">Stub</div>`;
+    bindReaderUi(document.querySelector<HTMLElement>('#mount')!);
+    sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    return {
+      expanded: stateModule.state.readerExpandableState[`${sectionKey}:${blockId}`],
+      refreshCount,
+    };
+  });
+
+  expect(result.expanded).toBe(true);
+  expect(result.refreshCount).toBe(1);
+});
+
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
   await page.goto('/');
 
@@ -780,6 +847,135 @@ hvy_version: 0.1
   expect(result.editorHasSerializer).toBe('function');
   expect(result.viewerText).toContain('Host download serialization test.');
   expect(result.editorText).toContain('Host download serialization test.');
+});
+
+test('embedded editor exposes dirty document change state to hosts', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const sectionActionsPath = '/src/bind/actions/section.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { insertTopLevelSection } = await import(/* @vite-ignore */ sectionActionsPath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Host dirty state test.
+`;
+    const root = document.querySelector<HTMLElement>('#editorMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: ReturnType<typeof mountHvy>;
+      testInsertMainSection?: () => void;
+    };
+    testWindow.testHvyChangeEvents = [];
+    testWindow.testInsertMainSection = () => insertTopLevelSection('blank', undefined, 'main');
+    testWindow.testHvyMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      onDocumentChange: (event) => testWindow.testHvyChangeEvents.push(event),
+    });
+  });
+
+  await expect(page.locator('#editorTree')).toBeVisible();
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testInsertMainSection?: () => void };
+    testWindow.testInsertMainSection?.();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: true, source: 'editor' }),
+    dirty: true,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testHvyMount?: { markSaved(): void } };
+    testWindow.testHvyMount?.markSaved();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: false, reason: 'mark-saved' }),
+    dirty: false,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testInsertMainSection?: () => void };
+    testWindow.testInsertMainSection?.();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: true, source: 'editor' }),
+    dirty: true,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testHvyMount?: { undo(): void } };
+    testWindow.testHvyMount?.undo();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: false, reason: 'undo' }),
+    dirty: false,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testHvyMount?: { redo(): void } };
+    testWindow.testHvyMount?.redo();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: true, reason: 'redo' }),
+    dirty: true,
+  });
 });
 
 test('embedded viewer mounts keep independent documents and link observers', async ({ page }) => {
@@ -1130,7 +1326,7 @@ hvy_version: 0.1
     const modulePath = '/src/embed-full.ts';
     const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
     const root = document.querySelector<HTMLElement>('#mount');
-    const testWindow = window as Window & {
+    const testWindow = window as unknown as Window & {
       testHvyMount?: ReturnType<typeof mountHvy>;
       testHvySource?: string;
     };

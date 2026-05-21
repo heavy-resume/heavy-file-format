@@ -349,6 +349,69 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('serializes reusable section template block schemas without runtime-only component defaults', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: publications-section
+    template:
+      id: publications
+      title: Publications
+      level: 1
+      blocks:
+        - text: "# Publications"
+          schema:
+            component: text
+            css: "margin: 0.5rem 0;"
+        - text: ""
+          schema:
+            component: table
+            lock: true
+            css: "margin: 0.5rem 0 0;"
+            tags: table-header
+            description: Publication table header
+            tableColumns: ["PUBLICATION", "PUBLISHER", "DATE"]
+        - text: ""
+          schema:
+            component: component-list
+            css: "margin: 0;"
+            componentListComponent: publication-record
+            componentListItemLabel: publication
+            tags: publication
+      children: []
+component_defs:
+  - name: publication-record
+    baseType: expandable
+    schema:
+      css: "margin: 0;"
+      expandableContentBlocks:
+        css: "padding: 0.5rem;"
+        children:
+          - text: ""
+            schema:
+              component: text
+              placeholder: Publication details
+---
+
+<!--hvy: {"id":"root"}-->
+#! Root
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('component: text');
+  expect(output).toContain('component: table');
+  expect(output).toContain('component: component-list');
+  expect(output).toContain('tableColumns:');
+  expect(output).toContain('componentListComponent: publication-record');
+  expect(output).toContain('css: "padding: 0.5rem;"');
+  expect(output).not.toContain('codeLanguage: ts');
+  expect(output).not.toContain('containerBlocks: []');
+  expect(output).not.toContain('expandableStubComponent: container');
+  expect(output).not.toContain('buttonLabel: Generate');
+  expect(output).not.toContain('carouselDurationMs: 3000');
+});
+
 test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -367,6 +430,74 @@ plugins:
 
   expect(output).toContain('<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"work_items"}}-->');
   expect(output).not.toContain('"pluginUrl"');
+});
+
+test('serializes only fields owned by the block component', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"mixed"}-->
+#! Mixed
+
+<!--hvy:text {"id":"plain","tableRows":[{"cells":["Wrong"]}],"plugin":"hvy.db-table","pluginConfig":{"table":"wrong"},"imageFile":"wrong.png","containerBlocks":[{"text":"Wrong","schema":{"component":"text"}}]}-->
+Plain text
+
+<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}],"plugin":"hvy.db-table","imageFile":"wrong.png"}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:text {"id":"plain"}-->');
+  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}]}-->');
+  expect(output).not.toContain('"plugin":"hvy.db-table"');
+  expect(output).not.toContain('"pluginConfig"');
+  expect(output).not.toContain('"imageFile":"wrong.png"');
+  expect(output).not.toContain('"containerBlocks"');
+  expect(output).not.toContain('"tableRows":[{"cells":["Wrong"]}]');
+});
+
+test('serializes custom component schemas using their resolved base type fields', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-text-card
+    baseType: text
+    schema:
+      css: "margin: 0;"
+      tableRows:
+        - cells: ["Wrong"]
+      pluginConfig:
+        table: wrong
+  - name: fake-table-card
+    baseType: table
+    schema:
+      tableColumns: ["Name"]
+      tableRows:
+        - cells: ["Ada"]
+      imageFile: wrong.png
+---
+
+<!--hvy: {"id":"custom"}-->
+#! Custom
+
+<!--hvy:fake-text-card {"id":"plain","tableRows":[{"cells":["Wrong"]}],"pluginConfig":{"table":"wrong"}}-->
+Custom text
+
+<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}],"imageFile":"wrong.png"}-->
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('name: fake-text-card');
+  expect(output).toContain('name: fake-table-card');
+  expect(output).toContain('tableColumns:');
+  expect(output).toContain('<!--hvy:fake-text-card {"id":"plain"}-->');
+  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}]}-->');
+  expect(output).not.toContain('pluginConfig:');
+  expect(output).not.toContain('imageFile: wrong.png');
+  expect(output).not.toContain('"pluginConfig"');
+  expect(output).not.toContain('"imageFile"');
 });
 
 test('round-trips editor-only button fields', () => {

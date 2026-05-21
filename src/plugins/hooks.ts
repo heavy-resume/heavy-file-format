@@ -1,6 +1,7 @@
 import { getActiveStateRuntime, getRenderApp, runWithStateRuntime, runWithStateRuntimeAsync, state, type StateRuntime } from '../state';
 import { serializeDocument } from '../serialization';
 import type { VisualDocument } from '../types';
+import { notifyDocumentMayHaveChanged } from '../document-change';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
 import type {
@@ -149,6 +150,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       if (ctx.isCurrentDocument()) {
         hookState.lastHookDocument = document;
         hookState.lastHookSignature = serializeDocument(document);
+        notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script');
       }
     });
   });

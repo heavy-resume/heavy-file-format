@@ -4,6 +4,7 @@ import type { VisualDocument } from './types';
 import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
+import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 
 export function snapshotState(): string {
   return JSON.stringify(
@@ -50,6 +51,7 @@ export function recordHistory(group?: string): void {
   if (state.isRestoring) {
     return;
   }
+  const changeSource = inferDocumentChangeSource(group);
   const recordId = incrementRecordHistoryCount();
   const startedAt = performance.now();
   let ensureMs = 0;
@@ -73,6 +75,7 @@ export function recordHistory(group?: string): void {
         pushed,
         skipped,
       });
+      notifyDocumentMayHaveChanged(group, changeSource);
       return;
     }
     state.lastHistoryGroup = group;
@@ -103,6 +106,7 @@ export function recordHistory(group?: string): void {
     pushed,
     skipped,
   });
+  notifyDocumentMayHaveChanged(group, changeSource);
 }
 
 export function undoState(): void {
@@ -130,6 +134,7 @@ export function undoState(): void {
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
+  notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'));
 }
 
 export function redoState(): void {
@@ -147,6 +152,7 @@ export function redoState(): void {
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
+  notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'));
 }
 
 function captureModalScroll(): { selector: string; scrollTop: number } | null {

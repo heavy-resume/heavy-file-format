@@ -892,7 +892,7 @@ function createCliComponentBlock(document: VisualDocument, component: string, id
     validateReusableTemplateValues(variables, templateValues);
   }
   const block = definition?.template
-    ? cloneCliVisualBlock(definition.template)
+    ? cloneCliVisualBlock(definition.template, document.meta)
     : createBlockFromSchema(createCliComponentSchema(document, component), '');
   block.schema.component = component;
   block.schema.id = id;
@@ -907,13 +907,9 @@ function createCliComponentBlock(document: VisualDocument, component: string, id
 function createCliComponentSchema(document: VisualDocument, component: string): BlockSchema {
   const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
   if (definition?.schema) {
-    return cloneCliBlockSchema(definition.schema, component);
+    return cloneCliBlockSchema(definition.schema, component, document.meta);
   }
-  const baseComponent = resolveBaseComponentFromMeta(component, document.meta);
-  return {
-    ...defaultBlockSchema(baseComponent),
-    component,
-  };
+  return schemaFromUnknown({ component }, new WeakSet<object>(), document.meta);
 }
 
 function createBlockFromSchema(schema: BlockSchema, text: string): VisualBlock {
@@ -925,35 +921,45 @@ function createBlockFromSchema(schema: BlockSchema, text: string): VisualBlock {
   };
 }
 
-function cloneCliVisualBlock(block: VisualBlock): VisualBlock {
+function cloneCliVisualBlock(block: VisualBlock, documentMeta?: JsonObject | null): VisualBlock {
   const schema = block.schema ?? defaultBlockSchema('text');
   return {
     id: makeId('block'),
     text: block.text ?? '',
-    schema: cloneCliBlockSchema(schema, schema.component || 'text'),
+    schema: cloneCliBlockSchema(schema, schema.component || 'text', documentMeta),
     schemaMode: false,
   };
 }
 
-function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.component): BlockSchema {
-  const cloned = schemaFromUnknown(JSON.parse(JSON.stringify(schema)) as JsonObject);
+function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.component, documentMeta?: JsonObject | null): BlockSchema {
+  const cloned = schemaFromUnknown({ ...(JSON.parse(JSON.stringify(schema)) as JsonObject), component: componentName }, new WeakSet<object>(), documentMeta);
   cloned.component = componentName;
   cloned.id = cloned.id ?? '';
-  cloned.containerBlocks = (cloned.containerBlocks ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock);
-  cloned.componentListBlocks = (cloned.componentListBlocks ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock);
-  cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
-    ...item,
-    id: item.id || makeId('griditem'),
-    block: item.block && isVisualBlockLike(item.block) ? cloneCliVisualBlock(item.block) : createBlockFromSchema(defaultBlockSchema('text'), ''),
-  }));
-  cloned.expandableStubBlocks = {
-    lock: cloned.expandableStubBlocks?.lock ?? false,
-    children: (cloned.expandableStubBlocks?.children ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock),
-  };
-  cloned.expandableContentBlocks = {
-    lock: cloned.expandableContentBlocks?.lock ?? false,
-    children: (cloned.expandableContentBlocks?.children ?? []).filter(isVisualBlockLike).map(cloneCliVisualBlock),
-  };
+  if (cloned.kind === 'container') {
+    cloned.containerBlocks = (cloned.containerBlocks ?? []).filter(isVisualBlockLike).map((block) => cloneCliVisualBlock(block, documentMeta));
+  }
+  if (cloned.kind === 'component-list') {
+    cloned.componentListBlocks = (cloned.componentListBlocks ?? []).filter(isVisualBlockLike).map((block) => cloneCliVisualBlock(block, documentMeta));
+  }
+  if (cloned.kind === 'grid') {
+    cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
+      ...item,
+      id: item.id || makeId('griditem'),
+      block: item.block && isVisualBlockLike(item.block)
+        ? cloneCliVisualBlock(item.block, documentMeta)
+        : createBlockFromSchema(defaultBlockSchema('text'), ''),
+    }));
+  }
+  if (cloned.kind === 'expandable') {
+    cloned.expandableStubBlocks = {
+      lock: cloned.expandableStubBlocks?.lock ?? false,
+      children: (cloned.expandableStubBlocks?.children ?? []).filter(isVisualBlockLike).map((block) => cloneCliVisualBlock(block, documentMeta)),
+    };
+    cloned.expandableContentBlocks = {
+      lock: cloned.expandableContentBlocks?.lock ?? false,
+      children: (cloned.expandableContentBlocks?.children ?? []).filter(isVisualBlockLike).map((block) => cloneCliVisualBlock(block, documentMeta)),
+    };
+  }
   return cloned;
 }
 

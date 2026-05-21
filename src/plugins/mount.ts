@@ -93,9 +93,9 @@ function buildContext(
     runWithStateRuntime(runtime, () => {
       const current = findBlockByIds(sectionKey, blockId);
       if (!current) return;
+      recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
       current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
       syncReusableTemplateForBlock(sectionKey, blockId);
-      recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
       getRefreshReaderPanels()();
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
@@ -105,9 +105,9 @@ function buildContext(
     runWithStateRuntime(runtime, () => {
       const current = findBlockByIds(sectionKey, blockId);
       if (!current) return;
+      recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
       current.text = text;
       syncReusableTemplateForBlock(sectionKey, blockId);
-      recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
       getRefreshReaderPanels()();
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
@@ -128,16 +128,23 @@ function buildContext(
       getHvy: () => serializeDocument(state.document),
     },
     attachments: {
-      list: () => state.document.attachments.slice(),
-      get: (id) => getAttachment(state.document, id),
-      set: (id, meta, bytes) => setAttachment(state.document, id, meta, bytes),
-      remove: (id) => removeAttachment(state.document, id),
+      list: () => runWithStateRuntime(runtime, () => state.document.attachments.slice()),
+      get: (id) => runWithStateRuntime(runtime, () => getAttachment(state.document, id)),
+      set: (id, meta, bytes) => runWithStateRuntime(runtime, () => {
+        recordHistory(`plugin-attachment:${plugin.id}:${sectionKey}:${blockId}:${id}`);
+        setAttachment(state.document, id, meta, bytes);
+      }),
+      remove: (id) => runWithStateRuntime(runtime, () => {
+        recordHistory(`plugin-attachment-remove:${plugin.id}:${sectionKey}:${blockId}:${id}`);
+        removeAttachment(state.document, id);
+      }),
     },
     header: {
-      get: (key) => state.document.meta[key],
-      set: (key, value) => {
+      get: (key) => runWithStateRuntime(runtime, () => state.document.meta[key]),
+      set: (key, value) => runWithStateRuntime(runtime, () => {
+        recordHistory(`plugin-header:${plugin.id}:${sectionKey}:${blockId}:${key}`);
         (state.document.meta as Record<string, unknown>)[key] = value;
-      },
+      }),
     },
     setConfig,
     setText,

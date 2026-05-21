@@ -45,8 +45,14 @@ import {
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory } from './history';
+import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import {
+  initDocumentChangeTracking,
+  isDocumentDirty,
+  markDocumentSaved,
+  type HvyDocumentChangeCallback,
+} from './document-change';
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type {
@@ -72,12 +78,17 @@ export interface HvyMountOptions {
   paletteId?: string | null;
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  onDocumentChange?: HvyDocumentChangeCallback;
 }
 
 export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  markSaved(): void;
+  isDirty(): boolean;
+  undo(): void;
+  redo(): void;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -510,6 +521,18 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
+    markSaved() {
+      withMount((mount) => mount.markSaved());
+    },
+    isDirty() {
+      return mounted?.isDirty() ?? false;
+    },
+    undo() {
+      withMount((mount) => mount.undo());
+    },
+    redo() {
+      withMount((mount) => mount.redo());
+    },
     buildImportPlan(importOptions) {
       return ready.then((mount) => mount.buildImportPlan(importOptions));
     },
@@ -607,6 +630,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
+  initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
   return {
@@ -627,6 +651,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+    },
+    markSaved() {
+      markDocumentSaved(runtime);
+    },
+    isDirty() {
+      return isDocumentDirty(runtime);
+    },
+    undo() {
+      runWithStateRuntime(runtime, () => undoState());
+    },
+    redo() {
+      runWithStateRuntime(runtime, () => redoState());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));
@@ -658,6 +694,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           storageKey: state.sessionStorageKey,
+          onDocumentChange: options.onDocumentChange,
         });
         fullMount.openThemeEditor(themeOptions);
       }));
@@ -670,6 +707,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           storageKey: state.sessionStorageKey,
+          onDocumentChange: options.onDocumentChange,
         });
         fullMount.mountThemeEditor(root, themeOptions);
       }));
@@ -698,6 +736,7 @@ export type {
   ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
+export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 
 declare global {
   interface Window {

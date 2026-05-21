@@ -429,43 +429,39 @@ Rules:
 
 ### 5.8 Recursive block shape
 
-Block metadata optionally includes component-specific fields. Common examples include:
-- `containerTitle`
-- `containerExpanded`
-- `containerCollapsedPreviewRem`
-- `containerBlocks`
-- `componentListComponent`
-- `componentListItemLabel`
-- `componentListBlocks`
-- `componentListDefaultSortKey`
-- `componentListDefaultSortDirection`
-- `componentListDefaultGroupKey`
-- `componentListGroupCollapsedPreviewRem`
+Block metadata is component-specific. A block schema is selected by the block's component directive name, or by `schema.component` when using the generic `hvy:block` directive. Custom components use their `component_defs[].baseType` as the schema shape while preserving the custom component name for round-tripping.
+
+All block schemas MAY include common document fields:
+- `id`
+- `editorOnly`
+- `lock`
+- `align`
+- `slot`
+- `css`
+- `sortKeys`
 - `groupKeys`
-- `gridColumns`
-- `gridItems`
-- `plugin`
-- `pluginConfig`
+- `tags`
+- `description`
+- `visibleScript`
+- `placeholder`
+- `fillIn`
 - `xrefTitle`
 - `xrefDetail`
-- `xrefTarget`
-- `xrefTargetTagFilter`
-- `expandableAlwaysShowStub`
-- `expandableExpanded`
-- `expandableStubCss`
-- `expandableStubBlocks`
-- `expandableContentCss`
-- `expandableContentBlocks`
-- `tableColumns`
-- `tableShowHeader`
-- `tableRows`
-- `imageFile`
-- `imageAlt`
-- `carouselImages`
-- `carouselDurationMs`
-- `carouselPauseOnHover`
-- `carouselShowControls`
-- `carouselShowIndicators`
+
+Component-owned fields are:
+- `code`: `codeLanguage`
+- `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
+- `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`
+- `grid`: `gridColumns`, `gridItems`
+- `plugin`: `plugin`, `pluginConfig`
+- `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
+- `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
+- `table`: `tableColumns`, `tableShowHeader`, `tableRows`
+- `image`: `imageFile`, `imageAlt`
+- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`
+- `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
+
+Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.
 
 Nested block arrays such as `containerBlocks` use a recursive block object shape:
 

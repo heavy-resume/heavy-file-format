@@ -11,6 +11,7 @@ import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-h
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
+import { serializeComponentDefinition } from '../serialization';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -830,14 +831,14 @@ function formatComponentAbout(meta: JsonObject, component: string): string {
 }
 
 function formatReusableDefinitionYaml(definition: NonNullable<ReturnType<typeof getComponentDefsFromMeta>[number]>): string {
-  const value: JsonObject = {
+  const value = serializeComponentDefinition({
     name: definition.name,
     baseType: definition.baseType,
-  };
+  } as JsonObject);
   if (definition.description) value.description = definition.description;
   if (definition.tags) value.tags = definition.tags;
   if (definition.schema) value.schema = definition.schema as unknown as JsonObject;
-  return stringifyYaml([value]).trimEnd();
+  return stringifyYaml([serializeComponentDefinition(value)]).trimEnd();
 }
 
 function formatComponentDirectoryMapping(component: string, baseComponent: string): string[] {

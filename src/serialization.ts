@@ -13,6 +13,7 @@ import {
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
+  normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
 
@@ -60,6 +61,7 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.section_defaults === 'undefined') {
     meta.section_defaults = { css: DEFAULT_SECTION_CSS };
   }
+  normalizeReusableComponentDefinitions(meta);
   normalizeReusableSectionDefinitions(meta);
 
   const diagnostics = parsed.errors.map((message) => mapParserErrorToDiagnostic(message));
@@ -748,8 +750,6 @@ function shouldCloseFrameForIndent(
   return frame.indent > indent;
 }
 
-const BLOCK_ARRAY_KEYS = ['containerBlocks', 'componentListBlocks'];
-const EXPANDABLE_PART_KEYS = ['expandableStubBlocks', 'expandableContentBlocks'];
 const SERIALIZED_TEXT_WRAP_COLUMN = 120;
 const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 
@@ -759,14 +759,15 @@ const SERIALIZED_TEXT_WRAP_EXCLUDED_COMPONENTS = new Set(['code']);
 // - uses { component: name } shorthand for custom component blocks in nested lists
 export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   const result: JsonObject = {};
+  const baseType = typeof raw.baseType === 'string' ? raw.baseType : undefined;
   for (const [key, value] of Object.entries(raw)) {
     if (key === 'template') continue; // runtime-only; derived from schema
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
       }
     } else if (key === 'flavors' && Array.isArray(value)) {
-      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject));
+      result.flavors = value.map((flavor) => cleanComponentDefFlavor(flavor as JsonObject, baseType));
     } else {
       result[key] = value;
     }
@@ -774,13 +775,13 @@ export function serializeComponentDefinition(raw: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
+function cleanComponentDefFlavor(flavor: JsonObject, baseType?: string): JsonObject {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(flavor)) {
     if (key === 'template') continue;
     if (key === 'schema') {
       if (value && typeof value === 'object') {
-        result.schema = cleanComponentDefSchema(value as JsonObject, true);
+        result.schema = cleanComponentDefSchema(value as JsonObject, true, baseType);
       }
     } else {
       result[key] = value;
@@ -789,35 +790,44 @@ function cleanComponentDefFlavor(flavor: JsonObject): JsonObject {
   return result;
 }
 
-function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false): JsonObject {
-  const result: JsonObject = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === 'component' && stripRootComponent) continue; // redundant with baseType only on the reusable root
-    if (key === 'schemaMode') continue; // editor state
-    if (key === 'id' && (value === '' || value === null || value === undefined)) continue;
-    if (BLOCK_ARRAY_KEYS.includes(key) && Array.isArray(value)) {
-      result[key] = value.map((block) => cleanComponentDefBlock(block as JsonObject));
-    } else if (EXPANDABLE_PART_KEYS.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const part = value as { lock?: boolean; children?: JsonObject[]; css?: unknown };
-      const cleanPart: JsonObject = {
-        lock: part.lock ?? false,
-        children: Array.isArray(part.children) ? part.children.map((block) => cleanComponentDefBlock(block)) : [],
-      };
-      const css = typeof part.css === 'string' ? part.css : '';
-      if (css.trim().length > 0) {
-        cleanPart.css = css;
-      }
-      result[key] = cleanPart;
-    } else if (key === 'gridItems' && Array.isArray(value)) {
-      result[key] = value.map((item) => {
-        const obj = item as JsonObject;
-        return obj.block ? { ...obj, block: cleanComponentDefBlock(obj.block as JsonObject) } : obj;
-      });
-    } else {
-      result[key] = value;
-    }
+function cleanComponentDefSchema(schema: JsonObject, stripRootComponent = false, componentHint?: string): JsonObject {
+  const componentName = stripRootComponent && componentHint
+    ? componentHint
+    : typeof schema.component === 'string'
+      ? schema.component
+      : componentHint ?? 'text';
+  const parsed = schemaFromUnknown({ ...schema, component: componentName });
+  const result = serializeBlockSchema(parsed, { omitComponent: stripRootComponent });
+  const baseComponent = resolveBaseComponentFromMeta(parsed.component, null);
+  if (baseComponent === 'expandable') {
+    addCleanExpandablePart(result, 'expandableStubBlocks', parsed.expandableStubBlocks, parsed.expandableStubCss, parsed.expandableStubDescription);
+    addCleanExpandablePart(result, 'expandableContentBlocks', parsed.expandableContentBlocks, parsed.expandableContentCss, parsed.expandableContentDescription);
   }
   return result;
+}
+
+function addCleanExpandablePart(
+  result: JsonObject,
+  key: 'expandableStubBlocks' | 'expandableContentBlocks',
+  part: BlockSchema['expandableStubBlocks'],
+  css: string,
+  description: string
+): void {
+  const children = part.children.map((block) => cleanComponentDefBlock(block as unknown as JsonObject));
+  if (children.length === 0 && part.lock !== true && css.trim().length === 0 && description.trim().length === 0) {
+    return;
+  }
+  const cleanPart: JsonObject = { children };
+  if (part.lock === true) {
+    cleanPart.lock = true;
+  }
+  if (css.trim().length > 0) {
+    cleanPart.css = css;
+  }
+  if (description.trim().length > 0) {
+    cleanPart.description = description;
+  }
+  result[key] = cleanPart;
 }
 
 function cleanComponentDefBlock(block: JsonObject): JsonObject {
@@ -1283,6 +1293,9 @@ function serializeBlockSchema(
   addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
   addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
 
+  if (component === 'code') {
+    addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
+  }
   if (component === 'xref-card') {
     addIfChanged(payload, 'xrefTarget', schema.xrefTarget, defaults.xrefTarget);
     addIfChanged(payload, 'xrefTargetTagFilter', schema.xrefTargetTagFilter, defaults.xrefTargetTagFilter);
@@ -1527,8 +1540,8 @@ function serializeSlotWithChild(name: string, schema: JsonObject, child: VisualB
 
 function buildExpandablePartPayload(expandableBlock: VisualBlock, part: 0 | 1): JsonObject {
   const payload: JsonObject = {};
-  const css = part === 0 ? expandableBlock.schema.expandableStubCss : expandableBlock.schema.expandableContentCss;
-  const description = part === 0 ? expandableBlock.schema.expandableStubDescription : expandableBlock.schema.expandableContentDescription;
+  const css = part === 0 ? expandableBlock.schema.expandableStubCss ?? '' : expandableBlock.schema.expandableContentCss ?? '';
+  const description = part === 0 ? expandableBlock.schema.expandableStubDescription ?? '' : expandableBlock.schema.expandableContentDescription ?? '';
   if (css.trim().length > 0) {
     payload.css = css;
   }
@@ -1576,8 +1589,8 @@ function serializeComponentListItemBlock(block: VisualBlock, index: number, inde
 function serializeNestedBlocks(block: VisualBlock, indent: number, documentMeta: JsonObject | null): string {
   const component = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
   if (component === 'expandable') {
-    const stub = block.schema.expandableStubBlocks;
-    const content = block.schema.expandableContentBlocks;
+    const stub = block.schema.expandableStubBlocks ?? { lock: false, children: [] };
+    const content = block.schema.expandableContentBlocks ?? { lock: false, children: [] };
     const stubPart = serializeExpandablePart(block, stub.children, 0, stub.lock, indent, documentMeta);
     const contentPart = serializeExpandablePart(block, content.children, 1, content.lock, indent, documentMeta);
     return [stubPart, contentPart].filter((part) => part.length > 0).join('\n\n');

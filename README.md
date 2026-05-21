@@ -185,6 +185,23 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor' });
 const bytes = mount.serializeDocumentBytes();
 ```
 
+Editor, AI, and import mutations can also notify hosts when the mounted
+document changes relative to the last saved baseline:
+
+```js
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  onDocumentChange(event) {
+    console.log(event.dirty, event.source, event.reason);
+  },
+});
+
+await saveDocument(mount.serializeDocumentBytes());
+mount.markSaved();
+```
+
 Embedded editor/AI instances do not persist reconnect/reload session state
 unless a stable `storageKey` is provided. Pass one per instance to persist
 without sharing a `sessionStorage` bucket:

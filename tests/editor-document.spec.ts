@@ -849,6 +849,121 @@ hvy_version: 0.1
   expect(result.editorText).toContain('Host download serialization test.');
 });
 
+test('embedded editor exposes dirty document change state to hosts', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const historyPath = '/src/history.ts';
+    const sectionActionsPath = '/src/bind/actions/section.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { undoState } = await import(/* @vite-ignore */ historyPath);
+    const { insertTopLevelSection } = await import(/* @vite-ignore */ sectionActionsPath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Host dirty state test.
+`;
+    const root = document.querySelector<HTMLElement>('#editorMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: ReturnType<typeof mountHvy>;
+      testInsertMainSection?: () => void;
+      testUndoDocument?: () => void;
+    };
+    testWindow.testHvyChangeEvents = [];
+    testWindow.testInsertMainSection = () => insertTopLevelSection('blank', undefined, 'main');
+    testWindow.testUndoDocument = () => undoState();
+    testWindow.testHvyMount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      onDocumentChange: (event) => testWindow.testHvyChangeEvents.push(event),
+    });
+  });
+
+  await expect(page.locator('#editorTree')).toBeVisible();
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testInsertMainSection?: () => void };
+    testWindow.testInsertMainSection?.();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: true, source: 'editor' }),
+    dirty: true,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testHvyMount?: { markSaved(): void } };
+    testWindow.testHvyMount?.markSaved();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: false, reason: 'mark-saved' }),
+    dirty: false,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testInsertMainSection?: () => void };
+    testWindow.testInsertMainSection?.();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: true, source: 'editor' }),
+    dirty: true,
+  });
+
+  await page.evaluate(() => {
+    const testWindow = window as unknown as Window & { testUndoDocument?: () => void };
+    testWindow.testUndoDocument?.();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as unknown as Window & {
+      testHvyChangeEvents: Array<{ dirty: boolean; reason?: string; source?: string }>;
+      testHvyMount?: { isDirty(): boolean };
+    };
+    return {
+      event: testWindow.testHvyChangeEvents.at(-1),
+      dirty: testWindow.testHvyMount?.isDirty(),
+    };
+  })).toEqual({
+    event: expect.objectContaining({ dirty: false, reason: 'undo' }),
+    dirty: false,
+  });
+});
+
 test('embedded viewer mounts keep independent documents and link observers', async ({ page }) => {
   await page.goto('/');
 
@@ -1197,7 +1312,7 @@ hvy_version: 0.1
     const modulePath = '/src/embed-full.ts';
     const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
     const root = document.querySelector<HTMLElement>('#mount');
-    const testWindow = window as Window & {
+    const testWindow = window as unknown as Window & {
       testHvyMount?: ReturnType<typeof mountHvy>;
       testHvySource?: string;
     };

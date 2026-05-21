@@ -26,6 +26,9 @@ function bindReaderAppControls(app: HTMLElement): void {
   bindKeydown(app);
 
   app.addEventListener('click', (event) => {
+    if (!app.querySelector('#readerDocument')) {
+      return;
+    }
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const action = actionButton?.dataset.action ?? '';

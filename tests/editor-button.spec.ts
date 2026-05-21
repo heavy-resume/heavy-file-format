@@ -232,6 +232,54 @@ test('embedded editor remains in editor view after activating a component beside
   await expect(firstDoc.locator('.chat-panel')).toHaveClass(/is-document-edit/);
 });
 
+test('embedded editor remains in editor view after switching from viewer back to editor', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.getByRole('button', { name: 'Reset sessions' }).click();
+
+  const firstDoc = page.locator('#docOne');
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+
+  await page.locator('[data-doc-one-mode="viewer"]').click();
+  await expect(firstDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
+  await expect(page.locator('[data-doc-one-mode="viewer"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('[data-doc-one-mode="editor"]').click();
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+  await expect(page.locator('[data-doc-one-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await firstDoc.getByText('Land three strong interviews this month', { exact: false }).click();
+
+  await expect(firstDoc.locator('#editorTree')).toBeVisible();
+  await expect(firstDoc.locator('#readerDocument')).toHaveCount(0);
+  await expect(firstDoc.locator('.editor-block[data-active-editor-block="true"]').first()).toBeVisible();
+});
+
+test('embedded AI remains in document edit mode after switching from viewer to AI', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.goto('/examples/two-embedded-docs.html');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.getByRole('button', { name: 'Reset sessions' }).click();
+
+  const firstDoc = page.locator('#docOne');
+  await expect(firstDoc.locator('#editorTree')).toBeVisible({ timeout: 1_000 });
+
+  await page.locator('[data-doc-one-mode="viewer"]').click();
+  await expect(firstDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
+  await expect(page.locator('[data-doc-one-mode="viewer"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('[data-doc-one-mode="ai"]').click();
+  await expect(firstDoc.locator('#aiReaderDocument')).toBeVisible({ timeout: 1_000 });
+  await expect(page.locator('[data-doc-one-mode="ai"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await firstDoc.locator('#aiReaderDocument [data-action="add-top-level-section"][data-section-key="__top_level__"]').click();
+  await expect(firstDoc.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]').first()).toBeVisible();
+
+  await firstDoc.locator('.chat-launcher').click();
+  await expect(firstDoc.locator('.chat-panel')).toHaveClass(/is-document-edit/);
+});
+
 test('two embedded docs can switch example sources independently', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');

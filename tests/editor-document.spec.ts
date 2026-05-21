@@ -545,6 +545,73 @@ component_defs:
   expect(result.plusClassName).toContain('ghost-plus-small');
 });
 
+test('reader UI binding handles AI sidebar reader surfaces', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"><div id="aiSidebarSections"></div></div>';
+    const bindReaderUiPath = '/src/bind-reader-ui.ts';
+    const serializationPath = '/src/serialization.ts';
+    const statePath = '/src/state.ts';
+    const [{ bindReaderUi }, { deserializeDocumentBytes }, stateModule] = await Promise.all([
+      import(/* @vite-ignore */ bindReaderUiPath),
+      import(/* @vite-ignore */ serializationPath),
+      import(/* @vite-ignore */ statePath),
+    ]);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ <!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   Stub
+  <!--hvy:expandable:content {}-->
+   Hidden details
+`;
+    const documentModel = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    const sectionKey = documentModel.sections[0]?.key;
+    const blockId = documentModel.sections[0]?.blocks[0]?.id;
+    if (!sectionKey || !blockId) {
+      throw new Error('Expected expandable block missing.');
+    }
+    documentModel.sections[0]!.blocks[0]!.schema.expandableExpanded = false;
+    stateModule.initState({
+      document: documentModel,
+      currentView: 'ai',
+      componentListReaderViews: {},
+      readerExpandableState: {},
+      readerContainerState: {},
+      viewerSidebarHelpDismissed: true,
+      editorSidebarHelpDismissed: true,
+    } as never);
+    let refreshCount = 0;
+    stateModule.initCallbacks({
+      renderApp: () => {},
+      refreshReaderPanels: () => { refreshCount += 1; },
+      refreshModalPreview: () => {},
+      componentRenderHelpers: {},
+      readerRenderer: {},
+    });
+    const sidebar = document.querySelector<HTMLElement>('#aiSidebarSections');
+    if (!sidebar) {
+      throw new Error('AI sidebar surface missing.');
+    }
+    sidebar.innerHTML = `<div data-reader-action="toggle-expandable" data-section-key="${sectionKey}" data-block-id="${blockId}">Stub</div>`;
+    bindReaderUi(document.querySelector<HTMLElement>('#mount')!);
+    sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    return {
+      expanded: stateModule.state.readerExpandableState[`${sectionKey}:${blockId}`],
+      refreshCount,
+    };
+  });
+
+  expect(result.expanded).toBe(true);
+  expect(result.refreshCount).toBe(1);
+});
+
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
   await page.goto('/');
 

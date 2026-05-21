@@ -54,8 +54,8 @@ function bindReaderAppControls(app: HTMLElement): void {
 }
 
 export function bindReaderUi(app: HTMLElement): void {
-  const readerDocument = app.querySelector<HTMLDivElement>('#readerDocument');
-  const readerSidebarSections = app.querySelector<HTMLDivElement>('#readerSidebarSections');
+  const readerDocuments = app.querySelectorAll<HTMLDivElement>('#readerDocument, #aiReaderDocument');
+  const readerSidebarSections = app.querySelectorAll<HTMLDivElement>('#readerSidebarSections, #aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
@@ -110,9 +110,13 @@ export function bindReaderUi(app: HTMLElement): void {
       currentView: state.currentView,
       readerSurface: target.closest('#readerDocument')
         ? 'reader-document'
-        : target.closest('#readerSidebarSections')
-          ? 'reader-sidebar'
-          : null,
+        : target.closest('#aiReaderDocument')
+          ? 'ai-document'
+          : target.closest('#readerSidebarSections')
+            ? 'reader-sidebar'
+            : target.closest('#aiSidebarSections')
+              ? 'ai-sidebar'
+              : null,
     });
     if (target.closest('[data-action]')) {
       logClickTrace(event, 'reader-area:skip', {
@@ -321,10 +325,14 @@ export function bindReaderUi(app: HTMLElement): void {
     }
   };
 
-  readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
-  readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
-  readerDocument?.addEventListener('click', handleReaderAreaClick);
-  readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  readerDocuments.forEach((readerDocument) => {
+    readerDocument.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+    readerDocument.addEventListener('click', handleReaderAreaClick);
+  });
+  readerSidebarSections.forEach((sidebarSections) => {
+    sidebarSections.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
+    sidebarSections.addEventListener('click', handleReaderAreaClick);
+  });
   app.querySelector<HTMLElement>('.viewer-sidebar-help-balloon')?.addEventListener('click', () => {
     dismissSidebarHelpBalloon(app, 'viewer');
   });

@@ -4,8 +4,8 @@ import { flattenSections, formatSectionTitle, getSectionId } from './section-ops
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import type { VisualDocument } from './types';
 
-export function normalizeXrefTarget(target: string): string {
-  const trimmed = target.trim();
+export function normalizeXrefTarget(target: unknown): string {
+  const trimmed = readXrefString(target);
   return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
 }
 
@@ -55,7 +55,7 @@ export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
 }
 
 export function getXrefTargetTagFilterForComponent(document: VisualDocument, componentName: string): string {
-  const component = componentName.trim();
+  const component = readXrefString(componentName);
   if (!component) {
     return '';
   }
@@ -68,7 +68,7 @@ export function getXrefTargetTagFilterForComponent(document: VisualDocument, com
 }
 
 export function getEffectiveXrefTargetTagFilter(document: VisualDocument, block: VisualBlock): string {
-  const localFilter = block.schema.xrefTargetTagFilter.trim();
+  const localFilter = readXrefString(block.schema.xrefTargetTagFilter);
   return localFilter || getXrefTargetTagFilterForComponent(document, block.schema.component);
 }
 
@@ -114,8 +114,8 @@ export function applyXrefTargetDefaults(block: VisualBlock, previousTarget = '')
   const previousOption = previousTarget
     ? options.find((item) => item.value === normalizeXrefTarget(previousTarget))
     : undefined;
-  const title = block.schema.xrefTitle.trim();
-  const detail = block.schema.xrefDetail.trim();
+  const title = readXrefString(block.schema.xrefTitle);
+  const detail = readXrefString(block.schema.xrefDetail);
   if (!title || title === previousOption?.title) {
     block.schema.xrefTitle = option.title;
   }
@@ -137,7 +137,7 @@ function visitBlocksForXrefOptions(
       }
       seen.add(block);
       const combinedTags = combineTags(inheritedTags, block.schema.tags);
-      const id = block.schema.id.trim();
+      const id = readXrefString(block.schema.id);
       if (id.length > 0 && matchesTagFilter(combinedTags, requestedTags)) {
         add(id, describeBlockTarget(block), describeBlockTargetDetail(block));
       }
@@ -162,7 +162,7 @@ function visitBlocksForXrefOptions(
 }
 
 function shouldPropagateXrefTargetTags(document: VisualDocument, block: VisualBlock): boolean {
-  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
+  const baseComponent = resolveBaseComponentFromMeta(readXrefString(block.schema.component) || 'text', document.meta);
   return baseComponent === 'component-list'
     || baseComponent === 'container'
     || baseComponent === 'grid';
@@ -193,13 +193,13 @@ function normalizeTagFilter(tagFilter: string): string[] {
   return parseTags(tagFilter).map((tag) => tag.toLowerCase());
 }
 
-function combineTags(...values: string[]): string {
-  return values.filter((value) => value.trim().length > 0).join(', ');
+function combineTags(...values: unknown[]): string {
+  return values.map(readXrefString).filter((value) => value.length > 0).join(', ');
 }
 
-function parseTags(value: string): string[] {
+function parseTags(value: unknown): string[] {
   const seen = new Set<string>();
-  return value
+  return readXrefString(value)
     .split(',')
     .map((tag) => tag.trim())
     .filter((tag) => {
@@ -212,8 +212,8 @@ function parseTags(value: string): string[] {
     });
 }
 
-function cleanXrefDisplayValue(value: string): string {
-  const trimmed = value.trim();
+function cleanXrefDisplayValue(value: unknown): string {
+  const trimmed = readXrefString(value);
   return trimmed.length > 0 && !hasTemplateToken(trimmed) ? trimmed : '';
 }
 
@@ -237,8 +237,8 @@ function getFirstVisibleTargetText(block: VisualBlock): string {
   ].map(getFirstVisibleTargetText).find((item) => item.length > 0) ?? '';
 }
 
-function cleanMarkdownText(value: string): string {
-  const cleaned = value
+function cleanMarkdownText(value: unknown): string {
+  const cleaned = readXrefString(value)
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/\^[a-z0-9_-]+\^/gi, ' ')
     .replace(/^#{1,6}\s*/gm, ' ')
@@ -255,6 +255,10 @@ function humanizeTargetId(value: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   return stripped.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readXrefString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function hasTemplateToken(value: string): boolean {

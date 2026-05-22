@@ -1397,6 +1397,7 @@ hvy_version: 0.1
 
 test('importTextIntoDocument records traced request errors without changing the result shape', async () => {
   requestProxyCompletionMock.mockRejectedValueOnce(new Error('provider unavailable'));
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -1426,6 +1427,71 @@ hvy_version: 0.1
     error: 'provider unavailable',
   });
   expect(result.trace?.calls[0]?.response).toBeUndefined();
+  expect(consoleError).toHaveBeenCalledWith('[hvy:import] import failed', expect.objectContaining({
+    operation: 'execute',
+    sourceName: 'notes.txt',
+    lastLlmCall: expect.objectContaining({
+      callIndex: 1,
+      stage: 'sectionDataCollection',
+      debugLabel: 'ai-import-section-data:1',
+      error: 'provider unavailable',
+    }),
+    error: expect.any(Error),
+  }));
+  consoleError.mockRestore();
+});
+
+test('importTextIntoDocument logs import failure context without returning a trace', async () => {
+  requestProxyCompletionMock.mockRejectedValueOnce(new TypeError('t is not iterable'));
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'summary' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result).toEqual({
+    status: 'error',
+    message: 't is not iterable',
+  });
+  expect(consoleError).toHaveBeenCalledWith('[hvy:import] import failed', expect.objectContaining({
+    operation: 'execute',
+    sourceName: 'notes.txt',
+    steps: [
+      {
+        sectionTitle: 'Summary',
+        target: {
+          kind: 'body',
+          id: 'summary',
+          title: 'Summary',
+          name: undefined,
+        },
+        importMode: 'hvy',
+      },
+    ],
+    lastLlmCall: expect.objectContaining({
+      callIndex: 1,
+      stage: 'sectionDataCollection',
+      debugLabel: 'ai-import-section-data:1',
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      error: 't is not iterable',
+    }),
+    error: expect.any(TypeError),
+  }));
+  consoleError.mockRestore();
 });
 
 test('importTextIntoDocument repairs raw HVY that adds components to locked sections', async () => {

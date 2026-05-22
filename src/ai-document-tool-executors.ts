@@ -218,7 +218,7 @@ function searchComponentIndex(
         block.schema.plugin,
         block.schema.xrefTitle,
         block.schema.xrefDetail,
-        renderAltAnnotationsAsFullText(block.schema.tableColumns.join(' ')),
+        renderAltAnnotationsAsFullText(Array.isArray(block.schema.tableColumns) ? block.schema.tableColumns.join(' ') : ''),
         JSON.stringify(block.schema.pluginConfig ?? {}),
         block.text,
       ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');

@@ -1,7 +1,7 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
-import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchState } from './search/types';
+import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const LEGACY_SESSION_STORAGE_KEYS = [
@@ -334,6 +334,8 @@ function serializeSearchState(search: SearchState): SavedSearchState {
     activeTab: search.activeTab,
     filterEnabled: search.filterEnabled,
     filterMode: search.filterMode,
+    filterQueryMode: search.filterQueryMode,
+    submittedFilterQueryMode: search.submittedFilterQueryMode,
     resultsCollapsed: search.resultsCollapsed,
     activeResultId: search.activeResultId,
     results: search.results,
@@ -350,6 +352,8 @@ function normalizeSearchState(value: unknown): SearchState {
   }
   const raw = value as Partial<SavedSearchState>;
   const submittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
+  const filterQueryMode = normalizeSearchFilterQueryMode(raw.filterQueryMode);
+  const submittedFilterQueryMode = normalizeSearchFilterQueryMode(raw.submittedFilterQueryMode);
   return {
     ...defaults,
     open: Boolean(raw.open),
@@ -360,6 +364,8 @@ function normalizeSearchState(value: unknown): SearchState {
     activeTab: raw.activeTab === 'filter' ? 'filter' : 'search',
     filterEnabled: Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
     filterMode: raw.filterMode === 'hide' ? 'hide' : 'deprioritize',
+    filterQueryMode,
+    submittedFilterQueryMode,
     resultsCollapsed: Boolean(raw.resultsCollapsed),
     activeResultId: typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
     results: Array.isArray(raw.results)
@@ -379,6 +385,10 @@ function normalizeSearchState(value: unknown): SearchState {
     requestNonce: 0,
     abortController: null,
   };
+}
+
+function normalizeSearchFilterQueryMode(value: unknown): SearchFilterQueryMode {
+  return value === 'semantic' ? 'semantic' : 'keyword';
 }
 
 function normalizeSearchCategories(value: unknown): Record<SearchCategory, boolean> {
@@ -401,7 +411,7 @@ function normalizeSearchResult(value: unknown): HvySearchResult | null {
   const raw = value as Partial<HvySearchResult>;
   if (
     typeof raw.id !== 'string' ||
-    !isSearchCategory(raw.category) ||
+    !isSearchResultCategory(raw.category) ||
     (raw.targetKind !== 'section' && raw.targetKind !== 'block') ||
     typeof raw.sectionKey !== 'string' ||
     typeof raw.targetId !== 'string' ||
@@ -432,6 +442,10 @@ function normalizeSearchResult(value: unknown): HvySearchResult | null {
     ...(typeof raw.workspaceId === 'string' ? { workspaceId: raw.workspaceId } : {}),
     ...(typeof raw.score === 'number' ? { score: raw.score } : {}),
   };
+}
+
+function isSearchResultCategory(value: unknown): value is SearchResultCategory {
+  return isSearchCategory(value) || value === 'semantic';
 }
 
 function isSearchCategory(value: unknown): value is SearchCategory {

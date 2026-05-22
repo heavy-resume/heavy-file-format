@@ -119,6 +119,8 @@ hvy_version: 0.1
       activeTab: 'filter',
       filterEnabled: true,
       filterMode: 'deprioritize',
+      filterQueryMode: 'keyword',
+      submittedFilterQueryMode: 'keyword',
       resultsCollapsed: false,
       activeResultId: 'result-1',
       isLoading: true,
@@ -178,6 +180,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: 'result-1',
     results: [

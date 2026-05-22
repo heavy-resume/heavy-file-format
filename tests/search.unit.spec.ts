@@ -1,10 +1,20 @@
-import { expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
+import { buildSemanticFilterRequest } from '../src/search/semantic-candidates';
+import { applySearchFilter } from '../src/search/actions';
+import { initCallbacks, initState, state } from '../src/state';
+import { createTestState } from './serialization-test-helpers';
+import { setReferenceAppConfig } from '../src/reference-config';
+
+afterEach(() => {
+  setReferenceAppConfig(null);
+  vi.restoreAllMocks();
+});
 
 test('built-in search returns tags, contents, then description matches', async () => {
   const document = deserializeDocument(`---
@@ -174,6 +184,8 @@ hvy_version: 0.1
     activeTab: 'search',
     filterEnabled: false,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -227,6 +239,8 @@ hvy_version: 0.1
     activeTab: 'search',
     filterEnabled: false,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -260,6 +274,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -316,6 +332,8 @@ hvy_version: 0.1
     activeTab: 'search',
     filterEnabled: true,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -368,6 +386,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -415,6 +435,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -468,6 +490,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -524,6 +548,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -595,6 +621,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -612,6 +640,149 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(metaGrid.id)).toBe(true);
   expect(expectedContext.visibleBlocks.has(location.id)).toBe(true);
   expect(expectedContext.visibleBlocks.has(date.id)).toBe(true);
+});
+
+test('semantic filter request builds AI-friendly section and component candidates', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Semantic Test
+---
+
+<!--hvy: {"id":"skills","tags":"frontend","description":"Technical skill inventory"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript","tags":"language","description":"Primary implementation language"}-->
+ TypeScript tooling and reusable UI components.
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterRequest({
+    document,
+    prompt: 'Find frontend language work',
+  });
+
+  expect(expectedResult.documentTitle).toBe('Semantic Test');
+  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain(`section:${document.sections[0]!.key}`);
+  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain(`block:${document.sections[0]!.key}:${document.sections[0]!.blocks[0]!.id}`);
+  expect(expectedResult.candidates[0]).toMatchObject({
+    targetKind: 'section',
+    label: 'Skills',
+    tags: ['frontend'],
+    description: 'Technical skill inventory',
+  });
+  expect(expectedResult.instructionPrompt).toContain('Return only JSON');
+  expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
+  expect(expectedResult.instructionPrompt).toContain(`block:${document.sections[0]!.key}:${document.sections[0]!.blocks[0]!.id}`);
+});
+
+test('semantic filter request truncates large candidate payloads deterministically', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"long-one"}-->
+ ${'one '.repeat(120)}
+
+<!--hvy:text {"id":"long-two"}-->
+ ${'two '.repeat(120)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterRequest({
+    document,
+    prompt: 'Find long content',
+    maxCandidateSummaryChars: 40,
+    maxTotalCandidateChars: 700,
+  });
+
+  expect(expectedResult.candidateBudget.truncated).toBe(true);
+  expect(expectedResult.candidates[0]!.targetKind).toBe('section');
+  expect(expectedResult.candidates[0]!.summary.length).toBeLessThanOrEqual(40);
+  expect(expectedResult.candidates.length).toBeLessThan(expectedResult.candidateBudget.totalCandidates);
+});
+
+test('semantic filter provider matches become normal filter results', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+
+<!--hvy: {"id":"writing"}-->
+#! Writing
+
+<!--hvy:text {"id":"notes"}-->
+ Release notes.
+`, '.hvy');
+  initState(createTestState(document));
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find TypeScript experience';
+  const matchedBlock = document.sections[0]!.blocks[0]!;
+  setReferenceAppConfig({
+    semanticFilterProvider: (request) => {
+      expect(request.instructionPrompt).toContain('Find TypeScript experience');
+      return [{
+        candidateId: `block:${document.sections[0]!.key}:${matchedBlock.id}`,
+        reason: 'TypeScript work is relevant.',
+        score: 0.91,
+      }];
+    },
+  });
+
+  await applySearchFilter({ enabled: true });
+
+  expect(state.search.filterEnabled).toBe(true);
+  expect(state.search.submittedFilterQueryMode).toBe('semantic');
+  expect(state.search.results).toHaveLength(1);
+  expect(state.search.results[0]).toMatchObject({
+    category: 'semantic',
+    targetKind: 'block',
+    blockId: matchedBlock.id,
+    preview: 'TypeScript work is relevant.',
+    score: 0.91,
+  });
+  const expectedContext = createSearchFilterContext(document.sections, state.search);
+  expect(expectedContext.visibleSections.has(document.sections[0]!.key)).toBe(true);
+  expect(expectedContext.visibleSections.has(document.sections[1]!.key)).toBe(false);
+});
+
+test('semantic filtering reports a missing provider without enabling filtering', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+  initState(createTestState(document));
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find skills';
+
+  await applySearchFilter({ enabled: true });
+
+  expect(state.search.filterEnabled).toBe(false);
+  expect(state.search.error).toBe('Semantic filtering is not configured.');
 });
 
 test('search highlighting escapes plain text before marking matches', () => {

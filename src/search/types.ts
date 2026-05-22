@@ -2,8 +2,10 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 
 export type SearchCategory = 'tags' | 'contents' | 'description';
+export type SearchResultCategory = SearchCategory | 'semantic';
 export type SearchPaletteTab = 'search' | 'filter';
 export type SearchFilterMode = 'deprioritize' | 'hide';
+export type SearchFilterQueryMode = 'keyword' | 'semantic';
 export type SearchTargetKind = 'section' | 'block';
 
 export interface HvySearchRequest {
@@ -16,7 +18,7 @@ export interface HvySearchRequest {
 
 export interface HvySearchResult {
   id: string;
-  category: SearchCategory;
+  category: SearchResultCategory;
   targetKind: SearchTargetKind;
   sectionKey: string;
   blockId?: string;
@@ -44,6 +46,49 @@ export interface HvySearchMatch {
 
 export type HvySearchProvider = (request: HvySearchRequest) => Promise<HvySearchResult[]> | HvySearchResult[];
 
+export interface HvySemanticFilterCandidate {
+  candidateId: string;
+  targetKind: SearchTargetKind;
+  sectionKey: string;
+  blockId?: string;
+  targetId: string;
+  targetPath?: string;
+  label: string;
+  locationLabel?: string;
+  contextLabel?: string;
+  tags: string[];
+  description: string;
+  summary: string;
+  documentOrder: number;
+  truncated: boolean;
+}
+
+export interface HvySemanticFilterCandidateBudget {
+  maxCandidateSummaryChars: number;
+  maxTotalCandidateChars: number;
+  usedTotalCandidateChars: number;
+  includedCandidates: number;
+  totalCandidates: number;
+  truncated: boolean;
+}
+
+export interface HvySemanticFilterRequest {
+  prompt: string;
+  instructionPrompt: string;
+  documentTitle?: string;
+  candidates: HvySemanticFilterCandidate[];
+  candidateBudget: HvySemanticFilterCandidateBudget;
+  signal?: AbortSignal;
+}
+
+export interface HvySemanticFilterMatch {
+  candidateId: string;
+  reason?: string;
+  score?: number;
+}
+
+export type HvySemanticFilterProvider = (request: HvySemanticFilterRequest) => Promise<HvySemanticFilterMatch[]> | HvySemanticFilterMatch[];
+
 export interface SearchState {
   open: boolean;
   queryDraft: string;
@@ -53,6 +98,8 @@ export interface SearchState {
   activeTab: SearchPaletteTab;
   filterEnabled: boolean;
   filterMode: SearchFilterMode;
+  filterQueryMode: SearchFilterQueryMode;
+  submittedFilterQueryMode: SearchFilterQueryMode;
   resultsCollapsed: boolean;
   activeResultId: string | null;
   isLoading: boolean;

@@ -55,6 +55,7 @@ import {
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
+import type { HvySemanticFilterProvider } from './search/types';
 import type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -63,6 +64,7 @@ import type {
 } from './ai-document-edit';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
+import { setRuntimeSemanticFilterProvider } from './reference-config';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -73,6 +75,7 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
@@ -135,6 +138,8 @@ function createDefaultSearchState(): AppState['search'] {
     activeTab: 'search',
     filterEnabled: false,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -628,6 +633,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   ));
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
+  if ('semanticFilterProvider' in options) {
+    setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
+  }
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
@@ -645,6 +653,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostPlugins([]);
+        setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
         if (currentRoot === options.root) {
           currentRoot = null;
@@ -744,6 +753,13 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvySemanticFilterCandidate,
+  HvySemanticFilterCandidateBudget,
+  HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
+  HvySemanticFilterRequest,
+} from './search/types';
 
 declare global {
   interface Window {

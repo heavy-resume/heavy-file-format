@@ -3,7 +3,7 @@ import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
-import { submitSearch } from '../../search/actions';
+import { isSearchFilterApplied, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 
@@ -25,6 +25,9 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
         return;
       }
+      if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+        return;
+      }
       void submitSearch();
     }, 120);
   });
@@ -37,7 +40,7 @@ export function bindInputMisc(app: HTMLElement): void {
       state.search.resultsCollapsed = false;
       const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
       if (filterButton) {
-        const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
+        const applied = isSearchFilterApplied();
         filterButton.classList.toggle('is-active', applied);
         filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
         filterButton.textContent = applied ? 'Turn off filter' : 'Filter';

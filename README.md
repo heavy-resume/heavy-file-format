@@ -70,6 +70,7 @@ A browser-based reference app is included with:
 Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
 - Set `window.HVY_REFERENCE_CONFIG = { aiEditor: { doubleClickDelayMs: 400 } }` to tune how long AI mode waits before running single-click reader actions, leaving room for double-click edit gestures.
+- Set `window.HVY_REFERENCE_CONFIG = { semanticFilterProvider }` or pass `semanticFilterProvider` to an embedded mount to enable AI-backed semantic filtering in the Filter panel.
 - When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
 Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
@@ -254,6 +255,24 @@ HVY.mountHvyViewer({
 
 Return `{ html }` to replace the rendered link with sanitized HTML, or return
 `null` / `undefined` to keep the default rendering.
+
+Embedded hosts can also enable semantic filtering by providing a callback that
+selects candidate IDs from the AI-friendly request packet:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+```
+
+The request includes structured `candidates` and a deterministic
+`instructionPrompt`; hosts should return only candidate IDs supplied by the
+request.
 
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a
 plan, show the returned steps to the user, then pass the approved steps into the

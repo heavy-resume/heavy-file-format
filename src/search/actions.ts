@@ -1,8 +1,15 @@
 import { builtInSearchProvider } from './search-provider';
+import { buildSemanticFilterRequest } from './semantic-candidates';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
-import type { HvySearchResult, SearchCategory } from './types';
+import type {
+  HvySearchResult,
+  HvySemanticFilterCandidate,
+  HvySemanticFilterMatch,
+  SearchCategory,
+  SearchFilterQueryMode,
+} from './types';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { filterTemplateVisibleSections } from '../template-hide';
 import { focusSearchInput } from './render';
@@ -68,6 +75,7 @@ export function stopSearch(): void {
 export async function submitSearch(): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;
+  state.search.submittedFilterQueryMode = 'keyword';
   state.search.activeResultId = null;
   state.search.resultsCollapsed = false;
   state.search.error = null;
@@ -288,6 +296,12 @@ export function setSearchFilterMode(mode: typeof state.search.filterMode): void 
   getRenderApp()();
 }
 
+export function setSearchFilterQueryMode(mode: SearchFilterQueryMode): void {
+  state.search.filterQueryMode = mode;
+  state.search.error = null;
+  getRenderApp()();
+}
+
 export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
   const enabled = options.enabled ?? !state.search.filterEnabled;
   if (!enabled) {
@@ -301,12 +315,15 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     getRenderApp()();
     return;
   }
-  const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim();
+  const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim()
+    || state.search.filterQueryMode !== state.search.submittedFilterQueryMode;
   if (queryChanged) {
     state.search.filterEnabled = false;
     getRefreshReaderPanels()();
   }
-  if (state.search.queryDraft.trim() !== state.search.submittedQuery.trim()) {
+  if (state.search.filterQueryMode === 'semantic') {
+    await submitSemanticFilter();
+  } else if (queryChanged) {
     await submitSearch();
   }
   if (!state.search.submittedQuery.trim() || state.search.error || state.search.results.length === 0) {
@@ -327,6 +344,122 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   state.search.resultsCollapsed = false;
   getRefreshReaderPanels()();
   getRenderApp()();
+}
+
+async function submitSemanticFilter(): Promise<void> {
+  const prompt = state.search.queryDraft.trim();
+  state.search.submittedQuery = prompt;
+  state.search.submittedFilterQueryMode = 'semantic';
+  state.search.activeResultId = null;
+  state.search.resultsCollapsed = false;
+  state.search.error = null;
+  state.search.abortController?.abort();
+  state.search.clearedSectionKeys = [];
+  state.search.clearedBlockIds = [];
+
+  if (!prompt) {
+    state.search.results = [];
+    state.search.navigationResultIds = [];
+    state.search.isLoading = false;
+    getRenderApp()();
+    return;
+  }
+
+  const provider = getReferenceAppConfig().semanticFilterProvider;
+  if (!provider) {
+    state.search.results = [];
+    state.search.navigationResultIds = [];
+    state.search.error = 'Semantic filtering is not configured.';
+    state.search.isLoading = false;
+    getRenderApp()();
+    return;
+  }
+
+  const requestNonce = state.search.requestNonce + 1;
+  const abortController = new AbortController();
+  state.search.requestNonce = requestNonce;
+  state.search.abortController = abortController;
+  state.search.isLoading = true;
+  getRenderApp()();
+
+  try {
+    const searchDocument = state.currentView === 'viewer'
+      ? { ...state.document, sections: filterTemplateVisibleSections(state.document.sections) }
+      : state.document;
+    const request = buildSemanticFilterRequest({
+      document: searchDocument,
+      prompt,
+      signal: abortController.signal,
+    });
+    const matches = await provider(request);
+    if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
+      return;
+    }
+    state.search.results = normalizeSearchResults(buildSemanticSearchResults(request.candidates, matches, prompt));
+    state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
+    if (state.search.filterEnabled && state.currentView === 'editor') {
+      state.currentView = 'viewer';
+    }
+    state.search.error = null;
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      return;
+    }
+    state.search.results = [];
+    state.search.navigationResultIds = [];
+    state.search.error = error instanceof Error ? error.message : 'Semantic filtering failed.';
+  } finally {
+    if (state.search.requestNonce !== requestNonce) {
+      return;
+    }
+    state.search.isLoading = false;
+    state.search.abortController = null;
+    getRenderApp()();
+  }
+}
+
+function buildSemanticSearchResults(
+  candidates: HvySemanticFilterCandidate[],
+  matches: HvySemanticFilterMatch[],
+  prompt: string
+): HvySearchResult[] {
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.candidateId, candidate]));
+  const seen = new Set<string>();
+  const results: HvySearchResult[] = [];
+  for (const match of matches) {
+    const candidate = candidatesById.get(match.candidateId);
+    if (!candidate || seen.has(candidate.candidateId)) {
+      continue;
+    }
+    seen.add(candidate.candidateId);
+    const reason = typeof match.reason === 'string' && match.reason.trim()
+      ? match.reason.trim()
+      : candidate.summary;
+    results.push({
+      id: `semantic-${results.length + 1}`,
+      category: 'semantic',
+      targetKind: candidate.targetKind,
+      sectionKey: candidate.sectionKey,
+      ...(candidate.blockId ? { blockId: candidate.blockId } : {}),
+      targetId: candidate.targetId,
+      ...(candidate.targetPath ? { targetPath: candidate.targetPath } : {}),
+      label: candidate.label,
+      ...(candidate.locationLabel ? { locationLabel: candidate.locationLabel } : {}),
+      ...(candidate.contextLabel ? { contextLabel: candidate.contextLabel } : {}),
+      preview: reason,
+      matchedText: prompt,
+      sourceField: 'Semantic match',
+      matches: [{
+        field: 'semantic',
+        label: 'Reason',
+        preview: reason,
+        matchedText: prompt,
+      }],
+      documentOrder: candidate.documentOrder,
+      ...(typeof match.score === 'number' && Number.isFinite(match.score) ? { score: match.score } : {}),
+    });
+  }
+  return results.sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
 }
 
 export function clearFilteringForTarget(sectionKey: string, blockId?: string): void {
@@ -474,4 +607,10 @@ function getRenderedSearchTargetOrder(app: HTMLElement): Map<string, number> {
 
 function getSearchResultTargetKey(result: HvySearchResult): string {
   return result.blockId ? `block:${result.sectionKey}:${result.blockId}` : `section:${result.sectionKey}`;
+}
+
+export function isSearchFilterApplied(): boolean {
+  return state.search.filterEnabled
+    && state.search.queryDraft.trim() === state.search.submittedQuery.trim()
+    && state.search.filterQueryMode === state.search.submittedFilterQueryMode;
 }

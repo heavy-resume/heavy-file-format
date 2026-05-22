@@ -1063,8 +1063,12 @@ async function refreshRestoredSearch(savedSession: ReturnType<typeof loadSession
     return;
   }
   state.search.queryDraft = savedSearch.queryDraft || savedSearch.submittedQuery;
-  state.search.submittedQuery = '';
-  await submitSearch();
+  if (savedSearch.submittedFilterQueryMode === 'semantic') {
+    state.search.filterQueryMode = 'semantic';
+  } else {
+    state.search.submittedQuery = '';
+    await submitSearch();
+  }
   if (savedSearch.filterEnabled) {
     await applySearchFilter({ enabled: true });
   }

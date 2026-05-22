@@ -64,6 +64,8 @@ import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
+import { setRuntimeSemanticFilterProvider } from './reference-config';
+import type { HvySemanticFilterProvider } from './search/types';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchPalette } from './search/render';
@@ -99,6 +101,7 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
@@ -708,6 +711,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     state.paletteOverrideId = options.paletteId;
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
+  if ('semanticFilterProvider' in options) {
+    setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
+  }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
   initDocumentChangeTracking(runtime, options.onDocumentChange);
@@ -718,6 +724,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostChatClient(null);
+        setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
         resetPluginDocumentHookState();
         sessionPersistence?.abort();
@@ -799,6 +806,13 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvySemanticFilterCandidate,
+  HvySemanticFilterCandidateBudget,
+  HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
+  HvySemanticFilterRequest,
+} from './search/types';
 
 window.HVY = {
   deserializeDocumentBytes,

@@ -99,11 +99,11 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
   const markBlockTreeVisible = (block: VisualBlock): void => {
     visibleBlocks.add(block.id);
-    block.schema.containerBlocks.forEach(markBlockTreeVisible);
-    block.schema.componentListBlocks.forEach(markBlockTreeVisible);
-    block.schema.expandableStubBlocks.children.forEach(markBlockTreeVisible);
-    block.schema.expandableContentBlocks.children.forEach(markBlockTreeVisible);
-    block.schema.gridItems.forEach((item) => markBlockTreeVisible(item.block));
+    (block.schema.containerBlocks ?? []).forEach(markBlockTreeVisible);
+    (block.schema.componentListBlocks ?? []).forEach(markBlockTreeVisible);
+    (block.schema.expandableStubBlocks?.children ?? []).forEach(markBlockTreeVisible);
+    (block.schema.expandableContentBlocks?.children ?? []).forEach(markBlockTreeVisible);
+    (block.schema.gridItems ?? []).forEach((item) => markBlockTreeVisible(item.block));
   };
 
   const markBlockContextVisible = (block: VisualBlock, depth: number): void => {
@@ -111,15 +111,15 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     if (depth <= 0) {
       return;
     }
-    block.schema.containerBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
-    block.schema.gridItems.forEach((item) => markBlockContextVisible(item.block, depth - 1));
+    (block.schema.containerBlocks ?? []).forEach((child) => markBlockContextVisible(child, depth - 1));
+    (block.schema.gridItems ?? []).forEach((item) => markBlockContextVisible(item.block, depth - 1));
   };
 
   const markBlockStructuralContextVisible = (block: VisualBlock): void => {
-    block.schema.containerBlocks.forEach((child) => visibleBlocks.add(child.id));
-    block.schema.expandableStubBlocks.children.forEach(markExpandableContextChildVisible);
-    block.schema.expandableContentBlocks.children.forEach(markExpandableContextChildVisible);
-    block.schema.gridItems.forEach((item) => visibleBlocks.add(item.block.id));
+    (block.schema.containerBlocks ?? []).forEach((child) => visibleBlocks.add(child.id));
+    (block.schema.expandableStubBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
+    (block.schema.expandableContentBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
+    (block.schema.gridItems ?? []).forEach((item) => visibleBlocks.add(item.block.id));
   };
 
   const markExpandableContextChildVisible = (block: VisualBlock): void => {
@@ -132,14 +132,14 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
   const markTransparentLayoutContextVisible = (block: VisualBlock): void => {
     visibleBlocks.add(block.id);
-    block.schema.containerBlocks.forEach((child) => {
+    (block.schema.containerBlocks ?? []).forEach((child) => {
       if (isTransparentLayoutBlock(child)) {
         markTransparentLayoutContextVisible(child);
         return;
       }
       visibleBlocks.add(child.id);
     });
-    block.schema.gridItems.forEach((item) => {
+    (block.schema.gridItems ?? []).forEach((item) => {
       if (isTransparentLayoutBlock(item.block)) {
         markTransparentLayoutContextVisible(item.block);
         return;
@@ -152,8 +152,8 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     block.schema.component === 'grid'
     || block.schema.component === 'container'
     || block.schema.component === 'component-list'
-    || block.schema.gridItems.length > 0
-    || block.schema.containerBlocks.length > 0;
+    || (block.schema.gridItems ?? []).length > 0
+    || (block.schema.containerBlocks ?? []).length > 0;
 
   const markSectionTreeVisible = (section: VisualSection): boolean => {
     visibleSections.add(section.key);
@@ -226,11 +226,11 @@ function findBlockInTree(block: VisualBlock, blockId: string): VisualBlock | nul
     return block;
   }
   for (const child of [
-    ...block.schema.containerBlocks,
-    ...block.schema.componentListBlocks,
-    ...block.schema.expandableStubBlocks.children,
-    ...block.schema.expandableContentBlocks.children,
-    ...block.schema.gridItems.map((item) => item.block),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
   ]) {
     const found = findBlockInTree(child, blockId);
     if (found) {

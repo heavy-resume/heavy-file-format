@@ -496,6 +496,82 @@ sidebar_label: Cards
   expect(result.labelBottom).toBeLessThanOrEqual(result.buttonBottom);
 });
 
+test('embedded semantic filtering uses provider prompt and preserves input focus', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent('<div id="root" style="height: 720px"></div>');
+  await page.evaluate(async () => {
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling and reusable UI components.
+
+<!--hvy: {"id":"writing"}-->
+#! Writing
+
+<!--hvy:text {"id":"notes"}-->
+ Release notes and internal docs.
+`;
+    const testWindow = window as Window & {
+      testSemanticProviderCalls?: Array<{ prompt: string; instructionPrompt: string; candidateCount: number }>;
+    };
+    testWindow.testSemanticProviderCalls = [];
+    mountHvy({
+      root: document.querySelector('#root') as HTMLElement,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      semanticFilterProvider(request) {
+        testWindow.testSemanticProviderCalls?.push({
+          prompt: request.prompt,
+          instructionPrompt: request.instructionPrompt,
+          candidateCount: request.candidates.length,
+        });
+        const match = request.candidates.find((candidate) => candidate.summary.includes('TypeScript'));
+        return match ? [{ candidateId: match.candidateId, reason: 'TypeScript work is relevant.', score: 0.95 }] : [];
+      },
+    });
+  });
+
+  await page.locator('.search-launcher').click();
+  await page.getByRole('tab', { name: /Filter/ }).click();
+  await page.getByRole('button', { name: 'Semantic' }).click();
+  await page.getByRole('button', { name: 'Hide' }).click();
+  const input = page.locator('[data-field="search-query"]');
+  await input.fill('show TypeScript work');
+  await input.press('!');
+  await expect(input).toBeFocused({ timeout: 1_000 });
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(page.locator('.search-palette')).toHaveCount(0, { timeout: 1_000 });
+
+  const result = await page.evaluate(() => {
+    const testWindow = window as Window & {
+      testSemanticProviderCalls?: Array<{ prompt: string; instructionPrompt: string; candidateCount: number }>;
+    };
+    return {
+      providerCall: testWindow.testSemanticProviderCalls?.[0],
+      visibleText: document.querySelector('#readerDocument')?.textContent ?? '',
+      paletteInsideRoot: (() => {
+        const rootBox = document.querySelector('#root')?.getBoundingClientRect();
+        const launcherBox = document.querySelector('.search-launcher')?.getBoundingClientRect();
+        return Boolean(rootBox && launcherBox && launcherBox.top >= rootBox.top && launcherBox.bottom <= rootBox.bottom);
+      })(),
+    };
+  });
+
+  expect(result.providerCall?.prompt).toBe('show TypeScript work!');
+  expect(result.providerCall?.instructionPrompt).toContain('Return only JSON');
+  expect(result.providerCall?.candidateCount).toBeGreaterThan(0);
+  expect(result.visibleText).toContain('TypeScript tooling');
+  expect(result.visibleText).not.toContain('Release notes');
+  expect(result.paletteInsideRoot).toBe(true);
+});
+
 test('embedded viewer omits empty sidebar markup', async ({ page }) => {
   await page.goto('/');
 

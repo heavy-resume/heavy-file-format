@@ -1,7 +1,7 @@
 import './search.css';
 import type { ReaderRenderer } from '../reader/render';
 import type { VisualDocument } from '../types';
-import type { HvySearchResult, SearchCategory, SearchState } from './types';
+import type { HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './types';
 import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
@@ -13,10 +13,11 @@ interface SearchRenderDeps {
   readerRenderer: ReaderRenderer;
 }
 
-const CATEGORY_LABELS: Record<SearchCategory, string> = {
+const CATEGORY_LABELS: Record<SearchResultCategory, string> = {
   tags: 'Tags',
   contents: 'Contents',
   description: 'Description',
+  semantic: 'Semantic',
 };
 
 export function renderSearchLauncher(search: SearchState): string {
@@ -190,16 +191,32 @@ function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options:
 }
 
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
-  const applied = search.filterEnabled && search.queryDraft.trim() === search.submittedQuery.trim();
+  const applied = search.filterEnabled
+    && search.queryDraft.trim() === search.submittedQuery.trim()
+    && search.filterQueryMode === search.submittedFilterQueryMode;
   const status = search.isLoading
-    ? 'Searching...'
+    ? search.filterQueryMode === 'semantic' ? 'Analyzing document...' : 'Searching...'
     : search.error
     ? search.error
     : search.submittedQuery.trim().length > 0 && search.results.length === 0
-    ? 'No matches. Try another term.'
+    ? search.filterQueryMode === 'semantic' ? 'No semantic matches. Try a more specific prompt.' : 'No matches. Try another term.'
     : '';
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
-    ${renderSearchInput(search, deps, { icon: funnelIcon(), label: 'Filter document', placeholder: 'Filter document' })}
+    <div class="search-filter-box">
+      <div class="search-filter-box-head">
+        ${funnelIcon()}
+        <span>Filter Type</span>
+      </div>
+      <div class="search-filter-mode-group" role="group" aria-label="Filter type">
+        ${renderFilterQueryModeButton('keyword', 'Keyword', search, deps)}
+        ${renderFilterQueryModeButton('semantic', 'Semantic', search, deps)}
+      </div>
+    </div>
+    ${renderSearchInput(search, deps, {
+      icon: funnelIcon(),
+      label: 'Filter document',
+      placeholder: search.filterQueryMode === 'semantic' ? 'Describe what should stay visible' : 'Filter document',
+    })}
     ${status ? `<div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
@@ -218,6 +235,17 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
       aria-pressed="${applied ? 'true' : 'false'}"
     >${applied ? 'Turn off filter' : 'Filter'}</button>
   </section>`;
+}
+
+function renderFilterQueryModeButton(mode: SearchFilterQueryMode, label: string, search: SearchState, deps: SearchRenderDeps): string {
+  const active = search.filterQueryMode === mode;
+  return `<button
+    type="button"
+    class="search-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-search-filter-query-mode"
+    data-search-filter-query-mode="${deps.escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+  >${deps.escapeHtml(label)}</button>`;
 }
 
 function renderFilterModeButton(mode: SearchState['filterMode'], label: string, search: SearchState, deps: SearchRenderDeps): string {
@@ -370,9 +398,9 @@ function resolveResultTarget(result: HvySearchResult, document: VisualDocument):
   return { section };
 }
 
-function groupResults(results: HvySearchResult[]): Array<[SearchCategory, HvySearchResult[]]> {
-  const order: SearchCategory[] = ['tags', 'contents', 'description'];
+function groupResults(results: HvySearchResult[]): Array<[SearchResultCategory, HvySearchResult[]]> {
+  const order: SearchResultCategory[] = ['semantic', 'tags', 'contents', 'description'];
   return order
-    .map((category) => [category, results.filter((result) => result.category === category)] as [SearchCategory, HvySearchResult[]])
+    .map((category) => [category, results.filter((result) => result.category === category)] as [SearchResultCategory, HvySearchResult[]])
     .filter(([, categoryResults]) => categoryResults.length > 0);
 }

@@ -14,6 +14,8 @@ export function createDefaultSearchState(): SearchState {
     activeTab: 'search',
     filterEnabled: false,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,

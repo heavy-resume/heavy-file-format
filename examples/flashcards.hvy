@@ -20,8 +20,11 @@ component_defs:
         label: Answer
     schema:
       tags: generated-flashcard
+      css: "border: 1px solid var(--hvy-border); border-radius: 8px; min-height: 8rem; padding: 0.85rem 0.95rem; margin: 0.8rem 0; background: var(--hvy-surface); box-shadow: 0 1px 0 var(--hvy-border-alt), 0 10px 22px var(--hvy-shadow-sm);"
       expandableAlwaysShowStub: true
       expandableExpanded: false
+      expandableStubCss: "padding: 0;"
+      expandableContentCss: "padding-top: 0.75rem; border-top: 1px solid var(--hvy-border-alt);"
       expandableStubBlocks:
         description: Generated flashcard question
         children:
@@ -415,5 +418,81 @@ theme:
       for card in cards:
           values_json = '{"question":"' + json_escape(card["question"]) + '","answer":"' + json_escape(card["answer"]) + '"}'
           card_id = "flashcard-" + normalize_id(card["source_id"]) + "-" + str(index)
+          doc.cli.run("hvy insert -1 flashcard-card /body/flashcards-sidebar --id " + card_id + " --using-template " + shell_quote(values_json))
+          index += 1
+
+ <!--hvy:plugin {"id":"flashcard-shuffle-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitAction":"script","submitScript":"shuffle","submitLabel":"Shuffle cards","showSubmit":true,"scriptLibraries":["random"]}}-->
+  fields: []
+  scripts:
+    shuffle: |
+      import random
+      
+      def json_escape(value):
+          output = ""
+          for char in value:
+              if char == "\\":
+                  output += "\\\\"
+              elif char == '"':
+                  output += '\\"'
+              elif char == "\n":
+                  output += "\\n"
+              elif char == "\r":
+                  output += "\\r"
+              elif char == "\t":
+                  output += "\\t"
+              else:
+                  output += char
+          return output
+      
+      def shell_quote(value):
+          return "'" + value.replace("'", "'\\''") + "'"
+      
+      def normalize_id(value):
+          output = ""
+          previous_dash = False
+          for char in value.lower():
+              if char.isalnum():
+                  output += char
+                  previous_dash = False
+              elif not previous_dash:
+                  output += "-"
+                  previous_dash = True
+          return output.strip("-") or "card"
+      
+      def read_card_text(component_id):
+          question = ""
+          answer = ""
+          for path in doc.cli.run("find /id/" + component_id + " -maxdepth 4").splitlines():
+              if path.endswith("/text.txt"):
+                  text = doc.cli.run("cat " + path).strip()
+                  if "/expandable-stub/" in path and len(text) > 0:
+                      question = text
+                  if "/expandable-content/" in path and len(text) > 0:
+                      answer = text
+          return {
+              "id": component_id,
+              "question": question,
+              "answer": answer,
+          }
+      
+      cards = []
+      for component in doc.tool.get_components("flashcard-card"):
+          if component.section_id == "flashcards-sidebar" and component.has_tag("generated-flashcard"):
+              card = read_card_text(component.id)
+              if len(card["question"]) > 0 and len(card["answer"]) > 0:
+                  cards.append(card)
+      if len(cards) < 2:
+          return
+      
+      shuffled = cards[:]
+      random.shuffle(shuffled)
+      if [card["id"] for card in shuffled] == [card["id"] for card in cards]:
+          shuffled = shuffled[1:] + shuffled[:1]
+      for card in cards:
+          doc.tool.remove_component(component_ref=card["id"], reason="Shuffle generated flashcards.")
+      index = 1
+      for card in shuffled:
+          values_json = '{"question":"' + json_escape(card["question"]) + '","answer":"' + json_escape(card["answer"]) + '"}'
+          card_id = "flashcard-shuffled-" + normalize_id(card["id"]) + "-" + str(index)
           doc.cli.run("hvy insert -1 flashcard-card /body/flashcards-sidebar --id " + card_id + " --using-template " + shell_quote(values_json))
           index += 1

@@ -407,7 +407,7 @@ registerHvyCliPluginCommands({
     'Scripting runs once when the document loads. Use it to generate, mutate, or rearrange document content programmatically.',
     'The component body is exposed as script.py. It is Python/Brython source wrapped in a generated function with one injected global: doc.',
     'Sandbox limits: imports, network, and DOM access are not allowed. Mutate the document through doc instead.',
-    'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-line budget.',
+    'Execution model: source is wrapped in a generated function, so return can stop the script early. Loops count against a 100,000-step budget.',
     'doc.tool.TOOL_NAME(**args) calls a synchronous subset of document-edit tools. args are Python keyword arguments matching the AI tool schema.',
     'Document tools: request_structure, grep, view_component, get_css, get_properties, set_properties, patch_component, create_component, remove_component, get_updated_components, get_components, create_section, remove_section, reorder_section.',
     'Header tools: view_header, grep_header, patch_header.',

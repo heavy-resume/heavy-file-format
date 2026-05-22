@@ -130,7 +130,7 @@ test('flashcards generator form remains mounted after sidebar reader refresh', a
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        output: '[{"source_id":"concept-model","question":"What does the source material say Heavy documents contain?","answer":"They contain sections and reusable components."}]',
+        output: '[{"source_id":"concept-model","question":"What does the source material say Heavy documents contain?","answer":"They contain sections and reusable components."},{"source_id":"scripting-runtime","question":"What does a form submit target script receive?","answer":"It receives the generated response and source values."}]',
       }),
     });
   });
@@ -149,6 +149,15 @@ test('flashcards generator form remains mounted after sidebar reader refresh', a
   await expect(
     page.locator('#flashcard-generator-form [data-hvy-plugin-mount="true"]')
   ).toHaveCount(0);
+
+  const generatedCards = page.locator('#readerSidebarSections .reader-block-expandable[data-component-id^="flashcard-"]');
+  await expect(generatedCards).toHaveCount(2);
+  await expect(generatedCards.first()).toContainText('What does the source material say Heavy documents contain?');
+  await expect(generatedCards.first()).toHaveCSS('min-height', '128px');
+  await expect(generatedCards.first()).not.toHaveCSS('border-top-style', 'none');
+
+  await page.getByRole('button', { name: 'Shuffle cards' }).click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('What does a form submit target script receive?', { timeout: 1000 });
 });
 
 test('editor-only generate button applies pronunciation and stays out of viewer', async ({ page }) => {

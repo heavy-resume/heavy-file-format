@@ -7,7 +7,7 @@ import type {
   HvyPluginInstance,
 } from './types';
 import { FORM_PLUGIN_ID } from './registry';
-import type { ScriptingRunResult } from './scripting/wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingRunResult, type ScriptingLibraryName } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { requestProxyCompletion } from '../chat/chat';
 import { sanitizeInlineCss } from '../css-sanitizer';
@@ -74,6 +74,8 @@ export interface FormSpec {
   submitOutputCharLimit: number;
   submitLabel: string;
   showSubmit: boolean;
+  scriptLibraries: ScriptingLibraryName[];
+  scriptStepBudget: number;
 }
 
 export interface ParsedFormSpec {
@@ -100,6 +102,8 @@ function defaultFormSpec(): FormSpec {
     submitOutputCharLimit: 4000,
     submitLabel: 'Submit',
     showSubmit: true,
+    scriptLibraries: [],
+    scriptStepBudget: 100_000,
   };
 }
 
@@ -242,6 +246,22 @@ function normalizeSubmitAction(value: unknown): FormSubmitAction {
   return value === 'ai-generate' ? 'ai-generate' : 'script';
 }
 
+function normalizeScriptLibraries(value: unknown): ScriptingLibraryName[] {
+  const raw = Array.isArray(value) ? value : [];
+  const allowed = new Set(SCRIPTING_LIBRARY_OPTIONS);
+  const libraries: ScriptingLibraryName[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const normalized = item.trim();
+    if (allowed.has(normalized as ScriptingLibraryName) && !libraries.includes(normalized as ScriptingLibraryName)) {
+      libraries.push(normalized as ScriptingLibraryName);
+    }
+  }
+  return libraries;
+}
+
 function normalizePositiveInt(value: unknown, fallback: number): number {
   const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : fallback;
@@ -254,7 +274,7 @@ function coerceReturnedText(value: unknown): string {
   return String(value).trim();
 }
 
-function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit'> {
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
   return {
     initialScript: typeof config?.initialScript === 'string' ? config.initialScript.trim() : '',
     submitAction: normalizeSubmitAction(config?.submitAction),
@@ -265,6 +285,8 @@ function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 
     submitOutputCharLimit: normalizePositiveInt(config?.submitOutputCharLimit, 4000),
     submitLabel: typeof config?.submitLabel === 'string' && config.submitLabel.trim().length > 0 ? config.submitLabel : 'Submit',
     showSubmit: config?.showSubmit !== false,
+    scriptLibraries: normalizeScriptLibraries(config?.scriptLibraries),
+    scriptStepBudget: normalizePositiveInt(config?.scriptStepBudget ?? config?.maxLines, 100_000),
   };
 }
 
@@ -280,6 +302,8 @@ export function serializeFormConfig(spec: FormSpec): JsonObject {
     submitOutputCharLimit: spec.submitOutputCharLimit,
     submitLabel: spec.submitLabel,
     showSubmit: spec.showSubmit,
+    scriptLibraries: spec.scriptLibraries,
+    scriptStepBudget: spec.scriptStepBudget,
   };
 }
 
@@ -401,7 +425,10 @@ function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
 
 function resultText(result: ScriptingRunResult): string {
   if (result.ok) {
-    return `Executed ${result.linesExecuted} line${result.linesExecuted === 1 ? '' : 's'}, ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`;
+    const steps = `${result.stepsExecuted.toLocaleString()}/${result.stepBudget.toLocaleString()} steps`;
+    return result.toolCalls > 0
+      ? `Script ran ${steps} with ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`
+      : `Script ran ${steps}.`;
   }
   return `Script error: ${result.error ?? 'unknown error'}`;
 }
@@ -464,6 +491,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return {
         ok: false,
         error: name.length === 0 ? 'Script name is empty.' : `Script "${name}" is not defined.`,
+        stepsExecuted: 0,
+        stepBudget: 100_000,
         linesExecuted: 0,
         toolCalls: 0,
         logs: [],
@@ -475,8 +504,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       source,
       componentId: `${ctx.block.schema.id || ctx.block.id}:${name}:${reason}`,
       pluginVersion: String(ctx.block.schema.pluginConfig.version ?? FORM_PLUGIN_VERSION),
+      maxLines: spec.scriptStepBudget,
       form: buildFormApi(),
       injectedGlobals,
+      libraries: spec.scriptLibraries,
     });
   };
 
@@ -692,8 +723,18 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       <label><span>Submit Prompt</span><textarea rows="4" data-form-top-text="submitPrompt">${escapeHtml(spec.submitPrompt)}</textarea></label>
       <label><span>Input Limit</span><input type="number" min="1" data-form-top-number="submitInputCharLimit" value="${spec.submitInputCharLimit}"></label>
       <label><span>Output Limit</span><input type="number" min="1" data-form-top-number="submitOutputCharLimit" value="${spec.submitOutputCharLimit}"></label>
+      <label><span>Script Step Budget</span><input type="number" min="1" data-form-top-number="scriptStepBudget" value="${spec.scriptStepBudget}"></label>
       <label><span>Submit Label</span><input data-form-top-text="submitLabel" value="${escapeAttr(spec.submitLabel)}"></label>
       <label class="hvy-form-checkbox-label"><span>Show Submit</span><input type="checkbox" data-form-top-checkbox="showSubmit" ${spec.showSubmit ? 'checked' : ''}></label>
+      <fieldset class="hvy-form-library-fieldset">
+        <legend>Script Libraries</legend>
+        ${SCRIPTING_LIBRARY_OPTIONS.map((library) => `
+          <label class="hvy-form-checkbox-label">
+            <span>${escapeHtml(library)}</span>
+            <input type="checkbox" data-form-library="${escapeAttr(library)}" ${spec.scriptLibraries.includes(library) ? 'checked' : ''}>
+          </label>
+        `).join('')}
+      </fieldset>
     `;
     scriptSection.appendChild(scriptControls);
     for (const [name, source] of Object.entries(spec.scripts)) {
@@ -933,14 +974,26 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       commitBehavior(spec);
       return;
     }
-    if (target.dataset.formTopNumber === 'submitInputCharLimit' || target.dataset.formTopNumber === 'submitOutputCharLimit') {
-      const key = target.dataset.formTopNumber as 'submitInputCharLimit' | 'submitOutputCharLimit';
+    if (target.dataset.formTopNumber === 'submitInputCharLimit' || target.dataset.formTopNumber === 'submitOutputCharLimit' || target.dataset.formTopNumber === 'scriptStepBudget') {
+      const key = target.dataset.formTopNumber as 'submitInputCharLimit' | 'submitOutputCharLimit' | 'scriptStepBudget';
       spec[key] = normalizePositiveInt(target.value, spec[key]);
       commitBehavior(spec);
       return;
     }
     if (target.dataset.formTopCheckbox === 'showSubmit' && target instanceof HTMLInputElement) {
       spec.showSubmit = target.checked;
+      commitBehavior(spec);
+      return;
+    }
+    if (target.dataset.formLibrary && target instanceof HTMLInputElement) {
+      const library = target.dataset.formLibrary as ScriptingLibraryName;
+      const nextLibraries = new Set(spec.scriptLibraries);
+      if (target.checked) {
+        nextLibraries.add(library);
+      } else {
+        nextLibraries.delete(library);
+      }
+      spec.scriptLibraries = SCRIPTING_LIBRARY_OPTIONS.filter((name) => nextLibraries.has(name));
       commitBehavior(spec);
       return;
     }
@@ -1122,10 +1175,12 @@ export const formPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
-    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, and `submitOutputCharLimit`.',
+    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output.',
+    '`scriptLibraries` enables checked sandbox libraries such as `random` for every form script.',
+    '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
     'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',

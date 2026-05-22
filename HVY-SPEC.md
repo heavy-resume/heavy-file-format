@@ -1178,6 +1178,12 @@ Plugin-specific rules:
   `pluginConfig.initialScript`, `pluginConfig.submitSourceScript`,
   `pluginConfig.submitScript`, and field trigger values reference keys in this
   map.
+- `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
+  make available to every form script before execution. Supported values are
+  client-defined; this reference client supports `"random"`. Import statements
+  for unchecked libraries MUST remain blocked by the scripting sandbox.
+- `pluginConfig.scriptStepBudget` MAY set a positive integer step budget for
+  each form script run. Clients SHOULD default to 100000 steps.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.
   Clients SHOULD debounce `input` trigger execution.
 - Viewer clients MUST render an HTML `<form>`, prevent native navigation on

@@ -22,6 +22,9 @@ import type { VisualBlock } from '../../editor/types';
 
 export interface ScriptingRuntimeStats {
   toolCalls: number;
+  stepsExecuted: number;
+  stepBudget: number;
+  /** @deprecated Use stepsExecuted. */
   linesExecuted: number;
   logs: string[];
 }
@@ -127,8 +130,7 @@ function createUnavailableDbApi(): ScriptingDbApi {
 }
 
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
-  const stats: ScriptingRuntimeStats = { toolCalls: 0, linesExecuted: 0, logs: [] };
-  let lineBudget = options.maxLines ?? 100_000;
+  const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
   let mutated = false;
 
   const onMutation = () => {
@@ -286,15 +288,16 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     doc,
     stats,
     step: () => {
-      stats.linesExecuted += 1;
-      if (stats.linesExecuted > lineBudget) {
-        return `Scripting plugin exceeded its line budget (${lineBudget}). Add fewer steps or raise the budget.`;
+      stats.stepsExecuted += 1;
+      stats.linesExecuted = stats.stepsExecuted;
+      if (stats.stepsExecuted > stats.stepBudget) {
+        return `Scripting plugin exceeded its step budget (${stats.stepBudget}). Add fewer steps or raise the budget.`;
       }
       return null;
     },
     markMutated: onMutation,
     setLineBudget: (maxLines: number) => {
-      lineBudget = Math.max(1, Math.floor(maxLines));
+      stats.stepBudget = Math.max(1, Math.floor(maxLines));
     },
   };
 }

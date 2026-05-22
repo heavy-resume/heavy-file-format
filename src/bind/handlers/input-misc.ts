@@ -1,6 +1,7 @@
 import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
+import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
 import { submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
@@ -405,6 +406,56 @@ export function bindInputMisc(app: HTMLElement): void {
       block.schema.pluginConfig = {
         ...block.schema.pluginConfig,
         version: target.value.trim() || SCRIPTING_PLUGIN_VERSION,
+      };
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-plugin-scripting-max-steps' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      if (block.schema.component !== 'plugin' || block.schema.plugin !== SCRIPTING_PLUGIN_ID) {
+        return;
+      }
+      const parsed = Number.parseInt(target.value, 10);
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        maxSteps: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 100_000,
+      };
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-plugin-scripting-library' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const block = context.block;
+      if (block.schema.component !== 'plugin' || block.schema.plugin !== SCRIPTING_PLUGIN_ID) {
+        return;
+      }
+      const library = target.dataset.library ?? '';
+      if (!(SCRIPTING_LIBRARY_OPTIONS as readonly string[]).includes(library)) {
+        return;
+      }
+      const current = Array.isArray(block.schema.pluginConfig.libraries)
+        ? block.schema.pluginConfig.libraries.filter((item): item is string => typeof item === 'string')
+        : [];
+      const next = new Set(current);
+      if (target.checked) {
+        next.add(library);
+      } else {
+        next.delete(library);
+      }
+      block.schema.pluginConfig = {
+        ...block.schema.pluginConfig,
+        libraries: SCRIPTING_LIBRARY_OPTIONS.filter((name) => next.has(name)),
       };
       syncReusableTemplateForBlock(sectionKey, block.id);
       getRefreshReaderPanels()();

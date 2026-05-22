@@ -10,7 +10,7 @@ import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
 import { deserializeDocument, serializeDocument } from '../../serialization';
 import { openScriptingHelpModal } from './help-modal';
-import { runUserScript } from './wrapper';
+import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
@@ -108,7 +108,7 @@ function buildReaderDom(): { root: HTMLDivElement; handles: ReaderHandles } {
 }
 
 interface ScriptingState {
-  lastResult: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number; logs?: string[] } | null;
+  lastResult: { ok: boolean; error?: string; errorDetail?: string; stepsExecuted: number; stepBudget: number; linesExecuted?: number; toolCalls: number; logs?: string[] } | null;
   sourceSignature: string;
 }
 
@@ -122,7 +122,7 @@ function getScriptingResultCacheKey(sectionKey: string, blockId: string): string
 export function storeScriptingResult(
   sectionKey: string,
   blockId: string,
-  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number; logs?: string[] },
+  result: { ok: boolean; error?: string; errorDetail?: string; stepsExecuted: number; stepBudget: number; linesExecuted?: number; toolCalls: number; logs?: string[] },
   sourceSignature = ''
 ): void {
   scriptingResultCache.set(getScriptingResultCacheKey(sectionKey, blockId), { lastResult: result, sourceSignature });
@@ -134,7 +134,7 @@ export function clearScriptingResults(): void {
 
 export function setScriptingResult(
   element: HTMLElement,
-  result: { ok: boolean; error?: string; errorDetail?: string; linesExecuted: number; toolCalls: number; logs?: string[] },
+  result: { ok: boolean; error?: string; errorDetail?: string; stepsExecuted: number; stepBudget: number; linesExecuted?: number; toolCalls: number; logs?: string[] },
   sourceSignature = element.dataset.scriptingSourceSignature ?? ''
 ): void {
   scriptingState.set(element, { lastResult: result, sourceSignature });
@@ -148,7 +148,8 @@ export function setScriptingResult(
   if (status) {
     if (result.ok) {
       const logSuffix = logs.length > 0 ? `, ${logs.length} log${logs.length === 1 ? '' : 's'}` : '';
-      status.textContent = `Executed ${result.linesExecuted} line${result.linesExecuted === 1 ? '' : 's'}, ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}${logSuffix}.`;
+      const toolSuffix = result.toolCalls > 0 ? ` with ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}` : '';
+      status.textContent = `Script ran ${result.stepsExecuted.toLocaleString()}/${result.stepBudget.toLocaleString()} steps${toolSuffix}${logSuffix}.`;
       status.classList.remove('hvy-scripting-status-error');
       status.classList.add('hvy-scripting-status-ok');
     } else {
@@ -240,11 +241,18 @@ interface ScriptingTarget {
   pluginVersion: string;
   maxLines?: number;
   componentId: string;
+  libraries: ScriptingLibraryName[];
 }
 
 let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
 let lastScriptedSignature = '';
 let lastScriptedDocumentSnapshot = '';
+
+function getScriptingPluginLibraries(pluginConfig: JsonObject | null | undefined): ScriptingLibraryName[] {
+  const raw = Array.isArray(pluginConfig?.libraries) ? pluginConfig.libraries : [];
+  const allowed = new Set(SCRIPTING_LIBRARY_OPTIONS);
+  return raw.filter((item): item is ScriptingLibraryName => typeof item === 'string' && allowed.has(item as ScriptingLibraryName));
+}
 
 function visitBlocksInSection(
   section: { key: string; blocks: Array<{ id: string; text: string; schema: { id?: string; component: string; plugin: string; pluginConfig?: JsonObject } }>; children: unknown[] },
@@ -261,6 +269,7 @@ function visitBlocksInSection(
         componentId: typeof block.schema.id === 'string' ? block.schema.id : '',
         pluginVersion: getScriptingPluginVersion(block.schema.pluginConfig),
         maxLines: getScriptingPluginMaxLines(block.schema.pluginConfig),
+        libraries: getScriptingPluginLibraries(block.schema.pluginConfig),
       });
     }
   });
@@ -291,7 +300,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   }
   const runnableTargets = getRunnableScriptingTargetsForView(targets, ctx.view);
   const scriptSignature = targets
-    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.source}`)
+    .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.libraries.join(',')}\u0000${target.source}`)
     .join('\u0001');
   const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}`;
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
@@ -314,6 +323,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
       changeReason: ctx.changeReason,
+      libraries: target.libraries,
     });
     console.debug('[hvy:scripting] script run', {
       changeReason: ctx.changeReason,
@@ -322,7 +332,8 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       componentId: target.componentId,
       pluginVersion: target.pluginVersion,
       ok: result.ok,
-      linesExecuted: result.linesExecuted,
+      stepsExecuted: result.stepsExecuted,
+      stepBudget: result.stepBudget,
       toolCalls: result.toolCalls,
       error: result.error,
     });
@@ -354,6 +365,8 @@ export const scriptingPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
+    'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random` before the script runs.',
+    'Use `pluginConfig.maxSteps` to configure the runtime step budget.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),

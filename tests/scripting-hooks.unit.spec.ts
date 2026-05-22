@@ -11,6 +11,8 @@ vi.mock('../src/plugins/scripting/wrapper', async (importOriginal) => {
     ...original,
     runUserScript: vi.fn(async () => ({
       ok: true,
+      stepsExecuted: 1,
+      stepBudget: 100_000,
       linesExecuted: 1,
       toolCalls: 0,
     })),

@@ -5,6 +5,9 @@ import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { hasDocumentDbTables } from '../db-table-model';
 
+export const SCRIPTING_LIBRARY_OPTIONS = ['random'] as const;
+export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
+
 // Counter for unique runtime ids — each script run gets its own slot on the
 // shared __HVY_SCRIPTING__ global so concurrent runs don't collide.
 let runtimeCounter = 0;
@@ -231,6 +234,20 @@ function isImportStatementStart(line: string): boolean {
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
 }
 
+function getAllowedImportLibrary(line: string, allowedLibraries: readonly string[]): string | null {
+  const allowed = new Set(allowedLibraries);
+  const trimmed = line.trimStart();
+  const importMatch = trimmed.match(/^import\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*$/);
+  if (importMatch) {
+    return allowed.has(importMatch[1] ?? '') ? importMatch[1] ?? null : null;
+  }
+  const fromMatch = trimmed.match(/^from\s+([A-Za-z_][A-Za-z0-9_]*)\s+import\b/);
+  if (fromMatch) {
+    return allowed.has(fromMatch[1] ?? '') ? fromMatch[1] ?? null : null;
+  }
+  return null;
+}
+
 const STRIPPED_IMPORT_MESSAGE = 'Import statements are not allowed in HVY scripts.';
 
 export function comparePluginVersions(left: string, right: string): number {
@@ -259,7 +276,7 @@ export function getScriptingTraceLabel(componentId?: string): string {
   return trimmed.length > 0 ? trimmed.replace(/[<>]/g, '') : 'hvy-script';
 }
 
-export function stripPythonImports(source: string): string {
+export function stripPythonImports(source: string, allowedLibraries: readonly string[] = []): string {
   const lines = source.split('\n');
   const stripped: string[] = [];
 
@@ -273,8 +290,13 @@ export function stripPythonImports(source: string): string {
     const indentation = line.match(/^\s*/)?.[0] ?? '';
 
     if (!statementOpen && !analysis.isBlankOrComment && isImportStatementStart(line)) {
-      stripped.push(`${indentation}raise RuntimeError(${JSON.stringify(STRIPPED_IMPORT_MESSAGE)})`);
-      strippingImport = true;
+      if (getAllowedImportLibrary(line, allowedLibraries)) {
+        stripped.push('');
+        strippingImport = false;
+      } else {
+        stripped.push(`${indentation}raise RuntimeError(${JSON.stringify(STRIPPED_IMPORT_MESSAGE)})`);
+        strippingImport = true;
+      }
     } else if (strippingImport) {
       stripped.push('');
     } else {
@@ -347,12 +369,14 @@ export function cleanScriptingErrorDetail(rawError: string): string {
 // source out of the shared JS global, prefers sys.settrace() for line
 // counting, and falls back to a JS-side source rewrite if tracing is
 // unavailable in the current Brython build.
-export function buildPythonProgram(runtimeId: string, componentId?: string, injectedGlobals: Record<string, unknown> = {}): string {
+export function buildPythonProgram(runtimeId: string, componentId?: string, injectedGlobals: Record<string, unknown> = {}, libraries: readonly string[] = []): string {
   const traceLabel = getScriptingTraceLabel(componentId);
+  const allowedLibraries = libraries.filter((name): name is ScriptingLibraryName => (SCRIPTING_LIBRARY_OPTIONS as readonly string[]).includes(name));
   const injectedAssignments = Object.entries(injectedGlobals)
     .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
     .map(([name, value]) => `    __hvy_user_globals__[${JSON.stringify(name)}] = ${toPythonLiteral(value)}`)
     .join('\n');
+  const libraryList = `[${allowedLibraries.map((name) => JSON.stringify(name)).join(', ')}]`;
   return `
 from browser import window as __hvy_window__
 
@@ -361,7 +385,9 @@ __hvy_runtime__ = __hvy_globals__.runtimes['${runtimeId}']
 __hvy_source__ = __hvy_globals__.sources['${runtimeId}']
 __hvy_instrumented_source__ = __hvy_globals__.instrumentedSources['${runtimeId}']
 __hvy_trace_enabled__ = False
+__hvy_builtin_import__ = __import__
 __hvy_builtin_eval__ = eval
+__hvy_allowed_libraries__ = ${libraryList}
 __hvy_forbidden_global_names__ = (
     'window',
     'document',
@@ -414,6 +440,29 @@ def __hvy_blocked_import__(*args, **kwargs):
     raise RuntimeError("Import statements are not allowed in HVY scripts.")
 
 
+def __hvy_script_import__(name, globals=None, locals=None, fromlist=(), level=0):
+    root_name = str(name).split('.')[0]
+    if level != 0 or root_name not in __hvy_allowed_libraries__:
+        raise RuntimeError("Import statements are not allowed in HVY scripts.")
+    if root_name == "random":
+        return __HvyRandomModule__()
+    return __hvy_builtin_import__(name, globals, locals, fromlist, level)
+
+
+class __HvyRandomModule__:
+    def random(self):
+        return __hvy_window__.Math.random()
+
+    def shuffle(self, items):
+        index = len(items) - 1
+        while index > 0:
+            swap_index = int(__hvy_window__.Math.floor(__hvy_window__.Math.random() * (index + 1)))
+            temp = items[index]
+            items[index] = items[swap_index]
+            items[swap_index] = temp
+            index -= 1
+
+
 def __hvy_print__(*values, sep=' ', end='\\n', file=None, flush=False):
     if file is not None:
         raise RuntimeError("print(file=...) is not supported in HVY scripts.")
@@ -451,6 +500,7 @@ __hvy_safe_builtins__ = {
     'RuntimeError': RuntimeError,
     'TypeError': TypeError,
     'ValueError': ValueError,
+    '__import__': __hvy_script_import__,
 }
 
 
@@ -551,13 +601,15 @@ try:
     __hvy_code__ = compile(__hvy_compilable_source__, '<${traceLabel}>', 'exec')
     __hvy_user_globals__ = {
         '__hvy_step__': __hvy_user_step__,
-        '__import__': __hvy_blocked_import__,
+        '__import__': __hvy_script_import__,
         '__builtins__': __hvy_safe_builtins__,
         'doc': __HvyDocProxy__(__hvy_runtime__.doc),
         'eval': __hvy_safe_eval__,
         'globals': __hvy_safe_globals__,
         '__name__': '__hvy_script__',
     }
+    for __hvy_library__ in __hvy_allowed_libraries__:
+        __hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)
 ${injectedAssignments}
     __hvy_sanitize_user_globals__()
     exec(__hvy_code__, __hvy_user_globals__)
@@ -595,6 +647,9 @@ export interface ScriptingRunResult {
   ok: boolean;
   error?: string;
   errorDetail?: string;
+  stepsExecuted: number;
+  stepBudget: number;
+  /** @deprecated Use stepsExecuted. */
   linesExecuted: number;
   toolCalls: number;
   logs?: string[];
@@ -611,11 +666,12 @@ export interface RunUserScriptOptions {
   changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
   injectedGlobals?: Record<string, unknown>;
+  libraries?: readonly string[];
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
   if (options.source.trim().length === 0) {
-    return { ok: true, linesExecuted: 0, toolCalls: 0 };
+    return { ok: true, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, toolCalls: 0 };
   }
 
   const requestedVersion = getScriptingPluginVersion(options.pluginVersion ? { version: options.pluginVersion } : undefined);
@@ -625,6 +681,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       ok: false,
       error,
       errorDetail: error,
+      stepsExecuted: 0,
+      stepBudget: options.maxLines ?? 100_000,
       linesExecuted: 0,
       toolCalls: 0,
     };
@@ -637,6 +695,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to load Brython.',
       errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to load Brython.',
+      stepsExecuted: 0,
+      stepBudget: options.maxLines ?? 100_000,
       linesExecuted: 0,
       toolCalls: 0,
     };
@@ -657,6 +717,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         ok: false,
         error: error instanceof Error ? error.message : 'Failed to initialize document database.',
         errorDetail: error instanceof Error ? error.stack ?? error.message : 'Failed to initialize document database.',
+        stepsExecuted: 0,
+        stepBudget: options.maxLines ?? 100_000,
         linesExecuted: 0,
         toolCalls: 0,
       };
@@ -672,7 +734,8 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
-  const sanitizedSource = stripPythonImports(options.source);
+  const libraries = (options.libraries ?? []).filter((name): name is ScriptingLibraryName => (SCRIPTING_LIBRARY_OPTIONS as readonly string[]).includes(name));
+  const sanitizedSource = stripPythonImports(options.source, libraries);
   scripting.runtimes[runtimeId] = runtime;
   scripting.sources[runtimeId] = wrapPythonSourceInFunction(sanitizedSource);
   scripting.instrumentedSources[runtimeId] = wrapPythonSourceInFunction(instrumentPythonSource(sanitizedSource));
@@ -684,7 +747,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   // in addition to the manual run_script call below, causing a double-execution.
   const scriptElement = document.createElement('script');
   scriptElement.id = `hvy-script-${runtimeId}`;
-  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {});
+  scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {}, libraries);
 
   return new Promise((resolve) => {
     scripting.callbacks[runtimeId] = () => {
@@ -694,12 +757,16 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             ok: false,
             error: summarizeScriptingError(error),
             errorDetail: cleanScriptingErrorDetail(error),
+            stepsExecuted: runtime.stats.stepsExecuted,
+            stepBudget: runtime.stats.stepBudget,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
             logs: [...runtime.stats.logs],
           }
         : {
             ok: true,
+            stepsExecuted: runtime.stats.stepsExecuted,
+            stepBudget: runtime.stats.stepBudget,
             linesExecuted: runtime.stats.linesExecuted,
             toolCalls: runtime.stats.toolCalls,
             returnValue: scripting.results[runtimeId],

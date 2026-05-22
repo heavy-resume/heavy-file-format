@@ -32,7 +32,8 @@ import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
-import { getScriptingPluginVersion } from '../plugins/scripting/version';
+import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
+import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
@@ -1413,8 +1414,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
+    const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+    const scriptingLibraries = Array.isArray(block.schema.pluginConfig.libraries) ? block.schema.pluginConfig.libraries : [];
     const scriptingVersionField =
-      component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID
+      isScriptingPlugin
         ? `<label>
           <span>Scripting Version</span>
           <input
@@ -1424,7 +1427,34 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             placeholder="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
             value="${deps.escapeAttr(getScriptingPluginVersion(block.schema.pluginConfig))}"
           />
-        </label>`
+        </label>
+        <label>
+          <span>Script Step Budget</span>
+          <input
+            type="number"
+            min="1"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-plugin-scripting-max-steps"
+            value="${deps.escapeAttr(String(getScriptingPluginMaxSteps(block.schema.pluginConfig) ?? 100_000))}"
+          />
+        </label>
+        <fieldset class="schema-meta-fieldset">
+          <legend>Script Libraries</legend>
+          ${SCRIPTING_LIBRARY_OPTIONS.map((library) => `
+            <label class="schema-meta-checkbox">
+              <span>${deps.escapeHtml(library)}</span>
+              <input
+                type="checkbox"
+                data-section-key="${deps.escapeAttr(sectionKey)}"
+                data-block-id="${deps.escapeAttr(block.id)}"
+                data-field="block-plugin-scripting-library"
+                data-library="${deps.escapeAttr(library)}"
+                ${scriptingLibraries.includes(library) ? 'checked' : ''}
+              />
+            </label>
+          `).join('')}
+        </fieldset>`
         : '';
     return `
       <div class="schema-meta-stack">

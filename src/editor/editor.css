@@ -1729,6 +1729,35 @@
   gap: 0.65rem;
 }
 
+.schema-meta-fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  background: var(--hvy-surface-alt);
+}
+
+.schema-meta-fieldset legend {
+  padding: 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--hvy-muted);
+}
+
+.schema-meta-checkbox {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.schema-meta-checkbox input {
+  width: auto;
+}
+
 .schema-grid {
   align-items: stretch;
 }

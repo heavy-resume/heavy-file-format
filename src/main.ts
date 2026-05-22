@@ -37,6 +37,8 @@ import { runButtonVisibilityScripts } from './editor/components/button/button-ac
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
+import { chatSemanticFilterProvider } from './search/semantic-provider';
+import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
@@ -50,6 +52,9 @@ if (!appRoot) {
 const app = appRoot;
 app.classList.add('hvy-document');
 setThemeRoot(app);
+setReferenceAppConfig({
+  semanticFilterProvider: window.HVY_REFERENCE_CONFIG?.semanticFilterProvider ?? chatSemanticFilterProvider,
+});
 const READER_HIGHLIGHT_GLOW_MS = 6000;
 const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: AppState['selectedExample'] }> = [
   { id: 'guideBtn', label: 'Guide', selectedExample: 'guide' },

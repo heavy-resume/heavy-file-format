@@ -1,7 +1,7 @@
 import './search.css';
 import type { ReaderRenderer } from '../reader/render';
 import type { VisualDocument } from '../types';
-import type { HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './types';
+import type { HvySearchResult, SearchCategory, SearchResultCategory, SearchState } from './types';
 import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
@@ -136,7 +136,7 @@ function getSearchNavigationResults(search: SearchState): HvySearchResult[] {
 
 export function focusSearchInput(app: ParentNode): void {
   window.setTimeout(() => {
-    const input = app.querySelector<HTMLInputElement>('[data-field="search-query"]');
+    const input = app.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-field="search-query"]');
     if (!input) {
       return;
     }
@@ -173,19 +173,30 @@ function renderCategoryToggle(category: SearchCategory, search: SearchState, dep
   >${deps.escapeHtml(CATEGORY_LABELS[category])}</button>`;
 }
 
-function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options: { icon: string; label: string; placeholder: string }): string {
+function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options: { icon: string; label: string; placeholder: string; multiline?: boolean }): string {
   return `<div class="search-head">
-    <div class="search-input-shell">
+    <div class="search-input-shell${options.multiline ? ' is-multiline' : ''}">
       <button type="submit" class="search-input-icon-button" aria-label="${deps.escapeAttr(options.label)}">${options.icon}</button>
-      <input
-        class="search-input"
-        data-field="search-query"
-        value="${deps.escapeAttr(search.queryDraft)}"
-        placeholder="${deps.escapeAttr(options.placeholder)}"
-        autocomplete="off"
-        spellcheck="false"
-        autofocus
-      />
+      ${options.multiline
+        ? `<textarea
+            class="search-input search-prompt-textarea"
+            data-field="search-query"
+            placeholder="${deps.escapeAttr(options.placeholder)}"
+            autocomplete="off"
+            spellcheck="true"
+            rows="4"
+            autofocus
+          >${deps.escapeHtml(search.queryDraft)}</textarea>`
+        : `<input
+            class="search-input"
+            data-field="search-query"
+            value="${deps.escapeAttr(search.queryDraft)}"
+            placeholder="${deps.escapeAttr(options.placeholder)}"
+            autocomplete="off"
+            spellcheck="false"
+            autofocus
+          />`
+      }
     </div>
   </div>`;
 }
@@ -202,26 +213,18 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     ? search.filterQueryMode === 'semantic' ? 'No semantic matches. Try a more specific prompt.' : 'No matches. Try another term.'
     : '';
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
-    <div class="search-filter-box">
-      <div class="search-filter-box-head">
-        ${funnelIcon()}
-        <span>Filter Type</span>
-      </div>
-      <div class="search-filter-mode-group" role="group" aria-label="Filter type">
-        ${renderFilterQueryModeButton('keyword', 'Keyword', search, deps)}
-        ${renderFilterQueryModeButton('semantic', 'Semantic', search, deps)}
-      </div>
-    </div>
     ${renderSearchInput(search, deps, {
       icon: funnelIcon(),
       label: 'Filter document',
       placeholder: search.filterQueryMode === 'semantic' ? 'Describe what should stay visible' : 'Filter document',
+      multiline: search.filterQueryMode === 'semantic',
     })}
     ${status ? `<div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}
         <span>Filter Technique</span>
+        ${renderSemanticToggle(search, deps)}
       </div>
       <div class="search-filter-mode-group" role="group" aria-label="Filter behavior">
         ${renderFilterModeButton('deprioritize', 'Shade', search, deps)}
@@ -237,15 +240,15 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   </section>`;
 }
 
-function renderFilterQueryModeButton(mode: SearchFilterQueryMode, label: string, search: SearchState, deps: SearchRenderDeps): string {
-  const active = search.filterQueryMode === mode;
+function renderSemanticToggle(search: SearchState, deps: SearchRenderDeps): string {
+  const active = search.filterQueryMode === 'semantic';
   return `<button
     type="button"
-    class="search-filter-mode${active ? ' is-active' : ''}"
+    class="search-semantic-toggle${active ? ' is-active' : ''}"
     data-action="set-search-filter-query-mode"
-    data-search-filter-query-mode="${deps.escapeAttr(mode)}"
+    data-search-filter-query-mode="semantic"
     aria-pressed="${active ? 'true' : 'false'}"
-  >${deps.escapeHtml(label)}</button>`;
+  >${deps.escapeHtml('Semantic')}</button>`;
 }
 
 function renderFilterModeButton(mode: SearchState['filterMode'], label: string, search: SearchState, deps: SearchRenderDeps): string {

@@ -56,8 +56,12 @@ const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
 
 const setSearchFilterQueryModeAction: AppActionHandler = ({ actionButton }) => {
   const mode = actionButton.dataset.searchFilterQueryMode as SearchFilterQueryMode | undefined;
-  if (mode === 'keyword' || mode === 'semantic') {
-    setSearchFilterQueryMode(mode);
+  if (mode === 'semantic') {
+    setSearchFilterQueryMode(state.search.filterQueryMode === 'semantic' ? 'keyword' : 'semantic');
+    return;
+  }
+  if (mode === 'keyword') {
+    setSearchFilterQueryMode('keyword');
   }
 };
 

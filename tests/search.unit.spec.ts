@@ -6,6 +6,7 @@ import { createSearchFilterContext, orderSearchFilteredSections } from '../src/s
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
 import { buildSemanticFilterRequest } from '../src/search/semantic-candidates';
+import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { applySearchFilter } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
@@ -783,6 +784,19 @@ hvy_version: 0.1
 
   expect(state.search.filterEnabled).toBe(false);
   expect(state.search.error).toBe('Semantic filtering is not configured.');
+});
+
+test('semantic provider parser keeps only valid candidate matches', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    '{"matches":[{"candidateId":"section:skills","reason":"Relevant","score":1.4},{"candidateId":"invented","reason":"Nope"}]}',
+    new Set(['section:skills']),
+  );
+
+  expect(expectedResult).toEqual([{
+    candidateId: 'section:skills',
+    reason: 'Relevant',
+    score: 1,
+  }]);
 });
 
 test('search highlighting escapes plain text before marking matches', () => {

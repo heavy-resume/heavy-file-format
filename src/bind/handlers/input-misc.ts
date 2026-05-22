@@ -12,10 +12,15 @@ const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   await actions.runButtonVisibilityScripts(root);
 };
 
+function isSearchQueryControl(target: HTMLElement): target is HTMLInputElement | HTMLTextAreaElement {
+  return target.dataset.field === 'search-query'
+    && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
+}
+
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('focusout', (event) => {
     const target = event.target as HTMLElement;
-    if (target.dataset.field !== 'search-query' || !(target instanceof HTMLInputElement)) {
+    if (!isSearchQueryControl(target)) {
       return;
     }
     window.setTimeout(() => {
@@ -35,7 +40,7 @@ export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
-    if (target.dataset.field === 'search-query' && target instanceof HTMLInputElement) {
+    if (isSearchQueryControl(target)) {
       state.search.queryDraft = target.value;
       state.search.resultsCollapsed = false;
       const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');

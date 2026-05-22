@@ -1,10 +1,15 @@
-import type { VisualBlock, VisualSection } from './editor/types';
+import type { GridItem, VisualBlock, VisualSection } from './editor/types';
 import type { VisualDocument } from './types';
 import { resolveBaseComponentFromMeta } from './component-defs';
 
 export interface LockedStructureValidationError {
   path: string;
   message: string;
+}
+
+interface LockedExpandablePart {
+  lock?: boolean;
+  children: VisualBlock[];
 }
 
 export function validateLockedSectionStructure(
@@ -78,8 +83,8 @@ function validateBlockLocks(
     validateLockedBlockChildren(expected, received, documentMeta, errors, path);
     return;
   }
-  validateBlockArrayLocks(expected.schema.containerBlocks, received.schema.containerBlocks, documentMeta, errors, `${path}/containerBlocks`);
-  validateBlockArrayLocks(expected.schema.componentListBlocks, received.schema.componentListBlocks, documentMeta, errors, `${path}/componentListBlocks`);
+  validateBlockArrayLocks(toLockedBlockArray(expected.schema.containerBlocks), toLockedBlockArray(received.schema.containerBlocks), documentMeta, errors, `${path}/containerBlocks`);
+  validateBlockArrayLocks(toLockedBlockArray(expected.schema.componentListBlocks), toLockedBlockArray(received.schema.componentListBlocks), documentMeta, errors, `${path}/componentListBlocks`);
   validateGridItemLocks(expected, received, documentMeta, errors, `${path}/gridItems`);
   validateExpandablePartLocks(expected, received, 'stub', documentMeta, errors, `${path}/expandableStubBlocks`);
   validateExpandablePartLocks(expected, received, 'content', documentMeta, errors, `${path}/expandableContentBlocks`);
@@ -92,8 +97,8 @@ function validateLockedBlockChildren(
   errors: LockedStructureValidationError[],
   path: string
 ): void {
-  validateBlockArrayShape(expected.schema.containerBlocks, received.schema.containerBlocks, documentMeta, errors, `${path}/containerBlocks`, 'Locked component container children');
-  validateBlockArrayShape(expected.schema.componentListBlocks, received.schema.componentListBlocks, documentMeta, errors, `${path}/componentListBlocks`, 'Locked component list children');
+  validateBlockArrayShape(toLockedBlockArray(expected.schema.containerBlocks), toLockedBlockArray(received.schema.containerBlocks), documentMeta, errors, `${path}/containerBlocks`, 'Locked component container children');
+  validateBlockArrayShape(toLockedBlockArray(expected.schema.componentListBlocks), toLockedBlockArray(received.schema.componentListBlocks), documentMeta, errors, `${path}/componentListBlocks`, 'Locked component list children');
   validateGridItemShape(expected, received, documentMeta, errors, `${path}/gridItems`);
   validateExpandablePartShape(expected, received, 'stub', documentMeta, errors, `${path}/expandableStubBlocks`);
   validateExpandablePartShape(expected, received, 'content', documentMeta, errors, `${path}/expandableContentBlocks`);
@@ -108,8 +113,8 @@ function validateExpandablePartLocks(
   errors: LockedStructureValidationError[],
   path: string
 ): void {
-  const expectedPart = part === 'stub' ? expected.schema.expandableStubBlocks : expected.schema.expandableContentBlocks;
-  const receivedPart = part === 'stub' ? received.schema.expandableStubBlocks : received.schema.expandableContentBlocks;
+  const expectedPart = toLockedExpandablePart(part === 'stub' ? expected.schema.expandableStubBlocks : expected.schema.expandableContentBlocks);
+  const receivedPart = toLockedExpandablePart(part === 'stub' ? received.schema.expandableStubBlocks : received.schema.expandableContentBlocks);
   if (expectedPart.lock === true) {
     validateBlockArrayShape(expectedPart.children, receivedPart.children, documentMeta, errors, `${path}/children`, `Locked expandable ${part} pane`);
   }
@@ -158,15 +163,17 @@ function validateGridItemShape(
   errors: LockedStructureValidationError[],
   path: string
 ): void {
-  if (expected.schema.gridItems.length !== received.schema.gridItems.length) {
+  const expectedGridItems = toLockedGridItems(expected.schema.gridItems);
+  const receivedGridItems = toLockedGridItems(received.schema.gridItems);
+  if (expectedGridItems.length !== receivedGridItems.length) {
     errors.push({
       path,
-      message: `Locked grid items at ${path} cannot add or remove cells; expected ${expected.schema.gridItems.length}, received ${received.schema.gridItems.length}.`,
+      message: `Locked grid items at ${path} cannot add or remove cells; expected ${expectedGridItems.length}, received ${receivedGridItems.length}.`,
     });
     return;
   }
-  expected.schema.gridItems.forEach((item, index) => {
-    validateBlockStructuralType(item.block, received.schema.gridItems[index]!.block, documentMeta, errors, `${path}/${index}/block`, 'Locked grid cell');
+  expectedGridItems.forEach((item, index) => {
+    validateBlockStructuralType(item.block, receivedGridItems[index]!.block, documentMeta, errors, `${path}/${index}/block`, 'Locked grid cell');
   });
 }
 
@@ -177,8 +184,8 @@ function validateGridItemLocks(
   errors: LockedStructureValidationError[],
   path: string
 ): void {
-  expected.schema.gridItems.forEach((item, index) => {
-    const receivedItem = received.schema.gridItems[index];
+  toLockedGridItems(expected.schema.gridItems).forEach((item, index) => {
+    const receivedItem = toLockedGridItems(received.schema.gridItems)[index];
     if (!receivedItem) {
       if (hasLockedBlockStructure(item.block)) {
         errors.push({
@@ -200,16 +207,18 @@ function validateExpandablePartShape(
   errors: LockedStructureValidationError[],
   path: string
 ): void {
-  const expectedPart = part === 'stub' ? expected.schema.expandableStubBlocks : expected.schema.expandableContentBlocks;
-  const receivedPart = part === 'stub' ? received.schema.expandableStubBlocks : received.schema.expandableContentBlocks;
+  const expectedPart = toLockedExpandablePart(part === 'stub' ? expected.schema.expandableStubBlocks : expected.schema.expandableContentBlocks);
+  const receivedPart = toLockedExpandablePart(part === 'stub' ? received.schema.expandableStubBlocks : received.schema.expandableContentBlocks);
   validateBlockArrayShape(expectedPart.children, receivedPart.children, documentMeta, errors, `${path}/children`, `Locked expandable ${part} children`);
 }
 
 function validateTableShape(expected: VisualBlock, received: VisualBlock, errors: LockedStructureValidationError[], path: string): void {
-  if (expected.schema.tableColumns.length !== received.schema.tableColumns.length) {
+  const expectedColumns = toLockedStringArray(expected.schema.tableColumns);
+  const receivedColumns = toLockedStringArray(received.schema.tableColumns);
+  if (expectedColumns.length !== receivedColumns.length) {
     errors.push({
       path,
-      message: `Locked table columns at ${path} cannot add or remove columns; expected ${expected.schema.tableColumns.length}, received ${received.schema.tableColumns.length}.`,
+      message: `Locked table columns at ${path} cannot add or remove columns; expected ${expectedColumns.length}, received ${receivedColumns.length}.`,
     });
   }
 }
@@ -233,7 +242,7 @@ function validateBlockStructuralType(
 }
 
 function getStructuralComponentType(block: VisualBlock, documentMeta: VisualDocument['meta']): string {
-  const component = block.schema.component.trim() || 'text';
+  const component = typeof block.schema.component === 'string' ? block.schema.component.trim() || 'text' : 'text';
   const base = resolveBaseComponentFromMeta(component, documentMeta);
   return component === base ? base : `${component}:${base}`;
 }
@@ -243,12 +252,43 @@ function hasLockedSectionStructure(section: VisualSection): boolean {
 }
 
 function hasLockedBlockStructure(block: VisualBlock): boolean {
+  const stub = toLockedExpandablePart(block.schema.expandableStubBlocks);
+  const content = toLockedExpandablePart(block.schema.expandableContentBlocks);
   return block.schema.lock === true
-    || block.schema.containerBlocks.some(hasLockedBlockStructure)
-    || block.schema.componentListBlocks.some(hasLockedBlockStructure)
-    || block.schema.gridItems.some((item) => hasLockedBlockStructure(item.block))
-    || block.schema.expandableStubBlocks.lock === true
-    || block.schema.expandableStubBlocks.children.some(hasLockedBlockStructure)
-    || block.schema.expandableContentBlocks.lock === true
-    || block.schema.expandableContentBlocks.children.some(hasLockedBlockStructure);
+    || toLockedBlockArray(block.schema.containerBlocks).some(hasLockedBlockStructure)
+    || toLockedBlockArray(block.schema.componentListBlocks).some(hasLockedBlockStructure)
+    || toLockedGridItems(block.schema.gridItems).some((item) => hasLockedBlockStructure(item.block))
+    || stub.lock === true
+    || stub.children.some(hasLockedBlockStructure)
+    || content.lock === true
+    || content.children.some(hasLockedBlockStructure);
+}
+
+function toLockedBlockArray(value: unknown): VisualBlock[] {
+  return Array.isArray(value) ? value.filter(isLockedBlock) : [];
+}
+
+function toLockedGridItems(value: unknown): GridItem[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is GridItem => !!item && typeof item === 'object' && isLockedBlock((item as GridItem).block))
+    : [];
+}
+
+function toLockedExpandablePart(value: unknown): LockedExpandablePart {
+  if (!value || typeof value !== 'object') {
+    return { children: [] };
+  }
+  const part = value as { lock?: unknown; children?: unknown };
+  return {
+    lock: part.lock === true,
+    children: toLockedBlockArray(part.children),
+  };
+}
+
+function toLockedStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function isLockedBlock(value: unknown): value is VisualBlock {
+  return !!value && typeof value === 'object' && !!(value as VisualBlock).schema;
 }

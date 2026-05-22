@@ -1,6 +1,6 @@
 import { requestProxyCompletion, type HostChatClient, type ProxyCompletionParams } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
-import type { VisualBlock, VisualSection } from './editor/types';
+import type { GridItem, VisualBlock, VisualSection } from './editor/types';
 import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionByKey, findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatMessage, ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
@@ -25,6 +25,7 @@ import { validateLockedSectionStructure } from './locked-structure';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
+type HvyImportOperation = 'plan' | 'execute';
 
 export interface HvyImportProgressEvent {
   phase: HvyImportProgressPhase;
@@ -321,6 +322,7 @@ export async function buildImportPlanForDocument(
     if (isAbortError(error)) {
       return withImportTrace({ status: 'aborted', message: 'Import planning was aborted.' }, options, traceRecorder);
     }
+    logImportFailure('plan', error, options, traceRecorder);
     return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import planning failed.' }, options, traceRecorder);
   }
 }
@@ -549,6 +551,7 @@ export async function importTextIntoDocument(
     if (isAbortError(error)) {
       return withImportTrace({ status: 'aborted', message: 'Import was aborted.' }, options, traceRecorder);
     }
+    logImportFailure('execute', error, options, traceRecorder, steps);
     return withImportTrace({ status: 'error', message: error instanceof Error ? error.message : 'Import failed.' }, options, traceRecorder);
   }
 }
@@ -2211,19 +2214,19 @@ function dedupeRedundantImportPromptSection(section: VisualSection, documentMeta
 
 function dedupeRedundantImportPromptBlocks(blocks: VisualBlock[], documentMeta: VisualDocument['meta']): void {
   for (const block of blocks) {
-    dedupeRedundantImportPromptBlocks(block.schema.containerBlocks, documentMeta);
-    dedupeRedundantImportPromptBlocks(block.schema.componentListBlocks, documentMeta);
-    for (const item of block.schema.gridItems) {
+    dedupeRedundantImportPromptBlocks(getImportPromptBlocks(block.schema.containerBlocks), documentMeta);
+    dedupeRedundantImportPromptBlocks(getImportPromptBlocks(block.schema.componentListBlocks), documentMeta);
+    for (const item of getImportPromptGridItems(block.schema.gridItems)) {
       dedupeRedundantImportPromptBlocks([item.block], documentMeta);
     }
-    dedupeRedundantImportPromptBlocks(block.schema.expandableStubBlocks.children, documentMeta);
-    dedupeRedundantImportPromptBlocks(block.schema.expandableContentBlocks.children, documentMeta);
+    dedupeRedundantImportPromptBlocks(getImportPromptBlocks(block.schema.expandableStubBlocks?.children), documentMeta);
+    dedupeRedundantImportPromptBlocks(getImportPromptBlocks(block.schema.expandableContentBlocks?.children), documentMeta);
 
     if (resolveBaseComponentFromMeta(block.schema.component, documentMeta) !== 'component-list') {
       continue;
     }
     const seen = new Set<string>();
-    block.schema.componentListBlocks = block.schema.componentListBlocks.filter((item) => {
+    block.schema.componentListBlocks = getImportPromptBlocks(block.schema.componentListBlocks).filter((item) => {
       const key = getImportPromptListItemDedupeKey(item, documentMeta);
       if (seen.has(key)) {
         return false;
@@ -2232,6 +2235,20 @@ function dedupeRedundantImportPromptBlocks(blocks: VisualBlock[], documentMeta: 
       return true;
     });
   }
+}
+
+function getImportPromptBlocks(value: unknown): VisualBlock[] {
+  return Array.isArray(value) ? value.filter(isImportPromptBlock) : [];
+}
+
+function getImportPromptGridItems(value: unknown): GridItem[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is GridItem => !!item && typeof item === 'object' && isImportPromptBlock((item as GridItem).block))
+    : [];
+}
+
+function isImportPromptBlock(value: unknown): value is VisualBlock {
+  return !!value && typeof value === 'object' && !!(value as VisualBlock).schema;
 }
 
 function getImportPromptListItemDedupeKey(block: VisualBlock, documentMeta: VisualDocument['meta']): string {
@@ -2292,11 +2309,14 @@ function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseTyp
     block.text ||= 'const example = "source-backed value";';
     block.schema.codeLanguage = block.schema.codeLanguage || 'ts';
   } else if (baseType === 'container') {
+    block.schema.containerBlocks = getImportPromptBlocks(block.schema.containerBlocks);
     if (block.schema.containerBlocks.length === 0) {
       block.schema.containerBlocks.push(createImportExampleTextBlock('Example child content.'));
     }
     block.schema.containerTitle ||= 'Example group';
   } else if (baseType === 'expandable') {
+    block.schema.expandableStubBlocks = block.schema.expandableStubBlocks ?? { children: [] };
+    block.schema.expandableContentBlocks = block.schema.expandableContentBlocks ?? { children: [] };
     if (block.schema.expandableStubBlocks.children.length === 0) {
       block.schema.expandableStubBlocks.children.push(createImportExampleTextBlock('Example summary'));
     }
@@ -2306,11 +2326,13 @@ function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseTyp
     block.schema.expandableAlwaysShowStub = true;
   } else if (baseType === 'component-list') {
     block.schema.componentListComponent ||= 'text';
+    block.schema.componentListBlocks = getImportPromptBlocks(block.schema.componentListBlocks);
     if (block.schema.componentListBlocks.length === 0) {
       block.schema.componentListBlocks.push(createImportExampleTextBlock('Example list item.'));
     }
   } else if (baseType === 'grid') {
     block.schema.gridColumns = block.schema.gridColumns || 2;
+    block.schema.gridItems = getImportPromptGridItems(block.schema.gridItems);
     if (block.schema.gridItems.length === 0) {
       block.schema.gridItems.push(
         { id: 'example-left', block: createImportExampleTextBlock('Left example content.') },
@@ -2318,6 +2340,8 @@ function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseTyp
       );
     }
   } else if (baseType === 'table') {
+    block.schema.tableColumns = Array.isArray(block.schema.tableColumns) ? block.schema.tableColumns : [];
+    block.schema.tableRows = Array.isArray(block.schema.tableRows) ? block.schema.tableRows : [];
     if (block.schema.tableColumns.length === 0 || isDefaultImportExampleTableColumns(block.schema.tableColumns)) {
       block.schema.tableColumns = ['Example', 'Detail'];
     }
@@ -2825,24 +2849,25 @@ function findImportTemplateListBlock(blocks: VisualBlock[], listBlockId: string,
 }
 
 function describeImportXrefTargetBlock(block: VisualBlock): string {
-  const title = block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
+  const title = trimImportString(block.schema.xrefTitle)
+    || trimImportString(block.schema.containerTitle)
     || firstImportVisibleText(block)
-    || humanizeImportId(block.schema.id)
+    || humanizeImportId(trimImportString(block.schema.id))
     || block.schema.component;
   return title;
 }
 
 function describeImportXrefTargetDetail(block: VisualBlock): string {
-  return block.schema.xrefDetail.trim() || block.schema.description.trim();
+  return trimImportString(block.schema.xrefDetail) || trimImportString(block.schema.description);
 }
 
 function firstImportVisibleText(block: VisualBlock): string {
-  const own = block.text.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim();
+  const own = trimImportString(block.text).replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim();
   if (own) {
     return own.slice(0, 120);
   }
-  for (const row of block.schema.tableRows) {
+  const tableRows = Array.isArray(block.schema.tableRows) ? block.schema.tableRows : [];
+  for (const row of tableRows) {
     const cell = row.cells.map((value) => value.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim()).find(Boolean);
     if (cell) {
       return cell.slice(0, 120);
@@ -3595,9 +3620,6 @@ function getImportStageSettings(llm: HvyImportLlmOptions, stage: HvyImportLlmSta
 }
 
 function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace' | 'onTraceEvent'>): HvyImportTraceRecorder | undefined {
-  if (!options.trace && !options.onTraceEvent) {
-    return undefined;
-  }
   const run: HvyImportTraceRun = { calls: [] };
   const emit = (type: HvyImportTraceEvent['type'], call: HvyImportTraceCall): void => {
     options.onTraceEvent?.({
@@ -3629,6 +3651,46 @@ function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace'
         throw error;
       }
     },
+  };
+}
+
+function logImportFailure(
+  operation: HvyImportOperation,
+  error: unknown,
+  options: Pick<BuildImportPlanOptions, 'sourceName'>,
+  traceRecorder: HvyImportTraceRecorder | undefined,
+  steps?: ImportPlanStep[]
+): void {
+  const lastCall = traceRecorder?.run.calls.at(-1);
+  console.error('[hvy:import] import failed', {
+    operation,
+    sourceName: options.sourceName,
+    ...(steps ? { steps: steps.map(formatImportFailureStep) } : {}),
+    ...(lastCall ? { lastLlmCall: formatImportFailureCall(lastCall) } : {}),
+    error,
+  });
+}
+
+function formatImportFailureStep(step: ImportPlanStep): Record<string, unknown> {
+  return {
+    sectionTitle: step.sectionTitle,
+    target: step.target,
+    importMode: step.importMode ?? 'hvy',
+    ...(step.preplanGroupIndex !== undefined ? { preplanGroupIndex: step.preplanGroupIndex } : {}),
+    ...(step.preplanTargetId ? { preplanTargetId: step.preplanTargetId } : {}),
+  };
+}
+
+function formatImportFailureCall(call: HvyImportTraceCall): Record<string, unknown> {
+  return {
+    callIndex: call.callIndex,
+    stage: call.stage,
+    debugLabel: call.debugLabel,
+    phase: call.phase,
+    provider: call.request.settings.provider,
+    model: call.request.settings.model,
+    ...(call.response ? { responseCharacters: call.response.output.length } : {}),
+    ...(call.error ? { error: call.error } : {}),
   };
 }
 

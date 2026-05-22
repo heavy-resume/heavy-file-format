@@ -148,6 +148,40 @@ component_defs:
   expect(expectedResult).toContain('project-heavy-stack');
 });
 
+test('xref target defaults ignore reusable records without an xref target', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    templateVariables:
+      skill:
+        label: Skill
+    schema:
+      tags: skill
+      xrefTitle: "{% skill %}"
+      expandableStubBlocks:
+        children:
+          - text: "### {% skill %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"id":"skill-list","tags":"skill","componentListComponent":"skill-record"}-->
+`, '.hvy');
+
+  initState(createTestState(document));
+  const expectedResult = createBlockFromReusableTemplateValues('skill-record', { skill: 'Foo' });
+
+  applyXrefTargetDefaults(expectedResult);
+
+  expect(expectedResult.schema.component).toBe('skill-record');
+  expect(expectedResult.schema.xrefTitle).toBe('Foo');
+});
+
 test('xref target options fall back from unresolved template labels to visible target text', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

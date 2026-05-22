@@ -383,10 +383,18 @@ function refreshReaderPanels(): void {
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
-  if (!reader) return;
+  const sidebarSections = currentRoot.querySelector<HTMLDivElement>('#readerSidebarSections');
   capturePluginFocus();
-  reader.innerHTML = renderer.renderReaderSections(state.document.sections);
-  reconcilePluginMounts(reader);
+  if (sidebarSections) {
+    sidebarSections.innerHTML = renderer.renderSidebarSections(state.document.sections);
+    reconcilePluginMounts(sidebarSections);
+    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
+  }
+  if (reader) {
+    reader.innerHTML = renderer.renderReaderSections(state.document.sections);
+    reconcilePluginMounts(reader);
+    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
+  }
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
@@ -395,7 +403,6 @@ function refreshReaderPanels(): void {
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
-  void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
 }
 
 function refreshModalPreview(): void {}

@@ -171,13 +171,13 @@ registerHvyCliPluginCommands({
   componentHints: [
     'This plugin is a form. Fields and named script bodies live in plugin.txt as form YAML.',
     'Named scripts are also exposed as sibling .py virtual files such as load.py or on_submit.py; prefer editing those files for script changes.',
-    'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, and submitScript.',
-    'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime.',
+    'Use plugin.json pluginConfig for form-level behavior: submitLabel, showSubmit, initialScript, submitAction, submitSourceScript, submitScript, submitPrompt, and submit limits.',
+    'Form scripts are Python/Brython snippets under scripts.NAME, wrapped in a generated function, and run through the sandboxed scripting runtime. For submitAction "ai-generate", submitSourceScript prepares model input and submitScript applies injected response/source values.',
     'When editing plugin.txt directly, write form scripts as literal YAML blocks with `|`, not folded blocks with `>`, so Python newlines and indentation are preserved.',
     'Form scripts receive doc plus doc.form. Use field labels with doc.form.get_value/get_values/set_value/set_options/set_error/clear_error.',
     'Use doc.db.query(sql, params) and doc.db.execute(sql, params) for the current document SQL backend from form scripts.',
     'doc.tool.TOOL_NAME(**args) can call the synchronous document-edit tool subset; args are Python keyword arguments matching the AI tool schema.',
-    'When changing submit behavior, look for named scripts and on-submit script settings before editing fields.',
+    'When changing submit behavior, look for named scripts, AI submit settings, and on-submit script settings before editing fields.',
     'For dynamic form options, run: hvy recipe populate-form-options-from-db.',
     'For form submit code examples, run: hvy cheatsheet scripting, hvy recipe scripting, or man hvy plugin scripting tool TOOL_NAME.',
   ],
@@ -216,7 +216,7 @@ registerHvyCliPluginCommands({
     },
     {
       command: 'plugin.json',
-      description: 'Stores form-level behavior in pluginConfig: submitLabel, showSubmit, initialScript, and submitScript.',
+      description: 'Stores form-level behavior in pluginConfig: submitLabel, showSubmit, initialScript, submitAction, submitSourceScript, submitScript, submitPrompt, and submit limits.',
     },
     {
       command: 'load.py, on_submit.py, etc.',

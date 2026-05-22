@@ -55,6 +55,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'guideBtn', label: 'Guide', selectedExample: 'guide' },
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
+  { id: 'flashcardsExampleBtn', label: 'Flashcards Example', selectedExample: 'flashcards' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
@@ -690,7 +691,6 @@ function renderApp(): void {
                        ${readerRenderer.renderSidebarHelpBalloon(state.document.sections)}
                        <div class="viewer-sidebar-panel">
                          <div id="readerWarnings" class="reader-warnings">${readerWarningsHtml}</div>
-                         <!-- TODO: Need to figure out what to do with navigation in the sidebar -->
                          <!-- <div id="readerNav" class="reader-nav">${readerRenderer.renderNavigation(state.document.sections)}</div> -->
                          <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                        </div>

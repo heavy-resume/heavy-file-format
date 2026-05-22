@@ -441,6 +441,61 @@ hvy_version: 0.1
   expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
 });
 
+test('text sidebar tab labels rotate and expand to fit', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+sidebar_label: Cards
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ Body content
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ Sidebar content
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvyViewer({ root, document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy') });
+    const button = root.querySelector<HTMLElement>('.viewer-sidebar-tab');
+    const label = root.querySelector<HTMLElement>('.sidebar-tab-label');
+    if (!button || !label) {
+      throw new Error('Expected sidebar text tab missing.');
+    }
+    const buttonBox = button.getBoundingClientRect();
+    const labelBox = label.getBoundingClientRect();
+    const labelStyle = getComputedStyle(label);
+    return {
+      buttonHeight: buttonBox.height,
+      buttonWidth: buttonBox.width,
+      labelHeight: labelBox.height,
+      labelWidth: labelBox.width,
+      labelWritingMode: labelStyle.writingMode,
+      labelTop: labelBox.top,
+      labelBottom: labelBox.bottom,
+      buttonTop: buttonBox.top,
+      buttonBottom: buttonBox.bottom,
+    };
+  });
+
+  expect(result.buttonHeight).toBeGreaterThan(result.buttonWidth);
+  expect(result.labelHeight).toBeGreaterThan(result.labelWidth);
+  expect(result.labelWritingMode).toBe('vertical-rl');
+  expect(result.labelTop).toBeGreaterThanOrEqual(result.buttonTop);
+  expect(result.labelBottom).toBeLessThanOrEqual(result.buttonBottom);
+});
+
 test('embedded viewer omits empty sidebar markup', async ({ page }) => {
   await page.goto('/');
 

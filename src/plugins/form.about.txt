@@ -1,8 +1,9 @@
 # Form Plugins #
 Renders editable form fields and optional scripted behavior.
 Fields live in plugin.txt as YAML under the fields key.
-Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, initialScript, and submitScript.
+Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, initialScript, submitAction, submitSourceScript, submitScript, submitPrompt, and submit limits.
 Fields use label as both visible text and the scripting key.
 Named scripts live in plugin.txt under scripts and are also exposed as sibling .py files in the CLI.
 Form scripts run as sandboxed Brython/Python with doc and doc.form available.
+Set submitAction to ai-generate to have the host call the configured chat model. submitSourceScript prepares the model input, and submitScript receives injected response and source values to apply generated output back to the document.
 Use doc.form.get_value, doc.form.get_values, doc.form.set_value, doc.form.set_options, doc.form.set_error, and doc.form.clear_error for form state.

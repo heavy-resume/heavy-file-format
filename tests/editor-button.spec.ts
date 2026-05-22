@@ -1,4 +1,155 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = true;
+    }
+  });
+  const item = page.locator('.document-menu-panel').getByRole('button', { name, exact: true });
+  await expect(item).toBeVisible();
+  await item.click({ force: true });
+}
+
+test('AI form submit applies generated card data through a component template', async ({ page }) => {
+  test.setTimeout(5000);
+  let requestCount = 0;
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { context?: string };
+    requestCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: payload.context?.includes('Widget basics')
+          ? requestCount === 1
+            ? '[{"source_id":"widget-basics","question":"What is Widget basics?","answer":"Widget basics are source-backed study material."}]'
+            : '[{"source_id":"widget-basics","question":"How can Widget basics be reviewed again?","answer":"A reusable form submit can run again and append another templated card."}]'
+          : '',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(String.raw`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.form
+    source: builtin://form
+component_defs:
+  - name: flashcard-card
+    baseType: expandable
+    templateVariables:
+      question:
+        label: Question
+      answer:
+        label: Answer
+    schema:
+      tags: generated-flashcard
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "{% question | block %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% answer | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"source"}-->
+  Widget basics
+
+ <!--hvy:plugin {"id":"generator","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitAction":"ai-generate","submitScript":"apply","submitLabel":"Generate cards","submitPrompt":"Return one JSON card record.","submitOutputCharLimit":2000}}-->
+  fields:
+    - label: Topic
+      type: text
+      value: Widget basics
+  scripts:
+    apply: |
+      def read_json_string(source, key, default_value=""):
+          marker = '"' + key + '"'
+          start = source.find(marker)
+          if start < 0:
+              return default_value
+          colon = source.find(":", start + len(marker))
+          quote = source.find('"', colon + 1)
+          index = quote + 1
+          value = ""
+          escaped = False
+          while index < len(source):
+              char = source[index]
+              if escaped:
+                  value += "\n" if char == "n" else char
+                  escaped = False
+              elif char == "\\":
+                  escaped = True
+              elif char == '"':
+                  return value
+              else:
+                  value += char
+              index += 1
+          return default_value
+      def json_escape(value):
+          return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+      question = read_json_string(response, "question")
+      answer = read_json_string(response, "answer")
+      values_json = '{"question":"' + json_escape(question) + '","answer":"' + json_escape(answer) + '"}'
+      existing_count = 0
+      for component in doc.tool.get_components("flashcard-card"):
+          if component.section_id == "main" and component.has_tag("generated-flashcard"):
+              existing_count += 1
+      doc.cli.run("hvy insert -1 flashcard-card /body/main --id flashcard-widget-basics-" + str(existing_count + 1) + " --using-template '" + values_json + "'")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.getByRole('button', { name: 'Generate cards' }).click({ timeout: 1000 });
+
+  await expect(page.locator('#readerDocument')).toContainText('What is Widget basics?', { timeout: 1000 });
+  await page.getByText('What is Widget basics?').click({ timeout: 1000 });
+  await expect(page.locator('#readerDocument')).toContainText('Widget basics are source-backed study material.', { timeout: 1000 });
+
+  await expect(page.getByRole('button', { name: 'Generate cards' })).toBeVisible({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Generate cards' }).click({ timeout: 1000 });
+  await expect(page.locator('#readerDocument')).toContainText('How can Widget basics be reviewed again?', { timeout: 1000 });
+});
+
+test('flashcards generator form remains mounted after sidebar reader refresh', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.route('**/api/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: '[{"source_id":"concept-model","question":"What does the source material say Heavy documents contain?","answer":"They contain sections and reusable components."}]',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Flashcards Example');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').click({ timeout: 1000 });
+
+  const generateButton = page.getByRole('button', { name: 'Generate flashcards' });
+  await expect(generateButton).toBeVisible({ timeout: 1000 });
+  await generateButton.click({ timeout: 1000 });
+
+  await expect(page.locator('#readerSidebarSections')).toContainText('What does the source material say Heavy documents contain?', { timeout: 2000 });
+  await expect(generateButton).toBeVisible({ timeout: 1000 });
+  await expect(
+    page.locator('#flashcard-generator-form [data-hvy-plugin-mount="true"]')
+  ).toHaveCount(0);
+});
 
 test('editor-only generate button applies pronunciation and stays out of viewer', async ({ page }) => {
   await page.route('**/api/chat', async (route) => {

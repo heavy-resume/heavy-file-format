@@ -1146,6 +1146,19 @@ Plugin-specific rules:
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
   and any non-submit triggers.
+- `pluginConfig.submitAction` is optional and defaults to `"script"`. Supported
+  values are `"script"` and `"ai-generate"`. For `"script"`, submitting the form
+  runs `pluginConfig.submitScript`. For `"ai-generate"`, submitting the form
+  calls the host-managed chat model, then runs `pluginConfig.submitScript` to
+  apply the returned text.
+- For `submitAction: "ai-generate"`, `pluginConfig.submitSourceScript` MAY
+  reference a named script that returns the model input text. If omitted, clients
+  SHOULD use the current form values as structured input. `pluginConfig.submitPrompt`
+  is the user prompt sent with that source text. `pluginConfig.submitInputCharLimit`
+  and `pluginConfig.submitOutputCharLimit` are optional positive integers used to
+  bound model input and output. During the submit target script,
+  `response` contains the generated text and `source` contains the model input
+  text.
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
@@ -1162,13 +1175,15 @@ Plugin-specific rules:
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
 - `scripts` is a map from script name to Python/Brython source.
-  `pluginConfig.initialScript`, `pluginConfig.submitScript`, and field trigger
-  values reference keys in this map.
+  `pluginConfig.initialScript`, `pluginConfig.submitSourceScript`,
+  `pluginConfig.submitScript`, and field trigger values reference keys in this
+  map.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.
   Clients SHOULD debounce `input` trigger execution.
 - Viewer clients MUST render an HTML `<form>`, prevent native navigation on
-  submit, gather current field values, and run the named submit script when one
-  is defined. No network request is implied by submitting a form.
+  submit, gather current field values, and run the configured submit action.
+  Networked model generation is implied only when `pluginConfig.submitAction` is
+  `"ai-generate"` and the host provides a chat client or proxy.
 - Form scripts run through the installed scripting runtime. During form script
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,

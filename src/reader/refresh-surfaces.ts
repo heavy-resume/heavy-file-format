@@ -46,7 +46,12 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     navMs = performance.now() - stepStartedAt;
   }
   if (sidebarSections) {
+    const stepStartedAt = performance.now();
+    options.capturePluginFocus?.();
     sidebarSections.innerHTML = options.readerRenderer.renderSidebarSections(options.sections);
+    options.reconcilePluginMounts?.(sidebarSections);
+    void options.runButtonVisibilityScripts?.(sidebarSections);
+    readerMs += performance.now() - stepStartedAt;
   }
   if (reader) {
     const stepStartedAt = performance.now();

@@ -49,6 +49,12 @@
   transition: opacity 540ms ease, transform 540ms ease;
 }
 
+.viewer-sidebar-tab:has(.sidebar-tab-label) {
+  height: auto;
+  min-height: var(--hvy-sidebar-tab-size);
+  padding-block: 0.62rem;
+}
+
 .hvy-preview-frame-phone.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
 .hvy-preview-frame-tablet.viewer-shell.is-sidebar-closed:not(.is-sidebar-tab-visible):not(.is-sidebar-tab-peeking):not(:has(.viewer-sidebar-help-balloon)) .viewer-sidebar-tab,
 .hvy-preview-frame-phone.viewer-shell.is-sidebar-closed.is-sidebar-tab-hidden .viewer-sidebar-tab,

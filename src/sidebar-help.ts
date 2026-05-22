@@ -41,8 +41,15 @@ export function shouldAutoDismissSidebarHelp(shell: HTMLElement | null, kind: Si
 }
 
 export function scheduleSidebarHelpAutoClose(app: HTMLElement): void {
+  updateSidebarHelpPositions(app);
+  window.requestAnimationFrame(() => updateSidebarHelpPositions(app));
   scheduleSidebarHelpAutoCloseFor(app, 'editor');
   scheduleSidebarHelpAutoCloseFor(app, 'viewer');
+}
+
+export function updateSidebarHelpPositions(app: HTMLElement): void {
+  updateSidebarHelpPositionFor(app, 'editor');
+  updateSidebarHelpPositionFor(app, 'viewer');
 }
 
 export function dismissSidebarHelpBalloon(app: HTMLElement, kind: SidebarHelpKind): void {
@@ -96,6 +103,38 @@ function setSidebarHelpDismissed(kind: SidebarHelpKind): void {
   } else {
     state.viewerSidebarHelpDismissed = true;
   }
+}
+
+function updateSidebarHelpPositionFor(app: HTMLElement, kind: SidebarHelpKind): void {
+  const shell = app.querySelector<HTMLElement>(kind === 'editor' ? '.editor-shell' : '.viewer-shell');
+  const sidebar = shell?.querySelector<HTMLElement>(kind === 'editor' ? '.editor-sidebar' : '.viewer-sidebar');
+  const tab = shell?.querySelector<HTMLElement>(kind === 'editor' ? '.editor-sidebar-tab' : '.viewer-sidebar-tab');
+  const balloon = shell?.querySelector<HTMLElement>(getSidebarHelpSelector(kind));
+  if (!shell || !sidebar || !tab || !balloon) {
+    return;
+  }
+
+  const shellRect = shell.getBoundingClientRect();
+  const sidebarRect = sidebar.getBoundingClientRect();
+  const tabRect = tab.getBoundingClientRect();
+  const balloonRect = balloon.getBoundingClientRect();
+  if (shellRect.height <= 0 || sidebarRect.width <= 0 || tabRect.width <= 0 || tabRect.height <= 0 || balloonRect.height <= 0) {
+    return;
+  }
+
+  const margin = 10;
+  const tabCenter = tabRect.top - shellRect.top + (tabRect.height / 2);
+  const tabRight = tabRect.right - sidebarRect.left;
+  const maxTop = Math.max(margin, shellRect.height - balloonRect.height - margin);
+  const top = Math.min(maxTop, Math.max(margin, tabCenter - (balloonRect.height / 2)));
+  const arrowTop = Math.min(
+    Math.max(8, balloonRect.height - 18),
+    Math.max(8, tabCenter - top - 9)
+  );
+  const left = tabRight + margin;
+  balloon.style.setProperty('--hvy-sidebar-help-top', `${top}px`);
+  balloon.style.setProperty('--hvy-sidebar-help-left', `${left}px`);
+  balloon.style.setProperty('--hvy-sidebar-help-arrow-top', `${arrowTop}px`);
 }
 
 function rectsOverlap(left: DOMRect, right: DOMRect): boolean {

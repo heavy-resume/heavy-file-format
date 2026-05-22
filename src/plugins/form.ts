@@ -811,7 +811,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   }
 
   function renderReaderField(field: FormFieldDefinition): HTMLElement {
-    const wrap = document.createElement('label');
+    const wrap = document.createElement(field.type === 'radio' ? 'div' : 'label');
     wrap.className = `hvy-form-field hvy-form-field-${field.type}`;
     if (field.meta.css.trim().length > 0) {
       wrap.setAttribute('style', sanitizeInlineCss(field.meta.css));

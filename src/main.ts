@@ -55,7 +55,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'guideBtn', label: 'Guide', selectedExample: 'guide' },
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
-  { id: 'flashcardsExampleBtn', label: 'Flashcards Example', selectedExample: 'flashcards' },
+  { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },

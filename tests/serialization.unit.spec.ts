@@ -1007,7 +1007,7 @@ test('round-trips migrated example files without reintroducing slot-level compon
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
     ['examples/example.hvy', '.hvy'],
-    ['examples/flashcards.hvy', '.hvy'],
+    ['examples/study-tools.hvy', '.hvy'],
   ];
 
   for (const [path, extension] of files) {
@@ -1042,7 +1042,7 @@ test('serialize -> deserialize -> serialize stays stable for migrated examples',
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
     ['examples/example.hvy', '.hvy'],
-    ['examples/flashcards.hvy', '.hvy'],
+    ['examples/study-tools.hvy', '.hvy'],
   ];
 
   for (const [path, extension] of files) {

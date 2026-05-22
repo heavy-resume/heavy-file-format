@@ -135,8 +135,8 @@
 
 .viewer-sidebar-help-balloon {
   position: absolute;
-  left: calc(100% + 0.65rem);
-  top: 4.25rem;
+  left: var(--hvy-sidebar-help-left, calc(100% + 0.65rem));
+  top: var(--hvy-sidebar-help-top, 4.25rem);
   width: max-content;
   max-width: min(18rem, calc(100vw - 5rem));
   overflow: visible;
@@ -157,7 +157,7 @@
   content: "";
   position: absolute;
   left: -0.72rem;
-  top: 0.55rem;
+  top: var(--hvy-sidebar-help-arrow-top, 0.55rem);
   width: 0;
   height: 0;
   border-top: 0.55rem solid transparent;

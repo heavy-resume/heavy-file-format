@@ -123,7 +123,7 @@ component_defs:
   await expect(page.locator('#readerDocument')).toContainText('How can Widget basics be reviewed again?', { timeout: 1000 });
 });
 
-test('flashcards generator form remains mounted after sidebar reader refresh', async ({ page }) => {
+test('study tools flashcards form remains mounted after sidebar reader refresh', async ({ page }) => {
   test.setTimeout(5000);
   await page.route('**/api/chat', async (route) => {
     await route.fulfill({
@@ -136,9 +136,23 @@ test('flashcards generator form remains mounted after sidebar reader refresh', a
   });
 
   await page.goto('/');
-  await selectDocumentMenuItem(page, 'Flashcards Example');
+  await selectDocumentMenuItem(page, 'Study Tools Example');
   await page.getByRole('button', { name: 'Viewer' }).click();
-  await page.locator('.viewer-sidebar-tab').click({ timeout: 1000 });
+  await expect(page.locator('.viewer-sidebar-tab')).toContainText('Study Tools', { timeout: 1000 });
+  const sidebarTabBox = await page.locator('.viewer-sidebar-tab').boundingBox();
+  const sidebarHelpBox = await page.locator('.viewer-sidebar-help-balloon').boundingBox();
+  expect(sidebarTabBox).not.toBeNull();
+  expect(sidebarHelpBox).not.toBeNull();
+  const sidebarTabCenter = sidebarTabBox!.y + sidebarTabBox!.height / 2;
+  const sidebarHelpCenter = sidebarHelpBox!.y + sidebarHelpBox!.height / 2;
+  expect(Math.abs(sidebarTabCenter - sidebarHelpCenter)).toBeLessThanOrEqual(3);
+  expect(sidebarHelpBox!.x).toBeGreaterThanOrEqual(sidebarTabBox!.x + sidebarTabBox!.width + 9);
+  await page.locator('.viewer-sidebar-tab').dispatchEvent('click');
+  await expect(page.locator('.viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  const flashcardsSection = page.locator('#flashcards-sidebar');
+  await expect(flashcardsSection).toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+  await flashcardsSection.dispatchEvent('click');
+  await expect(flashcardsSection).not.toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
 
   const generateButton = page.getByRole('button', { name: 'Generate flashcards' });
   await expect(generateButton).toBeVisible({ timeout: 1000 });
@@ -155,9 +169,47 @@ test('flashcards generator form remains mounted after sidebar reader refresh', a
   await expect(generatedCards.first()).toContainText('What does the source material say Heavy documents contain?');
   await expect(generatedCards.first()).toHaveCSS('min-height', '128px');
   await expect(generatedCards.first()).not.toHaveCSS('border-top-style', 'none');
+  await generatedCards.first().click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('Source: Concept Model', { timeout: 1000 });
 
   await page.getByRole('button', { name: 'Shuffle cards' }).click({ timeout: 1000 });
   await expect(generatedCards.first()).toContainText('What does a form submit target script receive?', { timeout: 1000 });
+  await generatedCards.first().click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('Source: Scripting Runtime', { timeout: 1000 });
+});
+
+test('study tools quiz generates radio choices and compares results', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.route('**/api/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: '[{"source_id":"concept-model","question":"What are Heavy documents composed from?","option_1":"Sections and reusable components","option_2":"Only raw text files","option_3":"A single hidden table","option_4":"External browser tabs","correct_option_letter":"A"},{"source_id":"scripting-runtime","question":"What does the submit target script receive?","option_1":"Only the document title","option_2":"Injected response and source values","option_3":"A CSS-only payload","option_4":"No values","correct_option_letter":"B"}]',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Study Tools Example');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').dispatchEvent('click');
+  await expect(page.locator('.viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  const quizSection = page.locator('#quiz-sidebar');
+  await expect(quizSection).toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+  await quizSection.dispatchEvent('click');
+  await expect(quizSection).not.toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+
+  await page.getByRole('button', { name: 'Generate quiz' }).click({ timeout: 1000 });
+  const firstAnswer = page.getByRole('radio', { name: 'A. Sections and reusable components', exact: true });
+  await expect(firstAnswer).toBeVisible({ timeout: 2000 });
+  await expect(page.locator('#quiz-answer-form')).not.toContainText('Correct answer:', { timeout: 1000 });
+
+  await firstAnswer.check({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Compare results' }).click({ timeout: 1000 });
+
+  await expect(page.getByLabel('Quiz result')).toHaveValue('Score: 1/2 (1 skipped)', { timeout: 1000 });
+  await expect(page.locator('#quiz-answer-form')).toContainText('Skipped. Correct answer: B', { timeout: 1000 });
 });
 
 test('editor-only generate button applies pronunciation and stays out of viewer', async ({ page }) => {

@@ -200,7 +200,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'blank'
     || value === 'guide'
     || value === 'crm'
-    || value === 'flashcards'
+    || value === 'study-tools'
     || value === 'resume-template'
     || value === 'resume-example'
     || value === 'import-reference'

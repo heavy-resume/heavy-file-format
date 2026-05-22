@@ -134,18 +134,24 @@ label.hvy-form-field-checkbox .hvy-form-field-error {
 
 .hvy-form-radio-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
-.hvy-form-radio-option {
+.hvy-form-plugin .hvy-form-radio-option {
+  display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
-.hvy-form-radio-option input {
+.hvy-form-plugin .hvy-form-radio-option input {
+  flex: 0 0 auto;
   width: auto;
+  margin: 0;
 }
 
 .hvy-form-actions {

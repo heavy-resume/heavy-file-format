@@ -73,4 +73,15 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
 };
 
 export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) =>
-  helpers.renderComponentFragment('text', block.text, block, section.key);
+  block.schema.showCopy
+    ? `${helpers.renderComponentFragment('text', block.text, block, section.key)}
+      <button
+        type="button"
+        class="text-copy-button"
+        data-action="copy-text-component"
+        data-section-key="${helpers.escapeAttr(section.key)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        aria-label="Copy text"
+        title="Copy text"
+      ><span class="text-copy-icon" aria-hidden="true"></span></button>`
+    : helpers.renderComponentFragment('text', block.text, block, section.key);

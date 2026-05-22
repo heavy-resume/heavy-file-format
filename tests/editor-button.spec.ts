@@ -123,6 +123,100 @@ component_defs:
   await expect(page.locator('#readerDocument')).toContainText('How can Widget basics be reviewed again?', { timeout: 1000 });
 });
 
+test('text component showCopy copies reader text to clipboard', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          (window as unknown as { __copiedText: string }).__copiedText = value;
+        },
+        write: async (items: ClipboardItem[]) => {
+          const item = items[0];
+          const plainBlob = await item.getType('text/plain');
+          const htmlBlob = await item.getType('text/html');
+          (window as unknown as { __copiedText: string }).__copiedText = await plainBlob.text();
+          (window as unknown as { __copiedHtml: string }).__copiedHtml = await htmlBlob.text();
+        },
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(String.raw`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"copyable","showCopy":true}-->
+  Copy this text
+
+ <!--hvy:text {"id":"copy-heading","showCopy":true}-->
+  ## Copy Heading
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const copyable = page.locator('.reader-block-text[data-component-id="copyable"]');
+  await expect(copyable).toContainText('Copy this text');
+  const copyLayout = await copyable.evaluate((block) => {
+    const button = block.querySelector<HTMLElement>('.text-copy-button');
+    if (!button) {
+      throw new Error('Copy button markup missing.');
+    }
+    const textNode = Array.from(block.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length > 0);
+    if (!textNode) {
+      throw new Error('Copy text node missing.');
+    }
+    const textRange = document.createRange();
+    textRange.selectNodeContents(textNode);
+    const blockStyles = getComputedStyle(block);
+    const blockBox = block.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
+    const textBox = textRange.getBoundingClientRect();
+    textRange.detach();
+    return {
+      hasCopyShell: Boolean(block.querySelector('.text-copy-shell')),
+      blockPaddingTop: blockStyles.paddingTop,
+      textTop: textBox.top,
+      blockTop: blockBox.top,
+      buttonBottom: buttonBox.bottom,
+      blockBottom: blockBox.bottom,
+    };
+  });
+  expect(copyLayout.hasCopyShell).toBe(false);
+  expect(copyLayout.blockPaddingTop).toBe('0px');
+  expect(copyLayout.textTop).toBeGreaterThanOrEqual(copyLayout.blockTop);
+  expect(copyLayout.buttonBottom).toBeLessThanOrEqual(copyLayout.blockBottom);
+  const headingCopyable = page.locator('.reader-block-text[data-component-id="copy-heading"]');
+  await expect(headingCopyable).toContainText('Copy Heading');
+  const headingLayout = await headingCopyable.evaluate((block) => {
+    const heading = block.querySelector<HTMLElement>('h2');
+    if (!heading) {
+      throw new Error('Copy heading markup missing.');
+    }
+    return getComputedStyle(heading).marginTop;
+  });
+  expect(headingLayout).toBe('0px');
+  await copyable.hover();
+  await copyable.getByRole('button', { name: 'Copy text' }).click({ timeout: 1000 });
+
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedText?: string }).__copiedText)).toBe('Copy this text');
+  await expect(copyable.getByRole('button', { name: 'Copied' })).toBeVisible({ timeout: 1000 });
+
+  await page.evaluate(() => {
+    (window as unknown as { __copiedHtml?: string; __copiedText?: string }).__copiedText = undefined;
+    (window as unknown as { __copiedHtml?: string; __copiedText?: string }).__copiedHtml = undefined;
+  });
+  await headingCopyable.hover();
+  await headingCopyable.getByRole('button', { name: 'Copy text' }).click({ timeout: 1000 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedText?: string }).__copiedText)).toBe('Copy Heading');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedHtml?: string }).__copiedHtml)).toContain('<h2>Copy Heading</h2>');
+});
+
 test('study tools flashcards form remains mounted after sidebar reader refresh', async ({ page }) => {
   test.setTimeout(5000);
   await page.route('**/api/chat', async (route) => {

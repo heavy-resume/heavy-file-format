@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { renderTextEditor } from '../src/editor/components/text/text';
+import { renderTextReader } from '../src/editor/components/text/text';
 import { renderXrefCardEditor } from '../src/editor/components/xref-card/xref-card';
 import type { VisualBlock } from '../src/editor/types';
 
@@ -12,6 +13,7 @@ const helpers = {
   renderRichToolbar: () => '',
   isXrefTargetValid: () => true,
   getXrefTargetOptions: () => [],
+  renderComponentFragment: (_componentName: string, content: string) => `<p>${content}</p>`,
 };
 
 test('text editor prose surfaces opt into native spellcheck', () => {
@@ -57,6 +59,7 @@ test('xref title and detail editors opt into native spellcheck', () => {
       xrefTitle: 'TypScript',
       xrefDetail: 'Primarry language',
       xrefTarget: 'tool-typescript',
+      xrefTargetTagFilter: '',
     },
   } as unknown as VisualBlock;
 
@@ -65,4 +68,26 @@ test('xref title and detail editors opt into native spellcheck', () => {
   expect(html.match(/spellcheck="true"/g)).toHaveLength(2);
   expect(html).toContain('data-field="block-xref-title"');
   expect(html).toContain('data-field="block-xref-detail"');
+});
+
+test('text reader can show a copy button for any text component', () => {
+  const block = {
+    id: 'body-copy',
+    text: 'Copy me',
+    schema: {
+      align: '',
+      component: 'text',
+      fillIn: false,
+      placeholder: '',
+      showCopy: true,
+    },
+  } as unknown as VisualBlock;
+  const section = { key: 'summary' };
+
+  const html = renderTextReader(section as never, block, helpers as never);
+
+  expect(html).toContain('data-action="copy-text-component"');
+  expect(html).toContain('data-section-key="summary"');
+  expect(html).toContain('data-block-id="body-copy"');
+  expect(html).toContain('<p>Copy me</p>');
 });

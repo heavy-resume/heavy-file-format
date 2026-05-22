@@ -30,11 +30,14 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     visibleScript: '',
     placeholder: '',
     fillIn: false,
+    showCopy: false,
     metaOpen: false,
     xrefTitle: '',
     xrefDetail: '',
   };
   switch (baseComponent) {
+    case 'text':
+      return { ...base, kind: 'text', showCopy: false } as unknown as BlockSchema;
     case 'code':
       return { ...base, kind: 'code', codeLanguage: 'ts' } as unknown as BlockSchema;
     case 'container':
@@ -109,9 +112,8 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
       return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
     case 'xref-card':
       return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
-    case 'text':
     default:
-      return { ...base, kind: 'text' } as unknown as BlockSchema;
+      return { ...base, kind: 'text', showCopy: false } as unknown as BlockSchema;
   }
 }
 
@@ -336,6 +338,10 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     xrefTitle: typeof candidate.xrefTitle === 'string' ? candidate.xrefTitle : defaults.xrefTitle,
     xrefDetail: typeof candidate.xrefDetail === 'string' ? candidate.xrefDetail : defaults.xrefDetail,
   };
+
+  if (schema.kind === 'text') {
+    schema.showCopy = candidate.showCopy === true;
+  }
 
   if (schema.kind === 'code') {
     schema.codeLanguage = typeof candidate.codeLanguage === 'string' ? candidate.codeLanguage : schema.codeLanguage;

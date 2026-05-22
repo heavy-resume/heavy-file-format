@@ -15,6 +15,115 @@
   max-width: 100%;
 }
 
+.reader-block-text:has(> .text-copy-button) {
+  position: relative;
+}
+
+.reader-block-text:has(> .text-copy-button) > :nth-last-child(2) {
+  margin-bottom: 0;
+}
+
+.text-copy-button {
+  position: absolute;
+  bottom: 0.18rem;
+  right: 0.18rem;
+  z-index: 3;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--hvy-border-alt);
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+  color: var(--hvy-muted);
+  box-shadow: 0 6px 14px var(--hvy-shadow-sm);
+  opacity: 0;
+  transform: none;
+  transition: opacity 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.reader-block-text:hover > .text-copy-button,
+.text-copy-button:focus-visible,
+.text-copy-button.is-copied {
+  opacity: 1;
+}
+
+.text-copy-button:hover,
+.text-copy-button:focus-visible {
+  color: var(--hvy-text);
+  background: var(--hvy-surface);
+  transform: none;
+}
+
+.text-copy-button.is-copied {
+  color: var(--hvy-focus);
+}
+
+.text-copy-icon {
+  position: relative;
+  width: 0.74rem;
+  height: 0.78rem;
+  transform: translate(-0.03rem, -0.02rem);
+}
+
+.text-copy-icon::before,
+.text-copy-icon::after {
+  content: "";
+  position: absolute;
+  width: 0.48rem;
+  height: 0.55rem;
+  border: 1.25px solid currentColor;
+  border-radius: 0.12rem;
+  background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);
+}
+
+.text-copy-icon::before {
+  left: 0.2rem;
+  top: 0.01rem;
+}
+
+.text-copy-icon::after {
+  left: 0.02rem;
+  top: 0.22rem;
+}
+
+.hvy-preview-frame-phone .reader-block-text:has(> .text-copy-button) {
+  padding-bottom: 1.85rem;
+  padding-right: 2rem;
+}
+
+.hvy-preview-frame-phone .text-copy-button {
+  bottom: 0.25rem;
+  right: 0.25rem;
+  opacity: 1;
+  transform: none;
+}
+
+.hvy-preview-frame-phone .text-copy-button:hover,
+.hvy-preview-frame-phone .text-copy-button:focus-visible {
+  transform: none;
+}
+
+@media (hover: none) {
+  .reader-block-text:has(> .text-copy-button) {
+    padding-bottom: 1.85rem;
+    padding-right: 2rem;
+  }
+
+  .text-copy-button {
+    bottom: 0.25rem;
+    right: 0.25rem;
+    opacity: 1;
+    transform: none;
+  }
+
+  .text-copy-button:hover,
+  .text-copy-button:focus-visible {
+    transform: none;
+  }
+}
+
 .text-fill-in-selection-button {
   position: absolute;
   top: -0.95rem;

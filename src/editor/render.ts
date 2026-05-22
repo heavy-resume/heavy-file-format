@@ -1415,7 +1415,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const component = deps.resolveBaseComponent(block.schema.component);
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
-    const scriptingLibraries = Array.isArray(block.schema.pluginConfig.libraries) ? block.schema.pluginConfig.libraries : [];
+    const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
+    const textMetaFields = component === 'text'
+      ? `<label class="schema-meta-checkbox">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-show-copy"
+            ${block.schema.showCopy ? 'checked' : ''}
+          />
+          <span>Show Copy Button</span>
+        </label>`
+      : '';
     const scriptingVersionField =
       isScriptingPlugin
         ? `<label>
@@ -1443,7 +1455,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <legend>Script Libraries</legend>
           ${SCRIPTING_LIBRARY_OPTIONS.map((library) => `
             <label class="schema-meta-checkbox">
-              <span>${deps.escapeHtml(library)}</span>
               <input
                 type="checkbox"
                 data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1452,6 +1463,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 data-library="${deps.escapeAttr(library)}"
                 ${scriptingLibraries.includes(library) ? 'checked' : ''}
               />
+              <span>${deps.escapeHtml(library)}</span>
             </label>
           `).join('')}
         </fieldset>`
@@ -1501,6 +1513,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
+        ${textMetaFields}
         <label>
           <div>Visible When Function Body</div>
           <div>Controls when this block is visible. Returns boolean.</div>

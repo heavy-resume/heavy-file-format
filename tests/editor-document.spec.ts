@@ -2300,6 +2300,62 @@ test('edit sidebar add section creates a sidebar section', async ({ page }) => {
   await expect(newSidebarSection.locator('[data-action="toggle-section-location"]')).toHaveText('main →');
 });
 
+test('sidebar section and component Meta buttons open their modals', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"main-note"}-->
+  Main note.
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar Notes
+
+ <!--hvy:text {"id":"side-note"}-->
+  Sidebar note.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-sidebar-tab').click();
+  const sidebar = page.locator('.editor-sidebar');
+  await sidebar.locator('.editor-section-head [data-action="focus-modal"]').click();
+  await expect(page.locator('.section-meta-modal')).toContainText('Section Meta: Sidebar Notes');
+  await page.locator('.section-meta-modal [data-modal-action="close"]').click();
+
+  await sidebar.locator('.editor-block-passive', { hasText: 'Sidebar note.' }).click();
+  const activeSidebarBlock = sidebar.locator('.editor-block[data-active-editor-block="true"]');
+  await activeSidebarBlock.getByRole('button', { name: 'Meta' }).click();
+  const componentMetaModal = page.locator('.component-meta-modal');
+  await expect(componentMetaModal).toContainText('Component Meta: text');
+  const showCopyCheckbox = componentMetaModal.locator('.schema-meta-checkbox', { hasText: 'Show Copy Button' });
+  await expect(showCopyCheckbox).toHaveCSS('display', 'flex');
+  await expect(showCopyCheckbox).toHaveCSS('flex-direction', 'row');
+  const showCopyLayout = await showCopyCheckbox.evaluate((label) => {
+    const input = label.querySelector('input');
+    const text = label.querySelector('span');
+    if (!input || !text) {
+      throw new Error('Show Copy Button checkbox markup missing.');
+    }
+    const inputBox = input.getBoundingClientRect();
+    const textBox = text.getBoundingClientRect();
+    return {
+      inputLeft: inputBox.left,
+      inputTop: inputBox.top,
+      textLeft: textBox.left,
+      textTop: textBox.top,
+    };
+  });
+  expect(showCopyLayout.inputLeft).toBeLessThan(showCopyLayout.textLeft);
+  expect(Math.abs(showCopyLayout.inputTop - showCopyLayout.textTop)).toBeLessThan(4);
+});
+
 test('AI mode shows add section ghost and opens the new section inline', async ({ page }) => {
   await page.goto('/');
 

@@ -937,11 +937,23 @@ theme:
           return text.strip()
 
       clean = strip_code_fence(response)
+      clean_lines = []
+      last_blank = False
+      for line in clean.splitlines():
+          compact_line = line.strip()
+          if len(compact_line) == 0:
+              if not last_blank and len(clean_lines) > 0:
+                  clean_lines.append("")
+              last_blank = True
+          else:
+              clean_lines.append(compact_line)
+              last_blank = False
+      clean = "\n".join(clean_lines).strip()
       if len(clean) == 0:
           doc.form.set_error("Podcast instructions", "The model returned no transcript text.")
           return
       doc.form.clear_error("Podcast instructions")
       doc.component.set_text("podcast-transcript-output", clean)
 
- <!--hvy:text {"id":"podcast-transcript-output","css":"border: 1px solid var(--hvy-border); border-radius: 8px; min-height: 16rem; padding: 0.85rem 0.95rem; margin: 0.8rem 0; background: var(--hvy-surface); white-space: pre-wrap;"}-->
+ <!--hvy:text {"id":"podcast-transcript-output","showCopy":true,"css":"border: 1px solid var(--hvy-border); border-radius: 8px; min-height: 16rem; padding: 0.85rem 0.95rem; margin: 0.8rem 0; background: var(--hvy-surface); white-space: pre-wrap;"}-->
   Podcast transcript output will appear here.

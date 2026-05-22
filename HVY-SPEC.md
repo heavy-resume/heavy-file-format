@@ -449,6 +449,7 @@ All block schemas MAY include common document fields:
 - `xrefDetail`
 
 Component-owned fields are:
+- `text`: `showCopy`
 - `code`: `codeLanguage`
 - `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
 - `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`

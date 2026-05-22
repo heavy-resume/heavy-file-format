@@ -1001,6 +1001,26 @@ hvy_version: 0.1
   expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
+test('round-trips text showCopy metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"copyable","showCopy":true}-->
+  Copy this text
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+
+  expect(output).toContain('<!--hvy:text {"id":"copyable","showCopy":true}-->');
+  expect(roundTripped.sections[0]?.blocks[0]?.schema.showCopy).toBe(true);
+});
+
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
   const files: Array<[string, '.hvy' | '.thvy']> = [

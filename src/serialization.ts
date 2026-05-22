@@ -1293,6 +1293,10 @@ function serializeBlockSchema(
   addIfChanged(payload, 'xrefTitle', schema.xrefTitle, defaults.xrefTitle);
   addIfChanged(payload, 'xrefDetail', schema.xrefDetail, defaults.xrefDetail);
 
+  if (component === 'text') {
+    addIfChanged(payload, 'showCopy', schema.showCopy, defaults.showCopy);
+  }
+
   if (component === 'code') {
     addIfChanged(payload, 'codeLanguage', schema.codeLanguage, defaults.codeLanguage);
   }

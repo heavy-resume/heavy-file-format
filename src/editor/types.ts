@@ -55,6 +55,7 @@ export interface BaseBlockSchema {
   visibleScript: string;
   placeholder: string;
   fillIn: boolean;
+  showCopy: boolean;
   metaOpen: boolean;
   xrefTitle: string;
   xrefDetail: string;

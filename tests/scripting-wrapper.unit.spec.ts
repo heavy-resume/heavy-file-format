@@ -511,6 +511,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
       editorOnly: true,
       pluginVersion: SCRIPTING_PLUGIN_VERSION,
       componentId: '',
+      libraries: [],
     },
     {
       sectionKey: 'section',
@@ -519,6 +520,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
       editorOnly: false,
       pluginVersion: SCRIPTING_PLUGIN_VERSION,
       componentId: '',
+      libraries: [],
     },
   ];
 

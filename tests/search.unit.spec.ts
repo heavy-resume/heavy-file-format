@@ -275,6 +275,7 @@ hvy_version: 0.1
   });
 
   expect(expectedMarkup).toContain('data-action="close-search"');
+  expect(expectedMarkup).toContain('class="search-palette is-filter-tab"');
   expect(expectedMarkup).toContain('class="search-close-button ghost remove-x"');
   expect(expectedMarkup).toContain('Turn off filter');
   expect(expectedMarkup).not.toContain('data-action="stop-search"');

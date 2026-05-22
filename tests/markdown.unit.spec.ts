@@ -29,6 +29,36 @@ test('normalizes ordered checkbox lists for plan progress', () => {
   );
 });
 
+test('renders bare inline checkbox markers as checkbox controls in reader html', () => {
+  const html = markdownToReaderHtml('[ ] Draft task\n\n[x] Done task');
+
+  expect(html).toContain('<div class="hvy-inline-checkbox-line">');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" contenteditable="false" disabled>');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" checked contenteditable="false" disabled>');
+  expect(html).toContain('Draft task');
+  expect(html).toContain('Done task');
+  expect(html).not.toContain('<p><input class="hvy-inline-checkbox"');
+  expect(html).not.toContain('[ ] Draft task');
+  expect(html).not.toContain('[x] Done task');
+});
+
+test('keeps checkbox marker text literal inside code', () => {
+  const html = markdownToReaderHtml('`[ ]` stays literal\n\n```md\n[x] also literal\n```');
+
+  expect(html).toContain('<code>[ ]</code>');
+  expect(html).toContain('[x] also literal');
+  expect(html).not.toContain('hvy-inline-checkbox');
+});
+
+test('keeps markdown task list markers as task lists', () => {
+  const html = markdownToReaderHtml('- [ ] Draft task\n- [x] Done task');
+
+  expect(html).toContain('<ul>');
+  expect(html).toContain('<li><input');
+  expect(html).toContain('type="checkbox"');
+  expect(html).not.toContain('hvy-inline-checkbox');
+});
+
 test('escapes raw html before applying underline syntax', () => {
   expect(applyUnderlineSyntax(escapeRawHtml('___safe___ <u>unsafe</u> <script>bad()</script>'))).toBe(
     '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'

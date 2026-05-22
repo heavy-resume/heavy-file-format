@@ -1087,6 +1087,69 @@
   padding-left: 0;
 }
 
+.rich-editor input[type='checkbox'] {
+  all: initial;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: -0.16rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0 0.34rem 0 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--hvy-surface) 0%, var(--hvy-surface-alt) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%);
+  color: var(--hvy-accent-1-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rich-editor .hvy-inline-checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.rich-editor .hvy-inline-checkbox-line > input.hvy-inline-checkbox {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.rich-editor input[type='checkbox']::before {
+  content: '';
+  box-sizing: border-box;
+  width: 0.26rem;
+  height: 0.5rem;
+  border-right: 0.13rem solid currentColor;
+  border-bottom: 0.13rem solid currentColor;
+  margin-top: -0.08rem;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 180ms ease;
+}
+
+.rich-editor input[type='checkbox']:checked {
+  border-color: var(--hvy-accent-1-alt);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-surface) 82%) 0%,
+    color-mix(in srgb, var(--hvy-accent-1-alt) 22%, var(--hvy-surface-alt) 78%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface) 88%, white 12%);
+}
+
+.rich-editor input[type='checkbox']:checked::before {
+  transform: rotate(45deg) scale(1);
+}
+
+.rich-editor input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
 .rich-editor .task-list-item {
   display: flex;
   align-items: flex-start;

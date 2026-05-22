@@ -107,4 +107,46 @@ scripts:
       submitScript: 'submit_form',
     });
   });
+
+  test('normalizes AI submit behavior from plugin config', () => {
+    const parsed = parseFormSpec(`fields:
+  - label: Topic
+    type: text
+scripts:
+  prepare: |
+    return doc.form.get_value("Topic")
+  apply: |
+    doc.header.set("generated", response)
+`, {
+      submitAction: 'ai-generate',
+      submitSourceScript: 'prepare',
+      submitScript: 'apply',
+      submitPrompt: 'Generate cards.',
+      submitInputCharLimit: 2500,
+      submitOutputCharLimit: 9000,
+      submitLabel: 'Generate flashcards',
+      scriptLibraries: ['random', 'browser'],
+      scriptStepBudget: 1234,
+    });
+
+    expect(parsed.error).toBeNull();
+    expect(parsed.spec.submitAction).toBe('ai-generate');
+    expect(parsed.spec.submitSourceScript).toBe('prepare');
+    expect(parsed.spec.submitScript).toBe('apply');
+    expect(parsed.spec.submitPrompt).toBe('Generate cards.');
+    expect(parsed.spec.submitInputCharLimit).toBe(2500);
+    expect(parsed.spec.submitOutputCharLimit).toBe(9000);
+    expect(parsed.spec.scriptLibraries).toEqual(['random']);
+    expect(parsed.spec.scriptStepBudget).toBe(1234);
+    expect(serializeFormConfig(parsed.spec)).toMatchObject({
+      submitAction: 'ai-generate',
+      submitSourceScript: 'prepare',
+      submitScript: 'apply',
+      submitPrompt: 'Generate cards.',
+      submitInputCharLimit: 2500,
+      submitOutputCharLimit: 9000,
+      scriptLibraries: ['random'],
+      scriptStepBudget: 1234,
+    });
+  });
 });

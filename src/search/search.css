@@ -129,6 +129,10 @@
   overflow: hidden;
 }
 
+.search-palette.is-filter-tab {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .search-tabbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -267,6 +271,12 @@
 }
 
 .search-switch input {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  padding: 0;
   accent-color: var(--hvy-button-bg);
 }
 

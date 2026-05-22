@@ -70,6 +70,25 @@ label.hvy-form-checkbox-label input {
   grid-column: 1 / -1;
 }
 
+.hvy-form-library-fieldset {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-form-library-fieldset legend {
+  padding: 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--hvy-muted);
+}
+
 .hvy-form-reader-form {
   display: flex;
   flex-direction: column;
@@ -115,18 +134,24 @@ label.hvy-form-field-checkbox .hvy-form-field-error {
 
 .hvy-form-radio-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
-.hvy-form-radio-option {
+.hvy-form-plugin .hvy-form-radio-option {
+  display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
-.hvy-form-radio-option input {
+.hvy-form-plugin .hvy-form-radio-option input {
+  flex: 0 0 auto;
   width: auto;
+  margin: 0;
 }
 
 .hvy-form-actions {

@@ -7,10 +7,14 @@ import type {
   HvyPluginInstance,
 } from './types';
 import { FORM_PLUGIN_ID } from './registry';
-import type { ScriptingRunResult } from './scripting/wrapper';
+import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingRunResult, type ScriptingLibraryName } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
+import { requestProxyCompletion } from '../chat/chat';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { recordHistory } from '../history';
 import type { JsonObject } from '../hvy/types';
+import { getActiveStateRuntime, runWithStateRuntime } from '../state';
+import type { ChatMessage } from '../types';
 import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
@@ -34,6 +38,7 @@ const FIELD_TYPES = [
 
 type FormFieldType = (typeof FIELD_TYPES)[number];
 type FormTriggerName = 'input' | 'change' | 'blur';
+type FormSubmitAction = 'script' | 'ai-generate';
 
 const FIELD_TYPE_ALIASES: Record<string, FormFieldType> = {
   dropdown: 'select',
@@ -61,9 +66,16 @@ export interface FormSpec {
   fields: FormFieldDefinition[];
   scripts: Record<string, string>;
   initialScript: string;
+  submitAction: FormSubmitAction;
+  submitSourceScript: string;
   submitScript: string;
+  submitPrompt: string;
+  submitInputCharLimit: number;
+  submitOutputCharLimit: number;
   submitLabel: string;
   showSubmit: boolean;
+  scriptLibraries: ScriptingLibraryName[];
+  scriptStepBudget: number;
 }
 
 export interface ParsedFormSpec {
@@ -78,7 +90,21 @@ interface LiveFormState {
 }
 
 function defaultFormSpec(): FormSpec {
-  return { fields: [], scripts: {}, initialScript: '', submitScript: '', submitLabel: 'Submit', showSubmit: true };
+  return {
+    fields: [],
+    scripts: {},
+    initialScript: '',
+    submitAction: 'script',
+    submitSourceScript: '',
+    submitScript: '',
+    submitPrompt: '',
+    submitInputCharLimit: 4000,
+    submitOutputCharLimit: 4000,
+    submitLabel: 'Submit',
+    showSubmit: true,
+    scriptLibraries: [],
+    scriptStepBudget: 100_000,
+  };
 }
 
 const DEFAULT_FIELD: FormFieldDefinition = {
@@ -216,12 +242,51 @@ function normalizeScripts(value: unknown): Record<string, string> {
   return scripts;
 }
 
-function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitScript' | 'submitLabel' | 'showSubmit'> {
+function normalizeSubmitAction(value: unknown): FormSubmitAction {
+  return value === 'ai-generate' ? 'ai-generate' : 'script';
+}
+
+function normalizeScriptLibraries(value: unknown): ScriptingLibraryName[] {
+  const raw = Array.isArray(value) ? value : [];
+  const allowed = new Set(SCRIPTING_LIBRARY_OPTIONS);
+  const libraries: ScriptingLibraryName[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const normalized = item.trim();
+    if (allowed.has(normalized as ScriptingLibraryName) && !libraries.includes(normalized as ScriptingLibraryName)) {
+      libraries.push(normalized as ScriptingLibraryName);
+    }
+  }
+  return libraries;
+}
+
+function normalizePositiveInt(value: unknown, fallback: number): number {
+  const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : fallback;
+}
+
+function coerceReturnedText(value: unknown): string {
+  if (value === null || typeof value === 'undefined') {
+    return '';
+  }
+  return String(value).trim();
+}
+
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
   return {
     initialScript: typeof config?.initialScript === 'string' ? config.initialScript.trim() : '',
+    submitAction: normalizeSubmitAction(config?.submitAction),
+    submitSourceScript: typeof config?.submitSourceScript === 'string' ? config.submitSourceScript.trim() : '',
     submitScript: typeof config?.submitScript === 'string' ? config.submitScript.trim() : '',
+    submitPrompt: typeof config?.submitPrompt === 'string' ? config.submitPrompt : '',
+    submitInputCharLimit: normalizePositiveInt(config?.submitInputCharLimit, 4000),
+    submitOutputCharLimit: normalizePositiveInt(config?.submitOutputCharLimit, 4000),
     submitLabel: typeof config?.submitLabel === 'string' && config.submitLabel.trim().length > 0 ? config.submitLabel : 'Submit',
     showSubmit: config?.showSubmit !== false,
+    scriptLibraries: normalizeScriptLibraries(config?.scriptLibraries),
+    scriptStepBudget: normalizePositiveInt(config?.scriptStepBudget ?? config?.maxLines, 100_000),
   };
 }
 
@@ -229,9 +294,16 @@ export function serializeFormConfig(spec: FormSpec): JsonObject {
   return {
     version: FORM_PLUGIN_VERSION,
     initialScript: spec.initialScript,
+    submitAction: spec.submitAction,
+    submitSourceScript: spec.submitSourceScript,
     submitScript: spec.submitScript,
+    submitPrompt: spec.submitPrompt,
+    submitInputCharLimit: spec.submitInputCharLimit,
+    submitOutputCharLimit: spec.submitOutputCharLimit,
     submitLabel: spec.submitLabel,
     showSubmit: spec.showSubmit,
+    scriptLibraries: spec.scriptLibraries,
+    scriptStepBudget: spec.scriptStepBudget,
   };
 }
 
@@ -353,7 +425,10 @@ function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
 
 function resultText(result: ScriptingRunResult): string {
   if (result.ok) {
-    return `Executed ${result.linesExecuted} line${result.linesExecuted === 1 ? '' : 's'}, ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`;
+    const steps = `${result.stepsExecuted.toLocaleString()}/${result.stepBudget.toLocaleString()} steps`;
+    return result.toolCalls > 0
+      ? `Script ran ${steps} with ${result.toolCalls} tool call${result.toolCalls === 1 ? '' : 's'}.`
+      : `Script ran ${steps}.`;
   }
   return `Script error: ${result.error ?? 'unknown error'}`;
 }
@@ -365,6 +440,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let initialized = false;
   let statusText = '';
   let statusError = false;
+  let submitBusy = false;
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
   let skipNextEditorRefresh = false;
@@ -381,55 +457,74 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     ctx.setConfig(serializeFormConfig(spec));
   };
 
+  const buildFormApi = (): ScriptingFormApi => ({
+    get_value: (fieldName) => live.values[fieldName],
+    set_value: (fieldName, value) => {
+      live.values[fieldName] = typeof value === 'boolean' ? value : String(value ?? '');
+      renderReader();
+    },
+    get_values: () => ({ ...live.values }),
+    set_options: (fieldName, options) => {
+      live.options[fieldName] = Array.isArray(options)
+        ? options
+            .map(normalizeScriptingFormOption)
+            .filter((option) => option.label.length > 0)
+        : [];
+      renderReader();
+    },
+    get_options: (fieldName) => (live.options[fieldName] ?? []).map((option) => ({ ...option })),
+    set_error: (fieldName, message) => {
+      live.errors[fieldName] = String(message ?? '');
+      renderReader();
+    },
+    clear_error: (fieldName) => {
+      delete live.errors[fieldName];
+      renderReader();
+    },
+  });
+
+  const runFormScript = async (scriptName: string, reason: string, injectedGlobals?: Record<string, unknown>): Promise<ScriptingRunResult> => {
+    const name = scriptName.trim();
+    const { spec } = parseCurrent();
+    const source = spec.scripts[name];
+    if (name.length === 0 || typeof source !== 'string') {
+      return {
+        ok: false,
+        error: name.length === 0 ? 'Script name is empty.' : `Script "${name}" is not defined.`,
+        stepsExecuted: 0,
+        stepBudget: 100_000,
+        linesExecuted: 0,
+        toolCalls: 0,
+        logs: [],
+      };
+    }
+    const { runUserScript } = await import('./scripting/wrapper');
+    return runUserScript({
+      document: ctx.rawDocument,
+      source,
+      componentId: `${ctx.block.schema.id || ctx.block.id}:${name}:${reason}`,
+      pluginVersion: String(ctx.block.schema.pluginConfig.version ?? FORM_PLUGIN_VERSION),
+      maxLines: spec.scriptStepBudget,
+      form: buildFormApi(),
+      injectedGlobals,
+      libraries: spec.scriptLibraries,
+    });
+  };
+
   const runNamedScript = (scriptName: string, reason: string): void => {
     const name = scriptName.trim();
     if (name.length === 0) {
       return;
     }
     const { spec } = parseCurrent();
-    const source = spec.scripts[name];
-    if (typeof source !== 'string') {
+    if (typeof spec.scripts[name] !== 'string') {
       statusText = `Script "${name}" is not defined.`;
       statusError = true;
       renderReader();
       return;
     }
-    const formApi: ScriptingFormApi = {
-      get_value: (fieldName) => live.values[fieldName],
-      set_value: (fieldName, value) => {
-        live.values[fieldName] = typeof value === 'boolean' ? value : String(value ?? '');
-        renderReader();
-      },
-      get_values: () => ({ ...live.values }),
-      set_options: (fieldName, options) => {
-        live.options[fieldName] = Array.isArray(options)
-          ? options
-              .map(normalizeScriptingFormOption)
-              .filter((option) => option.label.length > 0)
-          : [];
-        renderReader();
-      },
-      get_options: (fieldName) => (live.options[fieldName] ?? []).map((option) => ({ ...option })),
-      set_error: (fieldName, message) => {
-        live.errors[fieldName] = String(message ?? '');
-        renderReader();
-      },
-      clear_error: (fieldName) => {
-        delete live.errors[fieldName];
-        renderReader();
-      },
-    };
     runQueue = runQueue
-      .then(async () => {
-        const { runUserScript } = await import('./scripting/wrapper');
-        return runUserScript({
-          document: ctx.rawDocument,
-          source,
-          componentId: `${ctx.block.schema.id || ctx.block.id}:${name}:${reason}`,
-          pluginVersion: String(ctx.block.schema.pluginConfig.version ?? FORM_PLUGIN_VERSION),
-          form: formApi,
-        });
-      })
+      .then(() => runFormScript(name, reason))
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;
@@ -438,6 +533,81 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .catch((error) => {
         statusText = error instanceof Error ? error.message : 'Script failed.';
         statusError = true;
+        renderReader();
+      });
+  };
+
+  const buildDefaultAiSource = (): string => JSON.stringify(live.values, null, 2);
+
+  const runAiSubmit = (): void => {
+    if (submitBusy) {
+      return;
+    }
+    const runtime = getActiveStateRuntime();
+    const inFormRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
+    const { spec } = parseCurrent();
+    submitBusy = true;
+    statusText = 'Preparing...';
+    statusError = false;
+    renderReader();
+    runQueue = runQueue
+      .then(async () => {
+        let source = buildDefaultAiSource();
+        if (spec.submitSourceScript.trim().length > 0) {
+          const sourceResult = await runFormScript(spec.submitSourceScript, 'submit-source');
+          if (!sourceResult.ok) {
+            throw new Error(sourceResult.error ?? 'Submit source script failed.');
+          }
+          source = coerceReturnedText(sourceResult.returnValue);
+        }
+        if (source.length === 0) {
+          statusText = 'Nothing to generate.';
+          statusError = false;
+          return;
+        }
+        if (source.length > spec.submitInputCharLimit) {
+          throw new Error(`Generation input exceeds ${spec.submitInputCharLimit} characters.`);
+        }
+        statusText = 'Generating...';
+        statusError = false;
+        renderReader();
+        const prompt = spec.submitPrompt.trim() || 'Generate the requested text. Return only the generated text.';
+        const messages: ChatMessage[] = [{
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: prompt,
+        }];
+        const response = await inFormRuntime(() => requestProxyCompletion({
+          settings: runtime.state.chat.settings,
+          messages,
+          context: `Form generation input:\n${source}`,
+          responseInstructions: 'Return only the generated text. Do not include Markdown fences, explanations, or labels.',
+          mode: 'qa',
+          debugLabel: 'form-ai-generate',
+        }));
+        if (response.length > spec.submitOutputCharLimit) {
+          throw new Error(`Generation output exceeds ${spec.submitOutputCharLimit} characters.`);
+        }
+        if (spec.submitScript.trim().length === 0) {
+          throw new Error('AI form submit requires submitScript to apply the generated response.');
+        }
+        statusText = 'Applying...';
+        statusError = false;
+        renderReader();
+        inFormRuntime(() => recordHistory(`form:${ctx.block.id}:ai-generate`));
+        const targetResult = await runFormScript(spec.submitScript, 'submit-target', { response, source });
+        if (!targetResult.ok) {
+          throw new Error(targetResult.error ?? 'Submit target script failed.');
+        }
+        statusText = 'Done.';
+        statusError = false;
+      })
+      .catch((error) => {
+        statusText = error instanceof Error ? error.message : 'AI submit failed.';
+        statusError = true;
+      })
+      .finally(() => {
+        submitBusy = false;
         renderReader();
       });
   };
@@ -544,9 +714,27 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     scriptControls.className = 'hvy-form-editor-grid';
     scriptControls.innerHTML = `
       ${renderTopScriptSelect('Initial Script', 'initialScript', spec.initialScript, scriptNames)}
+      <label><span>Submit Action</span><select data-form-top-submit-action>
+        <option value="script"${spec.submitAction === 'script' ? ' selected' : ''}>Script</option>
+        <option value="ai-generate"${spec.submitAction === 'ai-generate' ? ' selected' : ''}>AI Generate</option>
+      </select></label>
+      ${renderTopScriptSelect('Submit Source Script', 'submitSourceScript', spec.submitSourceScript, scriptNames)}
       ${renderTopScriptSelect('Submit Script', 'submitScript', spec.submitScript, scriptNames)}
+      <label><span>Submit Prompt</span><textarea rows="4" data-form-top-text="submitPrompt">${escapeHtml(spec.submitPrompt)}</textarea></label>
+      <label><span>Input Limit</span><input type="number" min="1" data-form-top-number="submitInputCharLimit" value="${spec.submitInputCharLimit}"></label>
+      <label><span>Output Limit</span><input type="number" min="1" data-form-top-number="submitOutputCharLimit" value="${spec.submitOutputCharLimit}"></label>
+      <label><span>Script Step Budget</span><input type="number" min="1" data-form-top-number="scriptStepBudget" value="${spec.scriptStepBudget}"></label>
       <label><span>Submit Label</span><input data-form-top-text="submitLabel" value="${escapeAttr(spec.submitLabel)}"></label>
       <label class="hvy-form-checkbox-label"><span>Show Submit</span><input type="checkbox" data-form-top-checkbox="showSubmit" ${spec.showSubmit ? 'checked' : ''}></label>
+      <fieldset class="hvy-form-library-fieldset">
+        <legend>Script Libraries</legend>
+        ${SCRIPTING_LIBRARY_OPTIONS.map((library) => `
+          <label class="hvy-form-checkbox-label">
+            <span>${escapeHtml(library)}</span>
+            <input type="checkbox" data-form-library="${escapeAttr(library)}" ${spec.scriptLibraries.includes(library) ? 'checked' : ''}>
+          </label>
+        `).join('')}
+      </fieldset>
     `;
     scriptSection.appendChild(scriptControls);
     for (const [name, source] of Object.entries(spec.scripts)) {
@@ -586,7 +774,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const submit = document.createElement('button');
       submit.type = 'submit';
       submit.className = 'secondary';
-      submit.textContent = spec.submitLabel || 'Submit';
+      submit.textContent = submitBusy ? 'Generating...' : spec.submitLabel || 'Submit';
+      submit.disabled = submitBusy;
       actions.appendChild(submit);
       form.appendChild(actions);
     }
@@ -622,7 +811,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   }
 
   function renderReaderField(field: FormFieldDefinition): HTMLElement {
-    const wrap = document.createElement('label');
+    const wrap = document.createElement(field.type === 'radio' ? 'div' : 'label');
     wrap.className = `hvy-form-field hvy-form-field-${field.type}`;
     if (field.meta.css.trim().length > 0) {
       wrap.setAttribute('style', sanitizeInlineCss(field.meta.css));
@@ -769,18 +958,42 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return;
     }
     if (target.dataset.formTopScript) {
-      const key = target.dataset.formTopScript as 'initialScript' | 'submitScript';
+      const key = target.dataset.formTopScript as 'initialScript' | 'submitSourceScript' | 'submitScript';
       spec[key] = target.value.trim();
       commitBehavior(spec);
       return;
     }
-    if (target.dataset.formTopText === 'submitLabel') {
-      spec.submitLabel = target.value;
+    if (target.dataset.formTopSubmitAction !== undefined) {
+      spec.submitAction = normalizeSubmitAction(target.value);
+      commitBehavior(spec);
+      return;
+    }
+    if (target.dataset.formTopText === 'submitLabel' || target.dataset.formTopText === 'submitPrompt') {
+      const key = target.dataset.formTopText as 'submitLabel' | 'submitPrompt';
+      spec[key] = target.value;
+      commitBehavior(spec);
+      return;
+    }
+    if (target.dataset.formTopNumber === 'submitInputCharLimit' || target.dataset.formTopNumber === 'submitOutputCharLimit' || target.dataset.formTopNumber === 'scriptStepBudget') {
+      const key = target.dataset.formTopNumber as 'submitInputCharLimit' | 'submitOutputCharLimit' | 'scriptStepBudget';
+      spec[key] = normalizePositiveInt(target.value, spec[key]);
       commitBehavior(spec);
       return;
     }
     if (target.dataset.formTopCheckbox === 'showSubmit' && target instanceof HTMLInputElement) {
       spec.showSubmit = target.checked;
+      commitBehavior(spec);
+      return;
+    }
+    if (target.dataset.formLibrary && target instanceof HTMLInputElement) {
+      const library = target.dataset.formLibrary as ScriptingLibraryName;
+      const nextLibraries = new Set(spec.scriptLibraries);
+      if (target.checked) {
+        nextLibraries.add(library);
+      } else {
+        nextLibraries.delete(library);
+      }
+      spec.scriptLibraries = SCRIPTING_LIBRARY_OPTIONS.filter((name) => nextLibraries.has(name));
       commitBehavior(spec);
       return;
     }
@@ -796,6 +1009,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       spec.scripts[nextName] = spec.scripts[oldName] ?? '';
       delete spec.scripts[oldName];
       if (spec.initialScript === oldName) spec.initialScript = nextName;
+      if (spec.submitSourceScript === oldName) spec.submitSourceScript = nextName;
       if (spec.submitScript === oldName) spec.submitScript = nextName;
       for (const field of spec.fields) {
         for (const trigger of ['input', 'change', 'blur'] as const) {
@@ -803,7 +1017,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         }
       }
       commitSpec(spec);
-      if (spec.initialScript === nextName || spec.submitScript === nextName) {
+      if (spec.initialScript === nextName || spec.submitSourceScript === nextName || spec.submitScript === nextName) {
         commitBehavior(spec);
       }
     }
@@ -857,6 +1071,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const name = button.dataset.formScriptName ?? '';
       delete spec.scripts[name];
       if (spec.initialScript === name) spec.initialScript = '';
+      if (spec.submitSourceScript === name) spec.submitSourceScript = '';
       if (spec.submitScript === name) spec.submitScript = '';
       commitBehavior(spec);
       forceEditorRender = true;
@@ -867,6 +1082,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const onSubmit = (event: Event) => {
     event.preventDefault();
     const { spec } = parseCurrent();
+    if (spec.submitAction === 'ai-generate') {
+      runAiSubmit();
+      return;
+    }
     runNamedScript(spec.submitScript, 'submit');
   };
 
@@ -951,14 +1170,17 @@ export const formPlugin: HvyPlugin = {
     filename: 'about-form.txt',
     text: formDocumentation,
   },
-  aiHint: 'Form UI. Fields live in plugin.txt; named scripts are also exposed as sibling .py files. Form-level hooks live in plugin.json pluginConfig.',
+  aiHint: 'Form UI. Fields live in plugin.txt; named scripts are also exposed as sibling .py files. Form-level hooks and AI submit settings live in plugin.json pluginConfig.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
-    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, and `submitScript`.',
+    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
-    '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
+    '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
+    'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output.',
+    '`scriptLibraries` enables checked sandbox libraries such as `random` for every form script.',
+    '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
     'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',

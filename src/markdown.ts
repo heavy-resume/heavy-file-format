@@ -93,6 +93,7 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
     code.setAttribute('contenteditable', 'true');
   });
   renderInlineCheckboxes(template.content);
+  markInlineCheckboxLines(template.content);
   preserveTrailingEditableSpaces(template.content);
   template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');
@@ -111,7 +112,7 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'viewer',
   });
-  return restoreResponsiveAnnotationTokens(html, annotations.tokens);
+  return wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens));
 }
 
 function renderMarkdownHtml(markdown: string, options: Required<MarkdownRenderOptions>): string {
@@ -230,7 +231,65 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
   const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
-  return { markdown: withNowrap, tokens };
+  return { markdown: options.editable ? withNowrap : replaceInlineCheckboxMarkers(withNowrap, makeToken), tokens };
+}
+
+function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {
+  const lines = markdown.split(/(\r?\n)/);
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+  return lines
+    .map((line) => {
+      if (/^\r?\n$/.test(line)) {
+        return line;
+      }
+      const fenceLine = parseTextLineStyleFence(line);
+      if (fence) {
+        if (fenceLine && fenceLine.marker === fence.marker && fenceLine.length >= fence.length) {
+          fence = null;
+        }
+        return line;
+      }
+      if (fenceLine) {
+        fence = fenceLine;
+        return line;
+      }
+      return replaceInlineCheckboxMarkersInLine(line, makeToken);
+    })
+    .join('');
+}
+
+function replaceInlineCheckboxMarkersInLine(line: string, makeToken: (html: string) => string): string {
+  const taskListPrefix = line.match(/^(\s*(?:[-+*]|\d+[.)])\s+)\[(?: |x|X)\](?=\s|$)/)?.[1]?.length ?? -1;
+  let result = '';
+  let index = 0;
+  let inlineCodeMarker: string | null = null;
+
+  while (index < line.length) {
+    const codeMatch = line.slice(index).match(/^`+/);
+    if (codeMatch?.[0]) {
+      const marker = codeMatch[0];
+      if (inlineCodeMarker === marker) {
+        inlineCodeMarker = null;
+      } else if (!inlineCodeMarker) {
+        inlineCodeMarker = marker;
+      }
+      result += marker;
+      index += marker.length;
+      continue;
+    }
+
+    const checkboxMatch = line.slice(index).match(/^\[( |x|X)\]/);
+    if (checkboxMatch?.[0] && !inlineCodeMarker && index !== taskListPrefix) {
+      result += makeToken(renderInlineCheckboxHtml((checkboxMatch[1] ?? ' ').toLowerCase() === 'x'));
+      index += checkboxMatch[0].length;
+      continue;
+    }
+
+    result += line[index] ?? '';
+    index += 1;
+  }
+
+  return result;
 }
 
 export function renderAltAnnotationsAsFullText(markdown: string): string {
@@ -361,6 +420,36 @@ function renderAltAnnotationHtml(fullText: string, compactText: string, editable
 
 function renderNowrapAnnotationHtml(text: string): string {
   return `<span class="hvy-nowrap" data-hvy-nowrap="true">${escapeHtml(text)}</span>`;
+}
+
+function renderInlineCheckboxHtml(checked: boolean): string {
+  return `<input class="hvy-inline-checkbox" type="checkbox"${checked ? ' checked' : ''} contenteditable="false" disabled>`;
+}
+
+function wrapInlineCheckboxLines(html: string): string {
+  return html.replace(/<p>((?=[\s\S]*?\bhvy-inline-checkbox\b)[\s\S]*?)<\/p>/g, '<div class="hvy-inline-checkbox-line">$1</div>');
+}
+
+function markInlineCheckboxLines(root: ParentNode): void {
+  root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox').forEach((checkbox) => {
+    const parent = checkbox.parentElement;
+    if (!parent || !isLeadingInlineCheckbox(checkbox)) {
+      return;
+    }
+    parent.classList.add('hvy-inline-checkbox-line');
+  });
+}
+
+function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
+  let previous = checkbox.previousSibling;
+  while (previous) {
+    if (previous.nodeType === Node.TEXT_NODE && (previous.textContent ?? '').trim().length === 0) {
+      previous = previous.previousSibling;
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
@@ -543,6 +632,7 @@ function renderInlineCheckboxes(root: ParentNode): void {
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
+      checkbox.classList.add('hvy-inline-checkbox');
       const isChecked = (match[1] ?? ' ').toLowerCase() === 'x';
       checkbox.checked = isChecked;
       if (isChecked) {

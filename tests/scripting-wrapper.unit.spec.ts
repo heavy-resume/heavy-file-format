@@ -126,7 +126,7 @@ test('buildPythonProgram executes user code with restricted builtins', () => {
 
   expect(program).toContain('__hvy_safe_builtins__ = {');
   expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
-  expect(program).toContain("'__import__': __hvy_blocked_import__");
+  expect(program).toContain("'__import__': __hvy_script_import__");
   expect(program).toContain("'print': __hvy_print__");
   expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
   expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
@@ -153,6 +153,13 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
   );
 });
 
+test('buildPythonProgram preloads checked libraries', () => {
+  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random']);
+
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random"]');
+  expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
+});
+
 test('stripPythonImports replaces plain import statements with pass', () => {
   expect(
     stripPythonImports(
@@ -163,6 +170,23 @@ doc.header.set("ok", "yes")
   ).toBe(
     `raise RuntimeError("Import statements are not allowed in HVY scripts.")
 doc.header.set("ok", "yes")
+`
+  );
+});
+
+test('stripPythonImports allows checked library imports', () => {
+  expect(
+    stripPythonImports(
+      `import random
+items = [1, 2, 3]
+random.shuffle(items)
+`,
+      ['random']
+    )
+  ).toBe(
+    `
+items = [1, 2, 3]
+random.shuffle(items)
 `
   );
 });
@@ -256,6 +280,8 @@ test('runUserScript refuses to execute scripts that require a newer scripting pl
     ok: false,
     error: buildScriptingVersionMismatchMessage(requestedVersion),
     errorDetail: buildScriptingVersionMismatchMessage(requestedVersion),
+    stepsExecuted: 0,
+    stepBudget: 100_000,
     linesExecuted: 0,
     toolCalls: 0,
   });
@@ -288,7 +314,9 @@ test('createScriptingRuntime reports when the line budget is exceeded', () => {
 
   expect(runtime.step()).toBeNull();
   expect(runtime.step()).toBeNull();
-  expect(runtime.step()).toContain('line budget (2)');
+  expect(runtime.step()).toContain('step budget (2)');
+  expect(runtime.stats.stepsExecuted).toBe(3);
+  expect(runtime.stats.stepBudget).toBe(2);
   expect(runtime.stats.linesExecuted).toBe(3);
 });
 
@@ -483,6 +511,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
       editorOnly: true,
       pluginVersion: SCRIPTING_PLUGIN_VERSION,
       componentId: '',
+      libraries: [],
     },
     {
       sectionKey: 'section',
@@ -491,6 +520,7 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
       editorOnly: false,
       pluginVersion: SCRIPTING_PLUGIN_VERSION,
       componentId: '',
+      libraries: [],
     },
   ];
 

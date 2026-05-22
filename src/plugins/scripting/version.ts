@@ -8,9 +8,11 @@ export function getScriptingPluginVersion(pluginConfig: JsonObject | null | unde
 }
 
 export function getScriptingPluginMaxLines(pluginConfig: JsonObject | null | undefined): number | undefined {
-  const rawMaxLines = pluginConfig?.maxLines;
-  if (typeof rawMaxLines !== 'number' || !Number.isFinite(rawMaxLines) || rawMaxLines <= 0) {
+  const rawMaxSteps = pluginConfig?.maxSteps ?? pluginConfig?.maxLines;
+  if (typeof rawMaxSteps !== 'number' || !Number.isFinite(rawMaxSteps) || rawMaxSteps <= 0) {
     return undefined;
   }
-  return Math.floor(rawMaxLines);
+  return Math.floor(rawMaxSteps);
 }
+
+export const getScriptingPluginMaxSteps = getScriptingPluginMaxLines;

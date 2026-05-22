@@ -26,6 +26,7 @@ test('checkbox action inserts a single inline checkbox without coercing content 
     .click();
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
+  await expect(editor.locator('p').nth(0)).toHaveClass(/hvy-inline-checkbox-line/);
   await expect(editor.locator('p').nth(0)).toContainText('First item');
   await expect(editor.locator('p').nth(1)).toContainText('Second item');
   await expect(editor.locator('ul, li')).toHaveCount(0);
@@ -55,6 +56,7 @@ test('checkbox action inserts a checkbox at the current line and backspace remov
     .click();
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
+  await expect(editor.locator('p').first()).toHaveClass(/hvy-inline-checkbox-line/);
   await expect(editor.locator('p').first()).toContainText('Draft task');
 
   const caret = await editor.evaluate((node) => {

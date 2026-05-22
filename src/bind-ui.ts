@@ -1,6 +1,7 @@
 import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
+import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
@@ -254,6 +255,11 @@ export function bindUi(app: HTMLElement): void {
   const crmExampleBtn = app.querySelector<HTMLButtonElement>('#crmExampleBtn');
   crmExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledCrmHvy, 'crm.hvy', 'crm');
+  });
+
+  const studyToolsExampleBtn = app.querySelector<HTMLButtonElement>('#studyToolsExampleBtn');
+  studyToolsExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledStudyToolsHvy, 'study-tools.hvy', 'study-tools');
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');

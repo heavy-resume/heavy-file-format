@@ -200,6 +200,7 @@ export type SelectedExample =
   | 'blank'
   | 'guide'
   | 'crm'
+  | 'study-tools'
   | 'resume-template'
   | 'resume-example'
   | 'import-reference'

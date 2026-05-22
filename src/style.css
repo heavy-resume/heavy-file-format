@@ -592,6 +592,10 @@ body {
   display: block;
   line-height: 1;
   text-align: center;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  writing-mode: vertical-rl;
 }
 
 .viewer-shell {

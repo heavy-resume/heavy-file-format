@@ -2315,8 +2315,8 @@ function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseTyp
     }
     block.schema.containerTitle ||= 'Example group';
   } else if (baseType === 'expandable') {
-    block.schema.expandableStubBlocks = block.schema.expandableStubBlocks ?? { children: [] };
-    block.schema.expandableContentBlocks = block.schema.expandableContentBlocks ?? { children: [] };
+    block.schema.expandableStubBlocks = block.schema.expandableStubBlocks ?? { lock: false, children: [] };
+    block.schema.expandableContentBlocks = block.schema.expandableContentBlocks ?? { lock: false, children: [] };
     if (block.schema.expandableStubBlocks.children.length === 0) {
       block.schema.expandableStubBlocks.children.push(createImportExampleTextBlock('Example summary'));
     }

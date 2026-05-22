@@ -2668,13 +2668,35 @@ function insertInlineCheckboxAtSelection(editable: HTMLElement): void {
   normalizedRange.deleteContents();
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
+  checkbox.classList.add('hvy-inline-checkbox');
   checkbox.setAttribute('contenteditable', 'false');
   const spacer = document.createTextNode(' ');
   const fragment = document.createDocumentFragment();
   fragment.appendChild(checkbox);
   fragment.appendChild(spacer);
   normalizedRange.insertNode(fragment);
+  markInlineCheckboxLine(checkbox);
   placeCaretAfterInlineCheckbox(spacer, editable);
+}
+
+function markInlineCheckboxLine(checkbox: HTMLInputElement): void {
+  const parent = checkbox.parentElement;
+  if (!parent || !isLeadingInlineCheckbox(checkbox)) {
+    return;
+  }
+  parent.classList.add('hvy-inline-checkbox-line');
+}
+
+function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
+  let previous = checkbox.previousSibling;
+  while (previous) {
+    if (previous.nodeType === Node.TEXT_NODE && (previous.textContent ?? '').trim().length === 0) {
+      previous = previous.previousSibling;
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: string): void {

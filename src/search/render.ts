@@ -50,7 +50,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
   const isFilterTab = search.activeTab === 'filter';
   return `<section class="search-overlay" aria-label="Document search">
     <div class="search-backdrop" data-action="close-search"></div>
-    <form id="searchComposer" class="search-palette" role="dialog" aria-modal="true" aria-label="Search document">
+    <form id="searchComposer" class="search-palette${isFilterTab ? ' is-filter-tab' : ''}" role="dialog" aria-modal="true" aria-label="Search document">
       <div class="search-tabbar" role="tablist" aria-label="Search mode">
         <button
           type="button"

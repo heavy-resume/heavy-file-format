@@ -1,4 +1,310 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = true;
+    }
+  });
+  const item = page.locator('.document-menu-panel').getByRole('button', { name, exact: true });
+  await expect(item).toBeVisible();
+  await item.click({ force: true });
+}
+
+test('AI form submit applies generated card data through a component template', async ({ page }) => {
+  test.setTimeout(5000);
+  let requestCount = 0;
+  await page.route('**/api/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { context?: string };
+    requestCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: payload.context?.includes('Widget basics')
+          ? requestCount === 1
+            ? '[{"source_id":"widget-basics","question":"What is Widget basics?","answer":"Widget basics are source-backed study material."}]'
+            : '[{"source_id":"widget-basics","question":"How can Widget basics be reviewed again?","answer":"A reusable form submit can run again and append another templated card."}]'
+          : '',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(String.raw`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.form
+    source: builtin://form
+component_defs:
+  - name: flashcard-card
+    baseType: expandable
+    templateVariables:
+      question:
+        label: Question
+      answer:
+        label: Answer
+    schema:
+      tags: generated-flashcard
+      expandableAlwaysShowStub: true
+      expandableExpanded: false
+      expandableStubBlocks:
+        children:
+          - text: "{% question | block %}"
+            schema:
+              component: text
+      expandableContentBlocks:
+        children:
+          - text: "{% answer | block %}"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"source"}-->
+  Widget basics
+
+ <!--hvy:plugin {"id":"generator","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitAction":"ai-generate","submitScript":"apply","submitLabel":"Generate cards","submitPrompt":"Return one JSON card record.","submitOutputCharLimit":2000}}-->
+  fields:
+    - label: Topic
+      type: text
+      value: Widget basics
+  scripts:
+    apply: |
+      def read_json_string(source, key, default_value=""):
+          marker = '"' + key + '"'
+          start = source.find(marker)
+          if start < 0:
+              return default_value
+          colon = source.find(":", start + len(marker))
+          quote = source.find('"', colon + 1)
+          index = quote + 1
+          value = ""
+          escaped = False
+          while index < len(source):
+              char = source[index]
+              if escaped:
+                  value += "\n" if char == "n" else char
+                  escaped = False
+              elif char == "\\":
+                  escaped = True
+              elif char == '"':
+                  return value
+              else:
+                  value += char
+              index += 1
+          return default_value
+      def json_escape(value):
+          return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+      question = read_json_string(response, "question")
+      answer = read_json_string(response, "answer")
+      values_json = '{"question":"' + json_escape(question) + '","answer":"' + json_escape(answer) + '"}'
+      existing_count = 0
+      for component in doc.tool.get_components("flashcard-card"):
+          if component.section_id == "main" and component.has_tag("generated-flashcard"):
+              existing_count += 1
+      doc.cli.run("hvy insert -1 flashcard-card /body/main --id flashcard-widget-basics-" + str(existing_count + 1) + " --using-template '" + values_json + "'")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  await page.getByRole('button', { name: 'Generate cards' }).click({ timeout: 1000 });
+
+  await expect(page.locator('#readerDocument')).toContainText('What is Widget basics?', { timeout: 1000 });
+  await page.getByText('What is Widget basics?').click({ timeout: 1000 });
+  await expect(page.locator('#readerDocument')).toContainText('Widget basics are source-backed study material.', { timeout: 1000 });
+
+  await expect(page.getByRole('button', { name: 'Generate cards' })).toBeVisible({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Generate cards' }).click({ timeout: 1000 });
+  await expect(page.locator('#readerDocument')).toContainText('How can Widget basics be reviewed again?', { timeout: 1000 });
+});
+
+test('text component showCopy copies reader text to clipboard', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          (window as unknown as { __copiedText: string }).__copiedText = value;
+        },
+        write: async (items: ClipboardItem[]) => {
+          const item = items[0];
+          const plainBlob = await item.getType('text/plain');
+          const htmlBlob = await item.getType('text/html');
+          (window as unknown as { __copiedText: string }).__copiedText = await plainBlob.text();
+          (window as unknown as { __copiedHtml: string }).__copiedHtml = await htmlBlob.text();
+        },
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(String.raw`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"copyable","showCopy":true}-->
+  Copy this text
+
+ <!--hvy:text {"id":"copy-heading","showCopy":true}-->
+  ## Copy Heading
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const copyable = page.locator('.reader-block-text[data-component-id="copyable"]');
+  await expect(copyable).toContainText('Copy this text');
+  const copyLayout = await copyable.evaluate((block) => {
+    const button = block.querySelector<HTMLElement>('.text-copy-button');
+    if (!button) {
+      throw new Error('Copy button markup missing.');
+    }
+    const textNode = Array.from(block.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length > 0);
+    if (!textNode) {
+      throw new Error('Copy text node missing.');
+    }
+    const textRange = document.createRange();
+    textRange.selectNodeContents(textNode);
+    const blockStyles = getComputedStyle(block);
+    const blockBox = block.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
+    const textBox = textRange.getBoundingClientRect();
+    textRange.detach();
+    return {
+      hasCopyShell: Boolean(block.querySelector('.text-copy-shell')),
+      blockPaddingTop: blockStyles.paddingTop,
+      textTop: textBox.top,
+      blockTop: blockBox.top,
+      buttonBottom: buttonBox.bottom,
+      blockBottom: blockBox.bottom,
+    };
+  });
+  expect(copyLayout.hasCopyShell).toBe(false);
+  expect(copyLayout.blockPaddingTop).toBe('0px');
+  expect(copyLayout.textTop).toBeGreaterThanOrEqual(copyLayout.blockTop);
+  expect(copyLayout.buttonBottom).toBeLessThanOrEqual(copyLayout.blockBottom);
+  const headingCopyable = page.locator('.reader-block-text[data-component-id="copy-heading"]');
+  await expect(headingCopyable).toContainText('Copy Heading');
+  const headingLayout = await headingCopyable.evaluate((block) => {
+    const heading = block.querySelector<HTMLElement>('h2');
+    if (!heading) {
+      throw new Error('Copy heading markup missing.');
+    }
+    return getComputedStyle(heading).marginTop;
+  });
+  expect(headingLayout).toBe('0px');
+  await copyable.hover();
+  await copyable.getByRole('button', { name: 'Copy text' }).click({ timeout: 1000 });
+
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedText?: string }).__copiedText)).toBe('Copy this text');
+  await expect(copyable.getByRole('button', { name: 'Copied' })).toBeVisible({ timeout: 1000 });
+
+  await page.evaluate(() => {
+    (window as unknown as { __copiedHtml?: string; __copiedText?: string }).__copiedText = undefined;
+    (window as unknown as { __copiedHtml?: string; __copiedText?: string }).__copiedHtml = undefined;
+  });
+  await headingCopyable.hover();
+  await headingCopyable.getByRole('button', { name: 'Copy text' }).click({ timeout: 1000 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedText?: string }).__copiedText)).toBe('Copy Heading');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedHtml?: string }).__copiedHtml)).toContain('<h2>Copy Heading</h2>');
+});
+
+test('study tools flashcards form remains mounted after sidebar reader refresh', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.route('**/api/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: '[{"source_id":"concept-model","question":"What does the source material say Heavy documents contain?","answer":"They contain sections and reusable components."},{"source_id":"scripting-runtime","question":"What does a form submit target script receive?","answer":"It receives the generated response and source values."}]',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Study Tools Example');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('.viewer-sidebar-tab')).toContainText('Study Tools', { timeout: 1000 });
+  const sidebarTabBox = await page.locator('.viewer-sidebar-tab').boundingBox();
+  const sidebarHelpBox = await page.locator('.viewer-sidebar-help-balloon').boundingBox();
+  expect(sidebarTabBox).not.toBeNull();
+  expect(sidebarHelpBox).not.toBeNull();
+  const sidebarTabCenter = sidebarTabBox!.y + sidebarTabBox!.height / 2;
+  const sidebarHelpCenter = sidebarHelpBox!.y + sidebarHelpBox!.height / 2;
+  expect(Math.abs(sidebarTabCenter - sidebarHelpCenter)).toBeLessThanOrEqual(3);
+  expect(sidebarHelpBox!.x).toBeGreaterThanOrEqual(sidebarTabBox!.x + sidebarTabBox!.width + 9);
+  await page.locator('.viewer-sidebar-tab').dispatchEvent('click');
+  await expect(page.locator('.viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  const flashcardsSection = page.locator('#flashcards-sidebar');
+  await expect(flashcardsSection).toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+  await flashcardsSection.dispatchEvent('click');
+  await expect(flashcardsSection).not.toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+
+  const generateButton = page.getByRole('button', { name: 'Generate flashcards' });
+  await expect(generateButton).toBeVisible({ timeout: 1000 });
+  await generateButton.click({ timeout: 1000 });
+
+  await expect(page.locator('#readerSidebarSections')).toContainText('What does the source material say Heavy documents contain?', { timeout: 2000 });
+  await expect(generateButton).toBeVisible({ timeout: 1000 });
+  await expect(
+    page.locator('#flashcard-generator-form [data-hvy-plugin-mount="true"]')
+  ).toHaveCount(0);
+
+  const generatedCards = page.locator('#readerSidebarSections .reader-block-expandable[data-component-id^="flashcard-"]');
+  await expect(generatedCards).toHaveCount(2);
+  await expect(generatedCards.first()).toContainText('What does the source material say Heavy documents contain?');
+  await expect(generatedCards.first()).toHaveCSS('min-height', '128px');
+  await expect(generatedCards.first()).not.toHaveCSS('border-top-style', 'none');
+  await generatedCards.first().click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('Source: Concept Model', { timeout: 1000 });
+
+  await page.getByRole('button', { name: 'Shuffle cards' }).click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('What does a form submit target script receive?', { timeout: 1000 });
+  await generatedCards.first().click({ timeout: 1000 });
+  await expect(generatedCards.first()).toContainText('Source: Scripting Runtime', { timeout: 1000 });
+});
+
+test('study tools quiz generates radio choices and compares results', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.route('**/api/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: '[{"source_id":"concept-model","question":"What are Heavy documents composed from?","option_1":"Sections and reusable components","option_2":"Only raw text files","option_3":"A single hidden table","option_4":"External browser tabs","correct_option_letter":"A"},{"source_id":"scripting-runtime","question":"What does the submit target script receive?","option_1":"Only the document title","option_2":"Injected response and source values","option_3":"A CSS-only payload","option_4":"No values","correct_option_letter":"B"}]',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Study Tools Example');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('.viewer-sidebar-tab').dispatchEvent('click');
+  await expect(page.locator('.viewer-sidebar-tab')).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  const quizSection = page.locator('#quiz-sidebar');
+  await expect(quizSection).toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+  await quizSection.dispatchEvent('click');
+  await expect(quizSection).not.toHaveClass(/is-collapsed-preview/, { timeout: 1000 });
+
+  await page.getByRole('button', { name: 'Generate quiz' }).click({ timeout: 1000 });
+  const firstAnswer = page.getByRole('radio', { name: 'A. Sections and reusable components', exact: true });
+  await expect(firstAnswer).toBeVisible({ timeout: 2000 });
+  await expect(page.locator('#quiz-answer-form')).not.toContainText('Correct answer:', { timeout: 1000 });
+
+  await firstAnswer.check({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Compare results' }).click({ timeout: 1000 });
+
+  await expect(page.getByLabel('Quiz result')).toHaveValue('Score: 1/2 (1 skipped)', { timeout: 1000 });
+  await expect(page.locator('#quiz-answer-form')).toContainText('Skipped. Correct answer: B', { timeout: 1000 });
+});
 
 test('editor-only generate button applies pronunciation and stays out of viewer', async ({ page }) => {
   await page.route('**/api/chat', async (route) => {

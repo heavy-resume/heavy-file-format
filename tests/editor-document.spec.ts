@@ -441,6 +441,61 @@ hvy_version: 0.1
   expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
 });
 
+test('text sidebar tab labels rotate and expand to fit', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+sidebar_label: Cards
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ Body content
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Side
+
+ Sidebar content
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvyViewer({ root, document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy') });
+    const button = root.querySelector<HTMLElement>('.viewer-sidebar-tab');
+    const label = root.querySelector<HTMLElement>('.sidebar-tab-label');
+    if (!button || !label) {
+      throw new Error('Expected sidebar text tab missing.');
+    }
+    const buttonBox = button.getBoundingClientRect();
+    const labelBox = label.getBoundingClientRect();
+    const labelStyle = getComputedStyle(label);
+    return {
+      buttonHeight: buttonBox.height,
+      buttonWidth: buttonBox.width,
+      labelHeight: labelBox.height,
+      labelWidth: labelBox.width,
+      labelWritingMode: labelStyle.writingMode,
+      labelTop: labelBox.top,
+      labelBottom: labelBox.bottom,
+      buttonTop: buttonBox.top,
+      buttonBottom: buttonBox.bottom,
+    };
+  });
+
+  expect(result.buttonHeight).toBeGreaterThan(result.buttonWidth);
+  expect(result.labelHeight).toBeGreaterThan(result.labelWidth);
+  expect(result.labelWritingMode).toBe('vertical-rl');
+  expect(result.labelTop).toBeGreaterThanOrEqual(result.buttonTop);
+  expect(result.labelBottom).toBeLessThanOrEqual(result.buttonBottom);
+});
+
 test('embedded viewer omits empty sidebar markup', async ({ page }) => {
   await page.goto('/');
 
@@ -2243,6 +2298,62 @@ test('edit sidebar add section creates a sidebar section', async ({ page }) => {
 
   await expect(titleInput).toHaveValue('Sidebar Added');
   await expect(newSidebarSection.locator('[data-action="toggle-section-location"]')).toHaveText('main →');
+});
+
+test('sidebar section and component Meta buttons open their modals', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"main-note"}-->
+  Main note.
+
+<!--hvy: {"id":"side","location":"sidebar"}-->
+#! Sidebar Notes
+
+ <!--hvy:text {"id":"side-note"}-->
+  Sidebar note.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-sidebar-tab').click();
+  const sidebar = page.locator('.editor-sidebar');
+  await sidebar.locator('.editor-section-head [data-action="focus-modal"]').click();
+  await expect(page.locator('.section-meta-modal')).toContainText('Section Meta: Sidebar Notes');
+  await page.locator('.section-meta-modal [data-modal-action="close"]').click();
+
+  await sidebar.locator('.editor-block-passive', { hasText: 'Sidebar note.' }).click();
+  const activeSidebarBlock = sidebar.locator('.editor-block[data-active-editor-block="true"]');
+  await activeSidebarBlock.getByRole('button', { name: 'Meta' }).click();
+  const componentMetaModal = page.locator('.component-meta-modal');
+  await expect(componentMetaModal).toContainText('Component Meta: text');
+  const showCopyCheckbox = componentMetaModal.locator('.schema-meta-checkbox', { hasText: 'Show Copy Button' });
+  await expect(showCopyCheckbox).toHaveCSS('display', 'flex');
+  await expect(showCopyCheckbox).toHaveCSS('flex-direction', 'row');
+  const showCopyLayout = await showCopyCheckbox.evaluate((label) => {
+    const input = label.querySelector('input');
+    const text = label.querySelector('span');
+    if (!input || !text) {
+      throw new Error('Show Copy Button checkbox markup missing.');
+    }
+    const inputBox = input.getBoundingClientRect();
+    const textBox = text.getBoundingClientRect();
+    return {
+      inputLeft: inputBox.left,
+      inputTop: inputBox.top,
+      textLeft: textBox.left,
+      textTop: textBox.top,
+    };
+  });
+  expect(showCopyLayout.inputLeft).toBeLessThan(showCopyLayout.textLeft);
+  expect(Math.abs(showCopyLayout.inputTop - showCopyLayout.textTop)).toBeLessThan(4);
 });
 
 test('AI mode shows add section ghost and opens the new section inline', async ({ page }) => {

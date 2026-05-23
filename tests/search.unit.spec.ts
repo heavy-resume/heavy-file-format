@@ -754,6 +754,76 @@ hvy_version: 0.1
   expect(expectedContext.matchedBlocks.has(containersXref.id)).toBe(false);
 });
 
+test('search filter context treats xrefs to semantic target record descendants as matches', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+<!--hvy:component-list {"id":"tools-xrefs","componentListComponent":"xref-card"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:xref-card {"id":"python-xref","xrefTitle":"Python","xrefTarget":"tool-python"}-->
+ <!--hvy:component-list:1 {}-->
+  <!--hvy:xref-card {"id":"containers-xref","xrefTitle":"Developer Containers","xrefTarget":"tool-containers"}-->
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+<!--hvy:expandable {"id":"tool-python","xrefTitle":"Python"}-->
+ <!--hvy:expandable:stub {}-->
+  <!--hvy:text {"id":"python-title"}-->
+   Python
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"python-detail"}-->
+   High-level dynamically typed language.
+`, '.hvy');
+  const xrefList = document.sections[0]!.blocks[0]!;
+  const pythonXref = xrefList.schema.componentListBlocks[0]!;
+  const containersXref = xrefList.schema.componentListBlocks[1]!;
+  const pythonRecord = document.sections[1]!.blocks[0]!;
+  const pythonDetail = pythonRecord.schema.expandableContentBlocks!.children[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'Anything Python',
+    submittedQuery: 'Anything Python',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [{
+      id: 'semantic-1',
+      category: 'semantic',
+      targetKind: 'block',
+      sectionKey: document.sections[1]!.key,
+      blockId: pythonDetail.id,
+      targetId: pythonDetail.id,
+      targetPath: '/body/tools/tool-python/expandable-content/python-detail',
+      label: 'High-level dynamically typed language.',
+      preview: 'High-level dynamically typed language.',
+      matchedText: 'Anything Python',
+      sourceField: 'Semantic match',
+    }],
+    navigationResultIds: ['semantic-1'],
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.matchedBlocks.has(pythonDetail.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(pythonXref.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(pythonXref.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(containersXref.id)).toBe(false);
+});
+
 test('search filter context treats expandable content layout wrappers as transparent context', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

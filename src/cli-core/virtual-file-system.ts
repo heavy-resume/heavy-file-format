@@ -168,19 +168,24 @@ export function findVirtualDirectoryForSection(document: VisualDocument, targetS
 }
 
 export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlock: VisualBlock): string | null {
-  const entries = new Map<string, HvyVirtualEntry>();
-  const blocks = new Map<string, VisualBlock>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`));
+  const blocks = buildVirtualDirectoryBlockLookup(document);
   for (const [path, block] of blocks) {
     if (block === targetBlock) {
       return path;
     }
   }
   return null;
+}
+
+export function buildVirtualDirectoryBlockLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
+  const entries = new Map<string, HvyVirtualEntry>();
+  const blocks = new Map<string, VisualBlock>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  return blocks;
 }
 
 function addSectionLookup(

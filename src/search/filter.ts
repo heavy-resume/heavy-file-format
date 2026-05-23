@@ -210,10 +210,19 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
 function addResultTargetIds(result: SearchState['results'][number], targetIds: Set<string>): void {
   addNormalizedTargetId(targetIds, result.targetId);
+  addTargetPathIds(result.targetPath, targetIds);
   if (result.targetKind === 'section') {
     addNormalizedTargetId(targetIds, result.sectionKey);
   } else {
     addNormalizedTargetId(targetIds, result.blockId);
+  }
+}
+
+function addTargetPathIds(targetPath: string | undefined, targetIds: Set<string>): void {
+  for (const part of targetPath?.split('/').filter(Boolean) ?? []) {
+    if (part !== 'body') {
+      addNormalizedTargetId(targetIds, part);
+    }
   }
 }
 

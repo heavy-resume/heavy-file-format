@@ -896,6 +896,10 @@ function renderMetaFilterControls(): string {
       ${renderMetaFilterModeButton('keyword', 'Keyword')}
       ${renderMetaFilterModeButton('semantic', 'Semantic')}
     </div>
+    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
+      ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
+      ${renderMetaFilterBehaviorButton('hide', 'Hide')}
+    </div>
     <div class="meta-filter-input-shell">
       <input
         id="metaFilterQuery"
@@ -924,6 +928,18 @@ function renderMetaFilterModeButton(mode: AppState['search']['filterQueryMode'],
     class="meta-filter-mode${active ? ' is-active' : ''}"
     data-action="set-meta-filter-mode"
     data-meta-filter-mode="${escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+    ${state.metaFilter.isRunning ? 'disabled' : ''}
+  >${escapeHtml(label)}</button>`;
+}
+
+function renderMetaFilterBehaviorButton(mode: AppState['search']['filterMode'], label: string): string {
+  const active = state.search.filterMode === mode;
+  return `<button
+    type="button"
+    class="meta-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-meta-filter-behavior"
+    data-meta-filter-behavior="${escapeAttr(mode)}"
     aria-pressed="${active ? 'true' : 'false'}"
     ${state.metaFilter.isRunning ? 'disabled' : ''}
   >${escapeHtml(label)}</button>`;

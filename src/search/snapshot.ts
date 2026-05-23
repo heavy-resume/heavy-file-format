@@ -1,5 +1,6 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
+import { buildVirtualDirectoryBlockLookup } from '../cli-core/virtual-file-system';
 import type {
   HvyDocumentSearchResponse,
   HvyDocumentSearchResponseSnapshot,
@@ -152,16 +153,24 @@ export function searchStateToSnapshot(search: SearchState): HvySearchSnapshot {
 
 export function alignExternalSnapshotResultsToDocument(input: HvySearchSnapshotInput | null | undefined, document: VisualDocument): HvySearchSnapshot {
   const snapshot = normalizeSearchSnapshotInput(input);
+  const blockPathLookup = buildVirtualDirectoryBlockLookup(document);
+  const blocksByPath = new Map(blockPathLookup);
+  const pathsByBlock = new Map([...blockPathLookup].map(([path, block]) => [block, path]));
   return normalizeSearchSnapshotInput({
     ...snapshot,
     results: snapshot.results.flatMap((result): HvySearchResult[] => {
-      const aligned = alignSearchResultToDocument(result, document);
+      const aligned = alignSearchResultToDocument(result, document, blocksByPath, pathsByBlock);
       return aligned ? [aligned] : [];
     }),
   });
 }
 
-function alignSearchResultToDocument(result: HvySearchResult, document: VisualDocument): HvySearchResult | null {
+function alignSearchResultToDocument(
+  result: HvySearchResult,
+  document: VisualDocument,
+  blocksByPath: ReadonlyMap<string, VisualBlock>,
+  pathsByBlock: ReadonlyMap<VisualBlock, string>
+): HvySearchResult | null {
   const section = findSnapshotResultSection(result, document.sections);
   if (!section) {
     return null;
@@ -173,7 +182,7 @@ function alignSearchResultToDocument(result: HvySearchResult, document: VisualDo
       targetId: result.targetId || section.customId || section.key,
     };
   }
-  const block = findSnapshotResultBlock(result, section);
+  const block = findSnapshotResultBlock(result, section, blocksByPath, pathsByBlock);
   if (!block) {
     return null;
   }
@@ -195,7 +204,18 @@ function findSnapshotResultSection(result: HvySearchResult, sections: VisualSect
   );
 }
 
-function findSnapshotResultBlock(result: HvySearchResult, section: VisualSection): VisualBlock | null {
+function findSnapshotResultBlock(
+  result: HvySearchResult,
+  section: VisualSection,
+  blocksByPath: ReadonlyMap<string, VisualBlock>,
+  pathsByBlock: ReadonlyMap<VisualBlock, string>
+): VisualBlock | null {
+  if (result.targetPath) {
+    const pathBlock = blocksByPath.get(result.targetPath);
+    if (pathBlock) {
+      return pathBlock;
+    }
+  }
   const pathBlockId = getPathBlockId(result.targetPath);
   for (const block of section.blocks) {
     const found = findBlockByPredicate(block, (candidate) =>
@@ -204,6 +224,7 @@ function findSnapshotResultBlock(result: HvySearchResult, section: VisualSection
       || candidate.schema.id === result.targetId
       || Boolean(pathBlockId && candidate.id === pathBlockId)
       || Boolean(pathBlockId && candidate.schema.id === pathBlockId)
+      || Boolean(result.targetPath && pathsByBlock.get(candidate) === result.targetPath)
     );
     if (found) {
       return found;

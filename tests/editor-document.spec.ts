@@ -1090,6 +1090,70 @@ title: Snapshot Host Test
   expect(result.editorHasMethods).toEqual({ setSearchSnapshot: 'function', getSearchSnapshot: 'function' });
 });
 
+test('reference meta filter reloads the document with the filter snapshot applied', async ({ page }) => {
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+
+  await page.evaluate(async () => {
+    const { setReferenceAppConfig } = await import(/* @vite-ignore */ '/src/reference-config.ts');
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument = state.document;
+    setReferenceAppConfig({
+      semanticFilterProvider: async (request) => request.candidates
+        .filter((candidate) => candidate.label === 'TypeScript' || candidate.targetId === 'tool-typescript')
+        .map((candidate) => ({ candidateId: candidate.candidateId })),
+    });
+  });
+
+  await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Semantic' }).click();
+  await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Hide' }).click();
+  await page.locator('#metaFilterQuery').fill('Programming languages');
+  await page.getByRole('button', { name: 'Meta Filter' }).click();
+  await expect(page.locator('.meta-filter-status')).toContainText('Loaded document with meta filter snapshot.');
+  await expect(page.locator('#readerDocument')).toContainText('TypeScript');
+  await expect(page.locator('#readerDocument')).not.toContainText('Developer Containers');
+
+  const result = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const original = (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument;
+    const blockIds = new Set<string>();
+    const visitBlock = (block: { id: string; schema: {
+      containerBlocks?: unknown[];
+      componentListBlocks?: unknown[];
+      expandableStubBlocks?: { children?: unknown[] };
+      expandableContentBlocks?: { children?: unknown[] };
+      gridItems?: Array<{ block: unknown }>;
+    } }) => {
+      blockIds.add(block.id);
+      for (const child of block.schema.containerBlocks ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.componentListBlocks ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.expandableStubBlocks?.children ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.expandableContentBlocks?.children ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const item of block.schema.gridItems ?? []) visitBlock(item.block as Parameters<typeof visitBlock>[0]);
+    };
+    for (const section of state.document.sections) {
+      for (const block of section.blocks) visitBlock(block as Parameters<typeof visitBlock>[0]);
+    }
+    return {
+      documentReloaded: state.document !== original,
+      currentView: state.currentView,
+      filterEnabled: state.search.filterEnabled,
+      filterMode: state.search.filterMode,
+      submittedMode: state.search.submittedFilterQueryMode,
+      resultLabels: state.search.results.map((searchResult) => searchResult.label),
+      allResultBlocksExist: state.search.results.every((searchResult) => !searchResult.blockId || blockIds.has(searchResult.blockId)),
+    };
+  });
+
+  expect(result.documentReloaded).toBe(true);
+  expect(result.currentView).toBe('viewer');
+  expect(result.filterEnabled).toBe(true);
+  expect(result.filterMode).toBe('hide');
+  expect(result.submittedMode).toBe('semantic');
+  expect(result.resultLabels).toContain('TypeScript');
+  expect(result.allResultBlocksExist).toBe(true);
+});
+
 test('embedded editor exposes dirty document change state to hosts', async ({ page }) => {
   await page.goto('/');
 

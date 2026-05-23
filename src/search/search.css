@@ -309,6 +309,48 @@
   color: var(--hvy-danger);
 }
 
+.search-status.is-empty {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-warning-border) 72%, var(--hvy-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-warning-bg) 68%, var(--hvy-surface));
+  color: var(--hvy-warning-text);
+  font-weight: 650;
+}
+
+.search-semantic-progress {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 62%, transparent);
+}
+
+.search-semantic-progress-track {
+  height: 0.48rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-border));
+}
+
+.search-semantic-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-highlight-2));
+  transition: width 180ms ease;
+}
+
+.search-semantic-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+}
+
 .search-filter-panel {
   display: grid;
   gap: 0.8rem;

@@ -7,15 +7,17 @@ import type {
   HvySearchResult,
   HvySemanticFilterCandidate,
   HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
   SearchCategory,
 } from './types';
 import { builtInSearchProvider } from './search-provider';
 import {
   applySemanticCandidateBudget,
-  buildSemanticFilterCandidates,
-  buildSemanticFilterInstructionPrompt,
+  buildSemanticFilterWindowRequest,
+  buildSemanticFilterWindows,
   getDefaultSemanticCandidateBudget,
   getSemanticDocumentTitle,
+  type HvySemanticFilterCandidateWindow,
 } from './semantic-candidates';
 
 const DEFAULT_SEARCH_CATEGORIES: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -83,12 +85,11 @@ async function searchDocumentsSemantically(
   }
 
   throwIfAborted(request.signal);
-  const matches = await provider({
+  const matches = await runDocumentSemanticWindows({
     prompt: query,
-    instructionPrompt: buildSemanticFilterInstructionPrompt(query, packet.candidates),
-    candidates: packet.candidates,
-    candidateBudget: packet.candidateBudget,
-    ...(request.signal ? { signal: request.signal } : {}),
+    provider,
+    windows: packet.windows,
+    signal: request.signal,
   });
   throwIfAborted(request.signal);
 
@@ -104,29 +105,81 @@ function buildDocumentSemanticCandidatePacket(
   documents: NormalizedSearchDocument[],
   options: { maxCandidateSummaryChars: number; maxTotalCandidateChars: number }
 ) {
-  const sections: HvySemanticFilterCandidate[] = [];
-  const blocks: HvySemanticFilterCandidate[] = [];
+  const candidates: HvySemanticFilterCandidate[] = [];
+  const windows: HvySemanticFilterCandidateWindow[] = [];
+  let windowOffset = 0;
 
   for (const entry of documents) {
     const title = entry.documentTitle || getSemanticDocumentTitle(entry.document);
-    for (const candidate of buildSemanticFilterCandidates(entry.document, {
+    const packet = buildSemanticFilterWindows({
+      document: entry.document,
+      prompt: '',
       maxCandidateSummaryChars: options.maxCandidateSummaryChars,
-    })) {
+      maxTotalCandidateChars: options.maxTotalCandidateChars,
+    });
+    const idMap = new Map<string, HvySemanticFilterCandidate>();
+    for (const candidate of packet.candidates) {
       const nextCandidate: HvySemanticFilterCandidate = {
         ...candidate,
         candidateId: `document:${entry.documentId}:${candidate.candidateId}`,
         documentId: entry.documentId,
         ...(title ? { documentTitle: title } : {}),
       };
-      if (nextCandidate.targetKind === 'section') {
-        sections.push(nextCandidate);
-      } else {
-        blocks.push(nextCandidate);
-      }
+      idMap.set(candidate.candidateId, nextCandidate);
+      candidates.push(nextCandidate);
     }
+    windows.push(...packet.windows.map((window) => ({
+      ...window,
+      windowIndex: windowOffset + window.windowIndex,
+      windowCount: 0,
+      label: title ? `${title}: ${window.label}` : window.label,
+      candidates: window.candidates.map((candidate) => idMap.get(candidate.candidateId)).filter((candidate): candidate is HvySemanticFilterCandidate => Boolean(candidate)),
+    })));
+    windowOffset += packet.windows.length;
   }
 
-  return applySemanticCandidateBudget([...sections, ...blocks], options);
+  const budgeted = applySemanticCandidateBudget(candidates, options);
+  const allowed = new Set(budgeted.candidates.map((candidate) => candidate.candidateId));
+  const budgetedWindows = windows
+    .map((window) => ({
+      ...window,
+      candidates: window.candidates.filter((candidate) => allowed.has(candidate.candidateId)),
+    }))
+    .filter((window) => window.candidates.length > 0)
+    .map((window, index, all) => ({
+      ...window,
+      windowIndex: index,
+      windowCount: all.length,
+      candidateBudget: {
+        maxCandidateSummaryChars: options.maxCandidateSummaryChars,
+        maxTotalCandidateChars: window.candidateBudget.maxTotalCandidateChars,
+        usedTotalCandidateChars: window.candidates.reduce((total, candidate) => total + JSON.stringify(candidate).length, 0),
+        includedCandidates: window.candidates.length,
+        totalCandidates: budgeted.candidateBudget.totalCandidates,
+        truncated: budgeted.candidateBudget.truncated,
+      },
+    }));
+  return {
+    ...budgeted,
+    windows: budgetedWindows,
+  };
+}
+
+async function runDocumentSemanticWindows(options: {
+  prompt: string;
+  provider: HvySemanticFilterProvider;
+  windows: HvySemanticFilterCandidateWindow[];
+  signal?: AbortSignal;
+}): Promise<HvySemanticFilterMatch[]> {
+  const matches: HvySemanticFilterMatch[] = [];
+  for (const window of options.windows) {
+    throwIfAborted(options.signal);
+    const windowMatches = await options.provider(buildSemanticFilterWindowRequest(options.prompt, window, {
+      ...(options.signal ? { signal: options.signal } : {}),
+    }));
+    matches.push(...windowMatches);
+  }
+  return matches;
 }
 
 function buildDocumentSemanticSearchResults(

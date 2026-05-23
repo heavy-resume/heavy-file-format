@@ -1,5 +1,9 @@
 import { builtInSearchProvider } from './search-provider';
-import { buildSemanticFilterRequest } from './semantic-candidates';
+import {
+  buildSemanticFilterWindowRequest,
+  buildSemanticFilterWindows,
+  type HvySemanticFilterCandidateWindow,
+} from './semantic-candidates';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
@@ -7,6 +11,7 @@ import type {
   HvySearchResult,
   HvySemanticFilterCandidate,
   HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
   SearchCategory,
   SearchFilterQueryMode,
 } from './types';
@@ -16,6 +21,7 @@ import { focusSearchInput } from './render';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
+const SEMANTIC_FILTER_WINDOW_CONCURRENCY = 3;
 
 export function openSearch(app: HTMLElement): void {
   state.search.open = true;
@@ -49,6 +55,7 @@ export function closeSearch(): void {
   state.search.abortController = null;
   state.search.requestNonce += 1;
   state.search.isLoading = false;
+  state.search.semanticProgress = null;
   getRenderApp()();
 }
 
@@ -68,6 +75,7 @@ export function stopSearch(): void {
   state.search.abortController = null;
   state.search.requestNonce += 1;
   state.search.isLoading = false;
+  state.search.semanticProgress = null;
   getRefreshReaderPanels()();
   getRenderApp()();
 }
@@ -79,6 +87,7 @@ export async function submitSearch(): Promise<void> {
   state.search.activeResultId = null;
   state.search.resultsCollapsed = false;
   state.search.error = null;
+  state.search.semanticProgress = null;
   state.search.abortController?.abort();
   state.search.clearedSectionKeys = [];
   state.search.clearedBlockIds = [];
@@ -106,6 +115,7 @@ export async function submitSearch(): Promise<void> {
   state.search.requestNonce = requestNonce;
   state.search.abortController = abortController;
   state.search.isLoading = true;
+  state.search.semanticProgress = null;
   getRenderApp()();
 
   try {
@@ -141,6 +151,7 @@ export async function submitSearch(): Promise<void> {
       return;
     }
     state.search.isLoading = false;
+    state.search.semanticProgress = null;
     state.search.abortController = null;
     getRenderApp()();
   }
@@ -353,6 +364,7 @@ async function submitSemanticFilter(): Promise<void> {
   state.search.activeResultId = null;
   state.search.resultsCollapsed = false;
   state.search.error = null;
+  state.search.semanticProgress = null;
   state.search.abortController?.abort();
   state.search.clearedSectionKeys = [];
   state.search.clearedBlockIds = [];
@@ -361,6 +373,7 @@ async function submitSemanticFilter(): Promise<void> {
     state.search.results = [];
     state.search.navigationResultIds = [];
     state.search.isLoading = false;
+    state.search.semanticProgress = null;
     getRenderApp()();
     return;
   }
@@ -371,6 +384,7 @@ async function submitSemanticFilter(): Promise<void> {
     state.search.navigationResultIds = [];
     state.search.error = 'Semantic filtering is not configured.';
     state.search.isLoading = false;
+    state.search.semanticProgress = null;
     getRenderApp()();
     return;
   }
@@ -380,22 +394,50 @@ async function submitSemanticFilter(): Promise<void> {
   state.search.requestNonce = requestNonce;
   state.search.abortController = abortController;
   state.search.isLoading = true;
+  state.search.semanticProgress = null;
   getRenderApp()();
 
   try {
     const searchDocument = state.currentView === 'viewer'
       ? { ...state.document, sections: filterTemplateVisibleSections(state.document.sections) }
       : state.document;
-    const request = buildSemanticFilterRequest({
+    const packet = buildSemanticFilterWindows({
       document: searchDocument,
       prompt,
       signal: abortController.signal,
     });
-    const matches = await provider(request);
+    state.search.semanticProgress = {
+      completedWindows: 0,
+      totalWindows: packet.windows.length,
+      matchedCandidates: 0,
+      includedCandidates: packet.candidateBudget.includedCandidates,
+      totalCandidates: packet.candidateBudget.totalCandidates,
+    };
+    getRenderApp()();
+    const matches = await runSemanticFilterWindows({
+      prompt,
+      provider,
+      windows: packet.windows,
+      documentTitle: typeof searchDocument.meta.title === 'string' ? searchDocument.meta.title : undefined,
+      signal: abortController.signal,
+      onWindowComplete: (progress) => {
+        if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
+          return;
+        }
+        state.search.semanticProgress = {
+          completedWindows: progress.completedWindows,
+          totalWindows: packet.windows.length,
+          matchedCandidates: progress.matchedCandidates,
+          includedCandidates: packet.candidateBudget.includedCandidates,
+          totalCandidates: packet.candidateBudget.totalCandidates,
+        };
+        getRenderApp()();
+      },
+    });
     if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
       return;
     }
-    state.search.results = normalizeSearchResults(buildSemanticSearchResults(request.candidates, matches, prompt));
+    state.search.results = normalizeSearchResults(buildSemanticSearchResults(packet.candidates, matches, prompt));
     state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
     if (state.search.filterEnabled && state.currentView === 'editor') {
       state.currentView = 'viewer';
@@ -416,6 +458,42 @@ async function submitSemanticFilter(): Promise<void> {
     state.search.abortController = null;
     getRenderApp()();
   }
+}
+
+async function runSemanticFilterWindows(options: {
+  prompt: string;
+  provider: HvySemanticFilterProvider;
+  windows: HvySemanticFilterCandidateWindow[];
+  documentTitle?: string;
+  signal?: AbortSignal;
+  onWindowComplete?: (progress: { completedWindows: number; matchedCandidates: number }) => void;
+}): Promise<HvySemanticFilterMatch[]> {
+  const matches: HvySemanticFilterMatch[] = [];
+  let nextWindowIndex = 0;
+  let completedWindows = 0;
+  let matchedCandidates = 0;
+  const workerCount = Math.min(SEMANTIC_FILTER_WINDOW_CONCURRENCY, Math.max(1, options.windows.length));
+
+  const runWorker = async (): Promise<void> => {
+    while (!options.signal?.aborted) {
+      const window = options.windows[nextWindowIndex];
+      nextWindowIndex += 1;
+      if (!window) {
+        return;
+      }
+      const windowMatches = await options.provider(buildSemanticFilterWindowRequest(options.prompt, window, {
+        ...(options.documentTitle ? { documentTitle: options.documentTitle } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
+      }));
+      matches.push(...windowMatches);
+      completedWindows += 1;
+      matchedCandidates += windowMatches.length;
+      options.onWindowComplete?.({ completedWindows, matchedCandidates });
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return matches;
 }
 
 function buildSemanticSearchResults(

@@ -5,7 +5,7 @@ import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
-import { buildSemanticFilterRequest } from '../src/search/semantic-candidates';
+import { buildSemanticFilterRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
 import { applySearchFilter } from '../src/search/actions';
@@ -704,6 +704,37 @@ hvy_version: 0.1
   expect(expectedResult.candidates.length).toBeLessThan(expectedResult.candidateBudget.totalCandidates);
 });
 
+test('semantic filter windows group section subtrees instead of individual component calls', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+
+<!--hvy:text {"id":"react"}-->
+ React components.
+
+<!--hvy: {"id":"writing"}-->
+#! Writing
+
+<!--hvy:text {"id":"notes"}-->
+ Release notes.
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find frontend work',
+  });
+
+  expect(expectedResult.windows).toHaveLength(2);
+  expect(expectedResult.windows[0]!.candidates.map((candidate) => candidate.targetId)).toEqual(['skills', 'typescript', 'react']);
+  expect(expectedResult.windows[1]!.candidates.map((candidate) => candidate.targetId)).toEqual(['writing', 'notes']);
+});
+
 test('semantic filter provider matches become normal filter results', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -722,20 +753,26 @@ hvy_version: 0.1
  Release notes.
 `, '.hvy');
   initState(createTestState(document));
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find TypeScript experience';
+  const matchedBlock = document.sections[0]!.blocks[0]!;
+  const renderApp = vi.fn();
   initCallbacks({
-    renderApp: vi.fn(),
+    renderApp,
     refreshReaderPanels: vi.fn(),
     refreshModalPreview: vi.fn(),
     componentRenderHelpers: null,
     readerRenderer: null,
   });
-  state.search.activeTab = 'filter';
-  state.search.filterQueryMode = 'semantic';
-  state.search.queryDraft = 'Find TypeScript experience';
-  const matchedBlock = document.sections[0]!.blocks[0]!;
+  const seenWindows: string[] = [];
   setReferenceAppConfig({
-    semanticFilterProvider: (request) => {
+    semanticFilterProvider: async (request) => {
       expect(request.instructionPrompt).toContain('Find TypeScript experience');
+      seenWindows.push(request.windowLabel ?? '');
+      if (!request.candidates.some((candidate) => candidate.candidateId === `block:${document.sections[0]!.key}:${matchedBlock.id}`)) {
+        return [];
+      }
       return [{
         candidateId: `block:${document.sections[0]!.key}:${matchedBlock.id}`,
         reason: 'TypeScript work is relevant.',
@@ -746,6 +783,13 @@ hvy_version: 0.1
 
   await applySearchFilter({ enabled: true });
 
+  expect(seenWindows).toEqual(['Skills', 'Writing']);
+  expect(renderApp).toHaveBeenCalled();
+  expect(state.search.semanticProgress).toMatchObject({
+    completedWindows: 2,
+    totalWindows: 2,
+    matchedCandidates: 1,
+  });
   expect(state.search.filterEnabled).toBe(true);
   expect(state.search.submittedFilterQueryMode).toBe('semantic');
   expect(state.search.results).toHaveLength(1);
@@ -785,6 +829,53 @@ hvy_version: 0.1
 
   expect(state.search.filterEnabled).toBe(false);
   expect(state.search.error).toBe('Semantic filtering is not configured.');
+});
+
+test('filter tab boxes no results and disables repeat filtering', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+
+  const expectedMarkup = renderSearchPalette({
+    open: true,
+    queryDraft: 'missing',
+    submittedQuery: 'missing',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: false,
+    filterMode: 'hide',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    semanticProgress: {
+      completedWindows: 2,
+      totalWindows: 2,
+      matchedCandidates: 0,
+      includedCandidates: 4,
+      totalCandidates: 4,
+    },
+    error: null,
+    results: [],
+    navigationResultIds: [],
+    requestNonce: 1,
+    abortController: null,
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
+  expect(expectedMarkup).toContain('class="search-status is-empty"');
+  expect(expectedMarkup).toContain('No semantic matches. Try a more specific prompt.');
+  expect(expectedMarkup).toContain('disabled');
+  expect(expectedMarkup).toContain('>No results</button>');
 });
 
 test('semantic provider parser keeps only valid candidate matches', () => {
@@ -872,6 +963,9 @@ title: Second
       { documentId: 'second-doc', document: secondDocument },
     ],
     semanticFilterProvider: (request) => {
+      if (!request.candidates.some((candidate) => candidate.documentId === 'second-doc')) {
+        return [];
+      }
       expect(request.instructionPrompt).toContain('"documentId":"second-doc"');
       expect(request.instructionPrompt).toContain('"documentTitle":"Second"');
       return [{

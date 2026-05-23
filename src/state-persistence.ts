@@ -40,7 +40,7 @@ interface SessionStatePayload {
   documentBase64?: string;
 }
 
-type SavedSearchState = Omit<SearchState, 'isLoading' | 'error' | 'requestNonce' | 'abortController'>;
+type SavedSearchState = Omit<SearchState, 'isLoading' | 'semanticProgress' | 'error' | 'requestNonce' | 'abortController'>;
 
 export interface LoadedSessionState {
   document?: VisualDocument;
@@ -381,6 +381,7 @@ function normalizeSearchState(value: unknown): SearchState {
       ? raw.clearedBlockIds.filter((entry) => typeof entry === 'string')
       : [],
     isLoading: false,
+    semanticProgress: null,
     error: null,
     requestNonce: 0,
     abortController: null,

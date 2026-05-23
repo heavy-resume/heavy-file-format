@@ -41,14 +41,20 @@ export function bindInputMisc(app: HTMLElement): void {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     if (isSearchQueryControl(target)) {
+      const hadFocus = document.activeElement === target;
       state.search.queryDraft = target.value;
       state.search.resultsCollapsed = false;
+      state.search.semanticProgress = null;
       const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
       if (filterButton) {
         const applied = isSearchFilterApplied();
         filterButton.classList.toggle('is-active', applied);
         filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
-        filterButton.textContent = applied ? 'Turn off filter' : 'Filter';
+        filterButton.disabled = state.search.isLoading;
+        filterButton.textContent = state.search.isLoading ? 'Filtering...' : applied ? 'Turn off filter' : 'Filter';
+      }
+      if (hadFocus && document.activeElement !== target) {
+        target.focus({ preventScroll: true });
       }
       return;
     }

@@ -19,6 +19,7 @@ export function createDefaultSearchState(): SearchState {
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
+    semanticProgress: null,
     error: null,
     results: [],
     navigationResultIds: [],

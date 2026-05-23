@@ -74,12 +74,23 @@ export interface HvySemanticFilterCandidateBudget {
   truncated: boolean;
 }
 
+export interface HvySemanticFilterWindowProgress {
+  completedWindows: number;
+  totalWindows: number;
+  matchedCandidates: number;
+  includedCandidates: number;
+  totalCandidates: number;
+}
+
 export interface HvySemanticFilterRequest {
   prompt: string;
   instructionPrompt: string;
   documentTitle?: string;
   candidates: HvySemanticFilterCandidate[];
   candidateBudget: HvySemanticFilterCandidateBudget;
+  windowIndex?: number;
+  windowCount?: number;
+  windowLabel?: string;
   signal?: AbortSignal;
 }
 
@@ -138,6 +149,7 @@ export interface SearchState {
   resultsCollapsed: boolean;
   activeResultId: string | null;
   isLoading: boolean;
+  semanticProgress?: HvySemanticFilterWindowProgress | null;
   error: string | null;
   results: HvySearchResult[];
   navigationResultIds: string[];

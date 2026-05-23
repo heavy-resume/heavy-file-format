@@ -10,6 +10,7 @@ import type { VisualDocument } from '../types';
 
 const DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS = 800;
 const DEFAULT_MAX_TOTAL_CANDIDATE_CHARS = 80_000;
+const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 12_000;
 
 interface BuildSemanticFilterRequestOptions {
   document: VisualDocument;
@@ -17,6 +18,18 @@ interface BuildSemanticFilterRequestOptions {
   signal?: AbortSignal;
   maxCandidateSummaryChars?: number;
   maxTotalCandidateChars?: number;
+}
+
+export interface HvySemanticFilterCandidateWindow {
+  windowIndex: number;
+  windowCount: number;
+  label: string;
+  candidates: HvySemanticFilterCandidate[];
+  candidateBudget: HvySemanticFilterCandidateBudget;
+}
+
+interface BuildSemanticFilterWindowsOptions extends BuildSemanticFilterRequestOptions {
+  maxWindowCandidateChars?: number;
 }
 
 export function buildSemanticFilterRequest(options: BuildSemanticFilterRequestOptions): HvySemanticFilterRequest {
@@ -34,6 +47,46 @@ export function buildSemanticFilterRequest(options: BuildSemanticFilterRequestOp
     ...(documentTitle ? { documentTitle } : {}),
     candidates,
     candidateBudget,
+    ...(options.signal ? { signal: options.signal } : {}),
+  };
+}
+
+export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOptions): {
+  candidates: HvySemanticFilterCandidate[];
+  candidateBudget: HvySemanticFilterCandidateBudget;
+  windows: HvySemanticFilterCandidateWindow[];
+} {
+  const maxCandidateSummaryChars = options.maxCandidateSummaryChars ?? DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS;
+  const maxTotalCandidateChars = options.maxTotalCandidateChars ?? DEFAULT_MAX_TOTAL_CANDIDATE_CHARS;
+  const maxWindowCandidateChars = options.maxWindowCandidateChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS;
+  const allCandidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars })
+    .sort((left, right) => left.documentOrder - right.documentOrder);
+  const { candidates, candidateBudget } = applySemanticCandidateBudget(allCandidates, {
+    maxCandidateSummaryChars,
+    maxTotalCandidateChars,
+  });
+  const windows = packSemanticCandidateWindows(candidates, {
+    maxCandidateSummaryChars,
+    maxWindowCandidateChars,
+    overallCandidateBudget: candidateBudget,
+  });
+  return { candidates, candidateBudget, windows };
+}
+
+export function buildSemanticFilterWindowRequest(
+  prompt: string,
+  window: HvySemanticFilterCandidateWindow,
+  options: { documentTitle?: string; signal?: AbortSignal } = {}
+): HvySemanticFilterRequest {
+  return {
+    prompt,
+    instructionPrompt: buildSemanticFilterInstructionPrompt(prompt, window.candidates),
+    ...(options.documentTitle ? { documentTitle: options.documentTitle } : {}),
+    candidates: window.candidates,
+    candidateBudget: window.candidateBudget,
+    windowIndex: window.windowIndex,
+    windowCount: window.windowCount,
+    windowLabel: window.label,
     ...(options.signal ? { signal: options.signal } : {}),
   };
 }
@@ -192,6 +245,67 @@ export function applySemanticCandidateBudget(
       truncated: included.length < candidates.length || included.some((candidate) => candidate.truncated),
     },
   };
+}
+
+function packSemanticCandidateWindows(
+  candidates: HvySemanticFilterCandidate[],
+  options: {
+    maxCandidateSummaryChars: number;
+    maxWindowCandidateChars: number;
+    overallCandidateBudget: HvySemanticFilterCandidateBudget;
+  }
+): HvySemanticFilterCandidateWindow[] {
+  const windows: Array<{ label: string; candidates: HvySemanticFilterCandidate[]; usedTotalCandidateChars: number }> = [];
+  let current: HvySemanticFilterCandidate[] = [];
+  let currentChars = 0;
+
+  const flush = (): void => {
+    if (current.length === 0) {
+      return;
+    }
+    windows.push({
+      label: getSemanticWindowLabel(current),
+      candidates: current,
+      usedTotalCandidateChars: currentChars,
+    });
+    current = [];
+    currentChars = 0;
+  };
+
+  for (const candidate of candidates) {
+    const candidateChars = JSON.stringify(candidate).length;
+    const startsSectionWindow = candidate.targetKind === 'section' && current.length > 0;
+    const exceedsWindow = current.length > 0 && currentChars + candidateChars > options.maxWindowCandidateChars;
+    if (startsSectionWindow || exceedsWindow) {
+      flush();
+    }
+    current.push(candidate);
+    currentChars += candidateChars;
+  }
+  flush();
+
+  return windows.map((window, index) => ({
+    windowIndex: index,
+    windowCount: windows.length,
+    label: window.label,
+    candidates: window.candidates,
+    candidateBudget: {
+      maxCandidateSummaryChars: options.maxCandidateSummaryChars,
+      maxTotalCandidateChars: options.maxWindowCandidateChars,
+      usedTotalCandidateChars: window.usedTotalCandidateChars,
+      includedCandidates: window.candidates.length,
+      totalCandidates: options.overallCandidateBudget.totalCandidates,
+      truncated: options.overallCandidateBudget.truncated,
+    },
+  }));
+}
+
+function getSemanticWindowLabel(candidates: HvySemanticFilterCandidate[]): string {
+  const section = candidates.find((candidate) => candidate.targetKind === 'section') ?? candidates[0];
+  if (!section) {
+    return 'Document window';
+  }
+  return section.contextLabel ? `${section.contextLabel} / ${section.label}` : section.label;
 }
 
 function buildSectionSummary(section: VisualSection): string {

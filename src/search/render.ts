@@ -205,8 +205,18 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   const applied = search.filterEnabled
     && search.queryDraft.trim() === search.submittedQuery.trim()
     && search.filterQueryMode === search.submittedFilterQueryMode;
+  const noResults = !search.isLoading
+    && !search.error
+    && !applied
+    && search.submittedQuery.trim().length > 0
+    && search.queryDraft.trim() === search.submittedQuery.trim()
+    && search.filterQueryMode === search.submittedFilterQueryMode
+    && search.results.length === 0;
+  const semanticProgress = search.filterQueryMode === 'semantic' ? search.semanticProgress ?? null : null;
   const status = search.isLoading
-    ? search.filterQueryMode === 'semantic' ? 'Analyzing document...' : 'Searching...'
+    ? semanticProgress
+      ? `Analyzed ${semanticProgress.completedWindows} of ${semanticProgress.totalWindows} windows. ${semanticProgress.matchedCandidates} match${semanticProgress.matchedCandidates === 1 ? '' : 'es'} so far.`
+      : search.filterQueryMode === 'semantic' ? 'Preparing semantic windows...' : 'Searching...'
     : search.error
     ? search.error
     : search.submittedQuery.trim().length > 0 && search.results.length === 0
@@ -219,7 +229,8 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
       placeholder: search.filterQueryMode === 'semantic' ? 'Describe what should stay visible' : 'Filter document',
       multiline: search.filterQueryMode === 'semantic',
     })}
-    ${status ? `<div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
+    ${status ? `<div class="search-status${search.error ? ' is-error' : ''}${noResults ? ' is-empty' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
+    ${semanticProgress ? renderSemanticProgress(semanticProgress) : ''}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}
@@ -236,8 +247,23 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
       class="secondary search-apply-filter-button${applied ? ' is-active' : ''}"
       data-action="apply-search-filter"
       aria-pressed="${applied ? 'true' : 'false'}"
-    >${applied ? 'Turn off filter' : 'Filter'}</button>
+      ${search.isLoading || noResults ? 'disabled' : ''}
+    >${search.isLoading ? 'Filtering...' : noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter'}</button>
   </section>`;
+}
+
+function renderSemanticProgress(progress: NonNullable<SearchState['semanticProgress']>): string {
+  const total = Math.max(1, progress.totalWindows);
+  const percent = Math.max(0, Math.min(100, Math.round(progress.completedWindows / total * 100)));
+  return `<div class="search-semantic-progress" aria-label="Semantic filter progress">
+    <div class="search-semantic-progress-track">
+      <span style="width: ${percent}%"></span>
+    </div>
+    <div class="search-semantic-progress-meta">
+      <span>${progress.completedWindows}/${progress.totalWindows} windows</span>
+      <span>${progress.includedCandidates}/${progress.totalCandidates} candidates</span>
+    </div>
+  </div>`;
 }
 
 function renderSemanticToggle(search: SearchState, deps: SearchRenderDeps): string {

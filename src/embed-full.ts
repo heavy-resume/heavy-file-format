@@ -132,6 +132,7 @@ export interface HvyMount {
   setPaletteOverrideId(id: string | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
@@ -405,6 +406,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
+  const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
   const readerWarningsHtml = readerRenderer.renderWarnings();
   const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
@@ -421,7 +423,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
           ${
             isEditor
-              ? `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+              ? isDocumentMetaView
+                ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
+                : `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
                     <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -810,6 +814,14 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
+    openDocumentMeta() {
+      return runWithStateRuntime(runtime, () => {
+        if (state.currentView !== 'editor' || !state.showAdvancedEditor) return false;
+        state.metaPanelOpen = !state.metaPanelOpen;
+        runtime.callbacks.renderApp();
+        return state.metaPanelOpen;
+      });
     },
     openThemeEditor(themeOptions = {}) {
       runWithStateRuntime(runtime, () => openThemeEditor(themeOptions));

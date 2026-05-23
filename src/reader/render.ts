@@ -1232,7 +1232,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               </div>`
             : ''}
           <div class="link-inline-actions">
-            <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
             ${includeModalActions ? '<button type="button" class="secondary" data-modal-action="close">Done</button>' : ''}
           </div>
         </section>

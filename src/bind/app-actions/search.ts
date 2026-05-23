@@ -1,6 +1,6 @@
 import type { AppActionHandler } from './types';
 import { applySearchFilter, closeSearch, expandSearchResults, isSearchFilterApplied, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchFilterQueryMode, setSearchTab, stopSearch, stopSearchRequest } from '../../search/actions';
-import type { SearchCategory, SearchFilterMode, SearchFilterQueryMode, SearchPaletteTab } from '../../search/types';
+import type { SearchCategory, SearchFilterMode, SearchFilterQueryMode, SearchModalTab } from '../../search/types';
 import { getRenderApp, state } from '../../state';
 
 const openSearchAction: AppActionHandler = ({ app }) => {
@@ -45,7 +45,7 @@ const toggleSearchCategoryAction: AppActionHandler = ({ actionButton }) => {
 };
 
 const setSearchTabAction: AppActionHandler = ({ actionButton }) => {
-  const tab = actionButton.dataset.searchTab as SearchPaletteTab | undefined;
+  const tab = actionButton.dataset.searchTab as SearchModalTab | undefined;
   if (tab === 'search' || tab === 'filter') {
     setSearchTab(tab);
   }

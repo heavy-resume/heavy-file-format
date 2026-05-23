@@ -555,7 +555,7 @@ hvy_version: 0.1
   await input.press('!');
   await expect(input).toBeFocused({ timeout: 1_000 });
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
-  await expect(page.locator('.search-palette')).toHaveCount(0, { timeout: 1_000 });
+  await expect(page.locator('.search-modal')).toHaveCount(0, { timeout: 1_000 });
 
   const result = await page.evaluate(() => {
     const testWindow = window as Window & {

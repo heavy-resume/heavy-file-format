@@ -1,7 +1,6 @@
 import { requestProxyCompletion, traceAgentLoopEvent } from '../chat/chat';
-import { parseJsonObjectResponse } from '../llm-tool-loop';
+import { parseJsonArrayResponse } from '../llm-tool-loop';
 import { state } from '../state';
-import type { JsonObject } from '../hvy/types';
 import type { HvySemanticFilterMatch, HvySemanticFilterProvider } from './types';
 
 export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (request) => {
@@ -23,8 +22,9 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     }],
     context: request.instructionPrompt,
     responseInstructions: [
-      'Return exactly one JSON object and no prose.',
-      'The JSON object must be shaped like {"matches":["candidateId", "..."]}.',
+      'Return exactly one JSON array of candidate ID strings and no prose.',
+      'Do not wrap the JSON array in Markdown fences.',
+      'The response must be shaped like ["candidateId", "..."].',
       'Use only candidate IDs from the provided candidate list.',
     ].join('\n'),
     mode: 'qa',
@@ -83,17 +83,17 @@ function traceSemanticFilterEvent(
 }
 
 export function parseSemanticFilterResponse(source: string, validCandidateIds: ReadonlySet<string>): HvySemanticFilterMatch[] {
-  const parsed = parseJsonObjectResponse(source);
+  const parsed = parseJsonArrayResponse(source);
   if (parsed.ok === false) {
-    throw new Error(`Semantic filtering returned invalid JSON. ${parsed.message}`);
+    throw new Error(`Semantic filtering returned invalid JSON list. ${parsed.message}`);
   }
-  const matches = Array.isArray(parsed.value.matches) ? parsed.value.matches : null;
-  if (!matches) {
-    throw new Error('Semantic filtering response must include a matches array.');
-  }
-  return matches
+  const normalizedMatches = parsed.value
     .map((entry) => normalizeSemanticMatch(entry, validCandidateIds))
     .filter((entry): entry is HvySemanticFilterMatch => entry !== null);
+  if (parsed.value.length > 0 && normalizedMatches.length === 0) {
+    throw new Error('Semantic filtering response did not include any valid candidate IDs.');
+  }
+  return normalizedMatches;
 }
 
 function normalizeSemanticMatch(entry: unknown, validCandidateIds: ReadonlySet<string>): HvySemanticFilterMatch | null {
@@ -101,20 +101,5 @@ function normalizeSemanticMatch(entry: unknown, validCandidateIds: ReadonlySet<s
     const candidateId = entry.trim();
     return candidateId && validCandidateIds.has(candidateId) ? { candidateId } : null;
   }
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    return null;
-  }
-  const record = entry as JsonObject;
-  const candidateId = typeof record.candidateId === 'string' ? record.candidateId.trim() : '';
-  if (!candidateId || !validCandidateIds.has(candidateId)) {
-    return null;
-  }
-  const reason = typeof record.reason === 'string' && record.reason.trim() ? record.reason.trim() : undefined;
-  return {
-    candidateId,
-    ...(reason ? { reason } : {}),
-    ...(typeof record.score === 'number' && Number.isFinite(record.score)
-      ? { score: Math.max(0, Math.min(1, record.score)) }
-      : {}),
-  };
+  return null;
 }

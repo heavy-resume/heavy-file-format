@@ -351,27 +351,29 @@ function normalizeSearchState(value: unknown): SearchState {
     return defaults;
   }
   const raw = value as Partial<SavedSearchState>;
-  const submittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
   const filterQueryMode = normalizeSearchFilterQueryMode(raw.filterQueryMode);
   const submittedFilterQueryMode = normalizeSearchFilterQueryMode(raw.submittedFilterQueryMode);
+  const savedSubmittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
+  const resetSemanticRun = filterQueryMode === 'semantic' || submittedFilterQueryMode === 'semantic';
+  const submittedQuery = resetSemanticRun ? '' : savedSubmittedQuery;
   return {
     ...defaults,
     open: Boolean(raw.open),
-    queryDraft: typeof raw.queryDraft === 'string' ? raw.queryDraft : submittedQuery,
+    queryDraft: typeof raw.queryDraft === 'string' ? raw.queryDraft : savedSubmittedQuery,
     submittedQuery,
     caseSensitive: Boolean(raw.caseSensitive),
     categories: normalizeSearchCategories(raw.categories),
     activeTab: raw.activeTab === 'filter' ? 'filter' : 'search',
-    filterEnabled: Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
+    filterEnabled: !resetSemanticRun && Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
     filterMode: raw.filterMode === 'hide' ? 'hide' : 'deprioritize',
     filterQueryMode,
     submittedFilterQueryMode,
     resultsCollapsed: Boolean(raw.resultsCollapsed),
-    activeResultId: typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
-    results: Array.isArray(raw.results)
+    activeResultId: !resetSemanticRun && typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
+    results: !resetSemanticRun && Array.isArray(raw.results)
       ? raw.results.map(normalizeSearchResult).filter((result): result is HvySearchResult => Boolean(result))
       : [],
-    navigationResultIds: Array.isArray(raw.navigationResultIds)
+    navigationResultIds: !resetSemanticRun && Array.isArray(raw.navigationResultIds)
       ? raw.navigationResultIds.filter((entry) => typeof entry === 'string')
       : [],
     clearedSectionKeys: Array.isArray(raw.clearedSectionKeys)

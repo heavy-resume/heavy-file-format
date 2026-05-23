@@ -32,7 +32,7 @@ export function renderSearchLauncher(search: SearchState): string {
   >${filtering ? funnelIcon() : magnifyingGlassIcon()}</button>`;
 }
 
-export function renderSearchPalette(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
+export function renderSearchModal(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
   if (!search.open) {
     return '';
   }
@@ -51,7 +51,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
   const isFilterTab = search.activeTab === 'filter';
   return `<section class="search-overlay" aria-label="Document search">
     <div class="search-backdrop" data-action="close-search"></div>
-    <form id="searchComposer" class="search-palette${isFilterTab ? ' is-filter-tab' : ''}" role="dialog" aria-modal="true" aria-label="Search document">
+    <form id="searchComposer" class="search-modal${isFilterTab ? ' is-filter-tab' : ''}" role="dialog" aria-modal="true" aria-label="Search document">
       <div class="search-tabbar" role="tablist" aria-label="Search mode">
         <button
           type="button"
@@ -217,7 +217,7 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     ? search.filterQueryMode === 'semantic' ? '' : 'Searching...'
     : search.error
     ? search.error
-    : search.submittedQuery.trim().length > 0 && search.results.length === 0
+    : noResults
     ? search.filterQueryMode === 'semantic' ? 'No semantic matches. Try a more specific prompt.' : 'No matches. Try another term.'
     : '';
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">

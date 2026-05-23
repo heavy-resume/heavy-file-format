@@ -4,7 +4,7 @@ import { deserializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
-import { renderSearchPalette } from '../src/search/render';
+import { renderSearchModal } from '../src/search/render';
 import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
@@ -177,7 +177,7 @@ hvy_version: 0.1
     categories: ['contents'],
   });
 
-  const expectedMarkup = renderSearchPalette({
+  const expectedMarkup = renderSearchModal({
     open: true,
     queryDraft: 'TypeScript',
     submittedQuery: 'TypeScript',
@@ -232,7 +232,7 @@ hvy_version: 0.1
   expect(expectedResults[0]!.label).toBe('TypeScript');
   expect(expectedResults[0]!.locationLabel).toBe('Northwind Labs work history Tools & Technologies');
 
-  const expectedMarkup = renderSearchPalette({
+  const expectedMarkup = renderSearchModal({
     open: true,
     queryDraft: 'TypeScript',
     submittedQuery: 'TypeScript',
@@ -261,13 +261,13 @@ hvy_version: 0.1
   expect(expectedMarkup).not.toContain('<span class="search-result-title">History</span>');
 });
 
-test('filter palette close control closes without stopping an active filter', () => {
+test('filter modal close control closes without stopping an active filter', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 `, '.hvy');
 
-  const expectedMarkup = renderSearchPalette({
+  const expectedMarkup = renderSearchModal({
     open: true,
     queryDraft: 'Python',
     submittedQuery: 'Python',
@@ -293,19 +293,19 @@ hvy_version: 0.1
   });
 
   expect(expectedMarkup).toContain('data-action="close-search"');
-  expect(expectedMarkup).toContain('class="search-palette is-filter-tab"');
+  expect(expectedMarkup).toContain('class="search-modal is-filter-tab"');
   expect(expectedMarkup).toContain('class="search-close-button ghost remove-x"');
   expect(expectedMarkup).toContain('Turn off filter');
   expect(expectedMarkup).not.toContain('data-action="stop-search"');
 });
 
-test('filter palette shows stop control while semantic filtering is running', () => {
+test('filter modal shows stop control while semantic filtering is running', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 `, '.hvy');
 
-  const expectedMarkup = renderSearchPalette({
+  const expectedMarkup = renderSearchModal({
     open: true,
     queryDraft: 'Anything Carta',
     submittedQuery: 'Anything Carta',
@@ -873,9 +873,9 @@ title: Semantic Test
     targetPath: '/body/skills/typescript',
     targetRef: 'typescript',
   });
-  expect(expectedResult.instructionPrompt).toContain('Return only JSON');
+  expect(expectedResult.instructionPrompt).toContain('Return only a JSON array of candidateId strings, with no prose and no Markdown fences');
   expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
-  expect(expectedResult.instructionPrompt).toContain('"matches": ["candidateId from the list"]');
+  expect(expectedResult.instructionPrompt).toContain('["candidateId from the list"]');
   expect(expectedResult.instructionPrompt).toContain('Return only matching candidateId strings');
   expect(expectedResult.instructionPrompt).toContain('component:typescript');
 });
@@ -1176,6 +1176,60 @@ hvy_version: 0.1
   expect(expectedContext.visibleSections.has(document.sections[1]!.key)).toBe(false);
 });
 
+test('semantic filtering waits for provider results before changing document filtering', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  initState(createTestState(document));
+  state.search.activeTab = 'filter';
+  state.search.filterEnabled = true;
+  state.search.filterQueryMode = 'semantic';
+  state.search.submittedFilterQueryMode = 'semantic';
+  state.search.submittedQuery = 'old filter';
+  state.search.queryDraft = 'Find TypeScript experience';
+  const refreshReaderPanels = vi.fn();
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels,
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+
+  let finishProvider: (() => void) | null = null;
+  const providerStarted = new Promise<void>((resolveStarted) => {
+    setReferenceAppConfig({
+      semanticFilterProvider: async () => {
+        resolveStarted();
+        await new Promise<void>((resolveProvider) => {
+          finishProvider = resolveProvider;
+        });
+        return [];
+      },
+    });
+  });
+
+  const filterPromise = applySearchFilter({ enabled: true });
+  await providerStarted;
+
+  expect(state.search.filterEnabled).toBe(true);
+  expect(refreshReaderPanels).not.toHaveBeenCalled();
+
+  expect(finishProvider).not.toBeNull();
+  finishProvider?.();
+  await filterPromise;
+
+  expect(state.search.filterEnabled).toBe(false);
+  expect(refreshReaderPanels).toHaveBeenCalled();
+});
+
 test('semantic filtering reports a missing provider without enabling filtering', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1202,6 +1256,48 @@ hvy_version: 0.1
   expect(state.search.error).toBe('Semantic filtering is not configured.');
 });
 
+test('semantic filtering reports provider errors instead of no matches', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  initState(createTestState(document));
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  state.search.open = true;
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find TypeScript experience';
+  setReferenceAppConfig({
+    semanticFilterProvider: async () => {
+      throw new Error('Server error');
+    },
+  });
+
+  await applySearchFilter({ enabled: true });
+
+  expect(state.search.filterEnabled).toBe(false);
+  expect(state.search.error).toBe('Server error');
+  const expectedMarkup = renderSearchModal(state.search, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+  expect(expectedMarkup).toContain('Server error');
+  expect(expectedMarkup).not.toContain('No semantic matches. Try a more specific prompt.');
+});
+
 test('filter tab boxes no results and disables repeat filtering', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1211,7 +1307,7 @@ hvy_version: 0.1
 #! Skills
 `, '.hvy');
 
-  const expectedMarkup = renderSearchPalette({
+  const expectedMarkup = renderSearchModal({
     open: true,
     queryDraft: 'missing',
     submittedQuery: 'missing',
@@ -1251,7 +1347,7 @@ hvy_version: 0.1
 
 test('semantic provider parser keeps only valid candidate ids', () => {
   const expectedResult = parseSemanticFilterResponse(
-    '{"matches":["section:skills","invented"]}',
+    '["section:skills","invented"]',
     new Set(['section:skills']),
   );
 
@@ -1260,17 +1356,65 @@ test('semantic provider parser keeps only valid candidate ids', () => {
   }]);
 });
 
-test('semantic provider parser keeps object matches for compatibility', () => {
+test('semantic provider parser recovers id arrays from complete object wrappers', () => {
   const expectedResult = parseSemanticFilterResponse(
-    '{"matches":[{"candidateId":"section:skills","reason":"Relevant","score":1.4},{"candidateId":"invented","reason":"Nope"}]}',
+    '{"matches":["component:C7","component:C27"]}',
+    new Set(['component:C7', 'component:C27']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C7' },
+    { candidateId: 'component:C27' },
+  ]);
+});
+
+test('semantic provider parser recovers id arrays from malformed object wrappers', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    '{"matches":["component:C7","component:C27"]',
+    new Set(['component:C7', 'component:C27']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C7' },
+    { candidateId: 'component:C27' },
+  ]);
+});
+
+test('semantic provider parser accepts fenced JSON with wrapper prose', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    'Relevant candidates:\n```json\n["section:skills"]\n```',
     new Set(['section:skills']),
   );
 
   expect(expectedResult).toEqual([{
     candidateId: 'section:skills',
-    reason: 'Relevant',
-    score: 1,
   }]);
+});
+
+test('semantic provider parser accepts trace-style fenced id arrays with prose', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    [
+      'Here is the JSON list with the selected candidates:',
+      '',
+      '```',
+      '["component:C6", "component:C7", "component:C27"]',
+      '```',
+    ].join('\n'),
+    new Set(['component:C6', 'component:C7', 'component:C27']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C6' },
+    { candidateId: 'component:C7' },
+    { candidateId: 'component:C27' },
+  ]);
+});
+
+test('semantic provider parser errors when returned matches have no valid ids', () => {
+  expect(() => parseSemanticFilterResponse(
+    '["invented"]',
+    new Set(['section:skills']),
+  )).toThrow('Semantic filtering response did not include any valid candidate IDs.');
 });
 
 test('document search returns keyword matches across many documents', async () => {

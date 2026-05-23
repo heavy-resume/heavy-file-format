@@ -3,7 +3,7 @@ import type { VisualDocument } from '../types';
 
 export type SearchCategory = 'tags' | 'contents' | 'description';
 export type SearchResultCategory = SearchCategory | 'semantic';
-export type SearchPaletteTab = 'search' | 'filter';
+export type SearchModalTab = 'search' | 'filter';
 export type SearchFilterMode = 'deprioritize' | 'hide';
 export type SearchFilterQueryMode = 'keyword' | 'semantic';
 export type SearchTargetKind = 'section' | 'block';
@@ -150,7 +150,7 @@ export interface SearchState {
   submittedQuery: string;
   caseSensitive: boolean;
   categories: Record<SearchCategory, boolean>;
-  activeTab: SearchPaletteTab;
+  activeTab: SearchModalTab;
   filterEnabled: boolean;
   filterMode: SearchFilterMode;
   filterQueryMode: SearchFilterQueryMode;

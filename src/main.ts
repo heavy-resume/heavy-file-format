@@ -34,7 +34,7 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
+import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
 import { chatSemanticFilterProvider } from './search/semantic-provider';
@@ -721,7 +721,7 @@ function renderApp(): void {
                   state.currentView === 'editor' || state.currentView === 'ai'
                 )}
                 ${renderSearchLauncher(state.search)}
-                ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
           }
         </div>
       </section>

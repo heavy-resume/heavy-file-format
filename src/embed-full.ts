@@ -69,7 +69,7 @@ import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
-import { renderSearchLauncher, renderSearchPalette } from './search/render';
+import { renderSearchLauncher, renderSearchModal } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
@@ -446,7 +446,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
             'embedded'
           )}
           ${renderSearchLauncher(state.search)}
-          ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
+          ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
         </div>
       </section>
       ${readerRenderer.renderModal()}

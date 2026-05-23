@@ -185,20 +185,109 @@ export async function runJsonToolLoop<TToolCall extends JsonToolCall, TDone, TCo
 }
 
 export function parseJsonObjectResponse(source: string): { ok: true; value: JsonObject } | { ok: false; message: string } {
-  const cleaned = stripJsonMarkdownFence(source);
+  const parsed = parseJsonValueResponse(source);
+  if (parsed.ok === false) {
+    return parsed;
+  }
+  if (!parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) {
+    return { ok: false, message: 'Return exactly one JSON object.' };
+  }
+  return { ok: true, value: parsed.value as JsonObject };
+}
+
+export function parseJsonValueResponse(source: string): { ok: true; value: unknown } | { ok: false; message: string } {
+  const cleaned = extractJsonResponseValue(source);
   try {
     const parsed = JSON.parse(cleaned) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { ok: false, message: 'Return exactly one JSON object.' };
-    }
-    return { ok: true, value: parsed as JsonObject };
+    return { ok: true, value: parsed };
   } catch {
     return { ok: false, message: 'Response was not valid JSON.' };
   }
 }
 
+export function parseJsonArrayResponse(source: string): { ok: true; value: unknown[] } | { ok: false; message: string } {
+  const trimmed = source.trim();
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (trimmed[index] !== '[') {
+      continue;
+    }
+    const end = findJsonValueEnd(trimmed, index);
+    if (end < index) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(trimmed.slice(index, end + 1)) as unknown;
+      if (Array.isArray(parsed)) {
+        return { ok: true, value: parsed };
+      }
+    } catch {
+      continue;
+    }
+  }
+  return { ok: false, message: 'Response was not valid JSON.' };
+}
+
 export function stripJsonMarkdownFence(source: string): string {
   return source.trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+}
+
+function extractJsonResponseValue(source: string): string {
+  const trimmed = source.trim();
+  return findFirstBalancedJsonValue(trimmed) ?? trimmed;
+}
+
+function findFirstBalancedJsonValue(source: string): string | null {
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index] !== '{' && source[index] !== '[') {
+      continue;
+    }
+    const end = findJsonValueEnd(source, index);
+    if (end >= index) {
+      return source.slice(index, end + 1).trim();
+    }
+  }
+  return null;
+}
+
+function findJsonValueEnd(source: string, startIndex: number): number {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      stack.push('}');
+    } else if (char === '[') {
+      stack.push(']');
+    } else if (char === '}') {
+      if (stack.pop() !== '}') {
+        return -1;
+      }
+      if (stack.length === 0) {
+        return index;
+      }
+    } else if (char === ']') {
+      if (stack.pop() !== ']') {
+        return -1;
+      }
+      if (stack.length === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
 }
 
 function defaultToolResultMessage(tool: string, result: string): string {

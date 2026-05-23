@@ -344,7 +344,7 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   }
   const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim()
     || state.search.filterQueryMode !== state.search.submittedFilterQueryMode;
-  if (queryChanged) {
+  if (queryChanged && state.search.filterQueryMode !== 'semantic') {
     state.search.filterEnabled = false;
     getRefreshReaderPanels()();
   }

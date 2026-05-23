@@ -644,6 +644,88 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(date.id)).toBe(true);
 });
 
+test('semantic filter context reveals exact matched list item subtrees without sibling list items', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:text {"id":"history-heading"}-->
+ Professional History
+
+<!--hvy:component-list {"id":"history-list","componentListComponent":"expandable"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:expandable {"id":"northwind-role","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {"id":"northwind-title"}-->
+      Northwind Labs
+
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {"id":"northwind-detail"}-->
+      Built platform tooling.
+
+ <!--hvy:component-list:1 {}-->
+  <!--hvy:expandable {"id":"contoso-role","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {"id":"contoso-title"}-->
+      Contoso
+
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {"id":"contoso-detail"}-->
+      Wrote release notes.
+`, '.hvy');
+  const heading = document.sections[0]!.blocks[0]!;
+  const list = document.sections[0]!.blocks[1]!;
+  const matchedRecord = list.schema.componentListBlocks[0]!;
+  const matchedStub = matchedRecord.schema.expandableStubBlocks.children[0]!;
+  const matchedDetail = matchedRecord.schema.expandableContentBlocks.children[0]!;
+  const siblingRecord = list.schema.componentListBlocks[1]!;
+  const siblingStub = siblingRecord.schema.expandableStubBlocks.children[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'Northwind Labs',
+    submittedQuery: 'Northwind Labs',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [{
+      id: 'semantic-1',
+      category: 'semantic',
+      targetKind: 'block',
+      sectionKey: document.sections[0]!.key,
+      blockId: matchedRecord.id,
+      targetId: 'northwind-role',
+      label: 'Northwind Labs',
+      preview: 'Northwind role is relevant.',
+      matchedText: 'Northwind Labs',
+      sourceField: 'Semantic match',
+      documentOrder: 1,
+    }],
+    navigationResultIds: ['semantic-1'],
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.visibleBlocks.has(heading.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(list.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(matchedRecord.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(matchedStub.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(matchedDetail.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(siblingRecord.id)).toBe(false);
+  expect(expectedContext.visibleBlocks.has(siblingStub.id)).toBe(false);
+});
+
 test('semantic filter request builds AI-friendly section and component candidates', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -663,17 +745,53 @@ title: Semantic Test
   });
 
   expect(expectedResult.documentTitle).toBe('Semantic Test');
-  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain(`section:${document.sections[0]!.key}`);
-  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain(`block:${document.sections[0]!.key}:${document.sections[0]!.blocks[0]!.id}`);
+  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain('section:/body/skills');
+  expect(expectedResult.candidates.map((candidate) => candidate.candidateId)).toContain('component:typescript');
   expect(expectedResult.candidates[0]).toMatchObject({
     targetKind: 'section',
+    targetPath: '/body/skills',
+    targetRef: '/body/skills',
     label: 'Skills',
     tags: ['frontend'],
     description: 'Technical skill inventory',
   });
+  expect(expectedResult.candidates[1]).toMatchObject({
+    targetKind: 'block',
+    targetPath: '/body/skills/typescript',
+    targetRef: 'typescript',
+  });
   expect(expectedResult.instructionPrompt).toContain('Return only JSON');
   expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
-  expect(expectedResult.instructionPrompt).toContain(`block:${document.sections[0]!.key}:${document.sections[0]!.blocks[0]!.id}`);
+  expect(expectedResult.instructionPrompt).toContain('"matches": ["candidateId from the list"]');
+  expect(expectedResult.instructionPrompt).toContain('Return only matching candidateId strings');
+  expect(expectedResult.instructionPrompt).toContain('component:typescript');
+});
+
+test('semantic filter candidates use request_structure ids for anonymous components', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {}-->
+ Anonymous note
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterRequest({
+    document,
+    prompt: 'Find anonymous note',
+  });
+
+  const expectedComponent = expectedResult.candidates.find((candidate) => candidate.targetKind === 'block');
+  expect(expectedComponent).toMatchObject({
+    candidateId: 'component:C0',
+    targetRef: 'C0',
+    targetPath: '/body/alpha/text-0',
+    label: 'Anonymous note',
+  });
+  expect(expectedResult.instructionPrompt).toContain('"targetRef":"C0"');
 });
 
 test('semantic filter request truncates large candidate payloads deterministically', () => {
@@ -770,11 +888,12 @@ hvy_version: 0.1
     semanticFilterProvider: async (request) => {
       expect(request.instructionPrompt).toContain('Find TypeScript experience');
       seenWindows.push(request.windowLabel ?? '');
-      if (!request.candidates.some((candidate) => candidate.candidateId === `block:${document.sections[0]!.key}:${matchedBlock.id}`)) {
+      const match = request.candidates.find((candidate) => candidate.blockId === matchedBlock.id);
+      if (!match) {
         return [];
       }
       return [{
-        candidateId: `block:${document.sections[0]!.key}:${matchedBlock.id}`,
+        candidateId: match.candidateId,
         reason: 'TypeScript work is relevant.',
         score: 0.91,
       }];
@@ -878,7 +997,18 @@ hvy_version: 0.1
   expect(expectedMarkup).toContain('>No results</button>');
 });
 
-test('semantic provider parser keeps only valid candidate matches', () => {
+test('semantic provider parser keeps only valid candidate ids', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    '{"matches":["section:skills","invented"]}',
+    new Set(['section:skills']),
+  );
+
+  expect(expectedResult).toEqual([{
+    candidateId: 'section:skills',
+  }]);
+});
+
+test('semantic provider parser keeps object matches for compatibility', () => {
   const expectedResult = parseSemanticFilterResponse(
     '{"matches":[{"candidateId":"section:skills","reason":"Relevant","score":1.4},{"candidateId":"invented","reason":"Nope"}]}',
     new Set(['section:skills']),

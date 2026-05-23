@@ -1,5 +1,7 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
-import { findVirtualDirectoryForBlock } from '../cli-core/virtual-file-system';
+import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, findVirtualDirectoryForSection } from '../cli-core/virtual-file-system';
+import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
+import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getSectionId } from '../section-ops';
 import type {
   HvySemanticFilterCandidate,
@@ -98,6 +100,7 @@ export function buildSemanticFilterCandidates(
   const maxCandidateSummaryChars = options.maxCandidateSummaryChars ?? DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS;
   const sectionCandidates: HvySemanticFilterCandidate[] = [];
   const blockCandidates: HvySemanticFilterCandidate[] = [];
+  const targetRefs = buildSemanticTargetRefs(document);
   let documentOrder = 0;
 
   const visitSection = (section: VisualSection, ancestors: string[]): void => {
@@ -107,12 +110,16 @@ export function buildSemanticFilterCandidates(
     const sectionOrder = documentOrder;
     documentOrder += 1;
     const sectionLabel = section.title.trim() || getSectionId(section) || 'Untitled section';
+    const targetPath = findVirtualDirectoryForSection(document, section);
+    const targetRef = targetPath ?? (getSectionId(section) || section.key);
     const sectionSummary = truncateSummary(buildSectionSummary(section), maxCandidateSummaryChars);
     sectionCandidates.push({
-      candidateId: `section:${section.key}`,
+      candidateId: `section:${targetRef}`,
       targetKind: 'section',
       sectionKey: section.key,
       targetId: getSectionId(section) || section.key,
+      ...(targetPath ? { targetPath } : {}),
+      targetRef,
       label: sectionLabel,
       ...(ancestors.length ? { contextLabel: ancestors.slice(-3).join(' / ') } : {}),
       tags: splitTags(section.tags ?? ''),
@@ -139,18 +146,21 @@ export function buildSemanticFilterCandidates(
   ): void => {
     const blockOrder = documentOrder;
     documentOrder += 1;
+    const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
     const label = getBlockLabel(block) || nearestLocationLabel;
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
-    const summaryResult = truncateSummary(buildBlockSummary(block), maxCandidateSummaryChars);
     const targetPath = findVirtualDirectoryForBlock(document, block);
+    const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
+    const summaryResult = truncateSummary(buildBlockSummary(block, baseComponent), maxCandidateSummaryChars);
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
     blockCandidates.push({
-      candidateId: `block:${section.key}:${block.id}`,
+      candidateId: `component:${targetRef}`,
       targetKind: 'block',
       sectionKey: section.key,
       blockId: block.id,
       targetId: (block.schema.id ?? '').trim() || block.id,
       ...(targetPath ? { targetPath } : {}),
+      targetRef,
       label,
       locationLabel,
       ...(contextLabel ? { contextLabel } : {}),
@@ -179,12 +189,23 @@ export function buildSemanticFilterCandidates(
   return [...sectionCandidates, ...blockCandidates];
 }
 
+function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPath: Map<string, string> } {
+  const fs = buildHvyVirtualFileSystem(document);
+  return {
+    componentRefsByPath: new Map(
+      collectHvyComponentStructureReferences(document, fs).map((entry) => [entry.directory, entry.id])
+    ),
+  };
+}
+
 export function buildSemanticFilterInstructionPrompt(prompt: string, candidates: HvySemanticFilterCandidate[]): string {
   const candidateLines = candidates.map((candidate) => JSON.stringify({
     candidateId: candidate.candidateId,
     ...(candidate.documentId ? { documentId: candidate.documentId } : {}),
     ...(candidate.documentTitle ? { documentTitle: candidate.documentTitle } : {}),
     targetKind: candidate.targetKind,
+    ...(candidate.targetRef ? { targetRef: candidate.targetRef } : {}),
+    ...(candidate.targetPath ? { targetPath: candidate.targetPath } : {}),
     label: candidate.label,
     ...(candidate.locationLabel ? { locationLabel: candidate.locationLabel } : {}),
     ...(candidate.contextLabel ? { contextLabel: candidate.contextLabel } : {}),
@@ -202,15 +223,16 @@ export function buildSemanticFilterInstructionPrompt(prompt: string, candidates:
     '',
     'Choose the candidates that are relevant to the user prompt. Return only JSON:',
     '{',
-    '  "matches": [',
-    '    { "candidateId": "id from the list", "reason": "short reason", "score": 0.0 }',
-    '  ]',
+    '  "matches": ["candidateId from the list"]',
     '}',
     '',
     'Rules:',
     '- Only use candidateId values from the candidate list.',
-    '- Prefer precise component matches when a component alone satisfies the prompt.',
-    '- Select a section when the whole section is relevant or when many child components are relevant.',
+    '- Return only matching candidateId strings; do not include explanations.',
+    '- candidateId values identify exact section/component targets. Component targetRef values match the CLI request_structure IDs, including generated C0/C1-style IDs for anonymous components.',
+    '- Prefer the most precise component candidate whose summary satisfies the prompt.',
+    '- Prefer child item/record candidates over their parent list/container candidates unless the user asks for the whole group.',
+    '- Select a section only when the section itself is relevant or the user asks for that whole section.',
     '- Do not invent IDs.',
     '- Do not rewrite the document.',
     '- Do not include unrelated candidates.',
@@ -313,11 +335,13 @@ function buildSectionSummary(section: VisualSection): string {
     section.title,
     section.description ?? '',
     section.tags ?? '',
-    ...section.blocks.map((block) => getBlockSummaryText(block)).filter(Boolean).slice(0, 8),
   ].join('\n'));
 }
 
-function buildBlockSummary(block: VisualBlock): string {
+function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
+  const childSummary = shouldSummarizeChildContent(baseComponent, block)
+    ? getNestedBlockSummaryText(block)
+    : '';
   return cleanText([
     block.schema.component,
     block.schema.description ?? '',
@@ -329,6 +353,22 @@ function buildBlockSummary(block: VisualBlock): string {
     (block.schema.tableColumns ?? []).join(' '),
     (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' '),
     block.text,
+    childSummary,
+  ].join('\n'));
+}
+
+function shouldSummarizeChildContent(baseComponent: string, block: VisualBlock): boolean {
+  return baseComponent === 'expandable'
+    || (block.schema.component !== baseComponent && baseComponent !== 'component-list' && baseComponent !== 'container' && baseComponent !== 'grid');
+}
+
+function getNestedBlockSummaryText(block: VisualBlock): string {
+  return cleanText([
+    ...(block.schema.containerBlocks ?? []).map(getBlockSummaryText),
+    ...(block.schema.componentListBlocks ?? []).map(getBlockSummaryText),
+    ...(block.schema.expandableStubBlocks?.children ?? []).map(getBlockSummaryText),
+    ...(block.schema.expandableContentBlocks?.children ?? []).map(getBlockSummaryText),
+    ...(block.schema.gridItems ?? []).map((item) => getBlockSummaryText(item.block)),
   ].join('\n'));
 }
 

@@ -208,6 +208,7 @@ function buildDocumentSemanticSearchResults(
       sectionKey: candidate.sectionKey,
       ...(candidate.blockId ? { blockId: candidate.blockId } : {}),
       targetId: candidate.targetId,
+      ...(candidate.targetRef ? { targetRef: candidate.targetRef } : {}),
       ...(candidate.targetPath ? { targetPath: candidate.targetPath } : {}),
       label: candidate.label,
       ...(candidate.locationLabel ? { locationLabel: candidate.locationLabel } : {}),

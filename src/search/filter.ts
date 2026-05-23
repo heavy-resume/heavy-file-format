@@ -18,6 +18,7 @@ export interface SearchFilterContext {
 export function createSearchFilterContext(sections: VisualSection[], search: SearchState): SearchFilterContext {
   const matchedSections = new Set<string>();
   const matchedBlocks = new Set<string>();
+  const semanticMatchedBlocks = new Set<string>();
   const visibleSections = new Set<string>();
   const visibleBlocks = new Set<string>();
   const active = search.submittedQuery.trim().length > 0;
@@ -41,6 +42,9 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       matchedSections.add(result.sectionKey);
     } else if (result.blockId) {
       matchedBlocks.add(result.blockId);
+      if (result.category === 'semantic') {
+        semanticMatchedBlocks.add(result.blockId);
+      }
     }
   }
 
@@ -64,6 +68,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 
   const visitBlock = (block: VisualBlock, forceVisible = false): boolean => {
+    const semanticBlockMatched = semanticMatchedBlocks.has(block.id);
     let visible = forceVisible || matchedBlocks.has(block.id);
     for (const child of block.schema.containerBlocks ?? []) {
       visible = visitBlock(child, forceVisible) || visible;
@@ -89,6 +94,9 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       }
     }
     if (visible) {
+      if (semanticBlockMatched && !forceVisible) {
+        markBlockTreeVisible(block);
+      }
       visibleBlocks.add(block.id);
       if (filtering && !forceVisible) {
         markBlockStructuralContextVisible(block);

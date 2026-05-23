@@ -23,6 +23,7 @@ export interface HvySearchResult {
   sectionKey: string;
   blockId?: string;
   targetId: string;
+  targetRef?: string;
   targetPath?: string;
   label: string;
   locationLabel?: string;
@@ -54,6 +55,7 @@ export interface HvySemanticFilterCandidate {
   sectionKey: string;
   blockId?: string;
   targetId: string;
+  targetRef?: string;
   targetPath?: string;
   label: string;
   locationLabel?: string;

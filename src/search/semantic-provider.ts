@@ -15,7 +15,7 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     context: request.instructionPrompt,
     responseInstructions: [
       'Return exactly one JSON object and no prose.',
-      'The JSON object must be shaped like {"matches":[{"candidateId":"...","reason":"...","score":0.0}]}',
+      'The JSON object must be shaped like {"matches":["candidateId", "..."]}.',
       'Use only candidate IDs from the provided candidate list.',
     ].join('\n'),
     mode: 'qa',
@@ -40,6 +40,10 @@ export function parseSemanticFilterResponse(source: string, validCandidateIds: R
 }
 
 function normalizeSemanticMatch(entry: unknown, validCandidateIds: ReadonlySet<string>): HvySemanticFilterMatch | null {
+  if (typeof entry === 'string') {
+    const candidateId = entry.trim();
+    return candidateId && validCandidateIds.has(candidateId) ? { candidateId } : null;
+  }
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
     return null;
   }

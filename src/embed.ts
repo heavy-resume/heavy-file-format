@@ -55,8 +55,14 @@ import {
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
-import type { HvySemanticFilterProvider } from './search/types';
+import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
+import {
+  createDocumentSearchSnapshot,
+  normalizeSearchSnapshotInput,
+  searchSnapshotToDocumentState,
+  searchStateToSnapshot,
+} from './search/snapshot';
 import type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -82,6 +88,7 @@ export interface HvyMountOptions {
   paletteId?: string | null;
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  searchSnapshot?: HvySearchSnapshotInput | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -97,6 +104,8 @@ export interface HvyMount {
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
+  setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
+  getSearchSnapshot(): HvySearchSnapshot;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
@@ -485,12 +494,21 @@ function setPaletteOverrideId(id: string | null): void {
   renderApp();
 }
 
+function setMountedSearchSnapshot(snapshot: HvySearchSnapshotInput | null, options: { render?: boolean } = {}): void {
+  state.search.abortController?.abort();
+  state.search = searchSnapshotToDocumentState(snapshot, state.document);
+  if (options.render ?? true) {
+    renderApp();
+  }
+}
+
 async function loadFullEmbed(): Promise<FullEmbedModule> {
   return import('./embed-full');
 }
 
 function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let mounted: HvyMount | null = null;
+  let queuedSearchSnapshot = options.searchSnapshot ?? null;
   const pending: Array<(mount: HvyMount) => void> = [];
   options.root.classList.add('hvy-document');
   options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
@@ -557,6 +575,14 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     },
     setPaletteOverrideId(id) {
       withMount((mount) => mount.setPaletteOverrideId(id));
+    },
+    setSearchSnapshot(snapshot) {
+      queuedSearchSnapshot = snapshot;
+      options.searchSnapshot = snapshot;
+      withMount((mount) => mount.setSearchSnapshot(snapshot));
+    },
+    getSearchSnapshot() {
+      return mounted?.getSearchSnapshot() ?? normalizeSearchSnapshotInput(queuedSearchSnapshot);
     },
     openThemeEditor(themeOptions) {
       renderQueuedThemeModal();
@@ -644,6 +670,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
   }
+  if ('searchSnapshot' in options) {
+    setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
+  }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
   initDocumentChangeTracking(runtime, options.onDocumentChange);
@@ -703,6 +732,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setPaletteOverrideId(id);
       });
     },
+    setSearchSnapshot(snapshot) {
+      runWithStateRuntime(runtime, () => {
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setThemeRoot(options.root);
+        setMountedSearchSnapshot(snapshot);
+      });
+    },
+    getSearchSnapshot() {
+      return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
     openThemeEditor(themeOptions = {}) {
       void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
         const fullMount = module.mountHvy({
@@ -736,7 +776,7 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes };
+export { builtInPluginMap as plugins, builtInPlugins, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type {
   BuildImportPlanOptions,
@@ -760,11 +800,14 @@ export type {
   HvyDocumentSearchRequest,
   HvyDocumentSearchResponse,
   HvyDocumentSearchResult,
+  HvyDocumentSearchSnapshot,
   HvySemanticFilterCandidate,
   HvySemanticFilterCandidateBudget,
   HvySemanticFilterMatch,
   HvySemanticFilterProvider,
   HvySemanticFilterRequest,
+  HvySearchSnapshot,
+  HvySearchSnapshotInput,
 } from './search/types';
 
 declare global {
@@ -774,6 +817,7 @@ declare global {
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       searchDocuments: typeof searchDocuments;
+      createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -788,6 +832,7 @@ window.HVY = {
   serializeDocument,
   serializeDocumentBytes,
   searchDocuments,
+  createDocumentSearchSnapshot,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

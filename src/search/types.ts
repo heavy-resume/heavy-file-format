@@ -141,7 +141,39 @@ export interface HvyDocumentSearchResponse {
   query: string;
   mode: HvyDocumentSearchMode;
   results: HvyDocumentSearchResult[];
+  snapshot: HvyDocumentSearchResponseSnapshot;
   candidateBudget?: HvySemanticFilterCandidateBudget;
+}
+
+export interface HvySearchSnapshot {
+  query: string;
+  mode: HvyDocumentSearchMode;
+  caseSensitive: boolean;
+  categories: SearchCategory[];
+  filterEnabled: boolean;
+  filterMode: SearchFilterMode;
+  results: HvySearchResult[];
+  activeResultId?: string | null;
+}
+
+export interface HvyDocumentSearchResponseSnapshot extends Omit<HvySearchSnapshot, 'results'> {
+  results: HvyDocumentSearchResult[];
+}
+
+export interface HvyDocumentSearchSnapshot extends HvySearchSnapshot {
+  documentId: string;
+  documentTitle?: string;
+}
+
+export interface HvySearchSnapshotInput {
+  query?: string;
+  mode?: HvyDocumentSearchMode | SearchFilterQueryMode;
+  caseSensitive?: boolean;
+  categories?: SearchCategory[] | Partial<Record<SearchCategory, boolean>>;
+  filterEnabled?: boolean;
+  filterMode?: SearchFilterMode;
+  results?: HvySearchResult[];
+  activeResultId?: string | null;
 }
 
 export interface SearchState {

@@ -295,6 +295,19 @@ const response = await HVY.searchDocuments({
 for (const result of response.results) {
   console.log(result.documentId, result.targetKind, result.sectionKey, result.blockId);
 }
+
+const selectedSnapshot = HVY.createDocumentSearchSnapshot(response, 'resume', {
+  filterMode: 'hide',
+});
+
+const mount = HVY.mountHvyViewer({
+  root,
+  document: resumeDocument,
+  searchSnapshot: selectedSnapshot,
+});
+
+// Or apply a later meta-app selection without remounting the document.
+mount.setSearchSnapshot(selectedSnapshot);
 ```
 
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a

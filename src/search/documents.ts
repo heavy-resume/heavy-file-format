@@ -19,6 +19,7 @@ import {
   getSemanticDocumentTitle,
   type HvySemanticFilterCandidateWindow,
 } from './semantic-candidates';
+import { createDocumentSearchResponseSnapshot } from './snapshot';
 
 const DEFAULT_SEARCH_CATEGORIES: SearchCategory[] = ['tags', 'contents', 'description'];
 
@@ -26,7 +27,18 @@ export async function searchDocuments(request: HvyDocumentSearchRequest): Promis
   const query = request.query.trim();
   const mode = request.mode ?? 'keyword';
   if (!query || request.documents.length === 0) {
-    return { query, mode, results: [] };
+    return {
+      query,
+      mode,
+      results: [],
+      snapshot: createDocumentSearchResponseSnapshot({
+        query,
+        mode,
+        results: [],
+        caseSensitive: request.caseSensitive ?? false,
+        categories: request.categories ?? DEFAULT_SEARCH_CATEGORIES,
+      }),
+    };
   }
   throwIfAborted(request.signal);
   return mode === 'semantic'
@@ -56,6 +68,13 @@ async function searchDocumentsByKeyword(
     query,
     mode: 'keyword',
     results,
+    snapshot: createDocumentSearchResponseSnapshot({
+      query,
+      mode: 'keyword',
+      results,
+      caseSensitive: request.caseSensitive ?? false,
+      categories,
+    }),
   };
 }
 
@@ -80,6 +99,11 @@ async function searchDocumentsSemantically(
       query,
       mode: 'semantic',
       results: [],
+      snapshot: createDocumentSearchResponseSnapshot({
+        query,
+        mode: 'semantic',
+        results: [],
+      }),
       candidateBudget: packet.candidateBudget,
     };
   }
@@ -93,10 +117,16 @@ async function searchDocumentsSemantically(
   });
   throwIfAborted(request.signal);
 
+  const results = buildDocumentSemanticSearchResults(packet.candidates, matches, query);
   return {
     query,
     mode: 'semantic',
-    results: buildDocumentSemanticSearchResults(packet.candidates, matches, query),
+    results,
+    snapshot: createDocumentSearchResponseSnapshot({
+      query,
+      mode: 'semantic',
+      results,
+    }),
     candidateBudget: packet.candidateBudget,
   };
 }

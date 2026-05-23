@@ -8,6 +8,7 @@ import { renderSearchModal } from '../src/search/render';
 import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
+import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, stopSearchRequest } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
@@ -1455,6 +1456,15 @@ title: Second
   expect(expectedResult.results.map((result) => result.documentId)).toEqual(['first-doc', 'second-doc']);
   expect(expectedResult.results.map((result) => result.targetId)).toEqual(['first-note', 'second-note']);
   expect(expectedResult.results[0]!.documentTitle).toBe('First');
+  expect(expectedResult.snapshot).toMatchObject({
+    query: 'shared',
+    mode: 'keyword',
+    caseSensitive: false,
+    categories: ['contents'],
+    filterEnabled: true,
+    filterMode: 'deprioritize',
+  });
+  expect(expectedResult.snapshot.results.map((result) => result.documentId)).toEqual(['first-doc', 'second-doc']);
 });
 
 test('document search sends semantic candidates across many documents', async () => {
@@ -1515,6 +1525,80 @@ title: Second
     score: 0.82,
   });
   expect(expectedResult.candidateBudget?.totalCandidates).toBeGreaterThan(1);
+});
+
+test('document search snapshot can be reduced to one selected document', async () => {
+  const firstDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: First
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"first-note"}-->
+ frontend work
+`, '.hvy');
+  const secondDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: Second
+---
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"second-note"}-->
+ database work
+`, '.hvy');
+
+  const response = await searchDocuments({
+    query: 'Find databases',
+    mode: 'semantic',
+    documents: [
+      { documentId: 'first-doc', document: firstDocument },
+      { documentId: 'second-doc', document: secondDocument },
+    ],
+    semanticFilterProvider: (request) => {
+      const match = request.candidates.find((candidate) =>
+        candidate.documentId === 'second-doc' && candidate.targetKind === 'block'
+      );
+      return match ? [{
+        candidateId: match.candidateId,
+        reason: 'Database work is relevant.',
+      }] : [];
+    },
+  });
+
+  const expectedResult = createDocumentSearchSnapshot(response, 'second-doc', { filterMode: 'hide' });
+
+  expect(expectedResult).toMatchObject({
+    documentId: 'second-doc',
+    documentTitle: 'Second',
+    query: 'Find databases',
+    mode: 'semantic',
+    filterEnabled: true,
+    filterMode: 'hide',
+  });
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]!.id).toBe('semantic-1');
+  expect(expectedResult.results[0]!.targetId).toBe('second-note');
+});
+
+test('document snapshot state normalization clears empty or null filters', () => {
+  const expectedNullState = searchSnapshotToState(null);
+  const expectedEmptyState = searchSnapshotToState({
+    query: 'Missing',
+    mode: 'keyword',
+    filterEnabled: true,
+    results: [],
+  });
+
+  expect(expectedNullState.filterEnabled).toBe(false);
+  expect(expectedNullState.submittedQuery).toBe('');
+  expect(expectedNullState.results).toEqual([]);
+  expect(expectedEmptyState.filterEnabled).toBe(false);
+  expect(expectedEmptyState.submittedQuery).toBe('Missing');
+  expect(expectedEmptyState.results).toEqual([]);
 });
 
 test('search highlighting escapes plain text before marking matches', () => {

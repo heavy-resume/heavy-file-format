@@ -988,6 +988,108 @@ hvy_version: 0.1
   expect(result.editorText).toContain('Host download serialization test.');
 });
 
+test('embedded viewers can hydrate and update search snapshots from headless search', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const {
+      createDocumentSearchSnapshot,
+      deserializeDocumentBytes,
+      mountHvy,
+      mountHvyViewer,
+      searchDocuments,
+    } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+title: Snapshot Host Test
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ keep this needle
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-note"}-->
+ hide this section
+`;
+    const encoder = new TextEncoder();
+    const viewerRoot = document.querySelector<HTMLElement>('#viewerMount');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!viewerRoot || !editorRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const headlessDocument = deserializeDocumentBytes(encoder.encode(source), '.hvy');
+    const response = await searchDocuments({
+      query: 'needle',
+      mode: 'keyword',
+      documents: [{ documentId: 'snapshot-doc', document: headlessDocument }],
+      categories: ['contents'],
+    });
+    const snapshot = createDocumentSearchSnapshot(response, 'snapshot-doc', { filterMode: 'hide' });
+    const viewerMount = mountHvyViewer({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      searchSnapshot: snapshot,
+    });
+    const initialViewerText = viewerRoot.querySelector('#readerDocument')?.textContent ?? '';
+    viewerMount.setSearchSnapshot(null);
+    const clearedViewerText = viewerRoot.querySelector('#readerDocument')?.textContent ?? '';
+    const editorMount = mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    editorMount.setSearchSnapshot(snapshot);
+    await new Promise<void>((resolve) => {
+      const startedAt = performance.now();
+      const waitForFullMount = () => {
+        if (editorRoot.querySelector('#readerDocument') || performance.now() - startedAt > 1_000) {
+          resolve();
+          return;
+        }
+        window.setTimeout(waitForFullMount, 20);
+      };
+      waitForFullMount();
+    });
+    const editorSnapshot = editorMount.getSearchSnapshot();
+    const editorText = editorRoot.querySelector('#readerDocument')?.textContent ?? editorRoot.textContent ?? '';
+    return {
+      initialViewerText,
+      clearedViewerText,
+      editorSnapshot,
+      editorText,
+      viewerHasMethods: {
+        setSearchSnapshot: typeof viewerMount.setSearchSnapshot,
+        getSearchSnapshot: typeof viewerMount.getSearchSnapshot,
+      },
+      editorHasMethods: {
+        setSearchSnapshot: typeof editorMount.setSearchSnapshot,
+        getSearchSnapshot: typeof editorMount.getSearchSnapshot,
+      },
+    };
+  });
+
+  expect(result.initialViewerText).toContain('keep this needle');
+  expect(result.initialViewerText).not.toContain('hide this section');
+  expect(result.clearedViewerText).toContain('hide this section');
+  expect(result.editorSnapshot).toMatchObject({
+    query: 'needle',
+    mode: 'keyword',
+    filterEnabled: true,
+    filterMode: 'hide',
+  });
+  expect(result.editorText).toContain('keep this needle');
+  expect(result.editorText).not.toContain('hide this section');
+  expect(result.viewerHasMethods).toEqual({ setSearchSnapshot: 'function', getSearchSnapshot: 'function' });
+  expect(result.editorHasMethods).toEqual({ setSearchSnapshot: 'function', getSearchSnapshot: 'function' });
+});
+
 test('embedded editor exposes dirty document change state to hosts', async ({ page }) => {
   await page.goto('/');
 

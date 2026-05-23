@@ -214,9 +214,7 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     && search.results.length === 0;
   const semanticProgress = search.filterQueryMode === 'semantic' ? search.semanticProgress ?? null : null;
   const status = search.isLoading
-    ? semanticProgress
-      ? `Analyzed ${semanticProgress.completedWindows} of ${semanticProgress.totalWindows} windows. ${semanticProgress.matchedCandidates} match${semanticProgress.matchedCandidates === 1 ? '' : 'es'} so far.`
-      : search.filterQueryMode === 'semantic' ? 'Preparing semantic windows...' : 'Searching...'
+    ? search.filterQueryMode === 'semantic' ? '' : 'Searching...'
     : search.error
     ? search.error
     : search.submittedQuery.trim().length > 0 && search.results.length === 0
@@ -244,11 +242,11 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     </div>
     <button
       type="button"
-      class="secondary search-apply-filter-button${applied ? ' is-active' : ''}"
-      data-action="apply-search-filter"
+      class="${search.isLoading ? 'danger' : 'secondary'} search-apply-filter-button${applied ? ' is-active' : ''}"
+      data-action="${search.isLoading ? 'stop-search-request' : 'apply-search-filter'}"
       aria-pressed="${applied ? 'true' : 'false'}"
-      ${search.isLoading || noResults ? 'disabled' : ''}
-    >${search.isLoading ? 'Filtering...' : noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter'}</button>
+      ${!search.isLoading && noResults ? 'disabled' : ''}
+    >${search.isLoading ? 'Stop' : noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter'}</button>
   </section>`;
 }
 
@@ -261,7 +259,7 @@ function renderSemanticProgress(progress: NonNullable<SearchState['semanticProgr
     </div>
     <div class="search-semantic-progress-meta">
       <span>${progress.completedWindows}/${progress.totalWindows} windows</span>
-      <span>${progress.includedCandidates}/${progress.totalCandidates} candidates</span>
+      <span>${progress.matchedCandidates} match${progress.matchedCandidates === 1 ? '' : 'es'}</span>
     </div>
   </div>`;
 }

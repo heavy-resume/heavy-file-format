@@ -65,6 +65,12 @@ export interface HvySemanticFilterCandidate {
   summary: string;
   documentOrder: number;
   truncated: boolean;
+  windowChunk?: {
+    index: number;
+    count: number;
+    start: number;
+    end: number;
+  };
 }
 
 export interface HvySemanticFilterCandidateBudget {

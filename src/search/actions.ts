@@ -80,6 +80,21 @@ export function stopSearch(): void {
   getRenderApp()();
 }
 
+export function stopSearchRequest(): void {
+  if (!state.search.isLoading && !state.search.abortController) {
+    return;
+  }
+  state.search.abortController?.abort();
+  state.search.abortController = null;
+  state.search.requestNonce += 1;
+  state.search.open = true;
+  state.search.resultsCollapsed = false;
+  state.search.isLoading = false;
+  state.search.semanticProgress = null;
+  state.search.error = null;
+  getRenderApp()();
+}
+
 export async function submitSearch(): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;
@@ -322,6 +337,7 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     state.search.navigationResultIds = [];
     state.search.open = false;
     state.search.resultsCollapsed = false;
+    state.search.semanticProgress = null;
     getRefreshReaderPanels()();
     getRenderApp()();
     return;

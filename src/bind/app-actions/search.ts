@@ -1,5 +1,5 @@
 import type { AppActionHandler } from './types';
-import { applySearchFilter, closeSearch, expandSearchResults, isSearchFilterApplied, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchFilterQueryMode, setSearchTab, stopSearch } from '../../search/actions';
+import { applySearchFilter, closeSearch, expandSearchResults, isSearchFilterApplied, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchFilterQueryMode, setSearchTab, stopSearch, stopSearchRequest } from '../../search/actions';
 import type { SearchCategory, SearchFilterMode, SearchFilterQueryMode, SearchPaletteTab } from '../../search/types';
 import { getRenderApp, state } from '../../state';
 
@@ -13,6 +13,10 @@ const closeSearchAction: AppActionHandler = () => {
 
 const stopSearchAction: AppActionHandler = () => {
   stopSearch();
+};
+
+const stopSearchRequestAction: AppActionHandler = () => {
+  stopSearchRequest();
 };
 
 const expandSearchResultsAction: AppActionHandler = ({ app }) => {
@@ -73,6 +77,7 @@ export const searchActions: Record<string, AppActionHandler> = {
   'open-search': openSearchAction,
   'close-search': closeSearchAction,
   'stop-search': stopSearchAction,
+  'stop-search-request': stopSearchRequestAction,
   'expand-search-results': expandSearchResultsAction,
   'select-search-result': selectSearchResultAction,
   'previous-search-result': previousSearchResultAction,

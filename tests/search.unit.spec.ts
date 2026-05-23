@@ -5,10 +5,10 @@ import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
-import { buildSemanticFilterRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
+import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
-import { applySearchFilter } from '../src/search/actions';
+import { applySearchFilter, stopSearchRequest } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
@@ -297,6 +297,119 @@ hvy_version: 0.1
   expect(expectedMarkup).toContain('class="search-close-button ghost remove-x"');
   expect(expectedMarkup).toContain('Turn off filter');
   expect(expectedMarkup).not.toContain('data-action="stop-search"');
+});
+
+test('filter palette shows stop control while semantic filtering is running', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const expectedMarkup = renderSearchPalette({
+    open: true,
+    queryDraft: 'Anything Carta',
+    submittedQuery: 'Anything Carta',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: false,
+    filterMode: 'hide',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: true,
+    semanticProgress: {
+      completedWindows: 4,
+      totalWindows: 87,
+      matchedCandidates: 1,
+      includedCandidates: 120,
+      totalCandidates: 120,
+    },
+    error: null,
+    results: [],
+    navigationResultIds: [],
+    requestNonce: 1,
+    abortController: new AbortController(),
+  }, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  });
+
+  expect(expectedMarkup).toContain('data-action="stop-search-request"');
+  expect(expectedMarkup).toContain('>Stop</button>');
+  expect(expectedMarkup).toContain('4/87 windows');
+  expect(expectedMarkup).toContain('1 match');
+  expect(expectedMarkup).not.toContain('120/120 candidates');
+  expect(expectedMarkup).not.toContain('>Filtering...</button>');
+});
+
+test('stopping a search request aborts without closing the palette or clearing the prompt', () => {
+  const abortController = new AbortController();
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.search.open = false;
+  state.search.resultsCollapsed = true;
+  state.search.queryDraft = 'Anything Carta';
+  state.search.submittedQuery = 'Anything Carta';
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.isLoading = true;
+  state.search.abortController = abortController;
+  state.search.semanticProgress = {
+    completedWindows: 4,
+    totalWindows: 87,
+    matchedCandidates: 1,
+    includedCandidates: 120,
+    totalCandidates: 120,
+  };
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+
+  stopSearchRequest();
+
+  expect(abortController.signal.aborted).toBe(true);
+  expect(state.search.open).toBe(true);
+  expect(state.search.resultsCollapsed).toBe(false);
+  expect(state.search.queryDraft).toBe('Anything Carta');
+  expect(state.search.isLoading).toBe(false);
+  expect(state.search.semanticProgress).toBe(null);
+});
+
+test('turning off an applied filter clears semantic progress', async () => {
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.search.filterEnabled = true;
+  state.search.submittedQuery = 'Anything Carta';
+  state.search.semanticProgress = {
+    completedWindows: 4,
+    totalWindows: 10,
+    matchedCandidates: 1,
+    includedCandidates: 120,
+    totalCandidates: 120,
+  };
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+
+  await applySearchFilter({ enabled: false });
+
+  expect(state.search.filterEnabled).toBe(false);
+  expect(state.search.semanticProgress).toBe(null);
 });
 
 test('search filter context keeps matches and required ancestors visible', async () => {
@@ -791,7 +904,10 @@ hvy_version: 0.1
     targetPath: '/body/alpha/text-0',
     label: 'Anonymous note',
   });
-  expect(expectedResult.instructionPrompt).toContain('"targetRef":"C0"');
+  expect(expectedResult.instructionPrompt).toContain('<candidate id="component:C0">');
+  expect(expectedResult.instructionPrompt).toContain('<context label="Alpha">');
+  expect(expectedResult.instructionPrompt).not.toContain('PATH /body/alpha/text-0');
+  expect(expectedResult.instructionPrompt).not.toContain('/body/alpha/text-0');
 });
 
 test('semantic filter request truncates large candidate payloads deterministically', () => {
@@ -848,9 +964,145 @@ hvy_version: 0.1
     prompt: 'Find frontend work',
   });
 
-  expect(expectedResult.windows).toHaveLength(2);
-  expect(expectedResult.windows[0]!.candidates.map((candidate) => candidate.targetId)).toEqual(['skills', 'typescript', 'react']);
-  expect(expectedResult.windows[1]!.candidates.map((candidate) => candidate.targetId)).toEqual(['writing', 'notes']);
+  expect(expectedResult.windows).toHaveLength(1);
+  expect(expectedResult.windows[0]!.candidates.map((candidate) => candidate.targetId)).toEqual(['typescript', 'react', 'notes']);
+  expect(expectedResult.windows[0]!.candidates.every((candidate) => candidate.targetKind === 'block')).toBe(true);
+});
+
+test('semantic filter windows include late section candidates past the single request budget', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"early-one"}-->
+ ${'Early skill detail. '.repeat(20)}
+
+<!--hvy:text {"id":"early-two"}-->
+ ${'Early tool detail. '.repeat(20)}
+
+<!--hvy: {"id":"history"}-->
+#! Professional History
+
+<!--hvy:text {"id":"carta-role"}-->
+ Carta platform engineering.
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Anything Carta',
+    maxCandidateSummaryChars: 40,
+    maxTotalCandidateChars: 700,
+    maxWindowCandidateChars: 700,
+  });
+
+  expect(expectedResult.candidateBudget.truncated).toBe(false);
+  expect(expectedResult.candidateBudget.includedCandidates).toBe(expectedResult.candidateBudget.totalCandidates);
+  expect(expectedResult.candidates.find((candidate) => candidate.targetId === 'early-one')?.summary.length).toBeGreaterThan(40);
+  expect(expectedResult.candidates.map((candidate) => candidate.targetPath)).toContain('/body/history');
+  expect(expectedResult.candidates.map((candidate) => candidate.targetPath)).toContain('/body/history/carta-role');
+  expect(expectedResult.windows.flatMap((window) => window.candidates.map((candidate) => candidate.targetPath))).toContain('/body/history/carta-role');
+});
+
+test('semantic filter windows split oversized text candidates with overlap', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"long-note"}-->
+ ${'alpha '.repeat(260)}needle ${'omega '.repeat(260)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find needle',
+    maxWindowCandidateChars: 900,
+  });
+  const expectedChunks = expectedResult.windows
+    .flatMap((window) => window.candidates)
+    .filter((candidate) => candidate.candidateId === 'component:long-note');
+
+  expect(expectedResult.candidateBudget.truncated).toBe(false);
+  expect(expectedChunks.length).toBeGreaterThan(1);
+  expect(new Set(expectedChunks.map((candidate) => candidate.candidateId))).toEqual(new Set(['component:long-note']));
+  expect(expectedChunks.some((candidate) => candidate.summary.includes('needle'))).toBe(true);
+  for (let index = 1; index < expectedChunks.length; index += 1) {
+    expect(expectedChunks[index]!.windowChunk!.start).toBeLessThan(expectedChunks[index - 1]!.windowChunk!.end);
+  }
+});
+
+test('semantic filter windows back off oversized parent summaries to child candidates', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:expandable {"id":"record"}-->
+ <!--hvy:expandable:stub {}-->
+  <!--hvy:text {"id":"record-title"}-->
+   Example Role
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"record-detail"}-->
+   ${'Detailed impact. '.repeat(220)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Detailed impact',
+    maxWindowCandidateChars: 900,
+  });
+  const expectedWindowCandidates = expectedResult.windows.flatMap((window) => window.candidates);
+  const expectedDetailChunks = expectedWindowCandidates.filter((candidate) => candidate.candidateId === 'component:record-detail');
+
+  expect(expectedWindowCandidates.some((candidate) => candidate.candidateId === 'component:record')).toBe(false);
+  const expectedDetailWindow = expectedResult.windows.find((window) =>
+    window.candidates.some((candidate) => candidate.candidateId === 'component:record-detail')
+  );
+  expect(buildSemanticFilterWindowRequest('Detailed impact', expectedDetailWindow!).instructionPrompt).toContain('<context label="History">');
+  expect(expectedDetailChunks.length).toBeGreaterThan(1);
+  expect(expectedDetailChunks.some((candidate) => candidate.summary.includes('Detailed impact'))).toBe(true);
+});
+
+test('semantic filter windows pack leaf candidates up to the window budget', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"one"}-->
+ ${'one '.repeat(60)}
+
+<!--hvy:text {"id":"two"}-->
+ ${'two '.repeat(60)}
+
+<!--hvy:text {"id":"three"}-->
+ ${'three '.repeat(60)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find notes',
+    maxWindowCandidateChars: 900,
+  });
+
+  expect(expectedResult.windows.length).toBeGreaterThan(1);
+  for (const window of expectedResult.windows) {
+    expect(window.candidateBudget.usedTotalCandidateChars).toBeLessThanOrEqual(900);
+  }
+  expect(expectedResult.windows.flatMap((window) => window.candidates.map((candidate) => candidate.targetId))).toEqual([
+    'one',
+    'two',
+    'three',
+  ]);
 });
 
 test('semantic filter provider matches become normal filter results', async () => {
@@ -902,11 +1154,11 @@ hvy_version: 0.1
 
   await applySearchFilter({ enabled: true });
 
-  expect(seenWindows).toEqual(['Skills', 'Writing']);
+  expect(seenWindows).toEqual(['Skills / TypeScript tooling.']);
   expect(renderApp).toHaveBeenCalled();
   expect(state.search.semanticProgress).toMatchObject({
-    completedWindows: 2,
-    totalWindows: 2,
+    completedWindows: 1,
+    totalWindows: 1,
     matchedCandidates: 1,
   });
   expect(state.search.filterEnabled).toBe(true);
@@ -1096,8 +1348,8 @@ title: Second
       if (!request.candidates.some((candidate) => candidate.documentId === 'second-doc')) {
         return [];
       }
-      expect(request.instructionPrompt).toContain('"documentId":"second-doc"');
-      expect(request.instructionPrompt).toContain('"documentTitle":"Second"');
+      expect(request.instructionPrompt).toContain('document-id="second-doc"');
+      expect(request.instructionPrompt).toContain('document-title="Second"');
       return [{
         candidateId: request.candidates.find((candidate) =>
           candidate.documentId === 'second-doc' && candidate.targetKind === 'block'

@@ -133,7 +133,18 @@ function buildDocumentSemanticCandidatePacket(
       windowIndex: windowOffset + window.windowIndex,
       windowCount: 0,
       label: title ? `${title}: ${window.label}` : window.label,
-      candidates: window.candidates.map((candidate) => idMap.get(candidate.candidateId)).filter((candidate): candidate is HvySemanticFilterCandidate => Boolean(candidate)),
+      candidates: window.candidates.flatMap((candidate): HvySemanticFilterCandidate[] => {
+        const fullCandidate = idMap.get(candidate.candidateId);
+        if (!fullCandidate) {
+          return [];
+        }
+        return [{
+          ...candidate,
+          candidateId: fullCandidate.candidateId,
+          documentId: entry.documentId,
+          ...(title ? { documentTitle: title } : {}),
+        }];
+      }),
     })));
     windowOffset += packet.windows.length;
   }

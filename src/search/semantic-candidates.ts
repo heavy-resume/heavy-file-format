@@ -12,7 +12,9 @@ import type { VisualDocument } from '../types';
 
 const DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS = 800;
 const DEFAULT_MAX_TOTAL_CANDIDATE_CHARS = 80_000;
-const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 12_000;
+const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
+const UNLIMITED_CANDIDATE_SUMMARY_CHARS = Number.MAX_SAFE_INTEGER;
+const SEMANTIC_WINDOW_CHUNK_OVERLAP_CHARS = 400;
 
 interface BuildSemanticFilterRequestOptions {
   document: VisualDocument;
@@ -58,16 +60,18 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
   candidateBudget: HvySemanticFilterCandidateBudget;
   windows: HvySemanticFilterCandidateWindow[];
 } {
-  const maxCandidateSummaryChars = options.maxCandidateSummaryChars ?? DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS;
+  const maxCandidateSummaryChars = UNLIMITED_CANDIDATE_SUMMARY_CHARS;
   const maxTotalCandidateChars = options.maxTotalCandidateChars ?? DEFAULT_MAX_TOTAL_CANDIDATE_CHARS;
   const maxWindowCandidateChars = options.maxWindowCandidateChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS;
-  const allCandidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars })
+  const candidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars })
     .sort((left, right) => left.documentOrder - right.documentOrder);
-  const { candidates, candidateBudget } = applySemanticCandidateBudget(allCandidates, {
+  const candidateIdsWithDescendants = getCandidateIdsWithDescendants(candidates);
+  const windowCandidates = candidates.filter((candidate) => !candidateIdsWithDescendants.has(candidate.candidateId));
+  const candidateBudget = summarizeSemanticCandidateBudget(windowCandidates, {
     maxCandidateSummaryChars,
     maxTotalCandidateChars,
   });
-  const windows = packSemanticCandidateWindows(candidates, {
+  const windows = packSemanticCandidateWindows(windowCandidates, {
     maxCandidateSummaryChars,
     maxWindowCandidateChars,
     overallCandidateBudget: candidateBudget,
@@ -200,22 +204,7 @@ function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPat
 }
 
 export function buildSemanticFilterInstructionPrompt(prompt: string, candidates: HvySemanticFilterCandidate[]): string {
-  const candidateLines = candidates.map((candidate) => JSON.stringify({
-    candidateId: candidate.candidateId,
-    ...(candidate.documentId ? { documentId: candidate.documentId } : {}),
-    ...(candidate.documentTitle ? { documentTitle: candidate.documentTitle } : {}),
-    targetKind: candidate.targetKind,
-    ...(candidate.targetRef ? { targetRef: candidate.targetRef } : {}),
-    ...(candidate.targetPath ? { targetPath: candidate.targetPath } : {}),
-    label: candidate.label,
-    ...(candidate.locationLabel ? { locationLabel: candidate.locationLabel } : {}),
-    ...(candidate.contextLabel ? { contextLabel: candidate.contextLabel } : {}),
-    tags: candidate.tags,
-    description: candidate.description,
-    summary: candidate.summary,
-    documentOrder: candidate.documentOrder,
-    truncated: candidate.truncated,
-  }));
+  const candidateBlocks = formatSemanticCandidatePromptBlocks(candidates);
   return [
     'You are selecting visible content from structured HVY document candidates.',
     '',
@@ -231,16 +220,83 @@ export function buildSemanticFilterInstructionPrompt(prompt: string, candidates:
     '- Only use candidateId values from the candidate list.',
     '- Return only matching candidateId strings; do not include explanations.',
     '- candidateId values identify exact section/component targets. Component targetRef values match the CLI request_structure IDs, including generated C0/C1-style IDs for anonymous components.',
-    '- Prefer the most precise component candidate whose summary satisfies the prompt.',
-    '- Prefer child item/record candidates over their parent list/container candidates unless the user asks for the whole group.',
-    '- Select a section only when the section itself is relevant or the user asks for that whole section.',
+    '- Prefer the most precise leaf component candidate whose text satisfies the prompt.',
+    '- Parent sections and containers are included automatically when a leaf component matches.',
     '- Do not invent IDs.',
     '- Do not rewrite the document.',
     '- Do not include unrelated candidates.',
     '',
-    'Candidate list as JSONL:',
-    ...candidateLines,
+    'Candidate list as XML-like structured text:',
+    ...candidateBlocks,
   ].join('\n');
+}
+
+function formatSemanticCandidatePromptBlocks(candidates: HvySemanticFilterCandidate[]): string[] {
+  const blocks: string[] = [];
+  let contextStack: string[] = [];
+  for (const candidate of candidates) {
+    const contextParts = getSemanticCandidatePromptContextParts(candidate);
+    let shared = 0;
+    while (
+      shared < contextStack.length
+      && shared < contextParts.length
+      && contextStack[shared] === contextParts[shared]
+    ) {
+      shared += 1;
+    }
+    for (let index = contextStack.length - 1; index >= shared; index -= 1) {
+      blocks.push(`${'  '.repeat(index)}</context>`);
+    }
+    for (let index = shared; index < contextParts.length; index += 1) {
+      blocks.push(`${'  '.repeat(index)}<context label="${escapeSemanticXmlAttr(contextParts[index]!)}">`);
+    }
+    contextStack = contextParts;
+    blocks.push(formatSemanticCandidatePromptBlock(candidate));
+  }
+  for (let index = contextStack.length - 1; index >= 0; index -= 1) {
+    blocks.push(`${'  '.repeat(index)}</context>`);
+  }
+  return blocks;
+}
+
+function formatSemanticCandidatePromptBlock(candidate: HvySemanticFilterCandidate): string {
+  const indent = '  '.repeat(getSemanticCandidatePromptContextParts(candidate).length);
+  const attributes = [
+    `id="${escapeSemanticXmlAttr(candidate.candidateId)}"`,
+    ...(candidate.documentId ? [`document-id="${escapeSemanticXmlAttr(candidate.documentId)}"`] : []),
+    ...(candidate.documentTitle ? [`document-title="${escapeSemanticXmlAttr(candidate.documentTitle)}"`] : []),
+    ...(candidate.tags.length ? [`tags="${escapeSemanticXmlAttr(candidate.tags.join(', '))}"`] : []),
+    ...(candidate.windowChunk ? [`chunk="${candidate.windowChunk.index + 1}/${candidate.windowChunk.count}"`, `chars="${candidate.windowChunk.start}-${candidate.windowChunk.end}"`] : []),
+  ].join(' ');
+  return [
+    `${indent}<candidate ${attributes}>`,
+    `${indent}  ${escapeSemanticXmlText(candidate.summary)}`,
+    `${indent}</candidate>`,
+  ].join('\n');
+}
+
+function getSemanticCandidatePromptContextParts(candidate: HvySemanticFilterCandidate): string[] {
+  const parts = [
+    ...(candidate.documentTitle ? [candidate.documentTitle] : []),
+    ...splitContextParts(candidate.contextLabel ?? ''),
+    ...splitContextParts(candidate.locationLabel ?? ''),
+  ].map(cleanText).filter(Boolean);
+  return parts.filter((part, index) => parts.indexOf(part) === index);
+}
+
+function splitContextParts(value: string): string[] {
+  return value.split('/').map((part) => part.trim()).filter(Boolean);
+}
+
+function escapeSemanticXmlAttr(value: string): string {
+  return escapeSemanticXmlText(value).replace(/"/g, '&quot;');
+}
+
+function escapeSemanticXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 export function applySemanticCandidateBudget(
@@ -270,6 +326,20 @@ export function applySemanticCandidateBudget(
   };
 }
 
+function summarizeSemanticCandidateBudget(
+  candidates: HvySemanticFilterCandidate[],
+  options: { maxCandidateSummaryChars: number; maxTotalCandidateChars: number }
+): HvySemanticFilterCandidateBudget {
+  return {
+    maxCandidateSummaryChars: options.maxCandidateSummaryChars,
+    maxTotalCandidateChars: options.maxTotalCandidateChars,
+    usedTotalCandidateChars: candidates.reduce((total, candidate) => total + getSemanticCandidatePromptChars(candidate), 0),
+    includedCandidates: candidates.length,
+    totalCandidates: candidates.length,
+    truncated: candidates.some((candidate) => candidate.truncated),
+  };
+}
+
 function packSemanticCandidateWindows(
   candidates: HvySemanticFilterCandidate[],
   options: {
@@ -295,8 +365,8 @@ function packSemanticCandidateWindows(
     currentChars = 0;
   };
 
-  for (const candidate of candidates) {
-    const candidateChars = JSON.stringify(candidate).length;
+  const pushCandidate = (candidate: HvySemanticFilterCandidate): void => {
+    const candidateChars = getSemanticCandidatePromptChars(candidate);
     const startsSectionWindow = candidate.targetKind === 'section' && current.length > 0;
     const exceedsWindow = current.length > 0 && currentChars + candidateChars > options.maxWindowCandidateChars;
     if (startsSectionWindow || exceedsWindow) {
@@ -304,6 +374,12 @@ function packSemanticCandidateWindows(
     }
     current.push(candidate);
     currentChars += candidateChars;
+  };
+
+  for (const candidate of candidates) {
+    for (const windowCandidate of buildWindowCandidateChunks(candidate, options.maxWindowCandidateChars)) {
+      pushCandidate(windowCandidate);
+    }
   }
   flush();
 
@@ -323,6 +399,70 @@ function packSemanticCandidateWindows(
   }));
 }
 
+function getCandidateIdsWithDescendants(candidates: HvySemanticFilterCandidate[]): Set<string> {
+  const candidatesWithDescendants = new Set<string>();
+  const candidatesWithPaths = candidates.filter((candidate) => candidate.targetPath);
+  for (const candidate of candidatesWithPaths) {
+    const candidatePath = candidate.targetPath;
+    if (!candidatePath) {
+      continue;
+    }
+    const descendantPrefix = `${candidatePath}/`;
+    if (candidatesWithPaths.some((other) => other !== candidate && other.targetPath?.startsWith(descendantPrefix))) {
+      candidatesWithDescendants.add(candidate.candidateId);
+    }
+  }
+  return candidatesWithDescendants;
+}
+
+function buildWindowCandidateChunks(
+  candidate: HvySemanticFilterCandidate,
+  maxWindowCandidateChars: number
+): HvySemanticFilterCandidate[] {
+  const candidateChars = getSemanticCandidatePromptChars(candidate);
+  if (candidateChars <= maxWindowCandidateChars || candidate.summary.length === 0) {
+    return [candidate];
+  }
+
+  const emptySummaryChars = getSemanticCandidatePromptChars({ ...candidate, summary: '', windowChunk: { index: 0, count: 1, start: 0, end: 0 } });
+  const maxSummaryChars = Math.max(1, maxWindowCandidateChars - emptySummaryChars);
+  if (maxSummaryChars >= candidate.summary.length) {
+    return [candidate];
+  }
+
+  const overlapChars = Math.min(
+    SEMANTIC_WINDOW_CHUNK_OVERLAP_CHARS,
+    Math.max(0, Math.floor(maxSummaryChars / 4))
+  );
+  const stepChars = Math.max(1, maxSummaryChars - overlapChars);
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (let start = 0; start < candidate.summary.length; start += stepChars) {
+    const end = Math.min(candidate.summary.length, start + maxSummaryChars);
+    ranges.push({ start, end });
+    if (end >= candidate.summary.length) {
+      break;
+    }
+  }
+
+  return ranges.map((range, index) => ({
+    ...candidate,
+    summary: candidate.summary.slice(range.start, range.end),
+    truncated: false,
+    windowChunk: {
+      index,
+      count: ranges.length,
+      start: range.start,
+      end: range.end,
+    },
+  }));
+}
+
+function getSemanticCandidatePromptChars(candidate: HvySemanticFilterCandidate): number {
+  const contextChars = getSemanticCandidatePromptContextParts(candidate)
+    .reduce((total, part, index) => total + `${'  '.repeat(index)}<context label="${escapeSemanticXmlAttr(part)}">\n`.length + `${'  '.repeat(index)}</context>\n`.length, 0);
+  return formatSemanticCandidatePromptBlock(candidate).length + contextChars;
+}
+
 function getSemanticWindowLabel(candidates: HvySemanticFilterCandidate[]): string {
   const section = candidates.find((candidate) => candidate.targetKind === 'section') ?? candidates[0];
   if (!section) {
@@ -334,7 +474,6 @@ function getSemanticWindowLabel(candidates: HvySemanticFilterCandidate[]): strin
 function buildSectionSummary(section: VisualSection): string {
   return cleanText([
     section.title,
-    section.description ?? '',
     section.tags ?? '',
   ].join('\n'));
 }
@@ -345,7 +484,6 @@ function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
     : '';
   return cleanText([
     block.schema.component,
-    block.schema.description ?? '',
     block.schema.tags ?? '',
     block.schema.xrefTitle ?? '',
     block.schema.xrefDetail ?? '',

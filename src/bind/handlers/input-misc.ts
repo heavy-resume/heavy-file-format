@@ -44,14 +44,29 @@ export function bindInputMisc(app: HTMLElement): void {
       const hadFocus = document.activeElement === target;
       state.search.queryDraft = target.value;
       state.search.resultsCollapsed = false;
+      if (state.search.isLoading || state.search.abortController) {
+        state.search.abortController?.abort();
+        state.search.abortController = null;
+        state.search.requestNonce += 1;
+        state.search.isLoading = false;
+      }
       state.search.semanticProgress = null;
-      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
+      app.querySelector<HTMLElement>('.search-semantic-progress')?.remove();
+      const semanticStatus = app.querySelector<HTMLElement>('.search-filter-panel .search-status');
+      if (semanticStatus && state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+        semanticStatus.textContent = '';
+        semanticStatus.classList.remove('is-error', 'is-empty');
+      }
+      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"], [data-action="stop-search-request"]');
       if (filterButton) {
         const applied = isSearchFilterApplied();
+        filterButton.dataset.action = 'apply-search-filter';
+        filterButton.classList.remove('danger');
+        filterButton.classList.add('secondary');
         filterButton.classList.toggle('is-active', applied);
         filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
-        filterButton.disabled = state.search.isLoading;
-        filterButton.textContent = state.search.isLoading ? 'Filtering...' : applied ? 'Turn off filter' : 'Filter';
+        filterButton.disabled = false;
+        filterButton.textContent = applied ? 'Turn off filter' : 'Filter';
       }
       if (hadFocus && document.activeElement !== target) {
         target.focus({ preventScroll: true });

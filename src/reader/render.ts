@@ -1188,7 +1188,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <section class="theme-modal${options.advanced ? ' theme-modal--advanced' : ''}">
           <div class="modal-head">
             <h3>Theme Colors</h3>
-            ${includeModalActions ? '<button type="button" data-modal-action="close">Close</button>' : ''}
+            ${includeModalActions ? '<button type="button" class="hvy-button" data-modal-action="close">Close</button>' : ''}
           </div>
           <p class="muted">
             Adjust the document theme with a color picker or by typing any valid CSS color value.
@@ -1232,7 +1232,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               </div>`
             : ''}
           <div class="link-inline-actions">
-            <button type="button" class="ghost" data-action="theme-add-color">Add Color</button>
             ${includeModalActions ? '<button type="button" class="secondary" data-modal-action="close">Done</button>' : ''}
           </div>
         </section>
@@ -1279,7 +1278,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <section class="modal-panel component-meta-modal">
             <div class="modal-head">
               <h3>${title}</h3>
-              <button type="button" data-modal-action="close">Close</button>
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
             </div>
             <p class="muted">${help}</p>
             ${existingName
@@ -1449,7 +1448,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   title="${block.schema.lock ? 'Unlock' : 'Lock'}"
                   aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
                 >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
-                <button type="button" data-modal-action="close">Close</button>
+                <button type="button" class="hvy-button" data-modal-action="close">Close</button>
               </div>
             </div>
             <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
@@ -1468,7 +1467,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <section class="modal-panel component-meta-modal">
             <div class="modal-head">
               <h3>DB Table Query</h3>
-              <button type="button" data-modal-action="close">Close</button>
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
             </div>
             ${queryModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(queryModal.error)}</div>` : ''}
             <div class="modal-field-stack">
@@ -1540,7 +1539,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                       <button type="button" class="${rowModal.mode === 'advanced' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="advanced">Advanced</button>
                       <button type="button" class="${rowModal.mode === 'raw' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="raw">Raw</button>
                     </div>`}
-                <button type="button" data-modal-action="close">Close</button>
+                <button type="button" class="hvy-button" data-modal-action="close">Close</button>
               </div>
             </div>
             <p class="muted">
@@ -1654,7 +1653,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 title="${section.lock ? 'Unlock' : 'Lock'}"
                 aria-label="${section.lock ? 'Unlock' : 'Lock'}"
               >${section.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
-              <button type="button" data-modal-action="close">Close</button>
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
             </div>
           </div>
           <p class="muted">Edit section-level metadata and reader styling.</p>

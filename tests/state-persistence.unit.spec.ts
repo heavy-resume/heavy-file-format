@@ -119,6 +119,8 @@ hvy_version: 0.1
       activeTab: 'filter',
       filterEnabled: true,
       filterMode: 'deprioritize',
+      filterQueryMode: 'keyword',
+      submittedFilterQueryMode: 'keyword',
       resultsCollapsed: false,
       activeResultId: 'result-1',
       isLoading: true,
@@ -178,6 +180,8 @@ hvy_version: 0.1
     activeTab: 'filter',
     filterEnabled: true,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: 'result-1',
     results: [
@@ -261,6 +265,64 @@ test('loadSessionState ignores legacy shared localStorage state from other tabs'
   });
 
   expect(loadSessionState()).toBeNull();
+});
+
+test('loadSessionState resets saved semantic filter runs on refresh', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+  const state = createPersistenceTestState('Semantic Refresh', 'semantic');
+  state.search = {
+    ...state.search,
+    open: true,
+    activeTab: 'filter',
+    queryDraft: 'Anything Carta',
+    submittedQuery: 'Anything Carta',
+    filterEnabled: true,
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    results: [{
+      id: 'semantic-1',
+      category: 'semantic',
+      targetKind: 'block',
+      sectionKey: state.document.sections[0]!.key,
+      blockId: state.document.sections[0]!.blocks[0]!.id,
+      targetId: 'example',
+      label: 'Example',
+      preview: 'Old semantic result',
+      matchedText: 'Anything Carta',
+      sourceField: 'Semantic match',
+    }],
+    navigationResultIds: ['semantic-1'],
+    activeResultId: 'semantic-1',
+  };
+
+  saveSessionState(state);
+
+  const loaded = loadSessionState('semantic');
+  expect(loaded?.search).toMatchObject({
+    open: true,
+    activeTab: 'filter',
+    queryDraft: 'Anything Carta',
+    submittedQuery: '',
+    filterEnabled: false,
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    results: [],
+    navigationResultIds: [],
+    activeResultId: null,
+    isLoading: false,
+    semanticProgress: null,
+    error: null,
+  });
 });
 
 test('saveSessionState and loadSessionState isolate custom session storage keys', () => {

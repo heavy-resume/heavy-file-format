@@ -1,7 +1,7 @@
 import './search.css';
 import type { ReaderRenderer } from '../reader/render';
 import type { VisualDocument } from '../types';
-import type { HvySearchResult, SearchCategory, SearchState } from './types';
+import type { HvySearchResult, SearchCategory, SearchResultCategory, SearchState } from './types';
 import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
@@ -13,17 +13,18 @@ interface SearchRenderDeps {
   readerRenderer: ReaderRenderer;
 }
 
-const CATEGORY_LABELS: Record<SearchCategory, string> = {
+const CATEGORY_LABELS: Record<SearchResultCategory, string> = {
   tags: 'Tags',
   contents: 'Contents',
   description: 'Description',
+  semantic: 'Semantic',
 };
 
 export function renderSearchLauncher(search: SearchState): string {
   const filtering = search.filterEnabled && search.submittedQuery.trim().length > 0;
   return `<button
     type="button"
-    class="search-launcher${search.open ? ' is-active' : ''}${filtering ? ' is-filtering' : ''}"
+    class="hvy-floating-launcher search-launcher${search.open ? ' is-active' : ''}${filtering ? ' is-filtering' : ''}"
     data-action="open-search"
     aria-expanded="${search.open ? 'true' : 'false'}"
     aria-label="${filtering ? 'Open filter' : 'Open search'}"
@@ -31,7 +32,7 @@ export function renderSearchLauncher(search: SearchState): string {
   >${filtering ? funnelIcon() : magnifyingGlassIcon()}</button>`;
 }
 
-export function renderSearchPalette(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
+export function renderSearchModal(search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
   if (!search.open) {
     return '';
   }
@@ -50,7 +51,7 @@ export function renderSearchPalette(search: SearchState, document: VisualDocumen
   const isFilterTab = search.activeTab === 'filter';
   return `<section class="search-overlay" aria-label="Document search">
     <div class="search-backdrop" data-action="close-search"></div>
-    <form id="searchComposer" class="search-palette${isFilterTab ? ' is-filter-tab' : ''}" role="dialog" aria-modal="true" aria-label="Search document">
+    <form id="searchComposer" class="search-modal${isFilterTab ? ' is-filter-tab' : ''}" role="dialog" aria-modal="true" aria-label="Search document">
       <div class="search-tabbar" role="tablist" aria-label="Search mode">
         <button
           type="button"
@@ -135,7 +136,7 @@ function getSearchNavigationResults(search: SearchState): HvySearchResult[] {
 
 export function focusSearchInput(app: ParentNode): void {
   window.setTimeout(() => {
-    const input = app.querySelector<HTMLInputElement>('[data-field="search-query"]');
+    const input = app.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-field="search-query"]');
     if (!input) {
       return;
     }
@@ -172,39 +173,67 @@ function renderCategoryToggle(category: SearchCategory, search: SearchState, dep
   >${deps.escapeHtml(CATEGORY_LABELS[category])}</button>`;
 }
 
-function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options: { icon: string; label: string; placeholder: string }): string {
+function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options: { icon: string; label: string; placeholder: string; multiline?: boolean }): string {
   return `<div class="search-head">
-    <div class="search-input-shell">
+    <div class="search-input-shell${options.multiline ? ' is-multiline' : ''}">
       <button type="submit" class="search-input-icon-button" aria-label="${deps.escapeAttr(options.label)}">${options.icon}</button>
-      <input
-        class="search-input"
-        data-field="search-query"
-        value="${deps.escapeAttr(search.queryDraft)}"
-        placeholder="${deps.escapeAttr(options.placeholder)}"
-        autocomplete="off"
-        spellcheck="false"
-        autofocus
-      />
+      ${options.multiline
+        ? `<textarea
+            class="search-input search-prompt-textarea"
+            data-field="search-query"
+            placeholder="${deps.escapeAttr(options.placeholder)}"
+            autocomplete="off"
+            spellcheck="true"
+            rows="4"
+            autofocus
+          >${deps.escapeHtml(search.queryDraft)}</textarea>`
+        : `<input
+            class="search-input"
+            data-field="search-query"
+            value="${deps.escapeAttr(search.queryDraft)}"
+            placeholder="${deps.escapeAttr(options.placeholder)}"
+            autocomplete="off"
+            spellcheck="false"
+            autofocus
+          />`
+      }
     </div>
   </div>`;
 }
 
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
-  const applied = search.filterEnabled && search.queryDraft.trim() === search.submittedQuery.trim();
+  const applied = search.filterEnabled
+    && search.queryDraft.trim() === search.submittedQuery.trim()
+    && search.filterQueryMode === search.submittedFilterQueryMode;
+  const noResults = !search.isLoading
+    && !search.error
+    && !applied
+    && search.submittedQuery.trim().length > 0
+    && search.queryDraft.trim() === search.submittedQuery.trim()
+    && search.filterQueryMode === search.submittedFilterQueryMode
+    && search.results.length === 0;
+  const semanticProgress = search.filterQueryMode === 'semantic' ? search.semanticProgress ?? null : null;
   const status = search.isLoading
-    ? 'Searching...'
+    ? search.filterQueryMode === 'semantic' ? '' : 'Searching...'
     : search.error
     ? search.error
-    : search.submittedQuery.trim().length > 0 && search.results.length === 0
-    ? 'No matches. Try another term.'
+    : noResults
+    ? search.filterQueryMode === 'semantic' ? 'No semantic matches. Try a more specific prompt.' : 'No matches. Try another term.'
     : '';
   return `<section class="search-filter-panel" role="tabpanel" aria-label="Filter search results">
-    ${renderSearchInput(search, deps, { icon: funnelIcon(), label: 'Filter document', placeholder: 'Filter document' })}
-    ${status ? `<div class="search-status${search.error ? ' is-error' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
+    ${renderSearchInput(search, deps, {
+      icon: funnelIcon(),
+      label: 'Filter document',
+      placeholder: search.filterQueryMode === 'semantic' ? 'Describe what should stay visible' : 'Filter document',
+      multiline: search.filterQueryMode === 'semantic',
+    })}
+    ${status ? `<div class="search-status${search.error ? ' is-error' : ''}${noResults ? ' is-empty' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
+    ${semanticProgress ? renderSemanticProgress(semanticProgress) : ''}
     <div class="search-filter-box">
       <div class="search-filter-box-head">
         ${funnelIcon()}
         <span>Filter Technique</span>
+        ${renderSemanticToggle(search, deps)}
       </div>
       <div class="search-filter-mode-group" role="group" aria-label="Filter behavior">
         ${renderFilterModeButton('deprioritize', 'Shade', search, deps)}
@@ -213,11 +242,37 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
     </div>
     <button
       type="button"
-      class="secondary search-apply-filter-button${applied ? ' is-active' : ''}"
-      data-action="apply-search-filter"
+      class="${search.isLoading ? 'danger' : 'secondary'} search-apply-filter-button${applied ? ' is-active' : ''}"
+      data-action="${search.isLoading ? 'stop-search-request' : 'apply-search-filter'}"
       aria-pressed="${applied ? 'true' : 'false'}"
-    >${applied ? 'Turn off filter' : 'Filter'}</button>
+      ${!search.isLoading && noResults ? 'disabled' : ''}
+    >${search.isLoading ? 'Stop' : noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter'}</button>
   </section>`;
+}
+
+function renderSemanticProgress(progress: NonNullable<SearchState['semanticProgress']>): string {
+  const total = Math.max(1, progress.totalWindows);
+  const percent = Math.max(0, Math.min(100, Math.round(progress.completedWindows / total * 100)));
+  return `<div class="search-semantic-progress" aria-label="Semantic filter progress">
+    <div class="search-semantic-progress-track">
+      <span style="width: ${percent}%"></span>
+    </div>
+    <div class="search-semantic-progress-meta">
+      <span>${progress.completedWindows}/${progress.totalWindows} windows</span>
+      <span>${progress.matchedCandidates} match${progress.matchedCandidates === 1 ? '' : 'es'}</span>
+    </div>
+  </div>`;
+}
+
+function renderSemanticToggle(search: SearchState, deps: SearchRenderDeps): string {
+  const active = search.filterQueryMode === 'semantic';
+  return `<button
+    type="button"
+    class="search-semantic-toggle${active ? ' is-active' : ''}"
+    data-action="set-search-filter-query-mode"
+    data-search-filter-query-mode="semantic"
+    aria-pressed="${active ? 'true' : 'false'}"
+  >${deps.escapeHtml('Semantic')}</button>`;
 }
 
 function renderFilterModeButton(mode: SearchState['filterMode'], label: string, search: SearchState, deps: SearchRenderDeps): string {
@@ -370,9 +425,9 @@ function resolveResultTarget(result: HvySearchResult, document: VisualDocument):
   return { section };
 }
 
-function groupResults(results: HvySearchResult[]): Array<[SearchCategory, HvySearchResult[]]> {
-  const order: SearchCategory[] = ['tags', 'contents', 'description'];
+function groupResults(results: HvySearchResult[]): Array<[SearchResultCategory, HvySearchResult[]]> {
+  const order: SearchResultCategory[] = ['semantic', 'tags', 'contents', 'description'];
   return order
-    .map((category) => [category, results.filter((result) => result.category === category)] as [SearchCategory, HvySearchResult[]])
+    .map((category) => [category, results.filter((result) => result.category === category)] as [SearchResultCategory, HvySearchResult[]])
     .filter(([, categoryResults]) => categoryResults.length > 0);
 }

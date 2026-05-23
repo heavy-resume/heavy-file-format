@@ -431,7 +431,7 @@ export function renderChatPanel(
              </aside>`
           : ''
       }
-      <button type="button" class="chat-launcher" data-action="toggle-chat-panel" aria-expanded="${chat.panelOpen ? 'true' : 'false'}" aria-label="${chat.panelOpen ? 'Close chat' : 'Open chat'}">?</button>
+      <button type="button" class="hvy-floating-launcher chat-launcher" data-action="toggle-chat-panel" aria-expanded="${chat.panelOpen ? 'true' : 'false'}" aria-label="${chat.panelOpen ? 'Close chat' : 'Open chat'}">?</button>
     </div>
   `;
 }

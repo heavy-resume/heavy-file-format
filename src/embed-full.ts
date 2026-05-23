@@ -64,9 +64,19 @@ import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
+import { setRuntimeSemanticFilterProvider } from './reference-config';
+import type { HvySemanticFilterProvider } from './search/types';
+import { searchDocuments } from './search/documents';
+import { createDocumentFilterSnapshot } from './search/document-filter';
+import {
+  createDocumentSearchSnapshot,
+  externalSearchSnapshotToDocumentState,
+  searchStateToSnapshot,
+} from './search/snapshot';
+import type { HvySearchSnapshot, HvySearchSnapshotInput } from './search/types';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
-import { renderSearchLauncher, renderSearchPalette } from './search/render';
+import { renderSearchLauncher, renderSearchModal } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
@@ -99,11 +109,13 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  searchSnapshot?: HvySearchSnapshotInput | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -119,6 +131,9 @@ export interface HvyMount {
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
+  setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
+  getSearchSnapshot(): HvySearchSnapshot;
+  openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
@@ -149,6 +164,7 @@ function createEmbedState(
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
+    metaFilter: { query: '', mode: 'semantic', isRunning: false, status: null, error: null, resultCount: null },
     contextMenu: null,
     aiEdit: {
       sectionKey: null,
@@ -392,6 +408,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
+  const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
   const readerWarningsHtml = readerRenderer.renderWarnings();
   const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
@@ -408,7 +425,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
           ${
             isEditor
-              ? `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+              ? isDocumentMetaView
+                ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
+                : `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                   <aside class="editor-sidebar">
                     <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -442,7 +461,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
             'embedded'
           )}
           ${renderSearchLauncher(state.search)}
-          ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
+          ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
         </div>
       </section>
       ${readerRenderer.renderModal()}
@@ -510,6 +529,18 @@ function setPaletteOverrideId(id: string | null): void {
   state.paletteOverrideId = normalizedId;
   applyTheme();
   renderApp();
+}
+
+function setMountedSearchSnapshot(snapshot: HvySearchSnapshotInput | null, options: { render?: boolean } = {}): void {
+  state.search.abortController?.abort();
+  state.search = externalSearchSnapshotToDocumentState(snapshot, state.document);
+  if (state.search.filterEnabled && state.currentView === 'editor') {
+    state.currentView = 'viewer';
+  }
+  if (options.render ?? true) {
+    refreshReaderPanels();
+    renderApp();
+  }
 }
 
 function openThemeEditor(options: { advanced?: boolean } = {}): void {
@@ -707,7 +738,13 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
   }
+  if ('searchSnapshot' in options) {
+    setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
+  }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
+  if ('semanticFilterProvider' in options) {
+    setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
+  }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
   initDocumentChangeTracking(runtime, options.onDocumentChange);
@@ -718,6 +755,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostChatClient(null);
+        setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
         resetPluginDocumentHookState();
         sessionPersistence?.abort();
@@ -768,6 +806,25 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setPaletteOverrideId(id);
       });
     },
+    setSearchSnapshot(snapshot) {
+      runWithStateRuntime(runtime, () => {
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setThemeRoot(options.root);
+        setMountedSearchSnapshot(snapshot);
+      });
+    },
+    getSearchSnapshot() {
+      return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
+    openDocumentMeta() {
+      return runWithStateRuntime(runtime, () => {
+        if (state.currentView !== 'editor' || !state.showAdvancedEditor) return false;
+        state.metaPanelOpen = !state.metaPanelOpen;
+        runtime.callbacks.renderApp();
+        return state.metaPanelOpen;
+      });
+    },
     openThemeEditor(themeOptions = {}) {
       runWithStateRuntime(runtime, () => openThemeEditor(themeOptions));
     },
@@ -781,8 +838,9 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes };
+export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
+export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -799,11 +857,29 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyDocumentSearchDocument,
+  HvyDocumentSearchMode,
+  HvyDocumentSearchRequest,
+  HvyDocumentSearchResponse,
+  HvyDocumentSearchResult,
+  HvyDocumentSearchSnapshot,
+  HvySemanticFilterCandidate,
+  HvySemanticFilterCandidateBudget,
+  HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
+  HvySemanticFilterRequest,
+  HvySearchSnapshot,
+  HvySearchSnapshotInput,
+} from './search/types';
 
 window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  createDocumentFilterSnapshot,
+  createDocumentSearchSnapshot,
+  searchDocuments,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

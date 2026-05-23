@@ -18,6 +18,9 @@ export interface SearchFilterContext {
 export function createSearchFilterContext(sections: VisualSection[], search: SearchState): SearchFilterContext {
   const matchedSections = new Set<string>();
   const matchedBlocks = new Set<string>();
+  const semanticMatchedBlocks = new Set<string>();
+  const matchedTargetIds = new Set<string>();
+  const semanticMatchedTargetIds = new Set<string>();
   const visibleSections = new Set<string>();
   const visibleBlocks = new Set<string>();
   const active = search.submittedQuery.trim().length > 0;
@@ -37,12 +40,21 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   }
 
   for (const result of search.results) {
+    addResultTargetIds(result, matchedTargetIds);
+    if (result.category === 'semantic') {
+      addResultTargetIds(result, semanticMatchedTargetIds);
+    }
     if (result.targetKind === 'section') {
       matchedSections.add(result.sectionKey);
     } else if (result.blockId) {
       matchedBlocks.add(result.blockId);
+      if (result.category === 'semantic') {
+        semanticMatchedBlocks.add(result.blockId);
+      }
     }
   }
+  addDocumentTargetIdsForDirectMatches(sections, matchedSections, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  addXrefMatchesForMatchedTargets(sections, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
 
   const visitSection = (section: VisualSection, ancestors: VisualSection[]): boolean => {
     const sectionMatched = matchedSections.has(section.key);
@@ -64,6 +76,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 
   const visitBlock = (block: VisualBlock, forceVisible = false): boolean => {
+    const semanticBlockMatched = semanticMatchedBlocks.has(block.id);
     let visible = forceVisible || matchedBlocks.has(block.id);
     for (const child of block.schema.containerBlocks ?? []) {
       visible = visitBlock(child, forceVisible) || visible;
@@ -89,6 +102,9 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       }
     }
     if (visible) {
+      if (semanticBlockMatched && !forceVisible) {
+        markBlockTreeVisible(block);
+      }
       visibleBlocks.add(block.id);
       if (filtering && !forceVisible) {
         markBlockStructuralContextVisible(block);
@@ -99,11 +115,11 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
   const markBlockTreeVisible = (block: VisualBlock): void => {
     visibleBlocks.add(block.id);
-    block.schema.containerBlocks.forEach(markBlockTreeVisible);
-    block.schema.componentListBlocks.forEach(markBlockTreeVisible);
-    block.schema.expandableStubBlocks.children.forEach(markBlockTreeVisible);
-    block.schema.expandableContentBlocks.children.forEach(markBlockTreeVisible);
-    block.schema.gridItems.forEach((item) => markBlockTreeVisible(item.block));
+    (block.schema.containerBlocks ?? []).forEach(markBlockTreeVisible);
+    (block.schema.componentListBlocks ?? []).forEach(markBlockTreeVisible);
+    (block.schema.expandableStubBlocks?.children ?? []).forEach(markBlockTreeVisible);
+    (block.schema.expandableContentBlocks?.children ?? []).forEach(markBlockTreeVisible);
+    (block.schema.gridItems ?? []).forEach((item) => markBlockTreeVisible(item.block));
   };
 
   const markBlockContextVisible = (block: VisualBlock, depth: number): void => {
@@ -111,15 +127,15 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     if (depth <= 0) {
       return;
     }
-    block.schema.containerBlocks.forEach((child) => markBlockContextVisible(child, depth - 1));
-    block.schema.gridItems.forEach((item) => markBlockContextVisible(item.block, depth - 1));
+    (block.schema.containerBlocks ?? []).forEach((child) => markBlockContextVisible(child, depth - 1));
+    (block.schema.gridItems ?? []).forEach((item) => markBlockContextVisible(item.block, depth - 1));
   };
 
   const markBlockStructuralContextVisible = (block: VisualBlock): void => {
-    block.schema.containerBlocks.forEach((child) => visibleBlocks.add(child.id));
-    block.schema.expandableStubBlocks.children.forEach(markExpandableContextChildVisible);
-    block.schema.expandableContentBlocks.children.forEach(markExpandableContextChildVisible);
-    block.schema.gridItems.forEach((item) => visibleBlocks.add(item.block.id));
+    (block.schema.containerBlocks ?? []).forEach((child) => visibleBlocks.add(child.id));
+    (block.schema.expandableStubBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
+    (block.schema.expandableContentBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
+    (block.schema.gridItems ?? []).forEach((item) => visibleBlocks.add(item.block.id));
   };
 
   const markExpandableContextChildVisible = (block: VisualBlock): void => {
@@ -132,14 +148,14 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
   const markTransparentLayoutContextVisible = (block: VisualBlock): void => {
     visibleBlocks.add(block.id);
-    block.schema.containerBlocks.forEach((child) => {
+    (block.schema.containerBlocks ?? []).forEach((child) => {
       if (isTransparentLayoutBlock(child)) {
         markTransparentLayoutContextVisible(child);
         return;
       }
       visibleBlocks.add(child.id);
     });
-    block.schema.gridItems.forEach((item) => {
+    (block.schema.gridItems ?? []).forEach((item) => {
       if (isTransparentLayoutBlock(item.block)) {
         markTransparentLayoutContextVisible(item.block);
         return;
@@ -152,8 +168,8 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     block.schema.component === 'grid'
     || block.schema.component === 'container'
     || block.schema.component === 'component-list'
-    || block.schema.gridItems.length > 0
-    || block.schema.containerBlocks.length > 0;
+    || (block.schema.gridItems ?? []).length > 0
+    || (block.schema.containerBlocks ?? []).length > 0;
 
   const markSectionTreeVisible = (section: VisualSection): boolean => {
     visibleSections.add(section.key);
@@ -192,6 +208,123 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 }
 
+function addResultTargetIds(result: SearchState['results'][number], targetIds: Set<string>): void {
+  addNormalizedTargetId(targetIds, result.targetId);
+  addTargetPathIds(result.targetPath, targetIds);
+  if (result.targetKind === 'section') {
+    addNormalizedTargetId(targetIds, result.sectionKey);
+  } else {
+    addNormalizedTargetId(targetIds, result.blockId);
+  }
+}
+
+function addTargetPathIds(targetPath: string | undefined, targetIds: Set<string>): void {
+  for (const part of targetPath?.split('/').filter(Boolean) ?? []) {
+    if (part !== 'body') {
+      addNormalizedTargetId(targetIds, part);
+    }
+  }
+}
+
+function addDocumentTargetIdsForDirectMatches(
+  sections: VisualSection[],
+  matchedSections: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>
+): void {
+  for (const section of sections) {
+    if (matchedSections.has(section.key)) {
+      addNormalizedTargetId(matchedTargetIds, section.customId);
+      addNormalizedTargetId(matchedTargetIds, section.key);
+    }
+    for (const block of section.blocks) {
+      addBlockTargetIdsForDirectMatches(block, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+    }
+    addDocumentTargetIdsForDirectMatches(section.children, matchedSections, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  }
+}
+
+function addBlockTargetIdsForDirectMatches(
+  block: VisualBlock,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>
+): void {
+  if (matchedBlocks.has(block.id)) {
+    addNormalizedTargetId(matchedTargetIds, block.id);
+    addNormalizedTargetId(matchedTargetIds, block.schema.id);
+  }
+  if (semanticMatchedBlocks.has(block.id)) {
+    addNormalizedTargetId(semanticMatchedTargetIds, block.id);
+    addNormalizedTargetId(semanticMatchedTargetIds, block.schema.id);
+  }
+  for (const child of getBlockChildren(block)) {
+    addBlockTargetIdsForDirectMatches(child, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  }
+}
+
+function addXrefMatchesForMatchedTargets(
+  sections: VisualSection[],
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>
+): void {
+  for (const section of sections) {
+    for (const block of section.blocks) {
+      addXrefBlockMatchesForMatchedTargets(block, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+    }
+    addXrefMatchesForMatchedTargets(section.children, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+  }
+}
+
+function addXrefBlockMatchesForMatchedTargets(
+  block: VisualBlock,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>
+): void {
+  const xrefTarget = normalizeLocalTargetId(block.schema.xrefTarget);
+  if (xrefTarget && matchedTargetIds.has(xrefTarget)) {
+    matchedBlocks.add(block.id);
+    if (semanticMatchedTargetIds.has(xrefTarget)) {
+      semanticMatchedBlocks.add(block.id);
+    }
+  }
+  for (const child of getBlockChildren(block)) {
+    addXrefBlockMatchesForMatchedTargets(child, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+  }
+}
+
+function addNormalizedTargetId(targetIds: Set<string>, value?: string): void {
+  const targetId = normalizeLocalTargetId(value);
+  if (targetId) {
+    targetIds.add(targetId);
+  }
+}
+
+function normalizeLocalTargetId(value?: string): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return '';
+  }
+  return trimmed.startsWith('#') ? trimmed.slice(1).trim() : trimmed;
+}
+
+function getBlockChildren(block: VisualBlock): VisualBlock[] {
+  return [
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ];
+}
+
 function findSectionByKey(sections: VisualSection[], sectionKey: string): VisualSection | null {
   for (const section of sections) {
     if (section.key === sectionKey) {
@@ -226,11 +359,11 @@ function findBlockInTree(block: VisualBlock, blockId: string): VisualBlock | nul
     return block;
   }
   for (const child of [
-    ...block.schema.containerBlocks,
-    ...block.schema.componentListBlocks,
-    ...block.schema.expandableStubBlocks.children,
-    ...block.schema.expandableContentBlocks.children,
-    ...block.schema.gridItems.map((item) => item.block),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
   ]) {
     const found = findBlockInTree(child, blockId);
     if (found) {

@@ -67,7 +67,7 @@ export const builtInSearchProvider: HvySearchProvider = (request) => {
 
   request.document.sections.forEach(visitSection);
   return results.sort((left, right) => {
-    const categoryOrder = CATEGORY_ORDER.indexOf(left.category) - CATEGORY_ORDER.indexOf(right.category);
+    const categoryOrder = getSearchCategoryOrder(left.category) - getSearchCategoryOrder(right.category);
     if (categoryOrder !== 0) {
       return categoryOrder;
     }
@@ -118,6 +118,11 @@ function visitBlocks(
     documentOrder = visitBlocks(request, section, (block.schema.gridItems ?? []).map((item) => item.block), results, seen, categories, childTrail, documentOrder, blockLocationLabel);
   }
   return documentOrder;
+}
+
+function getSearchCategoryOrder(category: HvySearchResult['category']): number {
+  const order = CATEGORY_ORDER.indexOf(category as SearchCategory);
+  return order >= 0 ? order : CATEGORY_ORDER.length;
 }
 
 function addMatches(options: {
@@ -193,8 +198,8 @@ function getBlockLocationLabel(block: VisualBlock): string {
 
 function getExpandableLocationLabel(block: VisualBlock, pane: 'stub' | 'expanded'): string {
   return pane === 'stub'
-    ? block.schema.expandableStubDescription.trim()
-    : block.schema.expandableContentDescription.trim();
+    ? (block.schema.expandableStubDescription ?? '').trim()
+    : (block.schema.expandableContentDescription ?? '').trim();
 }
 
 function findMatchIndex(value: string, query: string, caseSensitive: boolean): number {
@@ -224,41 +229,41 @@ function getSectionCandidates(section: VisualSection, category: SearchCategory):
 
 function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
   if (category === 'tags') {
-    return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags }];
+    return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags ?? '' }];
   }
   if (category === 'description') {
     return [
-      { field: 'description', label: FIELD_LABELS.description, value: block.schema.description },
-      { field: 'expandableStubDescription', label: 'Stub description', value: block.schema.expandableStubDescription },
-      { field: 'expandableContentDescription', label: 'Expanded description', value: block.schema.expandableContentDescription },
+      { field: 'description', label: FIELD_LABELS.description, value: block.schema.description ?? '' },
+      { field: 'expandableStubDescription', label: 'Stub description', value: block.schema.expandableStubDescription ?? '' },
+      { field: 'expandableContentDescription', label: 'Expanded description', value: block.schema.expandableContentDescription ?? '' },
     ];
   }
   return [
     { field: 'text', label: FIELD_LABELS.text, value: block.text },
-    { field: 'xrefTitle', label: FIELD_LABELS.xrefTitle, value: block.schema.xrefTitle },
-    { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail },
-    { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle },
-    { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt },
-    { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: block.schema.tableColumns.join(' ') },
-    { field: 'tableCells', label: FIELD_LABELS.tableCells, value: block.schema.tableRows.flatMap((row) => row.cells).join(' ') },
+    { field: 'xrefTitle', label: FIELD_LABELS.xrefTitle, value: block.schema.xrefTitle ?? '' },
+    { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail ?? '' },
+    { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle ?? '' },
+    { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt ?? '' },
+    { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
+    { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },
   ];
 }
 
 function getBlockLabel(block: VisualBlock, section: VisualSection): string {
-  return block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
+  return (block.schema.xrefTitle ?? '').trim()
+    || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || block.schema.imageAlt.trim()
-    || block.schema.id.trim()
+    || (block.schema.imageAlt ?? '').trim()
+    || (block.schema.id ?? '').trim()
     || getSectionLabel(section);
 }
 
 function getBlockContextLabel(block: VisualBlock): string {
-  return block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
+  return (block.schema.xrefTitle ?? '').trim()
+    || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || block.schema.imageAlt.trim();
+    || (block.schema.imageAlt ?? '').trim();
 }
 
 function getSectionLabel(section: VisualSection): string {

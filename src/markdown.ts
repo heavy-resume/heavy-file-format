@@ -549,17 +549,19 @@ export function normalizeMarkdownLists(markdown: string): string {
   const lines = markdown.split(/\r?\n/).map((line) => line.replace(/^(\s*)\\-/, '$1-'));
   const out: string[] = [];
   let inList = false;
+  let listContinuationIndent: string | null = null;
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
-    const bullet = line.match(/^(\s*)[-*+]\s+(.+)$/);
-    const ordered = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/);
+    const bullet = line.match(bulletListLinePattern);
+    const ordered = line.match(orderedListLinePattern);
     if (bullet) {
       if (!inList && out.length > 0 && out[out.length - 1].trim().length > 0) {
         out.push('');
       }
       out.push(`${bullet[1]}- ${bullet[2].trim()}`);
       inList = true;
+      listContinuationIndent = `${bullet[1]}  `;
       continue;
     }
     if (ordered) {
@@ -568,24 +570,54 @@ export function normalizeMarkdownLists(markdown: string): string {
       }
       out.push(`${ordered[1]}${ordered[2]}. ${ordered[3].trim()}`);
       inList = true;
+      listContinuationIndent = `${ordered[1]}${' '.repeat((ordered[2] ?? '').length + 2)}`;
       continue;
     }
 
     if (line.trim().length === 0) {
       const next = lines[i + 1] ?? '';
-      if (inList && (/^(\s*)[-*+]\s+(.+)$/.test(next) || /^(\s*)\d+[.)]\s+(.+)$/.test(next))) {
+      if (inList && (bulletListLinePattern.test(next) || orderedListLinePattern.test(next))) {
+        listContinuationIndent = null;
         continue;
       }
+      if (inList && listContinuationIndent !== null && startsListAgainAfterPlainLines(lines, i + 1)) {
+        continue;
+      }
+      listContinuationIndent = null;
       inList = false;
       out.push('');
       continue;
     }
 
+    if (inList && listContinuationIndent !== null) {
+      out.push(`${listContinuationIndent}${line.trim()}`);
+      continue;
+    }
+
     inList = false;
+    listContinuationIndent = null;
     out.push(line);
   }
 
   return normalizeEscapedCheckboxMarkers(out.join('\n').replace(/\n{3,}/g, '\n\n'));
+}
+
+const bulletListLinePattern = /^(\s*)[-*+]\s+(.+)$/;
+const orderedListLinePattern = /^(\s*)(\d+)[.)]\s+(.+)$/;
+
+function startsListAgainAfterPlainLines(lines: string[], startIndex: number): boolean {
+  let sawPlainLine = false;
+  for (let index = startIndex; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (line.trim().length === 0) {
+      return false;
+    }
+    if (bulletListLinePattern.test(line) || orderedListLinePattern.test(line)) {
+      return sawPlainLine;
+    }
+    sawPlainLine = true;
+  }
+  return false;
 }
 
 function normalizeEscapedCheckboxMarkers(markdown: string): string {

@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 
 import { getComponentOptions } from '../src/component-defs';
-import { getAiEditorDoubleClickDelayMs, setReferenceAppConfig } from '../src/reference-config';
+import { getAiEditorDoubleClickDelayMs, getReferenceAppConfig, setReferenceAppConfig } from '../src/reference-config';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
@@ -54,4 +54,13 @@ test('ai editor double click delay does not go below zero', () => {
   });
 
   expect(getAiEditorDoubleClickDelayMs()).toBe(0);
+});
+
+test('semantic filter provider can be supplied through reference config', () => {
+  const semanticFilterProvider = () => [];
+  setReferenceAppConfig({
+    semanticFilterProvider,
+  });
+
+  expect(getReferenceAppConfig().semanticFilterProvider).toBe(semanticFilterProvider);
 });

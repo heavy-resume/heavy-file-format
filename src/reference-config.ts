@@ -1,5 +1,7 @@
 import type { HvySearchProvider } from './search/types';
+import type { HvySemanticFilterProvider } from './search/types';
 import type { HvyDescriptionProvider } from './descriptions/types';
+import { getActiveStateRuntime, type StateRuntime } from './state';
 
 export interface ReferenceAppFeatures {
   tables: boolean;
@@ -14,6 +16,7 @@ export interface ReferenceAppConfig {
   features: ReferenceAppFeatures;
   aiEditor: ReferenceAppAiEditorConfig;
   searchProvider?: HvySearchProvider | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
   descriptionProvider?: HvyDescriptionProvider | null;
 }
 
@@ -34,9 +37,26 @@ const defaultConfig: ReferenceAppConfig = {
 };
 
 let runtimeOverride: Partial<ReferenceAppConfig> | null = null;
+const semanticFilterProviderByRuntime = new WeakMap<StateRuntime, HvySemanticFilterProvider | null>();
 
 export function setReferenceAppConfig(config: Partial<ReferenceAppConfig> | null): void {
   runtimeOverride = config;
+}
+
+export function setRuntimeSemanticFilterProvider(provider: HvySemanticFilterProvider | null): void {
+  try {
+    semanticFilterProviderByRuntime.set(getActiveStateRuntime(), provider);
+  } catch {
+    // Runtime-scoped providers are only available after state initialization.
+  }
+}
+
+function getRuntimeSemanticFilterProvider(): HvySemanticFilterProvider | null | undefined {
+  try {
+    return semanticFilterProviderByRuntime.get(getActiveStateRuntime());
+  } catch {
+    return undefined;
+  }
 }
 
 export function getReferenceAppConfig(): ReferenceAppConfig {
@@ -68,6 +88,12 @@ export function getReferenceAppConfig(): ReferenceAppConfig {
       runtimeOverride?.searchProvider ??
       globalConfig?.searchProvider ??
       defaultConfig.searchProvider ??
+      null,
+    semanticFilterProvider:
+      getRuntimeSemanticFilterProvider() ??
+      runtimeOverride?.semanticFilterProvider ??
+      globalConfig?.semanticFilterProvider ??
+      defaultConfig.semanticFilterProvider ??
       null,
     descriptionProvider:
       runtimeOverride?.descriptionProvider ??

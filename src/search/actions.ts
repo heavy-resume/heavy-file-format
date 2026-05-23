@@ -1,15 +1,20 @@
 import { builtInSearchProvider } from './search-provider';
+import { createDocumentFilterSnapshot } from './document-filter';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
 import { state, getRenderApp, getRefreshReaderPanels } from '../state';
-import type { HvySearchResult, SearchCategory } from './types';
+import type {
+  HvySearchResult,
+  SearchCategory,
+  SearchFilterQueryMode,
+} from './types';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { filterTemplateVisibleSections } from '../template-hide';
 import { focusSearchInput } from './render';
 import { resolveBaseComponentFromMeta } from '../component-defs';
+import { searchSnapshotToState } from './snapshot';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
-
 export function openSearch(app: HTMLElement): void {
   state.search.open = true;
   state.search.resultsCollapsed = false;
@@ -42,6 +47,7 @@ export function closeSearch(): void {
   state.search.abortController = null;
   state.search.requestNonce += 1;
   state.search.isLoading = false;
+  state.search.semanticProgress = null;
   getRenderApp()();
 }
 
@@ -61,16 +67,34 @@ export function stopSearch(): void {
   state.search.abortController = null;
   state.search.requestNonce += 1;
   state.search.isLoading = false;
+  state.search.semanticProgress = null;
   getRefreshReaderPanels()();
+  getRenderApp()();
+}
+
+export function stopSearchRequest(): void {
+  if (!state.search.isLoading && !state.search.abortController) {
+    return;
+  }
+  state.search.abortController?.abort();
+  state.search.abortController = null;
+  state.search.requestNonce += 1;
+  state.search.open = true;
+  state.search.resultsCollapsed = false;
+  state.search.isLoading = false;
+  state.search.semanticProgress = null;
+  state.search.error = null;
   getRenderApp()();
 }
 
 export async function submitSearch(): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;
+  state.search.submittedFilterQueryMode = 'keyword';
   state.search.activeResultId = null;
   state.search.resultsCollapsed = false;
   state.search.error = null;
+  state.search.semanticProgress = null;
   state.search.abortController?.abort();
   state.search.clearedSectionKeys = [];
   state.search.clearedBlockIds = [];
@@ -98,6 +122,7 @@ export async function submitSearch(): Promise<void> {
   state.search.requestNonce = requestNonce;
   state.search.abortController = abortController;
   state.search.isLoading = true;
+  state.search.semanticProgress = null;
   getRenderApp()();
 
   try {
@@ -133,6 +158,7 @@ export async function submitSearch(): Promise<void> {
       return;
     }
     state.search.isLoading = false;
+    state.search.semanticProgress = null;
     state.search.abortController = null;
     getRenderApp()();
   }
@@ -288,6 +314,12 @@ export function setSearchFilterMode(mode: typeof state.search.filterMode): void 
   getRenderApp()();
 }
 
+export function setSearchFilterQueryMode(mode: SearchFilterQueryMode): void {
+  state.search.filterQueryMode = mode;
+  state.search.error = null;
+  getRenderApp()();
+}
+
 export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
   const enabled = options.enabled ?? !state.search.filterEnabled;
   if (!enabled) {
@@ -297,16 +329,20 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     state.search.navigationResultIds = [];
     state.search.open = false;
     state.search.resultsCollapsed = false;
+    state.search.semanticProgress = null;
     getRefreshReaderPanels()();
     getRenderApp()();
     return;
   }
-  const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim();
-  if (queryChanged) {
+  const queryChanged = state.search.queryDraft.trim() !== state.search.submittedQuery.trim()
+    || state.search.filterQueryMode !== state.search.submittedFilterQueryMode;
+  if (queryChanged && state.search.filterQueryMode !== 'semantic') {
     state.search.filterEnabled = false;
     getRefreshReaderPanels()();
   }
-  if (state.search.queryDraft.trim() !== state.search.submittedQuery.trim()) {
+  if (state.search.filterQueryMode === 'semantic') {
+    await submitSemanticFilter();
+  } else if (queryChanged) {
     await submitSearch();
   }
   if (!state.search.submittedQuery.trim() || state.search.error || state.search.results.length === 0) {
@@ -327,6 +363,83 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   state.search.resultsCollapsed = false;
   getRefreshReaderPanels()();
   getRenderApp()();
+}
+
+async function submitSemanticFilter(): Promise<void> {
+  const prompt = state.search.queryDraft.trim();
+  state.search.submittedQuery = prompt;
+  state.search.submittedFilterQueryMode = 'semantic';
+  state.search.activeResultId = null;
+  state.search.resultsCollapsed = false;
+  state.search.error = null;
+  state.search.semanticProgress = null;
+  state.search.abortController?.abort();
+  state.search.clearedSectionKeys = [];
+  state.search.clearedBlockIds = [];
+
+  if (!prompt) {
+    state.search.results = [];
+    state.search.navigationResultIds = [];
+    state.search.isLoading = false;
+    state.search.semanticProgress = null;
+    getRenderApp()();
+    return;
+  }
+
+  const requestNonce = state.search.requestNonce + 1;
+  const abortController = new AbortController();
+  state.search.requestNonce = requestNonce;
+  state.search.abortController = abortController;
+  state.search.isLoading = true;
+  state.search.semanticProgress = null;
+  getRenderApp()();
+
+  try {
+    const traceRunId = `semantic-filter:${requestNonce}:${Date.now().toString(36)}`;
+    const snapshot = await createDocumentFilterSnapshot({
+      document: state.document,
+      query: prompt,
+      mode: 'semantic',
+      view: state.currentView,
+      filterMode: state.search.filterMode,
+      traceRunId,
+      signal: abortController.signal,
+      onSemanticProgress: (progress) => {
+        if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
+          return;
+        }
+        state.search.semanticProgress = progress;
+        getRenderApp()();
+      },
+    });
+    if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
+      return;
+    }
+    const snapshotState = searchSnapshotToState(snapshot);
+    state.search.submittedQuery = snapshotState.submittedQuery;
+    state.search.submittedFilterQueryMode = snapshotState.submittedFilterQueryMode;
+    state.search.results = snapshotState.results;
+    state.search.navigationResultIds = snapshotState.navigationResultIds;
+    state.search.activeResultId = snapshotState.activeResultId;
+    if (state.search.filterEnabled && state.currentView === 'editor') {
+      state.currentView = 'viewer';
+    }
+    state.search.error = null;
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      return;
+    }
+    state.search.results = [];
+    state.search.navigationResultIds = [];
+    state.search.error = error instanceof Error ? error.message : 'Semantic filtering failed.';
+  } finally {
+    if (state.search.requestNonce !== requestNonce) {
+      return;
+    }
+    state.search.isLoading = false;
+    state.search.abortController = null;
+    getRenderApp()();
+  }
 }
 
 export function clearFilteringForTarget(sectionKey: string, blockId?: string): void {
@@ -474,4 +587,10 @@ function getRenderedSearchTargetOrder(app: HTMLElement): Map<string, number> {
 
 function getSearchResultTargetKey(result: HvySearchResult): string {
   return result.blockId ? `block:${result.sectionKey}:${result.blockId}` : `section:${result.sectionKey}`;
+}
+
+export function isSearchFilterApplied(): boolean {
+  return state.search.filterEnabled
+    && state.search.queryDraft.trim() === state.search.submittedQuery.trim()
+    && state.search.filterQueryMode === state.search.submittedFilterQueryMode;
 }

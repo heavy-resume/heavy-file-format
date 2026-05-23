@@ -100,3 +100,5 @@ When creating an X, +, or -, use vector graphics instead of characters. There's 
 When making code changes and fixes, ask yourself if someone would get angry that the change or fix is too narrow.
 
 When fixing bugs reproduce them first, if possible.
+
+Don't guess, get logs and examine them. If they dont exist, make them exist. Just be sure to keep intrusive logging on the reference app that owns the embedded app, and add capabilities to the embedded app if needed.

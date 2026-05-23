@@ -34,9 +34,11 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchPalette } from './search/render';
+import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
+import { chatSemanticFilterProvider } from './search/semantic-provider';
+import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
@@ -50,6 +52,9 @@ if (!appRoot) {
 const app = appRoot;
 app.classList.add('hvy-document');
 setThemeRoot(app);
+setReferenceAppConfig({
+  semanticFilterProvider: window.HVY_REFERENCE_CONFIG?.semanticFilterProvider ?? chatSemanticFilterProvider,
+});
 const READER_HIGHLIGHT_GLOW_MS = 6000;
 const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: AppState['selectedExample'] }> = [
   { id: 'guideBtn', label: 'Guide', selectedExample: 'guide' },
@@ -87,6 +92,14 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
+    metaFilter: {
+      query: '',
+      mode: 'semantic',
+      isRunning: false,
+      status: null,
+      error: null,
+      resultCount: null,
+    },
     contextMenu: null,
     aiEdit: {
       sectionKey: null,
@@ -608,25 +621,12 @@ function renderApp(): void {
             <button type="button" class="palette-open-button ghost" data-action="open-theme-modal">Palettes</button>
           </div>
           ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
-          ${
-            isEditorView
-              ? `<div class="editor-top-controls">
-                  ${
-                    isEditorView
-                      ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
-                  <button type="button" class="${isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
-                  <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
-                  <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>`
-                      : ''
-                  }
-                  ${
-                    isEditorView && isAdvancedEditor
-                      ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
-                      : ''
-                  }
-                </div>`
-              : '<div></div>'
-          }
+          ${renderWorkspaceRightControls({
+            isEditorView,
+            isMobileAdjustmentEditor,
+            isAdvancedEditor,
+            isRawEditor,
+          })}
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
           ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
@@ -716,7 +716,7 @@ function renderApp(): void {
                   state.currentView === 'editor' || state.currentView === 'ai'
                 )}
                 ${renderSearchLauncher(state.search)}
-                ${renderSearchPalette(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
           }
         </div>
       </section>
@@ -799,14 +799,14 @@ function renderTopbar(): string {
           ${renderDocumentMenu()}
         </div>
         <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button">Open Local</button>
+          <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
-          <button id="saveFileBtn" type="button">Save File</button>
-          <button id="downloadBtn" type="button">Download File</button>
+          <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
+          <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
         </div>
       </div>
     </header>
@@ -855,6 +855,94 @@ function renderPreviewControlStack(): string {
     ${renderResponsivePreviewControls()}
     ${renderReaderViewControls()}
   </div>`;
+}
+
+function renderWorkspaceRightControls(options: {
+  isEditorView: boolean;
+  isMobileAdjustmentEditor: boolean;
+  isAdvancedEditor: boolean;
+  isRawEditor: boolean;
+}): string {
+  return `<div class="workspace-right-controls">
+    ${
+      options.isEditorView
+        ? `<div class="editor-top-controls">
+            <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+            <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
+            <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+            <button type="button" class="${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+            ${
+              options.isAdvancedEditor
+                ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
+                : ''
+            }
+          </div>`
+        : ''
+    }
+    ${renderMetaFilterControls()}
+  </div>`;
+}
+
+function renderMetaFilterControls(): string {
+  const status = state.metaFilter.error
+    ? state.metaFilter.error
+    : state.metaFilter.status
+    ? state.metaFilter.status
+    : state.metaFilter.resultCount === null
+    ? ''
+    : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
+  return `<form id="metaFilterComposer" class="meta-filter-controls" aria-label="Meta filter current document">
+    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
+      ${renderMetaFilterModeButton('keyword', 'Keyword')}
+      ${renderMetaFilterModeButton('semantic', 'Semantic')}
+    </div>
+    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
+      ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
+      ${renderMetaFilterBehaviorButton('hide', 'Hide')}
+    </div>
+    <div class="meta-filter-input-shell">
+      <input
+        id="metaFilterQuery"
+        class="meta-filter-input"
+        data-field="meta-filter-query"
+        value="${escapeAttr(state.metaFilter.query)}"
+        placeholder="Meta filter prompt"
+        autocomplete="off"
+        spellcheck="true"
+      />
+      <button type="submit" class="${state.metaFilter.isRunning ? 'ghost' : 'secondary'} meta-filter-submit" ${state.metaFilter.isRunning ? 'disabled' : ''}>
+        ${state.metaFilter.isRunning ? 'Running' : 'Meta Filter'}
+      </button>
+      <button type="button" class="ghost meta-filter-clear" data-action="clear-meta-filter" ${state.metaFilter.isRunning ? 'disabled' : ''}>
+        Clear
+      </button>
+    </div>
+    ${status ? `<div class="meta-filter-status${state.metaFilter.error ? ' is-error' : ''}" role="status">${escapeHtml(status)}</div>` : ''}
+  </form>`;
+}
+
+function renderMetaFilterModeButton(mode: AppState['search']['filterQueryMode'], label: string): string {
+  const active = state.search.filterQueryMode === mode;
+  return `<button
+    type="button"
+    class="meta-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-meta-filter-mode"
+    data-meta-filter-mode="${escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+    ${state.metaFilter.isRunning ? 'disabled' : ''}
+  >${escapeHtml(label)}</button>`;
+}
+
+function renderMetaFilterBehaviorButton(mode: AppState['search']['filterMode'], label: string): string {
+  const active = state.search.filterMode === mode;
+  return `<button
+    type="button"
+    class="meta-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-meta-filter-behavior"
+    data-meta-filter-behavior="${escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+    ${state.metaFilter.isRunning ? 'disabled' : ''}
+  >${escapeHtml(label)}</button>`;
 }
 
 function renderReaderViewControls(): string {
@@ -1063,8 +1151,12 @@ async function refreshRestoredSearch(savedSession: ReturnType<typeof loadSession
     return;
   }
   state.search.queryDraft = savedSearch.queryDraft || savedSearch.submittedQuery;
-  state.search.submittedQuery = '';
-  await submitSearch();
+  if (savedSearch.submittedFilterQueryMode === 'semantic') {
+    state.search.filterQueryMode = 'semantic';
+  } else {
+    state.search.submittedQuery = '';
+    await submitSearch();
+  }
   if (savedSearch.filterEnabled) {
     await applySearchFilter({ enabled: true });
   }

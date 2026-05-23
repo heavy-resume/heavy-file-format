@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { defineJsonTool, parseJsonToolCall, runJsonToolLoop, type JsonToolCall, type JsonToolDefinition } from '../src/llm-tool-loop';
+import { defineJsonTool, parseJsonArrayResponse, parseJsonToolCall, parseJsonValueResponse, runJsonToolLoop, type JsonToolCall, type JsonToolDefinition } from '../src/llm-tool-loop';
 
 type ExampleToolCall =
   | JsonToolCall<'search_notes', { query: string }>
@@ -32,6 +32,69 @@ describe('llm-tool-loop', () => {
         tool: 'search_notes',
         query: 'release notes',
       },
+    });
+  });
+
+  test('parseJsonToolCall extracts JSON object from wrapper prose', () => {
+    const parsed = parseJsonToolCall<ExampleToolCall>(
+      'Here is the tool call:\n```json\n{"tool":"search_notes","query":"release notes"}\n```\nDone.',
+      exampleToolDefinitions
+    );
+
+    expect(parsed).toEqual({
+      ok: true,
+      value: {
+        tool: 'search_notes',
+        query: 'release notes',
+      },
+    });
+  });
+
+  test('parseJsonToolCall extracts balanced JSON object from prose inside a fence', () => {
+    const parsed = parseJsonToolCall<ExampleToolCall>(
+      '```text\nHere is the tool call:\n{"tool":"search_notes","query":"release {notes}"}\n```',
+      exampleToolDefinitions
+    );
+
+    expect(parsed).toEqual({
+      ok: true,
+      value: {
+        tool: 'search_notes',
+        query: 'release {notes}',
+      },
+    });
+  });
+
+  test('parseJsonToolCall ignores wrapper prose around a bare JSON object', () => {
+    const parsed = parseJsonToolCall<ExampleToolCall>(
+      'Tool call:\n{"tool":"search_notes","query":"release notes"}\nEnd.',
+      exampleToolDefinitions
+    );
+
+    expect(parsed).toEqual({
+      ok: true,
+      value: {
+        tool: 'search_notes',
+        query: 'release notes',
+      },
+    });
+  });
+
+  test('parseJsonValueResponse extracts a balanced JSON array', () => {
+    const parsed = parseJsonValueResponse('Selected IDs:\n```json\n["component:C6","component:C7"]\n```');
+
+    expect(parsed).toEqual({
+      ok: true,
+      value: ['component:C6', 'component:C7'],
+    });
+  });
+
+  test('parseJsonArrayResponse extracts the first parseable JSON array', () => {
+    const parsed = parseJsonArrayResponse('Ignore [not json], use {"matches":["component:C6","component:C7"]}');
+
+    expect(parsed).toEqual({
+      ok: true,
+      value: ['component:C6', 'component:C7'],
     });
   });
 

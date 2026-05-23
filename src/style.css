@@ -1,5 +1,6 @@
 :root {
-  --hvy-sidebar-tab-size: 2.9rem;
+  --hvy-floating-control-size: 3.2rem;
+  --hvy-sidebar-tab-size: var(--hvy-floating-control-size);
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-document-edge-gutter: 0.9rem;
   --hvy-floating-controls-clearance: 6.6rem;
@@ -43,7 +44,6 @@ body {
   text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }
 
-.hvy-embed-layout :where(button),
 .hvy-embed-layout :where(input),
 .hvy-embed-layout :where(select),
 .hvy-embed-layout :where(textarea) {
@@ -222,6 +222,12 @@ body {
   background: var(--hvy-button-bg);
   color: var(--hvy-button-text);
   cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .toolbar-primary-button {
@@ -234,6 +240,13 @@ body {
   border-radius: 8px;
   background: var(--hvy-button-bg);
   color: var(--hvy-button-text);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .file-picker input {
@@ -241,8 +254,7 @@ body {
 }
 
 .toolbar input[type='text'],
-.toolbar button,
-.hvy-embed-layout :where(button) {
+.hvy-embed-layout :where(.hvy-button, .secondary, .ghost, .danger, .tiny) {
   border: 1px solid var(--hvy-border-alt);
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
@@ -266,7 +278,7 @@ body {
   .document-menu,
   .document-menu summary,
   .toolbar input[type='text'],
-  .toolbar button,
+  .toolbar :where(.hvy-button, .toolbar-primary-button, .secondary, .ghost, .danger, .tiny),
   .file-picker {
     width: 100%;
   }
@@ -284,7 +296,7 @@ body {
   }
 }
 
-.hvy-embed-layout :where(button:not(:disabled):hover) {
+.hvy-embed-layout :where(.hvy-button, .secondary, .ghost, .danger, .tiny):not(:disabled):hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
@@ -292,13 +304,13 @@ body {
   transform: translateY(-1px);
 }
 
-.hvy-embed-layout :where(button.secondary) {
+.hvy-embed-layout :where(.secondary) {
   background: var(--hvy-button-bg);
   border-color: var(--hvy-button-bg);
   color: var(--hvy-button-text);
 }
 
-.hvy-embed-layout :where(button.secondary:not(:disabled):hover),
+.hvy-embed-layout :where(.secondary):not(:disabled):hover,
 .toolbar-primary-button:not(:disabled):hover,
 .file-picker:hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
@@ -308,20 +320,20 @@ body {
   transform: translateY(-1px);
 }
 
-.hvy-embed-layout :where(button.ghost) {
+.hvy-embed-layout :where(.ghost) {
   background: transparent;
 }
 
-.hvy-embed-layout :where(button.ghost:not(:disabled):hover) {
+.hvy-embed-layout :where(.ghost):not(:disabled):hover {
   background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
 }
 
-.hvy-embed-layout :where(button.danger) {
+.hvy-embed-layout :where(.danger) {
   background: var(--hvy-danger);
   border-color: var(--hvy-danger);
 }
 
-.hvy-embed-layout :where(button.danger:not(:disabled):hover) {
+.hvy-embed-layout :where(.danger):not(:disabled):hover {
   background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
   border-color: var(--hvy-danger);
 }
@@ -338,9 +350,43 @@ body {
   fill: none;
 }
 
-.hvy-embed-layout :where(button.tiny) {
+.hvy-embed-layout :where(.tiny) {
   font-size: 0.78rem;
   padding: 0.2rem 0.42rem;
+}
+
+.hvy-floating-launcher {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: var(--hvy-floating-control-size);
+  min-width: var(--hvy-floating-control-size);
+  max-width: var(--hvy-floating-control-size);
+  height: var(--hvy-floating-control-size);
+  min-height: var(--hvy-floating-control-size);
+  max-height: var(--hvy-floating-control-size);
+  padding: 0;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-surface));
+  color: var(--hvy-button-text);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-floating-launcher:not(:disabled):hover {
+  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg), 0 0 0 4px var(--hvy-focus-glow);
+  transform: translateY(-1px);
 }
 
 .workspace-shell {
@@ -409,6 +455,13 @@ body {
   justify-content: flex-end;
 }
 
+.workspace-right-controls {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+  min-width: min(100%, 24rem);
+}
+
 .responsive-preview-controls {
   display: flex;
   gap: 0.35rem;
@@ -428,6 +481,82 @@ body {
   gap: 0.35rem;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.meta-filter-controls {
+  display: grid;
+  gap: 0.25rem;
+  width: min(100%, 24rem);
+  padding: 0.35rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);
+  box-shadow: 0 10px 24px var(--hvy-shadow);
+}
+
+.meta-filter-mode-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+
+.meta-filter-mode {
+  min-height: 2rem;
+  border-color: var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-button-bg) 12%, var(--hvy-surface));
+  color: var(--hvy-text);
+}
+
+.meta-filter-mode.is-active {
+  border-color: var(--hvy-button-bg);
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  box-shadow: 0 0 0 3px var(--hvy-focus-glow);
+}
+
+.meta-filter-input-shell {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) auto auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.meta-filter-input {
+  min-width: 0;
+  height: 2.3rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 6px;
+  padding: 0 0.7rem;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 65%, transparent);
+}
+
+.meta-filter-input:focus {
+  outline: none;
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 3px var(--hvy-focus-glow);
+}
+
+.meta-filter-submit {
+  min-height: 2.3rem;
+  white-space: nowrap;
+}
+
+.meta-filter-clear {
+  min-height: 2.3rem;
+  white-space: nowrap;
+}
+
+.meta-filter-status {
+  min-height: 1rem;
+  color: var(--hvy-muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.meta-filter-status.is-error {
+  color: var(--hvy-danger);
 }
 
 .full-pane {
@@ -456,9 +585,16 @@ body {
 
 .pane.full-pane:has(.editor-shell),
 .pane.full-pane:has(.viewer-shell) {
+  border: 0;
+  border-radius: 0;
   padding: 0;
   overflow: hidden;
   background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
+}
+
+.hvy-embed-full-layout .pane.full-pane {
+  border: 0;
+  border-radius: 0;
 }
 
 .pane-title-row {
@@ -529,13 +665,11 @@ body {
 }
 
 .hvy-preview-frame-phone {
-  --hvy-sidebar-tab-size: 2.15rem;
   --hvy-sidebar-footprint: 2.35rem;
   --hvy-document-edge-gutter: 0.55rem;
 }
 
 .hvy-preview-frame-tablet {
-  --hvy-sidebar-tab-size: 2.55rem;
   --hvy-sidebar-footprint: 2.8rem;
   --hvy-document-edge-gutter: 0.75rem;
 }
@@ -674,6 +808,11 @@ body {
 
   .editor-top-controls {
     justify-content: center;
+    width: 100%;
+  }
+
+  .workspace-right-controls {
+    justify-items: center;
     width: 100%;
   }
 

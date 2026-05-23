@@ -408,7 +408,8 @@ hvy_version: 0.1
     const list = root.querySelector<HTMLElement>('.reader-block ul');
     const listItem = root.querySelector<HTMLElement>('.reader-block li');
     const paragraph = root.querySelector<HTMLElement>('.reader-block p');
-    if (!button || !link || !list || !listItem || !paragraph) {
+    const pane = root.querySelector<HTMLElement>('.pane.full-pane');
+    if (!button || !link || !list || !listItem || !paragraph || !pane) {
       throw new Error('Expected embedded controls missing.');
     }
     const buttonStyle = getComputedStyle(button);
@@ -416,6 +417,7 @@ hvy_version: 0.1
     const listStyle = getComputedStyle(list);
     const listItemStyle = getComputedStyle(listItem);
     const paragraphStyle = getComputedStyle(paragraph);
+    const paneStyle = getComputedStyle(pane);
     return {
       hasBoundary: root.classList.contains('hvy-document'),
       hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
@@ -427,6 +429,9 @@ hvy_version: 0.1
       listItemDisplay: listItemStyle.display,
       paragraphLineHeight: paragraphStyle.lineHeight,
       paragraphFontSize: paragraphStyle.fontSize,
+      paneBorderTopStyle: paneStyle.borderTopStyle,
+      paneBorderTopWidth: paneStyle.borderTopWidth,
+      paneBorderRadius: paneStyle.borderTopLeftRadius,
     };
   });
 
@@ -439,6 +444,9 @@ hvy_version: 0.1
   expect(result.listPaddingInlineStart).not.toBe('0px');
   expect(result.listItemDisplay).toBe('list-item');
   expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
+  expect(result.paneBorderTopStyle).toBe('none');
+  expect(result.paneBorderTopWidth).toBe('0px');
+  expect(result.paneBorderRadius).toBe('0px');
 });
 
 test('text sidebar tab labels rotate and expand to fit', async ({ page }) => {
@@ -494,6 +502,82 @@ sidebar_label: Cards
   expect(result.labelWritingMode).toBe('vertical-rl');
   expect(result.labelTop).toBeGreaterThanOrEqual(result.buttonTop);
   expect(result.labelBottom).toBeLessThanOrEqual(result.buttonBottom);
+});
+
+test('embedded semantic filtering uses provider prompt and preserves input focus', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent('<div id="root" style="height: 720px"></div>');
+  await page.evaluate(async () => {
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling and reusable UI components.
+
+<!--hvy: {"id":"writing"}-->
+#! Writing
+
+<!--hvy:text {"id":"notes"}-->
+ Release notes and internal docs.
+`;
+    const testWindow = window as Window & {
+      testSemanticProviderCalls?: Array<{ prompt: string; instructionPrompt: string; candidateCount: number }>;
+    };
+    testWindow.testSemanticProviderCalls = [];
+    mountHvy({
+      root: document.querySelector('#root') as HTMLElement,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      semanticFilterProvider(request) {
+        testWindow.testSemanticProviderCalls?.push({
+          prompt: request.prompt,
+          instructionPrompt: request.instructionPrompt,
+          candidateCount: request.candidates.length,
+        });
+        const match = request.candidates.find((candidate) => candidate.summary.includes('TypeScript'));
+        return match ? [{ candidateId: match.candidateId, reason: 'TypeScript work is relevant.', score: 0.95 }] : [];
+      },
+    });
+  });
+
+  await page.locator('.search-launcher').click();
+  await page.getByRole('tab', { name: /Filter/ }).click();
+  await page.getByRole('button', { name: 'Semantic' }).click();
+  await page.getByRole('button', { name: 'Hide' }).click();
+  const input = page.locator('[data-field="search-query"]');
+  await input.fill('show TypeScript work');
+  await input.press('!');
+  await expect(input).toBeFocused({ timeout: 1_000 });
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(page.locator('.search-modal')).toHaveCount(0, { timeout: 1_000 });
+
+  const result = await page.evaluate(() => {
+    const testWindow = window as Window & {
+      testSemanticProviderCalls?: Array<{ prompt: string; instructionPrompt: string; candidateCount: number }>;
+    };
+    return {
+      providerCall: testWindow.testSemanticProviderCalls?.[0],
+      visibleText: document.querySelector('#readerDocument')?.textContent ?? '',
+      paletteInsideRoot: (() => {
+        const rootBox = document.querySelector('#root')?.getBoundingClientRect();
+        const launcherBox = document.querySelector('.search-launcher')?.getBoundingClientRect();
+        return Boolean(rootBox && launcherBox && launcherBox.top >= rootBox.top && launcherBox.bottom <= rootBox.bottom);
+      })(),
+    };
+  });
+
+  expect(result.providerCall?.prompt).toBe('show TypeScript work!');
+  expect(result.providerCall?.instructionPrompt).toContain('Return only JSON');
+  expect(result.providerCall?.candidateCount).toBeGreaterThan(0);
+  expect(result.visibleText).toContain('TypeScript tooling');
+  expect(result.visibleText).not.toContain('Release notes');
+  expect(result.paletteInsideRoot).toBe(true);
 });
 
 test('embedded viewer omits empty sidebar markup', async ({ page }) => {
@@ -902,6 +986,172 @@ hvy_version: 0.1
   expect(result.editorHasSerializer).toBe('function');
   expect(result.viewerText).toContain('Host download serialization test.');
   expect(result.editorText).toContain('Host download serialization test.');
+});
+
+test('embedded viewers can hydrate and update search snapshots from headless search', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const {
+      createDocumentSearchSnapshot,
+      deserializeDocumentBytes,
+      mountHvy,
+      mountHvyViewer,
+      searchDocuments,
+    } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+title: Snapshot Host Test
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ keep this needle
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-note"}-->
+ hide this section
+`;
+    const encoder = new TextEncoder();
+    const viewerRoot = document.querySelector<HTMLElement>('#viewerMount');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!viewerRoot || !editorRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    const headlessDocument = deserializeDocumentBytes(encoder.encode(source), '.hvy');
+    const response = await searchDocuments({
+      query: 'needle',
+      mode: 'keyword',
+      documents: [{ documentId: 'snapshot-doc', document: headlessDocument }],
+      categories: ['contents'],
+    });
+    const snapshot = createDocumentSearchSnapshot(response, 'snapshot-doc', { filterMode: 'hide' });
+    const viewerMount = mountHvyViewer({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      searchSnapshot: snapshot,
+    });
+    const initialViewerText = viewerRoot.querySelector('#readerDocument')?.textContent ?? '';
+    viewerMount.setSearchSnapshot(null);
+    const clearedViewerText = viewerRoot.querySelector('#readerDocument')?.textContent ?? '';
+    const editorMount = mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(encoder.encode(source), '.hvy'),
+      mode: 'editor',
+    });
+    editorMount.setSearchSnapshot(snapshot);
+    await new Promise<void>((resolve) => {
+      const startedAt = performance.now();
+      const waitForFullMount = () => {
+        if (editorRoot.querySelector('#readerDocument') || performance.now() - startedAt > 1_000) {
+          resolve();
+          return;
+        }
+        window.setTimeout(waitForFullMount, 20);
+      };
+      waitForFullMount();
+    });
+    const editorSnapshot = editorMount.getSearchSnapshot();
+    const editorText = editorRoot.querySelector('#readerDocument')?.textContent ?? editorRoot.textContent ?? '';
+    return {
+      initialViewerText,
+      clearedViewerText,
+      editorSnapshot,
+      editorText,
+      viewerHasMethods: {
+        setSearchSnapshot: typeof viewerMount.setSearchSnapshot,
+        getSearchSnapshot: typeof viewerMount.getSearchSnapshot,
+      },
+      editorHasMethods: {
+        setSearchSnapshot: typeof editorMount.setSearchSnapshot,
+        getSearchSnapshot: typeof editorMount.getSearchSnapshot,
+      },
+    };
+  });
+
+  expect(result.initialViewerText).toContain('keep this needle');
+  expect(result.initialViewerText).not.toContain('hide this section');
+  expect(result.clearedViewerText).toContain('hide this section');
+  expect(result.editorSnapshot).toMatchObject({
+    query: 'needle',
+    mode: 'keyword',
+    filterEnabled: true,
+    filterMode: 'hide',
+  });
+  expect(result.editorText).toContain('keep this needle');
+  expect(result.editorText).not.toContain('hide this section');
+  expect(result.viewerHasMethods).toEqual({ setSearchSnapshot: 'function', getSearchSnapshot: 'function' });
+  expect(result.editorHasMethods).toEqual({ setSearchSnapshot: 'function', getSearchSnapshot: 'function' });
+});
+
+test('reference meta filter reloads the document with the filter snapshot applied', async ({ page }) => {
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+
+  await page.evaluate(async () => {
+    const { setReferenceAppConfig } = await import(/* @vite-ignore */ '/src/reference-config.ts');
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument = state.document;
+    setReferenceAppConfig({
+      semanticFilterProvider: async (request) => request.candidates
+        .filter((candidate) => candidate.label === 'TypeScript' || candidate.targetId === 'tool-typescript')
+        .map((candidate) => ({ candidateId: candidate.candidateId })),
+    });
+  });
+
+  await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Semantic' }).click();
+  await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Hide' }).click();
+  await page.locator('#metaFilterQuery').fill('Programming languages');
+  await page.getByRole('button', { name: 'Meta Filter' }).click();
+  await expect(page.locator('.meta-filter-status')).toContainText('Loaded document with meta filter snapshot.');
+  await expect(page.locator('#readerDocument')).toContainText('TypeScript');
+  await expect(page.locator('#readerDocument')).not.toContainText('Developer Containers');
+
+  const result = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const original = (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument;
+    const blockIds = new Set<string>();
+    const visitBlock = (block: { id: string; schema: {
+      containerBlocks?: unknown[];
+      componentListBlocks?: unknown[];
+      expandableStubBlocks?: { children?: unknown[] };
+      expandableContentBlocks?: { children?: unknown[] };
+      gridItems?: Array<{ block: unknown }>;
+    } }) => {
+      blockIds.add(block.id);
+      for (const child of block.schema.containerBlocks ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.componentListBlocks ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.expandableStubBlocks?.children ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const child of block.schema.expandableContentBlocks?.children ?? []) visitBlock(child as Parameters<typeof visitBlock>[0]);
+      for (const item of block.schema.gridItems ?? []) visitBlock(item.block as Parameters<typeof visitBlock>[0]);
+    };
+    for (const section of state.document.sections) {
+      for (const block of section.blocks) visitBlock(block as Parameters<typeof visitBlock>[0]);
+    }
+    return {
+      documentReloaded: state.document !== original,
+      currentView: state.currentView,
+      filterEnabled: state.search.filterEnabled,
+      filterMode: state.search.filterMode,
+      submittedMode: state.search.submittedFilterQueryMode,
+      resultLabels: state.search.results.map((searchResult) => searchResult.label),
+      allResultBlocksExist: state.search.results.every((searchResult) => !searchResult.blockId || blockIds.has(searchResult.blockId)),
+    };
+  });
+
+  expect(result.documentReloaded).toBe(true);
+  expect(result.currentView).toBe('viewer');
+  expect(result.filterEnabled).toBe(true);
+  expect(result.filterMode).toBe('hide');
+  expect(result.submittedMode).toBe('semantic');
+  expect(result.resultLabels).toContain('TypeScript');
+  expect(result.allResultBlocksExist).toBe(true);
 });
 
 test('embedded editor exposes dirty document change state to hosts', async ({ page }) => {

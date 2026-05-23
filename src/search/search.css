@@ -3,16 +3,6 @@
   right: 5.7rem;
   bottom: 2rem;
   z-index: 80;
-  display: inline-grid;
-  place-items: center;
-  width: 3.2rem;
-  height: 3.2rem;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid var(--hvy-border);
-  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-surface));
-  color: var(--hvy-button-text);
-  box-shadow: 0 18px 40px var(--hvy-shadow-lg);
 }
 
 .chat-dock.is-open ~ .search-launcher {
@@ -111,7 +101,7 @@
   font-size: 0.82rem;
 }
 
-.search-palette {
+.search-modal {
   position: relative;
   z-index: 1;
   display: grid;
@@ -129,7 +119,7 @@
   overflow: hidden;
 }
 
-.search-palette.is-filter-tab {
+.search-modal.is-filter-tab {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -183,6 +173,14 @@
   color: var(--hvy-code-text);
 }
 
+.search-input-shell.is-multiline {
+  align-items: start;
+}
+
+.search-input-shell.is-multiline .search-input-icon-button {
+  margin-top: 0;
+}
+
 .search-input-icon-button {
   display: inline-grid;
   place-items: center;
@@ -219,6 +217,12 @@
   font: 15px/1.35 "Segoe UI", sans-serif;
 }
 
+.search-prompt-textarea {
+  min-height: 6.8rem;
+  resize: vertical;
+  padding-top: 0.19rem;
+}
+
 .search-close-button {
   position: absolute;
   top: 0.85rem;
@@ -242,7 +246,8 @@
 
 .search-category-toggle,
 .search-switch,
-.search-filter-mode {
+.search-filter-mode,
+.search-semantic-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -264,10 +269,16 @@
 }
 
 .search-category-toggle.is-active,
-.search-filter-mode.is-active {
+.search-filter-mode.is-active,
+.search-semantic-toggle.is-active {
   border-color: var(--hvy-button-bg);
   background: color-mix(in srgb, var(--hvy-button-bg) 24%, var(--hvy-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-button-bg) 18%, transparent);
+}
+
+.hvy-embed-layout .search-filter-mode:not(:disabled):hover,
+.hvy-embed-layout .search-semantic-toggle:not(:disabled):hover {
+  transform: none;
 }
 
 .search-switch input {
@@ -298,6 +309,48 @@
   color: var(--hvy-danger);
 }
 
+.search-status.is-empty {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-warning-border) 72%, var(--hvy-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-warning-bg) 68%, var(--hvy-surface));
+  color: var(--hvy-warning-text);
+  font-weight: 650;
+}
+
+.search-semantic-progress {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 62%, transparent);
+}
+
+.search-semantic-progress-track {
+  height: 0.48rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-border));
+}
+
+.search-semantic-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-highlight-2));
+  transition: width 180ms ease;
+}
+
+.search-semantic-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+}
+
 .search-filter-panel {
   display: grid;
   gap: 0.8rem;
@@ -316,13 +369,24 @@
 }
 
 .search-filter-box-head {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.45rem;
   color: var(--hvy-text-alt);
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.search-filter-box-head > span {
+  flex: 1 1 auto;
+}
+
+.search-semantic-toggle {
+  min-height: 1.75rem;
+  padding: 0.24rem 0.55rem;
+  font-size: 0.74rem;
+  text-transform: none;
 }
 
 .search-filter-box-head .hvy-ui-icon {
@@ -705,7 +769,7 @@
     white-space: normal;
   }
 
-  .search-palette {
+  .search-modal {
     width: min(46rem, calc(100% - 1rem));
     padding: 0.65rem;
   }
@@ -748,7 +812,7 @@
   white-space: normal;
 }
 
-.pane.hvy-preview-frame-phone .search-palette {
+.pane.hvy-preview-frame-phone .search-modal {
   width: min(46rem, calc(100% - 1rem));
   padding: 0.65rem;
 }

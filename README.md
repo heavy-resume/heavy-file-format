@@ -70,6 +70,7 @@ A browser-based reference app is included with:
 Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { features: { tables: false } }` before the bundle loads to disable table authoring/rendering in an embedded host.
 - Set `window.HVY_REFERENCE_CONFIG = { aiEditor: { doubleClickDelayMs: 400 } }` to tune how long AI mode waits before running single-click reader actions, leaving room for double-click edit gestures.
+- Set `window.HVY_REFERENCE_CONFIG = { semanticFilterProvider }` or pass `semanticFilterProvider` to an embedded mount to enable AI-backed semantic filtering in the Filter panel.
 - When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
 Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
@@ -254,6 +255,81 @@ HVY.mountHvyViewer({
 
 Return `{ html }` to replace the rendered link with sanitized HTML, or return
 `null` / `undefined` to keep the default rendering.
+
+Embedded hosts can also enable semantic filtering by providing a callback that
+selects candidate IDs from the AI-friendly request packet:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+```
+
+The request includes structured `candidates` and a deterministic
+`instructionPrompt`; hosts should return only candidate IDs supplied by the
+request.
+
+Hosts can also search across many HVY documents without mounting them. Keyword
+mode uses the built-in search provider unless a host supplies one. Semantic mode
+builds one cross-document candidate packet and requires a semantic provider:
+
+For a single mounted document filter, use the same public filter snapshot helper
+that mirrors the reference reader Filter UI. This is the best API when an
+embedding host wants to apply or debug a document-level filter without changing
+the candidate IDs or prompt shape through the multi-document search route:
+
+```js
+const snapshot = await HVY.createDocumentFilterSnapshot({
+  document,
+  query: 'Find implementation experience',
+  mode: 'semantic',
+  view: 'viewer',
+  filterMode: 'hide',
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+
+mount.setSearchSnapshot(snapshot);
+```
+
+```js
+const response = await HVY.searchDocuments({
+  query: 'Find implementation experience',
+  mode: 'semantic',
+  documents: [
+    { documentId: 'resume', documentTitle: 'Resume', document: resumeDocument },
+    { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
+  ],
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+
+for (const result of response.results) {
+  console.log(result.documentId, result.targetKind, result.sectionKey, result.blockId);
+}
+
+const selectedSnapshot = HVY.createDocumentSearchSnapshot(response, 'resume', {
+  filterMode: 'hide',
+});
+
+const mount = HVY.mountHvyViewer({
+  root,
+  document: resumeDocument,
+  searchSnapshot: selectedSnapshot,
+});
+
+// Or apply a later meta-app selection without remounting the document.
+mount.setSearchSnapshot(selectedSnapshot);
+```
 
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a
 plan, show the returned steps to the user, then pass the approved steps into the

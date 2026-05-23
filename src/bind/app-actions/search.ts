@@ -1,6 +1,6 @@
 import type { AppActionHandler } from './types';
-import { applySearchFilter, closeSearch, expandSearchResults, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchTab, stopSearch } from '../../search/actions';
-import type { SearchCategory, SearchFilterMode, SearchPaletteTab } from '../../search/types';
+import { applySearchFilter, closeSearch, expandSearchResults, isSearchFilterApplied, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchFilterQueryMode, setSearchTab, stopSearch, stopSearchRequest } from '../../search/actions';
+import type { SearchCategory, SearchFilterMode, SearchFilterQueryMode, SearchModalTab } from '../../search/types';
 import { getRenderApp, state } from '../../state';
 
 const openSearchAction: AppActionHandler = ({ app }) => {
@@ -13,6 +13,10 @@ const closeSearchAction: AppActionHandler = () => {
 
 const stopSearchAction: AppActionHandler = () => {
   stopSearch();
+};
+
+const stopSearchRequestAction: AppActionHandler = () => {
+  stopSearchRequest();
 };
 
 const expandSearchResultsAction: AppActionHandler = ({ app }) => {
@@ -41,7 +45,7 @@ const toggleSearchCategoryAction: AppActionHandler = ({ actionButton }) => {
 };
 
 const setSearchTabAction: AppActionHandler = ({ actionButton }) => {
-  const tab = actionButton.dataset.searchTab as SearchPaletteTab | undefined;
+  const tab = actionButton.dataset.searchTab as SearchModalTab | undefined;
   if (tab === 'search' || tab === 'filter') {
     setSearchTab(tab);
   }
@@ -54,15 +58,26 @@ const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
   }
 };
 
+const setSearchFilterQueryModeAction: AppActionHandler = ({ actionButton }) => {
+  const mode = actionButton.dataset.searchFilterQueryMode as SearchFilterQueryMode | undefined;
+  if (mode === 'semantic') {
+    setSearchFilterQueryMode(state.search.filterQueryMode === 'semantic' ? 'keyword' : 'semantic');
+    return;
+  }
+  if (mode === 'keyword') {
+    setSearchFilterQueryMode('keyword');
+  }
+};
+
 const applySearchFilterAction: AppActionHandler = () => {
-  const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
-  void applySearchFilter({ enabled: !applied });
+  void applySearchFilter({ enabled: !isSearchFilterApplied() });
 };
 
 export const searchActions: Record<string, AppActionHandler> = {
   'open-search': openSearchAction,
   'close-search': closeSearchAction,
   'stop-search': stopSearchAction,
+  'stop-search-request': stopSearchRequestAction,
   'expand-search-results': expandSearchResultsAction,
   'select-search-result': selectSearchResultAction,
   'previous-search-result': previousSearchResultAction,
@@ -70,5 +85,6 @@ export const searchActions: Record<string, AppActionHandler> = {
   'toggle-search-category': toggleSearchCategoryAction,
   'set-search-tab': setSearchTabAction,
   'set-search-filter-mode': setSearchFilterModeAction,
+  'set-search-filter-query-mode': setSearchFilterQueryModeAction,
   'apply-search-filter': applySearchFilterAction,
 };

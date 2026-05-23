@@ -3,7 +3,7 @@ import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
-import { submitSearch } from '../../search/actions';
+import { isSearchFilterApplied, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 
@@ -12,10 +12,15 @@ const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   await actions.runButtonVisibilityScripts(root);
 };
 
+function isSearchQueryControl(target: HTMLElement): target is HTMLInputElement | HTMLTextAreaElement {
+  return target.dataset.field === 'search-query'
+    && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
+}
+
 export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('focusout', (event) => {
     const target = event.target as HTMLElement;
-    if (target.dataset.field !== 'search-query' || !(target instanceof HTMLInputElement)) {
+    if (!isSearchQueryControl(target)) {
       return;
     }
     window.setTimeout(() => {
@@ -25,6 +30,9 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
         return;
       }
+      if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+        return;
+      }
       void submitSearch();
     }, 120);
   });
@@ -32,15 +40,36 @@ export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
-    if (target.dataset.field === 'search-query' && target instanceof HTMLInputElement) {
+    if (isSearchQueryControl(target)) {
+      const hadFocus = document.activeElement === target;
       state.search.queryDraft = target.value;
       state.search.resultsCollapsed = false;
-      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"]');
+      if (state.search.isLoading || state.search.abortController) {
+        state.search.abortController?.abort();
+        state.search.abortController = null;
+        state.search.requestNonce += 1;
+        state.search.isLoading = false;
+      }
+      state.search.semanticProgress = null;
+      app.querySelector<HTMLElement>('.search-semantic-progress')?.remove();
+      const semanticStatus = app.querySelector<HTMLElement>('.search-filter-panel .search-status');
+      if (semanticStatus && state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+        semanticStatus.textContent = '';
+        semanticStatus.classList.remove('is-error', 'is-empty');
+      }
+      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"], [data-action="stop-search-request"]');
       if (filterButton) {
-        const applied = state.search.filterEnabled && state.search.queryDraft.trim() === state.search.submittedQuery.trim();
+        const applied = isSearchFilterApplied();
+        filterButton.dataset.action = 'apply-search-filter';
+        filterButton.classList.remove('danger');
+        filterButton.classList.add('secondary');
         filterButton.classList.toggle('is-active', applied);
         filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
+        filterButton.disabled = false;
         filterButton.textContent = applied ? 'Turn off filter' : 'Filter';
+      }
+      if (hadFocus && document.activeElement !== target) {
+        target.focus({ preventScroll: true });
       }
       return;
     }

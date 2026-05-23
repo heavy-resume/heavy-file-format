@@ -1,7 +1,14 @@
 import { expect, test } from 'vitest';
 
 import { convertMarkdownToHvyDocument } from '../src/markdown-import';
-import { applyUnderlineSyntax, escapeRawHtml, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists, turndown } from '../src/markdown';
+import {
+  applyUnderlineSyntax,
+  escapeRawHtml,
+  markdownToReaderHtml,
+  normalizeMarkdownIndentation,
+  normalizeMarkdownLists,
+  turndown,
+} from '../src/markdown';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -26,6 +33,23 @@ test('does not treat bold labels as star list items', () => {
 test('normalizes ordered checkbox lists for plan progress', () => {
   expect(normalizeMarkdownLists('Plan progress:\n1. [ ] Inspect components\n2. [x] Patch forms')).toBe(
     'Plan progress:\n\n1. [ ] Inspect components\n2. [x] Patch forms'
+  );
+});
+
+test('folds orphan wrapped bullet paragraphs back into the previous list item', () => {
+  const html = markdownToReaderHtml(
+    normalizeMarkdownLists('- First bullet starts here\n\nand this is the wrapped remainder\n- Second bullet')
+  );
+
+  expect(html).toContain('<ul>');
+  expect(html).toContain('<li>First bullet starts here\nand this is the wrapped remainder</li>');
+  expect(html).toContain('<li>Second bullet</li>');
+  expect(html).not.toContain('</ul>\n<p>and this is the wrapped remainder</p>');
+});
+
+test('keeps a paragraph after a completed list as its own paragraph', () => {
+  expect(normalizeMarkdownLists('- First bullet\n\nThis paragraph follows the list.')).toBe(
+    '- First bullet\n\nThis paragraph follows the list.'
   );
 });
 

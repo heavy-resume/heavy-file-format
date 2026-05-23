@@ -124,9 +124,9 @@ function renderEditorImageRow(
       ${download}
     </div>
     <div class="hvy-carousel-row-actions">
-      <button type="button" data-action="carousel-move-up" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === 0 ? ' disabled' : ''} title="Move up">${arrowUpIcon()}</button>
-      <button type="button" data-action="carousel-move-down" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === count - 1 ? ' disabled' : ''} title="Move down">${arrowDownIcon()}</button>
-      <button type="button" data-action="carousel-remove" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="Remove">${closeIcon()}</button>
+      <button type="button" class="ghost" data-action="carousel-move-up" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === 0 ? ' disabled' : ''} title="Move up">${arrowUpIcon()}</button>
+      <button type="button" class="ghost" data-action="carousel-move-down" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"${index === count - 1 ? ' disabled' : ''} title="Move down">${arrowDownIcon()}</button>
+      <button type="button" class="ghost" data-action="carousel-remove" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="Remove">${closeIcon()}</button>
     </div>
   </div>`;
 }

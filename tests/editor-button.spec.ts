@@ -234,9 +234,14 @@ test('study tools flashcards form remains mounted after sidebar reader refresh',
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('.viewer-sidebar-tab')).toContainText('Study Tools', { timeout: 1000 });
   const sidebarTabBox = await page.locator('.viewer-sidebar-tab').boundingBox();
+  const sidebarTabLabelBox = await page.locator('.viewer-sidebar-tab .sidebar-tab-label').boundingBox();
   const sidebarHelpBox = await page.locator('.viewer-sidebar-help-balloon').boundingBox();
   expect(sidebarTabBox).not.toBeNull();
+  expect(sidebarTabLabelBox).not.toBeNull();
   expect(sidebarHelpBox).not.toBeNull();
+  expect(sidebarTabBox!.height).toBeGreaterThan(sidebarTabBox!.width);
+  expect(sidebarTabLabelBox!.height).toBeGreaterThan(sidebarTabLabelBox!.width);
+  expect(sidebarTabLabelBox!.height).toBeLessThanOrEqual(sidebarTabBox!.height);
   const sidebarTabCenter = sidebarTabBox!.y + sidebarTabBox!.height / 2;
   const sidebarHelpCenter = sidebarHelpBox!.y + sidebarHelpBox!.height / 2;
   expect(Math.abs(sidebarTabCenter - sidebarHelpCenter)).toBeLessThanOrEqual(3);
@@ -642,15 +647,15 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   expect(secondDocLayoutBox!.height).toBeGreaterThanOrEqual(secondDocMountBox!.height - 1);
 
   await firstDoc.locator('.search-launcher').click();
-  await expect(firstDoc.locator('.search-palette')).toBeVisible({ timeout: 1_000 });
+  await expect(firstDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
   const firstDocSearchBox = await firstDoc.boundingBox();
-  const firstSearchPaletteBox = await firstDoc.locator('.search-palette').boundingBox();
+  const firstSearchModalBox = await firstDoc.locator('.search-modal').boundingBox();
   expect(firstDocSearchBox).not.toBeNull();
-  expect(firstSearchPaletteBox).not.toBeNull();
-  expect(firstSearchPaletteBox!.y).toBeGreaterThanOrEqual(firstDocSearchBox!.y);
-  expect(firstSearchPaletteBox!.y + firstSearchPaletteBox!.height).toBeLessThanOrEqual(firstDocSearchBox!.y + firstDocSearchBox!.height + 1);
+  expect(firstSearchModalBox).not.toBeNull();
+  expect(firstSearchModalBox!.y).toBeGreaterThanOrEqual(firstDocSearchBox!.y);
+  expect(firstSearchModalBox!.y + firstSearchModalBox!.height).toBeLessThanOrEqual(firstDocSearchBox!.y + firstDocSearchBox!.height + 1);
   await firstDoc.getByRole('button', { name: 'Close search panel' }).click();
-  await expect(firstDoc.locator('.search-palette')).toHaveCount(0);
+  await expect(firstDoc.locator('.search-modal')).toHaveCount(0);
 
   await secondDoc.locator('.viewer-sidebar-help-balloon').click();
   await page.waitForTimeout(220);
@@ -661,12 +666,12 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 
   await secondDoc.locator('.search-launcher').click();
-  await expect(secondDoc.locator('.search-palette')).toBeVisible({ timeout: 1_000 });
+  await expect(secondDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
   await secondDoc.locator('[data-field="search-query"]').fill('Avery Hart');
   await secondDoc.locator('#searchComposer').press('Enter');
   await expect(secondDoc.locator('.search-result')).toContainText('Avery Hart', { timeout: 1_000 });
   await secondDoc.getByRole('button', { name: 'Close search panel' }).click();
-  await expect(secondDoc.locator('.search-palette')).toHaveCount(0);
+  await expect(secondDoc.locator('.search-modal')).toHaveCount(0);
 
   await firstDoc.locator('.chat-launcher').click();
   await expect(firstDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });

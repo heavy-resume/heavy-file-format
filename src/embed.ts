@@ -55,6 +55,15 @@ import {
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
+import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
+import { searchDocuments } from './search/documents';
+import { createDocumentFilterSnapshot } from './search/document-filter';
+import {
+  createDocumentSearchSnapshot,
+  normalizeSearchSnapshotInput,
+  externalSearchSnapshotToDocumentState,
+  searchStateToSnapshot,
+} from './search/snapshot';
 import type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -63,6 +72,7 @@ import type {
 } from './ai-document-edit';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
+import { setRuntimeSemanticFilterProvider } from './reference-config';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -73,11 +83,13 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  searchSnapshot?: HvySearchSnapshotInput | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -93,6 +105,8 @@ export interface HvyMount {
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
+  setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
+  getSearchSnapshot(): HvySearchSnapshot;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
 }
@@ -135,6 +149,8 @@ function createDefaultSearchState(): AppState['search'] {
     activeTab: 'search',
     filterEnabled: false,
     filterMode: 'deprioritize',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
     resultsCollapsed: false,
     activeResultId: null,
     isLoading: false,
@@ -167,6 +183,7 @@ function createEmbedState(
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
+    metaFilter: { query: '', mode: 'semantic', isRunning: false, status: null, error: null, resultCount: null },
     contextMenu: null,
     aiEdit: {
       sectionKey: null,
@@ -479,12 +496,21 @@ function setPaletteOverrideId(id: string | null): void {
   renderApp();
 }
 
+function setMountedSearchSnapshot(snapshot: HvySearchSnapshotInput | null, options: { render?: boolean } = {}): void {
+  state.search.abortController?.abort();
+  state.search = externalSearchSnapshotToDocumentState(snapshot, state.document);
+  if (options.render ?? true) {
+    renderApp();
+  }
+}
+
 async function loadFullEmbed(): Promise<FullEmbedModule> {
   return import('./embed-full');
 }
 
 function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let mounted: HvyMount | null = null;
+  let queuedSearchSnapshot = options.searchSnapshot ?? null;
   const pending: Array<(mount: HvyMount) => void> = [];
   options.root.classList.add('hvy-document');
   options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
@@ -551,6 +577,14 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     },
     setPaletteOverrideId(id) {
       withMount((mount) => mount.setPaletteOverrideId(id));
+    },
+    setSearchSnapshot(snapshot) {
+      queuedSearchSnapshot = snapshot;
+      options.searchSnapshot = snapshot;
+      withMount((mount) => mount.setSearchSnapshot(snapshot));
+    },
+    getSearchSnapshot() {
+      return mounted?.getSearchSnapshot() ?? normalizeSearchSnapshotInput(queuedSearchSnapshot);
     },
     openThemeEditor(themeOptions) {
       renderQueuedThemeModal();
@@ -628,12 +662,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   ));
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
+  if ('semanticFilterProvider' in options) {
+    setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
+  }
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
   if (options.paletteId && getPaletteById(options.paletteId)) {
     state.paletteOverrideId = options.paletteId;
+  }
+  if ('searchSnapshot' in options) {
+    setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
@@ -645,6 +685,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostPlugins([]);
+        setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
         if (currentRoot === options.root) {
           currentRoot = null;
@@ -693,6 +734,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setPaletteOverrideId(id);
       });
     },
+    setSearchSnapshot(snapshot) {
+      runWithStateRuntime(runtime, () => {
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setThemeRoot(options.root);
+        setMountedSearchSnapshot(snapshot);
+      });
+    },
+    getSearchSnapshot() {
+      return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
     openThemeEditor(themeOptions = {}) {
       void loadFullEmbed().then((module) => runWithStateRuntime(runtime, () => {
         const fullMount = module.mountHvy({
@@ -726,8 +778,9 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes };
+export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
+export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -744,6 +797,21 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyDocumentSearchDocument,
+  HvyDocumentSearchMode,
+  HvyDocumentSearchRequest,
+  HvyDocumentSearchResponse,
+  HvyDocumentSearchResult,
+  HvyDocumentSearchSnapshot,
+  HvySemanticFilterCandidate,
+  HvySemanticFilterCandidateBudget,
+  HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
+  HvySemanticFilterRequest,
+  HvySearchSnapshot,
+  HvySearchSnapshotInput,
+} from './search/types';
 
 declare global {
   interface Window {
@@ -751,6 +819,9 @@ declare global {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
+      createDocumentFilterSnapshot: typeof createDocumentFilterSnapshot;
+      searchDocuments: typeof searchDocuments;
+      createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -764,6 +835,9 @@ window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  createDocumentFilterSnapshot,
+  searchDocuments,
+  createDocumentSearchSnapshot,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

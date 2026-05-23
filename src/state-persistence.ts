@@ -1,7 +1,7 @@
 import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
-import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchState } from './search/types';
+import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const LEGACY_SESSION_STORAGE_KEYS = [
@@ -40,7 +40,7 @@ interface SessionStatePayload {
   documentBase64?: string;
 }
 
-type SavedSearchState = Omit<SearchState, 'isLoading' | 'error' | 'requestNonce' | 'abortController'>;
+type SavedSearchState = Omit<SearchState, 'isLoading' | 'semanticProgress' | 'error' | 'requestNonce' | 'abortController'>;
 
 export interface LoadedSessionState {
   document?: VisualDocument;
@@ -334,6 +334,8 @@ function serializeSearchState(search: SearchState): SavedSearchState {
     activeTab: search.activeTab,
     filterEnabled: search.filterEnabled,
     filterMode: search.filterMode,
+    filterQueryMode: search.filterQueryMode,
+    submittedFilterQueryMode: search.submittedFilterQueryMode,
     resultsCollapsed: search.resultsCollapsed,
     activeResultId: search.activeResultId,
     results: search.results,
@@ -349,23 +351,29 @@ function normalizeSearchState(value: unknown): SearchState {
     return defaults;
   }
   const raw = value as Partial<SavedSearchState>;
-  const submittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
+  const filterQueryMode = normalizeSearchFilterQueryMode(raw.filterQueryMode);
+  const submittedFilterQueryMode = normalizeSearchFilterQueryMode(raw.submittedFilterQueryMode);
+  const savedSubmittedQuery = typeof raw.submittedQuery === 'string' ? raw.submittedQuery : '';
+  const resetSemanticRun = filterQueryMode === 'semantic' || submittedFilterQueryMode === 'semantic';
+  const submittedQuery = resetSemanticRun ? '' : savedSubmittedQuery;
   return {
     ...defaults,
     open: Boolean(raw.open),
-    queryDraft: typeof raw.queryDraft === 'string' ? raw.queryDraft : submittedQuery,
+    queryDraft: typeof raw.queryDraft === 'string' ? raw.queryDraft : savedSubmittedQuery,
     submittedQuery,
     caseSensitive: Boolean(raw.caseSensitive),
     categories: normalizeSearchCategories(raw.categories),
     activeTab: raw.activeTab === 'filter' ? 'filter' : 'search',
-    filterEnabled: Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
+    filterEnabled: !resetSemanticRun && Boolean(raw.filterEnabled) && submittedQuery.trim().length > 0,
     filterMode: raw.filterMode === 'hide' ? 'hide' : 'deprioritize',
+    filterQueryMode,
+    submittedFilterQueryMode,
     resultsCollapsed: Boolean(raw.resultsCollapsed),
-    activeResultId: typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
-    results: Array.isArray(raw.results)
+    activeResultId: !resetSemanticRun && typeof raw.activeResultId === 'string' ? raw.activeResultId : null,
+    results: !resetSemanticRun && Array.isArray(raw.results)
       ? raw.results.map(normalizeSearchResult).filter((result): result is HvySearchResult => Boolean(result))
       : [],
-    navigationResultIds: Array.isArray(raw.navigationResultIds)
+    navigationResultIds: !resetSemanticRun && Array.isArray(raw.navigationResultIds)
       ? raw.navigationResultIds.filter((entry) => typeof entry === 'string')
       : [],
     clearedSectionKeys: Array.isArray(raw.clearedSectionKeys)
@@ -375,10 +383,15 @@ function normalizeSearchState(value: unknown): SearchState {
       ? raw.clearedBlockIds.filter((entry) => typeof entry === 'string')
       : [],
     isLoading: false,
+    semanticProgress: null,
     error: null,
     requestNonce: 0,
     abortController: null,
   };
+}
+
+function normalizeSearchFilterQueryMode(value: unknown): SearchFilterQueryMode {
+  return value === 'semantic' ? 'semantic' : 'keyword';
 }
 
 function normalizeSearchCategories(value: unknown): Record<SearchCategory, boolean> {
@@ -401,7 +414,7 @@ function normalizeSearchResult(value: unknown): HvySearchResult | null {
   const raw = value as Partial<HvySearchResult>;
   if (
     typeof raw.id !== 'string' ||
-    !isSearchCategory(raw.category) ||
+    !isSearchResultCategory(raw.category) ||
     (raw.targetKind !== 'section' && raw.targetKind !== 'block') ||
     typeof raw.sectionKey !== 'string' ||
     typeof raw.targetId !== 'string' ||
@@ -432,6 +445,10 @@ function normalizeSearchResult(value: unknown): HvySearchResult | null {
     ...(typeof raw.workspaceId === 'string' ? { workspaceId: raw.workspaceId } : {}),
     ...(typeof raw.score === 'number' ? { score: raw.score } : {}),
   };
+}
+
+function isSearchResultCategory(value: unknown): value is SearchResultCategory {
+  return isSearchCategory(value) || value === 'semantic';
 }
 
 function isSearchCategory(value: unknown): value is SearchCategory {

@@ -6,7 +6,7 @@ import { formatStyleDefaultsSummary } from '../style-defaults-summary';
 import type { SectionDefinition, VisualDocument } from '../types';
 import type { HvyVirtualEntry, HvyVirtualFileSystem } from './virtual-file-system';
 
-type ComponentStructureEntry = {
+export type ComponentStructureEntry = {
   code: string;
   directory: string;
   id: string;
@@ -51,7 +51,7 @@ const COMPONENT_TYPE_CODES: Record<string, string> = {
 const STRUCTURE_PREVIEW_MAX_CHARS = 40;
 
 export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtualFileSystem, options: HvyRequestStructureOptions = {}): string {
-  const entries = collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
+  const entries = collectHvyComponentStructureReferences(document, fs);
   const scopedEntries = scopeEntries(entries, options.componentId, options.componentPath);
   return [
     'Effective style defaults:',
@@ -72,6 +72,10 @@ export function formatHvyRequestStructure(document: VisualDocument, fs: HvyVirtu
   ].join('\n');
 }
 
+export function collectHvyComponentStructureReferences(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
+  return collectComponentStructureEntries(document, fs).map((entry, index) => withStableId(entry, index));
+}
+
 export function formatHvyRequestStructureForDirectory(
   document: VisualDocument,
   fs: HvyVirtualFileSystem,
@@ -80,8 +84,7 @@ export function formatHvyRequestStructureForDirectory(
 ): string {
   const normalized = directoryPath.replace(/\/$/, '');
   const rootName = normalized.split('/').filter(Boolean).at(-1) ?? 'body';
-  const entries = collectComponentStructureEntries(document, fs)
-    .map((entry, index) => withStableId(entry, index))
+  const entries = collectHvyComponentStructureReferences(document, fs)
     .filter((entry) => entry.directory === normalized || entry.directory.startsWith(`${normalized}/`))
     .map((entry) => ({
       ...entry,
@@ -103,7 +106,7 @@ export function formatHvyRequestStructureForDirectory(
 }
 
 export function formatHvyStructureForPaths(document: VisualDocument, fs: HvyVirtualFileSystem, rawPaths: string[]): string {
-  const allEntries = collectComponentStructureEntries(document, fs).map(withStableId);
+  const allEntries = collectHvyComponentStructureReferences(document, fs);
   const selected = allEntries.filter((entry) =>
     rawPaths.some((path) => path === entry.directory || path === entry.textPath || path === entry.jsonPath || path.startsWith(`${entry.directory}/`))
   );

@@ -28,6 +28,11 @@ import { bindCarouselInteractions } from './editor/components/carousel/carousel'
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState } from './state-persistence';
+import { createDocumentFilterSnapshot } from './search/document-filter';
+import { createDefaultSearchState } from './search/state';
+import { externalSearchSnapshotToDocumentState } from './search/snapshot';
+import { traceSemanticFilterEvent } from './search/semantic-trace';
+import type { HvySearchSnapshot } from './search/types';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
@@ -67,11 +72,22 @@ interface HvyFileSystemFileHandle {
 
 let currentFileHandle: HvyFileSystemFileHandle | null = null;
 
+interface ReplaceLoadedDocumentOptions {
+  searchSnapshot?: HvySearchSnapshot | null;
+  currentView?: typeof state.currentView;
+  metaFilter?: Partial<typeof state.metaFilter>;
+}
+
 function supportsFileSystemAccess(): boolean {
   return typeof (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker === 'function';
 }
 
-function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selectedExample: typeof state.selectedExample): void {
+function replaceLoadedDocument(
+  raw: string | Uint8Array,
+  filename: string,
+  selectedExample: typeof state.selectedExample,
+  options: ReplaceLoadedDocumentOptions = {}
+): void {
   const extension = detectExtension(filename);
   const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw) : raw;
   state.selectedExample = selectedExample;
@@ -86,6 +102,19 @@ function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selec
   state.future = [];
   clearChatConversation(state.chat);
   resetTransientUiState();
+  if (options.searchSnapshot) {
+    state.search = externalSearchSnapshotToDocumentState(options.searchSnapshot, state.document);
+  }
+  state.currentView = options.currentView ?? state.currentView;
+  state.metaFilter = {
+    query: '',
+    mode: state.search.filterQueryMode,
+    isRunning: false,
+    status: null,
+    error: null,
+    resultCount: null,
+    ...options.metaFilter,
+  };
   saveSessionState(state);
   getRenderApp()();
 }
@@ -195,6 +224,11 @@ export function bindUi(app: HTMLElement): void {
   const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
   const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
   const chatScrollBottomButton = app.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]');
+  const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
+  const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
+  const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
+  const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
 
   const clearPendingAiReaderAction = (): void => {
@@ -229,6 +263,130 @@ export function bindUi(app: HTMLElement): void {
   bindImageDragAndDrop(app);
   bindCarouselInteractions(app);
   scheduleSidebarHelpAutoClose(app);
+
+  metaFilterQuery?.addEventListener('input', () => {
+    state.metaFilter.query = metaFilterQuery.value;
+    state.metaFilter.error = null;
+    state.metaFilter.status = null;
+  });
+
+  metaFilterComposer?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void runInBoundRuntimeAsync(async () => {
+      const query = state.metaFilter.query.trim();
+      if (!query || state.metaFilter.isRunning) {
+        return;
+      }
+      state.metaFilter.isRunning = true;
+      state.metaFilter.error = null;
+      state.metaFilter.status = 'Preparing semantic filter...';
+      state.metaFilter.resultCount = null;
+      getRenderApp()();
+      try {
+        const documentBytes = serializeDocumentBytes(state.document);
+        const documentExtension = state.document.extension;
+        const filename = state.filename || `document${documentExtension}`;
+        const detachedDocument = deserializeDocumentBytes(documentBytes, documentExtension);
+        const traceRunId = `meta-semantic-filter:${Date.now().toString(36)}`;
+        const snapshot = await createDocumentFilterSnapshot({
+          document: detachedDocument,
+          query,
+          mode: state.search.filterQueryMode,
+          view: state.currentView,
+          filterMode: state.search.filterMode,
+          traceRunId,
+          onSemanticProgress: (progress) => {
+            state.metaFilter.status = `Semantic windows ${progress.completedWindows}/${progress.totalWindows}; ${progress.matchedCandidates} match${progress.matchedCandidates === 1 ? '' : 'es'}`;
+            getRenderApp()();
+          },
+        });
+        replaceLoadedDocument(documentBytes, filename, state.selectedExample, {
+          searchSnapshot: snapshot,
+          currentView: 'viewer',
+          metaFilter: {
+            query,
+            mode: state.search.filterQueryMode,
+            resultCount: snapshot.results.length,
+            status: snapshot.results.length > 0 ? 'Loaded document with meta filter snapshot.' : 'Loaded document with no meta filter matches.',
+            error: null,
+          },
+        });
+        state.search.open = false;
+        state.search.resultsCollapsed = false;
+        traceSemanticFilterEvent({ traceRunId }, 'meta_filter_loaded_document_state', {
+          query,
+          currentView: state.currentView,
+          filterEnabled: state.search.filterEnabled,
+          filterMode: state.search.filterMode,
+          filterQueryMode: state.search.filterQueryMode,
+          submittedFilterQueryMode: state.search.submittedFilterQueryMode,
+          resultCount: state.search.results.length,
+          resultLabels: state.search.results.map((result) => result.label),
+          visibleBehavior: state.search.filterMode,
+        });
+        getRefreshReaderPanels()();
+      } catch (error: unknown) {
+        state.metaFilter.error = error instanceof Error ? error.message : 'Meta filter failed.';
+        getRenderApp()();
+      } finally {
+        state.metaFilter.isRunning = false;
+        getRenderApp()();
+      }
+    });
+  });
+
+  metaFilterModeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.metaFilterMode;
+      if (mode !== 'keyword' && mode !== 'semantic') {
+        return;
+      }
+      runInBoundRuntime(() => {
+        state.search.filterQueryMode = mode;
+        state.metaFilter.mode = mode;
+        state.metaFilter.error = null;
+        state.metaFilter.status = null;
+        state.metaFilter.resultCount = null;
+        getRenderApp()();
+      });
+    });
+  });
+
+  metaFilterBehaviorButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.metaFilterBehavior;
+      if (mode !== 'deprioritize' && mode !== 'hide') {
+        return;
+      }
+      runInBoundRuntime(() => {
+        state.search.filterMode = mode;
+        state.metaFilter.error = null;
+        state.metaFilter.status = null;
+        state.metaFilter.resultCount = null;
+        getRenderApp()();
+      });
+    });
+  });
+
+  clearMetaFilterButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => {
+      const mode = state.search.filterQueryMode;
+      state.search = createDefaultSearchState();
+      state.search.filterQueryMode = mode;
+      state.search.submittedFilterQueryMode = mode;
+      state.metaFilter = {
+        query: '',
+        mode,
+        isRunning: false,
+        status: null,
+        error: null,
+        resultCount: null,
+      };
+      saveSessionState(state);
+      getRefreshReaderPanels()();
+      getRenderApp()();
+    });
+  });
 
   newBtn.addEventListener('click', () => {
     currentFileHandle = null;

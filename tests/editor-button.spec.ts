@@ -234,9 +234,14 @@ test('study tools flashcards form remains mounted after sidebar reader refresh',
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('.viewer-sidebar-tab')).toContainText('Study Tools', { timeout: 1000 });
   const sidebarTabBox = await page.locator('.viewer-sidebar-tab').boundingBox();
+  const sidebarTabLabelBox = await page.locator('.viewer-sidebar-tab .sidebar-tab-label').boundingBox();
   const sidebarHelpBox = await page.locator('.viewer-sidebar-help-balloon').boundingBox();
   expect(sidebarTabBox).not.toBeNull();
+  expect(sidebarTabLabelBox).not.toBeNull();
   expect(sidebarHelpBox).not.toBeNull();
+  expect(sidebarTabBox!.height).toBeGreaterThan(sidebarTabBox!.width);
+  expect(sidebarTabLabelBox!.height).toBeGreaterThan(sidebarTabLabelBox!.width);
+  expect(sidebarTabLabelBox!.height).toBeLessThanOrEqual(sidebarTabBox!.height);
   const sidebarTabCenter = sidebarTabBox!.y + sidebarTabBox!.height / 2;
   const sidebarHelpCenter = sidebarHelpBox!.y + sidebarHelpBox!.height / 2;
   expect(Math.abs(sidebarTabCenter - sidebarHelpCenter)).toBeLessThanOrEqual(3);

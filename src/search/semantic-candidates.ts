@@ -23,7 +23,7 @@ export function buildSemanticFilterRequest(options: BuildSemanticFilterRequestOp
   const maxCandidateSummaryChars = options.maxCandidateSummaryChars ?? DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS;
   const maxTotalCandidateChars = options.maxTotalCandidateChars ?? DEFAULT_MAX_TOTAL_CANDIDATE_CHARS;
   const allCandidates = buildSemanticFilterCandidates(options.document, { maxCandidateSummaryChars });
-  const { candidates, candidateBudget } = applyCandidateBudget(allCandidates, {
+  const { candidates, candidateBudget } = applySemanticCandidateBudget(allCandidates, {
     maxCandidateSummaryChars,
     maxTotalCandidateChars,
   });
@@ -129,6 +129,8 @@ export function buildSemanticFilterCandidates(
 export function buildSemanticFilterInstructionPrompt(prompt: string, candidates: HvySemanticFilterCandidate[]): string {
   const candidateLines = candidates.map((candidate) => JSON.stringify({
     candidateId: candidate.candidateId,
+    ...(candidate.documentId ? { documentId: candidate.documentId } : {}),
+    ...(candidate.documentTitle ? { documentTitle: candidate.documentTitle } : {}),
     targetKind: candidate.targetKind,
     label: candidate.label,
     ...(candidate.locationLabel ? { locationLabel: candidate.locationLabel } : {}),
@@ -140,7 +142,7 @@ export function buildSemanticFilterInstructionPrompt(prompt: string, candidates:
     truncated: candidate.truncated,
   }));
   return [
-    'You are selecting visible content from a structured HVY document.',
+    'You are selecting visible content from structured HVY document candidates.',
     '',
     'User filter prompt:',
     JSON.stringify(prompt),
@@ -165,7 +167,7 @@ export function buildSemanticFilterInstructionPrompt(prompt: string, candidates:
   ].join('\n');
 }
 
-function applyCandidateBudget(
+export function applySemanticCandidateBudget(
   candidates: HvySemanticFilterCandidate[],
   options: { maxCandidateSummaryChars: number; maxTotalCandidateChars: number }
 ): { candidates: HvySemanticFilterCandidate[]; candidateBudget: HvySemanticFilterCandidateBudget } {
@@ -248,6 +250,20 @@ function getBlockContextLabel(block: VisualBlock): string {
 function getDocumentTitle(document: VisualDocument): string {
   const title = document.meta.title;
   return typeof title === 'string' ? title.trim() : '';
+}
+
+export function getSemanticDocumentTitle(document: VisualDocument): string {
+  return getDocumentTitle(document);
+}
+
+export function getDefaultSemanticCandidateBudget(): {
+  maxCandidateSummaryChars: number;
+  maxTotalCandidateChars: number;
+} {
+  return {
+    maxCandidateSummaryChars: DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS,
+    maxTotalCandidateChars: DEFAULT_MAX_TOTAL_CANDIDATE_CHARS,
+  };
 }
 
 function splitTags(tags: string): string[] {

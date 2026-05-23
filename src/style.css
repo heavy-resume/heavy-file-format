@@ -1,5 +1,6 @@
 :root {
-  --hvy-sidebar-tab-size: 2.9rem;
+  --hvy-floating-control-size: 3.2rem;
+  --hvy-sidebar-tab-size: var(--hvy-floating-control-size);
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-document-edge-gutter: 0.9rem;
   --hvy-floating-controls-clearance: 6.6rem;
@@ -529,13 +530,11 @@ body {
 }
 
 .hvy-preview-frame-phone {
-  --hvy-sidebar-tab-size: 2.15rem;
   --hvy-sidebar-footprint: 2.35rem;
   --hvy-document-edge-gutter: 0.55rem;
 }
 
 .hvy-preview-frame-tablet {
-  --hvy-sidebar-tab-size: 2.55rem;
   --hvy-sidebar-footprint: 2.8rem;
   --hvy-document-edge-gutter: 0.75rem;
 }

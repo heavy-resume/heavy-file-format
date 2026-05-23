@@ -56,6 +56,7 @@ import {
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySemanticFilterProvider } from './search/types';
+import { searchDocuments } from './search/documents';
 import type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -754,6 +755,11 @@ export type {
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
+  HvyDocumentSearchDocument,
+  HvyDocumentSearchMode,
+  HvyDocumentSearchRequest,
+  HvyDocumentSearchResponse,
+  HvyDocumentSearchResult,
   HvySemanticFilterCandidate,
   HvySemanticFilterCandidateBudget,
   HvySemanticFilterMatch,
@@ -767,6 +773,7 @@ declare global {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
+      searchDocuments: typeof searchDocuments;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -780,6 +787,7 @@ window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  searchDocuments,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

@@ -7,6 +7,7 @@ import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchPalette } from '../src/search/render';
 import { buildSemanticFilterRequest } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
+import { searchDocuments } from '../src/search/documents';
 import { applySearchFilter } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
@@ -797,6 +798,103 @@ test('semantic provider parser keeps only valid candidate matches', () => {
     reason: 'Relevant',
     score: 1,
   }]);
+});
+
+test('document search returns keyword matches across many documents', async () => {
+  const firstDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: First
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"first-note"}-->
+ shared keyword
+`, '.hvy');
+  const secondDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: Second
+---
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"second-note"}-->
+ shared keyword
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'shared',
+    documents: [
+      { documentId: 'first-doc', document: firstDocument },
+      { documentId: 'second-doc', document: secondDocument },
+    ],
+    mode: 'keyword',
+    categories: ['contents'],
+  });
+
+  expect(expectedResult.mode).toBe('keyword');
+  expect(expectedResult.results.map((result) => result.documentId)).toEqual(['first-doc', 'second-doc']);
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['first-note', 'second-note']);
+  expect(expectedResult.results[0]!.documentTitle).toBe('First');
+});
+
+test('document search sends semantic candidates across many documents', async () => {
+  const firstDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: First
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"first-note"}-->
+ frontend work
+`, '.hvy');
+  const secondDocument = deserializeDocument(`---
+hvy_version: 0.1
+title: Second
+---
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"second-note"}-->
+ database work
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'Find databases',
+    mode: 'semantic',
+    documents: [
+      { documentId: 'first-doc', document: firstDocument },
+      { documentId: 'second-doc', document: secondDocument },
+    ],
+    semanticFilterProvider: (request) => {
+      expect(request.instructionPrompt).toContain('"documentId":"second-doc"');
+      expect(request.instructionPrompt).toContain('"documentTitle":"Second"');
+      return [{
+        candidateId: request.candidates.find((candidate) =>
+          candidate.documentId === 'second-doc' && candidate.targetKind === 'block'
+        )!.candidateId,
+        reason: 'Database work is relevant.',
+        score: 0.82,
+      }];
+    },
+  });
+
+  expect(expectedResult.mode).toBe('semantic');
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]).toMatchObject({
+    documentId: 'second-doc',
+    documentTitle: 'Second',
+    category: 'semantic',
+    targetId: 'second-note',
+    preview: 'Database work is relevant.',
+    score: 0.82,
+  });
+  expect(expectedResult.candidateBudget?.totalCandidates).toBeGreaterThan(1);
 });
 
 test('search highlighting escapes plain text before marking matches', () => {

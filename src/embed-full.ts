@@ -66,6 +66,7 @@ import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
+import { searchDocuments } from './search/documents';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchPalette } from './search/render';
@@ -788,7 +789,7 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, serializeDocument, serializeDocumentBytes };
+export { builtInPluginMap as plugins, builtInPlugins, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type {
   BuildImportPlanOptions,
@@ -807,6 +808,11 @@ export type {
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
+  HvyDocumentSearchDocument,
+  HvyDocumentSearchMode,
+  HvyDocumentSearchRequest,
+  HvyDocumentSearchResponse,
+  HvyDocumentSearchResult,
   HvySemanticFilterCandidate,
   HvySemanticFilterCandidateBudget,
   HvySemanticFilterMatch,
@@ -818,6 +824,7 @@ window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  searchDocuments,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

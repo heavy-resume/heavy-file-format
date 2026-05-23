@@ -5,14 +5,29 @@
   z-index: 80;
   display: inline-grid;
   place-items: center;
-  width: 3.2rem;
-  height: 3.2rem;
+  width: var(--hvy-floating-control-size);
+  height: var(--hvy-floating-control-size);
   padding: 0;
   border-radius: 999px;
   border: 1px solid var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-surface));
   color: var(--hvy-button-text);
   box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+}
+
+.hvy-embed-layout .search-launcher {
+  appearance: none;
+  box-sizing: border-box !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: var(--hvy-floating-control-size) !important;
+  min-width: var(--hvy-floating-control-size) !important;
+  max-width: var(--hvy-floating-control-size) !important;
+  height: var(--hvy-floating-control-size) !important;
+  min-height: var(--hvy-floating-control-size) !important;
+  max-height: var(--hvy-floating-control-size) !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
 }
 
 .chat-dock.is-open ~ .search-launcher {

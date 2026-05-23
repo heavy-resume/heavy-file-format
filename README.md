@@ -274,6 +274,29 @@ The request includes structured `candidates` and a deterministic
 `instructionPrompt`; hosts should return only candidate IDs supplied by the
 request.
 
+Hosts can also search across many HVY documents without mounting them. Keyword
+mode uses the built-in search provider unless a host supplies one. Semantic mode
+builds one cross-document candidate packet and requires a semantic provider:
+
+```js
+const response = await HVY.searchDocuments({
+  query: 'Find implementation experience',
+  mode: 'semantic',
+  documents: [
+    { documentId: 'resume', documentTitle: 'Resume', document: resumeDocument },
+    { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
+  ],
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+
+for (const result of response.results) {
+  console.log(result.documentId, result.targetKind, result.sectionKey, result.blockId);
+}
+```
+
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a
 plan, show the returned steps to the user, then pass the approved steps into the
 import call:

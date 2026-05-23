@@ -48,6 +48,8 @@ export type HvySearchProvider = (request: HvySearchRequest) => Promise<HvySearch
 
 export interface HvySemanticFilterCandidate {
   candidateId: string;
+  documentId?: string;
+  documentTitle?: string;
   targetKind: SearchTargetKind;
   sectionKey: string;
   blockId?: string;
@@ -88,6 +90,39 @@ export interface HvySemanticFilterMatch {
 }
 
 export type HvySemanticFilterProvider = (request: HvySemanticFilterRequest) => Promise<HvySemanticFilterMatch[]> | HvySemanticFilterMatch[];
+
+export interface HvyDocumentSearchDocument {
+  documentId: string;
+  documentTitle?: string;
+  document: VisualDocument;
+}
+
+export type HvyDocumentSearchMode = 'keyword' | 'semantic';
+
+export interface HvyDocumentSearchRequest {
+  documents: HvyDocumentSearchDocument[];
+  query: string;
+  mode?: HvyDocumentSearchMode;
+  caseSensitive?: boolean;
+  categories?: SearchCategory[];
+  searchProvider?: HvySearchProvider | null;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
+  maxCandidateSummaryChars?: number;
+  maxTotalCandidateChars?: number;
+  signal?: AbortSignal;
+}
+
+export interface HvyDocumentSearchResult extends HvySearchResult {
+  documentId: string;
+  documentTitle?: string;
+}
+
+export interface HvyDocumentSearchResponse {
+  query: string;
+  mode: HvyDocumentSearchMode;
+  results: HvyDocumentSearchResult[];
+  candidateBudget?: HvySemanticFilterCandidateBudget;
+}
 
 export interface SearchState {
   open: boolean;

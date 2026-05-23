@@ -408,7 +408,8 @@ hvy_version: 0.1
     const list = root.querySelector<HTMLElement>('.reader-block ul');
     const listItem = root.querySelector<HTMLElement>('.reader-block li');
     const paragraph = root.querySelector<HTMLElement>('.reader-block p');
-    if (!button || !link || !list || !listItem || !paragraph) {
+    const pane = root.querySelector<HTMLElement>('.pane.full-pane');
+    if (!button || !link || !list || !listItem || !paragraph || !pane) {
       throw new Error('Expected embedded controls missing.');
     }
     const buttonStyle = getComputedStyle(button);
@@ -416,6 +417,7 @@ hvy_version: 0.1
     const listStyle = getComputedStyle(list);
     const listItemStyle = getComputedStyle(listItem);
     const paragraphStyle = getComputedStyle(paragraph);
+    const paneStyle = getComputedStyle(pane);
     return {
       hasBoundary: root.classList.contains('hvy-document'),
       hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
@@ -427,6 +429,9 @@ hvy_version: 0.1
       listItemDisplay: listItemStyle.display,
       paragraphLineHeight: paragraphStyle.lineHeight,
       paragraphFontSize: paragraphStyle.fontSize,
+      paneBorderTopStyle: paneStyle.borderTopStyle,
+      paneBorderTopWidth: paneStyle.borderTopWidth,
+      paneBorderRadius: paneStyle.borderTopLeftRadius,
     };
   });
 
@@ -439,6 +444,9 @@ hvy_version: 0.1
   expect(result.listPaddingInlineStart).not.toBe('0px');
   expect(result.listItemDisplay).toBe('list-item');
   expect(result.paragraphLineHeight).toBe(`${Number.parseFloat(result.paragraphFontSize) * 1.4}px`);
+  expect(result.paneBorderTopStyle).toBe('none');
+  expect(result.paneBorderTopWidth).toBe('0px');
+  expect(result.paneBorderRadius).toBe('0px');
 });
 
 test('text sidebar tab labels rotate and expand to fit', async ({ page }) => {

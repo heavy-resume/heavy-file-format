@@ -24,7 +24,7 @@ export function renderSearchLauncher(search: SearchState): string {
   const filtering = search.filterEnabled && search.submittedQuery.trim().length > 0;
   return `<button
     type="button"
-    class="search-launcher${search.open ? ' is-active' : ''}${filtering ? ' is-filtering' : ''}"
+    class="hvy-floating-launcher search-launcher${search.open ? ' is-active' : ''}${filtering ? ' is-filtering' : ''}"
     data-action="open-search"
     aria-expanded="${search.open ? 'true' : 'false'}"
     aria-label="${filtering ? 'Open filter' : 'Open search'}"

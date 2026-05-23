@@ -73,6 +73,26 @@ test('search launcher aligns with chat launcher in phone viewer preview', async 
   expect(Math.round(chatBox!.x - searchRight)).toBeLessThanOrEqual(12);
   expect(searchRight).toBeLessThanOrEqual(paneRight);
   expect(searchBottom).toBeLessThanOrEqual(paneBottom);
+  const launcherStyles = await Promise.all([
+    searchLauncher.evaluate((button) => {
+      const styles = getComputedStyle(button);
+      return {
+        borderRadius: styles.borderRadius,
+        paddingInline: `${styles.paddingLeft} ${styles.paddingRight}`,
+      };
+    }),
+    chatLauncher.evaluate((button) => {
+      const styles = getComputedStyle(button);
+      return {
+        borderRadius: styles.borderRadius,
+        paddingInline: `${styles.paddingLeft} ${styles.paddingRight}`,
+      };
+    }),
+  ]);
+  expect(launcherStyles).toEqual([
+    { borderRadius: '999px', paddingInline: '0px 0px' },
+    { borderRadius: '999px', paddingInline: '0px 0px' },
+  ]);
 });
 
 test('chat stays scrolled to latest across full rerenders', async ({ page }) => {

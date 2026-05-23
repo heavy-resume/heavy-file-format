@@ -804,14 +804,14 @@ function renderTopbar(): string {
           ${renderDocumentMenu()}
         </div>
         <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button">Open Local</button>
+          <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
           <label class="file-picker">
             Select File
             <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
-          <button id="saveFileBtn" type="button">Save File</button>
-          <button id="downloadBtn" type="button">Download File</button>
+          <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
+          <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
         </div>
       </div>
     </header>

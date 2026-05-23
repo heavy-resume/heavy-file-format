@@ -44,7 +44,6 @@ body {
   text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }
 
-.hvy-embed-layout :where(button),
 .hvy-embed-layout :where(input),
 .hvy-embed-layout :where(select),
 .hvy-embed-layout :where(textarea) {
@@ -223,6 +222,12 @@ body {
   background: var(--hvy-button-bg);
   color: var(--hvy-button-text);
   cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .toolbar-primary-button {
@@ -235,6 +240,13 @@ body {
   border-radius: 8px;
   background: var(--hvy-button-bg);
   color: var(--hvy-button-text);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .file-picker input {
@@ -242,8 +254,7 @@ body {
 }
 
 .toolbar input[type='text'],
-.toolbar button,
-.hvy-embed-layout :where(button) {
+.hvy-embed-layout :where(.hvy-button, .secondary, .ghost, .danger, .tiny) {
   border: 1px solid var(--hvy-border-alt);
   border-radius: 8px;
   padding: 0.38rem 0.58rem;
@@ -267,7 +278,7 @@ body {
   .document-menu,
   .document-menu summary,
   .toolbar input[type='text'],
-  .toolbar button,
+  .toolbar :where(.hvy-button, .toolbar-primary-button, .secondary, .ghost, .danger, .tiny),
   .file-picker {
     width: 100%;
   }
@@ -285,7 +296,7 @@ body {
   }
 }
 
-.hvy-embed-layout :where(button:not(:disabled):hover) {
+.hvy-embed-layout :where(.hvy-button, .secondary, .ghost, .danger, .tiny):not(:disabled):hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
@@ -293,13 +304,13 @@ body {
   transform: translateY(-1px);
 }
 
-.hvy-embed-layout :where(button.secondary) {
+.hvy-embed-layout :where(.secondary) {
   background: var(--hvy-button-bg);
   border-color: var(--hvy-button-bg);
   color: var(--hvy-button-text);
 }
 
-.hvy-embed-layout :where(button.secondary:not(:disabled):hover),
+.hvy-embed-layout :where(.secondary):not(:disabled):hover,
 .toolbar-primary-button:not(:disabled):hover,
 .file-picker:hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
@@ -309,20 +320,20 @@ body {
   transform: translateY(-1px);
 }
 
-.hvy-embed-layout :where(button.ghost) {
+.hvy-embed-layout :where(.ghost) {
   background: transparent;
 }
 
-.hvy-embed-layout :where(button.ghost:not(:disabled):hover) {
+.hvy-embed-layout :where(.ghost):not(:disabled):hover {
   background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
 }
 
-.hvy-embed-layout :where(button.danger) {
+.hvy-embed-layout :where(.danger) {
   background: var(--hvy-danger);
   border-color: var(--hvy-danger);
 }
 
-.hvy-embed-layout :where(button.danger:not(:disabled):hover) {
+.hvy-embed-layout :where(.danger):not(:disabled):hover {
   background: color-mix(in srgb, var(--hvy-danger) 86%, var(--hvy-surface) 14%);
   border-color: var(--hvy-danger);
 }
@@ -339,9 +350,43 @@ body {
   fill: none;
 }
 
-.hvy-embed-layout :where(button.tiny) {
+.hvy-embed-layout :where(.tiny) {
   font-size: 0.78rem;
   padding: 0.2rem 0.42rem;
+}
+
+.hvy-floating-launcher {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: var(--hvy-floating-control-size);
+  min-width: var(--hvy-floating-control-size);
+  max-width: var(--hvy-floating-control-size);
+  height: var(--hvy-floating-control-size);
+  min-height: var(--hvy-floating-control-size);
+  max-height: var(--hvy-floating-control-size);
+  padding: 0;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-surface));
+  color: var(--hvy-button-text);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-floating-launcher:not(:disabled):hover {
+  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  box-shadow: 0 18px 40px var(--hvy-shadow-lg), 0 0 0 4px var(--hvy-focus-glow);
+  transform: translateY(-1px);
 }
 
 .workspace-shell {

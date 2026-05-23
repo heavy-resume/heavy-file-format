@@ -1095,8 +1095,10 @@ test('reference meta filter reloads the document with the filter snapshot applie
   await selectDocumentMenuItem(page, 'Resume Example');
 
   await page.evaluate(async () => {
-    const { setReferenceAppConfig } = await import(/* @vite-ignore */ '/src/reference-config.ts');
-    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const referenceConfigModulePath = '/src/reference-config.ts';
+    const stateModulePath = '/src/state.ts';
+    const { setReferenceAppConfig } = await import(/* @vite-ignore */ referenceConfigModulePath);
+    const { state } = await import(/* @vite-ignore */ stateModulePath);
     (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument = state.document;
     setReferenceAppConfig({
       semanticFilterProvider: async (request) => request.candidates
@@ -1114,7 +1116,8 @@ test('reference meta filter reloads the document with the filter snapshot applie
   await expect(page.locator('#readerDocument')).not.toContainText('Developer Containers');
 
   const result = await page.evaluate(async () => {
-    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const stateModulePath = '/src/state.ts';
+    const { state } = await import(/* @vite-ignore */ stateModulePath);
     const original = (window as unknown as { __metaFilterOriginalDocument?: unknown }).__metaFilterOriginalDocument;
     const blockIds = new Set<string>();
     const visitBlock = (block: { id: string; schema: {

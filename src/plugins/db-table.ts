@@ -636,7 +636,7 @@ async function getSqlJs(): Promise<SqlJsStatic> {
 
 function locateSqlWasmFile(sqlWasmUrl: string): string {
   if (typeof process !== 'undefined' && process.versions?.node) {
-    return new URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
+    return new globalThis.URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url).pathname;
   }
   return sqlWasmUrl;
 }

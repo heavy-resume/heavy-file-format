@@ -20,6 +20,14 @@ function createHistoryTestState(): AppState {
     responsivePreview: 'full',
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
+    metaFilter: {
+      query: '',
+      mode: 'semantic',
+      isRunning: false,
+      status: null,
+      error: null,
+      resultCount: null,
+    },
     aiModeTipDismissed: false,
     aiEdit: {
       sectionKey: null,

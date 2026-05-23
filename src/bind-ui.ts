@@ -28,6 +28,9 @@ import { bindCarouselInteractions } from './editor/components/carousel/carousel'
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState } from './state-persistence';
+import { createDocumentFilterSnapshot } from './search/document-filter';
+import { createDefaultSearchState } from './search/state';
+import { searchSnapshotToState } from './search/snapshot';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
@@ -79,6 +82,14 @@ function replaceLoadedDocument(raw: string | Uint8Array, filename: string, selec
   state.rawEditorText = serializeDocument(state.document);
   state.rawEditorError = null;
   state.rawEditorDiagnostics = [];
+  state.metaFilter = {
+    query: '',
+    mode: 'semantic',
+    isRunning: false,
+    status: null,
+    error: null,
+    resultCount: null,
+  };
   state.filename = extension === '.md'
     ? normalizeMarkdownImportFilename(filename)
     : normalizeFilename(filename);
@@ -195,6 +206,10 @@ export function bindUi(app: HTMLElement): void {
   const chatThread = app.querySelector<HTMLDivElement>('.chat-thread');
   const chatScrollContainer = app.querySelector<HTMLDivElement>('[data-chat-scroll-container]');
   const chatScrollBottomButton = app.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]');
+  const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
+  const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
+  const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   let pendingAiReaderAction: number | null = null;
 
   const clearPendingAiReaderAction = (): void => {
@@ -229,6 +244,94 @@ export function bindUi(app: HTMLElement): void {
   bindImageDragAndDrop(app);
   bindCarouselInteractions(app);
   scheduleSidebarHelpAutoClose(app);
+
+  metaFilterQuery?.addEventListener('input', () => {
+    state.metaFilter.query = metaFilterQuery.value;
+    state.metaFilter.error = null;
+    state.metaFilter.status = null;
+  });
+
+  metaFilterComposer?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void runInBoundRuntimeAsync(async () => {
+      const query = state.metaFilter.query.trim();
+      if (!query || state.metaFilter.isRunning) {
+        return;
+      }
+      state.metaFilter.isRunning = true;
+      state.metaFilter.error = null;
+      state.metaFilter.status = 'Preparing semantic filter...';
+      state.metaFilter.resultCount = null;
+      getRenderApp()();
+      try {
+        const snapshot = await createDocumentFilterSnapshot({
+          document: state.document,
+          query,
+          mode: state.search.filterQueryMode,
+          view: state.currentView,
+          filterMode: state.search.filterMode,
+          traceRunId: `meta-semantic-filter:${Date.now().toString(36)}`,
+          onSemanticProgress: (progress) => {
+            state.metaFilter.status = `Semantic windows ${progress.completedWindows}/${progress.totalWindows}; ${progress.matchedCandidates} match${progress.matchedCandidates === 1 ? '' : 'es'}`;
+            getRenderApp()();
+          },
+        });
+        state.search = searchSnapshotToState(snapshot);
+        state.search.open = false;
+        state.search.resultsCollapsed = false;
+        state.currentView = 'viewer';
+        state.metaFilter.resultCount = snapshot.results.length;
+        state.metaFilter.status = snapshot.results.length > 0 ? 'Applied meta filter snapshot.' : 'No meta filter matches.';
+        state.metaFilter.error = null;
+        saveSessionState(state);
+        getRefreshReaderPanels()();
+        getRenderApp()();
+      } catch (error: unknown) {
+        state.metaFilter.error = error instanceof Error ? error.message : 'Meta filter failed.';
+        getRenderApp()();
+      } finally {
+        state.metaFilter.isRunning = false;
+        getRenderApp()();
+      }
+    });
+  });
+
+  metaFilterModeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.metaFilterMode;
+      if (mode !== 'keyword' && mode !== 'semantic') {
+        return;
+      }
+      runInBoundRuntime(() => {
+        state.search.filterQueryMode = mode;
+        state.metaFilter.mode = mode;
+        state.metaFilter.error = null;
+        state.metaFilter.status = null;
+        state.metaFilter.resultCount = null;
+        getRenderApp()();
+      });
+    });
+  });
+
+  clearMetaFilterButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => {
+      const mode = state.search.filterQueryMode;
+      state.search = createDefaultSearchState();
+      state.search.filterQueryMode = mode;
+      state.search.submittedFilterQueryMode = mode;
+      state.metaFilter = {
+        query: '',
+        mode,
+        isRunning: false,
+        status: null,
+        error: null,
+        resultCount: null,
+      };
+      saveSessionState(state);
+      getRefreshReaderPanels()();
+      getRenderApp()();
+    });
+  });
 
   newBtn.addEventListener('click', () => {
     currentFileHandle = null;

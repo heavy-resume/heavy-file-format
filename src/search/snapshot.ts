@@ -133,8 +133,8 @@ export function searchSnapshotToState(input?: HvySearchSnapshotInput | null): Se
   };
 }
 
-export function searchSnapshotToDocumentState(input: HvySearchSnapshotInput | null | undefined, document: VisualDocument): SearchState {
-  return searchSnapshotToState(alignSearchSnapshotToDocument(input, document));
+export function externalSearchSnapshotToDocumentState(input: HvySearchSnapshotInput | null | undefined, document: VisualDocument): SearchState {
+  return searchSnapshotToState(alignExternalSnapshotResultsToDocument(input, document));
 }
 
 export function searchStateToSnapshot(search: SearchState): HvySearchSnapshot {
@@ -150,7 +150,7 @@ export function searchStateToSnapshot(search: SearchState): HvySearchSnapshot {
   });
 }
 
-export function alignSearchSnapshotToDocument(input: HvySearchSnapshotInput | null | undefined, document: VisualDocument): HvySearchSnapshot {
+export function alignExternalSnapshotResultsToDocument(input: HvySearchSnapshotInput | null | undefined, document: VisualDocument): HvySearchSnapshot {
   const snapshot = normalizeSearchSnapshotInput(input);
   return normalizeSearchSnapshotInput({
     ...snapshot,

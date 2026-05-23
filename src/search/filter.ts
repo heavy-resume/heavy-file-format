@@ -19,6 +19,8 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   const matchedSections = new Set<string>();
   const matchedBlocks = new Set<string>();
   const semanticMatchedBlocks = new Set<string>();
+  const matchedTargetIds = new Set<string>();
+  const semanticMatchedTargetIds = new Set<string>();
   const visibleSections = new Set<string>();
   const visibleBlocks = new Set<string>();
   const active = search.submittedQuery.trim().length > 0;
@@ -38,6 +40,10 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   }
 
   for (const result of search.results) {
+    addResultTargetIds(result, matchedTargetIds);
+    if (result.category === 'semantic') {
+      addResultTargetIds(result, semanticMatchedTargetIds);
+    }
     if (result.targetKind === 'section') {
       matchedSections.add(result.sectionKey);
     } else if (result.blockId) {
@@ -47,6 +53,8 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       }
     }
   }
+  addDocumentTargetIdsForDirectMatches(sections, matchedSections, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  addXrefMatchesForMatchedTargets(sections, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
 
   const visitSection = (section: VisualSection, ancestors: VisualSection[]): boolean => {
     const sectionMatched = matchedSections.has(section.key);
@@ -198,6 +206,114 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     query: search.submittedQuery,
     caseSensitive: search.caseSensitive,
   };
+}
+
+function addResultTargetIds(result: SearchState['results'][number], targetIds: Set<string>): void {
+  addNormalizedTargetId(targetIds, result.targetId);
+  if (result.targetKind === 'section') {
+    addNormalizedTargetId(targetIds, result.sectionKey);
+  } else {
+    addNormalizedTargetId(targetIds, result.blockId);
+  }
+}
+
+function addDocumentTargetIdsForDirectMatches(
+  sections: VisualSection[],
+  matchedSections: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>
+): void {
+  for (const section of sections) {
+    if (matchedSections.has(section.key)) {
+      addNormalizedTargetId(matchedTargetIds, section.customId);
+      addNormalizedTargetId(matchedTargetIds, section.key);
+    }
+    for (const block of section.blocks) {
+      addBlockTargetIdsForDirectMatches(block, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+    }
+    addDocumentTargetIdsForDirectMatches(section.children, matchedSections, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  }
+}
+
+function addBlockTargetIdsForDirectMatches(
+  block: VisualBlock,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>
+): void {
+  if (matchedBlocks.has(block.id)) {
+    addNormalizedTargetId(matchedTargetIds, block.id);
+    addNormalizedTargetId(matchedTargetIds, block.schema.id);
+  }
+  if (semanticMatchedBlocks.has(block.id)) {
+    addNormalizedTargetId(semanticMatchedTargetIds, block.id);
+    addNormalizedTargetId(semanticMatchedTargetIds, block.schema.id);
+  }
+  for (const child of getBlockChildren(block)) {
+    addBlockTargetIdsForDirectMatches(child, matchedBlocks, semanticMatchedBlocks, matchedTargetIds, semanticMatchedTargetIds);
+  }
+}
+
+function addXrefMatchesForMatchedTargets(
+  sections: VisualSection[],
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>
+): void {
+  for (const section of sections) {
+    for (const block of section.blocks) {
+      addXrefBlockMatchesForMatchedTargets(block, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+    }
+    addXrefMatchesForMatchedTargets(section.children, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+  }
+}
+
+function addXrefBlockMatchesForMatchedTargets(
+  block: VisualBlock,
+  matchedTargetIds: Set<string>,
+  semanticMatchedTargetIds: Set<string>,
+  matchedBlocks: Set<string>,
+  semanticMatchedBlocks: Set<string>
+): void {
+  const xrefTarget = normalizeLocalTargetId(block.schema.xrefTarget);
+  if (xrefTarget && matchedTargetIds.has(xrefTarget)) {
+    matchedBlocks.add(block.id);
+    if (semanticMatchedTargetIds.has(xrefTarget)) {
+      semanticMatchedBlocks.add(block.id);
+    }
+  }
+  for (const child of getBlockChildren(block)) {
+    addXrefBlockMatchesForMatchedTargets(child, matchedTargetIds, semanticMatchedTargetIds, matchedBlocks, semanticMatchedBlocks);
+  }
+}
+
+function addNormalizedTargetId(targetIds: Set<string>, value?: string): void {
+  const targetId = normalizeLocalTargetId(value);
+  if (targetId) {
+    targetIds.add(targetId);
+  }
+}
+
+function normalizeLocalTargetId(value?: string): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return '';
+  }
+  return trimmed.startsWith('#') ? trimmed.slice(1).trim() : trimmed;
+}
+
+function getBlockChildren(block: VisualBlock): VisualBlock[] {
+  return [
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
+  ];
 }
 
 function findSectionByKey(sections: VisualSection[], sectionKey: string): VisualSection | null {

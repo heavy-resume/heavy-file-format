@@ -1,4 +1,5 @@
 import { getReferenceAppConfig } from '../reference-config';
+import { filterTemplateVisibleSections } from '../template-hide';
 import type {
   HvyDocumentSearchDocument,
   HvyDocumentSearchRequest,
@@ -90,7 +91,7 @@ async function searchDocumentsSemantically(
   const budgetDefaults = getDefaultSemanticCandidateBudget();
   const maxCandidateSummaryChars = request.maxCandidateSummaryChars ?? budgetDefaults.maxCandidateSummaryChars;
   const maxTotalCandidateChars = request.maxTotalCandidateChars ?? budgetDefaults.maxTotalCandidateChars;
-  const packet = buildDocumentSemanticCandidatePacket(normalizeSearchDocuments(request.documents), {
+  const packet = buildDocumentSemanticCandidatePacket(normalizeSearchDocuments(request.documents), query, {
     maxCandidateSummaryChars,
     maxTotalCandidateChars,
   });
@@ -133,6 +134,7 @@ async function searchDocumentsSemantically(
 
 function buildDocumentSemanticCandidatePacket(
   documents: NormalizedSearchDocument[],
+  prompt: string,
   options: { maxCandidateSummaryChars: number; maxTotalCandidateChars: number }
 ) {
   const candidates: HvySemanticFilterCandidate[] = [];
@@ -143,7 +145,7 @@ function buildDocumentSemanticCandidatePacket(
     const title = entry.documentTitle || getSemanticDocumentTitle(entry.document);
     const packet = buildSemanticFilterWindows({
       document: entry.document,
-      prompt: '',
+      prompt,
       maxCandidateSummaryChars: options.maxCandidateSummaryChars,
       maxTotalCandidateChars: options.maxTotalCandidateChars,
     });
@@ -280,6 +282,10 @@ function normalizeSearchDocuments(documents: HvyDocumentSearchDocument[]): Norma
       ...entry,
       documentId: entry.documentId.trim(),
       documentTitle: entry.documentTitle?.trim() || getSemanticDocumentTitle(entry.document) || undefined,
+      document: {
+        ...entry.document,
+        sections: filterTemplateVisibleSections(entry.document.sections),
+      },
     }))
     .filter((entry) => entry.documentId);
 }

@@ -8,6 +8,7 @@ import { renderSearchModal } from '../src/search/render';
 import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
+import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, stopSearchRequest } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
@@ -684,6 +685,75 @@ hvy_version: 0.1
   expect(expectedContext.visibleBlocks.has(siblingXref.id)).toBe(false);
 });
 
+test('search filter context treats xrefs to semantic target records as matches', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+<!--hvy:component-list {"id":"tools-xrefs","componentListComponent":"xref-card"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:xref-card {"id":"typescript-xref","xrefTitle":"TypeScript","xrefTarget":"tool-typescript"}-->
+ <!--hvy:component-list:1 {}-->
+  <!--hvy:xref-card {"id":"containers-xref","xrefTitle":"Developer Containers","xrefTarget":"tool-containers"}-->
+
+<!--hvy: {"id":"tools"}-->
+#! Tools
+
+<!--hvy:component-list {"id":"tools-list","componentListComponent":"text"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:text {"id":"tool-typescript","title":"TypeScript","groupKeys":{"Category":"Programming Languages"}}-->
+   Primary application language.
+ <!--hvy:component-list:1 {}-->
+  <!--hvy:text {"id":"tool-containers","title":"Developer Containers","groupKeys":{"Category":"Development Environments"}}-->
+   Reproducible local environments.
+`, '.hvy');
+  const xrefList = document.sections[0]!.blocks[0]!;
+  const typescriptXref = xrefList.schema.componentListBlocks[0]!;
+  const containersXref = xrefList.schema.componentListBlocks[1]!;
+  const recordList = document.sections[1]!.blocks[0]!;
+  const typescriptRecord = recordList.schema.componentListBlocks[0]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'Programming languages',
+    submittedQuery: 'Programming languages',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    filterQueryMode: 'semantic',
+    submittedFilterQueryMode: 'semantic',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [{
+      id: 'semantic-1',
+      category: 'semantic',
+      targetKind: 'block',
+      sectionKey: document.sections[1]!.key,
+      blockId: typescriptRecord.id,
+      targetId: 'tool-typescript',
+      label: 'TypeScript',
+      preview: 'Programming language',
+      matchedText: 'Programming languages',
+      sourceField: 'Semantic match',
+    }],
+    navigationResultIds: ['semantic-1'],
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.matchedBlocks.has(typescriptRecord.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(typescriptXref.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(typescriptXref.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(containersXref.id)).toBe(false);
+});
+
 test('search filter context treats expandable content layout wrappers as transparent context', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -876,7 +946,7 @@ title: Semantic Test
   });
   expect(expectedResult.instructionPrompt).toContain('Return only a JSON array of candidateId strings, with no prose and no Markdown fences');
   expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
-  expect(expectedResult.instructionPrompt).toContain('["candidateId from the list"]');
+  expect(expectedResult.instructionPrompt).toContain('["id1", "id2", ...]');
   expect(expectedResult.instructionPrompt).toContain('Return only matching candidateId strings');
   expect(expectedResult.instructionPrompt).toContain('component:typescript');
 });
@@ -1177,6 +1247,121 @@ hvy_version: 0.1
   expect(expectedContext.visibleSections.has(document.sections[1]!.key)).toBe(false);
 });
 
+test('public document filter snapshot matches in-document semantic filter results', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+
+<!--hvy: {"id":"writing"}-->
+#! Writing
+
+<!--hvy:text {"id":"notes"}-->
+ Release notes.
+`, '.hvy');
+  initState(createTestState(document));
+  state.currentView = 'viewer';
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find TypeScript experience';
+  const renderApp = vi.fn();
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const provider = vi.fn((request) => {
+    const match = request.candidates.find((candidate) => candidate.targetId === 'typescript');
+    return match ? [{
+      candidateId: match.candidateId,
+      reason: 'TypeScript work is relevant.',
+      score: 0.91,
+    }] : [];
+  });
+  setReferenceAppConfig({ semanticFilterProvider: provider });
+
+  const expectedSnapshot = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    view: 'viewer',
+    semanticFilterProvider: provider,
+  });
+  await applySearchFilter({ enabled: true });
+
+  expect(state.search.results).toEqual(expectedSnapshot.results);
+  expect(state.search.submittedQuery).toBe(expectedSnapshot.query);
+  expect(state.search.submittedFilterQueryMode).toBe(expectedSnapshot.mode);
+  expect(state.search.filterEnabled).toBe(expectedSnapshot.filterEnabled);
+  expect(provider.mock.calls[0]?.[0].instructionPrompt).toBe(provider.mock.calls[1]?.[0].instructionPrompt);
+});
+
+test('public document filter snapshot preserves nested semantic leaf matches when converted to state', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+<!--hvy:component-list {"id":"roles","componentListComponent":"expandable"}-->
+ <!--hvy:component-list:0 {}-->
+  <!--hvy:expandable {"id":"northwind-role","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {"id":"northwind-title"}-->
+      Northwind Labs
+
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {"id":"northwind-impact"}-->
+      TypeScript dashboard architecture
+
+ <!--hvy:component-list:1 {}-->
+  <!--hvy:expandable {"id":"southwind-role","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {"id":"southwind-title"}-->
+      Southwind Labs
+
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {"id":"southwind-impact"}-->
+      Python data pipelines
+`, '.hvy');
+
+  const list = document.sections[0]!.blocks[0]!;
+  const matchedRecord = list.schema.componentListBlocks[0]!;
+  const matchedDetail = matchedRecord.schema.expandableContentBlocks.children[0]!;
+  const siblingRecord = list.schema.componentListBlocks[1]!;
+
+  const snapshot = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript dashboard work',
+    mode: 'semantic',
+    view: 'viewer',
+    semanticFilterProvider: (request) => {
+      const match = request.candidates.find((candidate) => candidate.targetId === 'northwind-impact');
+      return match ? [{ candidateId: match.candidateId, reason: 'TypeScript dashboard work.' }] : [];
+    },
+  });
+  const expectedState = searchSnapshotToState(snapshot);
+  const expectedContext = createSearchFilterContext(document.sections, expectedState);
+
+  expect(expectedState.results[0]).toMatchObject({
+    category: 'semantic',
+    blockId: matchedDetail.id,
+    targetId: 'northwind-impact',
+  });
+  expect(expectedContext.matchedBlocks.has(matchedDetail.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(matchedRecord.id)).toBe(false);
+  expect(expectedContext.visibleBlocks.has(matchedRecord.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(siblingRecord.id)).toBe(false);
+});
+
 test('semantic filtering waits for provider results before changing document filtering', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1467,6 +1652,36 @@ title: Second
   expect(expectedResult.snapshot.results.map((result) => result.documentId)).toEqual(['first-doc', 'second-doc']);
 });
 
+test('document search hides template scaffold sections like viewer search', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Template Search
+---
+
+<!--hvy: {"id":"visible"}-->
+#! Visible
+
+<!--hvy:text {"id":"visible-note"}-->
+ shared keyword
+
+<!--hvy: {"id":"hidden","hideIfUnmodified":true}-->
+#! Hidden
+
+<!--hvy:text {"id":"hidden-note"}-->
+ shared keyword
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'shared',
+    documents: [{ documentId: 'template-doc', document }],
+    mode: 'keyword',
+    categories: ['contents'],
+  });
+
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['visible-note']);
+  expect(expectedResult.snapshot.results.map((result) => result.targetId)).toEqual(['visible-note']);
+});
+
 test('document search sends semantic candidates across many documents', async () => {
   const firstDocument = deserializeDocument(`---
 hvy_version: 0.1
@@ -1525,6 +1740,39 @@ title: Second
     score: 0.82,
   });
   expect(expectedResult.candidateBudget?.totalCandidates).toBeGreaterThan(1);
+});
+
+test('document semantic search excludes hidden template scaffold candidates', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Template Search
+---
+
+<!--hvy: {"id":"visible"}-->
+#! Visible
+
+<!--hvy:text {"id":"visible-note"}-->
+ visible semantic content
+
+<!--hvy: {"id":"hidden","hideIfUnmodified":true}-->
+#! Hidden
+
+<!--hvy:text {"id":"hidden-note"}-->
+ hidden semantic content
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'semantic content',
+    mode: 'semantic',
+    documents: [{ documentId: 'template-doc', document }],
+    semanticFilterProvider: (request) => {
+      expect(request.candidates.map((candidate) => candidate.targetId)).not.toContain('hidden-note');
+      const match = request.candidates.find((candidate) => candidate.targetId === 'visible-note');
+      return match ? [{ candidateId: match.candidateId, reason: 'Visible content is relevant.' }] : [];
+    },
+  });
+
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['visible-note']);
 });
 
 test('document search snapshot can be reduced to one selected document', async () => {

@@ -57,10 +57,11 @@ import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
+import { createDocumentFilterSnapshot } from './search/document-filter';
 import {
   createDocumentSearchSnapshot,
   normalizeSearchSnapshotInput,
-  searchSnapshotToDocumentState,
+  externalSearchSnapshotToDocumentState,
   searchStateToSnapshot,
 } from './search/snapshot';
 import type {
@@ -182,6 +183,7 @@ function createEmbedState(
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
+    metaFilter: { query: '', mode: 'semantic', isRunning: false, status: null, error: null, resultCount: null },
     contextMenu: null,
     aiEdit: {
       sectionKey: null,
@@ -496,7 +498,7 @@ function setPaletteOverrideId(id: string | null): void {
 
 function setMountedSearchSnapshot(snapshot: HvySearchSnapshotInput | null, options: { render?: boolean } = {}): void {
   state.search.abortController?.abort();
-  state.search = searchSnapshotToDocumentState(snapshot, state.document);
+  state.search = externalSearchSnapshotToDocumentState(snapshot, state.document);
   if (options.render ?? true) {
     renderApp();
   }
@@ -776,8 +778,9 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
+export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
+export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
   BuildImportPlanOptions,
   BuildImportPlanResult,
@@ -816,6 +819,7 @@ declare global {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
+      createDocumentFilterSnapshot: typeof createDocumentFilterSnapshot;
       searchDocuments: typeof searchDocuments;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       mountHvy: typeof mountHvy;
@@ -831,6 +835,7 @@ window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  createDocumentFilterSnapshot,
   searchDocuments,
   createDocumentSearchSnapshot,
   mountHvy,

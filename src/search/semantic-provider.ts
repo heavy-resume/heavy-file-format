@@ -1,7 +1,8 @@
-import { requestProxyCompletion, traceAgentLoopEvent } from '../chat/chat';
+import { requestProxyCompletion } from '../chat/chat';
 import { parseJsonArrayResponse } from '../llm-tool-loop';
 import { state } from '../state';
 import type { HvySemanticFilterMatch, HvySemanticFilterProvider } from './types';
+import { traceSemanticFilterEvent } from './semantic-trace';
 
 export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (request) => {
   traceSemanticFilterEvent(request, 'semantic_filter_request', {
@@ -61,26 +62,6 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     throw error;
   }
 };
-
-function traceSemanticFilterEvent(
-  request: Parameters<HvySemanticFilterProvider>[0],
-  stage: string,
-  payload: Record<string, unknown>
-): void {
-  if (!request.traceRunId) {
-    return;
-  }
-  traceAgentLoopEvent({
-    runId: request.traceRunId,
-    phase: 'qa',
-    type: 'client_event',
-    payload: {
-      stage,
-      ...payload,
-    },
-    signal: request.signal,
-  });
-}
 
 export function parseSemanticFilterResponse(source: string, validCandidateIds: ReadonlySet<string>): HvySemanticFilterMatch[] {
   const parsed = parseJsonArrayResponse(source);

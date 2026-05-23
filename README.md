@@ -278,6 +278,27 @@ Hosts can also search across many HVY documents without mounting them. Keyword
 mode uses the built-in search provider unless a host supplies one. Semantic mode
 builds one cross-document candidate packet and requires a semantic provider:
 
+For a single mounted document filter, use the same public filter snapshot helper
+that mirrors the reference reader Filter UI. This is the best API when an
+embedding host wants to apply or debug a document-level filter without changing
+the candidate IDs or prompt shape through the multi-document search route:
+
+```js
+const snapshot = await HVY.createDocumentFilterSnapshot({
+  document,
+  query: 'Find implementation experience',
+  mode: 'semantic',
+  view: 'viewer',
+  filterMode: 'hide',
+  async semanticFilterProvider(request) {
+    const response = await llm.complete(request.instructionPrompt);
+    return JSON.parse(response).matches;
+  },
+});
+
+mount.setSearchSnapshot(snapshot);
+```
+
 ```js
 const response = await HVY.searchDocuments({
   query: 'Find implementation experience',

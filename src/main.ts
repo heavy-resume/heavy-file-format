@@ -92,6 +92,14 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
+    metaFilter: {
+      query: '',
+      mode: 'semantic',
+      isRunning: false,
+      status: null,
+      error: null,
+      resultCount: null,
+    },
     contextMenu: null,
     aiEdit: {
       sectionKey: null,
@@ -613,25 +621,12 @@ function renderApp(): void {
             <button type="button" class="palette-open-button ghost" data-action="open-theme-modal">Palettes</button>
           </div>
           ${canPreviewSurface ? renderPreviewControlStack() : '<div></div>'}
-          ${
-            isEditorView
-              ? `<div class="editor-top-controls">
-                  ${
-                    isEditorView
-                      ? `<button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
-                  <button type="button" class="${isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
-                  <button type="button" class="${isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
-                  <button type="button" class="${isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>`
-                      : ''
-                  }
-                  ${
-                    isEditorView && isAdvancedEditor
-                      ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
-                      : ''
-                  }
-                </div>`
-              : '<div></div>'
-          }
+          ${renderWorkspaceRightControls({
+            isEditorView,
+            isMobileAdjustmentEditor,
+            isAdvancedEditor,
+            isRawEditor,
+          })}
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
           ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
@@ -860,6 +855,78 @@ function renderPreviewControlStack(): string {
     ${renderResponsivePreviewControls()}
     ${renderReaderViewControls()}
   </div>`;
+}
+
+function renderWorkspaceRightControls(options: {
+  isEditorView: boolean;
+  isMobileAdjustmentEditor: boolean;
+  isAdvancedEditor: boolean;
+  isRawEditor: boolean;
+}): string {
+  return `<div class="workspace-right-controls">
+    ${
+      options.isEditorView
+        ? `<div class="editor-top-controls">
+            <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+            <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
+            <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+            <button type="button" class="${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+            ${
+              options.isAdvancedEditor
+                ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
+                : ''
+            }
+          </div>`
+        : ''
+    }
+    ${renderMetaFilterControls()}
+  </div>`;
+}
+
+function renderMetaFilterControls(): string {
+  const status = state.metaFilter.error
+    ? state.metaFilter.error
+    : state.metaFilter.status
+    ? state.metaFilter.status
+    : state.metaFilter.resultCount === null
+    ? ''
+    : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
+  return `<form id="metaFilterComposer" class="meta-filter-controls" aria-label="Meta filter current document">
+    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
+      ${renderMetaFilterModeButton('keyword', 'Keyword')}
+      ${renderMetaFilterModeButton('semantic', 'Semantic')}
+    </div>
+    <div class="meta-filter-input-shell">
+      <input
+        id="metaFilterQuery"
+        class="meta-filter-input"
+        data-field="meta-filter-query"
+        value="${escapeAttr(state.metaFilter.query)}"
+        placeholder="Meta filter prompt"
+        autocomplete="off"
+        spellcheck="true"
+      />
+      <button type="submit" class="${state.metaFilter.isRunning ? 'ghost' : 'secondary'} meta-filter-submit" ${state.metaFilter.isRunning ? 'disabled' : ''}>
+        ${state.metaFilter.isRunning ? 'Running' : 'Meta Filter'}
+      </button>
+      <button type="button" class="ghost meta-filter-clear" data-action="clear-meta-filter" ${state.metaFilter.isRunning ? 'disabled' : ''}>
+        Clear
+      </button>
+    </div>
+    ${status ? `<div class="meta-filter-status${state.metaFilter.error ? ' is-error' : ''}" role="status">${escapeHtml(status)}</div>` : ''}
+  </form>`;
+}
+
+function renderMetaFilterModeButton(mode: AppState['search']['filterQueryMode'], label: string): string {
+  const active = state.search.filterQueryMode === mode;
+  return `<button
+    type="button"
+    class="meta-filter-mode${active ? ' is-active' : ''}"
+    data-action="set-meta-filter-mode"
+    data-meta-filter-mode="${escapeAttr(mode)}"
+    aria-pressed="${active ? 'true' : 'false'}"
+    ${state.metaFilter.isRunning ? 'disabled' : ''}
+  >${escapeHtml(label)}</button>`;
 }
 
 function renderReaderViewControls(): string {

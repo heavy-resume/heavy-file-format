@@ -257,6 +257,14 @@ export interface AppState {
   aiModeTipDismissed: boolean;
   contextMenu?: ContextMenuState | null;
   search: SearchState;
+  metaFilter: {
+    query: string;
+    mode: 'keyword' | 'semantic';
+    isRunning: boolean;
+    status: string | null;
+    error: string | null;
+    resultCount: number | null;
+  };
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
   rawEditorText: string;

@@ -406,6 +406,7 @@ async function submitSemanticFilter(): Promise<void> {
       prompt,
       signal: abortController.signal,
     });
+    const traceRunId = `semantic-filter:${requestNonce}:${Date.now().toString(36)}`;
     state.search.semanticProgress = {
       completedWindows: 0,
       totalWindows: packet.windows.length,
@@ -419,6 +420,7 @@ async function submitSemanticFilter(): Promise<void> {
       provider,
       windows: packet.windows,
       documentTitle: typeof searchDocument.meta.title === 'string' ? searchDocument.meta.title : undefined,
+      traceRunId,
       signal: abortController.signal,
       onWindowComplete: (progress) => {
         if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
@@ -465,6 +467,7 @@ async function runSemanticFilterWindows(options: {
   provider: HvySemanticFilterProvider;
   windows: HvySemanticFilterCandidateWindow[];
   documentTitle?: string;
+  traceRunId?: string;
   signal?: AbortSignal;
   onWindowComplete?: (progress: { completedWindows: number; matchedCandidates: number }) => void;
 }): Promise<HvySemanticFilterMatch[]> {
@@ -483,6 +486,7 @@ async function runSemanticFilterWindows(options: {
       }
       const windowMatches = await options.provider(buildSemanticFilterWindowRequest(options.prompt, window, {
         ...(options.documentTitle ? { documentTitle: options.documentTitle } : {}),
+        ...(options.traceRunId ? { traceRunId: options.traceRunId } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
       }));
       matches.push(...windowMatches);

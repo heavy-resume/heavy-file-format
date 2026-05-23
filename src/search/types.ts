@@ -93,6 +93,7 @@ export interface HvySemanticFilterRequest {
   windowIndex?: number;
   windowCount?: number;
   windowLabel?: string;
+  traceRunId?: string;
   signal?: AbortSignal;
 }
 

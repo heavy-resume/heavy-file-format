@@ -78,7 +78,7 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 export function buildSemanticFilterWindowRequest(
   prompt: string,
   window: HvySemanticFilterCandidateWindow,
-  options: { documentTitle?: string; signal?: AbortSignal } = {}
+  options: { documentTitle?: string; traceRunId?: string; signal?: AbortSignal } = {}
 ): HvySemanticFilterRequest {
   return {
     prompt,
@@ -89,6 +89,7 @@ export function buildSemanticFilterWindowRequest(
     windowIndex: window.windowIndex,
     windowCount: window.windowCount,
     windowLabel: window.label,
+    ...(options.traceRunId ? { traceRunId: options.traceRunId } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
   };
 }

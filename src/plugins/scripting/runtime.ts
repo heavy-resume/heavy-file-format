@@ -1,5 +1,6 @@
 import type { JsonObject } from '../../hvy/types';
 import type { HvyPluginHookChangeReason } from '../types';
+import type { HvyPdfExportRuleRecorder, HvyPdfExportStrategyRule } from '../../pdf-export/types';
 import type { VisualDocument } from '../../types';
 import type { VisualSection } from '../../editor/types';
 import { getAttachment, removeAttachment, setAttachment } from '../../attachments';
@@ -46,6 +47,7 @@ interface ScriptingDocApi {
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
   db: ScriptingDbApi;
+  export: ScriptingExportApi;
   cli: ScriptingCliApi;
   rerender: () => void;
 }
@@ -95,6 +97,15 @@ export interface ScriptingCliApi {
   write(path: string, content: string): string;
 }
 
+export interface ScriptingExportApi {
+  hide(idOrTag: string): void;
+  include(idOrTag: string): void;
+  expand(idOrTag: string): void;
+  keep_together(idOrTag: string): void;
+  style(idOrTag: string, style: Record<string, unknown>): void;
+  strategy(rule: HvyPdfExportStrategyRule | HvyPdfExportStrategyRule[]): void;
+}
+
 export interface ScriptingRuntimeOptions {
   maxLines?: number;
   document: VisualDocument;
@@ -102,6 +113,7 @@ export interface ScriptingRuntimeOptions {
   changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
+  exportRuleRecorder?: HvyPdfExportRuleRecorder;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -126,6 +138,31 @@ function createUnavailableDbApi(): ScriptingDbApi {
   return {
     query: fail,
     execute: fail,
+  };
+}
+
+function createUnavailableExportApi(): ScriptingExportApi {
+  const fail = () => {
+    throw new Error('doc.export is only available while running a PDF export prep script.');
+  };
+  return {
+    hide: fail,
+    include: fail,
+    expand: fail,
+    keep_together: fail,
+    style: fail,
+    strategy: fail,
+  };
+}
+
+function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi {
+  return {
+    hide: (idOrTag) => recorder.hide(String(idOrTag)),
+    include: (idOrTag) => recorder.include(String(idOrTag)),
+    expand: (idOrTag) => recorder.expand(String(idOrTag)),
+    keep_together: (idOrTag) => recorder.keep_together(String(idOrTag)),
+    style: (idOrTag, style) => recorder.style(String(idOrTag), normalizeScriptObject(style)),
+    strategy: (rule) => recorder.strategy(normalizeExportRuleInput(rule)),
   };
 }
 
@@ -257,6 +294,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     },
     form: options.form ?? createUnavailableFormApi(),
     db: options.db ?? createUnavailableDbApi(),
+    export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
     cli: {
       run: (command) => {
         stats.toolCalls += 1;
@@ -651,6 +689,13 @@ function normalizeScriptObject(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function normalizeExportRuleInput(rule: unknown): HvyPdfExportStrategyRule | HvyPdfExportStrategyRule[] {
+  if (Array.isArray(rule)) {
+    return rule.map((entry) => normalizeScriptObject(entry) as HvyPdfExportStrategyRule);
+  }
+  return normalizeScriptObject(rule) as HvyPdfExportStrategyRule;
 }
 
 function findFirstTableCell(block: VisualBlock, index: number): string {

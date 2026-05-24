@@ -1,0 +1,236 @@
+import { describe, expect, test, vi } from 'vitest';
+
+import { createEmptyBlock } from '../src/document-factory';
+import type { VisualBlock, VisualSection } from '../src/editor/types';
+import type { VisualDocument } from '../src/types';
+import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
+import { getHvyPdfBlob, preparePdfExport } from '../src/pdf-export/export';
+import { createPdfExportRuleRecorder, resolvePdfExportStrategy } from '../src/pdf-export/strategy';
+
+vi.mock('pdfmake/build/pdfmake.js', () => ({
+  default: {
+    createPdf: vi.fn((definition) => ({
+      getBlob: (callback: (blob: Blob) => void) => {
+        callback(new Blob([JSON.stringify(definition)], { type: 'application/pdf' }));
+      },
+    })),
+  },
+}));
+
+vi.mock('pdfmake/build/vfs_fonts.js', () => ({
+  default: {
+    vfs: {
+      'Roboto-Regular.ttf': 'font-bytes',
+      'Roboto-Medium.ttf': 'font-bytes',
+      'Roboto-Italic.ttf': 'font-bytes',
+      'Roboto-MediumItalic.ttf': 'font-bytes',
+    },
+  },
+}));
+
+vi.mock('../src/plugins/scripting/wrapper', () => ({
+  runUserScript: vi.fn(async (options) => {
+    options.document.sections[0].blocks[0].text = 'Export clone text';
+    options.exportRuleRecorder.hide('#hidden-by-prep');
+    options.exportRuleRecorder.strategy({ componentTag: 'prep-keep', keepTogether: true });
+    return { ok: true, stepsExecuted: 1, stepBudget: 100_000, linesExecuted: 1, toolCalls: 0 };
+  }),
+}));
+
+function createTextBlock(id: string, text: string, tags = ''): VisualBlock {
+  const block = createEmptyBlock('text');
+  block.id = `block-${id}`;
+  block.schema.id = id;
+  block.schema.tags = tags;
+  block.text = text;
+  return block;
+}
+
+function createExpandableBlock(id: string): VisualBlock {
+  const block = createEmptyBlock('expandable');
+  block.id = `block-${id}`;
+  block.schema.id = id;
+  block.schema.expandableStub = 'Short version';
+  block.schema.expandableExpanded = false;
+  block.schema.expandableStubBlocks.children = [createTextBlock(`${id}-stub`, 'Stub child')];
+  block.schema.expandableContentBlocks.children = [createTextBlock(`${id}-content`, 'Expanded child')];
+  return block;
+}
+
+function createSection(id: string, blocks: VisualBlock[], tags = ''): VisualSection {
+  return {
+    key: `section-${id}`,
+    customId: id,
+    contained: true,
+    editorOnly: false,
+    lock: false,
+    idEditorOpen: false,
+    isGhost: false,
+    title: id,
+    level: 1,
+    expanded: true,
+    highlight: false,
+    css: '',
+    tags,
+    description: '',
+    location: 'main',
+    hideIfUnmodified: false,
+    blocks,
+    children: [],
+  };
+}
+
+function createDocument(): VisualDocument {
+  return {
+    meta: {},
+    extension: '.hvy',
+    attachments: [],
+    sections: [
+      createSection('summary', [createTextBlock('intro', 'Intro text', 'lead prep-keep')], 'resume-primary'),
+      createSection('details', [createTextBlock('skip', 'Hidden text')]),
+      createSection('extras', [createExpandableBlock('expandable')]),
+    ],
+  };
+}
+
+describe('PDF export strategy', () => {
+  test('resolves targets by ID, path, component, and tag with deterministic precedence', () => {
+    const document = createDocument();
+    const expectedResult = resolvePdfExportStrategy(document, {
+      rules: [
+        { id: 'intro', hide: true },
+        { id: 'intro', include: true, keepTogether: true },
+        { path: '/id/summary/intro', pdfStyle: { fontSize: 9 } },
+        { component: 'text', dim: true },
+        { tag: 'lead', highlight: true },
+        { sectionTag: 'resume-primary', asHeading: true },
+        { predicate: (target) => target.kind === 'component' && target.id === 'skip', asMetadata: true },
+      ],
+    });
+
+    expect(expectedResult.getBlockDecision('block-intro')).toMatchObject({
+      visibility: 'highlight',
+      keepTogether: true,
+      pdfStyle: { fontSize: 9 },
+    });
+    expect(expectedResult.getSectionDecision('section-summary').role).toBe('heading');
+    expect(expectedResult.getBlockDecision('block-skip').visibility).toBe('dim');
+    expect(expectedResult.getBlockDecision('block-skip').role).toBe('metadata');
+  });
+
+  test('layers PDF rules after content view rules', () => {
+    const document = createDocument();
+    const expectedResult = resolvePdfExportStrategy(
+      document,
+      { rules: [{ id: 'intro', include: true }] },
+      { intro: ['hidden'] }
+    );
+
+    expect(expectedResult.getBlockDecision('block-intro').visibility).toBe('include');
+  });
+
+  test('keeps hide sticky unless a later include explicitly restores the item', () => {
+    const document = createDocument();
+    const expectedResult = resolvePdfExportStrategy(document, {
+      rules: [
+        { id: 'intro', hide: true },
+        { id: 'intro', highlight: true },
+        { id: 'skip', hide: true },
+        { id: 'skip', include: true },
+      ],
+    });
+
+    expect(expectedResult.getBlockDecision('block-intro').visibility).toBe('hide');
+    expect(expectedResult.getBlockDecision('block-skip').visibility).toBe('include');
+  });
+
+  test('prep script mutates only the export clone and adds runtime strategy rules', async () => {
+    const document = createDocument();
+    const before = document.sections[0].blocks[0].text;
+    const expectedResult = await preparePdfExport(document, {
+      strategy: { prepScript: 'doc.component.set_text("intro", "Export clone text")' },
+    });
+
+    expect(document.sections[0].blocks[0].text).toBe(before);
+    expect(expectedResult.exportDocument.sections[0].blocks[0].text).toBe('Export clone text');
+    expect(expectedResult.strategy.rules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'hidden-by-prep', hide: true }),
+        expect.objectContaining({ componentTag: 'prep-keep', keepTogether: true }),
+      ])
+    );
+  });
+
+  test('doc.export recorder supports script-friendly strategy calls', () => {
+    const recorder = createPdfExportRuleRecorder();
+
+    recorder.hide('#intro');
+    recorder.include('resume-primary');
+    recorder.expand('#expandable');
+    recorder.keep_together('pdf-keep');
+    recorder.style('#intro', { fontSize: 8 });
+    recorder.strategy([{ id: 'intro', asMetadata: true }]);
+
+    expect(recorder.getStrategy().rules).toEqual([
+      { id: 'intro', hide: true },
+      { tag: 'resume-primary', include: true },
+      { id: 'expandable', expand: true },
+      { tag: 'pdf-keep', keepTogether: true },
+      { id: 'intro', pdfStyle: { fontSize: 8 } },
+      { id: 'intro', asMetadata: true },
+    ]);
+  });
+
+  test('emits orphan-heading metadata and page break hook', () => {
+    const document = createDocument();
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const firstNode = expectedResult.content[0];
+
+    expect(JSON.stringify(firstNode)).toContain('"headlineLevel":1');
+    expect(
+      expectedResult.pageBreakBefore?.(
+        { text: 'Heading', headlineLevel: 1 },
+        {
+          getFollowingNodesOnPage: () => [],
+          getNodesOnNextPage: () => [{ text: 'Body' }],
+          getPreviousNodesOnPage: () => [{ text: 'Previous' }],
+        }
+      )
+    ).toBe(true);
+  });
+
+  test('honors hidden targets and strategy-selected expandable pane', () => {
+    const document = createDocument();
+    const expectedResult = buildPdfExportDocDefinition(document, {
+      strategy: {
+        rules: [
+          { id: 'skip', hide: true },
+          { id: 'expandable', contentOnly: true },
+        ],
+      },
+    });
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).not.toContain('Hidden text');
+    expect(serialized).toContain('Expanded child');
+    expect(serialized).not.toContain('Stub child');
+  });
+
+  test('generates a PDF blob with placeholders for unsupported components', async () => {
+    const document = createDocument();
+    const plugin = createEmptyBlock('plugin');
+    plugin.schema.id = 'custom-plugin';
+    plugin.schema.plugin = 'fake-plugin';
+    document.sections[0].blocks.push(plugin);
+
+    const expectedResult = await getHvyPdfBlob(document, {
+      contentView: { skip: ['hidden'] },
+      strategy: { rules: [{ id: 'intro', keepWithNext: true }] },
+    });
+    const text = await expectedResult.text();
+
+    expect(expectedResult.type).toBe('application/pdf');
+    expect(text).toContain('Unsupported PDF export component: fake-plugin');
+    expect(text).not.toContain('Hidden text');
+  });
+});

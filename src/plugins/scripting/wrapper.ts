@@ -1,5 +1,6 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
+import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
 import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
@@ -665,6 +666,7 @@ export interface RunUserScriptOptions {
   maxLines?: number;
   changeReason?: HvyPluginHookChangeReason;
   form?: ScriptingFormApi;
+  exportRuleRecorder?: HvyPdfExportRuleRecorder;
   injectedGlobals?: Record<string, unknown>;
   libraries?: readonly string[];
 }
@@ -731,6 +733,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     changeReason: options.changeReason,
     form: options.form,
     db: scriptingDb?.api,
+    exportRuleRecorder: options.exportRuleRecorder,
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();

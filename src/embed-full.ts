@@ -99,6 +99,7 @@ import {
   markDocumentSaved,
   type HvyDocumentChangeCallback,
 } from './document-change';
+import type { HvyPdfExportOptions } from './pdf-export/types';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -123,6 +124,8 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
+  exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
   undo(): void;
@@ -420,6 +423,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <input id="fileInput" type="file" />
         <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" />
         <button id="downloadBtn" type="button">Download</button>
+        <button id="exportPdfBtn" type="button">Export PDF</button>
       </div>
       <section class="workspace-shell">
         <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
@@ -772,6 +776,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
     },
+    getPdfBlob(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { getHvyPdfBlob } = await import('./pdf-export/export');
+        return getHvyPdfBlob(state.document, pdfOptions);
+      });
+    },
+    exportPdf(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { exportHvyPdf } = await import('./pdf-export/export');
+        return exportHvyPdf(state.document, pdfOptions);
+      });
+    },
     markSaved() {
       markDocumentSaved(runtime);
     },
@@ -857,6 +873,12 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyPdfExportOptions,
+  HvyPdfExportResult,
+  HvyPdfExportStrategy,
+  HvyPdfExportStrategyRule,
+} from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
   HvyDocumentSearchMode,

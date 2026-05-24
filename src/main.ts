@@ -807,6 +807,7 @@ function renderTopbar(): string {
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
           <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
+          <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
         </div>
       </div>
     </header>

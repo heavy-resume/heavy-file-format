@@ -56,6 +56,7 @@ import {
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
+import type { HvyPdfExportOptions } from './pdf-export/types';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
 import {
@@ -97,6 +98,8 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
+  exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
   undo(): void;
@@ -554,6 +557,12 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
+    getPdfBlob(pdfOptions) {
+      return ready.then((mount) => mount.getPdfBlob(pdfOptions));
+    },
+    exportPdf(pdfOptions) {
+      return ready.then((mount) => mount.exportPdf(pdfOptions));
+    },
     markSaved() {
       withMount((mount) => mount.markSaved());
     },
@@ -700,6 +709,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
     },
+    getPdfBlob(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { getHvyPdfBlob } = await import('./pdf-export/export');
+        return getHvyPdfBlob(state.document, pdfOptions);
+      });
+    },
+    exportPdf(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { exportHvyPdf } = await import('./pdf-export/export');
+        return exportHvyPdf(state.document, pdfOptions);
+      });
+    },
     markSaved() {
       markDocumentSaved(runtime);
     },
@@ -797,6 +818,12 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyPdfExportOptions,
+  HvyPdfExportResult,
+  HvyPdfExportStrategy,
+  HvyPdfExportStrategyRule,
+} from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
   HvyDocumentSearchMode,

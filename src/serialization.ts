@@ -1476,7 +1476,7 @@ function shouldPreserveSerializedTextLine(line: string): boolean {
   return (
     trimmed.length === 0 ||
     / {2,}$/.test(line) ||
-    /^(\|| {0,3}[-*+]\s+\[[ xX]\]\s+)/.test(line) ||
+    /^(\|| {0,3}(?:[-*+]\s+|\d+[.)]\s+))/.test(line) ||
     /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line) ||
     /^ {0,3}#{1,6}\s/.test(line) ||
     /^ {0,3}>/.test(line) ||

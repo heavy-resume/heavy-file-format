@@ -269,6 +269,27 @@ hvy_version: 0.1
   );
 });
 
+test('serializes long markdown list items without wrapping them into artificial paragraphs', () => {
+  const longBullet =
+    '- Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega alpha beta gamma delta';
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"intro"}-->
+  ${longBullet}
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+  const textLines = expectedResult.split('\n').filter((line) => line.includes('Alpha beta'));
+
+  expect(textLines).toEqual([`  ${longBullet}`]);
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks[0]?.text).toBe(longBullet);
+});
+
 test('serialization wrapping preserves code plugin and fenced text bodies', () => {
   const longCodeLine = 'const value = "' + 'x'.repeat(150) + '";';
   const longScriptLine = 'doc.header.set("long_value", "' + 'y'.repeat(150) + '")';

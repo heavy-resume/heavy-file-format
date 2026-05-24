@@ -521,6 +521,10 @@ function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
   });
 }
 
+function cancelPendingEmbedUiBind(root: HTMLElement): void {
+  embedUiBindGenerations.set(root, (embedUiBindGenerations.get(root) ?? 0) + 1);
+}
+
 function renderSidebarTabLabel(): string {
   const label = String(state.document.meta.sidebar_label || '\u2630');
   return label === '\u2630'
@@ -757,6 +761,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        cancelPendingEmbedUiBind(options.root);
         options.root.innerHTML = '';
         setHostChatClient(null);
         setRuntimeSemanticFilterProvider(null);
@@ -835,8 +840,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     openDocumentMeta() {
       return runWithStateRuntime(runtime, () => {
-        if (state.currentView !== 'editor' || !state.showAdvancedEditor) return false;
-        state.metaPanelOpen = !state.metaPanelOpen;
+        state.currentView = 'editor';
+        state.editorMode = 'advanced';
+        state.showAdvancedEditor = true;
+        state.metaPanelOpen = true;
         runtime.callbacks.renderApp();
         return state.metaPanelOpen;
       });

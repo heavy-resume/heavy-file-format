@@ -13,6 +13,19 @@ import { cameraIcon, closeIcon } from '../../../icons';
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
 
+type LegacyCameraNavigator = Navigator & {
+  getUserMedia?: (
+    constraints: MediaStreamConstraints,
+    successCallback: (stream: MediaStream) => void,
+    errorCallback: (error: unknown) => void,
+  ) => void;
+  webkitGetUserMedia?: (
+    constraints: MediaStreamConstraints,
+    successCallback: (stream: MediaStream) => void,
+    errorCallback: (error: unknown) => void,
+  ) => void;
+};
+
 export function getImageBlobUrl(filename: string): string | null {
   if (!filename) {
     return null;
@@ -150,12 +163,18 @@ export function openImageCameraCapture(app: HTMLElement, options: {
     }, 'image/jpeg', 0.9);
   });
 
-  if (!navigator.mediaDevices?.getUserMedia || !video) {
+  if (!video) {
     if (status) status.textContent = 'Camera is unavailable in this browser.';
     return;
   }
 
-  void navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+  const cameraRequest = requestCameraStream({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  if (!cameraRequest) {
+    if (status) status.textContent = 'Camera is unavailable in this browser.';
+    return;
+  }
+
+  void cameraRequest
     .then((cameraStream) => {
       stream = cameraStream;
       video.srcObject = cameraStream;
@@ -165,6 +184,20 @@ export function openImageCameraCapture(app: HTMLElement, options: {
     .catch(() => {
       if (status) status.textContent = 'Camera permission was denied or unavailable.';
     });
+}
+
+function requestCameraStream(constraints: MediaStreamConstraints): Promise<MediaStream> | null {
+  if (navigator.mediaDevices?.getUserMedia) {
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+  const legacyNavigator = navigator as LegacyCameraNavigator;
+  const getUserMedia = legacyNavigator.getUserMedia || legacyNavigator.webkitGetUserMedia;
+  if (!getUserMedia) {
+    return null;
+  }
+  return new Promise((resolve, reject) => {
+    getUserMedia.call(navigator, constraints, resolve, reject);
+  });
 }
 
 function closeImageCameraCapture(): void {

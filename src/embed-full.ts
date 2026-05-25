@@ -82,7 +82,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
-import { loadSessionState, saveSessionState } from './state-persistence';
+import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import {
@@ -138,6 +138,8 @@ export interface HvyMount {
   setPaletteOverrideId(id: string | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  getRecoveryState(): string | null;
+  applyRecoveryState(payload: string | null | undefined): void;
   openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -248,7 +250,7 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
   }
   const shouldRestoreDocument = initial.persistDocumentState !== false && savedSession.document;
   const document = shouldRestoreDocument ? savedSession.document! : initial.document;
-  return {
+  const restored: AppState = {
     ...initial,
     document,
     filename: shouldRestoreDocument ? savedSession.filename : initial.filename,
@@ -281,6 +283,8 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
     cliSession: savedSession.cli.session,
     cliHistory: savedSession.cli.history,
   };
+  applyRecoveryStatePayload(restored, savedSession.activeEditor ? JSON.stringify({ version: 1, activeEditor: savedSession.activeEditor }) : null);
+  return restored;
 }
 
 function bindSessionPersistence(runtime: StateRuntime): AbortController {
@@ -840,6 +844,15 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
+    getRecoveryState() {
+      return runWithStateRuntime(runtime, () => createRecoveryStatePayload(state));
+    },
+    applyRecoveryState(payload) {
+      runWithStateRuntime(runtime, () => {
+        applyRecoveryStatePayload(state, payload);
+        runtime.callbacks.renderApp();
+      });
     },
     openDocumentMeta() {
       return runWithStateRuntime(runtime, () => {

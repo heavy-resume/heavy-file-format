@@ -30,6 +30,21 @@ ai-import-guidance: >-
   A skill is something you do. For example, programming.
   A tool / technology is something you use and would have experience with. Such as
   a programming language, machinery, etc.
+export_prompt_templates:
+  - id: tailor-resume-export
+    label: Tailor resume for prompt
+    description: Select and arrange resume content for pasted export criteria.
+    prompt: |-
+      Plan a PDF export of this document for the following criteria.
+
+      {% target_context | block %}
+    variables:
+      target_context:
+        label: Target context
+        placeholder: Paste a job description, audience note, grant criteria, project brief, or other export criteria.
+        helpText: Used only to plan the PDF export.
+        type: block
+        required: true
 section_defaults:
   css: "margin: 0.5rem 0;"
 text_line_styles:

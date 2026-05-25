@@ -57,6 +57,8 @@ import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
+import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
 import {
@@ -238,6 +240,7 @@ function createEmbedState(
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -799,7 +802,20 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
+export {
+  builtInPluginMap as plugins,
+  builtInPlugins,
+  createDocumentFilterSnapshot,
+  createDocumentSearchSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
+  deserializeDocumentBytes,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
+  searchDocuments,
+  serializeDocument,
+  serializeDocumentBytes,
+};
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -820,9 +836,20 @@ export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
   HvyPdfExportOptions,
+  HvyPdfExportPlan,
+  HvyPdfExportPlanDecision,
+  HvyPdfExportPlanDiagnostic,
+  HvyPdfExportPreviewStats,
+  HvyPdfExportPromptTemplate,
+  HvyPdfExportPromptTemplateVariable,
   HvyPdfExportResult,
   HvyPdfExportStrategy,
+  HvyPdfExportStrategyProvider,
+  HvyPdfExportStrategyProviderRequest,
+  HvyPdfExportStrategyProviderResponse,
   HvyPdfExportStrategyRule,
+  CreatePdfExportPlanOptions,
+  CreatePdfExportPlanFromPromptOptions,
 } from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
@@ -847,8 +874,12 @@ declare global {
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       createDocumentFilterSnapshot: typeof createDocumentFilterSnapshot;
+      createPdfExportPlan: typeof createPdfExportPlan;
+      createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
+      getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
+      renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -863,8 +894,12 @@ window.HVY = {
   serializeDocument,
   serializeDocumentBytes,
   createDocumentFilterSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
   searchDocuments,
   createDocumentSearchSnapshot,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

@@ -100,6 +100,8 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
+import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -219,6 +221,7 @@ function createEmbedState(
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -861,7 +864,20 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
+export {
+  builtInPluginMap as plugins,
+  builtInPlugins,
+  createDocumentFilterSnapshot,
+  createDocumentSearchSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
+  deserializeDocumentBytes,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
+  searchDocuments,
+  serializeDocument,
+  serializeDocumentBytes,
+};
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -882,9 +898,20 @@ export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
   HvyPdfExportOptions,
+  HvyPdfExportPlan,
+  HvyPdfExportPlanDecision,
+  HvyPdfExportPlanDiagnostic,
+  HvyPdfExportPreviewStats,
+  HvyPdfExportPromptTemplate,
+  HvyPdfExportPromptTemplateVariable,
   HvyPdfExportResult,
   HvyPdfExportStrategy,
+  HvyPdfExportStrategyProvider,
+  HvyPdfExportStrategyProviderRequest,
+  HvyPdfExportStrategyProviderResponse,
   HvyPdfExportStrategyRule,
+  CreatePdfExportPlanOptions,
+  CreatePdfExportPlanFromPromptOptions,
 } from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
@@ -907,7 +934,11 @@ window.HVY = {
   serializeDocument,
   serializeDocumentBytes,
   createDocumentFilterSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
   createDocumentSearchSnapshot,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
   searchDocuments,
   mountHvy,
   mountHvyViewer,

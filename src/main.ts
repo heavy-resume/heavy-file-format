@@ -44,6 +44,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { renderPdfExportPlanModal } from './pdf-export/plan-modal-ui';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -158,6 +159,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -724,6 +726,7 @@ function renderApp(): void {
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
       ${renderDescriptionPopulateModal()}
+      ${renderPdfExportPlanModal()}
     </main>
   `;
   markupMs = performance.now() - stepStartedAt;

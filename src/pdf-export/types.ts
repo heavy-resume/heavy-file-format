@@ -1,4 +1,5 @@
 import type { ReaderViewFilter, VisualDocument } from '../types';
+import type { HvySemanticFilterCandidate, HvySemanticFilterMatch, HvySemanticFilterProvider } from '../search/types';
 
 export type HvyPdfExportExpansionPolicy = 'view-aware' | 'all-expanded' | 'authored';
 export type HvyPdfExportSidebarPolicy = 'include' | 'exclude' | 'inline-after-main';
@@ -81,6 +82,113 @@ export interface HvyPdfExportOptions {
   contentView?: ReaderViewFilter;
   strategy?: HvyPdfExportStrategy;
   runPrepScript?: boolean;
+}
+
+export interface HvyPdfExportPromptTemplateVariable {
+  label?: string;
+  placeholder?: string;
+  helpText?: string;
+  required?: boolean;
+  type?: 'text' | 'block';
+}
+
+export interface HvyPdfExportPromptTemplate {
+  id: string;
+  label: string;
+  description?: string;
+  prompt: string;
+  variables: Record<string, HvyPdfExportPromptTemplateVariable>;
+}
+
+export interface HvyPdfExportPlanDecision {
+  target: string;
+  action: string;
+  reason: string;
+  confidence?: number;
+}
+
+export interface HvyPdfExportPlanDiagnostic {
+  severity: 'error' | 'warning';
+  message: string;
+  target?: string;
+}
+
+export interface HvyPdfExportPreviewStats {
+  contentNodeCount: number;
+  matchedCandidateCount: number;
+  unsupportedVisibleComponentCount: number;
+}
+
+export interface HvyPdfExportPlan {
+  renderedPrompt: string;
+  contentView: ReaderViewFilter;
+  strategy: HvyPdfExportStrategy;
+  diagnostics: HvyPdfExportPlanDiagnostic[];
+  decisions: HvyPdfExportPlanDecision[];
+  prepScript?: string;
+  previewStats: HvyPdfExportPreviewStats;
+}
+
+export interface HvyPdfExportStrategyProviderRequest {
+  renderedPrompt: string;
+  documentTitle?: string;
+  candidates: HvySemanticFilterCandidate[];
+  semanticMatches: HvySemanticFilterMatch[];
+  currentContentView: ReaderViewFilter;
+  unsupportedComponents: HvyPdfExportUnsupportedComponent[];
+  allowedTargets: HvyPdfExportAllowedTarget[];
+  allowedActions: string[];
+  signal?: AbortSignal;
+}
+
+export interface HvyPdfExportUnsupportedComponent {
+  id: string;
+  component: string;
+  baseComponent: string;
+  path?: string;
+  label: string;
+}
+
+export interface HvyPdfExportAllowedTarget {
+  kind: 'section' | 'component';
+  id: string;
+  path?: string;
+  component?: string;
+  baseComponent?: string;
+  tags: string[];
+  label: string;
+}
+
+export interface HvyPdfExportStrategyProviderResponse {
+  contentView?: ReaderViewFilter;
+  strategy?: HvyPdfExportStrategy;
+  rules?: HvyPdfExportStrategyRule[];
+  prepScript?: string;
+  decisions?: HvyPdfExportPlanDecision[];
+  notes?: string;
+}
+
+export type HvyPdfExportStrategyProvider = (
+  request: HvyPdfExportStrategyProviderRequest
+) => Promise<HvyPdfExportStrategyProviderResponse> | HvyPdfExportStrategyProviderResponse;
+
+export interface CreatePdfExportPlanOptions {
+  document: VisualDocument;
+  templateId: string;
+  values: Record<string, string>;
+  currentContentView?: ReaderViewFilter;
+  strategyProvider?: HvyPdfExportStrategyProvider;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
+  signal?: AbortSignal;
+}
+
+export interface CreatePdfExportPlanFromPromptOptions {
+  document: VisualDocument;
+  prompt: string;
+  currentContentView?: ReaderViewFilter;
+  strategyProvider?: HvyPdfExportStrategyProvider;
+  semanticFilterProvider?: HvySemanticFilterProvider | null;
+  signal?: AbortSignal;
 }
 
 export interface HvyPdfExportResult {

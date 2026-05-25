@@ -85,6 +85,7 @@ function createHistoryTestState(): AppState {
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: null,

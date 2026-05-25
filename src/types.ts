@@ -1,5 +1,6 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
+import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 
 export interface DocumentAttachment {
@@ -89,6 +90,15 @@ export interface ChatState {
   abortController: AbortController | null;
   cliSimEnabled: boolean;
   cliSim: ChatCliSimState | null;
+}
+
+export interface PdfExportPlanModalState {
+  templateId: string;
+  values: Record<string, string>;
+  isRunning: boolean;
+  status: string | null;
+  error: string | null;
+  plan: HvyPdfExportPlan | null;
 }
 
 export interface AiEditState {
@@ -328,6 +338,7 @@ export interface AppState {
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
+  pdfExportPlanModal: PdfExportPlanModalState | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;

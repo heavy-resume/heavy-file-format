@@ -38,6 +38,21 @@ ai-import-guidance: >-
   Always write both sections of the summary - the short version and a longer version
   that's usually bullet points of highlights. For dates, use numeric formatting (mm/dd/YY or mm/YY)
   Do not create a redundant skills and tools & technology section. Do not feel obligated to create additional sections.
+export_prompt_templates:
+  - id: tailor-resume-export
+    label: Tailor resume for prompt
+    description: Select and arrange resume content for pasted export criteria.
+    prompt: |-
+      Plan a PDF export of this document for the following criteria.
+
+      {% target_context | block %}
+    variables:
+      target_context:
+        label: Target context
+        placeholder: Paste a job description, audience note, grant criteria, project brief, or other export criteria.
+        helpText: Used only to plan the PDF export.
+        type: block
+        required: true
 importPreplan:
   - [header, summary, locations]
   - [skills, tools-technologies, resume-languages, top-skills-tools-technologies]

@@ -939,7 +939,10 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     formatSelectionBlock(editable, nextBlock);
   } else if (action === 'list') {
     clearInlineTypingState(editable);
-    toggleSelectionList(editable);
+    toggleSelectionList(editable, 'ul');
+  } else if (action === 'ordered-list') {
+    clearInlineTypingState(editable);
+    toggleSelectionList(editable, 'ol');
   } else if (action === 'checklist') {
     clearInlineTypingState(editable);
     insertInlineCheckboxAtSelection(editable);
@@ -1628,7 +1631,7 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
         button.classList.toggle('ghost', !selected);
         return;
       }
-      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
+      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|ordered-list|checklist)$/.test(action) && !isInlineRichAction(action)) {
         return;
       }
       button.classList.toggle('secondary', selected);
@@ -1726,7 +1729,11 @@ function getSelectedRichBlockStyle(editable: HTMLElement): string {
   }
   if (block?.closest('li')) {
     const text = block.textContent ?? '';
-    return /^\s*(☐|☑|\[[ xX]\])/.test(text) ? 'checklist' : 'list';
+    if (/^\s*(☐|☑|\[[ xX]\])/.test(text)) {
+      return 'checklist';
+    }
+    const item = block.closest('li');
+    return item?.parentElement instanceof HTMLOListElement ? 'ordered-list' : 'list';
   }
   return 'paragraph';
 }
@@ -1938,9 +1945,18 @@ function normalizeEditableListDom(editable: HTMLElement): void {
   });
 }
 
-function toggleSelectionList(editable: HTMLElement): void {
+type EditableListTagName = 'ul' | 'ol';
+
+function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName): void {
   const item = getSelectionListItem(editable);
   if (item) {
+    const list = item.parentElement;
+    const selectedListMatchesAction =
+      tagName === 'ol' ? list instanceof HTMLOListElement : list instanceof HTMLUListElement;
+    if (!selectedListMatchesAction) {
+      convertListTypeForItem(item, tagName);
+      return;
+    }
     unwrapListItem(item);
     return;
   }
@@ -1951,7 +1967,7 @@ function toggleSelectionList(editable: HTMLElement): void {
   }
   const selectedBlocks = getSelectedEditableTextBlocks(editable);
   if (selectedBlocks.length > 1) {
-    wrapSelectedBlocksInList(selectedBlocks);
+    wrapSelectedBlocksInList(selectedBlocks, tagName);
     return;
   }
   const previousRange = getEditableSelectionRange(editable)?.cloneRange() ?? null;
@@ -1962,7 +1978,7 @@ function toggleSelectionList(editable: HTMLElement): void {
           end: getTextOffset(block, previousRange.endContainer, previousRange.endOffset),
         }
       : null;
-  const list = document.createElement('ul');
+  const list = document.createElement(tagName);
   const listItem = document.createElement('li');
   while (block.firstChild) {
     listItem.appendChild(block.firstChild);
@@ -1993,12 +2009,12 @@ function getSelectedEditableTextBlocks(editable: HTMLElement): HTMLElement[] {
   return selected.every((child) => !/^(PRE|UL|OL)$/.test(child.tagName)) ? selected : [];
 }
 
-function wrapSelectedBlocksInList(blocks: HTMLElement[]): void {
+function wrapSelectedBlocksInList(blocks: HTMLElement[], tagName: EditableListTagName): void {
   const firstBlock = blocks[0];
   if (!firstBlock?.parentNode) {
     return;
   }
-  const list = document.createElement('ul');
+  const list = document.createElement(tagName);
   for (const block of blocks) {
     const listItem = document.createElement('li');
     while (block.firstChild) {
@@ -2043,6 +2059,19 @@ function unwrapListItem(item: HTMLLIElement): void {
   placeCaretAtEnd(paragraph);
 }
 
+function convertListTypeForItem(item: HTMLLIElement, tagName: EditableListTagName): void {
+  const list = item.parentElement;
+  if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
+    return;
+  }
+  const replacement = document.createElement(tagName);
+  while (list.firstChild) {
+    replacement.appendChild(list.firstChild);
+  }
+  list.replaceWith(replacement);
+  placeCaretInside(item);
+}
+
 function moveSelectionListItemNesting(editable: HTMLElement, direction: 'indent' | 'outdent'): void {
   const item = getSelectionListItem(editable);
   if (!item) {
@@ -2060,9 +2089,13 @@ function indentListItem(item: HTMLLIElement): void {
   if (!(previousItem instanceof HTMLLIElement)) {
     return;
   }
-  let nestedList = Array.from(previousItem.children).find((child): child is HTMLUListElement => child instanceof HTMLUListElement);
+  const list = item.parentElement;
+  const tagName: EditableListTagName = list instanceof HTMLOListElement ? 'ol' : 'ul';
+  let nestedList = Array.from(previousItem.children).find((child): child is HTMLUListElement | HTMLOListElement =>
+    (tagName === 'ol' ? child instanceof HTMLOListElement : child instanceof HTMLUListElement)
+  );
   if (!nestedList) {
-    nestedList = document.createElement('ul');
+    nestedList = document.createElement(tagName);
     previousItem.appendChild(nestedList);
   }
   nestedList.appendChild(item);

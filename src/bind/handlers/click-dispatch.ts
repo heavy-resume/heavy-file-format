@@ -560,15 +560,21 @@ function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HT
   const columnIndex = richButton.dataset.columnIndex;
   const cellIndex = richButton.dataset.cellIndex;
   const selectorBase = `[data-section-key="${sectionKey}"][data-block-id="${blockId}"][data-field="${richField}"]`;
-  return richField === 'table-column' && columnIndex !== undefined
-    ? app.querySelector<HTMLElement>(`${selectorBase}[data-column-index="${columnIndex}"]`)
+  const selector = richField === 'table-column' && columnIndex !== undefined
+    ? `${selectorBase}[data-column-index="${columnIndex}"]`
     : richField === 'table-cell' && rowIndex !== undefined && cellIndex !== undefined
-    ? app.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`)
+    ? `${selectorBase}[data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`
     : rowIndex
-    ? app.querySelector<HTMLElement>(`${selectorBase}[data-row-index="${rowIndex}"]`)
+    ? `${selectorBase}[data-row-index="${rowIndex}"]`
     : gridItemId
-    ? app.querySelector<HTMLElement>(`${selectorBase}[data-grid-item-id="${gridItemId}"]`)
-    : app.querySelector<HTMLElement>(selectorBase);
+    ? `${selectorBase}[data-grid-item-id="${gridItemId}"]`
+    : selectorBase;
+  const localScope = richButton.closest<HTMLElement>('.editor-block, .table-inline-edit-shell');
+  const localEditable = localScope?.querySelector<HTMLElement>(selector);
+  if (localEditable) {
+    return localEditable;
+  }
+  return app.querySelector<HTMLElement>(selector);
 }
 
 function requiresRemoveConfirmation(action: string): boolean {

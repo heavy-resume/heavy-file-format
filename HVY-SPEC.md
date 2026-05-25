@@ -100,6 +100,7 @@ Each section contains:
 
 Notes:
 - `title` is derived from the `#!` section title line, if present, otherwise defaults to the `id` value.
+- When `id` is absent, authoring tools SHOULD generate a stable slug from the section title. If that slug is already used in the document, append a numeric suffix such as `-2`. This generated ID is the section's public document ID, not an editor-internal key.
 - Use `title` for navigation, editing, outline views, or linking.
 - `#!` lines are never rendered as Markdown content.
 
@@ -175,6 +176,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - `#!` lines are consumed by the parser and not rendered.
 - If no `#!` follows the directive, the section title defaults to `id`.
+- If `id` is omitted, authoring tools SHOULD derive it from the section title as a lowercase slug and make it unique within the document.
 - If multiple directives precede the same `#!` line, they are merged (last key wins).
 
 ### 5.4 Document-level directives

@@ -3,6 +3,7 @@ import { createEmptySection } from './document-factory';
 import type { JsonObject } from './hvy/types';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { sanitizeOptionalId } from './utils';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
   const output: VisualSection[] = [];
@@ -422,6 +423,50 @@ export function findDuplicateSectionIds(sections: VisualSection[]): string[] {
 
 export function getSectionId(section: VisualSection): string {
   return section.customId.trim().length > 0 ? section.customId.trim() : section.key;
+}
+
+export function assignSectionTitleAndGeneratedId(sections: VisualSection[], section: VisualSection, nextTitle: string): void {
+  const previousTitle = section.title;
+  const currentId = section.customId.trim();
+  const shouldRefreshId = currentId.length === 0 || isGeneratedSectionIdForTitle(currentId, previousTitle);
+  section.title = nextTitle;
+  if (!shouldRefreshId) {
+    return;
+  }
+  section.customId = createUniqueSectionIdFromTitle(nextTitle, sections, section.key);
+}
+
+export function createUniqueSectionIdFromTitle(title: string, sections: VisualSection[], excludeSectionKey?: string): string {
+  const base = createSectionIdFromTitle(title);
+  if (!base) {
+    return '';
+  }
+  const used = new Set(
+    flattenSections(sections)
+      .filter((section) => section.key !== excludeSectionKey)
+      .map((section) => getSectionId(section).trim())
+      .filter((id) => id.length > 0)
+  );
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+export function createSectionIdFromTitle(title: string): string {
+  return isDefaultUntitledSectionTitle(title) ? '' : sanitizeOptionalId(title);
+}
+
+function isGeneratedSectionIdForTitle(id: string, title: string): boolean {
+  const base = createSectionIdFromTitle(title);
+  return base.length > 0 && (id === base || new RegExp(`^${escapeRegExp(base)}-\\d+$`).test(id));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function isDefaultUntitledSectionTitle(title: string): boolean {

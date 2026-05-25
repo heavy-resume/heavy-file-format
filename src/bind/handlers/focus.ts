@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { commitTextFillInElement } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
@@ -44,7 +44,7 @@ export function bindFocus(app: HTMLElement): void {
         const sectionKey = target.dataset.sectionKey;
         const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
         if (section && target.value.trim().length === 0) {
-          section.title = 'Unnamed Section';
+          assignSectionTitleAndGeneratedId(state.document.sections, section, 'Unnamed Section');
         }
         state.activeEditorSectionTitleKey = null;
         state.clearSectionTitleOnFocusKey = null;

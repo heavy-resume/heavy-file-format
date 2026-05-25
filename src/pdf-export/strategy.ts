@@ -296,7 +296,8 @@ function normalizeExpansionPolicy(value: HvyPdfExportStrategyDefaults['expansion
 }
 
 function normalizeUnsupportedPluginPolicy(value: HvyPdfExportStrategyDefaults['unsupportedPluginPolicy']): HvyPdfUnsupportedPluginPolicy {
-  return value === 'hide' ? 'hide' : 'placeholder';
+  if (value === 'placeholder' || value === 'hide') return value;
+  return 'error';
 }
 
 function normalizeSidebarPolicy(value: HvyPdfExportStrategyDefaults['includeSidebar']): HvyPdfExportSidebarPolicy {

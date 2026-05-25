@@ -561,8 +561,12 @@ export function bindUi(app: HTMLElement): void {
 
   exportPdfBtn?.addEventListener('click', () => {
     void runInBoundRuntimeAsync(async () => {
-      const baseName = normalizeFilename(state.filename || 'document.hvy').replace(/\.(hvy|thvy|md)$/i, '');
-      await exportHvyPdf(state.document, { filename: `${baseName}.pdf` });
+      try {
+        const baseName = normalizeFilename(state.filename || 'document.hvy').replace(/\.(hvy|thvy|md)$/i, '');
+        await exportHvyPdf(state.document, { filename: `${baseName}.pdf` });
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'PDF export failed.');
+      }
     });
   });
 

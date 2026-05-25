@@ -13,6 +13,7 @@ import type {
   HvyPdfMakeNodeObject,
 } from './types';
 import { resolvePdfExportStrategy } from './strategy';
+import { normalizePdfTextInline, renderPdfTextBlock } from './text';
 
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
@@ -43,6 +44,8 @@ export function buildPdfExportDocDefinition(
       sectionTitle2: { fontSize: 12, bold: true, margin: [0, 8, 0, 3] },
       sectionTitle3: { fontSize: 11, bold: true, margin: [0, 6, 0, 3] },
       paragraph: { margin: [0, 0, 0, 5] },
+      detailHeading: { bold: true, margin: [0, 4, 0, 1] },
+      detailBody: { margin: [6, 0, 0, 4] },
       list: { margin: [10, 0, 0, 5] },
       codeBlock: { font: 'Roboto', fontSize: 8, margin: [0, 0, 0, 6], fillColor: '#f3f4f6' },
       metadata: { fontSize: 8, color: '#4b5563' },
@@ -146,7 +149,7 @@ function renderBlock(
   let node: HvyPdfMakeNodeObject | null;
   switch (baseComponent) {
     case 'text':
-      node = renderTextBlock(block, decision);
+      node = renderPdfTextBlock(block.text, block.schema.placeholder, decision);
       break;
     case 'code':
       node = { text: block.text || block.schema.placeholder || '', style: 'codeBlock' };
@@ -180,42 +183,6 @@ function renderBlock(
       break;
   }
   return node ? applyDecisionToNode(decision, { id: block.schema.id || block.id, ...node }) : null;
-}
-
-function renderTextBlock(block: VisualBlock, decision: HvyPdfExportDecision): HvyPdfMakeNodeObject {
-  const text = block.text || block.schema.placeholder || '';
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) {
-    return { text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' };
-  }
-  const stack: HvyPdfMakeNode[] = [];
-  let listItems: HvyPdfMakeNode[] = [];
-  const flushList = (): void => {
-    if (listItems.length) {
-      stack.push({ ul: listItems, style: 'list' });
-      listItems = [];
-    }
-  };
-  for (const line of lines) {
-    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
-    const bullet = /^[-*]\s+(.+)$/.exec(line);
-    if (heading) {
-      flushList();
-      stack.push({
-        text: heading[2],
-        style: heading[1].length === 1 ? 'sectionTitle' : heading[1].length === 2 ? 'sectionTitle2' : 'sectionTitle3',
-        headlineLevel: heading[1].length,
-        hvyKeepWithNext: true,
-      });
-    } else if (bullet) {
-      listItems.push({ text: bullet[1], style: decision.role === 'metadata' ? 'metadata' : 'paragraph' });
-    } else {
-      flushList();
-      stack.push({ text: line, style: decision.role === 'metadata' ? 'metadata' : 'paragraph' });
-    }
-  }
-  flushList();
-  return stack.length === 1 && typeof stack[0] !== 'string' ? stack[0] : { stack };
 }
 
 function renderContainerBlock(
@@ -289,9 +256,9 @@ function resolveExpandablePane(
 
 function renderTableBlock(block: VisualBlock): HvyPdfMakeNodeObject {
   const header = block.schema.tableShowHeader
-    ? [block.schema.tableColumns.map((column) => ({ text: column, style: 'tableHeader' }))]
+    ? [block.schema.tableColumns.map((column) => ({ text: normalizePdfTextInline(column), style: 'tableHeader' }))]
     : [];
-  const rows = block.schema.tableRows.map((row) => row.cells.map((cell) => ({ text: cell, style: 'paragraph' })));
+  const rows = block.schema.tableRows.map((row) => row.cells.map((cell) => ({ text: normalizePdfTextInline(cell), style: 'paragraph' })));
   return {
     table: {
       headerRows: header.length,
@@ -350,10 +317,10 @@ function renderImageNode(
 function renderXrefCardBlock(block: VisualBlock): HvyPdfMakeNodeObject {
   const stack: HvyPdfMakeNode[] = [];
   if (block.schema.xrefTitle.trim()) {
-    stack.push({ text: block.schema.xrefTitle, style: 'xrefTitle' });
+    stack.push({ text: normalizePdfTextInline(block.schema.xrefTitle), style: 'xrefTitle' });
   }
   if (block.schema.xrefDetail.trim()) {
-    stack.push({ text: block.schema.xrefDetail, style: 'xrefDetail' });
+    stack.push({ text: normalizePdfTextInline(block.schema.xrefDetail), style: 'xrefDetail' });
   }
   return stack.length ? { stack } : placeholderNode('Reference card.');
 }
@@ -363,6 +330,9 @@ function renderUnsupportedBlock(block: VisualBlock, resolved: HvyPdfExportResolv
     return null;
   }
   const label = block.schema.kind === 'plugin' ? block.schema.plugin || block.schema.component : block.schema.component;
+  if (resolved.defaults.unsupportedPluginPolicy === 'error') {
+    throw new Error(`PDF export cannot render component "${label}". Hide it with an export strategy or provide an export adapter.`);
+  }
   return placeholderNode(`Unsupported PDF export component: ${label}`);
 }
 

@@ -2,7 +2,7 @@ import type { ReaderViewFilter, VisualDocument } from '../types';
 
 export type HvyPdfExportExpansionPolicy = 'view-aware' | 'all-expanded' | 'authored';
 export type HvyPdfExportSidebarPolicy = 'include' | 'exclude' | 'inline-after-main';
-export type HvyPdfUnsupportedPluginPolicy = 'placeholder' | 'hide';
+export type HvyPdfUnsupportedPluginPolicy = 'error' | 'placeholder' | 'hide';
 export type HvyPdfExportVisibility = 'include' | 'hide' | 'dim' | 'highlight';
 export type HvyPdfExportPane = 'expand' | 'collapse' | 'stubOnly' | 'contentOnly' | 'stubThenContent';
 export type HvyPdfExportRole = 'heading' | 'body' | 'metadata' | 'sidebar';

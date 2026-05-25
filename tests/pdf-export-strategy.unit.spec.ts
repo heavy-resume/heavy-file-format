@@ -199,6 +199,43 @@ describe('PDF export strategy', () => {
     ).toBe(true);
   });
 
+  test('normalizes fill-in and text line style markers before creating PDF text nodes', () => {
+    const document = createDocument();
+    document.sections[0].blocks[0].text = `
+[<!-- value {"placeholder":"pronunciation"} -->]
+<!-- value {"placeholder":"title"} -->
+^detail-heading^ #### Highlights
+^detail-body^ - Led teams and improved developer velocity.
+^detail-body^ - Built services on cloud platforms.
+`;
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).not.toContain('<!-- value');
+    expect(serialized).not.toContain('^detail');
+    expect(serialized).toContain('Highlights');
+    expect(serialized).toContain('Led teams and improved developer velocity.');
+    expect(serialized).toContain('detailHeading');
+    expect(serialized).toContain('detailBody');
+  });
+
+  test('normalizes responsive alt annotations in PDF text and tables', () => {
+    const document = createDocument();
+    document.sections[0].blocks[0].text = '# Tools & <!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->';
+    const table = createEmptyBlock('table');
+    table.schema.id = 'history-table';
+    table.schema.tableColumns = ['TITLE', '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->', 'DATES'];
+    table.schema.tableRows = [{ cells: ['Senior Engineer', 'Northwind Labs', '2024'] }];
+    document.sections[0].blocks.push(table);
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).not.toContain('hvy:alt');
+    expect(serialized).not.toContain('compact');
+    expect(serialized).toContain('Tools & Technologies');
+    expect(serialized).toContain('ORGANIZATION');
+  });
+
   test('honors hidden targets and strategy-selected expandable pane', () => {
     const document = createDocument();
     const expectedResult = buildPdfExportDocDefinition(document, {
@@ -216,7 +253,17 @@ describe('PDF export strategy', () => {
     expect(serialized).not.toContain('Stub child');
   });
 
-  test('generates a PDF blob with placeholders for unsupported components', async () => {
+  test('fails PDF export by default for unsupported components', async () => {
+    const document = createDocument();
+    const plugin = createEmptyBlock('plugin');
+    plugin.schema.id = 'custom-plugin';
+    plugin.schema.plugin = 'fake-plugin';
+    document.sections[0].blocks.push(plugin);
+
+    await expect(getHvyPdfBlob(document)).rejects.toThrow('PDF export cannot render component "fake-plugin"');
+  });
+
+  test('can opt into PDF placeholders for unsupported components', async () => {
     const document = createDocument();
     const plugin = createEmptyBlock('plugin');
     plugin.schema.id = 'custom-plugin';
@@ -225,7 +272,10 @@ describe('PDF export strategy', () => {
 
     const expectedResult = await getHvyPdfBlob(document, {
       contentView: { skip: ['hidden'] },
-      strategy: { rules: [{ id: 'intro', keepWithNext: true }] },
+      strategy: {
+        defaults: { unsupportedPluginPolicy: 'placeholder' },
+        rules: [{ id: 'intro', keepWithNext: true }],
+      },
     });
     const text = await expectedResult.text();
 

@@ -147,19 +147,34 @@ export function openImageCameraCapture(app: HTMLElement, options: {
 
   captureButton?.addEventListener('click', () => {
     if (!video || !video.videoWidth || !video.videoHeight) return;
+    captureButton.disabled = true;
+    if (status) status.textContent = 'Capturing image...';
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      if (status) status.textContent = 'Could not capture image.';
+      captureButton.disabled = false;
+      return;
+    }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((blob) => {
       if (!blob) {
         if (status) status.textContent = 'Could not capture image.';
+        captureButton.disabled = false;
         return;
       }
       const file = new File([blob], `${options.filenamePrefix}-${formatCameraTimestamp(new Date())}.jpg`, { type: 'image/jpeg' });
-      void Promise.resolve(options.onCapture(file)).then(close);
+      void Promise.resolve(options.onCapture(file))
+        .then(close)
+        .catch((error) => {
+          console.error('Camera capture failed', error);
+          if (status) status.textContent = `Could not add captured image: ${error instanceof Error ? error.message : String(error)}`;
+          if (captureButton.isConnected) {
+            captureButton.disabled = false;
+          }
+        });
     }, 'image/jpeg', 0.9);
   });
 
@@ -457,12 +472,12 @@ function countSectionImageReferences(section: VisualSection, filename: string): 
 
 function countBlockImageReferences(block: VisualBlock, filename: string): number {
   let count = block.schema.imageFile === filename ? 1 : 0;
-  count += block.schema.carouselImages.filter((image) => image.imageFile === filename).length;
-  count += block.schema.containerBlocks.reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
-  count += block.schema.componentListBlocks.reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
-  count += block.schema.gridItems.reduce((total, item) => total + countBlockImageReferences(item.block, filename), 0);
-  count += block.schema.expandableStubBlocks.children.reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
-  count += block.schema.expandableContentBlocks.children.reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
+  count += (block.schema.carouselImages ?? []).filter((image) => image.imageFile === filename).length;
+  count += (block.schema.containerBlocks ?? []).reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
+  count += (block.schema.componentListBlocks ?? []).reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
+  count += (block.schema.gridItems ?? []).reduce((total, item) => total + countBlockImageReferences(item.block, filename), 0);
+  count += (block.schema.expandableStubBlocks?.children ?? []).reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
+  count += (block.schema.expandableContentBlocks?.children ?? []).reduce((total, child) => total + countBlockImageReferences(child, filename), 0);
   return count;
 }
 

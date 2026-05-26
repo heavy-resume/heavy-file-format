@@ -83,6 +83,7 @@ export function createTestState(document: VisualDocument): AppState {
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
+    pdfTemplateImportModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: null,

@@ -483,6 +483,7 @@ export function closeModal(): void {
   state.sqliteRowComponentModal = null;
   state.dbTableQueryModal = null;
   state.pdfExportPlanModal = null;
+  state.pdfTemplateImportModal = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
   state.sectionTemplateFlavorModal = null;

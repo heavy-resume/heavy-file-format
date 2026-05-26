@@ -163,6 +163,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
+    pdfTemplateImportModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -508,6 +509,9 @@ readerRenderer = createReaderRenderer(
     },
     get dbTableQueryModal() {
       return state.dbTableQueryModal;
+    },
+    get pdfTemplateImportModal() {
+      return state.pdfTemplateImportModal;
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;

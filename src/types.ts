@@ -101,6 +101,12 @@ export interface PdfExportPlanModalState {
   plan: HvyPdfExportPlan | null;
 }
 
+export interface PdfTemplateImportModalState {
+  isRunning: boolean;
+  status: string | null;
+  error: string | null;
+}
+
 export interface AiEditState {
   sectionKey: string | null;
   blockId: string | null;
@@ -341,6 +347,7 @@ export interface AppState {
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;
+  pdfTemplateImportModal: PdfTemplateImportModalState | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;

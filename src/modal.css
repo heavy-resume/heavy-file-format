@@ -99,6 +99,37 @@
   width: min(34rem, calc(100vw - 2rem));
 }
 
+.pdf-template-import-modal,
+.hvy-document .pdf-template-import-modal {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.pdf-template-import-picker,
+.hvy-document .pdf-template-import-picker {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.pdf-template-import-picker input,
+.hvy-document .pdf-template-import-picker input {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  padding: 0.65rem;
+}
+
+.pdf-template-import-status,
+.hvy-document .pdf-template-import-status {
+  margin: 0.5rem 0 0;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+  color: var(--hvy-text-alt);
+  padding: 0.65rem;
+}
+
 .new-document-choice-grid,
 .hvy-document .new-document-choice-grid {
   display: grid;

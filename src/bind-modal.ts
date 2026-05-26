@@ -19,6 +19,7 @@ import { getOutputGenerator } from './plugins/registry';
 import { getComponentDefsFromMeta } from './component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
+import { exportCurrentDocumentPdfWithTemplateBytes } from './pdf-export/action';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -100,6 +101,50 @@ export function bindModal(app: HTMLElement): void {
       const location = state.sectionTemplateFlavorModal.location ?? 'main';
       closeModal();
       insertTopLevelSection(templateName, flavorName, location);
+      return;
+    }
+
+    const pdfTemplateExportBtn = target.closest<HTMLButtonElement>('[data-modal-action="pdf-template-import-export"]');
+    if (pdfTemplateExportBtn && state.pdfTemplateImportModal) {
+      const fileInput = modalRoot.querySelector<HTMLInputElement>('#pdfTemplateFileInput');
+      const file = fileInput?.files?.[0] ?? null;
+      if (!file) {
+        state.pdfTemplateImportModal = {
+          ...state.pdfTemplateImportModal,
+          error: 'Choose a PHVY template before exporting.',
+        };
+        getRenderApp()();
+        return;
+      }
+      if (!file.name.toLowerCase().endsWith('.phvy')) {
+        state.pdfTemplateImportModal = {
+          ...state.pdfTemplateImportModal,
+          error: 'Choose a .phvy template file.',
+        };
+        getRenderApp()();
+        return;
+      }
+      state.pdfTemplateImportModal = {
+        ...state.pdfTemplateImportModal,
+        isRunning: true,
+        status: `Reading ${file.name}.`,
+        error: null,
+      };
+      getRenderApp()();
+      void file.arrayBuffer()
+        .then((buffer) => exportCurrentDocumentPdfWithTemplateBytes(new Uint8Array(buffer), file.name))
+        .then(() => {
+          closeModal();
+          getRenderApp()();
+        })
+        .catch((error) => {
+          state.pdfTemplateImportModal = {
+            isRunning: false,
+            status: null,
+            error: error instanceof Error ? error.message : 'PDF template export failed.',
+          };
+          getRenderApp()();
+        });
       return;
     }
 

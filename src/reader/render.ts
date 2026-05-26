@@ -62,6 +62,7 @@ interface ReaderRenderState {
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
+  pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
@@ -1275,6 +1276,31 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderModal(): string {
     if (state.themeModalOpen) {
       return renderThemeModal();
+    }
+    if (state.pdfTemplateImportModal) {
+      const modal = state.pdfTemplateImportModal;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="${modal.isRunning ? '' : 'close-overlay'}"></div>
+          <section class="modal-panel component-meta-modal pdf-template-import-modal">
+            <div class="modal-head">
+              <h3>Export PDF From PHVY</h3>
+              ${modal.isRunning ? '' : `<button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close PDF export" title="Close">${closeIcon()}</button>`}
+            </div>
+            <p class="muted">Choose a PHVY template. The current document will be imported into it before the PDF is rendered.</p>
+            ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
+            ${modal.status ? `<p class="pdf-template-import-status">${deps.escapeHtml(modal.status)}</p>` : ''}
+            <label class="pdf-template-import-picker">
+              <span>PHVY Template</span>
+              <input id="pdfTemplateFileInput" type="file" accept=".phvy,text/phvy" ${modal.isRunning ? 'disabled' : ''} />
+            </label>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close" ${modal.isRunning ? 'disabled' : ''}>Cancel</button>
+              <button type="button" class="secondary" data-modal-action="pdf-template-import-export" ${modal.isRunning ? 'disabled' : ''}>Import & Export</button>
+            </div>
+          </section>
+        </div>
+      `;
     }
     if (state.reusableSaveModal) {
       const existingName = state.reusableSaveModal.existingName;

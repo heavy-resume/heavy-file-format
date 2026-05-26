@@ -588,6 +588,7 @@ export function bindUi(app: HTMLElement): void {
     void runInBoundRuntimeAsync(async () => {
       try {
         await exportCurrentDocumentPdf();
+        getRenderApp()();
       } catch (error) {
         window.alert(error instanceof Error ? error.message : 'PDF export failed.');
       }

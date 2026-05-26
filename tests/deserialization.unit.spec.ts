@@ -232,6 +232,33 @@ hvy_version: 0.1
   expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
 });
 
+test('deserializes grid slot alignment metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"experience"}-->
+#! Experience
+
+ <!--hvy:grid {"gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"location"}-->
+
+   <!--hvy:text {}-->
+   Seattle, WA
+
+  <!--hvy:grid:1 {"id":"date-range","align":"right"}-->
+
+   <!--hvy:text {}-->
+   05/2024 - present
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.gridItems[1]?.align).toBe('right');
+});
+
 test('empty grids do not automatically create text items', () => {
   const input = `---
 hvy_version: 0.1

@@ -1,6 +1,6 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
-import type { VisualBlock } from '../../types';
+import type { GridItem, VisualBlock } from '../../types';
 import { closeIcon } from '../../../icons';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -40,6 +40,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
       ...block.schema.gridItems.map(
         (item) => {
           const canChangeComponent = isBlankDefaultGridItem(item.block);
+          const shellStyle = item.align ? ` style="text-align: ${helpers.escapeAttr(item.align)};"` : '';
           return `<div class="grid-field-row">
           <div class="grid-field-head">
             <div class="section-drag-title">
@@ -69,7 +70,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
             }
           </div>
-          <div class="grid-item-editor-shell">
+          <div class="grid-item-editor-shell"${shellStyle}>
             ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
           </div>
         </div>
@@ -103,14 +104,23 @@ function isBlankDefaultGridItem(block: VisualBlock): boolean {
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
+  const itemsByBlock = new Map(block.schema.gridItems.map((item) => [item.block, item]));
   const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
-    .map((item) => ({ html: helpers.renderReaderBlock(_section, item) }))
+    .map((orderedBlock) => {
+      const item = itemsByBlock.get(orderedBlock);
+      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock) } : null;
+    })
+    .filter((item): item is { item: GridItem; html: string } => item !== null)
     .filter((item) => item.html.trim().length > 0);
   const cells = visibleCells
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-      return `<div class="reader-grid-cell" style="grid-column: ${helpers.escapeAttr(gridColumn)};">${item.html}</div>`;
+      const cellStyle = [
+        `grid-column: ${gridColumn};`,
+        item.item.align ? `text-align: ${item.item.align};` : '',
+      ].filter(Boolean).join(' ');
+      return `<div class="reader-grid-cell" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
     })
     .join('');
   if (!cells.trim()) {

@@ -1,3 +1,4 @@
+import type { Align } from '../editor/types';
 import type { HvyPdfExportDecision, HvyPdfMakeNode, HvyPdfMakeNodeObject } from './types';
 
 interface PdfTextLine {
@@ -5,10 +6,15 @@ interface PdfTextLine {
   text: string;
 }
 
-export function renderPdfTextBlock(text: string, placeholder: string, decision: HvyPdfExportDecision): HvyPdfMakeNodeObject {
+export function renderPdfTextBlock(
+  text: string,
+  placeholder: string,
+  decision: HvyPdfExportDecision,
+  align?: Align
+): HvyPdfMakeNodeObject {
   const lines = splitPdfTextLines(stripFillInMarkers(normalizePdfTextInline(text || placeholder || '')));
   if (!lines.length) {
-    return { text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' };
+    return applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align);
   }
   const stack: HvyPdfMakeNode[] = [];
   let listItems: HvyPdfMakeNode[] = [];
@@ -26,27 +32,27 @@ export function renderPdfTextBlock(text: string, placeholder: string, decision: 
     const style = getPdfTextLineStyle(line.styleName, decision);
     if (heading) {
       flushList();
-      stack.push({
+      stack.push(applyTextAlignment({
         text: heading[2],
         style: getHeadingStyle(heading[1].length, style),
         headlineLevel: heading[1].length,
         hvyKeepWithNext: true,
-      });
+      }, align));
     } else if (bullet) {
       activeListStyle = style;
-      listItems.push({ text: bullet[1], style });
+      listItems.push(applyTextAlignment({ text: bullet[1], style }, align));
     } else {
       flushList();
-      stack.push({
+      stack.push(applyTextAlignment({
         text: line.text,
         style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
         headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
         hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
-      });
+      }, align));
     }
   }
   flushList();
-  return stack.length === 1 && typeof stack[0] !== 'string' ? stack[0] : { stack };
+  return applyTextAlignment(stack.length === 1 && typeof stack[0] !== 'string' ? stack[0] : { stack }, align);
 }
 
 export function normalizePdfTextInline(text: string): string {
@@ -93,4 +99,8 @@ function getPdfTextLineStyle(styleName: string | null, decision: HvyPdfExportDec
 function getHeadingStyle(level: number, lineStyle: string): string[] {
   const headingStyle = level <= 1 ? 'sectionTitle' : level === 2 ? 'sectionTitle2' : 'sectionTitle3';
   return lineStyle === 'paragraph' ? [headingStyle] : [headingStyle, lineStyle];
+}
+
+function applyTextAlignment<T extends HvyPdfMakeNodeObject>(node: T, align: Align | undefined): T {
+  return align && align !== 'left' ? { ...node, alignment: align } : node;
 }

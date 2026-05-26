@@ -8,6 +8,7 @@ const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const textLineStyles = helpers.getTextLineStyles?.() ?? {};
   const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
+  const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
   if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
     const fillInSource = fillInParts
       .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
@@ -40,7 +41,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           >Remove Fill-in</button>
         </div>
       </div>
-      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
+      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"${alignStyle}>
         ${html}
       </div>
     `;
@@ -69,7 +70,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-rich"
-      ${block.schema.align ? `style="text-align: ${helpers.escapeAttr(block.schema.align)};"` : ''}
+      ${alignStyle}
       ${block.schema.placeholder ? `data-placeholder="${helpers.escapeAttr(block.schema.placeholder)}"` : ''}
     >${editorHtml}</div>
   </div>

@@ -45,7 +45,6 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { virtualizeRenderedSections } from './section-virtualizer';
-import { renderPdfExportPlanModal } from './pdf-export/plan-modal-ui';
 import { renderNewDocumentModal } from './new-document-modal';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -751,7 +750,6 @@ function renderApp(): void {
       ${readerRenderer.renderLinkInlineModal()}
       ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
       ${renderDescriptionPopulateModal()}
-      ${renderPdfExportPlanModal()}
     </main>
   `;
   markupMs = performance.now() - stepStartedAt;

@@ -236,6 +236,47 @@ describe('PDF export strategy', () => {
     expect(serialized).toContain('ORGANIZATION');
   });
 
+  test('exports right-aligned grid item text into the PDF definition', async () => {
+    const document = createDocument();
+    const grid = createEmptyBlock('grid');
+    grid.schema.id = 'aligned-grid';
+    grid.schema.gridColumns = 2;
+    grid.schema.gridItems = [
+      { id: 'left-grid-cell', block: createTextBlock('left-grid-text', 'Left cell') },
+      { id: 'right-grid-cell', align: 'right', block: createTextBlock('right-grid-text', 'Right cell') },
+    ];
+    document.sections = [createSection('aligned-grid-section', [grid])];
+
+    const expectedResult = await getHvyPdfBlob(document);
+    const pdfDefinition = JSON.parse(await expectedResult.text());
+    const gridNode = pdfDefinition.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
+
+    expect(gridNode.columns[0].stack[0]).toEqual(expect.objectContaining({ text: 'Left cell' }));
+    expect(gridNode.columns[0].stack[0]).not.toHaveProperty('alignment');
+    expect(gridNode.columns[1]).toEqual(expect.objectContaining({ alignment: 'right' }));
+    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
+  });
+
+  test('exports right-aligned child text inside a grid into the PDF definition', async () => {
+    const document = createDocument();
+    const grid = createEmptyBlock('grid');
+    const rightText = createTextBlock('right-grid-text', 'Right cell');
+    rightText.schema.align = 'right';
+    grid.schema.id = 'aligned-child-text-grid';
+    grid.schema.gridColumns = 2;
+    grid.schema.gridItems = [
+      { id: 'left-grid-cell', block: createTextBlock('left-grid-text', 'Left cell') },
+      { id: 'right-grid-cell', block: rightText },
+    ];
+    document.sections = [createSection('aligned-child-text-grid-section', [grid])];
+
+    const expectedResult = await getHvyPdfBlob(document);
+    const pdfDefinition = JSON.parse(await expectedResult.text());
+    const gridNode = pdfDefinition.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
+
+    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
+  });
+
   test('honors hidden targets and strategy-selected expandable pane', () => {
     const document = createDocument();
     const expectedResult = buildPdfExportDocDefinition(document, {

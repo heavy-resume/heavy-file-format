@@ -18,7 +18,7 @@ import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './bl
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
-import { bindPdfExportPlanModal, openPdfExportPlannerOrExport } from './pdf-export/plan-modal-bind';
+import { exportCurrentDocumentPdf } from './pdf-export/action';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
@@ -587,14 +587,12 @@ export function bindUi(app: HTMLElement): void {
   exportPdfBtn?.addEventListener('click', () => {
     void runInBoundRuntimeAsync(async () => {
       try {
-        await openPdfExportPlannerOrExport();
+        await exportCurrentDocumentPdf();
       } catch (error) {
         window.alert(error instanceof Error ? error.message : 'PDF export failed.');
       }
     });
   });
-
-  bindPdfExportPlanModal(app, runInBoundRuntimeAsync);
 
   bindAppEvents(app);
 

@@ -1,4 +1,4 @@
-import type { GridItem, VisualBlock } from './editor/types';
+import type { Align, GridItem, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import { makeId } from './utils';
 
@@ -30,6 +30,10 @@ export function createGridItem(
   return { id: makeId('griditem'), block: createBlock('text', true) };
 }
 
+export function coerceGridItemAlign(value: unknown): Align | undefined {
+  return value === 'left' || value === 'center' || value === 'right' ? value : undefined;
+}
+
 export function parseGridItems(
   candidate: JsonObject,
   _columns: number,
@@ -44,8 +48,10 @@ export function parseGridItems(
         return;
       }
       const item = raw as JsonObject;
+      const align = coerceGridItemAlign(item.align);
       items.push({
         id: typeof item.id === 'string' ? item.id : makeId('griditem'),
+        ...(align ? { align } : {}),
         block: item.block ? parseBlock(item.block) : (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -63,8 +69,10 @@ export function parseGridItems(
         return;
       }
       const item = raw as JsonObject;
+      const align = coerceGridItemAlign(item.align);
       items.push({
         id: makeId('griditem'),
+        ...(align ? { align } : {}),
         block: (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';

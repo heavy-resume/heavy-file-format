@@ -1,4 +1,4 @@
-import type { CarouselImage, VisualBlock, VisualSection } from '../editor/types';
+import type { CarouselImage, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { getImageAttachment } from '../attachments';
 import { resolveBaseComponentFromMeta } from '../component-defs';
@@ -149,7 +149,7 @@ function renderBlock(
   let node: HvyPdfMakeNodeObject | null;
   switch (baseComponent) {
     case 'text':
-      node = renderPdfTextBlock(block.text, block.schema.placeholder, decision);
+      node = renderPdfTextBlock(block.text, block.schema.placeholder, decision, block.schema.align);
       break;
     case 'code':
       node = { text: block.text || block.schema.placeholder || '', style: 'codeBlock' };
@@ -203,11 +203,41 @@ function renderGridBlock(
   resolved: HvyPdfExportResolvedStrategy,
   block: VisualBlock
 ): HvyPdfMakeNodeObject {
-  const columns = block.schema.gridItems.map((item) => ({
-    width: '*',
-    stack: renderBlocks(document, resolved, [item.block]),
-  }));
+  const columns = block.schema.gridItems.map((item) => {
+    const stack = renderBlocks(document, resolved, [item.block]);
+    return {
+      width: '*',
+      ...(item.align ? { alignment: item.align } : {}),
+      stack: applyGridItemAlignment(stack, item.align),
+    };
+  });
   return columns.length ? { columns, columnGap: 12 } : placeholderNode('Empty grid.');
+}
+
+function applyGridItemAlignment(nodes: HvyPdfMakeNode[], align: GridItem['align']): HvyPdfMakeNode[] {
+  if (!align) {
+    return nodes;
+  }
+  return nodes.map((node) => applyAlignmentToPdfNode(node, align));
+}
+
+function applyAlignmentToPdfNode(node: HvyPdfMakeNode, align: NonNullable<GridItem['align']>): HvyPdfMakeNode {
+  if (typeof node === 'string') {
+    return { text: node, alignment: align };
+  }
+  if (node.alignment) {
+    return node;
+  }
+  if (node.stack) {
+    return { ...node, alignment: align, stack: node.stack.map((child) => applyAlignmentToPdfNode(child, align)) };
+  }
+  if (node.ul) {
+    return { ...node, alignment: align, ul: node.ul.map((child) => applyAlignmentToPdfNode(child, align)) };
+  }
+  if (node.ol) {
+    return { ...node, alignment: align, ol: node.ol.map((child) => applyAlignmentToPdfNode(child, align)) };
+  }
+  return { ...node, alignment: align };
 }
 
 function renderExpandableBlock(

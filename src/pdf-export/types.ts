@@ -221,7 +221,15 @@ export interface HvyPdfMakeNodeObject {
   id?: string;
   text?: string | Array<string | HvyPdfMakeNodeObject>;
   stack?: HvyPdfMakeNode[];
-  columns?: Array<HvyPdfMakeNode | { width?: string | number; stack?: HvyPdfMakeNode[]; text?: string }>;
+  columns?: Array<
+    | HvyPdfMakeNode
+    | {
+        width?: string | number;
+        stack?: HvyPdfMakeNode[];
+        text?: string;
+        alignment?: 'left' | 'center' | 'right' | 'justify';
+      }
+  >;
   ul?: HvyPdfMakeNode[];
   ol?: HvyPdfMakeNode[];
   table?: {

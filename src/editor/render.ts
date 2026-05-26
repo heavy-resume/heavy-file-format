@@ -888,6 +888,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map((item, index) => {
           const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+          const cellStyle = [
+            `grid-column: ${gridColumn};`,
+            item.align ? `text-align: ${item.align};` : '',
+          ].filter(Boolean).join(' ');
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
                 container: 'grid',
@@ -897,7 +901,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 targetGridItemId: item.id,
               })
             : '';
-          return `<div class="reader-grid-cell is-passive-grid-cell" style="grid-column: ${deps.escapeAttr(gridColumn)};">${renderPassiveEditorBlock(
+          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections
@@ -925,7 +929,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const content = block.schema.placeholder
         ? renderTextFragment(hint)
         : deps.escapeHtml(hint);
-      const alignStyle = block.schema.align ? ` style="text-align: ${deps.escapeAttr(block.schema.align)};"` : '';
+      const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${deps.escapeAttr(block.schema.align)};"`;
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 

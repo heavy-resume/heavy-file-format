@@ -3,7 +3,8 @@ import { beforeAll, beforeEach, expect, test } from 'vitest';
 import { handleBlockFieldInput } from '../src/block-ops';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
-import { renderGridEditor } from '../src/editor/components/grid/grid';
+import { renderGridEditor, renderGridReader } from '../src/editor/components/grid/grid';
+import { renderTextEditor } from '../src/editor/components/text/text';
 import { initCallbacks, initState, state } from '../src/state';
 import type { VisualDocument } from '../src/types';
 import { createTestState } from './serialization-test-helpers';
@@ -95,6 +96,46 @@ test('grid editor renders a newly added blank text item without reading other co
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
+test('grid editor applies grid item alignment to the edit shell', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'right-item',
+    align: 'right',
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
+
+  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
+});
+
+test('right-aligned grid item text editor has no default-left child override', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'right-item',
+    align: 'right',
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, {
+    ...createHelpers(),
+    renderEditorBlock: (sectionKey, block) => renderTextEditor(sectionKey, block, createHelpers()),
+  });
+
+  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
+  expect(expectedResult).toContain('<div\n      class="rich-editor"');
+  expect(expectedResult).not.toContain('style="text-align: left;"');
+});
+
+test('text editor omits inline style for default-left alignment', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Text';
+
+  const expectedResult = renderTextEditor('section-summary', block, createHelpers());
+
+  expect(expectedResult).not.toContain('text-align: left');
+});
+
 test('grid blank item component switch creates a complete schema for the selected component', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
@@ -116,4 +157,24 @@ test('grid blank item component switch creates a complete schema for the selecte
   expect(expectedResult.schema.kind).toBe('image');
   expect(expectedResult.schema.component).toBe('image');
   expect(expectedResult.schema.imageFile).toBe('');
+});
+
+test('grid reader applies grid item alignment to the cell', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'left-item',
+    block: createEmptyBlock('text'),
+  });
+  grid.schema.gridItems.push({
+    id: 'right-item',
+    align: 'right',
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: (_section, block) => `<p>${block.id}</p>`,
+  });
+
+  expect(expectedResult).toContain('grid-column: 2 / span 1; text-align: right;');
 });

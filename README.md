@@ -1,6 +1,7 @@
 # The HVY File Format
 
 Heavy "HVY" (`.hvy`) is a file format for structured, interactive content designed for information ingestion across different audiences.
+PDF template documents use the related `.phvy` extension and restrict authoring to PDF-compatible components.
 
 ## Why
 
@@ -73,7 +74,7 @@ Reference app feature flags:
 - Set `window.HVY_REFERENCE_CONFIG = { semanticFilterProvider }` or pass `semanticFilterProvider` to an embedded mount to enable AI-backed semantic filtering in the Filter panel.
 - When present, DB table tail payloads are now preserved on open/download for `.hvy` files.
 
-Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
+Reference app reader view filters are implementation-only and are not serialized into `.hvy` / `.thvy` / `.phvy` files. A filter is a JSON object mapping section/component IDs, or CLI-style virtual paths such as `/body/tools-technologies`, to modifiers:
 - `highlight`: adds reader highlight styling and expands/prioritizes parent containers.
 - `priority`: expands/prioritizes the target and its parent containers without adding the visual highlight.
 - `collapse`: forces a collapsed reader preview where practical.

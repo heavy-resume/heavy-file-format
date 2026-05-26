@@ -31,6 +31,9 @@ export function makeId(prefix: string): string {
 
 export function detectExtension(filename: string): VisualDocument['extension'] {
   const lower = filename.toLowerCase();
+  if (lower.endsWith('.phvy')) {
+    return '.phvy';
+  }
   if (lower.endsWith('.thvy')) {
     return '.thvy';
   }
@@ -47,7 +50,7 @@ export function detectExtension(filename: string): VisualDocument['extension'] {
 }
 
 export function normalizeFilename(input: string): string {
-  if (input.endsWith('.hvy') || input.endsWith('.thvy') || input.endsWith('.md')) {
+  if (input.endsWith('.hvy') || input.endsWith('.thvy') || input.endsWith('.phvy') || input.endsWith('.md')) {
     return input;
   }
   return `${input}.hvy`;
@@ -67,7 +70,7 @@ export function downloadBinaryFile(filename: string, bytes: Uint8Array): void {
   downloadBlob(filename, blob);
 }
 
-function downloadBlob(filename: string, blob: Blob): void {
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement('a');
   anchor.href = url;

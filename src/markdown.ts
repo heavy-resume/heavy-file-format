@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
+import { createTextFillInMarker } from './text-fill-in';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -69,6 +70,11 @@ turndown.addRule('hvy-text-line-style', {
     const trimmed = content.replace(/\n{3,}/g, '\n\n').trim();
     return name && trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n${trimmed}\n\n`;
   },
+});
+
+turndown.addRule('hvy-text-fill-in-marker', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-fill-in-marker') === 'true',
+  replacement: (_content, node) => createTextFillInMarker((node as Element).getAttribute('data-placeholder') ?? ''),
 });
 
 export interface MarkdownRenderOptions {

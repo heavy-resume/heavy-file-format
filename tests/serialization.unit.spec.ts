@@ -96,7 +96,7 @@ hvy_version: 0.1
    <!--hvy:component-list {"componentListComponent":"text"}-->
     ## Skills
 
-  <!--hvy:grid:1 {"id":"details"}-->
+  <!--hvy:grid:1 {"id":"details","align":"right"}-->
 
    <!--hvy:container {}-->
 
@@ -108,6 +108,7 @@ hvy_version: 0.1
   const output = serializeWithState(document);
 
   expect(output).toMatch(/<!--hvy:grid:0 {"id":"skills"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:1 {"id":"details","align":"right"}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:component-list \{\}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:container \{\}-->/);
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"component"/);
@@ -267,6 +268,27 @@ hvy_version: 0.1
   expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()).toBe(
     document.sections[0]?.blocks[0]?.text.replace(/\s+/g, ' ').trim()
   );
+});
+
+test('serializes long markdown list items without wrapping them into artificial paragraphs', () => {
+  const longBullet =
+    '- Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega alpha beta gamma delta';
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"intro"}-->
+  ${longBullet}
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+  const textLines = expectedResult.split('\n').filter((line) => line.includes('Alpha beta'));
+
+  expect(textLines).toEqual([`  ${longBullet}`]);
+  expect(deserializeDocument(expectedResult, '.hvy').sections[0]?.blocks[0]?.text).toBe(longBullet);
 });
 
 test('serialization wrapping preserves code plugin and fenced text bodies', () => {

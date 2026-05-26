@@ -12,12 +12,14 @@ Design goals:
 - Add structure for atomic thoughts, nesting, and metadata.
 - Support CSS and web rendering in safe/offline-first clients.
 - Support template documents that can be filled in via `.thvy` files.
+- Support PDF template documents via `.phvy` files.
 - Support extensibility via plugins.
 
 ## 2. File Types
 
 - `.hvy`: Concrete content document.
 - `.thvy`: Template document. Identical to `.hvy` except for extension and media type.
+- `.phvy`: PDF template document. Uses HVY syntax with PDF-safe authoring constraints.
 
 Rule: Any valid `.md` file is valid `.hvy`.
 
@@ -27,6 +29,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
+Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
@@ -99,6 +102,7 @@ Each section contains:
 
 Notes:
 - `title` is derived from the `#!` section title line, if present, otherwise defaults to the `id` value.
+- When `id` is absent, authoring tools SHOULD generate a stable slug from the section title. If that slug is already used in the document, append a numeric suffix such as `-2`. This generated ID is the section's public document ID, not an editor-internal key.
 - Use `title` for navigation, editing, outline views, or linking.
 - `#!` lines are never rendered as Markdown content.
 
@@ -173,6 +177,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - `#!` lines are consumed by the parser and not rendered.
 - If no `#!` follows the directive, the section title defaults to `id`.
+- If `id` is omitted, authoring tools SHOULD derive it from the section title as a lowercase slug and make it unique within the document.
 - If multiple directives precede the same `#!` line, they are merged (last key wins).
 
 ### 5.4 Document-level directives
@@ -317,6 +322,8 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
+
+Grid slot directives MAY include `id` and `align`. `align` accepts `left`, `center`, or `right` and applies to the rendered grid cell, allowing child text to inherit the cell alignment unless the child block sets its own alignment.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
@@ -841,6 +848,33 @@ Rules:
 - `css` is an optional inline CSS declaration string and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - Text line styles do not create HVY components, sections, component defaults, or component-level CSS. Component-level `css` continues to persist independently.
 
+### 5.16 Document-level heading styles
+
+A `.hvy` or `.thvy` file MAY declare presentation values for standard Markdown headings in front matter under `heading_styles`.
+
+This styles visible ATX headings (`#` through `######`) inside `text` components. It does not style HVY section titles from `#!` lines, because those lines are section metadata and are not rendered as Markdown content.
+
+#### Front matter shape
+
+```yaml
+heading_styles:
+  h2:
+    label: Heading 2
+    css: "margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "0.7rem"
+  h3:
+    label: Heading 3
+    css: "margin: 0.85rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1.1rem"
+```
+
+Rules:
+- Keys under `heading_styles` are `h1` through `h6`.
+- `css` is an optional inline CSS declaration string applied to that rendered heading level and MUST be sanitized using the same rules as other document-supplied inline CSS.
+- `afterContentMarginTop` is an optional CSS length or expression used as the top margin when that heading follows prose, a list, blockquote, or code block in the same text component.
+- Renderers SHOULD remove the top margin from the first visible heading in a text block or styled text-line wrapper so a heading at the start of a section aligns with the section content.
+- Unknown heading style fields MUST be ignored.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The distinction is the `.thvy` extension or `text/thvy` media type.
@@ -863,6 +897,19 @@ Minimal example:
 hvy_version: 0.1
 ---
 ```
+
+### 6.2 PDF template documents (`.phvy`)
+
+A `.phvy` file is a HVY-family document intended for PDF template authoring and export. Authoring clients SHOULD indicate when the current document is a PDF document and SHOULD prevent creation of components that cannot render to PDF.
+
+PDF-template authoring supports these component base types:
+- `text`
+- `container`
+- `grid`
+- `image`
+- `table` when static table support is enabled
+
+Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
 
 With optional schema:
 
@@ -970,7 +1017,9 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
 - a human-readable display name (used by editors to populate the plugin
   selector for new `plugin` blocks);
 - one or more renderable component factories that produce plugin instances bound to specific blocks;
-- one or more output generators that produce text directly or produce prompts for a host LLM/chat client.
+- one or more output generators that produce text directly or produce prompts for a host LLM/chat client;
+- a PDF/static render capability that resolves a plugin block to ordinary
+  PDF-compatible HVY blocks for export.
 
 An output generator has a globally unique plugin-qualified key, an optional
 human-readable label, optional required template variable names, and a generate
@@ -990,6 +1039,21 @@ used only when the LLM request fails or returns no text. If only `answer` is
 present, the host SHOULD insert that text directly. If neither path produces
 text, the authoring UI SHOULD show an error and preserve the user's existing
 field value.
+
+A PDF/static render capability is invoked by the host at PDF export time before
+PDF component validation and layout. It receives the plugin block, document
+header, attachments API, and current document context, and returns zero or more
+ordinary HVY blocks. Returned blocks MUST use components that are valid in the
+target PDF document, such as `text`, `container`, `grid`, `table`, or `image`.
+The capability MAY perform asynchronous work, including host-approved API calls,
+and MAY write static attachments before returning image or carousel blocks that
+reference those attachments. For example, a plugin can fetch or generate a QR
+code, store it as an image attachment, and return an `image` block. Hosts SHOULD
+replace only the export clone with these static blocks; the authored plugin
+block and plugin-owned configuration/text MUST remain unchanged. If a `.phvy`
+plugin block has no installed PDF/static render capability, authoring clients
+SHOULD keep the plugin visible in pickers but disabled, and PDF export MUST
+reject the unresolved plugin block rather than silently hiding it.
 
 Plugins MUST own the rendered DOM for their block. Hosts MUST treat the
 returned element as opaque and MUST NOT mutate its children, except to remove
@@ -1293,7 +1357,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
-- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, `text_line_styles.*.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, `text_line_styles.*.css`, `heading_styles.*.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 
@@ -1317,11 +1381,16 @@ Document is valid HVY if:
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.
 
+Additional validity for `.phvy`:
+- All rendered component base types MUST be PDF-compatible: `text`, `container`, `grid`, `image`, or static `table`.
+- Sections MUST NOT use `location: sidebar`.
+
 ## 11. Recommended MIME and Media Types
 
 Proposed (experimental):
 - `text/hvy` for `.hvy`
 - `text/thvy` for `.thvy`
+- `text/phvy` for `.phvy`
 
 ## 12. Future Work
 

@@ -1,6 +1,8 @@
 import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
+import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
+import type { ProxyChatMode } from './chat/chat';
 
 export interface DocumentAttachment {
   id: string;
@@ -10,7 +12,7 @@ export interface DocumentAttachment {
 
 export interface VisualDocument {
   meta: JsonObject;
-  extension: '.hvy' | '.thvy' | '.md';
+  extension: '.hvy' | '.thvy' | '.phvy' | '.md';
   sections: VisualSection[];
   attachments: DocumentAttachment[];
 }
@@ -89,6 +91,49 @@ export interface ChatState {
   abortController: AbortController | null;
   cliSimEnabled: boolean;
   cliSim: ChatCliSimState | null;
+}
+
+export interface PdfExportPlanModalState {
+  templateId: string;
+  values: Record<string, string>;
+  isRunning: boolean;
+  status: string | null;
+  error: string | null;
+  plan: HvyPdfExportPlan | null;
+}
+
+export interface PdfTemplateImportModalState {
+  isRunning: boolean;
+  status: string | null;
+  error: string | null;
+  steps: PdfTemplateImportStepState[];
+  totalTokenUsage: ChatTokenUsage;
+  awaitingLlmStep: boolean;
+  awaitingLlmStepId: string | null;
+  requestLog: PdfTemplateImportRequestLogEntry[];
+}
+
+export interface PdfTemplateImportStepState {
+  id: string;
+  label: string;
+  status: 'pending' | 'running' | 'complete' | 'error';
+  tokenUsage: ChatTokenUsage;
+}
+
+export interface PdfTemplateImportRequestLogEntry {
+  callIndex: number;
+  stage: string;
+  debugLabel: string;
+  phase: string;
+  request: {
+    settings: ChatSettings;
+    messages: ChatMessage[];
+    context: string;
+    responseInstructions: string;
+    systemInstructions?: string;
+    mode: ProxyChatMode;
+    maxContextChars?: number;
+  };
 }
 
 export interface AiEditState {
@@ -274,6 +319,7 @@ export interface AppState {
   cliSession: HvyCliSessionState;
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeTextEditorMode?: { sectionKey: string; blockId: string; mode: 'rich' | 'fill-in' } | null;
   aiEditorHostBlock: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey: string | null;
   activeEditorBlockPath: { sectionKey: string; blockId: string }[];
@@ -303,6 +349,7 @@ export interface AppState {
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
+  newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
@@ -328,6 +375,8 @@ export interface AppState {
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
+  pdfExportPlanModal: PdfExportPlanModalState | null;
+  pdfTemplateImportModal: PdfTemplateImportModalState | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;

@@ -19,9 +19,11 @@ interface ImportXrefLlmOptions {
 }
 
 interface ImportXrefPassOptions {
-  sourceName: string;
+  sourceName?: string;
   sourceText: string;
   instructions?: string;
+  requestMode?: ProxyCompletionParams['mode'];
+  maxContextChars?: number;
   signal?: AbortSignal;
 }
 
@@ -72,7 +74,8 @@ export async function runImportXrefPass(
         'You are performing the final HVY import xref pass.',
         'Return only the requested JSON object.',
       ].join('\n'),
-      mode: 'document-edit',
+      mode: options.requestMode ?? 'document-edit',
+      maxContextChars: options.maxContextChars,
       debugLabel: `ai-import-xrefs:${index + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
@@ -112,10 +115,10 @@ export function applyImportXrefResponse(document: VisualDocument, batch: ImportX
 
 function buildImportXrefTaskMessage(options: ImportXrefPassOptions, batch: ImportXrefBatch, index: number, total: number): string {
   return [
-    `Fill xref component lists for imported section "${batch.sectionTitle}" from "${options.sourceName}".`,
+    `Fill xref component lists for imported section "${batch.sectionTitle}" ${formatImportXrefSourceReference(options.sourceName)}.`,
     `Xref batch ${index + 1} of ${total}: ${batch.debugName}.`,
     '',
-    'Use only source-backed relationships visible in the source document and current section context.',
+    'Use only source-backed relationships visible in the incoming data and current section context.',
     'Only choose targets from the allowed target lists provided for each L-key.',
     'Return xrefs only for relationships that are clearly supported.',
     'Use the L-key IDs exactly as response object keys.',
@@ -131,7 +134,7 @@ function buildImportXrefTaskMessage(options: ImportXrefPassOptions, batch: Impor
 function buildImportXrefContext(options: ImportXrefPassOptions, batch: ImportXrefBatch, createdTargets: ImportXrefCreatedTarget[]): string {
   return [
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${options.sourceName}`,
+    ...formatImportXrefSourceNameLines(options.sourceName),
     '```text',
     options.sourceText,
     '```',
@@ -145,6 +148,16 @@ function buildImportXrefContext(options: ImportXrefPassOptions, batch: ImportXre
     batch.contextHvy,
     '=== END CURRENT IMPORTED SECTION CONTEXT ===',
   ].join('\n');
+}
+
+function formatImportXrefSourceReference(sourceName: string | undefined): string {
+  const name = sourceName?.trim() ?? '';
+  return name ? `from "${name}"` : 'from incoming data';
+}
+
+function formatImportXrefSourceNameLines(sourceName: string | undefined): string[] {
+  const name = sourceName?.trim() ?? '';
+  return name ? [`Source name: ${name}`] : [];
 }
 
 function buildBatchListFrame(batch: ImportXrefBatch): string {

@@ -70,6 +70,7 @@ const closeAiEdit: AppActionHandler = () => {
 };
 
 const setEditorMode: AppActionHandler = ({ actionButton }) => {
+  commitActiveTextFillIn('set-editor-mode');
   const previousEditorMode = state.editorMode;
   const editorMode = actionButton.dataset.editorMode === 'cli'
     ? 'cli'

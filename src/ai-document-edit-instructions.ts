@@ -180,10 +180,11 @@ export function buildHeaderEditFormatInstructions(options?: { planActive?: boole
       ? 'A plan already exists for this request. The `plan` tool is unavailable now; execute the current plan and use `mark_step_done` when steps are complete.'
       : 'For larger or ambiguous header edit requests, first use `plan` with explicit steps. Create at most one plan, then execute it and mark steps done instead of replacing it.',
     'The header is YAML front matter only. It contains document metadata, component template definitions, and section template definitions such as `component_defs` and `section_defs`.',
-    'Use the header path for document-level metadata, theme colors, component defaults, section defaults, text line styles, template schema, plugins, and component template/section definitions.',
+    'Use the header path for document-level metadata, theme colors, component defaults, section defaults, text line styles, heading styles, template schema, plugins, and component template/section definitions.',
     'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
     'For `component_defaults`, each component name may contain only `css`, for example `component_defaults:\\n  xref-card:\\n    css: "margin: 0.5rem 0;"`.',
     'For `text_line_styles`, each style may contain `label` and declaration-only `css`, for example `text_line_styles:\\n  role:\\n    label: Role heading\\n    css: "font-weight: 700;"`.',
+    'For `heading_styles`, each `h1` through `h6` entry may contain `label`, declaration-only `css`, and `afterContentMarginTop`, for example `heading_styles:\\n  h3:\\n    label: Heading 3\\n    css: "margin: 0.85rem 0 0.2rem; font-weight: 700;"\\n    afterContentMarginTop: "1.1rem"`.',
     'CSS values must be declaration strings, never serialized JSON objects. Do not put values like `{"id":"..."}` in any `css` field.',
     'Do not use `section_defaults` to satisfy requests about visible spacing between existing sections; edit the existing section CSS through the document path instead.',
     'When changing a theme palette, consider all known `theme.colors` variables listed in the header outline, including table colors: `--hvy-table-header`, `--hvy-table-row-bg-1`, and `--hvy-table-row-bg-2`.',

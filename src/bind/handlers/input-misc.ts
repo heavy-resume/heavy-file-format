@@ -1,4 +1,4 @@
-import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers } from './_imports';
+import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
@@ -6,6 +6,7 @@ import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '.
 import { isSearchFilterApplied, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
+import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -94,6 +95,9 @@ export function bindInputMisc(app: HTMLElement): void {
       advanced: state.showAdvancedEditor,
     });
     if (field === 'new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       state.addComponentBySection[sectionKey] = target.value;
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
@@ -104,6 +108,9 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
     if (field === 'new-grid-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const blockId = target.dataset.blockId;
       if (!blockId) {
         console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), skipped: 'missing-block-id' });
@@ -129,7 +136,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!section) {
         return;
       }
-      section.title = target.value;
+      assignSectionTitleAndGeneratedId(state.document.sections, section, target.value);
       getRefreshReaderPanels()();
       return;
     }

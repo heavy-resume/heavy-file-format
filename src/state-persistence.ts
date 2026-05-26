@@ -2,6 +2,7 @@ import { deserializeDocumentBytes, serializeDocumentBytes } from './serializatio
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
+import { detectExtension } from './utils';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const LEGACY_SESSION_STORAGE_KEYS = [
@@ -38,9 +39,19 @@ interface SessionStatePayload {
     history: HvyCliHistoryEntry[];
   };
   documentBase64?: string;
+  activeEditor?: SavedActiveEditorState;
 }
 
 type SavedSearchState = Omit<SearchState, 'isLoading' | 'semanticProgress' | 'error' | 'requestNonce' | 'abortController'>;
+type SavedActiveEditorState = {
+  activeEditorBlock: AppState['activeEditorBlock'];
+  aiEditorHostBlock: AppState['aiEditorHostBlock'];
+  aiEditorHostSectionKey: string | null;
+  activeEditorBlockPath: AppState['activeEditorBlockPath'];
+  activeEditorBlockSnapshot: AppState['activeEditorBlockSnapshot'];
+  activeEditorBlockSnapshots: AppState['activeEditorBlockSnapshots'];
+  activeEditorNewBlockIds: string[];
+};
 
 export interface LoadedSessionState {
   document?: VisualDocument;
@@ -54,6 +65,7 @@ export interface LoadedSessionState {
   chat: SessionStatePayload['chat'];
   search: SearchState;
   cli: SessionStatePayload['cli'];
+  activeEditor?: SavedActiveEditorState;
 }
 
 export function loadSessionState(storageKey?: string | null): LoadedSessionState | null {
@@ -69,12 +81,13 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
     if (!parsed || parsed.version !== 1) {
       return null;
     }
+    const filename = typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy';
     const document = typeof parsed.documentBase64 === 'string'
-      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), '.hvy')
+      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename))
       : undefined;
     return {
       document,
-      filename: typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy',
+      filename,
       selectedExample: isSelectedExample(parsed.selectedExample) ? parsed.selectedExample : undefined,
       currentView: isCurrentView(parsed.currentView) ? parsed.currentView : 'editor',
       editorMode: isEditorMode(parsed.editorMode) ? parsed.editorMode : 'basic',
@@ -97,6 +110,7 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
           ? parsed.cli.history.map(normalizeCliHistoryEntry).filter((entry): entry is HvyCliHistoryEntry => Boolean(entry))
           : [],
       },
+      activeEditor: normalizeActiveEditorState(parsed.activeEditor),
     };
   } catch (error) {
     console.warn('[hvy:session] failed to load saved state', error);
@@ -138,11 +152,121 @@ export function saveSessionState(state: AppState): void {
     if (state.persistDocumentState !== false) {
       payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
     }
+    const activeEditor = createActiveEditorStatePayload(state);
+    if (activeEditor) {
+      payload.activeEditor = activeEditor;
+    }
     window.sessionStorage.setItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
     removeLegacySessionState();
   } catch (error) {
     console.warn('[hvy:session] failed to save state', error);
   }
+}
+
+export function createRecoveryStatePayload(state: AppState): string | null {
+  const activeEditor = createActiveEditorStatePayload(state);
+  if (!activeEditor) {
+    return null;
+  }
+  return JSON.stringify({ version: 1, activeEditor });
+}
+
+export function applyRecoveryStatePayload(state: AppState, payload: string | null | undefined): void {
+  if (!payload) {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(payload) as { version?: unknown; activeEditor?: unknown };
+    if (parsed.version !== 1) {
+      return;
+    }
+    const activeEditor = normalizeActiveEditorState(parsed.activeEditor);
+    if (!activeEditor) {
+      return;
+    }
+    applyActiveEditorState(state, activeEditor);
+  } catch {
+    // Ignore malformed recovery state. The recovered document bytes are still usable.
+  }
+}
+
+function createActiveEditorStatePayload(state: AppState): SavedActiveEditorState | null {
+  if (!state.activeEditorBlock || state.activeEditorBlockPath.length === 0) {
+    return null;
+  }
+  return {
+    activeEditorBlock: state.activeEditorBlock,
+    aiEditorHostBlock: state.aiEditorHostBlock,
+    aiEditorHostSectionKey: state.aiEditorHostSectionKey,
+    activeEditorBlockPath: state.activeEditorBlockPath,
+    activeEditorBlockSnapshot: state.activeEditorBlockSnapshot,
+    activeEditorBlockSnapshots: state.activeEditorBlockSnapshots,
+    activeEditorNewBlockIds: Array.from(state.activeEditorNewBlockIds),
+  };
+}
+
+function applyActiveEditorState(state: AppState, activeEditor: SavedActiveEditorState): void {
+  state.activeEditorBlock = activeEditor.activeEditorBlock;
+  state.aiEditorHostBlock = activeEditor.aiEditorHostBlock;
+  state.aiEditorHostSectionKey = activeEditor.aiEditorHostSectionKey;
+  state.activeEditorBlockPath = activeEditor.activeEditorBlockPath;
+  state.activeEditorBlockSnapshot = activeEditor.activeEditorBlockSnapshot;
+  state.activeEditorBlockSnapshots = activeEditor.activeEditorBlockSnapshots;
+  state.activeEditorNewBlockIds = new Set(activeEditor.activeEditorNewBlockIds);
+  if (state.activeEditorBlock) {
+    state.pendingEditorActivation = {
+      ...state.activeEditorBlock,
+      revealPath: true,
+      immediateFocus: true,
+    };
+  }
+}
+
+function normalizeActiveEditorState(value: unknown): SavedActiveEditorState | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const raw = value as Partial<SavedActiveEditorState>;
+  const activeEditorBlock = normalizeEditorBlockRef(raw.activeEditorBlock);
+  const activeEditorBlockPath = Array.isArray(raw.activeEditorBlockPath)
+    ? raw.activeEditorBlockPath.map(normalizeEditorBlockRef).filter((ref): ref is NonNullable<AppState['activeEditorBlock']> => Boolean(ref))
+    : [];
+  if (!activeEditorBlock || activeEditorBlockPath.length === 0) {
+    return undefined;
+  }
+  const activeEditorBlockSnapshots = Array.isArray(raw.activeEditorBlockSnapshots)
+    ? raw.activeEditorBlockSnapshots.filter(isEditorBlockSnapshot)
+    : [];
+  const activeEditorBlockSnapshot = isEditorBlockSnapshot(raw.activeEditorBlockSnapshot) ? raw.activeEditorBlockSnapshot : null;
+  return {
+    activeEditorBlock,
+    aiEditorHostBlock: normalizeEditorBlockRef(raw.aiEditorHostBlock),
+    aiEditorHostSectionKey: typeof raw.aiEditorHostSectionKey === 'string' ? raw.aiEditorHostSectionKey : null,
+    activeEditorBlockPath,
+    activeEditorBlockSnapshot,
+    activeEditorBlockSnapshots,
+    activeEditorNewBlockIds: Array.isArray(raw.activeEditorNewBlockIds)
+      ? raw.activeEditorNewBlockIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  };
+}
+
+function normalizeEditorBlockRef(value: unknown): AppState['activeEditorBlock'] {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const candidate = value as Partial<NonNullable<AppState['activeEditorBlock']>>;
+  return typeof candidate.sectionKey === 'string' && typeof candidate.blockId === 'string'
+    ? { sectionKey: candidate.sectionKey, blockId: candidate.blockId }
+    : null;
+}
+
+function isEditorBlockSnapshot(value: unknown): value is NonNullable<AppState['activeEditorBlockSnapshot']> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Partial<NonNullable<AppState['activeEditorBlockSnapshot']>>;
+  return typeof candidate.sectionKey === 'string' && typeof candidate.blockId === 'string' && Boolean(candidate.block);
 }
 
 export function clearSessionState(storageKey?: string | null): void {

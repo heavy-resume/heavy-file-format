@@ -125,6 +125,14 @@ function validateHeaderCssValues(meta: JsonObject): void {
       }
     }
   }
+  const headingStyles = meta.heading_styles;
+  if (headingStyles && typeof headingStyles === 'object' && !Array.isArray(headingStyles)) {
+    for (const [styleName, style] of Object.entries(headingStyles)) {
+      if (style && typeof style === 'object' && !Array.isArray(style) && typeof (style as JsonObject).css === 'string') {
+        assertCssValueIsDeclarationString((style as JsonObject).css as string, `heading_styles.${styleName}.css`);
+      }
+    }
+  }
 }
 
 export function findBlockForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): VisualBlock | null {

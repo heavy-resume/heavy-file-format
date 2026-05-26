@@ -42,6 +42,51 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('PHVY diagnostics reject PDF-incompatible components', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Intro
+
+<!--hvy:expandable {"id":"details"}-->
+`, '.phvy');
+
+  expect(expectedResult.document.extension).toBe('.phvy');
+  expect(expectedResult.diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      severity: 'error',
+      code: 'phvy_component_not_supported',
+      message: expect.stringContaining('expandable'),
+    }),
+  ]));
+});
+
+test('PHVY diagnostics reject sidebar sections', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes","location":"sidebar"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+Sidebar note
+`, '.phvy');
+
+  expect(expectedResult.diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      severity: 'error',
+      code: 'phvy_sidebar_not_supported',
+      message: expect.stringContaining('sidebar sections'),
+    }),
+  ]));
+});
+
 test('drops fields that do not belong to the deserialized component schema', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -185,6 +230,33 @@ hvy_version: 0.1
 
   expect(grid?.schema.gridItems[0]?.block.text).toBe('Seattle, WA');
   expect(grid?.schema.gridItems[1]?.block.text).toBe('05/2024 - present');
+});
+
+test('deserializes grid slot alignment metadata', () => {
+  const input = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"experience"}-->
+#! Experience
+
+ <!--hvy:grid {"gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"location"}-->
+
+   <!--hvy:text {}-->
+   Seattle, WA
+
+  <!--hvy:grid:1 {"id":"date-range","align":"right"}-->
+
+   <!--hvy:text {}-->
+   05/2024 - present
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const grid = document.sections[0]?.blocks[0];
+
+  expect(grid?.schema.gridItems[1]?.align).toBe('right');
 });
 
 test('empty grids do not automatically create text items', () => {

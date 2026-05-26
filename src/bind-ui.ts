@@ -18,6 +18,7 @@ import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './bl
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
+import { exportCurrentDocumentPdf } from './pdf-export/action';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
@@ -38,7 +39,7 @@ import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
-import type { ReaderViewFilter, SelectedExample } from './types';
+import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -132,7 +133,7 @@ async function openLocalDocumentWithPicker(): Promise<void> {
       {
         description: 'HVY documents',
         accept: {
-          'text/plain': ['.hvy', '.thvy', '.md', '.markdown'],
+          'text/plain': ['.hvy', '.thvy', '.phvy', '.md', '.markdown'],
         },
       },
     ],
@@ -213,6 +214,7 @@ export function bindUi(app: HTMLElement): void {
   const newBtn = app.querySelector<HTMLButtonElement>('#newBtn');
   const fileInput = app.querySelector<HTMLInputElement>('#fileInput');
   const downloadBtn = app.querySelector<HTMLButtonElement>('#downloadBtn');
+  const exportPdfBtn = app.querySelector<HTMLButtonElement>('#exportPdfBtn');
   const downloadName = app.querySelector<HTMLInputElement>('#downloadName');
   const openLocalFileBtn = app.querySelector<HTMLButtonElement>('#openLocalFileBtn');
   const saveFileBtn = app.querySelector<HTMLButtonElement>('#saveFileBtn');
@@ -389,8 +391,33 @@ export function bindUi(app: HTMLElement): void {
   });
 
   newBtn.addEventListener('click', () => {
+    state.newDocumentModalOpen = true;
+    getRenderApp()();
+  });
+
+  const newDocumentModalRoot = app.querySelector<HTMLElement>('#newDocumentModalRoot');
+  newDocumentModalRoot?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionElement = target.closest<HTMLElement>('[data-new-document-action]');
+    const action = actionElement?.dataset.newDocumentAction;
+    if (!action) {
+      return;
+    }
+    event.preventDefault();
+    if (action === 'cancel') {
+      state.newDocumentModalOpen = false;
+      getRenderApp()();
+      return;
+    }
+    if (action !== 'choose') {
+      return;
+    }
+    const extension = actionElement.dataset.newDocumentExtension;
+    if (extension !== '.hvy' && extension !== '.thvy' && extension !== '.phvy') {
+      return;
+    }
     currentFileHandle = null;
-    resetToBlankDocument();
+    resetToBlankDocument(extension as VisualDocument['extension']);
   });
 
   const defaultExampleBtn = app.querySelector<HTMLButtonElement>('#defaultExampleBtn');
@@ -555,6 +582,17 @@ export function bindUi(app: HTMLElement): void {
     const bytes = serializeDocumentBytes(state.document);
     downloadBinaryFile(normalized, bytes);
     getRenderApp()();
+  });
+
+  exportPdfBtn?.addEventListener('click', () => {
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await exportCurrentDocumentPdf();
+        getRenderApp()();
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'PDF export failed.');
+      }
+    });
   });
 
   bindAppEvents(app);

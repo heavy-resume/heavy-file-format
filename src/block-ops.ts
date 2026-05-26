@@ -6,7 +6,7 @@ import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
-import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
+import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
@@ -21,6 +21,7 @@ import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
+import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -223,7 +224,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    if (!target.closest('.hvy-ai-reader-surface')) {
+    if (!target.closest('.editor-tree, .hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
     }
     return true;
@@ -296,6 +297,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-component-list-component' && target instanceof HTMLSelectElement) {
+    if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+      return true;
+    }
     block.schema.componentListComponent = target.value;
     ensureComponentListBlocks(block);
     block.schema.componentListBlocks.forEach((itemBlock) => {
@@ -317,6 +321,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-grid-item-component' && target instanceof HTMLSelectElement) {
+    if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+      return true;
+    }
     const gridItemId = target.dataset.gridItemId;
     if (!gridItemId) {
       return true;
@@ -331,8 +338,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
       item.block = reusableInstance;
       item.block.schema.component = target.value;
     } else {
-      item.block.schema.component = target.value;
-      applyComponentDefaults(item.block.schema, target.value);
+      const previousBlockId = item.block.id;
+      item.block = createEmptyBlock(target.value);
+      item.block.id = previousBlockId;
     }
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -601,12 +609,14 @@ export function isActiveEditorLeafBlock(sectionKey: string, blockId: string): bo
 type SetActiveEditorBlockOptions = {
   targetOnly?: boolean;
   pathBlockIds?: string[];
+  textEditorMode?: 'rich' | 'fill-in' | null;
 };
 
 export function setActiveEditorBlock(sectionKey: string, blockId: string, options: SetActiveEditorBlockOptions = {}): void {
   const pathIds = options.pathBlockIds ?? (options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId]);
   state.activeEditorBlockPath = pathIds.map((pathBlockId) => ({ sectionKey, blockId: pathBlockId }));
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeTextEditorMode = options.textEditorMode ? { sectionKey, blockId, mode: options.textEditorMode } : null;
   state.activeEditorBlockSnapshots = state.activeEditorBlockPath
     .map((active) => {
       const existing = state.activeEditorBlockSnapshots.find(
@@ -855,6 +865,24 @@ export function getComponentRenderHelpers(editorRenderer: {
   orderReaderListBlocks: ComponentRenderHelpers['orderReaderListBlocks'];
   isReaderViewPrioritizedBlock: ComponentRenderHelpers['isReaderViewPrioritizedBlock'];
 }): ComponentRenderHelpers {
+  const renderAllowedComponentOptions = (selected: string): string => {
+    if (!isPdfDocument(state.document)) {
+      return renderComponentOptions(selected);
+    }
+    const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+    const custom = getComponentDefs()
+      .map((def) => def.name.trim())
+      .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+    return [...new Set([...builtins, ...custom])]
+      .map((option) => renderOption(option, selected))
+      .join('');
+  };
+  const pdfComponentFilter = (componentName: string, pluginId?: string): boolean => {
+    return !isPdfDocument(state.document) || isPdfAllowedComponentInstance(componentName, state.document.meta, pluginId);
+  };
+  const pdfComponentDisabledReason = (componentName: string, pluginId?: string): string | null => {
+    return pdfComponentFilter(componentName, pluginId) ? null : 'Not supported in PHVY';
+  };
   return {
     escapeAttr,
     escapeHtml,
@@ -872,8 +900,11 @@ export function getComponentRenderHelpers(editorRenderer: {
     orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
-    renderComponentOptions,
-    renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
+    renderComponentOptions: renderAllowedComponentOptions,
+    renderAddComponentPicker: (options) => renderAddComponentPicker(
+      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter, componentDisabledReason: pdfComponentDisabledReason } : {}) },
+      { escapeAttr, escapeHtml, getComponentDefs }
+    ),
     renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
@@ -890,6 +921,7 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
+    isPdfDocument: () => isPdfDocument(state.document),
     getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
 }
@@ -939,7 +971,10 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
     formatSelectionBlock(editable, nextBlock);
   } else if (action === 'list') {
     clearInlineTypingState(editable);
-    toggleSelectionList(editable);
+    toggleSelectionList(editable, 'ul');
+  } else if (action === 'ordered-list') {
+    clearInlineTypingState(editable);
+    toggleSelectionList(editable, 'ol');
   } else if (action === 'checklist') {
     clearInlineTypingState(editable);
     insertInlineCheckboxAtSelection(editable);
@@ -1126,6 +1161,7 @@ function applyTextFillInSlot(editable: HTMLElement): void {
     block.text = `${block.text}${separator}${createTextFillInMarker()}`;
   }
   block.schema.fillIn = true;
+  state.activeTextEditorMode = { sectionKey, blockId: block.id, mode: 'fill-in' };
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRefreshReaderPanels()();
   getRenderApp()();
@@ -1628,7 +1664,7 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
         button.classList.toggle('ghost', !selected);
         return;
       }
-      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|checklist)$/.test(action) && !isInlineRichAction(action)) {
+      if (!/^(paragraph|heading-[1-4]|quote|code-block|list|ordered-list|checklist)$/.test(action) && !isInlineRichAction(action)) {
         return;
       }
       button.classList.toggle('secondary', selected);
@@ -1726,7 +1762,11 @@ function getSelectedRichBlockStyle(editable: HTMLElement): string {
   }
   if (block?.closest('li')) {
     const text = block.textContent ?? '';
-    return /^\s*(☐|☑|\[[ xX]\])/.test(text) ? 'checklist' : 'list';
+    if (/^\s*(☐|☑|\[[ xX]\])/.test(text)) {
+      return 'checklist';
+    }
+    const item = block.closest('li');
+    return item?.parentElement instanceof HTMLOListElement ? 'ordered-list' : 'list';
   }
   return 'paragraph';
 }
@@ -1938,9 +1978,18 @@ function normalizeEditableListDom(editable: HTMLElement): void {
   });
 }
 
-function toggleSelectionList(editable: HTMLElement): void {
+type EditableListTagName = 'ul' | 'ol';
+
+function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName): void {
   const item = getSelectionListItem(editable);
   if (item) {
+    const list = item.parentElement;
+    const selectedListMatchesAction =
+      tagName === 'ol' ? list instanceof HTMLOListElement : list instanceof HTMLUListElement;
+    if (!selectedListMatchesAction) {
+      convertListTypeForItem(item, tagName);
+      return;
+    }
     unwrapListItem(item);
     return;
   }
@@ -1951,7 +2000,7 @@ function toggleSelectionList(editable: HTMLElement): void {
   }
   const selectedBlocks = getSelectedEditableTextBlocks(editable);
   if (selectedBlocks.length > 1) {
-    wrapSelectedBlocksInList(selectedBlocks);
+    wrapSelectedBlocksInList(selectedBlocks, tagName);
     return;
   }
   const previousRange = getEditableSelectionRange(editable)?.cloneRange() ?? null;
@@ -1962,7 +2011,7 @@ function toggleSelectionList(editable: HTMLElement): void {
           end: getTextOffset(block, previousRange.endContainer, previousRange.endOffset),
         }
       : null;
-  const list = document.createElement('ul');
+  const list = document.createElement(tagName);
   const listItem = document.createElement('li');
   while (block.firstChild) {
     listItem.appendChild(block.firstChild);
@@ -1993,12 +2042,12 @@ function getSelectedEditableTextBlocks(editable: HTMLElement): HTMLElement[] {
   return selected.every((child) => !/^(PRE|UL|OL)$/.test(child.tagName)) ? selected : [];
 }
 
-function wrapSelectedBlocksInList(blocks: HTMLElement[]): void {
+function wrapSelectedBlocksInList(blocks: HTMLElement[], tagName: EditableListTagName): void {
   const firstBlock = blocks[0];
   if (!firstBlock?.parentNode) {
     return;
   }
-  const list = document.createElement('ul');
+  const list = document.createElement(tagName);
   for (const block of blocks) {
     const listItem = document.createElement('li');
     while (block.firstChild) {
@@ -2043,6 +2092,19 @@ function unwrapListItem(item: HTMLLIElement): void {
   placeCaretAtEnd(paragraph);
 }
 
+function convertListTypeForItem(item: HTMLLIElement, tagName: EditableListTagName): void {
+  const list = item.parentElement;
+  if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
+    return;
+  }
+  const replacement = document.createElement(tagName);
+  while (list.firstChild) {
+    replacement.appendChild(list.firstChild);
+  }
+  list.replaceWith(replacement);
+  placeCaretInside(item);
+}
+
 function moveSelectionListItemNesting(editable: HTMLElement, direction: 'indent' | 'outdent'): void {
   const item = getSelectionListItem(editable);
   if (!item) {
@@ -2060,9 +2122,13 @@ function indentListItem(item: HTMLLIElement): void {
   if (!(previousItem instanceof HTMLLIElement)) {
     return;
   }
-  let nestedList = Array.from(previousItem.children).find((child): child is HTMLUListElement => child instanceof HTMLUListElement);
+  const list = item.parentElement;
+  const tagName: EditableListTagName = list instanceof HTMLOListElement ? 'ol' : 'ul';
+  let nestedList = Array.from(previousItem.children).find((child): child is HTMLUListElement | HTMLOListElement =>
+    (tagName === 'ol' ? child instanceof HTMLOListElement : child instanceof HTMLUListElement)
+  );
   if (!nestedList) {
-    nestedList = document.createElement('ul');
+    nestedList = document.createElement(tagName);
     previousItem.appendChild(nestedList);
   }
   nestedList.appendChild(item);

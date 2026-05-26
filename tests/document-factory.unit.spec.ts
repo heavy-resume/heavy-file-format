@@ -11,6 +11,11 @@ test('createBlankDocument uses the default reader max width', () => {
   });
 });
 
+test('createBlankDocument can create PHVY and THVY documents', () => {
+  expect(createBlankDocument('.phvy').extension).toBe('.phvy');
+  expect(createBlankDocument('.thvy').extension).toBe('.thvy');
+});
+
 test('createEmptyBlock centers image components by default', () => {
   const expectedResult = createEmptyBlock('image');
 

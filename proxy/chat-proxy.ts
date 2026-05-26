@@ -7,6 +7,7 @@ import {
   buildOpenAiProxyRequest,
   buildQwenProxyRequest,
   type OpenAiReasoningEffort,
+  type ProviderProxyChatRequest,
 } from '../src/chat/chat-provider-payload';
 import {
   buildInitialProviderToolState,
@@ -57,7 +58,7 @@ interface TraceEvent {
 interface ProxyChatRequest {
   provider: ToolProvider;
   model: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProviderProxyChatRequest['mode'];
   messages: Array<{
     role: 'system' | 'user' | 'assistant';
     content: string;
@@ -301,7 +302,7 @@ async function requestProviderWithRepair(
   runId: string
 ): Promise<ProviderCompletion> {
   const initialCompletion = await requestProviderOnce(body, env, signal, runId);
-  if (body.mode === 'document-edit') {
+  if (body.mode === 'document-edit' || body.mode === 'pdf-template-import') {
     return initialCompletion;
   }
   const diagnostics = getHvyResponseDiagnostics(initialCompletion.output);
@@ -654,14 +655,14 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   if (record.provider !== 'openai' && record.provider !== 'anthropic' && record.provider !== 'qwen') {
     throw new Error('Invalid chat provider.');
   }
-  if (record.mode !== 'qa' && record.mode !== 'component-edit' && record.mode !== 'document-edit') {
+  if (!isProxyChatMode(record.mode)) {
     throw new Error('Invalid chat mode.');
   }
   if (typeof record.model !== 'string' || record.model.trim().length === 0) {
     throw new Error('Chat model is required.');
   }
-  if (typeof record.context !== 'string' || record.context.trim().length === 0) {
-    throw new Error('Chat context is required.');
+  if (typeof record.context !== 'string') {
+    throw new Error('Chat context must be a string.');
   }
   if (!Array.isArray(record.messages) || record.messages.length === 0) {
     throw new Error('At least one chat message is required.');
@@ -738,7 +739,7 @@ function validateClientTraceEvent(payload: unknown): TraceEvent {
   if (typeof record.runId !== 'string' || !/^[\w:-]{1,120}$/.test(record.runId)) {
     throw new Error('Trace runId is required.');
   }
-  if (record.phase !== 'qa' && record.phase !== 'component-edit' && record.phase !== 'document-edit' && record.phase !== 'proxy') {
+  if (record.phase !== 'proxy' && !isProxyChatMode(record.phase)) {
     throw new Error('Invalid trace phase.');
   }
   if (record.type !== 'progress' && record.type !== 'client_event' && record.type !== 'work_ledger') {
@@ -753,6 +754,10 @@ function validateClientTraceEvent(payload: unknown): TraceEvent {
     type: record.type,
     payload: record.payload as Record<string, unknown>,
   };
+}
+
+function isProxyChatMode(value: unknown): value is ProviderProxyChatRequest['mode'] {
+  return value === 'qa' || value === 'component-edit' || value === 'document-edit' || value === 'pdf-template-import';
 }
 
 async function readRequestJson(req: { on: (event: string, listener: (chunk?: unknown) => void) => void }): Promise<unknown> {

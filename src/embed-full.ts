@@ -82,8 +82,10 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
-import { loadSessionState, saveSessionState } from './state-persistence';
+import { renderNewDocumentModal } from './new-document-modal';
+import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import {
   buildImportPlanForDocument,
@@ -99,6 +101,9 @@ import {
   markDocumentSaved,
   type HvyDocumentChangeCallback,
 } from './document-change';
+import type { HvyPdfExportOptions } from './pdf-export/types';
+import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
+import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -123,6 +128,8 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
+  exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
   undo(): void;
@@ -133,6 +140,8 @@ export interface HvyMount {
   setPaletteOverrideId(id: string | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  getRecoveryState(): string | null;
+  applyRecoveryState(payload: string | null | undefined): void;
   openDocumentMeta(): boolean;
   openThemeEditor(options?: { advanced?: boolean }): void;
   mountThemeEditor(root: HTMLElement, options?: { advanced?: boolean; includePalettePicker?: boolean }): void;
@@ -153,7 +162,7 @@ function createEmbedState(
 ): AppState {
   return {
     document,
-    filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
+    filename: document.extension === '.phvy' ? 'document.phvy' : document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
     selectedExample: 'default',
     currentView: mode,
     editorMode: 'basic',
@@ -199,6 +208,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,
@@ -216,6 +226,8 @@ function createEmbedState(
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
+    pdfTemplateImportModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -242,7 +254,7 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
   }
   const shouldRestoreDocument = initial.persistDocumentState !== false && savedSession.document;
   const document = shouldRestoreDocument ? savedSession.document! : initial.document;
-  return {
+  const restored: AppState = {
     ...initial,
     document,
     filename: shouldRestoreDocument ? savedSession.filename : initial.filename,
@@ -275,6 +287,8 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
     cliSession: savedSession.cli.session,
     cliHistory: savedSession.cli.history,
   };
+  applyRecoveryStatePayload(restored, savedSession.activeEditor ? JSON.stringify({ version: 1, activeEditor: savedSession.activeEditor }) : null);
+  return restored;
 }
 
 function bindSessionPersistence(runtime: StateRuntime): AbortController {
@@ -294,11 +308,25 @@ function localGetComponentRenderHelpers() {
   return getComponentRenderHelpers(editorRenderer, readerRenderer);
 }
 
+function renderDocumentComponentOptions(selected: string): string {
+  if (!isPdfDocument(state.document)) {
+    return renderComponentOptions(selected);
+  }
+  const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+  const custom = getComponentDefs()
+    .map((def) => def.name.trim())
+    .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+  return [...new Set([...builtins, ...custom])]
+    .map((option) => renderOption(option, selected))
+    .join('');
+}
+
 function ensureRenderers(): void {
   if (editorRenderer && readerRenderer) return;
   editorRenderer = createEditorRenderer(
     {
       get documentMeta() { return state.document.meta as Record<string, unknown>; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get showAdvancedEditor() { return state.showAdvancedEditor; },
       get addComponentBySection() { return state.addComponentBySection; },
@@ -345,6 +373,7 @@ function ensureRenderers(): void {
   readerRenderer = createReaderRenderer(
     {
       get documentMeta() { return state.document.meta; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get addComponentBySection() { return state.addComponentBySection; },
       get tempHighlights() { return state.tempHighlights; },
@@ -356,6 +385,7 @@ function ensureRenderers(): void {
       get modalSectionKey() { return state.modalSectionKey; },
       get sqliteRowComponentModal() { return state.sqliteRowComponentModal; },
       get dbTableQueryModal() { return state.dbTableQueryModal; },
+      get pdfTemplateImportModal() { return state.pdfTemplateImportModal; },
       get reusableSaveModal() { return state.reusableSaveModal; },
       get reusableTemplateModal() { return state.reusableTemplateModal; },
       get sectionTemplateFlavorModal() { return state.sectionTemplateFlavorModal; },
@@ -390,7 +420,7 @@ function ensureRenderers(): void {
       getComponentRenderHelpers: localGetComponentRenderHelpers,
       renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
       renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
-      renderComponentOptions,
+      renderComponentOptions: renderDocumentComponentOptions,
       renderReusableSectionOptions,
       getSectionDefs,
       renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
@@ -409,8 +439,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
   const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
-  const readerWarningsHtml = readerRenderer.renderWarnings();
-  const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
+  const pdfDocument = isPdfDocument(state.document);
+  const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
+  const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   capturePluginFocus();
   root.innerHTML = `
@@ -420,6 +451,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <input id="fileInput" type="file" />
         <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" />
         <button id="downloadBtn" type="button">Download</button>
+        <button id="exportPdfBtn" type="button">Export PDF</button>
       </div>
       <section class="workspace-shell">
         <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
@@ -427,15 +459,15 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
             isEditor
               ? isDocumentMetaView
                 ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
-                : `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                  <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
-                  <aside class="editor-sidebar">
-                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
-                    ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="editor-sidebar-panel">
-                      ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
-                    </div>
-                  </aside>
+                : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                  ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
+                    <aside class="editor-sidebar">
+                      <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
+                      ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
+                      <div class="editor-sidebar-panel">
+                        ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
+                      </div>
+                    </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
               : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
@@ -452,20 +484,25 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }
-          ${renderChatPanel(
-            state.chat,
-            state.document,
-            { escapeAttr, escapeHtml },
-            state.currentView === 'viewer' ? 'qa' : 'document-edit',
-            state.currentView === 'editor' || state.currentView === 'ai',
-            'embedded'
-          )}
-          ${renderSearchLauncher(state.search)}
-          ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
+          ${
+            isDocumentMetaView
+              ? ''
+              : `${renderChatPanel(
+                  state.chat,
+                  state.document,
+                  { escapeAttr, escapeHtml },
+                  state.currentView === 'viewer' ? 'qa' : 'document-edit',
+                  state.currentView === 'editor' || state.currentView === 'ai',
+                  'embedded'
+                )}
+                ${renderSearchLauncher(state.search)}
+                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+          }
         </div>
       </section>
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
+      ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
   bindEmbedUi(root, runtime);
   reconcilePluginMounts(root);
@@ -515,6 +552,10 @@ function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
       bindUi(root);
     });
   });
+}
+
+function cancelPendingEmbedUiBind(root: HTMLElement): void {
+  embedUiBindGenerations.set(root, (embedUiBindGenerations.get(root) ?? 0) + 1);
 }
 
 function renderSidebarTabLabel(): string {
@@ -753,6 +794,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        cancelPendingEmbedUiBind(options.root);
         options.root.innerHTML = '';
         setHostChatClient(null);
         setRuntimeSemanticFilterProvider(null);
@@ -771,6 +813,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+    },
+    getPdfBlob(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { getHvyPdfBlob } = await import('./pdf-export/export');
+        return getHvyPdfBlob(state.document, pdfOptions);
+      });
+    },
+    exportPdf(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { exportHvyPdf } = await import('./pdf-export/export');
+        return exportHvyPdf(state.document, pdfOptions);
+      });
     },
     markSaved() {
       markDocumentSaved(runtime);
@@ -817,10 +871,21 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
     },
+    getRecoveryState() {
+      return runWithStateRuntime(runtime, () => createRecoveryStatePayload(state));
+    },
+    applyRecoveryState(payload) {
+      runWithStateRuntime(runtime, () => {
+        applyRecoveryStatePayload(state, payload);
+        runtime.callbacks.renderApp();
+      });
+    },
     openDocumentMeta() {
       return runWithStateRuntime(runtime, () => {
-        if (state.currentView !== 'editor' || !state.showAdvancedEditor) return false;
-        state.metaPanelOpen = !state.metaPanelOpen;
+        state.currentView = 'editor';
+        state.editorMode = 'advanced';
+        state.showAdvancedEditor = true;
+        state.metaPanelOpen = true;
         runtime.callbacks.renderApp();
         return state.metaPanelOpen;
       });
@@ -838,7 +903,20 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
+export {
+  builtInPluginMap as plugins,
+  builtInPlugins,
+  createDocumentFilterSnapshot,
+  createDocumentSearchSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
+  deserializeDocumentBytes,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
+  searchDocuments,
+  serializeDocument,
+  serializeDocumentBytes,
+};
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -857,6 +935,23 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyPdfExportOptions,
+  HvyPdfExportPlan,
+  HvyPdfExportPlanDecision,
+  HvyPdfExportPlanDiagnostic,
+  HvyPdfExportPreviewStats,
+  HvyPdfExportPromptTemplate,
+  HvyPdfExportPromptTemplateVariable,
+  HvyPdfExportResult,
+  HvyPdfExportStrategy,
+  HvyPdfExportStrategyProvider,
+  HvyPdfExportStrategyProviderRequest,
+  HvyPdfExportStrategyProviderResponse,
+  HvyPdfExportStrategyRule,
+  CreatePdfExportPlanOptions,
+  CreatePdfExportPlanFromPromptOptions,
+} from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
   HvyDocumentSearchMode,
@@ -878,7 +973,11 @@ window.HVY = {
   serializeDocument,
   serializeDocumentBytes,
   createDocumentFilterSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
   createDocumentSearchSnapshot,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
   searchDocuments,
   mountHvy,
   mountHvyViewer,

@@ -455,6 +455,19 @@ body {
   justify-content: flex-end;
 }
 
+.pdf-document-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-accent) 40%, var(--hvy-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-accent) 12%, var(--hvy-surface));
+  color: var(--hvy-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .workspace-right-controls {
   display: grid;
   justify-items: end;

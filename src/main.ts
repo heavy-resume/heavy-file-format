@@ -33,6 +33,7 @@ import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -44,6 +45,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { renderNewDocumentModal } from './new-document-modal';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -127,6 +129,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeTextEditorMode: null,
     aiEditorHostBlock: null,
     aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],
@@ -141,6 +144,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,
@@ -158,6 +162,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
+    pdfTemplateImportModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -352,10 +358,26 @@ function localGetComponentRenderHelpers() {
   return getComponentRenderHelpers(editorRenderer, readerRenderer);
 }
 
+function renderDocumentComponentOptions(selected: string): string {
+  if (!isPdfDocument(state.document)) {
+    return renderComponentOptions(selected);
+  }
+  const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+  const custom = getComponentDefs()
+    .map((def) => def.name.trim())
+    .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+  return [...new Set([...builtins, ...custom])]
+    .map((option) => renderOption(option, selected))
+    .join('');
+}
+
 editorRenderer = createEditorRenderer(
   {
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
+    },
+    get documentExtension() {
+      return state.document.extension;
     },
     get documentSections() {
       return state.document.sections;
@@ -449,6 +471,9 @@ readerRenderer = createReaderRenderer(
     get documentMeta() {
       return state.document.meta;
     },
+    get documentExtension() {
+      return state.document.extension;
+    },
     get documentSections() {
       return state.document.sections;
     },
@@ -484,6 +509,9 @@ readerRenderer = createReaderRenderer(
     },
     get dbTableQueryModal() {
       return state.dbTableQueryModal;
+    },
+    get pdfTemplateImportModal() {
+      return state.pdfTemplateImportModal;
     },
     get reusableSaveModal() {
       return state.reusableSaveModal;
@@ -555,7 +583,7 @@ readerRenderer = createReaderRenderer(
     getComponentRenderHelpers: localGetComponentRenderHelpers,
     renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
-    renderComponentOptions,
+    renderComponentOptions: renderDocumentComponentOptions,
     renderReusableSectionOptions,
     getSectionDefs,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
@@ -596,8 +624,9 @@ function renderApp(): void {
   const isRawEditor = state.editorMode === 'raw';
   const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
-  const readerWarningsHtml = readerRenderer.renderWarnings();
-  const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
+  const pdfDocument = isPdfDocument(state.document);
+  const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
+  const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
 
   stepStartedAt = performance.now();
@@ -673,15 +702,15 @@ function renderApp(): void {
                   : isDocumentMetaView
                   ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
-                <div${renderResponsivePreviewFrameAttrs(`editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
-                  <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
-                  <aside class="editor-sidebar">
-                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
-                    ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="editor-sidebar-panel">
-                      ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
-                    </div>
-                  </aside>
+                <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
+                  ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
+                    <aside class="editor-sidebar">
+                      <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
+                      ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
+                      <div class="editor-sidebar-panel">
+                        ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
+                      </div>
+                    </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
               : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`)}>
@@ -723,6 +752,7 @@ function renderApp(): void {
 
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
+      ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
       ${renderDescriptionPopulateModal()}
     </main>
   `;
@@ -791,7 +821,7 @@ function renderTopbar(): string {
     <header class="topbar">
       <div class="title-block">
         <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
+        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">
@@ -802,11 +832,12 @@ function renderTopbar(): string {
           <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
           <label class="file-picker">
             Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
+            <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
           <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
+          <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
         </div>
       </div>
     </header>
@@ -867,6 +898,7 @@ function renderWorkspaceRightControls(options: {
     ${
       options.isEditorView
         ? `<div class="editor-top-controls">
+            ${isPdfDocument(state.document) ? '<span class="pdf-document-badge" title="PDF template document">PDF Doc</span>' : ''}
             <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
             <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
             <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>

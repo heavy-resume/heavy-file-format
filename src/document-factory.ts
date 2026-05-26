@@ -3,7 +3,7 @@ import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
-import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
+import { coerceGridColumns, coerceGridItemAlign, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
@@ -572,7 +572,7 @@ export function createDefaultTableRow(columnCount: number): TableRow {
   };
 }
 
-export function createBlankDocument(): VisualDocument {
+export function createBlankDocument(extension: VisualDocument['extension'] = '.hvy'): VisualDocument {
   return {
     meta: {
       hvy_version: 0.1,
@@ -581,7 +581,7 @@ export function createBlankDocument(): VisualDocument {
         css: DEFAULT_SECTION_CSS,
       },
     },
-    extension: '.hvy',
+    extension,
     sections: [],
     attachments: [],
   };
@@ -862,10 +862,14 @@ export function ensureGridItems(schema: BlockSchema): void {
     schema.gridItems = [];
     return;
   }
-  schema.gridItems = schema.gridItems.map((item) => ({
-    id: item.id || makeId('griditem'),
-    block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
-      ? item.block
-      : item.block ? _parseBlock(item.block) : _createBlock('text', true),
-  }));
+  schema.gridItems = schema.gridItems.map((item) => {
+    const align = coerceGridItemAlign(item.align);
+    return {
+      id: item.id || makeId('griditem'),
+      ...(align ? { align } : {}),
+      block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
+        ? item.block
+        : item.block ? _parseBlock(item.block) : _createBlock('text', true),
+    };
+  });
 }

@@ -1,13 +1,15 @@
 import './text.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
+import { state } from '../../../state';
 
 const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const textLineStyles = helpers.getTextLineStyles?.() ?? {};
   const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
-  if (fillInParts.length > 1) {
+  const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
+  if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
     const fillInSource = fillInParts
       .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
       .join('');
@@ -39,11 +41,14 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           >Remove Fill-in</button>
         </div>
       </div>
-      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}" style="text-align: ${helpers.escapeAttr(block.schema.align)};">
+      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"${alignStyle}>
         ${html}
       </div>
     `;
   }
+  const editorHtml = fillInParts.length > 1
+    ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
+    : helpers.markdownToEditorHtml(block.text);
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
   const fillInSelectionButton = mobileAdjustment
     ? ''
@@ -65,12 +70,45 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-rich"
-      ${block.schema.align ? `style="text-align: ${helpers.escapeAttr(block.schema.align)};"` : ''}
+      ${alignStyle}
       ${block.schema.placeholder ? `data-placeholder="${helpers.escapeAttr(block.schema.placeholder)}"` : ''}
-    >${helpers.markdownToEditorHtml(block.text)}</div>
+    >${editorHtml}</div>
   </div>
 `;
 };
+
+function renderRichTextWithFillIns(
+  sectionKey: string,
+  block: Parameters<ComponentEditorRenderer>[1],
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  fillInParts: string[]
+): string {
+  const fillInSource = fillInParts
+    .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
+    .join('');
+  let html = helpers.markdownToEditorHtml(fillInSource);
+  for (let index = 0; index < fillInParts.length - 1; index += 1) {
+    const placeholder = getTextFillInPlaceholder(block.text, index);
+    html = html.replace(
+      `${FILL_IN_RENDER_TOKEN_PREFIX}${index}`,
+      `<span
+        class="text-fill-in-box text-fill-in-rich-marker"
+        contenteditable="false"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-hvy-fill-in-marker="true"
+        data-placeholder="${helpers.escapeAttr(placeholder)}"
+      >${helpers.escapeHtml(placeholder || 'value')}</span>`
+    );
+  }
+  return html;
+}
+
+function isFillInEditorMode(sectionKey: string, blockId: string): boolean {
+  return state.activeTextEditorMode?.sectionKey === sectionKey
+    && state.activeTextEditorMode.blockId === blockId
+    && state.activeTextEditorMode.mode === 'fill-in';
+}
 
 export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) =>
   block.schema.showCopy

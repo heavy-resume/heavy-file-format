@@ -247,13 +247,26 @@ function flushPendingSection(state: ParseState): void {
   state.stack.push(section);
 }
 
-function assignGeneratedIds(sections: HvySection[], prefix = 'sec'): void {
-  sections.forEach((section, index) => {
+function assignGeneratedIds(sections: HvySection[], used = new Set<string>()): void {
+  sections.forEach((section) => {
     if (!section.id || section.id.trim().length === 0) {
-      section.id = `${prefix}-${index + 1}-${slugify(section.title || 'untitled')}`;
+      section.id = uniqueGeneratedSectionId(slugify(section.title || 'untitled'), used);
     }
-    assignGeneratedIds(section.children, section.id);
+    if (!used.has(section.id)) {
+      used.add(section.id);
+    }
+    assignGeneratedIds(section.children, used);
   });
+}
+
+function uniqueGeneratedSectionId(base: string, used: Set<string>): string {
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
 }
 
 function slugify(text: string): string {

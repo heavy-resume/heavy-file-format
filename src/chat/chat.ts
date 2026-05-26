@@ -25,6 +25,7 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
+export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 20_000;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
 export type ChatControlSurface = 'reference' | 'embedded';
@@ -41,12 +42,14 @@ interface ProxyChatMessage {
   error?: boolean;
 }
 
+export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-template-import';
+
 interface ProxyChatRequest {
   provider: ChatSettings['provider'];
   model: string;
   messages: ProxyChatMessage[];
   context: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProxyChatMode;
   traceRunId?: string;
   tools?: ProviderToolDefinition[];
   toolState?: ProviderToolState;
@@ -111,9 +114,10 @@ export interface ProxyCompletionParams {
   // Natural-language response instructions, not a provider JSON schema.
   responseInstructions: string;
   systemInstructions?: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProxyChatMode;
   debugLabel?: string;
   traceRunId?: string;
+  maxContextChars?: number;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
@@ -515,6 +519,8 @@ export async function requestChatCompletion(params: {
 }
 
 export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {
+  const debugLabel = params.debugLabel?.trim() || 'chat';
+  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars);
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
@@ -524,7 +530,6 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     mode: params.mode,
     traceRunId: params.traceRunId,
   });
-  const debugLabel = params.debugLabel?.trim() || 'chat';
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
   console.debug(`[hvy:${debugLabel}] client request`, {
@@ -595,6 +600,8 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
 }
 
 export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise<ProxyToolTurn> {
+  const debugLabel = params.debugLabel?.trim() || 'chat-tools';
+  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars);
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
@@ -606,7 +613,6 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     tools: params.tools,
     toolState: params.toolState,
   });
-  const debugLabel = params.debugLabel?.trim() || 'chat-tools';
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
   console.debug(`[hvy:${debugLabel}] client native tool request`, {
@@ -682,6 +688,18 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     nativeMessages: typed.nativeMessages,
     toolState: typed.toolState,
   };
+}
+
+function assertProxyContextWithinLimit(context: string, debugLabel: string, maxContextChars = MAX_PROXY_COMPLETION_CONTEXT_CHARS): void {
+  if (!Number.isFinite(maxContextChars) || maxContextChars <= 0) {
+    throw new Error(`Invalid LLM context cap for ${debugLabel}: ${maxContextChars}.`);
+  }
+  if (context.length <= maxContextChars) {
+    return;
+  }
+  throw new Error(
+    `LLM context for ${debugLabel} is ${context.length} characters; maximum is ${maxContextChars}. Reduce or chunk the context before making this request.`
+  );
 }
 
 function createEmptyHostToolState(provider: ChatSettings['provider']): ProviderToolState {

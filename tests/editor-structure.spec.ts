@@ -1848,12 +1848,12 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { hasText: 'Location:' }).click();
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="location-details"] .text-fill-in-box').first().click();
   const fillIns = page.locator('[data-field="text-fill-in-value"]');
   await expect(fillIns).toHaveCount(2);
 
   await fillIns.nth(0).fill('Seattle, WA');
-  await expect(fillIns.nth(1)).toHaveAttribute('data-placeholder', 'target location');
+  await expect(fillIns.nth(1)).toHaveAttribute('data-placeholder', 'value');
   await fillIns.nth(1).fill('Greater Seattle area');
 
   const editor = page.locator('.text-fill-in-editor');
@@ -1896,8 +1896,8 @@ hvy_version: 0.1
 
   await fillIns.nth(1).click();
   await page.keyboard.type('Remote');
-  await expect(fillIns.nth(1)).toBeFocused();
-  await expect(page.locator('.text-fill-in-editor')).toContainText('Target Location(s): Remote');
+  await expect(page.locator('[data-field="text-fill-in-value"]:focus')).toHaveCount(0);
+  await expect(page.locator('#editorTree')).toContainText('Target Location(s): Remote');
 });
 
 test('completed fill-in slots prune placeholder labels for remaining slots', async ({ page }) => {
@@ -1998,7 +1998,7 @@ hvy_version: 0.1
   await page.keyboard.type('first value');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="second"] .text-fill-in-box').click();
-  const secondFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="second"]) [data-field="text-fill-in-value"]');
+  const secondFillIn = page.locator('[data-field="text-fill-in-value"]').first();
   await expect(secondFillIn).toBeVisible();
   await secondFillIn.click();
   await page.keyboard.type('second value');
@@ -2025,7 +2025,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('#pronunciation') }).click();
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="pronunciation"] .text-fill-in-box').click();
   const fillIn = page.locator('[data-field="text-fill-in-value"]');
   await fillIn.fill('Line one');
   await fillIn.focus();
@@ -2033,7 +2033,7 @@ hvy_version: 0.1
   await page.keyboard.type('Line two');
   await expect(fillIn).toContainText(/Line one\s+Line two/);
   await page.keyboard.press('Enter');
-  await expect(fillIn).not.toBeFocused();
+  await expect(page.locator('[data-field="text-fill-in-value"]:focus')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('Line one\nLine two');
@@ -2413,6 +2413,33 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('editor fill-in text outside the slot activates the rich text editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"description","placeholder":"Description","fillIn":true}-->
+  Before <!-- value {"placeholder":"detail"} --> after.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const passiveBlock = page.locator('.editor-block-passive .editor-block-content[data-component-id="description"]');
+  await passiveBlock.getByText('Before').click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toBeVisible();
+  await expect(activeBlock.locator('[data-field="text-fill-in-value"]')).toHaveCount(0);
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"] .text-fill-in-box')).toBeVisible();
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).not.toContainText('<!-- value');
 });
 
 test('text fill-in commits focused DOM value before switching views', async ({ page }) => {
@@ -3507,13 +3534,56 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
-  await page.locator('[data-action="add-top-level-section"]').click();
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
 
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
+});
+
+test('section drag handle uses grab cursor', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.section-drag-handle').first()).toHaveCSS('cursor', 'grab');
+});
+
+test('section dragover previews insertion title at the target edge', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  await expect(sections).toHaveCount(2);
+
+  const expectedResult = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card:not(.editor-subsection-card)'));
+    const sourceHandle = cards[0]?.querySelector<HTMLElement>('.section-drag-handle');
+    const targetCard = cards[1];
+    if (!sourceHandle || !targetCard) {
+      return null;
+    }
+    const transfer = new DataTransfer();
+    sourceHandle.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    const targetRect = targetCard.getBoundingClientRect();
+    targetCard.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientY: targetRect.top + 4,
+      dataTransfer: transfer,
+    }));
+    return {
+      before: targetCard.classList.contains('is-section-drop-before'),
+      after: targetCard.classList.contains('is-section-drop-after'),
+      title: targetCard.dataset.sectionDropTitle ?? '',
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    before: true,
+    after: false,
+    title: 'Move Overview',
+  });
 });
 
 test('named empty sections offer a heading ghost in editor only', async ({ page }) => {

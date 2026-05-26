@@ -2526,12 +2526,25 @@ component_defs:
 test('new section component picker opens on the first click', async ({ page }) => {
   await page.goto('/');
 
-  await page.locator('[data-action="add-top-level-section"]').click();
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
   const newSection = page.locator('.editor-section-card').last();
   await expect(newSection.locator('[data-field="section-title"]')).toBeFocused();
 
   await newSection.locator('.component-picker-trigger').click();
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+});
+
+test('new section title creates a matching section id', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  const titleInput = page.locator('.editor-section-card').last().locator('[data-field="section-title"]');
+
+  await titleInput.fill('Launch Plan');
+  await expect(titleInput).toBeFocused();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"launch-plan"');
 });
 
 test('edit sidebar add section creates a sidebar section', async ({ page }) => {

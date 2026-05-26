@@ -1,5 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
+import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import {
   TEXT_LINE_STYLE_NAME_PATTERN,
   formatTextLineStyleCssLines,
@@ -12,6 +13,18 @@ import {
   updateTextLineStyleSpacingCss,
   writeTextLineStylesToMeta,
 } from '../../text-line-styles';
+import {
+  formatHeadingStyleCssLines,
+  getHeadingStyleLabel,
+  getHeadingStyleSpacing,
+  getHeadingStyleSurfaceClass,
+  getHeadingStylesFromMeta,
+  renderHeadingStyleElement,
+  sanitizeHeadingStyleCss,
+  updateHeadingStyleSpacingCss,
+  writeHeadingStylesToMeta,
+  type HeadingStyleName,
+} from '../../heading-styles';
 import { visitBlocks } from '../../section-ops';
 
 export function bindInputBlock(app: HTMLElement): void {
@@ -175,6 +188,59 @@ export function bindInputBlock(app: HTMLElement): void {
       styles[name] = { ...(styles[name] ?? { label: '', css: '' }), css: nextCss };
       writeTextLineStylesToMeta(state.document.meta, styles);
       refreshTextLineStyleEditingUi(app, name, nextCss);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'heading-style-label' && target instanceof HTMLInputElement) {
+      const name = getHeadingStyleName(target);
+      if (!name) return;
+      recordHistory(`meta:heading-style:label:${name}`);
+      const styles = getHeadingStylesFromMeta(state.document.meta);
+      styles[name] = { ...styles[name], label: target.value };
+      writeHeadingStylesToMeta(state.document.meta, styles);
+      refreshHeadingStyleLabelUi(app, name, getHeadingStyleLabel(name, styles[name]));
+      refreshHeadingStyleSurfaces(app);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'heading-style-css' && target instanceof HTMLTextAreaElement) {
+      const name = getHeadingStyleName(target);
+      if (!name) return;
+      recordHistory(`meta:heading-style:css:${name}`);
+      const styles = getHeadingStylesFromMeta(state.document.meta);
+      styles[name] = { ...styles[name], css: sanitizeHeadingStyleCss(target.value) };
+      writeHeadingStylesToMeta(state.document.meta, styles);
+      refreshHeadingStyleEditingUi(app, name, styles[name].css);
+      refreshHeadingStyleSurfaces(app);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'heading-style-spacing' && target instanceof HTMLInputElement) {
+      const name = getHeadingStyleName(target);
+      const property = target.dataset.cssProperty ?? '';
+      if (!name || !property) return;
+      recordHistory(`meta:heading-style:spacing:${name}:${property}`);
+      const styles = getHeadingStylesFromMeta(state.document.meta);
+      const nextCss = updateHeadingStyleSpacingCss(styles[name].css, property, target.value);
+      styles[name] = { ...styles[name], css: nextCss };
+      writeHeadingStylesToMeta(state.document.meta, styles);
+      refreshHeadingStyleEditingUi(app, name, nextCss);
+      refreshHeadingStyleSurfaces(app);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'heading-style-after-margin-top' && target instanceof HTMLInputElement) {
+      const name = getHeadingStyleName(target);
+      if (!name) return;
+      recordHistory(`meta:heading-style:after-margin-top:${name}`);
+      const styles = getHeadingStylesFromMeta(state.document.meta);
+      styles[name] = { ...styles[name], afterContentMarginTop: target.value };
+      writeHeadingStylesToMeta(state.document.meta, styles);
+      refreshHeadingStyleSurfaces(app);
       getRefreshReaderPanels()();
       return;
     }
@@ -374,6 +440,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'row-details-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.rowDetailsKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -382,6 +451,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'container-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.containerKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -390,6 +462,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'expandable-stub-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.expandableKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -398,6 +473,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'expandable-content-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.expandableKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -529,6 +607,56 @@ function refreshTextLineStyleLabelUi(app: HTMLElement, name: string, label: stri
   });
   app.querySelectorAll<HTMLElement>(`[data-text-line-style-name="${cssEscape(name)}"] .text-line-style-pill-sample`).forEach((sample) => {
     sample.textContent = label;
+  });
+}
+
+function getHeadingStyleName(target: HTMLElement): HeadingStyleName | null {
+  const name = target.dataset.headingStyleName ?? '';
+  return /^(h[1-6])$/.test(name) ? name as HeadingStyleName : null;
+}
+
+function refreshHeadingStyleEditingUi(app: HTMLElement, name: HeadingStyleName, css: string): void {
+  const spacing = getHeadingStyleSpacing(css);
+  app.querySelectorAll<HTMLElement>(`[data-heading-style-name="${cssEscape(name)}"] .heading-style-sample`).forEach((sample) => {
+    sample.setAttribute('style', css);
+  });
+  app.querySelectorAll<HTMLTextAreaElement>(`textarea[data-field="heading-style-css"][data-heading-style-name="${cssEscape(name)}"]`).forEach((textarea) => {
+    if (document.activeElement !== textarea) {
+      textarea.value = formatHeadingStyleCssLines(css);
+    }
+  });
+  Object.entries(spacing).forEach(([property, value]) => {
+    app.querySelectorAll<HTMLInputElement>(`input[data-field="heading-style-spacing"][data-heading-style-name="${cssEscape(name)}"][data-css-property="${cssEscape(property)}"]`).forEach((input) => {
+      if (document.activeElement !== input) {
+        input.value = value;
+      }
+    });
+  });
+}
+
+function refreshHeadingStyleLabelUi(app: HTMLElement, name: HeadingStyleName, label: string): void {
+  app.querySelectorAll<HTMLElement>(`[data-heading-style-name="${cssEscape(name)}"] [data-heading-style-sample-label]`).forEach((sampleLabel) => {
+    sampleLabel.textContent = label;
+  });
+}
+
+function refreshHeadingStyleSurfaces(app: HTMLElement): void {
+  const className = getHeadingStyleSurfaceClass(state.document.meta);
+  app.querySelectorAll<HTMLElement>('.hvy-surface').forEach((surface) => {
+    Array.from(surface.classList)
+      .filter((name) => name.startsWith('hvy-heading-style-'))
+      .forEach((name) => surface.classList.remove(name));
+    surface.classList.add(className);
+    const existing = surface.querySelector<HTMLStyleElement>(':scope > style[data-hvy-heading-styles="true"]');
+    const template = document.createElement('template');
+    template.innerHTML = renderHeadingStyleElement(state.document.meta, className);
+    const next = template.content.firstElementChild;
+    if (!next) return;
+    if (existing) {
+      existing.replaceWith(next);
+    } else {
+      surface.prepend(next);
+    }
   });
 }
 

@@ -25,6 +25,7 @@ import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
+import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../heading-styles';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema } from '../document-factory';
@@ -34,6 +35,7 @@ import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-d
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
+import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
 import {
   createReaderViewContext,
@@ -49,6 +51,7 @@ import {
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
+  documentExtension?: VisualDocument['extension'];
   documentSections: VisualSection[];
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
@@ -60,6 +63,7 @@ interface ReaderRenderState {
   modalSectionKey: string | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
+  pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
@@ -147,11 +151,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function getActiveReaderViewContext(): ReaderViewContext {
     if (!activeReaderViewContext) {
       return createReaderViewContext(
-        { meta: state.documentMeta, extension: '.hvy', sections: getViewerContextSections(), attachments: [] },
+        { meta: state.documentMeta, extension: state.documentExtension ?? '.hvy', sections: getViewerContextSections(), attachments: [] },
         state.readerView
       );
     }
     return activeReaderViewContext;
+  }
+
+  function isPdfReaderDocument(): boolean {
+    return state.documentExtension === '.phvy';
   }
 
   function getActiveSearchFilterContext(): SearchFilterContext {
@@ -205,18 +213,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
           : topLevelAddGhost
-          ? `<div${renderResponsiveSurfaceAttrs('')}><div class="reader-document-body">${topLevelAddGhost}</div></div>`
+          ? `<div${renderResponsiveSurfaceAttrs('')}>${renderSurfaceHeadingStyles()}<div class="reader-document-body">${topLevelAddGhost}</div></div>`
           : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
       const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
     });
   }
 
   function renderAiTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
     if (state.currentView !== 'ai' || getActiveSearchFilterContext().filtering) {
+      return '';
+    }
+    if (location === 'sidebar' && isPdfReaderDocument()) {
       return '';
     }
     const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
@@ -234,10 +245,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
     const preview = state.responsivePreview;
-    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)} ${deps.escapeAttr(getHeadingStyleSurfaceClass(state.documentMeta))}"`;
+  }
+
+  function renderSurfaceHeadingStyles(): string {
+    return renderHeadingStyleElement(state.documentMeta, getHeadingStyleSurfaceClass(state.documentMeta));
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
+    if (isPdfReaderDocument()) {
+      return '';
+    }
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const sidebarSections = orderReaderSections(
@@ -249,11 +267,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return '';
       }
       const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
     });
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (isPdfReaderDocument()) {
+      return '';
+    }
     if (state.viewerSidebarHelpDismissed) {
       return '';
     }
@@ -1253,9 +1274,92 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     `;
   }
 
+  function hasPdfTemplateImportTokenUsage(usage: import('../types').ChatTokenUsage): boolean {
+    return Object.values(usage).some((value) => typeof value === 'number');
+  }
+
+  function formatPdfTemplateImportTokenUsage(usage: import('../types').ChatTokenUsage): string {
+    return [
+      typeof usage.inputTokens === 'number' ? `input ${usage.inputTokens}` : '',
+      typeof usage.outputTokens === 'number' ? `output ${usage.outputTokens}` : '',
+      typeof usage.totalTokens === 'number' ? `total ${usage.totalTokens}` : '',
+      typeof usage.cachedTokens === 'number' ? `cached ${usage.cachedTokens}` : '',
+      typeof usage.reasoningTokens === 'number' ? `reasoning ${usage.reasoningTokens}` : '',
+    ].filter(Boolean).join(' / ');
+  }
+
+  function formatPdfTemplateImportStepStatus(status: import('../types').PdfTemplateImportStepState['status']): string {
+    if (status === 'complete') return 'Done';
+    if (status === 'running') return 'Running';
+    if (status === 'error') return 'Error';
+    return 'Pending';
+  }
+
+  function renderPdfTemplateImportRequestLog(entries: import('../types').PdfTemplateImportRequestLogEntry[]): string {
+    if (entries.length === 0) {
+      return '';
+    }
+    return `<details class="pdf-template-import-log">
+      <summary>LLM request log (${entries.length})</summary>
+      <div class="pdf-template-import-log-list">
+        ${entries.map((entry) => `
+          <details class="pdf-template-import-log-entry">
+            <summary>${deps.escapeHtml(`${entry.callIndex}. ${entry.debugLabel}`)}</summary>
+            <pre>${deps.escapeHtml(JSON.stringify(entry.request, null, 2))}</pre>
+          </details>
+        `).join('')}
+      </div>
+    </details>`;
+  }
+
   function renderModal(): string {
     if (state.themeModalOpen) {
       return renderThemeModal();
+    }
+    if (state.pdfTemplateImportModal) {
+      const modal = state.pdfTemplateImportModal;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="${modal.isRunning ? '' : 'close-overlay'}"></div>
+          <section class="modal-panel component-meta-modal pdf-template-import-modal">
+            <div class="modal-head">
+              <h3>Export PDF From PHVY</h3>
+              ${modal.isRunning ? '' : `<button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close PDF export" title="Close">${closeIcon()}</button>`}
+            </div>
+            <p class="muted">Choose a PHVY template. The current document will be imported into it before the PDF is rendered.</p>
+            ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
+            ${modal.status ? `<p class="pdf-template-import-status">${deps.escapeHtml(modal.status)}</p>` : ''}
+            ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER
+              ? `<ol class="pdf-template-import-stepper">
+                  ${modal.steps.map((step) => `
+                    <li class="pdf-template-import-step is-${deps.escapeAttr(step.status)}">
+                      <span class="pdf-template-import-step-state">${deps.escapeHtml(formatPdfTemplateImportStepStatus(step.status))}</span>
+                      <span class="pdf-template-import-step-label">${deps.escapeHtml(step.label)}</span>
+                      ${hasPdfTemplateImportTokenUsage(step.tokenUsage) ? `<span class="pdf-template-import-step-tokens">${deps.escapeHtml(formatPdfTemplateImportTokenUsage(step.tokenUsage))}</span>` : ''}
+                    </li>
+                  `).join('')}
+                </ol>`
+              : ''}
+            ${hasPdfTemplateImportTokenUsage(modal.totalTokenUsage)
+              ? `<p class="pdf-template-import-token-total">${deps.escapeHtml(`Total ${formatPdfTemplateImportTokenUsage(modal.totalTokenUsage)}`)}</p>`
+              : ''}
+            ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER && modal.awaitingLlmStep
+              ? `<div class="pdf-template-import-next-step">
+                  <button type="button" class="secondary" data-modal-action="pdf-template-import-next-llm">Run Next LLM Step</button>
+                </div>`
+              : ''}
+            ${renderPdfTemplateImportRequestLog(modal.requestLog)}
+            <label class="pdf-template-import-picker">
+              <span>PHVY Template</span>
+              <input id="pdfTemplateFileInput" type="file" accept=".phvy,text/phvy" ${modal.isRunning ? 'disabled' : ''} />
+            </label>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="close" ${modal.isRunning ? 'disabled' : ''}>Cancel</button>
+              <button type="button" class="secondary" data-modal-action="pdf-template-import-export" ${modal.isRunning ? 'disabled' : ''}>Import & Export</button>
+            </div>
+          </section>
+        </div>
+      `;
     }
     if (state.reusableSaveModal) {
       const existingName = state.reusableSaveModal.existingName;

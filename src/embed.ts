@@ -56,6 +56,9 @@ import {
 import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
+import type { HvyPdfExportOptions } from './pdf-export/types';
+import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
+import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
 import {
@@ -97,6 +100,8 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
+  exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
   undo(): void;
@@ -172,7 +177,7 @@ function createEmbedState(
 ): AppState {
   return {
     document,
-    filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
+    filename: document.extension === '.phvy' ? 'document.phvy' : document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
     selectedExample: 'default',
     currentView: 'viewer',
     editorMode: 'basic',
@@ -204,6 +209,7 @@ function createEmbedState(
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeTextEditorMode: null,
     aiEditorHostBlock: null,
     aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],
@@ -218,6 +224,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,
@@ -235,6 +242,8 @@ function createEmbedState(
     componentMetaModal: null,
     sqliteRowComponentModal: null,
     dbTableQueryModal: null,
+    pdfExportPlanModal: null,
+    pdfTemplateImportModal: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -288,6 +297,7 @@ function ensureReaderRenderer(): ReaderRenderer {
   readerRenderer = createReaderRenderer(
     {
       get documentMeta() { return state.document.meta; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get addComponentBySection() { return state.addComponentBySection; },
       get tempHighlights() { return state.tempHighlights; },
@@ -299,6 +309,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get modalSectionKey() { return null; },
       get sqliteRowComponentModal() { return state.sqliteRowComponentModal; },
       get dbTableQueryModal() { return state.dbTableQueryModal; },
+      get pdfTemplateImportModal() { return null; },
       get reusableSaveModal() { return null; },
       get reusableTemplateModal() { return null; },
       get sectionTemplateFlavorModal() { return null; },
@@ -554,6 +565,12 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
+    getPdfBlob(pdfOptions) {
+      return ready.then((mount) => mount.getPdfBlob(pdfOptions));
+    },
+    exportPdf(pdfOptions) {
+      return ready.then((mount) => mount.exportPdf(pdfOptions));
+    },
     markSaved() {
       withMount((mount) => mount.markSaved());
     },
@@ -700,6 +717,18 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
     },
+    getPdfBlob(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { getHvyPdfBlob } = await import('./pdf-export/export');
+        return getHvyPdfBlob(state.document, pdfOptions);
+      });
+    },
+    exportPdf(pdfOptions) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const { exportHvyPdf } = await import('./pdf-export/export');
+        return exportHvyPdf(state.document, pdfOptions);
+      });
+    },
     markSaved() {
       markDocumentSaved(runtime);
     },
@@ -778,7 +807,20 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
   return mountHvy({ ...options, mode: 'viewer' });
 }
 
-export { builtInPluginMap as plugins, builtInPlugins, createDocumentFilterSnapshot, createDocumentSearchSnapshot, deserializeDocumentBytes, searchDocuments, serializeDocument, serializeDocumentBytes };
+export {
+  builtInPluginMap as plugins,
+  builtInPlugins,
+  createDocumentFilterSnapshot,
+  createDocumentSearchSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
+  deserializeDocumentBytes,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
+  searchDocuments,
+  serializeDocument,
+  serializeDocumentBytes,
+};
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -797,6 +839,23 @@ export type {
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyPdfExportOptions,
+  HvyPdfExportPlan,
+  HvyPdfExportPlanDecision,
+  HvyPdfExportPlanDiagnostic,
+  HvyPdfExportPreviewStats,
+  HvyPdfExportPromptTemplate,
+  HvyPdfExportPromptTemplateVariable,
+  HvyPdfExportResult,
+  HvyPdfExportStrategy,
+  HvyPdfExportStrategyProvider,
+  HvyPdfExportStrategyProviderRequest,
+  HvyPdfExportStrategyProviderResponse,
+  HvyPdfExportStrategyRule,
+  CreatePdfExportPlanOptions,
+  CreatePdfExportPlanFromPromptOptions,
+} from './pdf-export/types';
 export type {
   HvyDocumentSearchDocument,
   HvyDocumentSearchMode,
@@ -820,8 +879,12 @@ declare global {
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       createDocumentFilterSnapshot: typeof createDocumentFilterSnapshot;
+      createPdfExportPlan: typeof createPdfExportPlan;
+      createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
+      getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
+      renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
       mountHvyViewer: typeof mountHvyViewer;
       plugins: typeof builtInPluginMap;
@@ -836,8 +899,12 @@ window.HVY = {
   serializeDocument,
   serializeDocumentBytes,
   createDocumentFilterSnapshot,
+  createPdfExportPlan,
+  createPdfExportPlanFromPrompt,
   searchDocuments,
   createDocumentSearchSnapshot,
+  getPdfExportPromptTemplates,
+  renderPdfExportPromptTemplate,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

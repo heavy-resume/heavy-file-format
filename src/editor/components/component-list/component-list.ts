@@ -8,6 +8,7 @@ import { getComponentListDisplayState, parseComponentListRuntimeView, resolveCom
 
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
+  const pdfDocument = helpers.isPdfDocument?.() === true;
   const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
   const listComponent = block.schema.componentListComponent || 'text';
   const editorResolved = resolveComponentListItems(block);
@@ -17,6 +18,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
   const editorBlockList = renderComponentListPlacementBlockList(sectionKey, block, editorBlocks, helpers);
   const placementMode = editorBlockList.length > 0 && editorBlockList.includes('component-placement-target');
   const addControl = block.schema.lock
+    || pdfDocument
     || placementMode
     ? ''
     : `<div class="ghost-section-card add-ghost component-list-add-ghost" data-action="add-component-list-item" data-section-key="${helpers.escapeAttr(
@@ -52,8 +54,9 @@ function renderComponentListPlacementBlockList(
   blocks: VisualBlock[],
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
+  const pdfDocument = helpers.isPdfDocument?.() === true;
   const output: string[] = [];
-  if (!block.schema.lock && blocks.length > 0) {
+  if (!block.schema.lock && !pdfDocument && blocks.length > 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'component-list',
       sectionKey,
@@ -64,7 +67,7 @@ function renderComponentListPlacementBlockList(
   }
   for (const innerBlock of blocks) {
     output.push(helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock));
-    if (!block.schema.lock) {
+    if (!block.schema.lock && !pdfDocument) {
       output.push(helpers.renderComponentPlacementTarget({
         container: 'component-list',
         sectionKey,
@@ -74,7 +77,7 @@ function renderComponentListPlacementBlockList(
       }));
     }
   }
-  if (!block.schema.lock && blocks.length === 0) {
+  if (!block.schema.lock && !pdfDocument && blocks.length === 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'component-list',
       sectionKey,

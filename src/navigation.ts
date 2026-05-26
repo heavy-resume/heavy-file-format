@@ -9,6 +9,7 @@ import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
 import { restoreVirtualizedSection } from './section-virtualizer';
+import type { VisualDocument } from './types';
 
 /**
  * Directly update the sidebar open/closed state on the DOM without a full re-render,
@@ -477,9 +478,12 @@ export function closeModal(): void {
     state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
   }
   state.modalSectionKey = null;
+  state.newDocumentModalOpen = false;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
   state.dbTableQueryModal = null;
+  state.pdfExportPlanModal = null;
+  state.pdfTemplateImportModal = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
   state.sectionTemplateFlavorModal = null;
@@ -528,6 +532,7 @@ export function resetTransientUiState(): void {
   state.activeEditorSectionTitleKey = null;
   state.clearSectionTitleOnFocusKey = null;
   state.modalSectionKey = null;
+  state.newDocumentModalOpen = false;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
   state.sectionTemplateFlavorModal = null;
@@ -573,12 +578,13 @@ export function resetTransientUiState(): void {
   };
 }
 
-export function resetToBlankDocument(): void {
-  state.document = createBlankDocument();
+export function resetToBlankDocument(extension: VisualDocument['extension'] = '.hvy'): void {
+  const documentExtension = extension === '.phvy' || extension === '.thvy' ? extension : '.hvy';
+  state.document = createBlankDocument(documentExtension);
   state.rawEditorText = serializeDocument(state.document);
   state.rawEditorError = null;
   state.rawEditorDiagnostics = [];
-  state.filename = 'untitled.hvy';
+  state.filename = `untitled${documentExtension}`;
   state.selectedExample = 'blank';
   state.history = [];
   state.future = [];

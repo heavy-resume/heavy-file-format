@@ -102,3 +102,5 @@ When making code changes and fixes, ask yourself if someone would get angry that
 When fixing bugs reproduce them first, if possible.
 
 Don't guess, get logs and examine them. If they dont exist, make them exist. Just be sure to keep intrusive logging on the reference app that owns the embedded app, and add capabilities to the embedded app if needed.
+
+Section titles are part of the editing experience and not the viewing experience. We don't render it on PDFs, in viewer mode, etc. Its just for naming and linking.

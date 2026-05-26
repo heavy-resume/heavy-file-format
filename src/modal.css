@@ -94,6 +94,198 @@
   margin: 0;
 }
 
+.new-document-modal,
+.hvy-document .new-document-modal {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.pdf-template-import-modal,
+.hvy-document .pdf-template-import-modal {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.pdf-template-import-picker,
+.hvy-document .pdf-template-import-picker {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.pdf-template-import-picker input,
+.hvy-document .pdf-template-import-picker input {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  padding: 0.65rem;
+}
+
+.pdf-template-import-status,
+.hvy-document .pdf-template-import-status {
+  margin: 0.5rem 0 0;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+  color: var(--hvy-text-alt);
+  padding: 0.65rem;
+}
+
+.pdf-template-import-stepper,
+.hvy-document .pdf-template-import-stepper {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pdf-template-import-step,
+.hvy-document .pdf-template-import-step {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
+  gap: 0.25rem 0.65rem;
+  align-items: center;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 70%, transparent);
+  padding: 0.55rem 0.65rem;
+}
+
+.pdf-template-import-step.is-running,
+.hvy-document .pdf-template-import-step.is-running {
+  border-color: var(--hvy-focus-ring);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
+}
+
+.pdf-template-import-step.is-error,
+.hvy-document .pdf-template-import-step.is-error {
+  border-color: var(--hvy-danger);
+}
+
+.pdf-template-import-step-state,
+.hvy-document .pdf-template-import-step-state {
+  color: var(--hvy-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pdf-template-import-step-label,
+.hvy-document .pdf-template-import-step-label {
+  color: var(--hvy-text);
+  font-weight: 650;
+}
+
+.pdf-template-import-step-tokens,
+.hvy-document .pdf-template-import-step-tokens {
+  grid-column: 2;
+  color: var(--hvy-text-alt);
+  font-size: 0.82rem;
+}
+
+.pdf-template-import-token-total,
+.hvy-document .pdf-template-import-token-total {
+  margin: 0.5rem 0 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.pdf-template-import-next-step,
+.hvy-document .pdf-template-import-next-step {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.pdf-template-import-log,
+.hvy-document .pdf-template-import-log {
+  margin-top: 0.75rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 68%, transparent);
+  padding: 0.65rem;
+}
+
+.pdf-template-import-log > summary,
+.hvy-document .pdf-template-import-log > summary,
+.pdf-template-import-log-entry > summary,
+.hvy-document .pdf-template-import-log-entry > summary {
+  cursor: pointer;
+  color: var(--hvy-text);
+  font-weight: 700;
+}
+
+.pdf-template-import-log-list,
+.hvy-document .pdf-template-import-log-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.pdf-template-import-log-entry,
+.hvy-document .pdf-template-import-log-entry {
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  padding: 0.5rem;
+}
+
+.pdf-template-import-log-entry pre,
+.hvy-document .pdf-template-import-log-entry pre {
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0.5rem 0 0;
+  border-radius: 8px;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  padding: 0.65rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.new-document-choice-grid,
+.hvy-document .new-document-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.new-document-choice,
+.hvy-document .new-document-choice {
+  display: flex;
+  min-height: 6rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  box-shadow: 0 10px 24px var(--hvy-shadow-sm);
+  cursor: pointer;
+}
+
+.new-document-choice:hover,
+.new-document-choice:focus-visible,
+.hvy-document .new-document-choice:hover,
+.hvy-document .new-document-choice:focus-visible {
+  border-color: var(--hvy-accent-1);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 10px 24px var(--hvy-shadow-sm);
+}
+
+.new-document-choice strong,
+.hvy-document .new-document-choice strong {
+  font-size: 1.05rem;
+}
+
+.new-document-choice span,
+.hvy-document .new-document-choice span {
+  color: var(--hvy-muted);
+  font-size: 0.88rem;
+}
+
 .description-progress-track {
   height: 0.7rem;
   overflow: hidden;

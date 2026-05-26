@@ -348,6 +348,30 @@ test('saveSessionState and loadSessionState isolate custom session storage keys'
   expect(loadSessionState()).toBeNull();
 });
 
+test('loadSessionState restores the document extension from the saved filename', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  });
+
+  const state = createPersistenceTestState('PDF Template', 'pdf-template');
+  state.document.extension = '.phvy';
+  state.filename = 'pdf-template.phvy';
+
+  saveSessionState(state);
+
+  expect(loadSessionState('pdf-template')?.document?.extension).toBe('.phvy');
+});
+
 test('saveSessionState skips persistence when sessionStorageKey is null', () => {
   const storage = new Map<string, string>();
   vi.stubGlobal('window', {

@@ -5,11 +5,15 @@ import { createEmptySection, instantiateReusableSection } from '../../document-f
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
+import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import type { ActionHandler } from './types';
 import type { SectionLocation } from '../../editor/types';
 
 const addTopLevelSection: ActionHandler = ({ actionButton }) => {
   const location: SectionLocation = actionButton.dataset.sectionLocation === 'sidebar' ? 'sidebar' : 'main';
+  if (isPdfDocument(state.document) && location === 'sidebar') {
+    return;
+  }
   const pickerKey = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
   const starter = state.addComponentBySection[pickerKey] ?? 'blank';
   if (openSectionFlavorChooserIfNeeded(starter, location)) {
@@ -20,6 +24,9 @@ const addTopLevelSection: ActionHandler = ({ actionButton }) => {
 };
 
 export function insertTopLevelSection(starter: string, flavorName?: string, location: SectionLocation = 'main'): void {
+  if (isPdfDocument(state.document) && location === 'sidebar') {
+    return;
+  }
   recordHistory();
   const section = starter === 'blank'
     ? createEmptySection(1, state.currentView === 'ai' ? 'text' : '', false)
@@ -71,8 +78,11 @@ const spawnGhostChild: ActionHandler = ({ section }) => {
   if (!section || section.lock) {
     return;
   }
-  recordHistory();
   const component = state.addComponentBySection[section.key] ?? 'container';
+  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+    return;
+  }
+  recordHistory();
   const child = createEmptySection(Math.min(section.level + 1, 6), component, false);
   section.children.push(child);
   state.pendingEditorCenterSectionKey = child.key;
@@ -81,6 +91,9 @@ const spawnGhostChild: ActionHandler = ({ section }) => {
 
 const toggleSectionLocation: ActionHandler = ({ section }) => {
   if (!section) {
+    return;
+  }
+  if (isPdfDocument(state.document)) {
     return;
   }
   recordHistory();
@@ -153,8 +166,11 @@ const addChild: ActionHandler = ({ section }) => {
   if (!section || section.lock) {
     return;
   }
-  recordHistory();
   const component = state.addComponentBySection[section.key] ?? 'container';
+  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+    return;
+  }
+  recordHistory();
   const child = createEmptySection(Math.min(section.level + 1, 6), component, true);
   section.children.push(child);
   if (child.blocks[0]) {

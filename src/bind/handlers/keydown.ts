@@ -1,4 +1,4 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { selectAdjacentSearchResult } from '../../search/actions';
@@ -90,7 +90,7 @@ export function bindKeydown(app: HTMLElement): void {
       const sectionKey = target.dataset.sectionKey;
       const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;
       if (section) {
-        section.title = target.value;
+        assignSectionTitleAndGeneratedId(state.document.sections, section, target.value);
         if ((event.metaKey || event.ctrlKey) && section.title.trim().length > 0 && section.blocks.length === 0 && section.children.length === 0) {
           recordHistory(`section-title-heading:${section.key}`);
           const newBlock = createEmptyBlock('text');

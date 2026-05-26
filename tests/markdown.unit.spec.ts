@@ -195,6 +195,14 @@ test('serializes editor text line style wrappers back to markers', () => {
   ).toBe('^role^ #### Foo');
 });
 
+test('serializes rich editor fill-in markers back to value comments', () => {
+  expect(
+    turndown.turndown(
+      '<p>Before <span class="text-fill-in-box text-fill-in-rich-marker" contenteditable="false" data-hvy-fill-in-marker="true" data-placeholder="Summary">Summary</span> after.</p>'
+    )
+  ).toBe('Before <!-- value {"placeholder":"Summary"} --> after.');
+});
+
 test('converts markdown headings into HVY section hierarchy', () => {
   const document = convertMarkdownToHvyDocument(`# Project Brief
 

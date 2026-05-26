@@ -16,6 +16,8 @@ import {
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
+import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { coerceGridItemAlign } from './grid-ops';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -365,8 +367,10 @@ function parseBlocks(
       return;
     }
     if (attach.kind === 'grid') {
+      const align = coerceGridItemAlign(attach.meta.align);
       attach.parent.schema.gridItems.push({
         id: typeof attach.meta.id === 'string' ? attach.meta.id : makeId('griditem'),
+        ...(align ? { align } : {}),
         block,
       });
       return;
@@ -627,21 +631,38 @@ function escapeHvyJsonString(value: string): string {
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   for (const section of document.sections) {
-    validateSectionSemantics(section, document.meta, diagnostics);
+    validateSectionSemantics(section, document, diagnostics);
   }
 }
 
-function validateSectionSemantics(section: VisualSection, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
+function validateSectionSemantics(section: VisualSection, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  const sectionLabel = section.title || section.customId || 'Untitled Section';
+  if (isPdfDocument(document) && section.location === 'sidebar') {
+    diagnostics.push({
+      severity: 'error',
+      code: 'phvy_sidebar_not_supported',
+      message: `Section "${sectionLabel}": PHVY cannot use sidebar sections.`,
+    });
+  }
   for (const block of section.blocks) {
-    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', documentMeta, diagnostics);
+    validateBlockSemantics(block, sectionLabel, document, diagnostics);
   }
   for (const child of section.children) {
-    validateSectionSemantics(child, documentMeta, diagnostics);
+    validateSectionSemantics(child, document, diagnostics);
   }
 }
 
-function validateBlockSemantics(block: VisualBlock, sectionLabel: string, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
-  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
+function validateBlockSemantics(block: VisualBlock, sectionLabel: string, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
+
+  if (isPdfDocument(document) && !isPdfAllowedComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
+    const label = block.schema.component === 'plugin' ? block.schema.plugin || 'plugin' : block.schema.component;
+    diagnostics.push({
+      severity: 'error',
+      code: 'phvy_component_not_supported',
+      message: `Section "${sectionLabel}": PHVY cannot use component "${label}".`,
+    });
+  }
 
   if (baseComponent === 'expandable') {
     if ((block.schema.expandableContentBlocks.children ?? []).length === 0) {
@@ -671,19 +692,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, docume
   }
 
   for (const child of block.schema.containerBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.componentListBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.expandableStubBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.expandableContentBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const item of block.schema.gridItems ?? []) {
-    validateBlockSemantics(item.block, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(item.block, sectionLabel, document, diagnostics);
   }
 }
 
@@ -1328,6 +1349,7 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
+        ...(item.align ? { align: item.align } : {}),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1476,7 +1498,7 @@ function shouldPreserveSerializedTextLine(line: string): boolean {
   return (
     trimmed.length === 0 ||
     / {2,}$/.test(line) ||
-    /^(\|| {0,3}[-*+]\s+\[[ xX]\]\s+)/.test(line) ||
+    /^(\|| {0,3}(?:[-*+]\s+|\d+[.)]\s+))/.test(line) ||
     /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line) ||
     /^ {0,3}#{1,6}\s/.test(line) ||
     /^ {0,3}>/.test(line) ||
@@ -1579,6 +1601,7 @@ function serializeGridItemBlock(item: GridItem, index: number, indent: number, d
     `grid:${index}`,
     {
       id: item.id,
+      ...(item.align ? { align: item.align } : {}),
     },
     item.block,
     indent,

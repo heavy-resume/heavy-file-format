@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import {
   buildChatDocumentContext,
@@ -6,7 +6,9 @@ import {
   closeChatPanel,
   createDefaultChatState,
   getEnvChatSettings,
+  MAX_PROXY_COMPLETION_CONTEXT_CHARS,
   mergeChatSettings,
+  requestProxyCompletion,
   stopChatRequest,
   stripDocumentHeaderAndComments,
   toggleChatPanelOpen,
@@ -140,6 +142,44 @@ test('buildProxyChatRequest preserves provider, model, messages, and context', (
       { id: '2', role: 'assistant', content: 'A summary.', error: undefined },
     ],
   });
+});
+
+test('requestProxyCompletion hard fails when context exceeds the per-call cap', async () => {
+  const client = {
+    complete: vi.fn(async () => ({ output: 'ok' })),
+  };
+
+  await expect(
+    requestProxyCompletion({
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      messages: [{ id: '1', role: 'user', content: 'Go.' }],
+      context: '123456',
+      responseInstructions: 'Return ok.',
+      mode: 'qa',
+      debugLabel: 'oversized-test',
+      client,
+      maxContextChars: 5,
+    })
+  ).rejects.toThrow(/maximum is 5/);
+  expect(client.complete).not.toHaveBeenCalled();
+});
+
+test('requestProxyCompletion uses the default context cap when no override is supplied', async () => {
+  const client = {
+    complete: vi.fn(async () => ({ output: 'ok' })),
+  };
+
+  await requestProxyCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    messages: [{ id: '1', role: 'user', content: 'Go.' }],
+    context: 'x'.repeat(Math.min(16, MAX_PROXY_COMPLETION_CONTEXT_CHARS)),
+    responseInstructions: 'Return ok.',
+    mode: 'qa',
+    debugLabel: 'default-cap-test',
+    client,
+  });
+
+  expect(client.complete).toHaveBeenCalledTimes(1);
 });
 
 test('getEnvChatSettings prepopulates provider and model from vite env vars', () => {

@@ -27,6 +27,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'component_defaults',
   'section_defaults',
   'text_line_styles',
+  'heading_styles',
   'plugins',
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
@@ -301,6 +302,14 @@ function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
     for (const [styleName, style] of Object.entries(textLineStyles)) {
       if (style && typeof style === 'object' && !Array.isArray(style)) {
         pushHeaderCssJsonIssue(issues, `text_line_styles.${styleName}.css`, (style as JsonObject).css);
+      }
+    }
+  }
+  const headingStyles = document.meta.heading_styles;
+  if (headingStyles && typeof headingStyles === 'object' && !Array.isArray(headingStyles)) {
+    for (const [styleName, style] of Object.entries(headingStyles)) {
+      if (style && typeof style === 'object' && !Array.isArray(style)) {
+        pushHeaderCssJsonIssue(issues, `heading_styles.${styleName}.css`, (style as JsonObject).css);
       }
     }
   }

@@ -845,6 +845,33 @@ Rules:
 - `css` is an optional inline CSS declaration string and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - Text line styles do not create HVY components, sections, component defaults, or component-level CSS. Component-level `css` continues to persist independently.
 
+### 5.16 Document-level heading styles
+
+A `.hvy` or `.thvy` file MAY declare presentation values for standard Markdown headings in front matter under `heading_styles`.
+
+This styles visible ATX headings (`#` through `######`) inside `text` components. It does not style HVY section titles from `#!` lines, because those lines are section metadata and are not rendered as Markdown content.
+
+#### Front matter shape
+
+```yaml
+heading_styles:
+  h2:
+    label: Heading 2
+    css: "margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "0.7rem"
+  h3:
+    label: Heading 3
+    css: "margin: 0.85rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1.1rem"
+```
+
+Rules:
+- Keys under `heading_styles` are `h1` through `h6`.
+- `css` is an optional inline CSS declaration string applied to that rendered heading level and MUST be sanitized using the same rules as other document-supplied inline CSS.
+- `afterContentMarginTop` is an optional CSS length or expression used as the top margin when that heading follows prose, a list, blockquote, or code block in the same text component.
+- Renderers SHOULD remove the top margin from the first visible heading in a text block or styled text-line wrapper so a heading at the start of a section aligns with the section content.
+- Unknown heading style fields MUST be ignored.
+
 ## 6. Template & Schema (`.thvy`)
 
 A `.thvy` file is a `.hvy` file. The distinction is the `.thvy` extension or `text/thvy` media type.
@@ -1297,7 +1324,7 @@ Normative behavior:
 - Remote resource fetches MUST be gated behind user network permission.
 - Plugin installation MUST show `id` and `source` before trust is granted.
 - Clients MUST treat tail payload bytes as untrusted input and only hand them to the declared plugin after normal trust checks.
-- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, `text_line_styles.*.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
+- Renderers MUST sanitize document-supplied CSS (inline `css` fields, fenced `~~~css` blocks, `hvy:css` directives, `theme.colors` values, `component_defaults.*.css`, `section_defaults.css`, `text_line_styles.*.css`, `heading_styles.*.css`, and section/block `css`) so it cannot trigger network fetches unless the user has explicitly enabled external CSS resources. Specifically, renderers MUST drop or neutralize `url(...)`, `image-set(...)`, `src(...)`, `src:` declarations, and the at-rules `@import`, `@font-face`, `@namespace`, and `@property`. Sanitization MUST decode CSS character escapes (e.g. `u\72l(...)` and `\55RL(...)`) before pattern matching so obfuscated forms are also blocked.
 
 ## 9. Parsing Rules (Normative)
 

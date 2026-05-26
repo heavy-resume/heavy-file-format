@@ -6,7 +6,7 @@ Inspect the header before patching it:
 
 ```shell
 cat /header.yaml
-grep -n "component_defs\|section_defs\|theme\|component_defaults\|section_defaults" /header.yaml
+grep -n "component_defs\|section_defs\|theme\|component_defaults\|section_defaults\|heading_styles" /header.yaml
 nl -ba /header.yaml
 ```
 
@@ -15,7 +15,7 @@ Use the header for document-level concerns:
 - `title`, `description`, `tags`, `sidebar_label`, and `reader_max_width`
 - `theme.colors`
 - `component_defs` and `section_defs`
-- `component_defaults` and `section_defaults`
+- `component_defaults`, `section_defaults`, and `heading_styles`
 - plugin or template metadata that belongs to the whole document
 
 Use body component files for visible content:

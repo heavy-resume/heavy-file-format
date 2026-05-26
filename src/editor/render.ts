@@ -45,6 +45,15 @@ import {
   getTextLineStylesFromMeta,
   type TextLineStyles,
 } from '../text-line-styles';
+import {
+  HEADING_STYLE_NAMES,
+  formatHeadingStyleCssLines,
+  getHeadingStyleLabel,
+  getHeadingStyleSpacing,
+  getHeadingStyleSurfaceClass,
+  getHeadingStylesFromMeta,
+  renderHeadingStyleElement,
+} from '../heading-styles';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -192,7 +201,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   function renderSidebarEditorSections(sections: VisualSection[]): string {
     const sidebarSections = sections.filter((s) => !s.isGhost && s.location === 'sidebar');
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-    return `<div${surfaceAttrs}><div class="editor-tree-body editor-sidebar-tree-body">
+    return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="editor-tree-body editor-sidebar-tree-body">
       ${sidebarSections.length === 0 ? '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button, or add one below.</div>' : ''}
       ${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}
       ${renderTopLevelSectionAddGhost('sidebar')}
@@ -234,6 +243,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
     return `
       <div${surfaceAttrs}>
+        ${renderSurfaceHeadingStyles()}
         <div class="editor-tree-body"${bodyStyle}>
           ${state.showAdvancedEditor
             ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
@@ -265,7 +275,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
     const preview = state.responsivePreview;
-    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)} ${deps.escapeAttr(getHeadingStyleSurfaceClass(state.documentMeta))}"`;
+  }
+
+  function renderSurfaceHeadingStyles(): string {
+    return renderHeadingStyleElement(state.documentMeta, getHeadingStyleSurfaceClass(state.documentMeta));
   }
 
   function renderEditorSection(section: VisualSection, rootSections: VisualSection[], isSubsection = false): string {
@@ -1108,6 +1122,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const theme = deps.getThemeConfig();
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
+    const headingStyles = getHeadingStylesFromMeta(state.documentMeta);
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
       <section class="meta-panel">
@@ -1175,6 +1190,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="text-line-style-editor">
           ${renderTextLineStyleEditorRows(textLineStyles)}
+        </div>
+        <div class="meta-panel-head">
+          <strong>Heading Styles</strong>
+        </div>
+        <div class="text-line-style-editor heading-style-editor">
+          ${renderHeadingStyleEditorRows(headingStyles)}
         </div>
         <div class="meta-panel-head">
           <strong>Component Templates</strong>
@@ -1360,6 +1381,63 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <span>Preview</span>
             <div class="text-line-style-sample" style="${deps.escapeAttr(css)}">
               <span data-text-line-style-sample-label>${deps.escapeHtml(label)}</span>
+            </div>
+          </div>
+        </div>
+      </details>`;
+    }).join('');
+  }
+
+  function renderHeadingStyleEditorRows(styles: ReturnType<typeof getHeadingStylesFromMeta>): string {
+    return HEADING_STYLE_NAMES.map((name) => {
+      const style = styles[name];
+      const label = getHeadingStyleLabel(name, style);
+      const rawCss = formatHeadingStyleCssLines(style.css);
+      const spacing = getHeadingStyleSpacing(style.css);
+      const renderSpacingInput = (property: string, shortLabel: string): string => `<label class="paragraph-style-box-field paragraph-style-box-field-${deps.escapeAttr(property)}">
+        <span class="${property.startsWith('margin-') ? 'paragraph-style-margin-mobile-label' : 'sr-only'}">${shortLabel}</span>
+        <input data-field="heading-style-spacing" data-heading-style-name="${deps.escapeAttr(name)}" data-css-property="${deps.escapeAttr(property)}" value="${deps.escapeAttr(spacing[property] ?? '')}" placeholder="0" aria-label="${deps.escapeAttr(`${label} ${shortLabel.toLowerCase()} ${property.startsWith('margin-') ? 'margin' : 'padding'}`)}" />
+      </label>`;
+      const boxModel = `<div class="paragraph-style-box-model" aria-label="${deps.escapeAttr(`${label} box model spacing`)}">
+            <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-margin">Margin</strong>
+            ${renderSpacingInput('margin-top', 'Top')}
+            ${renderSpacingInput('margin-right', 'Right')}
+            ${renderSpacingInput('margin-bottom', 'Bottom')}
+            ${renderSpacingInput('margin-left', 'Left')}
+            <div class="paragraph-style-padding-box">
+              <strong class="paragraph-style-box-model-label paragraph-style-box-model-label-padding">Padding</strong>
+              ${renderSpacingInput('padding-top', 'Top')}
+              ${renderSpacingInput('padding-right', 'Right')}
+              ${renderSpacingInput('padding-bottom', 'Bottom')}
+              ${renderSpacingInput('padding-left', 'Left')}
+            </div>
+          </div>`;
+      return `<details class="heading-style-row template-def-details" data-heading-style-name="${deps.escapeAttr(name)}">
+        <summary class="template-def-summary">
+          <span class="template-def-summary-text">
+            <strong data-heading-style-sample-label>${deps.escapeHtml(label)}</strong>
+            <span>${deps.escapeHtml(name.toUpperCase())}</span>
+          </span>
+          <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="template-def-body">
+          <label>
+            <span>Label</span>
+            <input data-field="heading-style-label" data-heading-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.label)}" placeholder="${deps.escapeAttr(name.toUpperCase())}" />
+          </label>
+          ${boxModel}
+          <label>
+            <span>Top Margin After Content</span>
+            <input data-field="heading-style-after-margin-top" data-heading-style-name="${deps.escapeAttr(name)}" value="${deps.escapeAttr(style.afterContentMarginTop)}" placeholder="0.7rem" />
+          </label>
+          <label class="paragraph-style-css-lines">
+            <span>CSS declarations</span>
+            <textarea rows="5" data-field="heading-style-css" data-heading-style-name="${deps.escapeAttr(name)}" spellcheck="false" placeholder="font-weight: 700;">${deps.escapeHtml(rawCss)}</textarea>
+          </label>
+          <div class="text-line-style-preview">
+            <span>Preview</span>
+            <div class="text-line-style-sample heading-style-sample" style="${deps.escapeAttr(style.css)}">
+              <span data-heading-style-sample-label>${deps.escapeHtml(label)}</span>
             </div>
           </div>
         </div>

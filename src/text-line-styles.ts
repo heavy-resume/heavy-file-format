@@ -48,7 +48,7 @@ export function writeTextLineStylesToMeta(meta: Record<string, unknown>, styles:
 }
 
 export function sanitizeTextLineStyleCss(css: string): string {
-  return sanitizeInlineCss(css);
+  return sanitizeStyleCss(css);
 }
 
 export function getTextLineStylePreviewCss(css: string): string {
@@ -60,13 +60,29 @@ export function getTextLineStylePreviewCss(css: string): string {
 }
 
 export function formatTextLineStyleCssLines(css: string): string {
-  return parseCssDeclarations(sanitizeTextLineStyleCss(css))
+  return formatStyleCssLines(css);
+}
+
+export function getTextLineStyleSpacing(css: string): Record<string, string> {
+  return getStyleSpacing(css);
+}
+
+export function updateTextLineStyleSpacingCss(css: string, property: string, value: string): string {
+  return updateStyleSpacingCss(css, property, value);
+}
+
+export function sanitizeStyleCss(css: string): string {
+  return sanitizeInlineCss(css);
+}
+
+export function formatStyleCssLines(css: string): string {
+  return parseCssDeclarations(sanitizeStyleCss(css))
     .map(({ property, value }) => `${property}: ${value};`)
     .join('\n');
 }
 
-export function getTextLineStyleSpacing(css: string): Record<string, string> {
-  const declarations = parseCssDeclarations(sanitizeTextLineStyleCss(css));
+export function getStyleSpacing(css: string): Record<string, string> {
+  const declarations = parseCssDeclarations(sanitizeStyleCss(css));
   const spacing: Record<string, string> = {
     'margin-top': '',
     'margin-right': '',
@@ -91,19 +107,19 @@ export function getTextLineStyleSpacing(css: string): Record<string, string> {
   return spacing;
 }
 
-export function updateTextLineStyleSpacingCss(css: string, property: string, value: string): string {
-  const spacing = getTextLineStyleSpacing(css);
+export function updateStyleSpacingCss(css: string, property: string, value: string): string {
+  const spacing = getStyleSpacing(css);
   if (!(property in spacing)) {
-    return sanitizeTextLineStyleCss(css);
+    return sanitizeStyleCss(css);
   }
   spacing[property] = value.trim();
-  const preserved = parseCssDeclarations(sanitizeTextLineStyleCss(css)).filter(
+  const preserved = parseCssDeclarations(sanitizeStyleCss(css)).filter(
     (declaration) => !/^(margin|padding)(-|$)/.test(declaration.property)
   );
   const spacingDeclarations = Object.entries(spacing)
     .filter(([, spacingValue]) => spacingValue.length > 0)
     .map(([spacingProperty, spacingValue]) => ({ property: spacingProperty, value: spacingValue }));
-  return sanitizeTextLineStyleCss(serializeCssDeclarations([...spacingDeclarations, ...preserved]));
+  return sanitizeStyleCss(serializeCssDeclarations([...spacingDeclarations, ...preserved]));
 }
 
 export function getTextLineStyleLabel(name: string, style: TextLineStyle | undefined): string {

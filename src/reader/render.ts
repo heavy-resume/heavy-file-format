@@ -25,6 +25,7 @@ import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
+import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../heading-styles';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema } from '../document-factory';
@@ -205,13 +206,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
           : topLevelAddGhost
-          ? `<div${renderResponsiveSurfaceAttrs('')}><div class="reader-document-body">${topLevelAddGhost}</div></div>`
+          ? `<div${renderResponsiveSurfaceAttrs('')}>${renderSurfaceHeadingStyles()}<div class="reader-document-body">${topLevelAddGhost}</div></div>`
           : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
       const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-      return `<div${surfaceAttrs}><div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
     });
   }
 
@@ -234,7 +235,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
 
   function renderResponsiveSurfaceAttrs(_documentMaxWidth: string): string {
     const preview = state.responsivePreview;
-    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)}"`;
+    return ` class="hvy-surface hvy-surface-${deps.escapeAttr(preview)} ${deps.escapeAttr(getHeadingStyleSurfaceClass(state.documentMeta))}"`;
+  }
+
+  function renderSurfaceHeadingStyles(): string {
+    return renderHeadingStyleElement(state.documentMeta, getHeadingStyleSurfaceClass(state.documentMeta));
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
@@ -249,7 +254,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return '';
       }
       const surfaceAttrs = renderResponsiveSurfaceAttrs('');
-      return `<div${surfaceAttrs}><div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-sidebar-surface-body">${sidebarSectionsHtml}${topLevelAddGhost}</div></div>`;
     });
   }
 

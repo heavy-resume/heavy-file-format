@@ -33,6 +33,7 @@ import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -354,10 +355,26 @@ function localGetComponentRenderHelpers() {
   return getComponentRenderHelpers(editorRenderer, readerRenderer);
 }
 
+function renderDocumentComponentOptions(selected: string): string {
+  if (!isPdfDocument(state.document)) {
+    return renderComponentOptions(selected);
+  }
+  const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+  const custom = getComponentDefs()
+    .map((def) => def.name.trim())
+    .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+  return [...new Set([...builtins, ...custom])]
+    .map((option) => renderOption(option, selected))
+    .join('');
+}
+
 editorRenderer = createEditorRenderer(
   {
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
+    },
+    get documentExtension() {
+      return state.document.extension;
     },
     get documentSections() {
       return state.document.sections;
@@ -557,7 +574,7 @@ readerRenderer = createReaderRenderer(
     getComponentRenderHelpers: localGetComponentRenderHelpers,
     renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
-    renderComponentOptions,
+    renderComponentOptions: renderDocumentComponentOptions,
     renderReusableSectionOptions,
     getSectionDefs,
     renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
@@ -794,7 +811,7 @@ function renderTopbar(): string {
     <header class="topbar">
       <div class="title-block">
         <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code> and <code>.thvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
+        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">
@@ -805,7 +822,7 @@ function renderTopbar(): string {
           <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
           <label class="file-picker">
             Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.md,.markdown,text/markdown,text/plain" />
+            <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
@@ -871,6 +888,7 @@ function renderWorkspaceRightControls(options: {
     ${
       options.isEditorView
         ? `<div class="editor-top-controls">
+            ${isPdfDocument(state.document) ? '<span class="pdf-document-badge" title="PDF template document">PDF Doc</span>' : ''}
             <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
             <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
             <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>

@@ -3,6 +3,7 @@ import type { VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { deserializeDocumentBytes, serializeDocumentBytes } from '../serialization';
 import { downloadBlob } from '../utils';
+import { isPdfAllowedComponent, isPdfDocument } from '../pdf-document-capabilities';
 import { buildPdfExportDocDefinition } from './doc-definition';
 import { createPdfExportRuleRecorder, mergePdfExportStrategies } from './strategy';
 import type {
@@ -25,6 +26,7 @@ export async function preparePdfExport(
   options: HvyPdfExportOptions = {}
 ): Promise<HvyPdfExportResult> {
   const exportDocument = cloneDocumentForPdfExport(sourceDocument);
+  validatePdfDocumentComponents(exportDocument);
   const strategy = await prepareExportStrategy(exportDocument, options.strategy, options.runPrepScript !== false);
   return {
     sourceDocument,
@@ -32,6 +34,31 @@ export async function preparePdfExport(
     strategy,
     docDefinition: buildPdfExportDocDefinition(exportDocument, { contentView: options.contentView, strategy }),
   };
+}
+
+function validatePdfDocumentComponents(document: VisualDocument): void {
+  if (!isPdfDocument(document)) {
+    return;
+  }
+  const visit = (blocks: VisualBlock[]): void => {
+    for (const block of blocks) {
+      if (!isPdfAllowedComponent(block.schema.component, document.meta)) {
+        throw new Error(`PDF document cannot render component "${block.schema.component}".`);
+      }
+      visit(block.schema.containerBlocks ?? []);
+      visit(block.schema.componentListBlocks ?? []);
+      visit((block.schema.gridItems ?? []).map((item) => item.block));
+      visit(block.schema.expandableStubBlocks?.children ?? []);
+      visit(block.schema.expandableContentBlocks?.children ?? []);
+    }
+  };
+  const visitSections = (sections: VisualSection[]): void => {
+    for (const section of sections) {
+      visit(section.blocks);
+      visitSections(section.children);
+    }
+  };
+  visitSections(document.sections);
 }
 
 export async function getHvyPdfBlob(document: VisualDocument, options: HvyPdfExportOptions = {}): Promise<Blob> {

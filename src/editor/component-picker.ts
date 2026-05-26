@@ -28,7 +28,12 @@ interface PickerGroup {
 
 export function renderAddComponentPicker(options: AddComponentPickerOptions, deps: RenderDeps): string {
   const groups = getPickerGroups(deps.getComponentDefs());
-  const paneStyle = `--component-picker-groups: ${groups.length};`;
+  const visibleGroups = options.componentFilter
+    ? groups
+        .map((group) => ({ ...group, items: group.items.filter((item) => options.componentFilter?.(item.value) ?? true) }))
+        .filter((group) => group.items.length > 0)
+    : groups;
+  const paneStyle = `--component-picker-groups: ${visibleGroups.length};`;
   return `
     <div class="component-picker" style="${paneStyle}" data-active-pane="root">
       <button
@@ -43,9 +48,9 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
         <div class="component-picker-viewport">
           <div class="component-picker-panes">
             <div class="component-picker-pane component-picker-pane-root" data-picker-pane="root">
-              ${groups.map((group) => renderGroupButton(options, group, deps)).join('')}
+              ${visibleGroups.map((group) => renderGroupButton(options, group, deps)).join('')}
             </div>
-            ${groups.map((group) => renderGroupPane(options, group, deps)).join('')}
+            ${visibleGroups.map((group) => renderGroupPane(options, group, deps)).join('')}
           </div>
         </div>
       </div>

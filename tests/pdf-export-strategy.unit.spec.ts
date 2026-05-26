@@ -283,4 +283,22 @@ describe('PDF export strategy', () => {
     expect(text).toContain('Unsupported PDF export component: fake-plugin');
     expect(text).not.toContain('Hidden text');
   });
+
+  test('PHVY export accepts PDF-compatible components', async () => {
+    const document = createDocument();
+    document.extension = '.phvy';
+    document.sections = [createSection('summary', [createTextBlock('intro', 'PDF template text')])];
+
+    const expectedResult = await getHvyPdfBlob(document);
+
+    expect(expectedResult.type).toBe('application/pdf');
+  });
+
+  test('PHVY export rejects existing PDF-incompatible components', async () => {
+    const document = createDocument();
+    document.extension = '.phvy';
+    document.sections = [createSection('details', [createExpandableBlock('details')])];
+
+    await expect(getHvyPdfBlob(document)).rejects.toThrow('PDF document cannot render component "expandable"');
+  });
 });

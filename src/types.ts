@@ -11,7 +11,7 @@ export interface DocumentAttachment {
 
 export interface VisualDocument {
   meta: JsonObject;
-  extension: '.hvy' | '.thvy' | '.md';
+  extension: '.hvy' | '.thvy' | '.phvy' | '.md';
   sections: VisualSection[];
   attachments: DocumentAttachment[];
 }

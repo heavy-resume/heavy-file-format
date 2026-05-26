@@ -6,6 +6,7 @@ import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '.
 import { isSearchFilterApplied, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
+import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -94,6 +95,9 @@ export function bindInputMisc(app: HTMLElement): void {
       advanced: state.showAdvancedEditor,
     });
     if (field === 'new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       state.addComponentBySection[sectionKey] = target.value;
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
@@ -104,6 +108,9 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
     if (field === 'new-grid-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const blockId = target.dataset.blockId;
       if (!blockId) {
         console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)), skipped: 'missing-block-id' });

@@ -54,6 +54,7 @@ import {
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
 } from '../heading-styles';
+import { isPdfAllowedComponent } from '../pdf-document-capabilities';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -106,6 +107,7 @@ interface ComponentListDisplayContext {
 }
 
 interface EditorRenderState {
+  documentExtension: '.hvy' | '.thvy' | '.phvy' | '.md';
   documentMeta: Record<string, unknown>;
   documentSections: VisualSection[];
   showAdvancedEditor: boolean;
@@ -198,7 +200,18 @@ export interface EditorRenderer {
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
+  function isPdfEditorDocument(): boolean {
+    return state.documentExtension === '.phvy';
+  }
+
+  function isPdfAllowedEditorComponent(componentName: string): boolean {
+    return isPdfAllowedComponent(componentName, state.documentMeta);
+  }
+
   function renderSidebarEditorSections(sections: VisualSection[]): string {
+    if (isPdfEditorDocument()) {
+      return '';
+    }
     const sidebarSections = sections.filter((s) => !s.isGhost && s.location === 'sidebar');
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
     return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="editor-tree-body editor-sidebar-tree-body">
@@ -209,6 +222,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (isPdfEditorDocument()) {
+      return '';
+    }
     if (state.editorSidebarHelpDismissed) {
       return '';
     }
@@ -257,7 +273,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
-    if (state.mobileAdjustmentMode) {
+    if (state.mobileAdjustmentMode || (isPdfEditorDocument() && location === 'sidebar')) {
       return '';
     }
     const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
@@ -315,6 +331,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     action: 'add-block',
                     sectionKey: section.key,
                     label: 'Section component type',
+                    ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent } : {}),
                   })}
               </div>`;
     return `
@@ -337,7 +354,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                    <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(section.key)}">Meta</button>`
         : ''
       }
-            ${isSubsection ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
+            ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
               section.key
             )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
@@ -610,6 +627,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           'data-insert-placement': placement,
           'data-target-block-id': block.id,
         },
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent } : {}),
       })}
     </div>`;
   }

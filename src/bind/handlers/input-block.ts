@@ -1,5 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
+import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import {
   TEXT_LINE_STYLE_NAME_PATTERN,
   formatTextLineStyleCssLines,
@@ -439,6 +440,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'row-details-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.rowDetailsKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -447,6 +451,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'container-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.containerKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -455,6 +462,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'expandable-stub-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.expandableKey;
       if (key) {
         state.addComponentBySection[key] = target.value;
@@ -463,6 +473,9 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
     if (field === 'expandable-content-new-component-type' && target instanceof HTMLSelectElement) {
+      if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+        return;
+      }
       const key = target.dataset.expandableKey;
       if (key) {
         state.addComponentBySection[key] = target.value;

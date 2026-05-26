@@ -177,7 +177,7 @@ function createEmbedState(
 ): AppState {
   return {
     document,
-    filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
+    filename: document.extension === '.phvy' ? 'document.phvy' : document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
     selectedExample: 'default',
     currentView: 'viewer',
     editorMode: 'basic',

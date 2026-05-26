@@ -1,0 +1,48 @@
+---
+hvy_version: 0.1
+title: pdf-export-strategy
+reader_max_width: 60rem
+section_defaults:
+  css: "margin: 0 0 0.5rem;"
+theme:
+  colors: {}
+---
+
+<!--hvy: {"id":"pdf-import-via-template-strategy","lock":false,"expanded":true,"highlight":false}-->
+#! PDF Import via Template Strategy
+
+ <!--hvy:text {}-->
+  # PDF Import via Template Strategy
+
+ <!--hvy:text {}-->
+  This strategy involves creating a HVY template that one HVY imports into another. This reconciles "What should go in
+  the PDF?" Then, its just a matter of presentation.
+  
+  ## PDF Templates
+  
+  When exporting to PDF, only the main sections are rendered. The sidebar(s) are not. Template values like fillins are
+  used for targeting data, and templated (reusable) components are created via the import process.
+  
+  ## Allowed Components
+  
+  The following components are allowed in a PDF template:
+  
+  - Text
+  - Container
+  - Grid
+  - Image
+  - Static tables
+  
+  Fillins (placeholders) are allowed and such to allow for creating a PDF via the template, but they are not rendered.
+  
+  The client could potentially have a dedicated mode for phvy that disables components not allowed, and doesn't show the
+  sidebar nor the options to move to the sidebar.
+<!--hvy: {"id":"hvy-to-hvy-import","lock":false,"expanded":true,"highlight":false}-->
+#! HVY to HVY import
+
+ <!--hvy:text {}-->
+  # HVY to HVY import
+
+ <!--hvy:text {}-->
+  HVY can be imported into another HVY document. The header information is not included as part of the import text. A
+  context filter can be used to narrow the information prior to import.

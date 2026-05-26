@@ -84,6 +84,7 @@ import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import {
   buildImportPlanForDocument,
@@ -160,7 +161,7 @@ function createEmbedState(
 ): AppState {
   return {
     document,
-    filename: document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
+    filename: document.extension === '.phvy' ? 'document.phvy' : document.extension === '.thvy' ? 'resume.thvy' : 'resume.hvy',
     selectedExample: 'default',
     currentView: mode,
     editorMode: 'basic',
@@ -304,11 +305,25 @@ function localGetComponentRenderHelpers() {
   return getComponentRenderHelpers(editorRenderer, readerRenderer);
 }
 
+function renderDocumentComponentOptions(selected: string): string {
+  if (!isPdfDocument(state.document)) {
+    return renderComponentOptions(selected);
+  }
+  const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+  const custom = getComponentDefs()
+    .map((def) => def.name.trim())
+    .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+  return [...new Set([...builtins, ...custom])]
+    .map((option) => renderOption(option, selected))
+    .join('');
+}
+
 function ensureRenderers(): void {
   if (editorRenderer && readerRenderer) return;
   editorRenderer = createEditorRenderer(
     {
       get documentMeta() { return state.document.meta as Record<string, unknown>; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get showAdvancedEditor() { return state.showAdvancedEditor; },
       get addComponentBySection() { return state.addComponentBySection; },
@@ -400,7 +415,7 @@ function ensureRenderers(): void {
       getComponentRenderHelpers: localGetComponentRenderHelpers,
       renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
       renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
-      renderComponentOptions,
+      renderComponentOptions: renderDocumentComponentOptions,
       renderReusableSectionOptions,
       getSectionDefs,
       renderBlockMetaFields: (sectionKey, block) => editorRenderer.renderBlockMetaFields(sectionKey, block),
@@ -463,16 +478,20 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }
-          ${renderChatPanel(
-            state.chat,
-            state.document,
-            { escapeAttr, escapeHtml },
-            state.currentView === 'viewer' ? 'qa' : 'document-edit',
-            state.currentView === 'editor' || state.currentView === 'ai',
-            'embedded'
-          )}
-          ${renderSearchLauncher(state.search)}
-          ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}
+          ${
+            isDocumentMetaView
+              ? ''
+              : `${renderChatPanel(
+                  state.chat,
+                  state.document,
+                  { escapeAttr, escapeHtml },
+                  state.currentView === 'viewer' ? 'qa' : 'document-edit',
+                  state.currentView === 'editor' || state.currentView === 'ai',
+                  'embedded'
+                )}
+                ${renderSearchLauncher(state.search)}
+                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+          }
         </div>
       </section>
       ${readerRenderer.renderModal()}

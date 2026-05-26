@@ -16,6 +16,7 @@ import {
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -627,21 +628,29 @@ function escapeHvyJsonString(value: string): string {
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   for (const section of document.sections) {
-    validateSectionSemantics(section, document.meta, diagnostics);
+    validateSectionSemantics(section, document, diagnostics);
   }
 }
 
-function validateSectionSemantics(section: VisualSection, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
+function validateSectionSemantics(section: VisualSection, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   for (const block of section.blocks) {
-    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', documentMeta, diagnostics);
+    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', document, diagnostics);
   }
   for (const child of section.children) {
-    validateSectionSemantics(child, documentMeta, diagnostics);
+    validateSectionSemantics(child, document, diagnostics);
   }
 }
 
-function validateBlockSemantics(block: VisualBlock, sectionLabel: string, documentMeta: JsonObject, diagnostics: HvyDiagnostic[]): void {
-  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
+function validateBlockSemantics(block: VisualBlock, sectionLabel: string, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
+
+  if (isPdfDocument(document) && !isPdfAllowedComponent(block.schema.component, document.meta)) {
+    diagnostics.push({
+      severity: 'error',
+      code: 'phvy_component_not_supported',
+      message: `Section "${sectionLabel}": PHVY cannot use component "${block.schema.component}".`,
+    });
+  }
 
   if (baseComponent === 'expandable') {
     if ((block.schema.expandableContentBlocks.children ?? []).length === 0) {
@@ -671,19 +680,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, docume
   }
 
   for (const child of block.schema.containerBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.componentListBlocks ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.expandableStubBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const child of block.schema.expandableContentBlocks?.children ?? []) {
-    validateBlockSemantics(child, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(child, sectionLabel, document, diagnostics);
   }
   for (const item of block.schema.gridItems ?? []) {
-    validateBlockSemantics(item.block, sectionLabel, documentMeta, diagnostics);
+    validateBlockSemantics(item.block, sectionLabel, document, diagnostics);
   }
 }
 

@@ -42,6 +42,30 @@ hvy_version: 0.1
   expect(block.schema.expandableContentBlocks.children[0]?.text).toBe('Expanded detail');
 });
 
+test('PHVY diagnostics reject PDF-incompatible components', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Intro
+
+<!--hvy:expandable {"id":"details"}-->
+`, '.phvy');
+
+  expect(expectedResult.document.extension).toBe('.phvy');
+  expect(expectedResult.diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      severity: 'error',
+      code: 'phvy_component_not_supported',
+      message: expect.stringContaining('expandable'),
+    }),
+  ]));
+});
+
 test('drops fields that do not belong to the deserialized component schema', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -12,12 +12,14 @@ Design goals:
 - Add structure for atomic thoughts, nesting, and metadata.
 - Support CSS and web rendering in safe/offline-first clients.
 - Support template documents that can be filled in via `.thvy` files.
+- Support PDF template documents via `.phvy` files.
 - Support extensibility via plugins.
 
 ## 2. File Types
 
 - `.hvy`: Concrete content document.
 - `.thvy`: Template document. Identical to `.hvy` except for extension and media type.
+- `.phvy`: PDF template document. Uses HVY syntax with PDF-safe authoring constraints.
 
 Rule: Any valid `.md` file is valid `.hvy`.
 
@@ -895,6 +897,19 @@ hvy_version: 0.1
 ---
 ```
 
+### 6.2 PDF template documents (`.phvy`)
+
+A `.phvy` file is a HVY-family document intended for PDF template authoring and export. Authoring clients SHOULD indicate when the current document is a PDF document and SHOULD prevent creation of components that cannot render to PDF.
+
+PDF-template authoring supports these component base types:
+- `text`
+- `container`
+- `grid`
+- `image`
+- `table` when static table support is enabled
+
+Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents; PDF export renders the PDF document body rather than interactive reader/sidebar behavior. Existing incompatible components remain visible for correction, but PDF export MUST reject the document rather than hiding or replacing them.
+
 With optional schema:
 
 ```yaml
@@ -1348,11 +1363,15 @@ Document is valid HVY if:
 Additional validity for `.thvy`:
 - If `schema` is present, it is valid against the supported subset.
 
+Additional validity for `.phvy`:
+- All rendered component base types MUST be PDF-compatible: `text`, `container`, `grid`, `image`, or static `table`.
+
 ## 11. Recommended MIME and Media Types
 
 Proposed (experimental):
 - `text/hvy` for `.hvy`
 - `text/thvy` for `.thvy`
+- `text/phvy` for `.phvy`
 
 ## 12. Future Work
 

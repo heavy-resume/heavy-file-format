@@ -42,6 +42,7 @@ test('passive editor fallback renders plain reader content without re-entering A
   let expectedOptions: ReaderBlockRenderOptions | undefined;
   const helpers = {} as ComponentRenderHelpers;
   const renderer = createEditorRenderer({
+    documentExtension: '.hvy',
     documentMeta: {},
     documentSections: [section],
     showAdvancedEditor: false,

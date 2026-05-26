@@ -21,6 +21,7 @@ import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
+import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -296,6 +297,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-component-list-component' && target instanceof HTMLSelectElement) {
+    if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+      return true;
+    }
     block.schema.componentListComponent = target.value;
     ensureComponentListBlocks(block);
     block.schema.componentListBlocks.forEach((itemBlock) => {
@@ -317,6 +321,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'block-grid-item-component' && target instanceof HTMLSelectElement) {
+    if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
+      return true;
+    }
     const gridItemId = target.dataset.gridItemId;
     if (!gridItemId) {
       return true;
@@ -855,6 +862,21 @@ export function getComponentRenderHelpers(editorRenderer: {
   orderReaderListBlocks: ComponentRenderHelpers['orderReaderListBlocks'];
   isReaderViewPrioritizedBlock: ComponentRenderHelpers['isReaderViewPrioritizedBlock'];
 }): ComponentRenderHelpers {
+  const renderAllowedComponentOptions = (selected: string): string => {
+    if (!isPdfDocument(state.document)) {
+      return renderComponentOptions(selected);
+    }
+    const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+    const custom = getComponentDefs()
+      .map((def) => def.name.trim())
+      .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));
+    return [...new Set([...builtins, ...custom])]
+      .map((option) => renderOption(option, selected))
+      .join('');
+  };
+  const pdfComponentFilter = (componentName: string): boolean => {
+    return !isPdfDocument(state.document) || isPdfAllowedComponent(componentName, state.document.meta);
+  };
   return {
     escapeAttr,
     escapeHtml,
@@ -872,8 +894,11 @@ export function getComponentRenderHelpers(editorRenderer: {
     orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
     renderComponentFragment: editorRenderer.renderComponentFragment,
-    renderComponentOptions,
-    renderAddComponentPicker: (options) => renderAddComponentPicker(options, { escapeAttr, escapeHtml, getComponentDefs }),
+    renderComponentOptions: renderAllowedComponentOptions,
+    renderAddComponentPicker: (options) => renderAddComponentPicker(
+      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter } : {}) },
+      { escapeAttr, escapeHtml, getComponentDefs }
+    ),
     renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),
     renderOption,
     getDocumentComponentCss: (componentName: string) => getDocumentComponentDefaultCss(state.document.meta, componentName),
@@ -890,6 +915,7 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
+    isPdfDocument: () => isPdfDocument(state.document),
     getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
 }

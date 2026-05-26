@@ -5,6 +5,7 @@ import { sanitizeInlineCss } from '../../../css-sanitizer';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
+  const pdfDocument = helpers.isPdfDocument?.() === true;
   const advanced = helpers.isAdvancedEditorMode();
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
   const contentAddKey = `expandable-content:${sectionKey}:${block.id}`;
@@ -16,8 +17,8 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
   const contentCount = contentBlocks.length;
   const stubOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'stub', false);
   const expandedOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'expanded', false);
-  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, block.schema.lock || stub.lock);
-  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, block.schema.lock || content.lock);
+  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, block.schema.lock || stub.lock || pdfDocument);
+  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, block.schema.lock || content.lock || pdfDocument);
   const stubPlacementMode = stubPlacementTargets.includes('component-placement-target');
   const contentPlacementMode = contentPlacementTargets.includes('component-placement-target');
   const stubPreview = stubBlocks
@@ -119,7 +120,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="container-inner-blocks">
             ${stubPlacementTargets}
           </div>
-          ${mobileAdjustment || stubPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || pdfDocument || stubPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: stubAddKey,
                     action: 'add-expandable-stub-block',
@@ -156,7 +157,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
           <div class="container-inner-blocks">
             ${contentPlacementTargets}
           </div>
-          ${mobileAdjustment || contentPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
+          ${mobileAdjustment || pdfDocument || contentPlacementMode ? '' : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${helpers.renderAddComponentPicker({
                     id: contentAddKey,
                     action: 'add-expandable-content-block',

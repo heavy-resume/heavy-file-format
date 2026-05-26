@@ -50,6 +50,7 @@ export interface ComponentRenderHelpers {
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
   isAdvancedEditorMode: () => boolean;
   isMobileAdjustmentMode: () => boolean;
+  isPdfDocument?: () => boolean;
   getTextLineStyles?: () => TextLineStyles;
 }
 
@@ -60,6 +61,7 @@ export interface AddComponentPickerOptions {
   blockId?: string;
   label?: string;
   extraAttrs?: Record<string, string>;
+  componentFilter?: (componentName: string) => boolean;
 }
 
 export interface ComponentPlacementTargetOptions {

@@ -15,7 +15,7 @@ export interface HvyCssBlock {
 }
 
 export interface HvyDocument {
-  extension: '.hvy' | '.thvy' | '.md';
+  extension: '.hvy' | '.thvy' | '.phvy' | '.md';
   meta: JsonObject;
   sections: HvySection[];
   cssBlocks: HvyCssBlock[];

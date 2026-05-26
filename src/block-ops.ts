@@ -880,6 +880,9 @@ export function getComponentRenderHelpers(editorRenderer: {
   const pdfComponentFilter = (componentName: string): boolean => {
     return !isPdfDocument(state.document) || isPdfAllowedComponent(componentName, state.document.meta);
   };
+  const pdfComponentDisabledReason = (componentName: string): string | null => {
+    return pdfComponentFilter(componentName) ? null : 'Not supported in PHVY';
+  };
   return {
     escapeAttr,
     escapeHtml,
@@ -899,7 +902,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions: renderAllowedComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(
-      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter } : {}) },
+      { ...options, ...(isPdfDocument(state.document) ? { componentFilter: pdfComponentFilter, componentDisabledReason: pdfComponentDisabledReason } : {}) },
       { escapeAttr, escapeHtml, getComponentDefs }
     ),
     renderComponentPlacementTarget: (options) => editorRenderer.renderComponentPlacementTarget(options),

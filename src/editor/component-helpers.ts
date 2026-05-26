@@ -62,6 +62,7 @@ export interface AddComponentPickerOptions {
   label?: string;
   extraAttrs?: Record<string, string>;
   componentFilter?: (componentName: string) => boolean;
+  componentDisabledReason?: (componentName: string) => string | null | undefined;
 }
 
 export interface ComponentPlacementTargetOptions {

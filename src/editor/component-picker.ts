@@ -15,6 +15,8 @@ interface PickerItem {
   label: string;
   description: string;
   pluginId?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 interface PickerGroup {
@@ -27,12 +29,10 @@ interface PickerGroup {
 }
 
 export function renderAddComponentPicker(options: AddComponentPickerOptions, deps: RenderDeps): string {
-  const groups = getPickerGroups(deps.getComponentDefs());
-  const visibleGroups = options.componentFilter
-    ? groups
-        .map((group) => ({ ...group, items: group.items.filter((item) => options.componentFilter?.(item.value) ?? true) }))
-        .filter((group) => group.items.length > 0)
-    : groups;
+  const visibleGroups = getPickerGroups(deps.getComponentDefs()).map((group) => ({
+    ...group,
+    items: group.items.map((item) => withPickerItemAvailability(options, item)),
+  }));
   const paneStyle = `--component-picker-groups: ${visibleGroups.length};`;
   return `
     <div class="component-picker" style="${paneStyle}" data-active-pane="root">
@@ -89,24 +89,41 @@ function renderComponentButton(
   deps: RenderDeps,
   display: { className?: string; position?: PickerGroup['position'] } = {}
 ): string {
+  const disabledReason = item.disabled ? item.disabledReason || 'Unavailable here' : '';
+  const description = disabledReason ? `${item.description} - ${disabledReason}` : item.description;
   const extraAttrs = Object.entries(options.extraAttrs ?? {})
     .map(([key, value]) => ` ${deps.escapeAttr(key)}="${deps.escapeAttr(value)}"`)
     .join('');
   const blockIdAttr = options.blockId ? ` data-block-id="${deps.escapeAttr(options.blockId)}"` : '';
   const positionAttr = display.position ? ` data-picker-position="${deps.escapeAttr(display.position)}"` : '';
   const pluginAttr = item.pluginId ? ` data-plugin-id="${deps.escapeAttr(item.pluginId)}"` : '';
+  const actionAttr = item.disabled ? '' : ` data-action="${deps.escapeAttr(options.action)}"`;
+  const disabledAttrs = item.disabled
+    ? ` disabled aria-disabled="true" data-component-picker-disabled="true" data-disabled-reason="${deps.escapeAttr(disabledReason)}" title="${deps.escapeAttr(disabledReason)}"`
+    : '';
   return `
     <button
       type="button"
       class="component-picker-row component-picker-row-leaf${display.className ? ` ${deps.escapeAttr(display.className)}` : ''}"
-      data-action="${deps.escapeAttr(options.action)}"
+      ${actionAttr}
       data-section-key="${deps.escapeAttr(options.sectionKey)}"${blockIdAttr}
-      data-component="${deps.escapeAttr(item.value)}"${positionAttr}${pluginAttr}${extraAttrs}
+      data-component="${deps.escapeAttr(item.value)}"${positionAttr}${pluginAttr}${extraAttrs}${disabledAttrs}
     >
       <span class="component-picker-row-title">${deps.escapeHtml(item.label)}</span>
-      <span class="component-picker-row-description">${deps.escapeHtml(item.description)}</span>
+      <span class="component-picker-row-description">${deps.escapeHtml(description)}</span>
     </button>
   `;
+}
+
+function withPickerItemAvailability(options: AddComponentPickerOptions, item: PickerItem): PickerItem {
+  if (!options.componentFilter || options.componentFilter(item.value)) {
+    return item;
+  }
+  return {
+    ...item,
+    disabled: true,
+    disabledReason: options.componentDisabledReason?.(item.value) || 'Unavailable here',
+  };
 }
 
 function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {

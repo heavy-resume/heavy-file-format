@@ -208,6 +208,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return isPdfAllowedComponent(componentName, state.documentMeta);
   }
 
+  function getPdfDisabledComponentReason(componentName: string): string | null {
+    return isPdfAllowedEditorComponent(componentName) ? null : 'Not supported in PHVY';
+  }
+
   function renderSidebarEditorSections(sections: VisualSection[]): string {
     if (isPdfEditorDocument()) {
       return '';
@@ -331,7 +335,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     action: 'add-block',
                     sectionKey: section.key,
                     label: 'Section component type',
-                    ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent } : {}),
+                    ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
                   })}
               </div>`;
     return `
@@ -627,7 +631,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           'data-insert-placement': placement,
           'data-target-block-id': block.id,
         },
-        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent } : {}),
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
       })}
     </div>`;
   }

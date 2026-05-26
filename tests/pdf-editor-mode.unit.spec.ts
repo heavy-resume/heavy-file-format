@@ -40,7 +40,7 @@ function createPdfDocument(sections: VisualSection[] = [createSection('summary')
   };
 }
 
-test('PHVY component picker hides non-PDF components and disallowed custom templates', () => {
+test('PHVY component picker disables non-PDF components and disallowed custom templates', () => {
   const document = createPdfDocument();
   const html = renderAddComponentPicker(
     {
@@ -48,6 +48,7 @@ test('PHVY component picker hides non-PDF components and disallowed custom templ
       action: 'add-block',
       sectionKey: 'section-summary',
       componentFilter: (componentName) => isPdfAllowedComponent(componentName, document.meta),
+      componentDisabledReason: (componentName) => isPdfAllowedComponent(componentName, document.meta) ? null : 'Not supported in PHVY',
     },
     {
       escapeAttr: escapeHtml,
@@ -61,10 +62,16 @@ test('PHVY component picker hides non-PDF components and disallowed custom templ
   expect(html).toContain('data-component="container"');
   expect(html).toContain('data-component="grid"');
   expect(html).toContain('data-component="pdf-card"');
-  expect(html).not.toContain('data-component="carousel"');
-  expect(html).not.toContain('data-component="plugin"');
-  expect(html).not.toContain('data-component="xref-card"');
-  expect(html).not.toContain('data-component="interactive-card"');
+  expect(html).toContain('data-component="carousel"');
+  expect(html).toContain('data-component="plugin"');
+  expect(html).toContain('data-component="xref-card"');
+  expect(html).toContain('data-component="interactive-card"');
+  expect(html).toContain('data-component-picker-disabled="true"');
+  expect(html).toContain('No plugins installed - Not supported in PHVY');
+  expect(html).toContain('component templates - Not supported in PHVY');
+  const pluginButton = html.match(/<button(?:(?!<button)[\s\S])*data-component="plugin"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+  expect(pluginButton).toContain('disabled');
+  expect(pluginButton).not.toContain('data-action="add-block"');
 });
 
 test('PHVY editor rendering omits sidebar editor affordances', () => {

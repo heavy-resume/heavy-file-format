@@ -447,6 +447,129 @@ section_defs:
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
 });
 
+test('buildImportPlanForDocument in PDF template mode fits incoming data into one PHVY body slot', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Resume Summary","sectionId":"pdf-summary"},{"section":"Skills"},{"section":"History","sectionId":"pdf-summary"}]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"pdf-summary"}-->
+#! PDF Summary
+
+<!--hvy:text {"fillIn":true}-->
+ <!-- value {"placeholder":"Summarize incoming resume"} -->
+`, '.phvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceText: 'Summary\\nSkill facts\\nHistory facts\\nProject facts',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => ({
+    sectionTitle: step.sectionTitle,
+    target: step.target,
+    importMode: step.importMode,
+  }))).toEqual([
+    {
+      sectionTitle: 'Resume Summary',
+      target: { kind: 'body', id: 'pdf-summary', title: 'PDF Summary', name: undefined },
+      importMode: 'template',
+    },
+  ]);
+  expect(requestProxyCompletionMock).toHaveBeenCalledTimes(1);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Choose PHVY template slots to fill from incoming data.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Merge, summarize, and prioritize incoming topics');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not create arbitrary blank sections.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('PDF-template import must not create arbitrary blank sections.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).not.toContain('Do not impose a step count limit.');
+});
+
+test('buildImportPlanForDocument in PDF template mode allows repeatable definitions once but not blank sections', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Awards","templateName":"Award Section"},{"section":"More Awards","templateName":"Award Section"},{"section":"Extra Notes"}]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Award Section
+    repeatable: true
+    templateVariables:
+      section_title:
+        label: Section title
+    template:
+      id: award-section
+      title: Awards
+      blocks:
+        - text: "{% section_title %}"
+          schema:
+            component: text
+---
+
+<!--hvy: {"id":"pdf-summary"}-->
+#! PDF Summary
+`, '.phvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceText: 'Award facts and extra notes',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.target)).toEqual([
+    { kind: 'definition', id: 'award-section', title: 'Award Section', name: 'Award Section' },
+  ]);
+  expect(result.steps?.some((step) => step.target.kind === 'blank')).toBe(false);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-plan',
+  ]);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- definition: Award Section (id: award-section, name: Award Section, repeatable)');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Use each reusable/template definition at most once');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('repeated items belong inside that section');
+});
+
+test('importTextIntoDocument in PDF template mode rejects duplicate non-repeatable targets before mutation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"pdf-summary"}-->
+#! PDF Summary
+
+<!--hvy:text {"fillIn":true}-->
+ <!-- value {"placeholder":"Summarize incoming resume"} -->
+`, '.phvy');
+  const before = serializeDocument(document);
+
+  const result = await importTextIntoDocument(document, {
+    sourceText: 'Summary and history facts',
+    steps: [
+      { section: 'Summary', sectionId: 'pdf-summary' },
+      { section: 'History', sectionId: 'pdf-summary' },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toBe('PDF template import cannot use non-repeatable target "body section: PDF Summary (pdf-summary)" for both import section 1 and 2.');
+  expect(serializeDocument(document)).toBe(before);
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
 test('buildImportPlanForDocument returns exact import trace calls when requested', async () => {
   requestProxyCompletionMock.mockImplementationOnce(async (request: { beforeRequest?: (debugLabel: string) => Promise<void> | void; debugLabel: string }) => {
     await request.beforeRequest?.(request.debugLabel);

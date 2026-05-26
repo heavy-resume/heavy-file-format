@@ -293,16 +293,19 @@ export async function buildImportPlanForDocument(
       const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
       options.onProgress?.({ phase: 'thinking', message: 'Extracting preplanned section information.' });
       const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall, traceRecorder);
-      if (extractedSteps.length === 0) {
+      const requestMode = getImportRequestMode(options);
+      const filteredSteps = filterImportPlanStepsForRequestMode(extractedSteps, document, requestMode);
+      if (filteredSteps.length === 0) {
         return withImportTrace({ status: 'error', message: 'The import preplan did not return usable source-backed sections.' }, options, traceRecorder);
       }
       options.onProgress?.({ phase: 'complete', message: 'Import plan is ready.' });
-      return withImportTrace({ status: 'ready', steps: extractedSteps }, options, traceRecorder);
+      return withImportTrace({ status: 'ready', steps: filteredSteps }, options, traceRecorder);
     }
     const llm = requireImportLlm(options.llm);
     throwIfAborted(options.signal);
     options.onProgress?.({ phase: 'thinking', message: 'Reviewing the template and imported document.' });
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
+    const requestMode = getImportRequestMode(options);
     const response = await requestTracedImportCompletion(traceRecorder, 'sectionPlanner', 'thinking', {
       settings: getImportStageSettings(llm, 'sectionPlanner'),
       client: llm.client,
@@ -310,25 +313,28 @@ export async function buildImportPlanForDocument(
         {
           id: 'ai-import-plan-task',
           role: 'user',
-          content: buildImportTaskMessage(buildImportPlanPrompt(options.sourceName, options.instructions), buildImportPlanResponseInstructions()),
+          content: buildImportTaskMessage(
+            buildImportPlanPrompt(options.sourceName, options.instructions, requestMode),
+            buildImportPlanResponseInstructions(requestMode)
+          ),
         },
       ],
       context: buildImportPlanContext(document, options.sourceName, options.sourceText),
-      responseInstructions: buildImportPlanResponseInstructions(),
+      responseInstructions: buildImportPlanResponseInstructions(requestMode),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: getImportRequestMode(options),
+      mode: requestMode,
       maxContextChars: options.maxContextChars,
       debugLabel: 'ai-import-plan',
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
     });
     throwIfAborted(options.signal);
-    const steps = parseImportPlanSteps(response, document);
+    const steps = filterImportPlanStepsForRequestMode(parseImportPlanSteps(response, document), document, requestMode);
     if (steps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
-    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, document, llm, beforeLlmCall, requestMode, options.maxContextChars, options.signal, traceRecorder);
     if (dedupedSteps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan after deduping.' }, options, traceRecorder);
     }
@@ -358,6 +364,10 @@ export async function importTextIntoDocument(
   const steps = normalizeImportPlanSteps(options.steps, document);
   if (steps.length === 0) {
     return withImportTrace({ status: 'error', message: 'Import requires at least one approved plan step.' }, options, traceRecorder);
+  }
+  const pdfTemplateImportPlanError = validatePdfTemplateImportExecutablePlan(steps, document, getImportRequestMode(options));
+  if (pdfTemplateImportPlanError) {
+    return withImportTrace({ status: 'error', message: pdfTemplateImportPlanError }, options, traceRecorder);
   }
   options.onProgress?.({ phase: 'starting', message: `Importing ${formatImportSourceProgress(options.sourceName)}.` });
   try {
@@ -575,7 +585,10 @@ export async function importTextIntoDocument(
   }
 }
 
-function buildImportPlanPrompt(sourceName: string | undefined, instructions?: string): string {
+function buildImportPlanPrompt(sourceName: string | undefined, instructions: string | undefined, requestMode: ProxyCompletionParams['mode']): string {
+  if (isPdfTemplateImportMode(requestMode)) {
+    return buildPdfTemplateImportPlanPrompt(sourceName, instructions);
+  }
   return [
     `Find the sections needed to create a document ${formatImportSourceReference(sourceName)}.`,
     '',
@@ -591,6 +604,26 @@ function buildImportPlanPrompt(sourceName: string | undefined, instructions?: st
     'Do not write conditional, optional, fallback, verification, or leave-unchanged steps.',
     'Use only facts present in the imported source text.',
     'Preserve exact source data without alteration.',
+    instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildPdfTemplateImportPlanPrompt(sourceName: string | undefined, instructions?: string): string {
+  return [
+    `Choose PHVY template slots to fill ${formatImportSourceReference(sourceName)}.`,
+    '',
+    'You have the PHVY PDF template section outline and incoming data in context. Do not use tools. Do not mutate anything.',
+    'Treat the PHVY as a fixed PDF layout, not as a source document to duplicate.',
+    'Plan from the available PHVY body sections and reusable/template definitions, not from the incoming data section list.',
+    'Use each existing PHVY body section at most once.',
+    'Merge, summarize, and prioritize incoming topics to fit the selected PHVY slots.',
+    'Cut lower-priority incoming data when it does not fit the PHVY layout.',
+    'Do not create arbitrary blank sections.',
+    'Only plan optional extra sections from explicit reusable/template definitions that are marked repeatable.',
+    'Use each reusable/template definition at most once; repeatable means the section may exist, not that it should be duplicated.',
+    'Each step should name the PHVY slot or optional template section being filled. Keep the plan short.',
+    'Do not copy specific source facts into the plan. Names, dates, entity names, labels, links, bullets, metrics, and other exact facts will be extracted in a later step.',
+    'Use only facts present in the incoming data.',
     instructions?.trim() ? ['Additional import instructions:', instructions.trim()].join('\n') : '',
   ].filter(Boolean).join('\n');
 }
@@ -647,6 +680,7 @@ function buildImportTemplateSectionOutline(document: VisualDocument): string {
     const details = [
       templateId ? `id: ${templateId}` : '',
       definitionName ? `name: ${definitionName}` : '',
+      definition.repeatable ? 'repeatable' : '',
       template.location !== 'main' ? `location: ${template.location}` : '',
     ].filter(Boolean);
     lines.push(`- definition: ${title}${details.length > 0 ? ` (${details.join(', ')})` : ''}`);
@@ -685,7 +719,10 @@ function getImportSectionDefinitions(document: VisualDocument): SectionDefinitio
     : [];
 }
 
-function buildImportPlanResponseInstructions(): string {
+function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams['mode'] = 'document-edit'): string {
+  if (isPdfTemplateImportMode(requestMode)) {
+    return buildPdfTemplateImportPlanResponseInstructions();
+  }
   return [
     'Return exactly one JSON object and no prose.',
     'Shape:',
@@ -703,6 +740,27 @@ function buildImportPlanResponseInstructions(): string {
     'Do not impose a step count limit. Use as many steps as needed so each final document section has its own step.',
     'Do not write bundled steps such as "add Alpha, Beta, Gamma, and Delta sections"; split that into one step per section.',
     'Do not include component-level steps such as "add each item card"; those details belong inside the later one-shot HVY section generation.',
+  ].join('\n');
+}
+
+function buildPdfTemplateImportPlanResponseInstructions(): string {
+  return [
+    'Return exactly one JSON object and no prose.',
+    'Shape:',
+    '{"steps":[{"section":"Blip Overview","sectionId":"blip-overview"},{"section":"Widget Records","templateName":"Widget Records"}]}',
+    '',
+    'Use `sectionId` only for an existing PHVY body section id from the template section outline.',
+    'Use `templateName` only for a reusable/template section name from the template section outline.',
+    'Do not include steps with only `section`; PDF-template import must not create arbitrary blank sections.',
+    'Use each existing PHVY body section id at most once.',
+    'Use each reusable/template section at most once, even when the template outline marks it repeatable.',
+    'Repeatable means a reusable/template section may be included as an optional section; repeated items belong inside that section, not in duplicate section steps.',
+    'Plan one step per PHVY slot or optional template section to fill.',
+    'Merge multiple incoming topics into the same PHVY slot when the template has fewer slots than the incoming data has sections.',
+    'Omit lower-priority incoming data when it does not fit the PHVY layout.',
+    'Do not include `instruction` unless a section title alone would be ambiguous.',
+    'If `instruction` is needed, keep it structural and very short. Do not list exact facts.',
+    'Do not copy specific source facts into the plan; do not include names, dates, entity names, labels, links, bullets, metrics, or other exact source details.',
   ].join('\n');
 }
 
@@ -727,6 +785,7 @@ function parseImportPlanSteps(response: string, document: VisualDocument): Impor
 
 async function dedupeImportPlanStepsWithModel(
   steps: ImportPlanStep[],
+  document: VisualDocument,
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
   requestMode: ProxyCompletionParams['mode'],
@@ -734,10 +793,11 @@ async function dedupeImportPlanStepsWithModel(
   signal?: AbortSignal,
   traceRecorder?: HvyImportTraceRecorder
 ): Promise<ImportPlanStep[]> {
-  if (steps.length <= 1) {
-    return steps;
+  const dedupeSteps = filterImportPlanStepsForRequestMode(steps, document, requestMode);
+  if (dedupeSteps.length <= 1) {
+    return dedupeSteps;
   }
-  const candidates = buildImportSectionDedupeCandidates(steps);
+  const candidates = buildImportSectionDedupeCandidates(dedupeSteps);
   const response = await requestTracedImportCompletion(traceRecorder, 'dedupe', 'thinking', {
     settings: getImportStageSettings(llm, 'dedupe'),
     client: llm.client,
@@ -745,7 +805,10 @@ async function dedupeImportPlanStepsWithModel(
       {
         id: 'ai-import-section-dedupe-task',
         role: 'user',
-        content: buildImportTaskMessage(buildImportSectionDedupePrompt(candidates), buildImportSectionDedupeResponseInstructions(candidates)),
+        content: buildImportTaskMessage(
+          buildImportSectionDedupePrompt(candidates, requestMode),
+          buildImportSectionDedupeResponseInstructions(candidates)
+        ),
       },
     ],
     context: '',
@@ -760,7 +823,7 @@ async function dedupeImportPlanStepsWithModel(
   throwIfAborted(signal);
   const keepIds = parseImportSectionDedupeResponse(response, candidates);
   const keepSet = new Set(keepIds);
-  return candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step);
+  return filterImportPlanStepsForRequestMode(candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step), document, requestMode);
 }
 
 interface ImportSectionDedupeCandidate {
@@ -797,7 +860,21 @@ function slugImportSectionDedupeId(value: string | undefined): string {
   return normalizeImportMissingSectionTitle(value).replace(/\s+/g, '-') || 'section';
 }
 
-function buildImportSectionDedupePrompt(candidates: ImportSectionDedupeCandidate[]): string {
+function buildImportSectionDedupePrompt(candidates: ImportSectionDedupeCandidate[], requestMode: ProxyCompletionParams['mode'] = 'document-edit'): string {
+  if (isPdfTemplateImportMode(requestMode)) {
+    return [
+      'Deduplicate this candidate PDF-template import section list.',
+      '',
+      'You are given only PHVY slot candidates. Do not infer from incoming data. Do not use tools.',
+      'Keep at most one section for each PHVY body or reusable/template target.',
+      'Prefer sections listed first when candidates target the same slot.',
+      'Keep multiple candidates only when they represent genuinely different PHVY slots.',
+      'Do not keep blank section candidates.',
+      '',
+      'Candidate sections:',
+      ...candidates.map((candidate) => `- id="${candidate.id}" ${formatImportPlanSectionDedupeCandidate(candidate.step)}`),
+    ].join('\n');
+  }
   return [
     'Deduplicate this candidate import section list.',
     '',
@@ -990,7 +1067,7 @@ async function preparePreplannedImportSteps(
   if (candidates.length <= 1) {
     return candidates;
   }
-  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
+  return dedupeImportPlanStepsWithModel(candidates, document, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -1269,6 +1346,61 @@ function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: Visual
     normalized.push(step);
   }
   return normalized;
+}
+
+function filterImportPlanStepsForRequestMode(
+  steps: ImportPlanStep[],
+  document: VisualDocument,
+  requestMode: ProxyCompletionParams['mode']
+): ImportPlanStep[] {
+  if (!isPdfTemplateImportMode(requestMode)) {
+    return steps;
+  }
+  const candidates = getImportTemplateSectionCandidates(document);
+  const usedTargets = new Set<string>();
+  return steps.filter((step) => {
+    if (step.target.kind === 'blank') {
+      return false;
+    }
+    const candidate = findImportCandidateForTarget(candidates, step.target);
+    if (!candidate) {
+      return false;
+    }
+    const key = formatImportPlanTarget(candidateToImportPlanTarget(candidate));
+    if (usedTargets.has(key)) {
+      return false;
+    }
+    usedTargets.add(key);
+    return true;
+  });
+}
+
+function validatePdfTemplateImportExecutablePlan(
+  steps: ImportPlanStep[],
+  document: VisualDocument,
+  requestMode: ProxyCompletionParams['mode']
+): string | null {
+  if (!isPdfTemplateImportMode(requestMode)) {
+    return null;
+  }
+  const candidates = getImportTemplateSectionCandidates(document);
+  const usedTargets = new Map<string, number>();
+  for (const [index, step] of steps.entries()) {
+    if (step.target.kind === 'blank') {
+      return `PDF template import cannot create a blank section for import section ${index + 1}.`;
+    }
+    const candidate = findImportCandidateForTarget(candidates, step.target);
+    if (!candidate) {
+      return `PDF template import target was not found for import section ${index + 1}: ${formatImportPlanTarget(step.target)}.`;
+    }
+    const key = formatImportPlanTarget(candidateToImportPlanTarget(candidate));
+    const previous = usedTargets.get(key);
+    if (previous !== undefined) {
+      return `PDF template import cannot use non-repeatable target "${key}" for both import section ${previous + 1} and ${index + 1}.`;
+    }
+    usedTargets.set(key, index);
+  }
+  return null;
 }
 
 function normalizeImportPlanStep(rawStep: ImportPlanStepInput | unknown, candidates: ImportTemplateSectionCandidate[]): ImportPlanStep | null {
@@ -3660,6 +3792,10 @@ function getImportStageSettings(llm: HvyImportLlmOptions, stage: HvyImportLlmSta
 
 function getImportRequestMode(options: { requestMode?: ProxyCompletionParams['mode'] }): ProxyCompletionParams['mode'] {
   return options.requestMode ?? 'document-edit';
+}
+
+function isPdfTemplateImportMode(requestMode: ProxyCompletionParams['mode']): boolean {
+  return requestMode === 'pdf-template-import';
 }
 
 function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace' | 'onTraceEvent' | 'onTokenUsage'>): HvyImportTraceRecorder | undefined {

@@ -4,6 +4,8 @@ import { actionRegistry } from '../src/bind/actions/registry';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { renderAddComponentPicker } from '../src/editor/component-picker';
 import { createEditorRenderer } from '../src/editor/render';
+import { createReaderRenderer } from '../src/reader/render';
+import { createDefaultSearchState } from '../src/search/state';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
 import { isPdfAllowedComponent } from '../src/pdf-document-capabilities';
@@ -115,6 +117,116 @@ test('PHVY editor rendering omits sidebar editor affordances', () => {
   expect(renderer.renderSidebarEditorSections([main, sidebar])).toBe('');
   expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
   expect(renderer.renderSectionEditorTree([main])).not.toContain('toggle-section-location');
+});
+
+test('PHVY reader rendering omits sidebar surface affordances', () => {
+  const main = createSection('summary');
+  const sidebar = createSection('notes', 'sidebar');
+  const renderer = createReaderRenderer({
+    documentExtension: '.phvy',
+    documentMeta: {},
+    documentSections: [main, sidebar],
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    sectionTemplateFlavorModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    themeModalMode: 'full',
+    paletteOverrideId: null,
+    theme: { colors: {} },
+    currentView: 'viewer',
+    showAdvancedEditor: false,
+    responsivePreview: 'full',
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {},
+    readerViewActivatedTargets: new Set<string>(),
+    search: createDefaultSearchState(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: false,
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => ({} as ComponentRenderHelpers),
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '',
+    getSectionDefs: () => [],
+    renderBlockMetaFields: () => '',
+  });
+
+  expect(renderer.renderSidebarSections([main, sidebar])).toBe('');
+  expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
+});
+
+test('PHVY AI reader rendering omits sidebar add ghost', () => {
+  const sidebar = createSection('notes', 'sidebar');
+  const renderer = createReaderRenderer({
+    documentExtension: '.phvy',
+    documentMeta: {},
+    documentSections: [sidebar],
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    sectionTemplateFlavorModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    themeModalMode: 'full',
+    paletteOverrideId: null,
+    theme: { colors: {} },
+    currentView: 'ai',
+    showAdvancedEditor: false,
+    responsivePreview: 'full',
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {},
+    readerViewActivatedTargets: new Set<string>(),
+    search: createDefaultSearchState(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: false,
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => ({} as ComponentRenderHelpers),
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '<option value="blank">Blank</option>',
+    getSectionDefs: () => [{}],
+    renderBlockMetaFields: () => '',
+  });
+
+  expect(renderer.renderSidebarSections([sidebar])).not.toContain('Add Section');
 });
 
 test('PHVY add-block action rejects forged disallowed components and allows PDF components', () => {

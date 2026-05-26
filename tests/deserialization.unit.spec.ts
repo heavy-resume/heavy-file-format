@@ -66,6 +66,27 @@ Intro
   ]));
 });
 
+test('PHVY diagnostics reject sidebar sections', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes","location":"sidebar"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+Sidebar note
+`, '.phvy');
+
+  expect(expectedResult.diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      severity: 'error',
+      code: 'phvy_sidebar_not_supported',
+      message: expect.stringContaining('sidebar sections'),
+    }),
+  ]));
+});
+
 test('drops fields that do not belong to the deserialized component schema', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

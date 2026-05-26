@@ -301,4 +301,14 @@ describe('PDF export strategy', () => {
 
     await expect(getHvyPdfBlob(document)).rejects.toThrow('PDF document cannot render component "expandable"');
   });
+
+  test('PHVY export rejects existing sidebar sections', async () => {
+    const document = createDocument();
+    document.extension = '.phvy';
+    const section = createSection('notes', [createTextBlock('note', 'Sidebar note')]);
+    section.location = 'sidebar';
+    document.sections = [section];
+
+    await expect(getHvyPdfBlob(document)).rejects.toThrow('PDF document cannot render sidebar section "notes"');
+  });
 });

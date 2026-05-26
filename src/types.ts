@@ -313,6 +313,7 @@ export interface AppState {
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
+  newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;

@@ -64,6 +64,7 @@ export function createTestState(document: VisualDocument): AppState {
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,

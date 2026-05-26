@@ -223,6 +223,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,
@@ -294,6 +295,7 @@ function ensureReaderRenderer(): ReaderRenderer {
   readerRenderer = createReaderRenderer(
     {
       get documentMeta() { return state.document.meta; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get addComponentBySection() { return state.addComponentBySection; },
       get tempHighlights() { return state.tempHighlights; },

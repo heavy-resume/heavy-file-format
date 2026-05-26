@@ -633,8 +633,16 @@ function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDia
 }
 
 function validateSectionSemantics(section: VisualSection, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  const sectionLabel = section.title || section.customId || 'Untitled Section';
+  if (isPdfDocument(document) && section.location === 'sidebar') {
+    diagnostics.push({
+      severity: 'error',
+      code: 'phvy_sidebar_not_supported',
+      message: `Section "${sectionLabel}": PHVY cannot use sidebar sections.`,
+    });
+  }
   for (const block of section.blocks) {
-    validateBlockSemantics(block, section.title || section.customId || 'Untitled Section', document, diagnostics);
+    validateBlockSemantics(block, sectionLabel, document, diagnostics);
   }
   for (const child of section.children) {
     validateSectionSemantics(child, document, diagnostics);

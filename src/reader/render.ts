@@ -50,6 +50,7 @@ import {
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
+  documentExtension?: VisualDocument['extension'];
   documentSections: VisualSection[];
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
@@ -148,11 +149,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function getActiveReaderViewContext(): ReaderViewContext {
     if (!activeReaderViewContext) {
       return createReaderViewContext(
-        { meta: state.documentMeta, extension: '.hvy', sections: getViewerContextSections(), attachments: [] },
+        { meta: state.documentMeta, extension: state.documentExtension ?? '.hvy', sections: getViewerContextSections(), attachments: [] },
         state.readerView
       );
     }
     return activeReaderViewContext;
+  }
+
+  function isPdfReaderDocument(): boolean {
+    return state.documentExtension === '.phvy';
   }
 
   function getActiveSearchFilterContext(): SearchFilterContext {
@@ -220,6 +225,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.currentView !== 'ai' || getActiveSearchFilterContext().filtering) {
       return '';
     }
+    if (location === 'sidebar' && isPdfReaderDocument()) {
+      return '';
+    }
     const key = location === 'sidebar' ? '__sidebar_top_level__' : '__top_level__';
     const hasReusableSectionOptions = deps.getSectionDefs().length > 0;
     return `<div class="ghost-section-card add-ghost reusable-section-ghost" data-action="add-top-level-section" data-section-key="${deps.escapeAttr(key)}" data-section-location="${location}">
@@ -243,6 +251,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderSidebarSections(sections: VisualSection[]): string {
+    if (isPdfReaderDocument()) {
+      return '';
+    }
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const sidebarSections = orderReaderSections(
@@ -259,6 +270,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderSidebarHelpBalloon(sections: VisualSection[]): string {
+    if (isPdfReaderDocument()) {
+      return '';
+    }
     if (state.viewerSidebarHelpDismissed) {
       return '';
     }

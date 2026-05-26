@@ -2,6 +2,7 @@ import { deserializeDocumentBytes, serializeDocumentBytes } from './serializatio
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
+import { detectExtension } from './utils';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const LEGACY_SESSION_STORAGE_KEYS = [
@@ -80,12 +81,13 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
     if (!parsed || parsed.version !== 1) {
       return null;
     }
+    const filename = typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy';
     const document = typeof parsed.documentBase64 === 'string'
-      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), '.hvy')
+      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename))
       : undefined;
     return {
       document,
-      filename: typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy',
+      filename,
       selectedExample: isSelectedExample(parsed.selectedExample) ? parsed.selectedExample : undefined,
       currentView: isCurrentView(parsed.currentView) ? parsed.currentView : 'editor',
       editorMode: isEditorMode(parsed.editorMode) ? parsed.editorMode : 'basic',

@@ -54,6 +54,9 @@ function validatePdfDocumentComponents(document: VisualDocument): void {
   };
   const visitSections = (sections: VisualSection[]): void => {
     for (const section of sections) {
+      if (section.location === 'sidebar') {
+        throw new Error(`PDF document cannot render sidebar section "${section.title || section.customId || 'Untitled Section'}".`);
+      }
       visit(section.blocks);
       visitSections(section.children);
     }

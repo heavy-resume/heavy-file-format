@@ -18,6 +18,10 @@
   scrollbar-gutter: stable both-edges;
 }
 
+.editor-shell.has-no-sidebar .editor-tree {
+  padding-left: var(--hvy-document-edge-gutter);
+}
+
 .hvy-preview-frame-phone.editor-shell .editor-tree,
 .hvy-preview-frame-tablet.editor-shell .editor-tree,
 .hvy-preview-frame-desktop.editor-shell .editor-tree {

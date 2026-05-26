@@ -572,7 +572,7 @@ export function createDefaultTableRow(columnCount: number): TableRow {
   };
 }
 
-export function createBlankDocument(): VisualDocument {
+export function createBlankDocument(extension: VisualDocument['extension'] = '.hvy'): VisualDocument {
   return {
     meta: {
       hvy_version: 0.1,
@@ -581,7 +581,7 @@ export function createBlankDocument(): VisualDocument {
         css: DEFAULT_SECTION_CSS,
       },
     },
-    extension: '.hvy',
+    extension,
     sections: [],
     attachments: [],
   };

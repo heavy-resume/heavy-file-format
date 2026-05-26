@@ -82,6 +82,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
+import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
@@ -207,6 +208,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
     sectionTemplateFlavorModal: null,
@@ -370,6 +372,7 @@ function ensureRenderers(): void {
   readerRenderer = createReaderRenderer(
     {
       get documentMeta() { return state.document.meta; },
+      get documentExtension() { return state.document.extension; },
       get documentSections() { return state.document.sections; },
       get addComponentBySection() { return state.addComponentBySection; },
       get tempHighlights() { return state.tempHighlights; },
@@ -434,8 +437,9 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';
   const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
-  const readerWarningsHtml = readerRenderer.renderWarnings();
-  const readerSidebarSectionsHtml = readerRenderer.renderSidebarSections(state.document.sections);
+  const pdfDocument = isPdfDocument(state.document);
+  const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
+  const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   capturePluginFocus();
   root.innerHTML = `
@@ -453,15 +457,15 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
             isEditor
               ? isDocumentMetaView
                 ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
-                : `<div class="editor-shell ${state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
-                  <div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
-                  <aside class="editor-sidebar">
-                    <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
-                    ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
-                    <div class="editor-sidebar-panel">
-                      ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
-                    </div>
-                  </aside>
+                : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                  ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
+                    <aside class="editor-sidebar">
+                      <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
+                      ${editorRenderer.renderSidebarHelpBalloon(state.document.sections)}
+                      <div class="editor-sidebar-panel">
+                        ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
+                      </div>
+                    </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
               : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
@@ -496,6 +500,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       </section>
       ${readerRenderer.renderModal()}
       ${readerRenderer.renderLinkInlineModal()}
+      ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
   bindEmbedUi(root, runtime);
   reconcilePluginMounts(root);

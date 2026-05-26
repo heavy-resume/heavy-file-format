@@ -39,7 +39,7 @@ import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
-import type { ReaderViewFilter, SelectedExample } from './types';
+import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -133,7 +133,7 @@ async function openLocalDocumentWithPicker(): Promise<void> {
       {
         description: 'HVY documents',
         accept: {
-          'text/plain': ['.hvy', '.thvy', '.md', '.markdown'],
+          'text/plain': ['.hvy', '.thvy', '.phvy', '.md', '.markdown'],
         },
       },
     ],
@@ -391,8 +391,33 @@ export function bindUi(app: HTMLElement): void {
   });
 
   newBtn.addEventListener('click', () => {
+    state.newDocumentModalOpen = true;
+    getRenderApp()();
+  });
+
+  const newDocumentModalRoot = app.querySelector<HTMLElement>('#newDocumentModalRoot');
+  newDocumentModalRoot?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionElement = target.closest<HTMLElement>('[data-new-document-action]');
+    const action = actionElement?.dataset.newDocumentAction;
+    if (!action) {
+      return;
+    }
+    event.preventDefault();
+    if (action === 'cancel') {
+      state.newDocumentModalOpen = false;
+      getRenderApp()();
+      return;
+    }
+    if (action !== 'choose') {
+      return;
+    }
+    const extension = actionElement.dataset.newDocumentExtension;
+    if (extension !== '.hvy' && extension !== '.thvy' && extension !== '.phvy') {
+      return;
+    }
     currentFileHandle = null;
-    resetToBlankDocument();
+    resetToBlankDocument(extension as VisualDocument['extension']);
   });
 
   const defaultExampleBtn = app.querySelector<HTMLButtonElement>('#defaultExampleBtn');

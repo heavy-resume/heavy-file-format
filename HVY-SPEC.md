@@ -908,7 +908,7 @@ PDF-template authoring supports these component base types:
 - `image`
 - `table` when static table support is enabled
 
-Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents; PDF export renders the PDF document body rather than interactive reader/sidebar behavior. Existing incompatible components remain visible for correction, but PDF export MUST reject the document rather than hiding or replacing them.
+Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
 
 With optional schema:
 
@@ -1365,6 +1365,7 @@ Additional validity for `.thvy`:
 
 Additional validity for `.phvy`:
 - All rendered component base types MUST be PDF-compatible: `text`, `container`, `grid`, `image`, or static `table`.
+- Sections MUST NOT use `location: sidebar`.
 
 ## 11. Recommended MIME and Media Types
 

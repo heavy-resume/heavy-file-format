@@ -5,7 +5,6 @@ import {
   createPdfTemplateImportModalState,
   exportCurrentDocumentPdf,
   exportCurrentDocumentPdfWithTemplateBytes,
-  runNextPdfTemplateImportLlmStep,
 } from '../src/pdf-export/action';
 import { buildImportPlanForDocument, importTextIntoDocument } from '../src/ai-document-import';
 import { exportHvyPdf } from '../src/pdf-export/export';
@@ -108,16 +107,6 @@ function createDocumentWithExportTemplate(): VisualDocument {
   };
 }
 
-async function waitForAwaitingLlmStep(stepId: string): Promise<void> {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    if (state.pdfTemplateImportModal?.awaitingLlmStepId === stepId) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error(`Timed out waiting for ${stepId}`);
-}
-
 beforeEach(() => {
   vi.mocked(exportHvyPdf).mockClear();
   vi.mocked(buildImportPlanForDocument).mockClear();
@@ -169,15 +158,13 @@ test('export PDF imports HVY source into selected PHVY before rendering', async 
   template.extension = '.phvy';
   state.pdfTemplateImportModal = createPdfTemplateImportModalState();
 
-  const exportPromise = exportCurrentDocumentPdfWithTemplateBytes(serializeDocumentBytes(template), 'template.phvy');
-  await waitForAwaitingLlmStep('ai-import-plan');
+  await exportCurrentDocumentPdfWithTemplateBytes(serializeDocumentBytes(template), 'template.phvy');
+
   expect(state.pdfTemplateImportModal?.requestLog[0]?.request.messages[0]?.content).toBe('Plan exact message.');
   expect(state.pdfTemplateImportModal?.requestLog[0]?.request.maxContextChars).toBe(60_000);
-  expect(runNextPdfTemplateImportLlmStep()).toBe(true);
-  await waitForAwaitingLlmStep('ai-import-template-values:1');
   expect(state.pdfTemplateImportModal?.requestLog[1]?.request.context).toBe('exact template context');
-  expect(runNextPdfTemplateImportLlmStep()).toBe(true);
-  await exportPromise;
+  expect(state.pdfTemplateImportModal?.awaitingLlmStep).toBe(false);
+  expect(state.pdfTemplateImportModal?.awaitingLlmStepId).toBeNull();
 
   expect(buildImportPlanForDocument).toHaveBeenCalledWith(
     expect.objectContaining({ extension: '.phvy' }),
@@ -185,6 +172,7 @@ test('export PDF imports HVY source into selected PHVY before rendering', async 
       sourceText: expect.stringContaining('PDF export source text.'),
       requestMode: 'pdf-template-import',
       maxContextChars: 60_000,
+      beforeLlmCall: undefined,
     })
   );
   expect(importTextIntoDocument).toHaveBeenCalledWith(
@@ -193,6 +181,7 @@ test('export PDF imports HVY source into selected PHVY before rendering', async 
       steps: [{ sectionTitle: 'Summary', instruction: 'Fill summary', target: { kind: 'body', id: 'summary' } }],
       requestMode: 'pdf-template-import',
       maxContextChars: 60_000,
+      beforeLlmCall: undefined,
     })
   );
   expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1]).not.toHaveProperty('sourceName');

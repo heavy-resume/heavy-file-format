@@ -35,6 +35,7 @@ import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-d
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
+import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
 import {
   createReaderViewContext,
@@ -1328,19 +1329,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <p class="muted">Choose a PHVY template. The current document will be imported into it before the PDF is rendered.</p>
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${modal.status ? `<p class="pdf-template-import-status">${deps.escapeHtml(modal.status)}</p>` : ''}
-            <ol class="pdf-template-import-stepper">
-              ${modal.steps.map((step) => `
-                <li class="pdf-template-import-step is-${deps.escapeAttr(step.status)}">
-                  <span class="pdf-template-import-step-state">${deps.escapeHtml(formatPdfTemplateImportStepStatus(step.status))}</span>
-                  <span class="pdf-template-import-step-label">${deps.escapeHtml(step.label)}</span>
-                  ${hasPdfTemplateImportTokenUsage(step.tokenUsage) ? `<span class="pdf-template-import-step-tokens">${deps.escapeHtml(formatPdfTemplateImportTokenUsage(step.tokenUsage))}</span>` : ''}
-                </li>
-              `).join('')}
-            </ol>
+            ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER
+              ? `<ol class="pdf-template-import-stepper">
+                  ${modal.steps.map((step) => `
+                    <li class="pdf-template-import-step is-${deps.escapeAttr(step.status)}">
+                      <span class="pdf-template-import-step-state">${deps.escapeHtml(formatPdfTemplateImportStepStatus(step.status))}</span>
+                      <span class="pdf-template-import-step-label">${deps.escapeHtml(step.label)}</span>
+                      ${hasPdfTemplateImportTokenUsage(step.tokenUsage) ? `<span class="pdf-template-import-step-tokens">${deps.escapeHtml(formatPdfTemplateImportTokenUsage(step.tokenUsage))}</span>` : ''}
+                    </li>
+                  `).join('')}
+                </ol>`
+              : ''}
             ${hasPdfTemplateImportTokenUsage(modal.totalTokenUsage)
               ? `<p class="pdf-template-import-token-total">${deps.escapeHtml(`Total ${formatPdfTemplateImportTokenUsage(modal.totalTokenUsage)}`)}</p>`
               : ''}
-            ${modal.awaitingLlmStep
+            ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER && modal.awaitingLlmStep
               ? `<div class="pdf-template-import-next-step">
                   <button type="button" class="secondary" data-modal-action="pdf-template-import-next-llm">Run Next LLM Step</button>
                 </div>`

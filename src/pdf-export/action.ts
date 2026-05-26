@@ -9,6 +9,7 @@ import type { HvyImportTraceCall } from '../ai-document-import';
 import type { ChatTokenUsage, PdfTemplateImportModalState, PdfTemplateImportRequestLogEntry, PdfTemplateImportStepState } from '../types';
 
 const PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS = 60_000;
+export const ENABLE_PDF_TEMPLATE_IMPORT_STEPPER = import.meta.env?.VITE_HVY_ENABLE_PDF_IMPORT_STEPPER === 'true';
 
 let pendingPdfTemplateImportLlmResume: (() => void) | null = null;
 
@@ -98,6 +99,9 @@ export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Arra
   };
   const waitForLlmStep = async (debugLabel: string): Promise<void> => {
     recordLlmStepStart(debugLabel);
+    if (!ENABLE_PDF_TEMPLATE_IMPORT_STEPPER) {
+      return;
+    }
     if (!state.pdfTemplateImportModal) return;
     state.pdfTemplateImportModal = {
       ...state.pdfTemplateImportModal,
@@ -147,7 +151,7 @@ export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Arra
       llm: { settings: state.chat.settings },
       requestMode: 'pdf-template-import',
       maxContextChars: PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS,
-      beforeLlmCall: (event) => waitForLlmStep(event.debugLabel),
+      beforeLlmCall: ENABLE_PDF_TEMPLATE_IMPORT_STEPPER ? (event) => waitForLlmStep(event.debugLabel) : undefined,
       onTraceEvent: (event) => {
         if (event.type === 'call-start') recordLlmRequestLog(toPdfTemplateImportRequestLogEntry(event.call));
       },
@@ -170,7 +174,7 @@ export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Arra
       llm: { settings: state.chat.settings },
       requestMode: 'pdf-template-import',
       maxContextChars: PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS,
-      beforeLlmCall: (event) => waitForLlmStep(event.debugLabel),
+      beforeLlmCall: ENABLE_PDF_TEMPLATE_IMPORT_STEPPER ? (event) => waitForLlmStep(event.debugLabel) : undefined,
       onTraceEvent: (event) => {
         if (event.type === 'call-start') recordLlmRequestLog(toPdfTemplateImportRequestLogEntry(event.call));
       },

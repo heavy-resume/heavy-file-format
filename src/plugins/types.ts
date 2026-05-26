@@ -105,6 +105,27 @@ export interface HvyOutputGenerator {
   generate(request: HvyOutputGeneratorRequest): Promise<HvyOutputGeneratorResponse> | HvyOutputGeneratorResponse;
 }
 
+export interface HvyPluginPdfStaticRenderContext {
+  sectionKey: string;
+  block: VisualBlock;
+  document: HvyPluginDocumentApi;
+  attachments: HvyPluginAttachmentsApi;
+  header: HvyPluginHeaderApi;
+  rawDocument: VisualDocument;
+}
+
+export interface HvyPluginPdfStaticRenderResult {
+  blocks?: VisualBlock[];
+  block?: VisualBlock;
+}
+
+export interface HvyPluginPdfCapability {
+  // Return static HVY blocks that the normal PDF renderer already knows how to
+  // render. Plugins may update attachments in the context before returning
+  // image/carousel blocks that point at those static assets.
+  renderStatic(ctx: HvyPluginPdfStaticRenderContext): Promise<HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined> | HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined;
+}
+
 export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
@@ -143,6 +164,10 @@ export interface HvyPlugin {
   // Optional document lifecycle hooks. Handlers are ordered by per-handler
   // priority, then by the host plugin list order.
   hooks?: HvyPluginHooks;
+  // Optional PDF/static rendering capability for PHVY and PDF export. The host
+  // invokes this at export time and replaces the plugin block with the returned
+  // PDF-compatible HVY blocks in the export clone.
+  pdf?: HvyPluginPdfCapability;
   // Optional guidance included in the AI document outline for plugin blocks.
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.

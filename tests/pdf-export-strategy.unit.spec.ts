@@ -1,7 +1,8 @@
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createEmptyBlock } from '../src/document-factory';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
+import { setHostPlugins } from '../src/plugins/registry';
 import type { VisualDocument } from '../src/types';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob, preparePdfExport } from '../src/pdf-export/export';
@@ -94,6 +95,10 @@ function createDocument(): VisualDocument {
 }
 
 describe('PDF export strategy', () => {
+  beforeEach(() => {
+    setHostPlugins([]);
+  });
+
   test('resolves targets by ID, path, component, and tag with deterministic precedence', () => {
     const document = createDocument();
     const expectedResult = resolvePdfExportStrategy(document, {
@@ -181,12 +186,16 @@ describe('PDF export strategy', () => {
     ]);
   });
 
-  test('emits orphan-heading metadata and page break hook', () => {
+  test('omits internal section titles and keeps authored heading page break hook', () => {
     const document = createDocument();
+    document.sections[0].blocks[0].text = '# Authored Heading\n\nIntro text';
     const expectedResult = buildPdfExportDocDefinition(document);
     const firstNode = expectedResult.content[0];
+    const firstSection = typeof firstNode === 'string' ? null : firstNode;
 
-    expect(JSON.stringify(firstNode)).toContain('"headlineLevel":1');
+    expect(JSON.stringify(firstSection)).not.toContain('"text":"summary"');
+    expect(JSON.stringify(firstSection)).toContain('"text":"Authored Heading"');
+    expect(JSON.stringify(firstSection)).toContain('"headlineLevel":1');
     expect(
       expectedResult.pageBreakBefore?.(
         { text: 'Heading', headlineLevel: 1 },
@@ -341,6 +350,36 @@ describe('PDF export strategy', () => {
     document.sections = [createSection('details', [createExpandableBlock('details')])];
 
     await expect(getHvyPdfBlob(document)).rejects.toThrow('PDF document cannot render component "expandable"');
+  });
+
+  test('PHVY export resolves plugin PDF static renderer before validation', async () => {
+    const document = createDocument();
+    document.extension = '.phvy';
+    const plugin = createEmptyBlock('plugin');
+    plugin.schema.id = 'qr-code';
+    plugin.schema.plugin = 'fake.qr';
+    document.sections = [createSection('summary', [plugin])];
+    setHostPlugins([{
+      id: 'fake.qr',
+      displayName: 'QR',
+      pdf: {
+        renderStatic: async (ctx) => {
+          ctx.attachments.set('image:qr.svg', { mediaType: 'image/svg+xml' }, new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><text>QR</text></svg>'));
+          const image = createEmptyBlock('image');
+          image.schema.id = `${ctx.block.schema.id}-static`;
+          image.schema.imageFile = 'qr.svg';
+          image.schema.imageAlt = 'Generated QR code';
+          return { block: image };
+        },
+      },
+    }]);
+
+    const expectedResult = await getHvyPdfBlob(document);
+    const text = await expectedResult.text();
+
+    expect(expectedResult.type).toBe('application/pdf');
+    expect(text).toContain('qr-code-static');
+    expect(text).toContain('<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>QR</text></svg>');
   });
 
   test('PHVY export rejects existing sidebar sections', async () => {

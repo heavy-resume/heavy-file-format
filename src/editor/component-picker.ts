@@ -116,13 +116,13 @@ function renderComponentButton(
 }
 
 function withPickerItemAvailability(options: AddComponentPickerOptions, item: PickerItem): PickerItem {
-  if (!options.componentFilter || options.componentFilter(item.value)) {
+  if (!options.componentFilter || options.componentFilter(item.value, item.pluginId)) {
     return item;
   }
   return {
     ...item,
     disabled: true,
-    disabledReason: options.componentDisabledReason?.(item.value) || 'Unavailable here',
+    disabledReason: options.componentDisabledReason?.(item.value, item.pluginId) || 'Unavailable here',
   };
 }
 

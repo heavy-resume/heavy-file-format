@@ -1,4 +1,5 @@
 import { resolveBaseComponentFromMeta } from './component-defs';
+import { getHostPlugin } from './plugins/registry';
 import { areTablesEnabled } from './reference-config';
 import type { ComponentDefinition, VisualDocument } from './types';
 
@@ -18,6 +19,21 @@ export function isPdfAllowedBaseComponent(baseComponent: string): boolean {
 
 export function isPdfAllowedComponent(componentName: string, meta: Record<string, unknown> | null | undefined): boolean {
   return isPdfAllowedBaseComponent(resolveBaseComponentFromMeta(componentName, meta));
+}
+
+export function isPdfAllowedPlugin(pluginId: string): boolean {
+  return typeof getHostPlugin(pluginId)?.pdf?.renderStatic === 'function';
+}
+
+export function isPdfAllowedComponentInstance(
+  componentName: string,
+  meta: Record<string, unknown> | null | undefined,
+  pluginId?: string
+): boolean {
+  if (componentName === 'plugin') {
+    return typeof pluginId === 'string' && pluginId.trim().length > 0 && isPdfAllowedPlugin(pluginId.trim());
+  }
+  return isPdfAllowedComponent(componentName, meta);
 }
 
 export function filterPdfAllowedComponentDefs(

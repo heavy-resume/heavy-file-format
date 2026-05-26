@@ -21,7 +21,7 @@ import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
-import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -877,11 +877,11 @@ export function getComponentRenderHelpers(editorRenderer: {
       .map((option) => renderOption(option, selected))
       .join('');
   };
-  const pdfComponentFilter = (componentName: string): boolean => {
-    return !isPdfDocument(state.document) || isPdfAllowedComponent(componentName, state.document.meta);
+  const pdfComponentFilter = (componentName: string, pluginId?: string): boolean => {
+    return !isPdfDocument(state.document) || isPdfAllowedComponentInstance(componentName, state.document.meta, pluginId);
   };
-  const pdfComponentDisabledReason = (componentName: string): string | null => {
-    return pdfComponentFilter(componentName) ? null : 'Not supported in PHVY';
+  const pdfComponentDisabledReason = (componentName: string, pluginId?: string): string | null => {
+    return pdfComponentFilter(componentName, pluginId) ? null : 'Not supported in PHVY';
   };
   return {
     escapeAttr,

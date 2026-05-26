@@ -16,7 +16,7 @@ import {
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
-import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
+import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { coerceGridItemAlign } from './grid-ops';
 
 export interface HvyDiagnostic {
@@ -655,11 +655,12 @@ function validateSectionSemantics(section: VisualSection, document: VisualDocume
 function validateBlockSemantics(block: VisualBlock, sectionLabel: string, document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
 
-  if (isPdfDocument(document) && !isPdfAllowedComponent(block.schema.component, document.meta)) {
+  if (isPdfDocument(document) && !isPdfAllowedComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
+    const label = block.schema.component === 'plugin' ? block.schema.plugin || 'plugin' : block.schema.component;
     diagnostics.push({
       severity: 'error',
       code: 'phvy_component_not_supported',
-      message: `Section "${sectionLabel}": PHVY cannot use component "${block.schema.component}".`,
+      message: `Section "${sectionLabel}": PHVY cannot use component "${label}".`,
     });
   }
 

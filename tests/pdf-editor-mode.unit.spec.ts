@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { beforeEach, expect, test } from 'vitest';
 
 import { actionRegistry } from '../src/bind/actions/registry';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
@@ -8,13 +8,18 @@ import { createReaderRenderer } from '../src/reader/render';
 import { createDefaultSearchState } from '../src/search/state';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
-import { isPdfAllowedComponent } from '../src/pdf-document-capabilities';
+import { isPdfAllowedComponent, isPdfAllowedComponentInstance } from '../src/pdf-document-capabilities';
+import { setHostPlugins } from '../src/plugins/registry';
 import { state } from '../src/state';
 import type { VisualDocument } from '../src/types';
 import { escapeHtml } from '../src/utils';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
+
+beforeEach(() => {
+  setHostPlugins([]);
+});
 
 function createSection(id: string, location: 'main' | 'sidebar' = 'main'): VisualSection {
   const section = createEmptySection(1, '');
@@ -72,6 +77,38 @@ test('PHVY component picker disables non-PDF components and disallowed custom te
   const pluginButton = html.match(/<button(?:(?!<button)[\s\S])*data-component="plugin"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
   expect(pluginButton).toContain('disabled');
   expect(pluginButton).not.toContain('data-action="add-block"');
+});
+
+test('PHVY component picker enables plugins with PDF static render capability', () => {
+  const document = createPdfDocument();
+  setHostPlugins([{
+    id: 'fake.qr',
+    displayName: 'QR',
+    create: () => ({ element: globalThis.document.createElement('div') }),
+    pdf: {
+      renderStatic: () => [],
+    },
+  }]);
+
+  const html = renderAddComponentPicker(
+    {
+      id: 'section:summary',
+      action: 'add-block',
+      sectionKey: 'section-summary',
+      componentFilter: (componentName, pluginId) => isPdfAllowedComponentInstance(componentName, document.meta, pluginId),
+      componentDisabledReason: (componentName, pluginId) =>
+        isPdfAllowedComponentInstance(componentName, document.meta, pluginId) ? null : 'Not supported in PHVY',
+    },
+    {
+      escapeAttr: escapeHtml,
+      escapeHtml,
+      getComponentDefs: () => document.meta.component_defs as never,
+    }
+  );
+
+  const pluginButton = html.match(/<button(?:(?!<button)[\s\S])*data-plugin-id="fake.qr"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+  expect(pluginButton).toContain('data-action="add-block"');
+  expect(pluginButton).not.toContain('disabled');
 });
 
 test('PHVY editor rendering omits sidebar editor affordances', () => {

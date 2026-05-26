@@ -61,8 +61,8 @@ export interface AddComponentPickerOptions {
   blockId?: string;
   label?: string;
   extraAttrs?: Record<string, string>;
-  componentFilter?: (componentName: string) => boolean;
-  componentDisabledReason?: (componentName: string) => string | null | undefined;
+  componentFilter?: (componentName: string, pluginId?: string) => boolean;
+  componentDisabledReason?: (componentName: string, pluginId?: string) => string | null | undefined;
 }
 
 export interface ComponentPlacementTargetOptions {

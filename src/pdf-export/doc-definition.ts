@@ -102,16 +102,6 @@ function renderSection(
   }
   const childSidebar = sidebar || decision.role === 'sidebar' || section.location === 'sidebar';
   const stack: HvyPdfMakeNode[] = [];
-  if (section.title.trim() && decision.role !== 'body') {
-    stack.push(applyDecisionToNode(decision, {
-      id: section.customId || section.key,
-      text: section.title,
-      style: section.level <= 1 ? 'sectionTitle' : section.level === 2 ? 'sectionTitle2' : 'sectionTitle3',
-      headlineLevel: Math.max(1, section.level || 1),
-      hvyKeepWithNext: true,
-      hvyRole: decision.role ?? (childSidebar ? 'sidebar' : 'heading'),
-    }));
-  }
   stack.push(...renderBlocks(document, resolved, section.blocks));
   stack.push(...renderSections(document, resolved, section.children, childSidebar));
   if (stack.length === 0) {

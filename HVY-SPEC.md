@@ -1017,7 +1017,9 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
 - a human-readable display name (used by editors to populate the plugin
   selector for new `plugin` blocks);
 - one or more renderable component factories that produce plugin instances bound to specific blocks;
-- one or more output generators that produce text directly or produce prompts for a host LLM/chat client.
+- one or more output generators that produce text directly or produce prompts for a host LLM/chat client;
+- a PDF/static render capability that resolves a plugin block to ordinary
+  PDF-compatible HVY blocks for export.
 
 An output generator has a globally unique plugin-qualified key, an optional
 human-readable label, optional required template variable names, and a generate
@@ -1037,6 +1039,21 @@ used only when the LLM request fails or returns no text. If only `answer` is
 present, the host SHOULD insert that text directly. If neither path produces
 text, the authoring UI SHOULD show an error and preserve the user's existing
 field value.
+
+A PDF/static render capability is invoked by the host at PDF export time before
+PDF component validation and layout. It receives the plugin block, document
+header, attachments API, and current document context, and returns zero or more
+ordinary HVY blocks. Returned blocks MUST use components that are valid in the
+target PDF document, such as `text`, `container`, `grid`, `table`, or `image`.
+The capability MAY perform asynchronous work, including host-approved API calls,
+and MAY write static attachments before returning image or carousel blocks that
+reference those attachments. For example, a plugin can fetch or generate a QR
+code, store it as an image attachment, and return an `image` block. Hosts SHOULD
+replace only the export clone with these static blocks; the authored plugin
+block and plugin-owned configuration/text MUST remain unchanged. If a `.phvy`
+plugin block has no installed PDF/static render capability, authoring clients
+SHOULD keep the plugin visible in pickers but disabled, and PDF export MUST
+reject the unresolved plugin block rather than silently hiding it.
 
 Plugins MUST own the rendered DOM for their block. Hosts MUST treat the
 returned element as opaque and MUST NOT mutate its children, except to remove

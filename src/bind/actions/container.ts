@@ -6,7 +6,7 @@ import { syncReusableTemplateForBlock } from '../../reusable';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { assignAutoBlockId } from '../../auto-block-id';
-import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
 import type { ActionHandler } from './types';
 
 const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -22,7 +22,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
   }
   ensureComponentListBlocks(block);
   const component = block.schema.componentListComponent || 'text';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+  if (isPdfDocument(state.document) && !isPdfAllowedComponentInstance(component, state.document.meta, actionButton.dataset.pluginId)) {
     return;
   }
   if (openReusableTemplateModalIfNeeded(component, { kind: 'component-list', sectionKey, blockId })) {
@@ -62,7 +62,7 @@ const addContainerBlock: ActionHandler = ({ actionButton, sectionKey, blockId })
   ensureContainerBlocks(block);
   const addKey = `container:${sectionKey}:${blockId}`;
   const component = actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'text';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+  if (isPdfDocument(state.document) && !isPdfAllowedComponentInstance(component, state.document.meta, actionButton.dataset.pluginId)) {
     return;
   }
   if (openReusableTemplateModalIfNeeded(component, { kind: 'container', sectionKey, blockId })) {
@@ -96,7 +96,7 @@ const addExpandableBlock = (kind: 'stub' | 'content'): ActionHandler => ({ actio
   ensureExpandableBlocks(block);
   const addKey = `expandable-${kind}:${sectionKey}:${blockId}`;
   const component = actionButton.dataset.component ?? state.addComponentBySection[addKey] ?? 'container';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+  if (isPdfDocument(state.document) && !isPdfAllowedComponentInstance(component, state.document.meta, actionButton.dataset.pluginId)) {
     return;
   }
   if (openReusableTemplateModalIfNeeded(component, { kind: 'expandable', sectionKey, blockId, part: kind })) {

@@ -3,8 +3,9 @@ import type { VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { deserializeDocumentBytes, serializeDocumentBytes } from '../serialization';
 import { downloadBlob } from '../utils';
-import { isPdfAllowedComponent, isPdfDocument } from '../pdf-document-capabilities';
+import { isPdfAllowedComponentInstance, isPdfDocument } from '../pdf-document-capabilities';
 import { buildPdfExportDocDefinition } from './doc-definition';
+import { resolvePdfStaticPluginBlocks } from './plugin-static-render';
 import { createPdfExportRuleRecorder, mergePdfExportStrategies } from './strategy';
 import type {
   HvyPdfExportOptions,
@@ -26,6 +27,7 @@ export async function preparePdfExport(
   options: HvyPdfExportOptions = {}
 ): Promise<HvyPdfExportResult> {
   const exportDocument = cloneDocumentForPdfExport(sourceDocument);
+  await resolvePdfStaticPluginBlocks(exportDocument);
   validatePdfDocumentComponents(exportDocument);
   const strategy = await prepareExportStrategy(exportDocument, options.strategy, options.runPrepScript !== false);
   return {
@@ -42,8 +44,9 @@ function validatePdfDocumentComponents(document: VisualDocument): void {
   }
   const visit = (blocks: VisualBlock[]): void => {
     for (const block of blocks) {
-      if (!isPdfAllowedComponent(block.schema.component, document.meta)) {
-        throw new Error(`PDF document cannot render component "${block.schema.component}".`);
+      if (!isPdfAllowedComponentInstance(block.schema.component, document.meta, block.schema.plugin)) {
+        const label = block.schema.component === 'plugin' ? block.schema.plugin || 'plugin' : block.schema.component;
+        throw new Error(`PDF document cannot render component "${label}".`);
       }
       visit(block.schema.containerBlocks ?? []);
       visit(block.schema.componentListBlocks ?? []);

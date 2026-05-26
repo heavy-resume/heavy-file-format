@@ -26,7 +26,7 @@ function renderBlockMarkdown(block: VisualBlock): string[] {
   if (block.schema.editorOnly) {
     return [];
   }
-  const component = block.schema.kind || block.schema.component;
+  const component = block.schema.kind;
   if (component === 'text') {
     return textPart(block.text);
   }

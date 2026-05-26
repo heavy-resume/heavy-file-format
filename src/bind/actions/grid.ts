@@ -7,7 +7,7 @@ import { syncReusableTemplateForBlock } from '../../reusable';
 import { moveItem } from '../../utils';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
-import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
 import type { ActionHandler } from './types';
 
 const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
@@ -20,7 +20,7 @@ const addGridItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   }
   ensureGridItems(block.schema);
   const component = actionButton.dataset.component ?? state.gridAddComponentByBlock[blockId] ?? 'text';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+  if (isPdfDocument(state.document) && !isPdfAllowedComponentInstance(component, state.document.meta, actionButton.dataset.pluginId)) {
     return;
   }
   if (openReusableTemplateModalIfNeeded(component, { kind: 'grid', sectionKey, blockId })) {

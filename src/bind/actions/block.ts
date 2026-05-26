@@ -9,7 +9,7 @@ import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
-import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -24,7 +24,7 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
-  if (isPdfDocument(state.document) && !isPdfAllowedComponent(component, state.document.meta)) {
+  if (isPdfDocument(state.document) && !isPdfAllowedComponentInstance(component, state.document.meta, actionButton.dataset.pluginId)) {
     return;
   }
   if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {

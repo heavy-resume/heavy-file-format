@@ -54,7 +54,7 @@ import {
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
 } from '../heading-styles';
-import { isPdfAllowedComponent } from '../pdf-document-capabilities';
+import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -204,12 +204,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return state.documentExtension === '.phvy';
   }
 
-  function isPdfAllowedEditorComponent(componentName: string): boolean {
-    return isPdfAllowedComponent(componentName, state.documentMeta);
+  function isPdfAllowedEditorComponent(componentName: string, pluginId?: string): boolean {
+    return isPdfAllowedComponentInstance(componentName, state.documentMeta, pluginId);
   }
 
-  function getPdfDisabledComponentReason(componentName: string): string | null {
-    return isPdfAllowedEditorComponent(componentName) ? null : 'Not supported in PHVY';
+  function getPdfDisabledComponentReason(componentName: string, pluginId?: string): string | null {
+    return isPdfAllowedEditorComponent(componentName, pluginId) ? null : 'Not supported in PHVY';
   }
 
   function renderSidebarEditorSections(sections: VisualSection[]): string {

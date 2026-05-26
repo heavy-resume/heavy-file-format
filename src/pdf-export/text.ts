@@ -62,22 +62,48 @@ export function normalizePdfTextInline(text: string): string {
 }
 
 function splitPdfTextLines(text: string): PdfTextLine[] {
-  return text
-    .split(/\r?\n/)
-    .map((rawLine) => rawLine.trim())
-    .filter((line) => line.length > 0 && !/^\[\s*\]$/.test(line))
-    .map((line) => {
-      const escaped = /^(\\\^)([a-z0-9_-]+)\^\s?(.*)$/i.exec(line);
-      if (escaped) {
-        return { styleName: null, text: `^${escaped[2]}^${escaped[3] ? ` ${escaped[3]}` : ''}` };
-      }
-      const styled = /^\^([a-z0-9_-]+)\^\s?(.*)$/i.exec(line);
-      if (styled) {
-        return { styleName: styled[1], text: styled[2].trim() };
-      }
-      return { styleName: null, text: line };
-    })
-    .filter((line) => line.text.length > 0 && !/^\[\s*\]$/.test(line.text));
+  const lines: PdfTextLine[] = [];
+  let paragraphParts: string[] = [];
+  const flushParagraph = (): void => {
+    const text = paragraphParts.join(' ').replace(/[ \t]{2,}/g, ' ').trim();
+    if (text.length > 0 && !/^\[\s*\]$/.test(text)) {
+      lines.push({ styleName: null, text });
+    }
+    paragraphParts = [];
+  };
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line.length === 0 || /^\[\s*\]$/.test(line)) {
+      flushParagraph();
+      continue;
+    }
+    const parsed = parsePdfTextLine(line);
+    if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text)) {
+      flushParagraph();
+      continue;
+    }
+    if (parsed.styleName || /^(#{1,6})\s+(.+)$/.test(parsed.text) || /^[-*]\s+(.+)$/.test(parsed.text)) {
+      flushParagraph();
+      lines.push(parsed);
+      continue;
+    }
+    paragraphParts.push(parsed.text);
+  }
+  flushParagraph();
+  return lines;
+}
+
+function parsePdfTextLine(line: string): PdfTextLine | null {
+  const escaped = /^(\\\^)([a-z0-9_-]+)\^\s?(.*)$/i.exec(line);
+  if (escaped) {
+    return { styleName: null, text: `^${escaped[2]}^${escaped[3] ? ` ${escaped[3]}` : ''}` };
+  }
+  const styled = /^\^([a-z0-9_-]+)\^\s?(.*)$/i.exec(line);
+  if (styled) {
+    return { styleName: styled[1], text: styled[2].trim() };
+  }
+  return { styleName: null, text: line };
 }
 
 function stripFillInMarkers(text: string): string {

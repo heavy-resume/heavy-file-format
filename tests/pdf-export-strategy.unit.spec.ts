@@ -245,6 +245,31 @@ describe('PDF export strategy', () => {
     expect(serialized).toContain('ORGANIZATION');
   });
 
+  test('collapses soft-wrapped text lines before PDF layout', () => {
+    const document = createDocument();
+    document.sections[0].blocks[0].text = [
+      'Summary',
+      'Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make',
+      'complex',
+      'products easier to ship and maintain.',
+      '',
+      'Software Engineering, Library Development, LLM Prompt Engineering, TypeScript, Python, Developer Containers,',
+      'Skills',
+      'Project',
+      'Management, Reverse Engineering, OpenAI API, GitHub Codespaces, SuperAGI, C/C++',
+    ].join('\n');
+
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).toContain(
+      'Product-minded software engineer focused on developer tooling, AI workflows, and reusable systems that make complex products easier to ship and maintain.'
+    );
+    expect(serialized).toContain('Developer Containers, Skills Project Management, Reverse Engineering');
+    expect(serialized).not.toContain('"text":"complex"');
+    expect(serialized).not.toContain('"text":"Project"');
+  });
+
   test('exports right-aligned grid item text into the PDF definition', async () => {
     const document = createDocument();
     const grid = createEmptyBlock('grid');

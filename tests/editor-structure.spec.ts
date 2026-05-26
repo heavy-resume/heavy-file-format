@@ -3507,13 +3507,56 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
-  await page.locator('[data-action="add-top-level-section"]').click();
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
 
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(0);
   await expect(sections.first().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
+});
+
+test('section drag handle uses grab cursor', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.section-drag-handle').first()).toHaveCSS('cursor', 'grab');
+});
+
+test('section dragover previews insertion title at the target edge', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
+  await expect(sections).toHaveCount(2);
+
+  const expectedResult = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.editor-section-card:not(.editor-subsection-card)'));
+    const sourceHandle = cards[0]?.querySelector<HTMLElement>('.section-drag-handle');
+    const targetCard = cards[1];
+    if (!sourceHandle || !targetCard) {
+      return null;
+    }
+    const transfer = new DataTransfer();
+    sourceHandle.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    const targetRect = targetCard.getBoundingClientRect();
+    targetCard.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientY: targetRect.top + 4,
+      dataTransfer: transfer,
+    }));
+    return {
+      before: targetCard.classList.contains('is-section-drop-before'),
+      after: targetCard.classList.contains('is-section-drop-after'),
+      title: targetCard.dataset.sectionDropTitle ?? '',
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    before: true,
+    after: false,
+    title: 'Move Overview',
+  });
 });
 
 test('named empty sections offer a heading ghost in editor only', async ({ page }) => {

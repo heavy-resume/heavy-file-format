@@ -18,6 +18,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   }
   event.stopPropagation();
   const targetElement = event.target as HTMLElement | null;
+  const textEditorMode = targetElement?.closest('[data-field="text-fill-in-value"]') ? 'fill-in' : 'rich';
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
   const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
@@ -26,7 +27,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   if (aiPlaceholderActivation) {
     state.aiModeTipDismissed = true;
   }
-  setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation });
+  setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation, textEditorMode });
   if (state.currentView === 'ai') {
     setAiEditorHostBlock(sectionKey, blockId);
   }

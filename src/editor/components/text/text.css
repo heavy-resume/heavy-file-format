@@ -180,6 +180,12 @@
     0 2px 8px color-mix(in srgb, var(--hvy-shadow) 82%, transparent);
 }
 
+.text-fill-in-rich-marker {
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+  text-shadow: 0 0 1px black;
+}
+
 .hvy-alt {
   display: inline;
 }

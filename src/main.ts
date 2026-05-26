@@ -130,6 +130,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeTextEditorMode: null,
     aiEditorHostBlock: null,
     aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],

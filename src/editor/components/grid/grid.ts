@@ -92,17 +92,12 @@ function isBlankDefaultGridItem(block: VisualBlock): boolean {
   if ((block.schema.component || 'text') !== 'text') {
     return false;
   }
+  if (block.schema.kind !== 'text') {
+    return false;
+  }
   return block.text.trim().length === 0
     && block.schema.placeholder.trim().length === 0
-    && !block.schema.fillIn
-    && block.schema.containerBlocks.length === 0
-    && block.schema.componentListBlocks.length === 0
-    && block.schema.gridItems.length === 0
-    && block.schema.expandableStubBlocks.children.length === 0
-    && block.schema.expandableContentBlocks.children.length === 0
-    && block.schema.tableRows.length === 0
-    && block.schema.imageFile.trim().length === 0
-    && block.schema.plugin.trim().length === 0;
+    && !block.schema.fillIn;
 }
 
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {

@@ -91,6 +91,12 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
     }
+    if (actionButton?.dataset.action === 'set-editor-mode' || actionButton?.dataset.action === 'switch-view') {
+      event.preventDefault();
+      logClickTrace(event, 'click-dispatch:mousedown:preserve-fill-in-for-shell-action', {
+        action: actionButton.dataset.action,
+      });
+    }
   });
 
   app.addEventListener('click', (event) => {

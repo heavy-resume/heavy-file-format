@@ -284,6 +284,7 @@ export interface AppState {
   cliSession: HvyCliSessionState;
   cliHistory: HvyCliHistoryEntry[];
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
+  activeTextEditorMode?: { sectionKey: string; blockId: string; mode: 'rich' | 'fill-in' } | null;
   aiEditorHostBlock: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey: string | null;
   activeEditorBlockPath: { sectionKey: string; blockId: string }[];

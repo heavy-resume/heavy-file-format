@@ -50,6 +50,7 @@ export function createTestState(document: VisualDocument): AppState {
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeTextEditorMode: null,
     aiEditorHostBlock: null,
     aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],

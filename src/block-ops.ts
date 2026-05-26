@@ -6,7 +6,7 @@ import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
-import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
+import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
@@ -224,7 +224,7 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     block.text = buildTextFromFillInEditor(target);
     block.schema.fillIn = hasTextFillInMarker(block.text);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    if (!target.closest('.hvy-ai-reader-surface')) {
+    if (!target.closest('.editor-tree, .hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
     }
     return true;
@@ -338,8 +338,9 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
       item.block = reusableInstance;
       item.block.schema.component = target.value;
     } else {
-      item.block.schema.component = target.value;
-      applyComponentDefaults(item.block.schema, target.value);
+      const previousBlockId = item.block.id;
+      item.block = createEmptyBlock(target.value);
+      item.block.id = previousBlockId;
     }
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -608,12 +609,14 @@ export function isActiveEditorLeafBlock(sectionKey: string, blockId: string): bo
 type SetActiveEditorBlockOptions = {
   targetOnly?: boolean;
   pathBlockIds?: string[];
+  textEditorMode?: 'rich' | 'fill-in' | null;
 };
 
 export function setActiveEditorBlock(sectionKey: string, blockId: string, options: SetActiveEditorBlockOptions = {}): void {
   const pathIds = options.pathBlockIds ?? (options.targetOnly ? [blockId] : getEditorBlockPathIds(sectionKey, blockId) ?? [blockId]);
   state.activeEditorBlockPath = pathIds.map((pathBlockId) => ({ sectionKey, blockId: pathBlockId }));
   state.activeEditorBlock = { sectionKey, blockId };
+  state.activeTextEditorMode = options.textEditorMode ? { sectionKey, blockId, mode: options.textEditorMode } : null;
   state.activeEditorBlockSnapshots = state.activeEditorBlockPath
     .map((active) => {
       const existing = state.activeEditorBlockSnapshots.find(
@@ -1155,6 +1158,7 @@ function applyTextFillInSlot(editable: HTMLElement): void {
     block.text = `${block.text}${separator}${createTextFillInMarker()}`;
   }
   block.schema.fillIn = true;
+  state.activeTextEditorMode = { sectionKey, blockId: block.id, mode: 'fill-in' };
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRefreshReaderPanels()();
   getRenderApp()();

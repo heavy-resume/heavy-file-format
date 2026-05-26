@@ -157,6 +157,7 @@ const setTextFillIn: ActionHandler = ({ actionButton, sectionKey }) => {
   const prepared = prepareTextFillIn(block.text);
   block.text = prepared.text;
   block.schema.fillIn = true;
+  state.activeTextEditorMode = { sectionKey, blockId: block.id, mode: 'fill-in' };
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };
@@ -169,6 +170,7 @@ const removeTextFillIn: ActionHandler = ({ actionButton, sectionKey }) => {
   recordHistory(`text:${block.id}:fill-in:remove`);
   block.text = removeTextFillInMarkers(block.text);
   block.schema.fillIn = false;
+  state.activeTextEditorMode = { sectionKey, blockId: block.id, mode: 'rich' };
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRenderApp()();
 };

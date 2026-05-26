@@ -209,6 +209,7 @@ function createEmbedState(
     cliSession: { cwd: '/' },
     cliHistory: [],
     activeEditorBlock: null,
+    activeTextEditorMode: null,
     aiEditorHostBlock: null,
     aiEditorHostSectionKey: null,
     activeEditorBlockPath: [],

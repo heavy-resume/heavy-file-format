@@ -1,7 +1,12 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
-import { exportCurrentDocumentPdf, exportCurrentDocumentPdfWithTemplateBytes } from '../src/pdf-export/action';
+import {
+  createPdfTemplateImportModalState,
+  exportCurrentDocumentPdf,
+  exportCurrentDocumentPdfWithTemplateBytes,
+  runNextPdfTemplateImportLlmStep,
+} from '../src/pdf-export/action';
 import { buildImportPlanForDocument, importTextIntoDocument } from '../src/ai-document-import';
 import { exportHvyPdf } from '../src/pdf-export/export';
 import { serializeDocumentBytes } from '../src/serialization';
@@ -14,11 +19,67 @@ vi.mock('../src/pdf-export/export', () => ({
 }));
 
 vi.mock('../src/ai-document-import', () => ({
-  buildImportPlanForDocument: vi.fn(async () => ({
-    status: 'ready',
-    steps: [{ sectionTitle: 'Summary', instruction: 'Fill summary', target: { kind: 'body', id: 'summary' } }],
-  })),
-  importTextIntoDocument: vi.fn(async () => ({ status: 'complete', message: 'Imported.' })),
+  buildImportPlanForDocument: vi.fn(async (_document, options) => {
+    options.onTraceEvent?.({
+      type: 'call-start',
+      run: { calls: [] },
+      call: {
+        callIndex: 1,
+        stage: 'sectionPlanner',
+        debugLabel: 'ai-import-plan',
+        phase: 'thinking',
+        request: {
+          settings: { provider: 'openai', model: 'gpt-5-mini' },
+          messages: [{ id: 'plan', role: 'user', content: 'Plan exact message.' }],
+          context: 'exact plan context',
+          responseInstructions: 'exact plan instructions',
+          mode: 'pdf-template-import',
+          maxContextChars: options.maxContextChars,
+        },
+      },
+    });
+    await options.beforeLlmCall?.({ callIndex: 1, debugLabel: 'ai-import-plan', phase: 'thinking' });
+    options.onTokenUsage?.({
+      callIndex: 1,
+      stage: 'sectionPlanner',
+      debugLabel: 'ai-import-plan',
+      phase: 'thinking',
+      usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+    });
+    return {
+      status: 'ready',
+      steps: [{ sectionTitle: 'Summary', instruction: 'Fill summary', target: { kind: 'body', id: 'summary' } }],
+    };
+  }),
+  importTextIntoDocument: vi.fn(async (_document, options) => {
+    options.onTraceEvent?.({
+      type: 'call-start',
+      run: { calls: [] },
+      call: {
+        callIndex: 2,
+        stage: 'templateSectionWriter',
+        debugLabel: 'ai-import-template-values:1',
+        phase: 'thinking',
+        request: {
+          settings: { provider: 'openai', model: 'gpt-5-mini' },
+          messages: [{ id: 'template', role: 'user', content: 'Template exact message.' }],
+          context: 'exact template context',
+          responseInstructions: 'exact template instructions',
+          mode: 'pdf-template-import',
+          maxContextChars: options.maxContextChars,
+        },
+      },
+    });
+    await options.beforeLlmCall?.({ callIndex: 1, debugLabel: 'ai-import-template-values:1', phase: 'thinking' });
+    options.onTokenUsage?.({
+      callIndex: 1,
+      stage: 'templateSectionWriter',
+      debugLabel: 'ai-import-template-values:1',
+      phase: 'thinking',
+      usage: { inputTokens: 80, outputTokens: 10, totalTokens: 90 },
+    });
+    return { status: 'complete', message: 'Imported.' };
+  }),
 }));
 
 function createDocumentWithExportTemplate(): VisualDocument {
@@ -47,6 +108,16 @@ function createDocumentWithExportTemplate(): VisualDocument {
   };
 }
 
+async function waitForAwaitingLlmStep(stepId: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (state.pdfTemplateImportModal?.awaitingLlmStepId === stepId) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`Timed out waiting for ${stepId}`);
+}
+
 beforeEach(() => {
   vi.mocked(exportHvyPdf).mockClear();
   vi.mocked(buildImportPlanForDocument).mockClear();
@@ -69,6 +140,16 @@ test('export PDF opens PHVY template picker for HVY documents', async () => {
     isRunning: false,
     status: null,
     error: null,
+    steps: [
+      { id: 'read', label: 'Read PHVY template', status: 'pending', tokenUsage: {} },
+      { id: 'plan', label: 'Plan import', status: 'pending', tokenUsage: {} },
+      { id: 'import', label: 'Import source content', status: 'pending', tokenUsage: {} },
+      { id: 'render', label: 'Render PDF', status: 'pending', tokenUsage: {} },
+    ],
+    totalTokenUsage: {},
+    awaitingLlmStep: false,
+    awaitingLlmStepId: null,
+    requestLog: [],
   });
   expect(exportHvyPdf).not.toHaveBeenCalled();
 });
@@ -86,25 +167,50 @@ test('export PDF names PHVY output with a PDF extension', async () => {
 test('export PDF imports HVY source into selected PHVY before rendering', async () => {
   const template = createDocumentWithExportTemplate();
   template.extension = '.phvy';
-  state.pdfTemplateImportModal = { isRunning: false, status: null, error: null };
+  state.pdfTemplateImportModal = createPdfTemplateImportModalState();
 
-  await exportCurrentDocumentPdfWithTemplateBytes(serializeDocumentBytes(template), 'template.phvy');
+  const exportPromise = exportCurrentDocumentPdfWithTemplateBytes(serializeDocumentBytes(template), 'template.phvy');
+  await waitForAwaitingLlmStep('ai-import-plan');
+  expect(state.pdfTemplateImportModal?.requestLog[0]?.request.messages[0]?.content).toBe('Plan exact message.');
+  expect(state.pdfTemplateImportModal?.requestLog[0]?.request.maxContextChars).toBe(60_000);
+  expect(runNextPdfTemplateImportLlmStep()).toBe(true);
+  await waitForAwaitingLlmStep('ai-import-template-values:1');
+  expect(state.pdfTemplateImportModal?.requestLog[1]?.request.context).toBe('exact template context');
+  expect(runNextPdfTemplateImportLlmStep()).toBe(true);
+  await exportPromise;
 
   expect(buildImportPlanForDocument).toHaveBeenCalledWith(
     expect.objectContaining({ extension: '.phvy' }),
     expect.objectContaining({
-      sourceName: 'resume.hvy',
       sourceText: expect.stringContaining('PDF export source text.'),
+      requestMode: 'pdf-template-import',
+      maxContextChars: 60_000,
     })
   );
   expect(importTextIntoDocument).toHaveBeenCalledWith(
     expect.objectContaining({ extension: '.phvy' }),
     expect.objectContaining({
-      sourceName: 'resume.hvy',
       steps: [{ sectionTitle: 'Summary', instruction: 'Fill summary', target: { kind: 'body', id: 'summary' } }],
+      requestMode: 'pdf-template-import',
+      maxContextChars: 60_000,
     })
   );
+  expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1]).not.toHaveProperty('sourceName');
+  expect(vi.mocked(importTextIntoDocument).mock.calls[0]?.[1]).not.toHaveProperty('sourceName');
   expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('<!--hvy');
   expect(vi.mocked(buildImportPlanForDocument).mock.calls[0]?.[1].sourceText).not.toContain('hvy_version');
+  expect(state.pdfTemplateImportModal?.totalTokenUsage).toEqual({ inputTokens: 180, outputTokens: 30, totalTokens: 210 });
+  expect(state.pdfTemplateImportModal?.steps).toEqual([
+    { id: 'read', label: 'Read PHVY template', status: 'pending', tokenUsage: {} },
+    { id: 'plan', label: 'Plan import', status: 'complete', tokenUsage: {} },
+    { id: 'import', label: 'Import source content', status: 'complete', tokenUsage: {} },
+    { id: 'render', label: 'Render PDF', status: 'complete', tokenUsage: {} },
+    { id: 'ai-import-plan', label: 'Choose import sections', status: 'complete', tokenUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 } },
+    { id: 'ai-import-template-values:1', label: 'Fill template section 1', status: 'complete', tokenUsage: { inputTokens: 80, outputTokens: 10, totalTokens: 90 } },
+  ]);
+  expect(state.pdfTemplateImportModal?.requestLog.map((entry) => entry.debugLabel)).toEqual([
+    'ai-import-plan',
+    'ai-import-template-values:1',
+  ]);
   expect(exportHvyPdf).toHaveBeenCalledWith(expect.objectContaining({ extension: '.phvy' }), { filename: 'resume.pdf' });
 });

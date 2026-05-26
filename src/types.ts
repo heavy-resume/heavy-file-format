@@ -2,6 +2,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
+import type { ProxyChatMode } from './chat/chat';
 
 export interface DocumentAttachment {
   id: string;
@@ -105,6 +106,34 @@ export interface PdfTemplateImportModalState {
   isRunning: boolean;
   status: string | null;
   error: string | null;
+  steps: PdfTemplateImportStepState[];
+  totalTokenUsage: ChatTokenUsage;
+  awaitingLlmStep: boolean;
+  awaitingLlmStepId: string | null;
+  requestLog: PdfTemplateImportRequestLogEntry[];
+}
+
+export interface PdfTemplateImportStepState {
+  id: string;
+  label: string;
+  status: 'pending' | 'running' | 'complete' | 'error';
+  tokenUsage: ChatTokenUsage;
+}
+
+export interface PdfTemplateImportRequestLogEntry {
+  callIndex: number;
+  stage: string;
+  debugLabel: string;
+  phase: string;
+  request: {
+    settings: ChatSettings;
+    messages: ChatMessage[];
+    context: string;
+    responseInstructions: string;
+    systemInstructions?: string;
+    mode: ProxyChatMode;
+    maxContextChars?: number;
+  };
 }
 
 export interface AiEditState {

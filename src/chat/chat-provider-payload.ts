@@ -1,10 +1,12 @@
+import type { ProxyChatMode } from './chat';
+
 const OPENAI_REASONING_EFFORT = 'low';
 export type OpenAiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
 export interface ProviderProxyChatRequest {
   provider: 'openai' | 'anthropic' | 'qwen';
   model: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProxyChatMode;
   messages: Array<{
     id?: string;
     role: 'system' | 'user' | 'assistant';
@@ -147,6 +149,13 @@ function buildSystemInstructions(mode: ProviderProxyChatRequest['mode'], systemM
           'Use the provided document context only for this request.',
           'Return only the response format requested below.',
           'Dont reveal CLI details, the client wont understand.',
+        ]
+      : mode === 'pdf-template-import'
+      ? [
+          'You are importing incoming data into a PHVY PDF template.',
+          'Use the provided template and incoming data context only for this request.',
+          'Return only the response format requested below.',
+          'Do not treat filenames, UI labels, or template availability as source facts.',
         ]
       : [
           'Answer questions about the provided HVY document context.',

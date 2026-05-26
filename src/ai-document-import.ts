@@ -3,7 +3,7 @@ import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDo
 import type { GridItem, VisualBlock, VisualSection } from './editor/types';
 import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
 import { findSectionByKey, findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
-import type { ChatMessage, ChatSettings, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
 import { resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
@@ -62,6 +62,7 @@ export interface HvyImportTraceRequest {
   responseInstructions: string;
   systemInstructions?: string;
   mode: ProxyCompletionParams['mode'];
+  maxContextChars?: number;
 }
 
 export interface HvyImportTraceResponse {
@@ -88,18 +89,29 @@ export interface HvyImportTraceEvent {
   call: HvyImportTraceCall;
 }
 
+export interface HvyImportTokenUsageEvent {
+  callIndex: number;
+  stage: HvyImportLlmStage;
+  debugLabel: string;
+  phase: HvyLlmCallPhase;
+  usage: ChatTokenUsage;
+}
+
 export interface HvyImportTraceRecorder {
   run: HvyImportTraceRun;
   recordCompletion(stage: HvyImportLlmStage, phase: HvyLlmCallPhase, params: ProxyCompletionParams): Promise<string>;
 }
 
 export interface BuildImportPlanOptions {
-  sourceName: string;
+  sourceName?: string;
   sourceText: string;
   instructions?: string;
   llm?: HvyImportLlmOptions;
+  requestMode?: ProxyCompletionParams['mode'];
+  maxContextChars?: number;
   trace?: boolean;
   onTraceEvent?: (event: HvyImportTraceEvent) => void;
+  onTokenUsage?: (event: HvyImportTokenUsageEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
@@ -246,13 +258,16 @@ export type ImportPlanStepInput = string | ImportPlanStep | {
 };
 
 export interface ImportFromTextOptions {
-  sourceName: string;
+  sourceName?: string;
   sourceText: string;
   instructions?: string;
   steps: ImportPlanStepInput[];
   llm?: HvyImportLlmOptions;
+  requestMode?: ProxyCompletionParams['mode'];
+  maxContextChars?: number;
   trace?: boolean;
   onTraceEvent?: (event: HvyImportTraceEvent) => void;
+  onTokenUsage?: (event: HvyImportTokenUsageEvent) => void;
   beforeLlmCall?: (event: HvyImportLlmStepEvent) => Promise<void> | void;
   onProgress?: (event: HvyImportProgressEvent) => void;
   signal?: AbortSignal;
@@ -269,7 +284,7 @@ export async function buildImportPlanForDocument(
   options: BuildImportPlanOptions
 ): Promise<BuildImportPlanResult> {
   const traceRecorder = createImportTraceRecorder(options);
-  options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${options.sourceName}.` });
+  options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${formatImportSourceProgress(options.sourceName)}.` });
   try {
     const preplanSteps = buildImportPlanStepsFromPreplan(document);
     if (preplanSteps.length > 0) {
@@ -301,7 +316,8 @@ export async function buildImportPlanForDocument(
       context: buildImportPlanContext(document, options.sourceName, options.sourceText),
       responseInstructions: buildImportPlanResponseInstructions(),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: 'document-edit',
+      mode: getImportRequestMode(options),
+      maxContextChars: options.maxContextChars,
       debugLabel: 'ai-import-plan',
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
@@ -312,7 +328,7 @@ export async function buildImportPlanForDocument(
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
-    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, options.signal, traceRecorder);
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
     if (dedupedSteps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan after deduping.' }, options, traceRecorder);
     }
@@ -343,7 +359,7 @@ export async function importTextIntoDocument(
   if (steps.length === 0) {
     return withImportTrace({ status: 'error', message: 'Import requires at least one approved plan step.' }, options, traceRecorder);
   }
-  options.onProgress?.({ phase: 'starting', message: `Importing ${options.sourceName}.` });
+  options.onProgress?.({ phase: 'starting', message: `Importing ${formatImportSourceProgress(options.sourceName)}.` });
   try {
     const llm = requireImportLlm(options.llm);
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
@@ -384,7 +400,8 @@ export async function importTextIntoDocument(
           context: buildImportTemplateValuesContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application, templateStructure, step.extractedInformation),
           responseInstructions: buildImportTemplateValuesResponseInstructions(templateStructure),
           systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-          mode: 'document-edit',
+          mode: getImportRequestMode(options),
+          maxContextChars: options.maxContextChars,
           debugLabel: `ai-import-template-values:${index + 1}`,
           beforeRequest: beforeLlmCall?.('thinking'),
           signal: options.signal,
@@ -450,7 +467,8 @@ export async function importTextIntoDocument(
           context: buildImportSectionInformationContext(document, options.sourceName, options.sourceText, executableSteps, index, created, application),
           responseInstructions: buildImportSectionInformationResponseInstructions(),
           systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-          mode: 'document-edit',
+          mode: getImportRequestMode(options),
+          maxContextChars: options.maxContextChars,
           debugLabel: `ai-import-section-data:${index + 1}`,
           beforeRequest: beforeLlmCall?.('thinking'),
           signal: options.signal,
@@ -478,7 +496,8 @@ export async function importTextIntoDocument(
         context: buildImportSectionHvyContext(document, step.extractedInformation!, application),
         responseInstructions: buildImportSectionHvyResponseInstructions(),
         systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-        mode: 'document-edit',
+        mode: getImportRequestMode(options),
+        maxContextChars: options.maxContextChars,
         debugLabel: `ai-import-section-hvy:${index + 1}`,
         beforeRequest: beforeLlmCall?.('thinking'),
         signal: options.signal,
@@ -556,11 +575,11 @@ export async function importTextIntoDocument(
   }
 }
 
-function buildImportPlanPrompt(sourceName: string, instructions?: string): string {
+function buildImportPlanPrompt(sourceName: string | undefined, instructions?: string): string {
   return [
-    `Find the sections needed to create a document from "${sourceName}".`,
+    `Find the sections needed to create a document ${formatImportSourceReference(sourceName)}.`,
     '',
-    'You have the current HVY template section outline and the imported source document in context. Do not use tools. Do not mutate anything.',
+    'You have the current HVY template section outline and the incoming data in context. Do not use tools. Do not mutate anything.',
     'Treat the current document primarily as a starting template/scaffold for a new document.',
     'The template section list is a target inventory, not an ordering requirement. Existing body sections are replaced in place during execution.',
     'Plan section-sized work only. Each approved step will later generate one complete raw HVY section in one shot.',
@@ -586,7 +605,7 @@ function buildImportTaskMessage(prompt: string, responseInstructions: string): s
   ].join('\n');
 }
 
-function buildImportPlanContext(document: VisualDocument, sourceName: string, sourceText: string): string {
+function buildImportPlanContext(document: VisualDocument, sourceName: string | undefined, sourceText: string): string {
   return [
     buildImportGuidanceFrame(document),
     '',
@@ -596,7 +615,7 @@ function buildImportPlanContext(document: VisualDocument, sourceName: string, so
     '=== END TEMPLATE SECTIONS ===',
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
+    ...formatImportSourceNameLines(sourceName),
     '```text',
     sourceText,
     '```',
@@ -645,6 +664,20 @@ function trimImportString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function formatImportSourceReference(sourceName: string | undefined): string {
+  const name = trimImportString(sourceName);
+  return name ? `from "${name}"` : 'from incoming data';
+}
+
+function formatImportSourceNameLines(sourceName: string | undefined): string[] {
+  const name = trimImportString(sourceName);
+  return name ? [`Source name: ${name}`] : [];
+}
+
+function formatImportSourceProgress(sourceName: string | undefined): string {
+  return trimImportString(sourceName) || 'incoming data';
+}
+
 function getImportSectionDefinitions(document: VisualDocument): SectionDefinition[] {
   const definitions = document.meta.section_defs;
   return Array.isArray(definitions)
@@ -661,11 +694,11 @@ function buildImportPlanResponseInstructions(): string {
     'Use `sectionId` only for an existing body section id from the template section outline.',
     'Use `templateName` only for a reusable/template section name from the template section outline.',
     'When no listed section fits a distinct source-backed topic, include only `section` so execution may create a new blank section.',
-    'Each step should be a section to create from the source document. Try to fit data to the template and only add sections if needed. Things outside the intent of the source document can be discarded.',
+    'Each step should be a section to create from the incoming data. Try to fit data to the template and only add sections if needed. Things outside the intent of the incoming data can be discarded.',
     'Do not include `instruction` unless a section title alone would be ambiguous.',
     'If `instruction` is needed, keep it structural and very short. Do not list exact facts.',
     'Do not copy specific source facts into the plan; do not include names, dates, entity names, labels, links, bullets, metrics, or other exact source details.',
-    'Every step must be unconditional and source-backed. The planner must make the section decision now from the imported source document.',
+    'Every step must be unconditional and source-backed. The planner must make the section decision now from the incoming data.',
     'Do not include steps containing conditional language such as "if", "only if", "otherwise", "as needed", "when needed", "if present", "if available", "if applicable", "unless", "may", "might", or "leave unmodified".',
     'Do not impose a step count limit. Use as many steps as needed so each final document section has its own step.',
     'Do not write bundled steps such as "add Alpha, Beta, Gamma, and Delta sections"; split that into one step per section.',
@@ -696,6 +729,8 @@ async function dedupeImportPlanStepsWithModel(
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  requestMode: ProxyCompletionParams['mode'],
+  maxContextChars: number | undefined,
   signal?: AbortSignal,
   traceRecorder?: HvyImportTraceRecorder
 ): Promise<ImportPlanStep[]> {
@@ -716,7 +751,8 @@ async function dedupeImportPlanStepsWithModel(
     context: '',
     responseInstructions: buildImportSectionDedupeResponseInstructions(candidates),
     systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-    mode: 'document-edit',
+    mode: requestMode,
+    maxContextChars,
     debugLabel: 'ai-import-section-dedupe',
     beforeRequest: beforeLlmCall?.('thinking'),
     signal,
@@ -765,7 +801,7 @@ function buildImportSectionDedupePrompt(candidates: ImportSectionDedupeCandidate
   return [
     'Deduplicate this candidate import section list.',
     '',
-    'You are given only section candidates. Do not infer from any source document. Do not use tools.',
+    'You are given only section candidates. Do not infer from incoming data. Do not use tools.',
     'Keep one section for each distinct final document role.',
     'When candidates have the same role, prefer an existing body section over a reusable/template section, and prefer either of those over a blank section.',
     'Only keep a blank section when no body or reusable/template candidate covers that same role.',
@@ -878,7 +914,7 @@ function resolveImportPreplanTarget(id: string, candidates: ImportTemplateSectio
 
 async function preparePreplannedImportSteps(
   document: VisualDocument,
-  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal'>,
+  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal' | 'requestMode' | 'maxContextChars'>,
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
@@ -909,7 +945,8 @@ async function preparePreplannedImportSteps(
       context: '',
       responseInstructions: buildImportPreplanDataResponseInstructions(),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: 'document-edit',
+      mode: getImportRequestMode(options),
+      maxContextChars: options.maxContextChars,
       debugLabel: `ai-import-preplan-data:${groupIndex + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
@@ -941,7 +978,8 @@ async function preparePreplannedImportSteps(
     context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted),
     responseInstructions: buildImportMissingSectionsResponseInstructions(),
     systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-    mode: 'document-edit',
+    mode: getImportRequestMode(options),
+    maxContextChars: options.maxContextChars,
     debugLabel: 'ai-import-missing-sections',
     beforeRequest: beforeLlmCall?.('thinking'),
     signal: options.signal,
@@ -952,7 +990,7 @@ async function preparePreplannedImportSteps(
   if (candidates.length <= 1) {
     return candidates;
   }
-  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, options.signal, traceRecorder);
+  return dedupeImportPlanStepsWithModel(candidates, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -971,13 +1009,13 @@ function getImportPlanStepTargetId(step: ImportPlanStep): string {
 }
 
 function buildImportPreplanDataSourceMessage(
-  sourceName: string,
+  sourceName: string | undefined,
   sourceText: string,
   steps: ImportPlanStep[]
 ): string {
   return [
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
+    ...formatImportSourceNameLines(sourceName),
     '```text',
     sourceText,
     '```',
@@ -990,14 +1028,14 @@ function buildImportPreplanDataSourceMessage(
 
 function buildImportPreplanDataTaskMessage(
   document: VisualDocument,
-  sourceName: string,
+  sourceName: string | undefined,
   instructions: string | undefined,
   groupSteps: ImportPlanStep[],
   index: number,
   total: number
 ): string {
   return [
-    `Extract source information for import group ${index + 1} of ${total} from "${sourceName}".`,
+    `Extract source information for import group ${index + 1} of ${total} ${formatImportSourceReference(sourceName)}.`,
     '',
     '=== BEGIN TARGET SECTION APPLICATIONS ===',
     groupSteps.map((step) => {
@@ -1091,9 +1129,9 @@ function parseImportPreplanSectionInformation(value: unknown): string {
   return typeof section.information === 'string' ? section.information.trim() : '';
 }
 
-function buildImportMissingSectionsPrompt(sourceName: string, instructions?: string): string {
+function buildImportMissingSectionsPrompt(sourceName: string | undefined, instructions?: string): string {
   return [
-    `Identify missing import sections for "${sourceName}".`,
+    `Identify missing import sections ${formatImportSourceReference(sourceName)}.`,
     '',
     'Review what the preplanned import has already seen, then add only source-backed sections that are still missing and needed.',
     'You may choose a remaining body section, a reusable section template, or a blank section as the starting point.',
@@ -1105,7 +1143,7 @@ function buildImportMissingSectionsPrompt(sourceName: string, instructions?: str
 
 function buildImportMissingSectionsContext(
   document: VisualDocument,
-  sourceName: string,
+  sourceName: string | undefined,
   sourceText: string,
   allPreplanSteps: ImportPlanStep[],
   extractedSteps: ImportPlanStep[]
@@ -1117,7 +1155,7 @@ function buildImportMissingSectionsContext(
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
+    ...formatImportSourceNameLines(sourceName),
     '```text',
     sourceText,
     '```',
@@ -1788,9 +1826,9 @@ function toImportJsonPropertyName(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'items';
 }
 
-function buildImportSectionInformationPrompt(sourceName: string, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
+function buildImportSectionInformationPrompt(sourceName: string | undefined, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
   return [
-    `Extract source information for one import section from "${sourceName}".`,
+    `Extract source information for one import section ${formatImportSourceReference(sourceName)}.`,
     '',
     `Approved section step ${index + 1} of ${total}: ${formatImportPlanStep(step)}`,
     '',
@@ -1804,7 +1842,7 @@ function buildImportSectionInformationPrompt(sourceName: string, instructions: s
 
 function buildImportSectionInformationContext(
   document: VisualDocument,
-  sourceName: string,
+  sourceName: string | undefined,
   sourceText: string,
   steps: ImportPlanStep[],
   activeIndex: number,
@@ -1815,7 +1853,7 @@ function buildImportSectionInformationContext(
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
+    ...formatImportSourceNameLines(sourceName),
     '```text',
     sourceText,
     '```',
@@ -1831,9 +1869,9 @@ function buildImportSectionInformationContext(
   ].join('\n');
 }
 
-function buildImportSectionHvyPrompt(sourceName: string, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
+function buildImportSectionHvyPrompt(sourceName: string | undefined, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
   return [
-    `Generate one complete HVY section for import source "${sourceName}".`,
+    `Generate one complete HVY section ${formatImportSourceReference(sourceName)}.`,
     '',
     `Approved section step ${index + 1} of ${total}: ${formatImportPlanStep(step)}`,
     '',
@@ -1862,7 +1900,7 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN HVY FORMAT REFERENCE ===',
-    'The following HVY document is a syntax and component reference only. It is not the task, not the source document, and not the output contract.',
+    'The following HVY document is a syntax and component reference only. It is not the task, not the incoming data, and not the output contract.',
     'Use it to understand valid HVY section/component structure and examples. Follow the separate response instructions for what to return.',
     '',
     importHvyFormatReference.trim(),
@@ -1880,9 +1918,9 @@ function buildImportSectionHvyContext(document: VisualDocument, information: str
   ].join('\n');
 }
 
-function buildImportTemplateValuesPrompt(sourceName: string, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
+function buildImportTemplateValuesPrompt(sourceName: string | undefined, instructions: string | undefined, step: ImportPlanStep, index: number, total: number): string {
   return [
-    `Fill one HVY template JSON object for import source "${sourceName}".`,
+    `Fill one HVY template JSON object ${formatImportSourceReference(sourceName)}.`,
     '',
     `Approved section step ${index + 1} of ${total}: ${formatImportPlanStep(step)}`,
     '',
@@ -1896,7 +1934,7 @@ function buildImportTemplateValuesPrompt(sourceName: string, instructions: strin
 
 function buildImportTemplateValuesContext(
   document: VisualDocument,
-  sourceName: string,
+  sourceName: string | undefined,
   sourceText: string,
   steps: ImportPlanStep[],
   activeIndex: number,
@@ -1913,7 +1951,7 @@ function buildImportTemplateValuesContext(
     ].join('\n')
     : [
       '=== BEGIN SOURCE DOCUMENT ===',
-      `Source name: ${sourceName}`,
+      ...formatImportSourceNameLines(sourceName),
       '```text',
       sourceText,
       '```',
@@ -3112,7 +3150,8 @@ async function fillImportedSectionPlaceholders(
       context: buildImportFillInContext(document, options.sourceName, options.sourceText, section, createdTargets, targets),
       responseInstructions: buildImportFillInResponseInstructions(targets),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-      mode: 'document-edit',
+      mode: getImportRequestMode(options),
+      maxContextChars: options.maxContextChars,
       debugLabel: `ai-import-fill-ins:${index + 1}`,
       beforeRequest: beforeLlmCall?.('thinking'),
       signal: options.signal,
@@ -3122,13 +3161,13 @@ async function fillImportedSectionPlaceholders(
   }
 }
 
-function buildImportFillInPrompt(sourceName: string, instructions: string | undefined, section: VisualSection, targets: ImportFillInTarget[], index: number, total: number): string {
+function buildImportFillInPrompt(sourceName: string | undefined, instructions: string | undefined, section: VisualSection, targets: ImportFillInTarget[], index: number, total: number): string {
   return [
-    `Fill remaining placeholders for imported section ${index + 1} of ${total} from "${sourceName}".`,
+    `Fill remaining placeholders for imported section ${index + 1} of ${total} ${formatImportSourceReference(sourceName)}.`,
     '',
     `Section: ${formatSectionTitle(section.title)} (${getSectionId(section) || section.key})`,
     '',
-    'Use the original source document, not the earlier extracted notes, so low-level details can still be recovered.',
+    'Use the original incoming data, not the earlier extracted notes, so low-level details can still be recovered.',
     'Return an empty string for a key when the source does not contain a source-backed value.',
     'Do not invent facts, dates, names, metrics, links, or xref targets.',
     'Placeholder keys:',
@@ -3137,12 +3176,12 @@ function buildImportFillInPrompt(sourceName: string, instructions: string | unde
   ].filter(Boolean).join('\n');
 }
 
-function buildImportFillInContext(document: VisualDocument, sourceName: string, sourceText: string, section: VisualSection, createdTargets: CreatedImportXrefTarget[], targets: ImportFillInTarget[]): string {
+function buildImportFillInContext(document: VisualDocument, sourceName: string | undefined, sourceText: string, section: VisualSection, createdTargets: CreatedImportXrefTarget[], targets: ImportFillInTarget[]): string {
   return [
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
-    `Source name: ${sourceName}`,
+    ...formatImportSourceNameLines(sourceName),
     '```text',
     sourceText,
     '```',
@@ -3619,7 +3658,11 @@ function getImportStageSettings(llm: HvyImportLlmOptions, stage: HvyImportLlmSta
   return llm.stages?.[stage] ?? llm.settings;
 }
 
-function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace' | 'onTraceEvent'>): HvyImportTraceRecorder | undefined {
+function getImportRequestMode(options: { requestMode?: ProxyCompletionParams['mode'] }): ProxyCompletionParams['mode'] {
+  return options.requestMode ?? 'document-edit';
+}
+
+function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace' | 'onTraceEvent' | 'onTokenUsage'>): HvyImportTraceRecorder | undefined {
   const run: HvyImportTraceRun = { calls: [] };
   const emit = (type: HvyImportTraceEvent['type'], call: HvyImportTraceCall): void => {
     options.onTraceEvent?.({
@@ -3641,7 +3684,19 @@ function createImportTraceRecorder(options: Pick<BuildImportPlanOptions, 'trace'
       run.calls.push(call);
       emit('call-start', call);
       try {
-        const output = await requestProxyCompletion(params);
+        const output = await requestProxyCompletion({
+          ...params,
+          onTokenUsage: (usage) => {
+            params.onTokenUsage?.(usage);
+            options.onTokenUsage?.({
+              callIndex: call.callIndex,
+              stage,
+              debugLabel: call.debugLabel,
+              phase,
+              usage,
+            });
+          },
+        });
         call.response = { output };
         emit('call-complete', call);
         return output;
@@ -3728,6 +3783,7 @@ function copyImportTraceRequest(params: ProxyCompletionParams): HvyImportTraceRe
     responseInstructions: params.responseInstructions,
     ...(params.systemInstructions !== undefined ? { systemInstructions: params.systemInstructions } : {}),
     mode: params.mode,
+    ...(params.maxContextChars !== undefined ? { maxContextChars: params.maxContextChars } : {}),
   };
 }
 

@@ -19,7 +19,7 @@ import { getOutputGenerator } from './plugins/registry';
 import { getComponentDefsFromMeta } from './component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
-import { exportCurrentDocumentPdfWithTemplateBytes } from './pdf-export/action';
+import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -129,22 +129,44 @@ export function bindModal(app: HTMLElement): void {
         isRunning: true,
         status: `Reading ${file.name}.`,
         error: null,
+        steps: state.pdfTemplateImportModal.steps.map((step) => step.id === 'read' ? { ...step, status: 'running' } : step),
       };
       getRenderApp()();
       void file.arrayBuffer()
-        .then((buffer) => exportCurrentDocumentPdfWithTemplateBytes(new Uint8Array(buffer), file.name))
+        .then((buffer) => {
+          if (state.pdfTemplateImportModal) {
+            state.pdfTemplateImportModal = {
+              ...state.pdfTemplateImportModal,
+              steps: state.pdfTemplateImportModal.steps.map((step) => step.id === 'read' ? { ...step, status: 'complete' } : step),
+            };
+            getRenderApp()();
+          }
+          return exportCurrentDocumentPdfWithTemplateBytes(new Uint8Array(buffer), file.name);
+        })
         .then(() => {
           closeModal();
           getRenderApp()();
         })
         .catch((error) => {
+          const modal = state.pdfTemplateImportModal;
           state.pdfTemplateImportModal = {
             isRunning: false,
             status: null,
             error: error instanceof Error ? error.message : 'PDF template export failed.',
+            steps: (modal?.steps ?? []).map((step) => step.status === 'running' ? { ...step, status: 'error' } : step),
+            totalTokenUsage: modal?.totalTokenUsage ?? {},
+            awaitingLlmStep: false,
+            awaitingLlmStepId: null,
+            requestLog: modal?.requestLog ?? [],
           };
           getRenderApp()();
         });
+      return;
+    }
+
+    const pdfTemplateNextLlmBtn = target.closest<HTMLButtonElement>('[data-modal-action="pdf-template-import-next-llm"]');
+    if (pdfTemplateNextLlmBtn && state.pdfTemplateImportModal) {
+      runNextPdfTemplateImportLlmStep();
       return;
     }
 

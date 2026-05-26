@@ -1273,6 +1273,44 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     `;
   }
 
+  function hasPdfTemplateImportTokenUsage(usage: import('../types').ChatTokenUsage): boolean {
+    return Object.values(usage).some((value) => typeof value === 'number');
+  }
+
+  function formatPdfTemplateImportTokenUsage(usage: import('../types').ChatTokenUsage): string {
+    return [
+      typeof usage.inputTokens === 'number' ? `input ${usage.inputTokens}` : '',
+      typeof usage.outputTokens === 'number' ? `output ${usage.outputTokens}` : '',
+      typeof usage.totalTokens === 'number' ? `total ${usage.totalTokens}` : '',
+      typeof usage.cachedTokens === 'number' ? `cached ${usage.cachedTokens}` : '',
+      typeof usage.reasoningTokens === 'number' ? `reasoning ${usage.reasoningTokens}` : '',
+    ].filter(Boolean).join(' / ');
+  }
+
+  function formatPdfTemplateImportStepStatus(status: import('../types').PdfTemplateImportStepState['status']): string {
+    if (status === 'complete') return 'Done';
+    if (status === 'running') return 'Running';
+    if (status === 'error') return 'Error';
+    return 'Pending';
+  }
+
+  function renderPdfTemplateImportRequestLog(entries: import('../types').PdfTemplateImportRequestLogEntry[]): string {
+    if (entries.length === 0) {
+      return '';
+    }
+    return `<details class="pdf-template-import-log">
+      <summary>LLM request log (${entries.length})</summary>
+      <div class="pdf-template-import-log-list">
+        ${entries.map((entry) => `
+          <details class="pdf-template-import-log-entry">
+            <summary>${deps.escapeHtml(`${entry.callIndex}. ${entry.debugLabel}`)}</summary>
+            <pre>${deps.escapeHtml(JSON.stringify(entry.request, null, 2))}</pre>
+          </details>
+        `).join('')}
+      </div>
+    </details>`;
+  }
+
   function renderModal(): string {
     if (state.themeModalOpen) {
       return renderThemeModal();
@@ -1290,6 +1328,24 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <p class="muted">Choose a PHVY template. The current document will be imported into it before the PDF is rendered.</p>
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${modal.status ? `<p class="pdf-template-import-status">${deps.escapeHtml(modal.status)}</p>` : ''}
+            <ol class="pdf-template-import-stepper">
+              ${modal.steps.map((step) => `
+                <li class="pdf-template-import-step is-${deps.escapeAttr(step.status)}">
+                  <span class="pdf-template-import-step-state">${deps.escapeHtml(formatPdfTemplateImportStepStatus(step.status))}</span>
+                  <span class="pdf-template-import-step-label">${deps.escapeHtml(step.label)}</span>
+                  ${hasPdfTemplateImportTokenUsage(step.tokenUsage) ? `<span class="pdf-template-import-step-tokens">${deps.escapeHtml(formatPdfTemplateImportTokenUsage(step.tokenUsage))}</span>` : ''}
+                </li>
+              `).join('')}
+            </ol>
+            ${hasPdfTemplateImportTokenUsage(modal.totalTokenUsage)
+              ? `<p class="pdf-template-import-token-total">${deps.escapeHtml(`Total ${formatPdfTemplateImportTokenUsage(modal.totalTokenUsage)}`)}</p>`
+              : ''}
+            ${modal.awaitingLlmStep
+              ? `<div class="pdf-template-import-next-step">
+                  <button type="button" class="secondary" data-modal-action="pdf-template-import-next-llm">Run Next LLM Step</button>
+                </div>`
+              : ''}
+            ${renderPdfTemplateImportRequestLog(modal.requestLog)}
             <label class="pdf-template-import-picker">
               <span>PHVY Template</span>
               <input id="pdfTemplateFileInput" type="file" accept=".phvy,text/phvy" ${modal.isRunning ? 'disabled' : ''} />

@@ -321,6 +321,13 @@ function buildSystemInstructions(mode: ProviderProxyChatRequest['mode'], systemM
           'Return only the response format requested below.',
           'Dont reveal CLI details, the client wont understand.',
         ]
+      : mode === 'pdf-template-import'
+      ? [
+          'You are importing incoming data into a PHVY PDF template.',
+          'Use the provided template and incoming data context only for this request.',
+          'Return only the response format requested below.',
+          'Do not treat filenames, UI labels, or template availability as source facts.',
+        ]
       : [
           'Answer questions about the provided HVY document context.',
           'If the answer is not supported by the document, say that clearly.',

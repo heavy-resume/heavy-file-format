@@ -42,12 +42,14 @@ interface ProxyChatMessage {
   error?: boolean;
 }
 
+export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-template-import';
+
 interface ProxyChatRequest {
   provider: ChatSettings['provider'];
   model: string;
   messages: ProxyChatMessage[];
   context: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProxyChatMode;
   traceRunId?: string;
   tools?: ProviderToolDefinition[];
   toolState?: ProviderToolState;
@@ -112,7 +114,7 @@ export interface ProxyCompletionParams {
   // Natural-language response instructions, not a provider JSON schema.
   responseInstructions: string;
   systemInstructions?: string;
-  mode: 'qa' | 'component-edit' | 'document-edit';
+  mode: ProxyChatMode;
   debugLabel?: string;
   traceRunId?: string;
   maxContextChars?: number;

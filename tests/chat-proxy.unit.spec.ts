@@ -137,6 +137,33 @@ test('buildQwenProxyRequest uses OpenAI-compatible chat messages', () => {
   });
 });
 
+test('provider payload builders omit blank request context', () => {
+  const messageOnlyRequest = {
+    ...request,
+    context: '',
+    messages: [
+      { role: 'system' as const, content: 'Use the import protocol.' },
+      { role: 'user' as const, content: 'Deduplicate these candidate sections.' },
+    ],
+  };
+
+  expect(buildOpenAiProxyRequest(messageOnlyRequest).input).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      role: 'user',
+      content: expect.arrayContaining([
+        expect.objectContaining({ text: expect.stringContaining('Request context:') }),
+      ]),
+    }),
+  ]));
+  expect(buildAnthropicProxyRequest({ ...messageOnlyRequest, provider: 'anthropic', model: 'claude-sonnet-4-6' }).messages).toEqual([
+    { role: 'user', content: 'Deduplicate these candidate sections.' },
+  ]);
+  expect(buildQwenProxyRequest({ ...messageOnlyRequest, provider: 'qwen', model: 'qwen-plus' }).messages).toEqual([
+    { role: 'system', content: expect.stringMatching(/Use the import protocol\./) },
+    { role: 'user', content: 'Deduplicate these candidate sections.' },
+  ]);
+});
+
 test('provider tool adapters build OpenAI Responses function calls and append outputs', () => {
   const tools: ProviderToolDefinition[] = [{
     name: 'run_hvy_cli',
@@ -318,6 +345,24 @@ test('document edit requests use document-edit-specific system instructions', ()
   expect(openAiRequest).toEqual(
     expect.not.objectContaining({
       instructions: expect.stringMatching(/Modify only the selected component\./),
+    })
+  );
+});
+
+test('PDF template import requests use PDF-template-import-specific system instructions', () => {
+  const openAiRequest = buildOpenAiProxyRequest({
+    ...request,
+    mode: 'pdf-template-import',
+  });
+
+  expect(openAiRequest).toEqual(
+    expect.objectContaining({
+      input: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'system',
+          content: [expect.objectContaining({ text: expect.stringMatching(/importing incoming data into a PHVY PDF template/) })],
+        }),
+      ]),
     })
   );
 });

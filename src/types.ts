@@ -148,6 +148,7 @@ export interface AiEditState {
 }
 
 export interface PaneScrollState {
+  fullPaneTop: number;
   editorTop: number;
   editorSidebarTop: number;
   viewerSidebarTop: number;
@@ -206,10 +207,19 @@ export interface ComponentPlacementState {
   mode: 'move' | 'copy';
   sectionKey: string;
   blockId: string;
+  source?: 'block' | 'clipboard';
+  sourcePane?: 'stub' | 'content';
 }
 
 export type HvyEditorClipboardPayload =
-  | { kind: 'component'; block: VisualBlock; attachments?: DocumentAttachment[] }
+  | {
+      kind: 'component';
+      block: VisualBlock;
+      attachments?: DocumentAttachment[];
+      pasteBehavior?: {
+        unwrapIntoEmptyContainer?: boolean;
+      };
+    }
   | { kind: 'section'; section: VisualSection; attachments?: DocumentAttachment[] };
 
 export interface HvyEditorClipboardHost {

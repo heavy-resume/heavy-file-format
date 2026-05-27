@@ -202,7 +202,7 @@ function createEmbedState(
       popupY: 0,
       requestNonce: 0,
     },
-    paneScroll: { editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
+    paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,

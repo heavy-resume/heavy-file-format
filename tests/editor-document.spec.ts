@@ -3496,6 +3496,54 @@ component_defs:
   await expect(inserted.locator('.editor-block-passive [data-placeholder="Details"]')).toBeVisible();
 });
 
+test('component template remove confirmation deletes the template', async ({ page }) => {
+  await page.goto('/');
+
+  const componentDefs = [
+    ...Array.from({ length: 14 }, (_, index) => `  - name: filler-card-${index + 1}
+    baseType: text
+    description: Filler template ${index + 1}
+    schema:
+      placeholder: Filler ${index + 1}`),
+    `  - name: card-record
+    baseType: text
+    description: Disposable card template
+    schema:
+      placeholder: Card`,
+  ].join('\n');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+${componentDefs}
+---
+
+<!--hvy: {"id":"cards"}-->
+#! Cards
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const pane = page.locator('.full-pane');
+  await pane.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  const template = page.locator('.component-def', { hasText: 'card-record' });
+  await expect(template).toBeVisible();
+  await template.locator('summary').click();
+  const expectedResultScrollTop = await pane.evaluate((node) => node.scrollTop);
+  expect(expectedResultScrollTop).toBeGreaterThan(0);
+
+  await template.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.remove-confirmation-modal')).toBeVisible();
+  await page.locator('.remove-confirmation-modal').getByRole('button', { name: 'Delete' }).click();
+
+  await expect(page.locator('.component-def', { hasText: 'card-record' })).toHaveCount(0);
+  await expect(page.locator('.component-def', { hasText: 'filler-card-14' })).toBeVisible();
+  await expect.poll(async () => pane.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+});
+
 test('custom component template output generator fills a field from provided variables', async ({ page }) => {
   let prompt = '';
   await page.route('**/api/chat', async (route) => {

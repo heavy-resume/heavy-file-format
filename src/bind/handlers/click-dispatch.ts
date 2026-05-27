@@ -401,12 +401,6 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
     return false;
   }
 
-  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
-    logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
-    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
-    return true;
-  }
-
   const handler = actionRegistry[action];
   if (!handler) {
     logActionExecution(event, 'click-dispatch:execute-action:skip', {
@@ -414,6 +408,12 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
       action,
     });
     return false;
+  }
+
+  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
+    logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
+    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
+    return true;
   }
 
   const sectionKey = getActionSectionKey(actionButton);

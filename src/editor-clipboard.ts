@@ -10,11 +10,16 @@ export function setEditorClipboardHost(host: HvyEditorClipboardHost | null): voi
   editorClipboardHost = host;
 }
 
-export function copyComponentToEditorClipboard(block: VisualBlock, attachments: DocumentAttachment[] = []): void {
+export function copyComponentToEditorClipboard(
+  block: VisualBlock,
+  attachments: DocumentAttachment[] = [],
+  options: { unwrapIntoEmptyContainer?: boolean } = {}
+): void {
   writeEditorClipboard({
     kind: 'component',
     block: cloneReusableBlock(block),
     attachments: cloneAttachments(attachments),
+    ...(options.unwrapIntoEmptyContainer ? { pasteBehavior: { unwrapIntoEmptyContainer: true } } : {}),
   });
 }
 
@@ -35,8 +40,17 @@ export function hasSectionInEditorClipboard(): boolean {
 }
 
 export function cloneComponentFromEditorClipboard(): VisualBlock | null {
+  return cloneComponentClipboardEntry()?.block ?? null;
+}
+
+export function cloneComponentClipboardEntry(): { block: VisualBlock; unwrapIntoEmptyContainer: boolean } | null {
   const clipboard = readEditorClipboard();
-  return clipboard?.kind === 'component' ? cloneReusableBlock(clipboard.block) : null;
+  return clipboard?.kind === 'component'
+    ? {
+        block: cloneReusableBlock(clipboard.block),
+        unwrapIntoEmptyContainer: clipboard.pasteBehavior?.unwrapIntoEmptyContainer === true,
+      }
+    : null;
 }
 
 export function cloneAttachmentsFromEditorClipboard(): DocumentAttachment[] {

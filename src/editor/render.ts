@@ -1229,7 +1229,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="ghost" data-action="add-component-def">Add Template</button>
         </div>
         <div class="component-defs">
-          ${defs
+          ${defs.length === 0
+        ? '<div class="muted template-def-empty">No component templates</div>'
+        : defs
         .map(
           (def, index) => {
             const flavors = Array.isArray(def.flavors) ? def.flavors : [];

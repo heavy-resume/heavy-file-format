@@ -35,6 +35,7 @@ export function createTestState(document: VisualDocument): AppState {
       requestNonce: 0,
     },
     paneScroll: {
+      fullPaneTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,

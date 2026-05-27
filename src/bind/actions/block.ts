@@ -1,7 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
-import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
+import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
 import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
@@ -10,7 +10,8 @@ import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
-import { cloneComponentFromEditorClipboard, collectBlockAttachments, copyComponentToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
+import { cloneComponentClipboardEntry, collectBlockAttachments, copyComponentToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
+import { resolveBaseComponent } from '../../component-defs';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -328,6 +329,27 @@ const copyComponent: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const copyExpandablePane = (pane: 'stub' | 'content'): ActionHandler => ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || resolveBaseComponent(block.schema.component) !== 'expandable') {
+    return;
+  }
+  const children = pane === 'stub'
+    ? block.schema.expandableStubBlocks.children
+    : block.schema.expandableContentBlocks.children;
+  const wrapper = createEmptyBlock('container');
+  wrapper.schema.containerBlocks = children.map((child) => cloneReusableBlock(child));
+  copyComponentToEditorClipboard(wrapper, collectBlockAttachments(state.document, wrapper), { unwrapIntoEmptyContainer: true });
+  state.contextMenu = null;
+  state.componentPlacement = { mode: 'copy', sectionKey, blockId, source: 'clipboard', sourcePane: pane };
+  setActiveEditorBlock(sectionKey, blockId);
+  getRenderApp()();
+  centerPlacementSourceAfterRender();
+};
+
 const startComponentPlacement = (mode: 'move' | 'copy'): ActionHandler => ({ sectionKey, blockId }) => {
   if (!blockId) {
     return;
@@ -360,9 +382,15 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   if (!targetSection) {
     return;
   }
-  const sourceBlock = placement
-    ? findBlockByIds(placement.sectionKey, placement.blockId)
-    : cloneComponentFromEditorClipboard();
+  const clipboardEntry = !placement || placement.source === 'clipboard'
+    ? cloneComponentClipboardEntry()
+    : null;
+  const sourceBlock = placement?.source === 'clipboard'
+    ? clipboardEntry?.block ?? null
+    : placement
+      ? findBlockByIds(placement.sectionKey, placement.blockId)
+      : clipboardEntry?.block ?? null;
+  const unwrapIntoEmptyContainer = clipboardEntry?.unwrapIntoEmptyContainer === true;
   if (!sourceBlock) {
     state.componentPlacement = null;
     getRenderApp()();
@@ -413,6 +441,13 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
 
   const placementMode = placement?.mode ?? 'copy';
   const placedBlock = placementMode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  const canUnwrapPlacedBlock = placementMode === 'copy'
+    && unwrapIntoEmptyContainer
+    && placedBlock.schema.component === 'container'
+    && Array.isArray(placedBlock.schema.containerBlocks)
+    && placedBlock.schema.containerBlocks.length > 0;
+  let activePlacedBlockId = placedBlock.id;
+  let syncBlockId = placedBlock.id;
   if (placementMode === 'copy') {
     installEditorClipboardAttachments(state.document);
   }
@@ -437,11 +472,21 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
   } else if (targetBlockList) {
     const insertIndex = getPlacementInsertIndex(targetBlockList, targetPlacement, targetBlockId);
-    targetBlockList.splice(insertIndex, 0, placedBlock);
+    if (
+      canUnwrapPlacedBlock
+      && targetBlockList.length === 0
+      && (placementContainer === 'container' || placementContainer === 'expandable-stub' || placementContainer === 'expandable-content')
+    ) {
+      targetBlockList.splice(insertIndex, 0, ...placedBlock.schema.containerBlocks);
+      activePlacedBlockId = targetBlockList[insertIndex]?.id ?? placedBlock.id;
+      syncBlockId = parentBlockId || activePlacedBlockId;
+    } else {
+      targetBlockList.splice(insertIndex, 0, placedBlock);
+    }
   }
-  syncReusableTemplateForBlock(sectionKey, placedBlock.id);
+  syncReusableTemplateForBlock(sectionKey, syncBlockId);
   state.componentPlacement = null;
-  setActiveEditorBlock(sectionKey, placedBlock.id);
+  setActiveEditorBlock(sectionKey, activePlacedBlockId);
   getRenderApp()();
 };
 
@@ -465,6 +510,8 @@ export const blockActions: Record<string, ActionHandler> = {
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
   'copy-component': copyComponent,
+  'copy-expandable-stub-pane': copyExpandablePane('stub'),
+  'copy-expandable-content-pane': copyExpandablePane('content'),
   'start-component-move': startComponentPlacement('move'),
   'start-component-copy': startComponentPlacement('copy'),
   'cancel-component-placement': cancelComponentPlacement,

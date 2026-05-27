@@ -3474,6 +3474,117 @@ hvy_version: 0.1
   expect(raw.indexOf('Skill details')).toBeLessThan(raw.indexOf('Skill notes'));
 });
 
+test('copying an expandable pane pastes as a container unless the destination pane is empty', async ({ page }) => {
+  await page.goto('/');
+
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+
+ <!--hvy:expandable {"id":"empty-skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"empty-name"}-->
+    Empty skill
+`;
+  await page.evaluate(async (rawSource) => {
+    const [{ state, getRenderApp }, { deserializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    state.document = deserializeDocument(rawSource, '.hvy');
+    state.rawEditorText = rawSource;
+    state.currentView = 'editor';
+    state.editorMode = 'basic';
+    state.metaPanelOpen = false;
+    state.activeEditorBlock = null;
+    state.activeEditorBlockPath = [];
+    state.componentPlacement = null;
+    getRenderApp()();
+  }, source);
+  await expect(page.locator('#editorTree')).toContainText('Skill name');
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  const skillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(2);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="after"]').first().click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Empty skill' }).first().click();
+  const emptySkillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await emptySkillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await emptySkillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await emptySkillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(1);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="end"]').click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).toMatch(/<!--hvy:expandable:content \{\}-->\n\n   <!--hvy:text \{"id":"details"\}-->\n    Skill details\n\n   <!--hvy:container/);
+  expect(raw).toMatch(/<!--hvy:container [\s\S]*?Skill name/);
+  expect(raw).toMatch(/<!--hvy:expandable \{"id":"empty-skill"[\s\S]*?<!--hvy:expandable:content \{\}-->[\s\S]*?<!--hvy:text \{\}-->[\s\S]*?Empty skill/);
+  expect(raw).not.toMatch(/<!--hvy:expandable \{"id":"empty-skill"[\s\S]*?<!--hvy:expandable:content \{\}-->[\s\S]*?<!--hvy:container/);
+});
+
+test('copying a custom expandable component pane enters placement mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: expandable
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:skill-card {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  const skillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(2);
+});
+
 test('component placement works inside expandable children of a locked section', async ({ page }) => {
   await page.goto('/');
 

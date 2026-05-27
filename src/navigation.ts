@@ -569,6 +569,7 @@ export function resetTransientUiState(): void {
     requestNonce: state.aiEdit.requestNonce + 1,
   };
   state.paneScroll = {
+    fullPaneTop: 0,
     editorTop: 0,
     editorSidebarTop: 0,
     viewerSidebarTop: 0,

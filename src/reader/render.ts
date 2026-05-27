@@ -56,7 +56,7 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
-  contextMenu?: { kind: 'filter' | 'ai'; sectionKey: string; blockId?: string } | null;
+  contextMenu?: { kind: 'filter' | 'ai' | 'editor'; sectionKey: string; blockId?: string } | null;
   activeEditorBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey?: string | null;

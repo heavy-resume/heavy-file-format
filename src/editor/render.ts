@@ -431,7 +431,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (!pending) {
       return '';
     }
-    const label = `${capitalizePlacementMode(pending.mode)} (in ${formatPlacementContainerLabel(options.container)})`;
+    const mode = pending.mode;
+    const label = `${capitalizePlacementMode(mode)} (in ${formatPlacementContainerLabel(options.container)})`;
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
     )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
@@ -555,7 +556,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">

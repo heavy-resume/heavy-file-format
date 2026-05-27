@@ -419,7 +419,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
   const sectionKey = getActionSectionKey(actionButton);
   const blockId = actionButton.dataset.blockId ?? '';
 
-  if (action === 'add-top-level-section') {
+  if (action === 'add-top-level-section' || action === 'paste-section') {
     logActionExecution(event, 'click-dispatch:execute-action:handled', {
       action,
       sectionKey,

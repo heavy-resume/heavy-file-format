@@ -13,7 +13,7 @@ import {
   runWithStateRuntimeAsync,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
@@ -76,6 +76,7 @@ import type {
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
+import { setEditorClipboardHost } from './editor-clipboard';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -93,6 +94,7 @@ export interface HvyMountOptions {
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
+  editorClipboard?: HvyEditorClipboardHost | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -682,6 +684,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
+  setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
@@ -702,6 +705,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostPlugins([]);
+        setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
         if (currentRoot === options.root) {

@@ -10,6 +10,7 @@ import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
+import { cloneComponentFromEditorClipboard, collectBlockAttachments, copyComponentToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -314,10 +315,30 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const copyComponent: ActionHandler = ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return;
+  }
+  copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block));
+  state.contextMenu = null;
+  getRenderApp()();
+};
+
 const startComponentPlacement = (mode: 'move' | 'copy'): ActionHandler => ({ sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
+  if (mode === 'copy') {
+    const block = findBlockByIds(sectionKey, blockId);
+    if (block) {
+      copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block));
+    }
+  }
+  state.contextMenu = null;
   state.componentPlacement = { mode, sectionKey, blockId };
   setActiveEditorBlock(sectionKey, blockId);
   getRenderApp()();
@@ -331,14 +352,17 @@ const cancelComponentPlacement: ActionHandler = () => {
 
 const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   const placement = state.componentPlacement;
-  if (!placement || !sectionKey) {
+  state.contextMenu = null;
+  if (!sectionKey) {
     return;
   }
   const targetSection = findSectionByKey(state.document.sections, sectionKey);
   if (!targetSection) {
     return;
   }
-  const sourceBlock = findBlockByIds(placement.sectionKey, placement.blockId);
+  const sourceBlock = placement
+    ? findBlockByIds(placement.sectionKey, placement.blockId)
+    : cloneComponentFromEditorClipboard();
   if (!sourceBlock) {
     state.componentPlacement = null;
     getRenderApp()();
@@ -372,6 +396,7 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   }
 
   if (
+    placement &&
     placement.mode === 'move' &&
     placement.sectionKey === sectionKey &&
     (
@@ -386,18 +411,22 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     return;
   }
 
-  const placedBlock = placement.mode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  const placementMode = placement?.mode ?? 'copy';
+  const placedBlock = placementMode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  if (placementMode === 'copy') {
+    installEditorClipboardAttachments(state.document);
+  }
 
-  if (placement.mode === 'move') {
-    recordHistory(`component-${placement.mode}`);
-    if (!removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
+  if (placementMode === 'move') {
+    recordHistory(`component-${placementMode}`);
+    if (!placement || !removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
       state.componentPlacement = null;
       getRenderApp()();
       return;
     }
     syncReusableTemplateForBlock(placement.sectionKey, placement.blockId);
   } else {
-    recordHistory(`component-${placement.mode}`);
+    recordHistory(`component-${placementMode}`);
   }
 
   if (placementContainer === 'grid') {
@@ -435,6 +464,7 @@ export const blockActions: Record<string, ActionHandler> = {
   'move-block-down': moveBlock(1),
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
+  'copy-component': copyComponent,
   'start-component-move': startComponentPlacement('move'),
   'start-component-copy': startComponentPlacement('copy'),
   'cancel-component-placement': cancelComponentPlacement,
@@ -603,24 +633,25 @@ function removeBlockForPlacementFromList(blocks: VisualBlock[], blockId: string)
     return true;
   }
   for (const block of blocks) {
-    if (removeBlockForPlacementFromList(block.schema.containerBlocks, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.containerBlocks ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.componentListBlocks, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.componentListBlocks ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.expandableStubBlocks.children, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.expandableStubBlocks?.children ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.expandableContentBlocks.children, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.expandableContentBlocks?.children ?? [], blockId)) {
       return true;
     }
-    const gridItemIndex = block.schema.gridItems.findIndex((item) => item.block.id === blockId);
+    const gridItems = block.schema.gridItems ?? [];
+    const gridItemIndex = gridItems.findIndex((item) => item.block.id === blockId);
     if (gridItemIndex >= 0) {
-      block.schema.gridItems.splice(gridItemIndex, 1);
+      gridItems.splice(gridItemIndex, 1);
       return true;
     }
-    for (const item of block.schema.gridItems) {
+    for (const item of gridItems) {
       if (removeBlockForPlacementFromList([item.block], blockId)) {
         return true;
       }
@@ -638,11 +669,11 @@ function cloneBlockForPlacement(block: VisualBlock): VisualBlock {
 function reassignBlockIds(block: VisualBlock): void {
   block.id = makeId('block');
   block.schema.id = '';
-  block.schema.containerBlocks.forEach(reassignBlockIds);
-  block.schema.componentListBlocks.forEach(reassignBlockIds);
-  block.schema.expandableStubBlocks.children.forEach(reassignBlockIds);
-  block.schema.expandableContentBlocks.children.forEach(reassignBlockIds);
-  block.schema.gridItems.forEach((item) => {
+  (block.schema.containerBlocks ?? []).forEach(reassignBlockIds);
+  (block.schema.componentListBlocks ?? []).forEach(reassignBlockIds);
+  (block.schema.expandableStubBlocks?.children ?? []).forEach(reassignBlockIds);
+  (block.schema.expandableContentBlocks?.children ?? []).forEach(reassignBlockIds);
+  (block.schema.gridItems ?? []).forEach((item) => {
     item.id = makeId('griditem');
     reassignBlockIds(item.block);
   });

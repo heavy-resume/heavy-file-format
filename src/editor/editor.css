@@ -1314,6 +1314,11 @@
   box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 5px var(--hvy-focus-glow);
 }
 
+.editor-shell.is-context-menu-open .editor-block.is-context-menu-target,
+.editor-shell.is-context-menu-open .editor-section-card.is-context-menu-target {
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 5px var(--hvy-focus-glow);
+}
+
 @media (hover: none) {
   .component-placement-target::before {
     opacity: 0.14;

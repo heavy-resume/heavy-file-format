@@ -208,6 +208,15 @@ export interface ComponentPlacementState {
   blockId: string;
 }
 
+export type HvyEditorClipboardPayload =
+  | { kind: 'component'; block: VisualBlock; attachments?: DocumentAttachment[] }
+  | { kind: 'section'; section: VisualSection; attachments?: DocumentAttachment[] };
+
+export interface HvyEditorClipboardHost {
+  read(): HvyEditorClipboardPayload | null;
+  write(payload: HvyEditorClipboardPayload): void;
+}
+
 export interface RawEditorDiagnostic {
   severity: 'warning' | 'error';
   message: string;
@@ -397,7 +406,7 @@ export interface AppState {
 }
 
 export interface ContextMenuState {
-  kind: 'filter' | 'ai';
+  kind: 'filter' | 'ai' | 'editor';
   sectionKey: string;
   blockId?: string;
   x: number;

@@ -1,13 +1,14 @@
 import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
-import { isDefaultUntitledSectionTitle, getSectionId, moveSectionByOffset, removeSectionByKey, makeBlockSubsection, removeSubsection } from '../../section-ops';
+import { isDefaultUntitledSectionTitle, getSectionId, moveSectionByOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
 import { setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySection, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { cloneSectionFromEditorClipboard, collectSectionAttachments, copySectionToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
 import type { ActionHandler } from './types';
-import type { SectionLocation } from '../../editor/types';
+import type { SectionLocation, VisualSection } from '../../editor/types';
 
 const addTopLevelSection: ActionHandler = ({ actionButton }) => {
   const location: SectionLocation = actionButton.dataset.sectionLocation === 'sidebar' ? 'sidebar' : 'main';
@@ -211,6 +212,62 @@ const jumpToReader: ActionHandler = ({ section, app }) => {
   navigateToSection(getSectionId(section), app);
 };
 
+const copySection: ActionHandler = ({ section }) => {
+  if (!section) {
+    return;
+  }
+  copySectionToEditorClipboard(section, collectSectionAttachments(state.document, section));
+  state.contextMenu = null;
+  getRenderApp()();
+};
+
+const pasteSection: ActionHandler = ({ actionButton }) => {
+  state.contextMenu = null;
+  const location: SectionLocation = actionButton.dataset.sectionLocation === 'sidebar' ? 'sidebar' : 'main';
+  if (isPdfDocument(state.document) && location === 'sidebar') {
+    return;
+  }
+  const section = cloneSectionFromEditorClipboard(1);
+  if (!section) {
+    return;
+  }
+  recordHistory('section-paste');
+  installEditorClipboardAttachments(state.document);
+  section.location = location;
+  state.document.sections.push(section);
+  activatePastedSection(section);
+  getRenderApp()();
+};
+
+const pasteSectionAfter: ActionHandler = ({ sectionKey }) => {
+  state.contextMenu = null;
+  const targetLocation = findSectionContainer(state.document.sections, sectionKey);
+  const target = targetLocation?.container[targetLocation.index] ?? null;
+  if (!targetLocation || !target) {
+    return;
+  }
+  const section = cloneSectionFromEditorClipboard(target.level);
+  if (!section) {
+    return;
+  }
+  recordHistory('section-paste');
+  installEditorClipboardAttachments(state.document);
+  section.location = target.location;
+  targetLocation.container.splice(targetLocation.index + 1, 0, section);
+  activatePastedSection(section);
+  getRenderApp()();
+};
+
+function activatePastedSection(section: VisualSection): void {
+  state.pendingEditorCenterSectionKey = section.key;
+  if (section.blocks[0]) {
+    setActiveEditorBlock(section.key, section.blocks[0].id);
+    return;
+  }
+  state.activeEditorSectionTitleKey = section.key;
+  state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
+}
+
 export const sectionActions: Record<string, ActionHandler> = {
   'add-top-level-section': addTopLevelSection,
   'spawn-child-ghost': spawnGhostChild,
@@ -224,4 +281,7 @@ export const sectionActions: Record<string, ActionHandler> = {
   'make-block-subsection': makeBlockSubsectionAction,
   'realize-ghost': realizeGhost,
   'jump-to-reader': jumpToReader,
+  'copy-section': copySection,
+  'paste-section': pasteSection,
+  'paste-section-after': pasteSectionAfter,
 };

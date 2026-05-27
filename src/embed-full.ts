@@ -15,7 +15,7 @@ import {
   runWithStateRuntimeAsync,
   type StateRuntime,
 } from './state';
-import type { AppState, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -104,6 +104,7 @@ import {
 import type { HvyPdfExportOptions } from './pdf-export/types';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
+import { setEditorClipboardHost } from './editor-clipboard';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -121,6 +122,7 @@ export interface HvyMountOptions {
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
+  editorClipboard?: HvyEditorClipboardHost | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -783,6 +785,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
+  setEditorClipboardHost(options.editorClipboard ?? null);
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
@@ -797,6 +800,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         cancelPendingEmbedUiBind(options.root);
         options.root.innerHTML = '';
         setHostChatClient(null);
+        setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
         resetPluginDocumentHookState();

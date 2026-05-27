@@ -19,7 +19,7 @@ import {
   extractReusableTemplateVariablesFromSectionFlavor,
   type ReusableTemplateVariable,
 } from './reusable-template-values';
-import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker } from './text-fill-in';
+import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 import { runImportXrefPass } from './ai-import-xrefs';
 import { validateLockedSectionStructure } from './locked-structure';
 
@@ -384,6 +384,7 @@ export async function importTextIntoDocument(
     }
     const created: string[] = [];
     const appliedSections: AppliedImportSectionResult[] = [];
+    const rawGeneratedSectionKeys: string[] = [];
     for (const [index, step] of executableSteps.entries()) {
       const application = resolveImportStepApplication(document, step);
       throwIfAborted(options.signal);
@@ -552,11 +553,12 @@ export async function importTextIntoDocument(
       const result = applyGeneratedImportSection(document, application, generated.section, options.onMutation);
       created.push(result.message);
       appliedSections.push(result);
+      rawGeneratedSectionKeys.push(result.sectionKey);
       await options.onSectionApplied?.(result.message);
     }
     const importedSectionKeys = appliedSections.map((result) => result.sectionKey).filter(Boolean);
     let createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
-    const fillInTargets = collectImportFillInTargets(document, importedSectionKeys);
+    const fillInTargets = collectImportFillInTargets(document, rawGeneratedSectionKeys);
     if (fillInTargets.length > 0) {
       options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
       await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets, fillInTargets);
@@ -3367,8 +3369,11 @@ function parseImportFillInResponse(response: string): Map<string, string> {
     return result;
   }
   for (const [key, value] of Object.entries(fills as Record<string, unknown>)) {
-    if (typeof value === 'string' && value.trim()) {
-      result.set(key, value.trim());
+    if (typeof value === 'string') {
+      const normalized = normalizeImportJsonStringValue(value).trim();
+      if (normalized) {
+        result.set(key, normalized);
+      }
     }
   }
   return result;
@@ -3654,7 +3659,7 @@ function validateImportTemplateValuesForStructure(
     if (typeof value !== 'string') {
       return { ok: false, message: `Template value "${variable.name}" must be a string.` };
     }
-    normalized[variable.name] = value;
+    normalized[variable.name] = normalizeImportJsonStringValue(value);
   }
   for (const list of lists) {
     const items = raw[list.key];
@@ -3711,9 +3716,31 @@ function validateImportTemplateListItemValues(
     if (typeof value !== 'string') {
       return { ok: false, message: `Template value "${label}" field "${variable.name}" must be a string.` };
     }
-    normalized[variable.name] = value;
+    normalized[variable.name] = normalizeImportJsonStringValue(value);
   }
   return { ok: true, value: normalized };
+}
+
+function normalizeImportJsonStringValue(value: string): string {
+  return importValueIsOnlyFillInMarker(value) ? '' : value;
+}
+
+function importValueIsOnlyFillInMarker(value: string): boolean {
+  if (!hasTextFillInMarker(value)) {
+    return false;
+  }
+  return removeTextFillInMarkers(value)
+    .split(/\r?\n/)
+    .every((line) => stripImportMarkdownScaffold(line).trim().length === 0);
+}
+
+function stripImportMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
 }
 
 function validateImportTemplateObjectKeys(raw: Record<string, unknown>, expected: string[], label: string): { ok: false; message: string } | null {

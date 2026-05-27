@@ -780,7 +780,6 @@ importPreplan:
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"hvy":"<!--hvy: {\\"id\\":\\"projects\\"}-->\\n#! Projects\\n\\n <!--hvy:component-list {\\"id\\":\\"project-refs\\",\\"componentListComponent\\":\\"xref-card\\"}-->"}'
   );
-  requestProxyCompletionMock.mockResolvedValueOnce('{"fills":{"display-name":""}}');
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"L1":[{"xrefTitle":"Profile","xrefTarget":"profile"}]}'
   );
@@ -817,7 +816,6 @@ hvy_version: 0.1
     'ai-import-template-values:1': 'template-section-writer-model',
     'ai-import-section-data:2': 'section-data-collection-model',
     'ai-import-section-hvy:2': 'raw-section-writer-model',
-    'ai-import-fill-ins:1': 'fallback-model',
     'ai-import-xrefs:1': 'xrefs-model',
   });
 });
@@ -2993,13 +2991,47 @@ hvy_version: 0.1
   expect(result.status).toBe('complete');
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
     'ai-import-template-values:1',
-    'ai-import-fill-ins:1',
   ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"display_name"');
   expect(serialized).toContain('<!--hvy:container {"id":"profile-panel"}-->');
   expect(serialized).toContain('<!--hvy:text {"id":"display-name","placeholder":"Display name","fillIn":true}-->');
   expect(serialized).toContain('# <!-- value {"placeholder":"Display name"} -->');
   expect(serialized).not.toContain('<!-- /container -->');
+});
+
+test('importTextIntoDocument treats echoed template fill-in marker values as blank JSON values', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"values":{"title_heading":"<!-- value {\\"placeholder\\":\\"Title / Heading\\"} -->"}}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"info"}-->
+#! Info
+
+<!--hvy:text {"id":"title-heading","placeholder":"Title / Heading","fillIn":true}-->
+ # <!-- value {"placeholder":"Title / Heading"} -->
+`, '.hvy');
+
+  const expectedResult = await importTextIntoDocument(document, {
+    sourceName: 'profile.txt',
+    sourceText: 'No title heading was provided.',
+    steps: [{ section: 'Info', sectionId: 'info' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(expectedResult.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-template-values:1',
+  ]);
+  expect(serialized).toContain('<!--hvy:text {"id":"title-heading","placeholder":"Title / Heading","fillIn":true}-->');
+  expect(serialized).toContain('# <!-- value {"placeholder":"Title / Heading"} -->');
+  expect(serialized).not.toContain('# <!-- value {"placeholder":"Title / Heading"} --><!-- value {"placeholder":"Title / Heading"} -->');
 });
 
 test('importTextIntoDocument fills preserved template fill-ins from source document', async () => {
@@ -3127,6 +3159,38 @@ hvy_version: 0.1
   expect(serialized).toContain('Bio: Built source-backed systems.');
   expect(serialized).not.toContain('"fillIn":true');
   expect(serialized).not.toContain('<!-- value {"placeholder":"Description"} -->');
+});
+
+test('importTextIntoDocument ignores echoed fill-in markers from the final fill pass', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"information":"Profile details."}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"hvy":"<!--hvy: {\\"id\\":\\"profile\\"}-->\\n#! Profile\\n\\n <!--hvy:text {\\"id\\":\\"profile-title\\",\\"placeholder\\":\\"Title / Heading\\",\\"fillIn\\":true}-->\\n  # <!-- value {\\"placeholder\\":\\"Title / Heading\\"} -->"}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"fills":{"profile-title":"# <!-- value {\\"placeholder\\":\\"Title / Heading\\"} -->"}}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const expectedResult = await importTextIntoDocument(document, {
+    sourceName: 'profile.txt',
+    sourceText: 'No title heading was provided.',
+    steps: [{ section: 'Profile', target: { kind: 'blank', title: 'Profile' } }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const serialized = serializeDocument(document);
+  expect(expectedResult.status).toBe('complete');
+  expect(serialized).toContain('<!--hvy:text {"id":"profile-title","placeholder":"Title / Heading","fillIn":true}-->');
+  expect(serialized).toContain('# <!-- value {"placeholder":"Title / Heading"} -->');
+  expect(serialized).not.toContain('# # <!-- value {"placeholder":"Title / Heading"} -->');
 });
 
 test('importTextIntoDocument applies parent safety closures when a child closer is forgotten', async () => {

@@ -3059,6 +3059,41 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Awards', 'Resume Section']);
 });
 
+test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await expect(sectionTemplate).toContainText('one per document');
+  const repeatable = sectionTemplate.getByLabel('Allow Multiple Per Document');
+  await expect(repeatable).not.toBeChecked();
+
+  await repeatable.check();
+  await expect(sectionTemplate).toContainText('multiple allowed');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/repeatable: true/);
+});
+
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 

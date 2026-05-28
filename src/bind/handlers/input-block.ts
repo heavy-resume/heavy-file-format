@@ -413,6 +413,18 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'section-def-repeatable' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
+      const defs = getSectionDefs();
+      if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`section-def:${idx}:repeatable`);
+        defs[idx].repeatable = target.checked;
+        state.document.meta.section_defs = defs;
+        getRenderApp()();
+      }
+      return;
+    }
+
     if (field === 'section-def-flavor-name' && target instanceof HTMLInputElement) {
       const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
       const flavorIndex = Number.parseInt(target.dataset.flavorIndex ?? '', 10);

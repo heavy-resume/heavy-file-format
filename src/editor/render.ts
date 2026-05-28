@@ -95,6 +95,7 @@ interface ComponentDef {
 
 interface SectionDef {
   name: string;
+  repeatable?: boolean;
   flavors?: Array<{
     name: string;
     description?: string;
@@ -1314,7 +1315,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                       <summary class="template-def-summary">
                         <span class="template-def-summary-text">
                           <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
-                          <span>Section template${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
+                          <span>Section template · ${def.repeatable === true ? 'multiple allowed' : 'one per document'}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                         </span>
                         <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
                       </summary>
@@ -1322,6 +1323,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                         <label>
                           <span>Name</span>
                           <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
+                        </label>
+                        <label class="checkbox-label">
+                          <span>Allow Multiple Per Document</span>
+                          <input type="checkbox" data-field="section-def-repeatable" data-section-def-index="${index}" ${def.repeatable === true ? 'checked' : ''} />
                         </label>
                         <div class="meta-panel-head">
                           <strong>Flavors</strong>

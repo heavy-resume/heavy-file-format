@@ -65,6 +65,7 @@ test('PHVY component picker disables non-PDF components and disallowed custom te
   expect(html).toContain('data-component="text"');
   expect(html).toContain('data-component="image"');
   expect(html).toContain('data-component="container"');
+  expect(html).toContain('data-component="component-list"');
   expect(html).toContain('data-component="grid"');
   expect(html).toContain('data-component="pdf-card"');
   expect(html).toContain('data-component="carousel"');
@@ -346,7 +347,13 @@ test('PHVY grid add action rejects forged disallowed components and allows PDF c
   expect(grid.schema.gridItems.map((item) => item.block.schema.component)).toEqual(['image']);
 });
 
-test('PHVY component-list and expandable add actions are blocked defensively', () => {
+test('PHVY component-list add actions allow PDF components and expandable add actions are blocked defensively', () => {
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    callback(0);
+    return 0;
+  }) as typeof requestAnimationFrame;
+  globalThis.document = { querySelector: () => null } as unknown as Document;
+  globalThis.CSS = { escape: (value: string) => value } as unknown as typeof CSS;
   const section = createSection('summary');
   const list = createEmptyBlock('component-list');
   list.id = 'list-block';
@@ -357,6 +364,7 @@ test('PHVY component-list and expandable add actions are blocked defensively', (
 
   const forgedButton = {
     dataset: { component: 'text', sectionKey: section.key },
+    closest: () => null,
   } as unknown as HTMLElement;
 
   actionRegistry['add-component-list-item']?.({
@@ -384,7 +392,7 @@ test('PHVY component-list and expandable add actions are blocked defensively', (
     reusableName: null,
   });
 
-  expect(list.schema.componentListBlocks).toHaveLength(0);
+  expect(list.schema.componentListBlocks.map((block) => block.schema.component)).toEqual(['text']);
   expect(expandable.schema.expandableStubBlocks.children).toHaveLength(0);
   expect(expandable.schema.expandableContentBlocks.children).toHaveLength(0);
 });

@@ -23,6 +23,7 @@ test('allows only PDF-compatible base components', () => {
 
   expect(isPdfAllowedBaseComponent('text')).toBe(true);
   expect(isPdfAllowedBaseComponent('container')).toBe(true);
+  expect(isPdfAllowedBaseComponent('component-list')).toBe(true);
   expect(isPdfAllowedBaseComponent('grid')).toBe(true);
   expect(isPdfAllowedBaseComponent('image')).toBe(true);
   expect(isPdfAllowedBaseComponent('table')).toBe(true);
@@ -34,14 +35,17 @@ test('resolves custom component templates through their PDF-compatible base type
   const meta: VisualDocument['meta'] = {
     component_defs: [
       { name: 'pdf-callout', baseType: 'container' },
+      { name: 'pdf-repeated-items', baseType: 'component-list' },
       { name: 'interactive-detail', baseType: 'expandable' },
     ],
   };
 
   expect(isPdfAllowedComponent('pdf-callout', meta)).toBe(true);
+  expect(isPdfAllowedComponent('pdf-repeated-items', meta)).toBe(true);
   expect(isPdfAllowedComponent('interactive-detail', meta)).toBe(false);
   expect(filterPdfAllowedComponentDefs(meta.component_defs as ComponentDefinition[], meta).map((def) => def.name)).toEqual([
     'pdf-callout',
+    'pdf-repeated-items',
   ]);
 });
 

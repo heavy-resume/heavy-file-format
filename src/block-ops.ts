@@ -869,7 +869,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     if (!isPdfDocument(state.document)) {
       return renderComponentOptions(selected);
     }
-    const builtins = ['text', 'container', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
+    const builtins = ['text', 'container', 'component-list', 'grid', 'image', ...(isPdfAllowedComponent('table', state.document.meta) ? ['table'] : [])];
     const custom = getComponentDefs()
       .map((def) => def.name.trim())
       .filter((name) => name.length > 0 && isPdfAllowedComponent(name, state.document.meta));

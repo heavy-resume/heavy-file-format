@@ -905,6 +905,7 @@ A `.phvy` file is a HVY-family document intended for PDF template authoring and 
 PDF-template authoring supports these component base types:
 - `text`
 - `container`
+- `component-list`
 - `grid`
 - `image`
 - `table` when static table support is enabled

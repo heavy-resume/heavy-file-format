@@ -13,6 +13,7 @@ export function isPdfAllowedBaseComponent(baseComponent: string): boolean {
   }
   return baseComponent === 'text'
     || baseComponent === 'container'
+    || baseComponent === 'component-list'
     || baseComponent === 'grid'
     || baseComponent === 'image';
 }

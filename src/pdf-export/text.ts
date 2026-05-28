@@ -8,11 +8,11 @@ interface PdfTextLine {
 
 export function renderPdfTextBlock(
   text: string,
-  placeholder: string,
+  _placeholder: string,
   decision: HvyPdfExportDecision,
   align?: Align
 ): HvyPdfMakeNodeObject {
-  const lines = splitPdfTextLines(stripFillInMarkers(normalizePdfTextInline(text || placeholder || '')));
+  const lines = splitPdfTextLines(getPdfTextBlockSource(text));
   if (!lines.length) {
     return applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align);
   }
@@ -55,6 +55,14 @@ export function renderPdfTextBlock(
   return applyTextAlignment(stack.length === 1 && typeof stack[0] !== 'string' ? stack[0] : { stack }, align);
 }
 
+export function hasRenderablePdfTextBlock(text: string): boolean {
+  return splitPdfTextLines(getPdfTextBlockSource(text)).length > 0;
+}
+
+function getPdfTextBlockSource(text: string): string {
+  return stripFillInMarkers(normalizePdfTextInline(text || ''));
+}
+
 export function normalizePdfTextInline(text: string): string {
   return text
     .replace(/<!--hvy:alt\s+(\{.*?\})-->\s*([\s\S]*?)\s*<!--\/hvy:alt-->/g, (_match, _rawJson, fullText) => String(fullText).trim())
@@ -79,7 +87,7 @@ function splitPdfTextLines(text: string): PdfTextLine[] {
       continue;
     }
     const parsed = parsePdfTextLine(line);
-    if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text)) {
+    if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text) || !hasVisiblePdfLineText(parsed.text)) {
       flushParagraph();
       continue;
     }
@@ -92,6 +100,19 @@ function splitPdfTextLines(text: string): PdfTextLine[] {
   }
   flushParagraph();
   return lines;
+}
+
+function hasVisiblePdfLineText(text: string): boolean {
+  return stripMarkdownScaffold(text).trim().length > 0;
+}
+
+function stripMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
 }
 
 function parsePdfTextLine(line: string): PdfTextLine | null {

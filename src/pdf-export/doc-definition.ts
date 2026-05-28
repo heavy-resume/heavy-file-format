@@ -13,7 +13,7 @@ import type {
   HvyPdfMakeNodeObject,
 } from './types';
 import { resolvePdfExportStrategy } from './strategy';
-import { normalizePdfTextInline, renderPdfTextBlock } from './text';
+import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock } from './text';
 
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
@@ -139,7 +139,9 @@ function renderBlock(
   let node: HvyPdfMakeNodeObject | null;
   switch (baseComponent) {
     case 'text':
-      node = renderPdfTextBlock(block.text, block.schema.placeholder, decision, block.schema.align);
+      node = hasRenderablePdfTextBlock(block.text)
+        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, block.schema.align)
+        : null;
       break;
     case 'code':
       node = { text: block.text || block.schema.placeholder || '', style: 'codeBlock' };

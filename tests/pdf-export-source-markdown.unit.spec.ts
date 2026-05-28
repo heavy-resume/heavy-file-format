@@ -51,3 +51,25 @@ TypeScript - Primary tool`);
   expect(expectedResult).not.toContain('setup');
   expect(expectedResult).not.toContain('Hidden instructions');
 });
+
+test('PDF template source markdown omits unfilled placeholder-only text', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+
+<!--hvy:text {"css":"margin: 0;","fillIn":true}-->
+ ^section-heading^ #### <!-- value {"placeholder":"Classes Or '' if no classes"} -->
+
+<!--hvy:text {"css":"margin: 0;","placeholder":"classes"}-->
+`, '.phvy');
+
+  const expectedResult = exportDocumentSourceMarkdown(document);
+
+  expect(expectedResult).toBe('# Education');
+  expect(expectedResult).not.toContain('####');
+  expect(expectedResult).not.toContain('classes');
+  expect(expectedResult).not.toContain('<!-- value');
+});

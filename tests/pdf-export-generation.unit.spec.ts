@@ -51,3 +51,30 @@ test('PDF doc definition renders component-list children as exportable content',
   expect(JSON.stringify(expectedResult.content)).toContain('Second repeated item.');
   expect(JSON.stringify(expectedResult.content)).not.toContain('Unsupported PDF export component');
 });
+
+test('PDF doc definition omits unfilled placeholder-only text blocks', () => {
+  const unfilledHeading = createEmptyBlock('text');
+  unfilledHeading.schema.fillIn = true;
+  unfilledHeading.text = '^section-heading^ #### <!-- value {"placeholder":"Classes Or \'\' if no classes"} -->';
+  const emptyPlaceholder = createEmptyBlock('text');
+  emptyPlaceholder.schema.placeholder = 'classes';
+  const filledText = createEmptyBlock('text');
+  filledText.text = 'Visible education details.';
+  const section = createEmptySection(1, '');
+  section.title = 'Education';
+  section.blocks = [unfilledHeading, emptyPlaceholder, filledText];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Placeholders' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const serialized = JSON.stringify(expectedResult.content);
+
+  expect(serialized).toContain('Visible education details.');
+  expect(serialized).not.toContain('####');
+  expect(serialized).not.toContain('classes');
+  expect(serialized).not.toContain('<!-- value');
+});

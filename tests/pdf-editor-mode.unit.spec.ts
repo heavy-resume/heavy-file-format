@@ -1,19 +1,20 @@
-import { beforeEach, expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import { actionRegistry } from '../src/bind/actions/registry';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
+import { copyComponentToEditorClipboard } from '../src/editor-clipboard';
 import { renderAddComponentPicker } from '../src/editor/component-picker';
 import { createEditorRenderer } from '../src/editor/render';
 import { createReaderRenderer } from '../src/reader/render';
 import { createDefaultSearchState } from '../src/search/state';
+import { initCallbacks, initState, REUSABLE_SECTION_PREFIX, state } from '../src/state';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance } from '../src/pdf-document-capabilities';
 import { setHostPlugins } from '../src/plugins/registry';
-import { state } from '../src/state';
 import type { VisualDocument } from '../src/types';
 import { escapeHtml } from '../src/utils';
-import { registerSerializationTestState } from './serialization-test-helpers';
+import { createTestState, registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
 
@@ -345,6 +346,129 @@ test('PHVY grid add action rejects forged disallowed components and allows PDF c
   });
 
   expect(grid.schema.gridItems.map((item) => item.block.schema.component)).toEqual(['image']);
+});
+
+test('PHVY reusable definition paste asks before removing incompatible components', () => {
+  let appendedPopover: { addEventListener?: (type: string, listener: EventListener) => void } | null = null;
+  let popoverClick: EventListener | null = null;
+  const renderApp = vi.fn();
+  globalThis.document = {
+    createElement: () => ({
+      className: '',
+      innerHTML: '',
+      addEventListener: (_type: string, listener: EventListener) => {
+        popoverClick = listener;
+      },
+    }),
+    querySelector: () => ({ remove: vi.fn() }),
+  } as unknown as Document;
+  globalThis.window = { setTimeout: vi.fn() } as unknown as Window & typeof globalThis;
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const targetTemplate = createEmptyBlock('container');
+  targetTemplate.id = 'target-template';
+  const document = createPdfDocument();
+  document.meta.component_defs = [{ name: 'Pdf Card', baseType: 'container', template: targetTemplate }];
+  initState(createTestState(document));
+  state.reusableDefinitionEditModal = { kind: 'component', index: 0, mode: 'edit', rawDraft: '', error: null };
+  const sourceContainer = createEmptyBlock('container');
+  sourceContainer.id = 'source-container';
+  sourceContainer.schema.containerBlocks = [createEmptyBlock('text'), createEmptyBlock('carousel')];
+  copyComponentToEditorClipboard(sourceContainer, [], { sourceDocument: document });
+
+  actionRegistry['place-component']?.({
+    app: {
+      append: (node: HTMLElement) => {
+        appendedPopover = node;
+      },
+    } as unknown as HTMLElement,
+    actionButton: {
+      dataset: {
+        sectionKey: `${REUSABLE_SECTION_PREFIX}Pdf Card`,
+        parentBlockId: 'target-template',
+        placementContainer: 'container',
+        placement: 'end',
+      },
+    } as unknown as HTMLElement,
+    sectionKey: `${REUSABLE_SECTION_PREFIX}Pdf Card`,
+    blockId: '',
+    section: null,
+    reusableName: 'Pdf Card',
+  });
+
+  expect(appendedPopover).not.toBeNull();
+  expect(targetTemplate.schema.containerBlocks).toHaveLength(0);
+  expect(renderApp).not.toHaveBeenCalled();
+
+  popoverClick?.({
+    target: {
+      closest: () => ({ dataset: { phvyPasteAction: 'cancel' } }),
+    },
+  } as unknown as Event);
+
+  expect(targetTemplate.schema.containerBlocks).toHaveLength(0);
+  expect(renderApp).toHaveBeenCalledTimes(1);
+});
+
+test('PHVY reusable definition paste removes incompatible components after confirmation', () => {
+  let popoverClick: EventListener | null = null;
+  globalThis.document = {
+    createElement: () => ({
+      className: '',
+      innerHTML: '',
+      addEventListener: (_type: string, listener: EventListener) => {
+        popoverClick = listener;
+      },
+    }),
+    querySelector: () => ({ remove: vi.fn() }),
+  } as unknown as Document;
+  globalThis.window = { setTimeout: vi.fn() } as unknown as Window & typeof globalThis;
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const targetTemplate = createEmptyBlock('container');
+  targetTemplate.id = 'target-template';
+  const document = createPdfDocument();
+  document.meta.component_defs = [{ name: 'Pdf Card', baseType: 'container', template: targetTemplate }];
+  initState(createTestState(document));
+  state.reusableDefinitionEditModal = { kind: 'component', index: 0, mode: 'edit', rawDraft: '', error: null };
+  const sourceContainer = createEmptyBlock('container');
+  sourceContainer.schema.containerBlocks = [createEmptyBlock('text'), createEmptyBlock('carousel')];
+  copyComponentToEditorClipboard(sourceContainer, [], { sourceDocument: document });
+  const actionButton = {
+    dataset: {
+      sectionKey: `${REUSABLE_SECTION_PREFIX}Pdf Card`,
+      parentBlockId: 'target-template',
+      placementContainer: 'container',
+      placement: 'end',
+    },
+  } as unknown as HTMLElement;
+
+  actionRegistry['place-component']?.({
+    app: { append: () => {} } as unknown as HTMLElement,
+    actionButton,
+    sectionKey: `${REUSABLE_SECTION_PREFIX}Pdf Card`,
+    blockId: '',
+    section: null,
+    reusableName: 'Pdf Card',
+  });
+  popoverClick?.({
+    target: {
+      closest: () => ({ dataset: { phvyPasteAction: 'confirm' } }),
+    },
+  } as unknown as Event);
+
+  expect(targetTemplate.schema.containerBlocks.map((block) => block.schema.component)).toEqual(['container']);
+  expect(targetTemplate.schema.containerBlocks[0]?.schema.containerBlocks.map((block) => block.schema.component)).toEqual(['text']);
 });
 
 test('PHVY component-list add actions allow PDF components and expandable add actions are blocked defensively', () => {

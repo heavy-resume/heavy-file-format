@@ -98,6 +98,21 @@ export function installEditorClipboardComponentDefinitions(document: VisualDocum
   document.meta.component_defs = [...existingDefs, ...defsToInstall];
 }
 
+export function prepareComponentDefinitionForDocumentPasteWithResult(
+  document: VisualDocument,
+  definition: ComponentDefinition,
+  mergedMeta: VisualDocument['meta']
+): { definition: ComponentDefinition | null; removedCount: number } {
+  if (!isPdfDocument(document)) {
+    return { definition: cloneComponentDefinition(definition), removedCount: 0 };
+  }
+  const prepared = cloneComponentDefinitionForDocument(definition, document, mergedMeta);
+  return {
+    definition: prepared,
+    removedCount: isPdfAllowedComponent(definition.name, mergedMeta) ? 0 : 1,
+  };
+}
+
 export function prepareSectionForDocumentPaste(document: VisualDocument, section: VisualSection): VisualSection {
   if (!isPdfDocument(document)) {
     return section;

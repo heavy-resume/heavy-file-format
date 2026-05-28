@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshReaderPanels, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
@@ -19,7 +19,8 @@ import {
   prepareBlockForDocumentPasteWithResult,
 } from '../../editor-clipboard';
 import { showTransientNotice } from '../../transient-notice';
-import { resolveBaseComponent } from '../../component-defs';
+import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
+import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -383,7 +384,7 @@ const cancelComponentPlacement: ActionHandler = () => {
   getRenderApp()();
 };
 
-const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
+const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   const placement = state.componentPlacement;
   state.contextMenu = null;
   if (!sectionKey) {
@@ -460,9 +461,25 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   let activePlacedBlockId = placedBlock.id;
   let syncBlockId = placedBlock.id;
   if (placementMode === 'copy') {
-    installEditorClipboardComponentDefinitions(state.document);
-    installEditorClipboardAttachments(state.document);
     const prepared = prepareBlockForDocumentPasteWithResult(state.document, placedBlock);
+    if (
+      prepared.removedCount > 0
+      && shouldConfirmReusableDefinitionPhvyPaste(sectionKey, actionButton)
+    ) {
+      openPhvyPasteConfirmationPopover(
+        () => {
+          actionButton.dataset.phvyIncompatiblePasteConfirmed = 'true';
+          placeComponent({ app, actionButton, sectionKey, blockId, section: targetSection, reusableName: null });
+          delete actionButton.dataset.phvyIncompatiblePasteConfirmed;
+        },
+        () => {
+          state.componentPlacement = null;
+          getRenderApp()();
+        },
+        app
+      );
+      return;
+    }
     if (!prepared.block) {
       state.componentPlacement = null;
       if (prepared.removedCount > 0) {
@@ -471,6 +488,8 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
       getRenderApp()();
       return;
     }
+    installEditorClipboardComponentDefinitions(state.document);
+    installEditorClipboardAttachments(state.document);
     if (prepared.removedCount > 0) {
       showTransientNotice('Some components were altered for PHVY compatibility.');
     }
@@ -520,6 +539,24 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   setActiveEditorBlock(sectionKey, activePlacedBlockId);
   getRenderApp()();
 };
+
+function shouldConfirmReusableDefinitionPhvyPaste(sectionKey: string, actionButton: HTMLElement): boolean {
+  if (
+    !isPdfDocument(state.document)
+    || !state.reusableDefinitionEditModal
+    || actionButton.dataset.phvyIncompatiblePasteConfirmed === 'true'
+  ) {
+    return false;
+  }
+  if (sectionKey.startsWith(REUSABLE_SECTION_PREFIX) || sectionKey.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
+    return true;
+  }
+  if (state.reusableDefinitionEditModal.kind !== 'section') {
+    return false;
+  }
+  const definition = getSectionDefsFromMeta(state.document.meta)[state.reusableDefinitionEditModal.index];
+  return Boolean(definition?.template?.key && definition.template.key === sectionKey);
+}
 
 export const blockActions: Record<string, ActionHandler> = {
   'add-block': addBlock,

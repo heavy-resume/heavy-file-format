@@ -486,6 +486,7 @@ export function closeModal(): void {
   state.pdfTemplateImportModal = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.themeModalOpen = false;
 }
@@ -535,6 +536,7 @@ export function resetTransientUiState(): void {
   state.newDocumentModalOpen = false;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;

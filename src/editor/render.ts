@@ -1295,6 +1295,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                       <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                     </div>`).join('')}`}
                   <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
+                  <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
                 </div>
               </details>`;
           }
@@ -1345,9 +1346,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                             </label>
                             <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                           </div>`).join('')}`}
-                        <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
-                      </div>
-                    </details>`;
+                          <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
+                          <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="section" data-section-def-index="${index}">Edit Template</button>
+                        </div>
+                      </details>`;
             }
           )
           .join('')

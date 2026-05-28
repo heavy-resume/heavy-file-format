@@ -6,6 +6,7 @@ import { handleRemoveTag } from '../../editor/tag-editor';
 import { createEmptySection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
+import { stringify as stringifyYaml } from 'yaml';
 import type { AppActionHandler } from './types';
 
 const tagStateHelpers = {
@@ -85,6 +86,26 @@ const removeSectionDefFlavor: AppActionHandler = ({ actionButton }) => {
   }
   def.flavors.splice(flavorIndex, 1);
   state.document.meta.section_defs = defs;
+  getRenderApp()();
+};
+
+const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
+  const kind = actionButton.dataset.templateKind;
+  const index = Number.parseInt(actionButton.dataset.defIndex ?? actionButton.dataset.sectionDefIndex ?? '', 10);
+  if ((kind !== 'component' && kind !== 'section') || Number.isNaN(index)) {
+    return;
+  }
+  const definition = kind === 'component' ? getComponentDefs()[index] : getSectionDefs()[index];
+  if (!definition) {
+    return;
+  }
+  state.reusableDefinitionEditModal = {
+    kind,
+    index,
+    mode: 'edit',
+    rawDraft: stringifyYaml(definition).trimEnd(),
+    error: null,
+  };
   getRenderApp()();
 };
 
@@ -174,6 +195,7 @@ export const reusableActions: Record<string, AppActionHandler> = {
   'remove-component-def-flavor': removeComponentDefFlavor,
   'remove-section-def': removeSectionDef,
   'remove-section-def-flavor': removeSectionDefFlavor,
+  'open-reusable-definition-editor': openReusableDefinitionEditor,
   'open-save-component-def': openSaveComponentDef,
   'open-save-section-def': openSaveSectionDef,
   'remove-tag': removeTag,

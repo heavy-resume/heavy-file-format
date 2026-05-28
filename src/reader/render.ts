@@ -1,5 +1,6 @@
 import './reader.css';
 import './sidebar.css';
+import { stringify as stringifyYaml } from 'yaml';
 import { renderCodeReader } from '../editor/components/code/code';
 import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
@@ -20,7 +21,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
-import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
@@ -28,10 +29,11 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../heading-styles';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
-import { defaultBlockSchema } from '../document-factory';
+import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
+import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
@@ -66,6 +68,7 @@ interface ReaderRenderState {
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
@@ -97,7 +100,7 @@ interface ReaderRenderDeps {
   ensureExpandableBlocks: (block: VisualBlock) => void;
   ensureGridItems: (schema: BlockSchema) => void;
   getComponentRenderHelpers: () => ComponentRenderHelpers;
-  renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderReusableSectionOptions: (selected: string) => string;
@@ -1490,6 +1493,67 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
               <button type="button" class="secondary" data-modal-action="insert-reusable-template" ${hasUnavailablePicker ? 'disabled' : ''}>Add</button>
             </div>
+          </section>
+        </div>
+      `;
+    }
+
+    if (state.reusableDefinitionEditModal) {
+      const modal = state.reusableDefinitionEditModal;
+      const componentDefinitions = getComponentDefsFromMeta(state.documentMeta);
+      const sectionDefinitions = getSectionDefsFromMeta(state.documentMeta);
+      const definition = modal.kind === 'component' ? componentDefinitions[modal.index] : sectionDefinitions[modal.index];
+      if (!definition) {
+        return '';
+      }
+      const title = modal.kind === 'component'
+        ? `Edit ${definition.name || 'Component Template'}`
+        : `Edit ${definition.name || 'Section Template'}`;
+      const rawDraft = modal.rawDraft || stringifyYaml(definition).trimEnd();
+      const componentTemplate = modal.kind === 'component' && componentDefinitions[modal.index]
+        ? getReusableTemplate(componentDefinitions[modal.index])
+        : null;
+      if (componentTemplate) {
+        componentTemplate.schema = schemaFromUnknown(
+          { ...(componentTemplate.schema as unknown as Record<string, unknown>), component: definition.name },
+          new WeakSet<object>(),
+          state.documentMeta
+        );
+      }
+      const sectionTemplate = modal.kind === 'section' ? sectionDefinitions[modal.index]?.template ?? null : null;
+      const componentTemplateSectionKey = `${REUSABLE_SECTION_PREFIX}${definition.name}`;
+      const sectionTemplateKey = sectionTemplate?.key || `section-def:${definition.name}`;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="save-reusable-definition-close"></div>
+          <section class="modal-panel reusable-definition-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(title)}</h3>
+              <div class="modal-head-actions">
+                <button type="button" class="ghost" data-modal-action="reusable-definition-mode">${modal.mode === 'raw' ? 'Edit' : 'HVY'}</button>
+                <button type="button" class="ghost remove-x" data-modal-action="save-reusable-definition-close" aria-label="Close ${deps.escapeAttr(title)}" title="Close">${closeIcon()}</button>
+              </div>
+            </div>
+            ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
+            ${modal.mode === 'raw'
+              ? `<label class="reusable-definition-raw-field">
+                  <span>Header Definition YAML</span>
+                  <textarea id="reusableDefinitionRawInput" rows="18" spellcheck="false">${deps.escapeHtml(rawDraft)}</textarea>
+                </label>`
+              : `<div class="reusable-definition-editor">
+                  ${componentTemplate
+                    ? `<div class="reusable-definition-hvy-surface">${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}</div>`
+                    : ''}
+                  ${sectionTemplate
+                    ? `<div class="reusable-definition-section-surface">
+                        <label>
+                          <span>Section Title</span>
+                          <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
+                        </label>
+                        ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
+                      </div>`
+                    : ''}
+                </div>`}
           </section>
         </div>
       `;

@@ -148,6 +148,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    reusableDefinitionEditModal: null,
     sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
@@ -521,6 +522,9 @@ readerRenderer = createReaderRenderer(
     get reusableTemplateModal() {
       return state.reusableTemplateModal;
     },
+    get reusableDefinitionEditModal() {
+      return state.reusableDefinitionEditModal;
+    },
     get sectionTemplateFlavorModal() {
       return state.sectionTemplateFlavorModal;
     },
@@ -583,7 +587,7 @@ readerRenderer = createReaderRenderer(
     ensureExpandableBlocks,
     ensureGridItems,
     getComponentRenderHelpers: localGetComponentRenderHelpers,
-    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+    renderEditorBlock: (sectionKey, block, rootSections) => editorRenderer.renderEditorBlock(sectionKey, block, rootSections ?? state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
     renderComponentOptions: renderDocumentComponentOptions,
     renderReusableSectionOptions,

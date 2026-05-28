@@ -1,8 +1,9 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import { createEmptySection } from './document-factory';
 import type { JsonObject } from './hvy/types';
-import { resolveBaseComponentFromMeta } from './component-defs';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
+import { REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX, state } from './state';
 import { sanitizeOptionalId } from './utils';
 
 export function flattenSections(sections: VisualSection[]): VisualSection[] {
@@ -27,7 +28,50 @@ export function findSectionByKey(sections: VisualSection[], sectionKey: string):
       return nested;
     }
   }
+  const templateSection = findReusableSectionTemplateByKey(sectionKey);
+  if (templateSection) {
+    return templateSection;
+  }
   return null;
+}
+
+function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | null {
+  try {
+    if (sectionKey.startsWith(REUSABLE_SECTION_PREFIX)) {
+      const name = sectionKey.slice(REUSABLE_SECTION_PREFIX.length);
+      const template = getComponentDefsFromMeta(state?.document?.meta).find((def) => def.name === name)?.template;
+      if (!template) {
+        return null;
+      }
+      return {
+        key: sectionKey,
+        customId: '',
+        contained: false,
+        editorOnly: false,
+        lock: false,
+        idEditorOpen: false,
+        isGhost: false,
+        title: name,
+        level: 1,
+        expanded: true,
+        highlight: false,
+        css: '',
+        tags: '',
+        description: '',
+        location: 'main',
+        blocks: [template],
+        children: [],
+      };
+    }
+    const defs = getSectionDefsFromMeta(state?.document?.meta);
+    if (sectionKey.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
+      const name = sectionKey.slice(REUSABLE_SECTION_DEF_PREFIX.length);
+      return defs.find((def) => def.name === name || def.key === name)?.template ?? null;
+    }
+    return defs.find((def) => def.template?.key === sectionKey)?.template ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function findSectionContainer(

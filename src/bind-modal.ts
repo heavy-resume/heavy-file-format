@@ -1,4 +1,5 @@
 import './modal.css';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshModalPreview } from './state';
 import { findSectionByKey } from './section-ops';
 import { closeModal } from './navigation';
@@ -20,6 +21,7 @@ import { getComponentDefsFromMeta } from './component-defs';
 import { extractReusableTemplateVariablesFromDefinition } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
+import type { JsonObject } from './hvy/types';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -85,6 +87,18 @@ export function bindModal(app: HTMLElement): void {
     const insertReusableTemplateBtn = target.closest<HTMLElement>('[data-modal-action="insert-reusable-template"]');
     if (insertReusableTemplateBtn && state.reusableTemplateModal) {
       insertReusableTemplateFromModal(modalRoot);
+      return;
+    }
+
+    const reusableDefinitionModeBtn = target.closest<HTMLElement>('[data-modal-action="reusable-definition-mode"]');
+    if (reusableDefinitionModeBtn && state.reusableDefinitionEditModal) {
+      switchReusableDefinitionMode();
+      return;
+    }
+
+    const reusableDefinitionCloseBtn = target.closest<HTMLElement>('[data-modal-action="save-reusable-definition-close"]');
+    if (reusableDefinitionCloseBtn && state.reusableDefinitionEditModal) {
+      saveReusableDefinitionModalAndClose();
       return;
     }
 
@@ -348,10 +362,24 @@ export function bindModal(app: HTMLElement): void {
   setupReusableTemplateGeneratorControls(modalRoot);
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
+  const reusableDefinitionRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#reusableDefinitionRawInput');
   const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
   const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
   const dbTableQueryDynamicWindowInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryDynamicWindowInput');
   const dbTableQueryLimitInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryLimitInput');
+
+  if (reusableDefinitionRawInput && state.reusableDefinitionEditModal) {
+    reusableDefinitionRawInput.addEventListener('input', () => {
+      if (!state.reusableDefinitionEditModal) {
+        return;
+      }
+      state.reusableDefinitionEditModal = {
+        ...state.reusableDefinitionEditModal,
+        rawDraft: reusableDefinitionRawInput.value,
+        error: null,
+      };
+    });
+  }
 
   if (sqliteRowComponentRawInput && state.sqliteRowComponentModal) {
     sqliteRowComponentRawInput.addEventListener('input', () => {
@@ -434,6 +462,110 @@ function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void
     }
     updateReusableTemplateGeneratorButtons(modalRoot);
   });
+}
+
+function switchReusableDefinitionMode(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) {
+    return;
+  }
+  const definition = modal.kind === 'component'
+    ? getComponentDefsFromMeta(state.document.meta)[modal.index]
+    : (Array.isArray(state.document.meta.section_defs) ? state.document.meta.section_defs[modal.index] : null);
+  if (!definition || typeof definition !== 'object') {
+    closeModal();
+    getRenderApp()();
+    return;
+  }
+  if (modal.mode === 'edit') {
+    state.reusableDefinitionEditModal = {
+      ...modal,
+      mode: 'raw',
+      rawDraft: stringifyYaml(definition).trimEnd(),
+      error: null,
+    };
+    getRenderApp()();
+    return;
+  }
+  if (!applyReusableDefinitionRawDraft()) {
+    getRenderApp()();
+    return;
+  }
+  state.reusableDefinitionEditModal = {
+    ...state.reusableDefinitionEditModal!,
+    mode: 'edit',
+    error: null,
+  };
+  getRenderApp()();
+}
+
+function saveReusableDefinitionModalAndClose(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) {
+    return;
+  }
+  if (modal.mode === 'raw' && !applyReusableDefinitionRawDraft()) {
+    getRenderApp()();
+    return;
+  }
+  closeModal();
+  getRenderApp()();
+  getRefreshReaderPanels()();
+}
+
+function applyReusableDefinitionRawDraft(): boolean {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) {
+    return true;
+  }
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(modal.rawDraft);
+  } catch (error) {
+    state.reusableDefinitionEditModal = {
+      ...modal,
+      error: error instanceof Error ? error.message : 'Header definition YAML is invalid.',
+    };
+    return false;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    state.reusableDefinitionEditModal = {
+      ...modal,
+      error: 'Header definition YAML must be an object.',
+    };
+    return false;
+  }
+  const parsedObject = parsed as JsonObject;
+  if (typeof parsedObject.name !== 'string' || !parsedObject.name.trim()) {
+    state.reusableDefinitionEditModal = {
+      ...modal,
+      error: 'Template definition needs a name.',
+    };
+    return false;
+  }
+  recordHistory(`reusable-definition:${modal.kind}:${modal.index}:raw`);
+  if (modal.kind === 'component') {
+    const defs = getComponentDefsFromMeta(state.document.meta);
+    defs[modal.index] = parsedObject as never;
+    state.document.meta.component_defs = defs;
+  } else {
+    const defs = Array.isArray(state.document.meta.section_defs) ? state.document.meta.section_defs : [];
+    if (!parsedObject.template || typeof parsedObject.template !== 'object') {
+      state.reusableDefinitionEditModal = {
+        ...modal,
+        error: 'Section template definition needs a template object.',
+      };
+      return false;
+    }
+    defs[modal.index] = parsedObject as never;
+    state.document.meta.section_defs = defs;
+  }
+  state.reusableDefinitionEditModal = {
+    ...modal,
+    rawDraft: stringifyYaml(parsed).trimEnd(),
+    error: null,
+  };
+  return true;
 }
 
 function updateReusableTemplateGeneratorButtons(modalRoot: HTMLDivElement): void {

@@ -180,6 +180,14 @@ export interface SectionTemplateFlavorModalState {
   location?: 'main' | 'sidebar';
 }
 
+export interface ReusableDefinitionEditModalState {
+  kind: 'component' | 'section';
+  index: number;
+  mode: 'edit' | 'raw';
+  rawDraft: string;
+  error: string | null;
+}
+
 export interface SqliteRowComponentModalState {
   sectionKey: string;
   blockId: string;
@@ -372,6 +380,7 @@ export interface AppState {
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
+  reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;

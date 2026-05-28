@@ -1199,11 +1199,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         ${descriptionPopulate.status ? `<div class="muted">${deps.escapeHtml(descriptionPopulate.status)}</div>` : ''}
         ${descriptionPopulate.skippedLeaves > 0 ? `<div class="muted">${deps.escapeHtml(`${descriptionPopulate.skippedLeaves} component${descriptionPopulate.skippedLeaves === 1 ? '' : 's'} skipped.`)}</div>` : ''}
-        <label class="checkbox-label">
-          <span>Tables Enabled</span>
-          <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />
-        </label>
-        <div class="muted">Reference app feature flag. This is not stored in the HVY file.</div>
         <div class="editor-grid">
           <label>
             <span>Theme Colors</span>

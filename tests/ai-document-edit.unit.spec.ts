@@ -570,6 +570,164 @@ hvy_version: 0.1
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });
 
+test('importTextIntoDocument in PDF template mode fills template values even if step requests raw HVY', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"summarize_incoming_resume":"Imported summary"}}');
+  const progressMessages: string[] = [];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"pdf-summary"}-->
+#! PDF Summary
+
+<!--hvy:text {"fillIn":true}-->
+ <!-- value {"placeholder":"Summarize incoming resume"} -->
+`, '.phvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'pdf-summary', importMode: 'hvy' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+    onProgress: (event) => {
+      if (event.message) progressMessages.push(event.message);
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-template-values:1',
+  ]);
+  expect(progressMessages.some((message) => message.includes('Generating HVY section'))).toBe(false);
+  expect(serializeDocument(document)).toContain('Imported summary');
+});
+
+test('importTextIntoDocument in PDF template mode treats placeholder-only text blocks as template fields', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"degree":"Computer Science, BS","school_university":"Washington State University"}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"education"}-->
+#! Education
+
+<!--hvy:text {"placeholder":"Degree"}-->
+
+<!--hvy:text {"placeholder":"School / University"}-->
+`, '.phvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Computer Science, BS from Washington State University',
+    steps: [{ section: 'Education', sectionId: 'education' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-template-values:1',
+  ]);
+  expect(serializeDocument(document)).toContain('Computer Science, BS');
+  expect(serializeDocument(document)).toContain('Washington State University');
+});
+
+test('importTextIntoDocument errors when a section template list references a missing reusable component', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: Job History Item
+    baseType: container
+    schema:
+      containerBlocks:
+        - text: <!-- value {"placeholder":"Organization"} -->
+          schema:
+            component: text
+            fillIn: true
+section_defs:
+  - name: Professional History
+    template:
+      title: Professional History
+      level: 1
+      blocks:
+        - text: "# Professional History"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: Resume Item
+      children: []
+---
+`, '.phvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Example Co',
+    steps: [{ section: 'Professional History', templateName: 'Professional History', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('missing component definition "Resume Item"');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('buildImportPlanForDocument errors when selected section template references a missing reusable component', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"steps":[{"section":"Professional History","templateName":"Professional History"}]}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: Job History Item
+    baseType: container
+    schema:
+      containerBlocks:
+        - text: <!-- value {"placeholder":"Organization"} -->
+          schema:
+            component: text
+            fillIn: true
+section_defs:
+  - name: Professional History
+    template:
+      title: Professional History
+      level: 1
+      blocks:
+        - text: "# Professional History"
+          schema:
+            component: text
+        - text: ""
+          schema:
+            component: component-list
+            componentListComponent: Resume Item
+      children: []
+---
+`, '.phvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Example Co',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+  });
+
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('missing component definition "Resume Item"');
+});
+
 test('buildImportPlanForDocument returns exact import trace calls when requested', async () => {
   requestProxyCompletionMock.mockImplementationOnce(async (request: { beforeRequest?: (debugLabel: string) => Promise<void> | void; debugLabel: string }) => {
     await request.beforeRequest?.(request.debugLabel);

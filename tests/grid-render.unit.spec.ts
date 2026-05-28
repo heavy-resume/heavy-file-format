@@ -159,6 +159,44 @@ test('grid blank item component switch creates a complete schema for the selecte
   expect(expectedResult.schema.imageFile).toBe('');
 });
 
+test('component-list component switch stores an inferred item label when label is automatic', () => {
+  const section = state.document.sections[0]!;
+  const list = createEmptyBlock('component-list');
+  list.id = 'component-list-block';
+  list.schema.componentListComponent = 'text';
+  list.schema.componentListItemLabel = '';
+  section.blocks = [list];
+  const select = new TestSelectElement() as unknown as HTMLSelectElement;
+  select.dataset.field = 'block-component-list-component';
+  select.dataset.sectionKey = 'section-summary';
+  select.dataset.blockId = 'component-list-block';
+  select.value = 'Resume Item';
+
+  handleBlockFieldInput(select);
+
+  expect(list.schema.componentListComponent).toBe('Resume Item');
+  expect(list.schema.componentListItemLabel).toBe('Resume Item');
+});
+
+test('component-list component switch preserves a manually edited item label', () => {
+  const section = state.document.sections[0]!;
+  const list = createEmptyBlock('component-list');
+  list.id = 'component-list-block';
+  list.schema.componentListComponent = 'text';
+  list.schema.componentListItemLabel = 'job';
+  section.blocks = [list];
+  const select = new TestSelectElement() as unknown as HTMLSelectElement;
+  select.dataset.field = 'block-component-list-component';
+  select.dataset.sectionKey = 'section-summary';
+  select.dataset.blockId = 'component-list-block';
+  select.value = 'Resume Item';
+
+  handleBlockFieldInput(select);
+
+  expect(list.schema.componentListComponent).toBe('Resume Item');
+  expect(list.schema.componentListItemLabel).toBe('job');
+});
+
 test('grid reader applies grid item alignment to the cell', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({

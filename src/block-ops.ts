@@ -22,6 +22,7 @@ import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
 import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -300,7 +301,15 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
     if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
       return true;
     }
+    const previousComponent = block.schema.componentListComponent || 'item';
+    const previousLabel = inferComponentListItemLabel(previousComponent);
+    const shouldRefreshLabel =
+      block.schema.componentListItemLabel.trim().length === 0
+      || block.schema.componentListItemLabel.trim() === previousLabel;
     block.schema.componentListComponent = target.value;
+    if (shouldRefreshLabel) {
+      block.schema.componentListItemLabel = inferComponentListItemLabel(target.value);
+    }
     ensureComponentListBlocks(block);
     block.schema.componentListBlocks.forEach((itemBlock) => {
       itemBlock.schema.component = target.value;

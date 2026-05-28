@@ -432,6 +432,7 @@ export interface ContextMenuState {
   blockId?: string;
   x: number;
   y: number;
+  surface?: 'modal';
   targetRect?: {
     left: number;
     top: number;

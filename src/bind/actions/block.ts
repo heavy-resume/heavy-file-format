@@ -441,7 +441,7 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     (
       targetBlockId === placement.blockId ||
       parentBlockId === placement.blockId ||
-      getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId ||
+      (placementContainer === 'grid' && getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId) ||
       (parentBlockId.length > 0 && blockContainsBlockId(sourceBlock, parentBlockId))
     )
   ) {
@@ -695,7 +695,7 @@ function insertBlockInsideBlock(
 
 function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId: string): string | null {
   const gridBlock = gridBlockId ? findBlockByIds(sectionKey, gridBlockId) : null;
-  const item = gridBlock?.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+  const item = gridBlock?.schema.gridItems?.find((candidate) => candidate.id === gridItemId);
   return item?.block.id ?? null;
 }
 

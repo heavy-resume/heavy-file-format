@@ -1,6 +1,8 @@
 import { state, openLinkInlineModal } from './_imports';
 import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
 import { hasComponentInEditorClipboard, hasSectionInEditorClipboard } from '../../editor-clipboard';
+import { findBlockByIds } from '../../block-ops';
+import { findBlockContainerById } from '../../section-ops';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
@@ -177,7 +179,7 @@ export function bindContextmenu(app: HTMLElement): void {
 
 function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
   const target = event.target as HTMLElement;
-  if (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover, .modal-root')) {
+  if (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover')) {
     return;
   }
   const blockElement = target.closest<HTMLElement>('.editor-block[data-active-editor-block="true"], .editor-block-passive[data-section-key][data-block-id]');
@@ -188,7 +190,8 @@ function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
   if (!sectionKey) {
     return;
   }
-  const shellRect = (app.querySelector<HTMLElement>('.editor-shell') ?? app).getBoundingClientRect();
+  const modalRoot = target.closest<HTMLElement>('#modalRoot');
+  const shellRect = (modalRoot ?? app.querySelector<HTMLElement>('.editor-shell') ?? app).getBoundingClientRect();
   event.preventDefault();
   state.contextMenu = {
     kind: 'editor',
@@ -196,6 +199,7 @@ function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
     ...(blockId ? { blockId } : {}),
     x: Number.isFinite(event.clientX) ? event.clientX - shellRect.left : 16,
     y: Number.isFinite(event.clientY) ? event.clientY - shellRect.top : 16,
+    ...(modalRoot ? { surface: 'modal' as const } : {}),
   };
   renderContextMenuElement(app);
 }
@@ -280,7 +284,9 @@ function renderContextMenuElement(app: HTMLElement): void {
     return;
   }
   const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
-  const root = app.querySelector<HTMLElement>(menu.kind === 'editor' ? '.editor-shell' : '.viewer-shell') ?? app;
+  const root = menu.kind === 'editor' && menu.surface === 'modal'
+    ? app.querySelector<HTMLElement>('#modalRoot') ?? app
+    : app.querySelector<HTMLElement>(menu.kind === 'editor' ? '.editor-shell' : '.viewer-shell') ?? app;
   root.classList.add('is-context-menu-open');
   if (menu.kind === 'ai' && menu.blockId) {
     const target = root
@@ -337,6 +343,7 @@ function renderContextMenuElement(app: HTMLElement): void {
     let itemCount = 0;
     if (menu.blockId) {
       addButton('Copy component', 'copy-component', { sectionKey: menu.sectionKey, blockId: menu.blockId });
+      addButton('Cut component', 'start-component-move', { sectionKey: menu.sectionKey, blockId: menu.blockId });
       itemCount += 1;
     }
     if (menu.sectionKey !== '__top_level__' && menu.sectionKey !== '__sidebar_top_level__') {
@@ -344,11 +351,7 @@ function renderContextMenuElement(app: HTMLElement): void {
       itemCount += 1;
     }
     if (hasComponentInEditorClipboard() && menu.sectionKey !== '__top_level__' && menu.sectionKey !== '__sidebar_top_level__') {
-      addButton('Paste component', 'place-component', {
-        sectionKey: menu.sectionKey,
-        placementContainer: 'section',
-        placement: 'end',
-      });
+      addButton('Paste component', 'place-component', getComponentPasteContextAttrs(menu));
       itemCount += 1;
     }
     if (hasSectionInEditorClipboard()) {
@@ -379,6 +382,84 @@ function renderContextMenuElement(app: HTMLElement): void {
   const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
   menu.x = position.x;
   menu.y = position.y;
+}
+
+function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: string }): Record<string, string> {
+  const fallback = {
+    sectionKey: menu.sectionKey,
+    placementContainer: 'section',
+    placement: 'end',
+  };
+  if (!menu.blockId) {
+    return fallback;
+  }
+  const location = findBlockContainerById(state.document.sections, menu.sectionKey, menu.blockId);
+  if (!location) {
+    return {
+      ...fallback,
+      placement: 'after',
+      targetBlockId: menu.blockId,
+    };
+  }
+  if (!location.ownerBlockId) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'section',
+      placement: 'after',
+      targetBlockId: menu.blockId,
+    };
+  }
+  const owner = findBlockByIds(menu.sectionKey, location.ownerBlockId);
+  if (!owner) {
+    return fallback;
+  }
+  if ((owner.schema.containerBlocks ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'container',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.componentListBlocks ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'component-list',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.expandableStubBlocks?.children ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'expandable-stub',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.expandableContentBlocks?.children ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'expandable-content',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  const gridItem = (owner.schema.gridItems ?? []).find((item) => item.block.id === menu.blockId);
+  if (gridItem) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'grid',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetGridItemId: gridItem.id,
+    };
+  }
+  return fallback;
 }
 
 export function closeReaderContextPopover(app: HTMLElement, clearState = true): void {

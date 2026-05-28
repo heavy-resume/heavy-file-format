@@ -1688,6 +1688,19 @@
   font-size: 0.86rem;
 }
 
+.template-def-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+}
+
+.template-def-summary-actions button {
+  min-height: 1.85rem;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.82rem;
+}
+
 .template-def-summary-icon {
   width: 1.6rem;
   height: 1.6rem;

@@ -1242,7 +1242,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
                     <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                   </span>
-                  <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                  <span class="template-def-summary-actions">
+                    <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
+                    <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                  </span>
                 </summary>
                 <div class="template-def-body">
                   <label>
@@ -1292,10 +1295,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                         <span>Flavor Description</span>
                         <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
                       </label>
-                      <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                  <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                     </div>`).join('')}`}
                   <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
-                  <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
                 </div>
               </details>`;
           }
@@ -1318,7 +1320,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                           <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
                           <span>Section template · ${def.repeatable === true ? 'multiple allowed' : 'one per document'}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                         </span>
-                        <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                        <span class="template-def-summary-actions">
+                          <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="section" data-section-def-index="${index}">Edit Template</button>
+                          <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                        </span>
                       </summary>
                       <div class="template-def-body">
                         <label>
@@ -1347,7 +1352,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                             <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                           </div>`).join('')}`}
                           <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
-                          <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="section" data-section-def-index="${index}">Edit Template</button>
                         </div>
                       </details>`;
             }

@@ -216,11 +216,12 @@ export type HvyEditorClipboardPayload =
       kind: 'component';
       block: VisualBlock;
       attachments?: DocumentAttachment[];
+      componentDefs?: ComponentDefinition[];
       pasteBehavior?: {
         unwrapIntoEmptyContainer?: boolean;
       };
     }
-  | { kind: 'section'; section: VisualSection; attachments?: DocumentAttachment[] };
+  | { kind: 'section'; section: VisualSection; attachments?: DocumentAttachment[]; componentDefs?: ComponentDefinition[] };
 
 export interface HvyEditorClipboardHost {
   read(): HvyEditorClipboardPayload | null;
@@ -413,6 +414,7 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+  transientNotice: { id: number; message: string } | null;
 }
 
 export interface ContextMenuState {

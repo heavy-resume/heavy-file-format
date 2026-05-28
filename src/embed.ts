@@ -263,6 +263,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -362,6 +363,14 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
+}
+
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   void options;
   if (!currentRoot) return;
@@ -380,6 +389,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
           <div class="viewer-shell ${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+            ${renderTransientNotice()}
             ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
               <aside class="viewer-sidebar">
                 <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>

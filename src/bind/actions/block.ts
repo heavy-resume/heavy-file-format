@@ -10,7 +10,15 @@ import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
-import { cloneComponentClipboardEntry, collectBlockAttachments, copyComponentToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
+import {
+  cloneComponentClipboardEntry,
+  collectBlockAttachments,
+  copyComponentToEditorClipboard,
+  installEditorClipboardAttachments,
+  installEditorClipboardComponentDefinitions,
+  prepareBlockForDocumentPasteWithResult,
+} from '../../editor-clipboard';
+import { showTransientNotice } from '../../transient-notice';
 import { resolveBaseComponent } from '../../component-defs';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
@@ -324,7 +332,7 @@ const copyComponent: ActionHandler = ({ sectionKey, blockId }) => {
   if (!block) {
     return;
   }
-  copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block));
+  copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block), { sourceDocument: state.document });
   state.contextMenu = null;
   getRenderApp()();
 };
@@ -342,7 +350,10 @@ const copyExpandablePane = (pane: 'stub' | 'content'): ActionHandler => ({ secti
     : block.schema.expandableContentBlocks.children;
   const wrapper = createEmptyBlock('container');
   wrapper.schema.containerBlocks = children.map((child) => cloneReusableBlock(child));
-  copyComponentToEditorClipboard(wrapper, collectBlockAttachments(state.document, wrapper), { unwrapIntoEmptyContainer: true });
+  copyComponentToEditorClipboard(wrapper, collectBlockAttachments(state.document, wrapper), {
+    unwrapIntoEmptyContainer: true,
+    sourceDocument: state.document,
+  });
   state.contextMenu = null;
   state.componentPlacement = { mode: 'copy', sectionKey, blockId, source: 'clipboard', sourcePane: pane };
   setActiveEditorBlock(sectionKey, blockId);
@@ -357,7 +368,7 @@ const startComponentPlacement = (mode: 'move' | 'copy'): ActionHandler => ({ sec
   if (mode === 'copy') {
     const block = findBlockByIds(sectionKey, blockId);
     if (block) {
-      copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block));
+      copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block), { sourceDocument: state.document });
     }
   }
   state.contextMenu = null;
@@ -440,8 +451,8 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   }
 
   const placementMode = placement?.mode ?? 'copy';
-  const placedBlock = placementMode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
-  const canUnwrapPlacedBlock = placementMode === 'copy'
+  let placedBlock = placementMode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  let canUnwrapPlacedBlock = placementMode === 'copy'
     && unwrapIntoEmptyContainer
     && placedBlock.schema.component === 'container'
     && Array.isArray(placedBlock.schema.containerBlocks)
@@ -449,7 +460,27 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   let activePlacedBlockId = placedBlock.id;
   let syncBlockId = placedBlock.id;
   if (placementMode === 'copy') {
+    installEditorClipboardComponentDefinitions(state.document);
     installEditorClipboardAttachments(state.document);
+    const prepared = prepareBlockForDocumentPasteWithResult(state.document, placedBlock);
+    if (!prepared.block) {
+      state.componentPlacement = null;
+      if (prepared.removedCount > 0) {
+        showTransientNotice('Some components were altered for PHVY compatibility.');
+      }
+      getRenderApp()();
+      return;
+    }
+    if (prepared.removedCount > 0) {
+      showTransientNotice('Some components were altered for PHVY compatibility.');
+    }
+    placedBlock = prepared.block;
+    activePlacedBlockId = placedBlock.id;
+    syncBlockId = placedBlock.id;
+    canUnwrapPlacedBlock = unwrapIntoEmptyContainer
+      && placedBlock.schema.component === 'container'
+      && Array.isArray(placedBlock.schema.containerBlocks)
+      && placedBlock.schema.containerBlocks.length > 0;
   }
 
   if (placementMode === 'move') {

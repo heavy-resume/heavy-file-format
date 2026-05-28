@@ -182,6 +182,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -704,6 +705,7 @@ function renderApp(): void {
                   ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
+                  ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                     <aside class="editor-sidebar">
                       <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -715,6 +717,7 @@ function renderApp(): void {
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
               : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`)}>
+                   ${renderTransientNotice()}
                    ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                      <aside class="viewer-sidebar">
                        <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -880,6 +883,14 @@ function renderResponsivePreviewControls(): string {
       )
       .join('')}
   </div>`;
+}
+
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
 }
 
 function renderPreviewControlStack(): string {

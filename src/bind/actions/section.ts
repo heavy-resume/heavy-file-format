@@ -6,7 +6,15 @@ import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
-import { cloneSectionFromEditorClipboard, collectSectionAttachments, copySectionToEditorClipboard, installEditorClipboardAttachments } from '../../editor-clipboard';
+import {
+  cloneSectionFromEditorClipboard,
+  collectSectionAttachments,
+  copySectionToEditorClipboard,
+  installEditorClipboardAttachments,
+  installEditorClipboardComponentDefinitions,
+  prepareSectionForDocumentPasteWithResult,
+} from '../../editor-clipboard';
+import { showTransientNotice } from '../../transient-notice';
 import type { ActionHandler } from './types';
 import type { SectionLocation, VisualSection } from '../../editor/types';
 
@@ -216,7 +224,7 @@ const copySection: ActionHandler = ({ section }) => {
   if (!section) {
     return;
   }
-  copySectionToEditorClipboard(section, collectSectionAttachments(state.document, section));
+  copySectionToEditorClipboard(section, collectSectionAttachments(state.document, section), state.document);
   state.contextMenu = null;
   getRenderApp()();
 };
@@ -232,7 +240,12 @@ const pasteSection: ActionHandler = ({ actionButton }) => {
     return;
   }
   recordHistory('section-paste');
+  installEditorClipboardComponentDefinitions(state.document);
   installEditorClipboardAttachments(state.document);
+  const prepared = prepareSectionForDocumentPasteWithResult(state.document, section);
+  if (prepared.removedCount > 0) {
+    showTransientNotice('Some components were altered for PHVY compatibility.');
+  }
   section.location = location;
   state.document.sections.push(section);
   activatePastedSection(section);
@@ -251,7 +264,12 @@ const pasteSectionAfter: ActionHandler = ({ sectionKey }) => {
     return;
   }
   recordHistory('section-paste');
+  installEditorClipboardComponentDefinitions(state.document);
   installEditorClipboardAttachments(state.document);
+  const prepared = prepareSectionForDocumentPasteWithResult(state.document, section);
+  if (prepared.removedCount > 0) {
+    showTransientNotice('Some components were altered for PHVY compatibility.');
+  }
   section.location = target.location;
   targetLocation.container.splice(targetLocation.index + 1, 0, section);
   activatePastedSection(section);

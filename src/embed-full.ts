@@ -79,6 +79,7 @@ import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchModal } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
+import { centerPendingEditorSection } from './scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
@@ -247,6 +248,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -462,6 +464,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
               ? isDocumentMetaView
                 ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                 : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                  ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                     <aside class="editor-sidebar">
                       <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -473,6 +476,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
               : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+                  ${renderTransientNotice()}
                   ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                     <aside class="viewer-sidebar">
                       <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -516,6 +520,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
+  centerPendingEditorSection(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
 }
@@ -558,6 +563,14 @@ function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
 
 function cancelPendingEmbedUiBind(root: HTMLElement): void {
   embedUiBindGenerations.set(root, (embedUiBindGenerations.get(root) ?? 0) + 1);
+}
+
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
 }
 
 function renderSidebarTabLabel(): string {

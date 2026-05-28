@@ -21,7 +21,7 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
 }
 
 export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLElement): void {
-  if (!scroll || state.pendingEditorCenterSectionKey) {
+  if (!scroll) {
     return;
   }
   const restore = (): void => {

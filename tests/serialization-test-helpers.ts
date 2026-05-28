@@ -102,6 +102,7 @@ export function createTestState(document: VisualDocument): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 

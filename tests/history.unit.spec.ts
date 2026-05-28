@@ -106,6 +106,7 @@ function createHistoryTestState(): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 

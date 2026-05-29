@@ -53,7 +53,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"details"}-->
 #! Details
 
- <!--hvy:text {"id":"description","hideIfYes":"yes"}-->
+ <!--hvy:text {"id":"description","hideIfYes":"YES"}-->
   Description
 
  <!--hvy:text {"id":"notes","hideIfYes":"no"}-->

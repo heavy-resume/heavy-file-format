@@ -1661,7 +1661,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-hide-if-yes"
-            placeholder="{% field | isempty %}"
+            placeholder="yes"
             value="${deps.escapeAttr(block.schema.hideIfYes)}"
           />
         </label>

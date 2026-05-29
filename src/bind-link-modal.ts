@@ -98,6 +98,12 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
   }
   const value = input.value.trim();
   if (!value) {
+    pendingLinkEditable.focus();
+    if (pendingLinkAnchor && pendingLinkEditable.contains(pendingLinkAnchor)) {
+      unwrapLinkAnchor(pendingLinkAnchor);
+      const inputEvent = new InputEvent('input', { bubbles: true });
+      pendingLinkEditable.dispatchEvent(inputEvent);
+    }
     closeLinkInlineModal(app);
     return;
   }
@@ -119,6 +125,25 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
   }
   applyRichAction('link', pendingLinkEditable, link);
   closeLinkInlineModal(app);
+}
+
+function unwrapLinkAnchor(anchor: HTMLAnchorElement): void {
+  const firstChild = anchor.firstChild;
+  const lastChild = anchor.lastChild;
+  const fragment = document.createDocumentFragment();
+  while (anchor.firstChild) {
+    fragment.appendChild(anchor.firstChild);
+  }
+  anchor.replaceWith(fragment);
+  if (!firstChild || !lastChild) {
+    return;
+  }
+  const range = document.createRange();
+  range.setStartBefore(firstChild);
+  range.setEndAfter(lastChild);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 function findLinkAnchorForRange(editable: HTMLElement, range: Range | null): HTMLAnchorElement | null {

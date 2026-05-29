@@ -477,6 +477,28 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
   await expect(editor.locator('a[href="https://updated.example"]')).toContainText('Link me');
   await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(0);
 
+  await editor.evaluate((node) => {
+    const anchor = node.querySelector('a[href="https://updated.example"]');
+    const textNode = anchor?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    (node as HTMLElement).focus();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Link' }).first().click();
+  await expect(linkModal).toBeVisible();
+  await expect(linkInput).toHaveValue('https://updated.example');
+  await linkInput.fill('');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(editor.locator('a')).toHaveCount(0);
+  await expect(editor).toContainText('Link me');
+
   await editor.fill('Altcut link');
   await editor.evaluate((node) => {
     const textNode = node.querySelector('p')?.firstChild;
@@ -495,6 +517,52 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
   await page.keyboard.press('Enter');
 
   await expect(editor.locator('a[href="#section-id"]')).toContainText('Altcut link');
+});
+
+test('link modal apply with an empty value removes the selected link', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const linkModalModulePath = '/src/bind-link-modal.ts';
+    const { bindLinkInlineModal, openLinkInlineModal } = await import(/* @vite-ignore */ linkModalModulePath);
+    const app = document.createElement('div');
+    app.innerHTML = `
+      <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
+        <input id="linkInlineInput" />
+        <button type="button" data-link-modal-action="apply">Apply</button>
+      </div>
+      <div class="rich-editor" contenteditable="true" data-field="block-rich">
+        <p><a href="https://example.com">Link me</a></p>
+      </div>
+    `;
+    document.body.replaceChildren(app);
+    bindLinkInlineModal(app);
+
+    const editor = app.querySelector<HTMLElement>('.rich-editor')!;
+    const anchor = editor.querySelector<HTMLAnchorElement>('a[href="https://example.com"]')!;
+    let inputEvents = 0;
+    editor.addEventListener('input', () => {
+      inputEvents += 1;
+    });
+
+    openLinkInlineModal(app, editor, '', null, anchor);
+    app.querySelector<HTMLInputElement>('#linkInlineInput')!.value = '';
+    app.querySelector<HTMLButtonElement>('[data-link-modal-action="apply"]')!.click();
+
+    return {
+      html: editor.innerHTML.trim(),
+      inputEvents,
+      modalOpen: app.querySelector('#linkInlineModal')!.classList.contains('is-open'),
+      text: editor.textContent?.trim(),
+    };
+  });
+
+  expect(result).toEqual({
+    html: '<p>Link me</p>',
+    inputEvents: 1,
+    modalOpen: false,
+    text: 'Link me',
+  });
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

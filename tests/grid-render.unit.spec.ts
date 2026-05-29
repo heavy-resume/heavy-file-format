@@ -96,37 +96,6 @@ test('grid editor renders a newly added blank text item without reading other co
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
-test('grid editor applies grid item alignment to the edit shell', () => {
-  const grid = state.document.sections[0]!.blocks[0]!;
-  grid.schema.gridItems.push({
-    id: 'right-item',
-    align: 'right',
-    block: createEmptyBlock('text'),
-  });
-
-  const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
-
-  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
-});
-
-test('right-aligned grid item text editor has no default-left child override', () => {
-  const grid = state.document.sections[0]!.blocks[0]!;
-  grid.schema.gridItems.push({
-    id: 'right-item',
-    align: 'right',
-    block: createEmptyBlock('text'),
-  });
-
-  const expectedResult = renderGridEditor('section-summary', grid, {
-    ...createHelpers(),
-    renderEditorBlock: (sectionKey, block) => renderTextEditor(sectionKey, block, createHelpers()),
-  });
-
-  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
-  expect(expectedResult).toContain('<div\n      class="rich-editor"');
-  expect(expectedResult).not.toContain('style="text-align: left;"');
-});
-
 test('text editor omits inline style for default-left alignment', () => {
   const block = createEmptyBlock('text');
   block.text = 'Text';
@@ -197,7 +166,7 @@ test('component-list component switch preserves a manually edited item label', (
   expect(list.schema.componentListItemLabel).toBe('job');
 });
 
-test('grid reader applies grid item alignment to the cell', () => {
+test('grid reader renders grid cells without slot alignment metadata', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
     id: 'left-item',
@@ -205,7 +174,6 @@ test('grid reader applies grid item alignment to the cell', () => {
   });
   grid.schema.gridItems.push({
     id: 'right-item',
-    align: 'right',
     block: createEmptyBlock('text'),
   });
 
@@ -214,5 +182,6 @@ test('grid reader applies grid item alignment to the cell', () => {
     renderReaderBlock: (_section, block) => `<p>${block.id}</p>`,
   });
 
-  expect(expectedResult).toContain('grid-column: 2 / span 1; text-align: right;');
+  expect(expectedResult).toContain('grid-column: 2 / span 1;');
+  expect(expectedResult).not.toContain('text-align: right;');
 });

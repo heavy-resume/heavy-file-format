@@ -17,7 +17,6 @@ import {
   normalizeReusableSectionDefinitions,
 } from './document-factory';
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
-import { coerceGridItemAlign } from './grid-ops';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -367,10 +366,8 @@ function parseBlocks(
       return;
     }
     if (attach.kind === 'grid') {
-      const align = coerceGridItemAlign(attach.meta.align);
       attach.parent.schema.gridItems.push({
         id: typeof attach.meta.id === 'string' ? attach.meta.id : makeId('griditem'),
-        ...(align ? { align } : {}),
         block,
       });
       return;
@@ -1349,7 +1346,6 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         id: item.id,
-        ...(item.align ? { align: item.align } : {}),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1601,7 +1597,6 @@ function serializeGridItemBlock(item: GridItem, index: number, indent: number, d
     `grid:${index}`,
     {
       id: item.id,
-      ...(item.align ? { align: item.align } : {}),
     },
     item.block,
     indent,

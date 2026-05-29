@@ -323,7 +323,7 @@ Grid blocks can be emitted with specialized directives so grid item content rema
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
 
-Grid slot directives MAY include `id` and `align`. `align` accepts `left`, `center`, or `right` and applies to the rendered grid cell, allowing child text to inherit the cell alignment unless the child block sets its own alignment.
+Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 

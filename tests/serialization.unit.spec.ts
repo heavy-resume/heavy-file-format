@@ -96,7 +96,7 @@ hvy_version: 0.1
    <!--hvy:component-list {"componentListComponent":"text"}-->
     ## Skills
 
-  <!--hvy:grid:1 {"id":"details","align":"right"}-->
+  <!--hvy:grid:1 {"id":"details"}-->
 
    <!--hvy:container {}-->
 
@@ -108,7 +108,7 @@ hvy_version: 0.1
   const output = serializeWithState(document);
 
   expect(output).toMatch(/<!--hvy:grid:0 {"id":"skills"}-->/);
-  expect(output).toMatch(/<!--hvy:grid:1 {"id":"details","align":"right"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:1 {"id":"details"}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:component-list \{\}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:container \{\}-->/);
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"component"/);

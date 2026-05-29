@@ -40,7 +40,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
       ...block.schema.gridItems.map(
         (item) => {
           const canChangeComponent = isBlankDefaultGridItem(item.block);
-          const shellStyle = item.align ? ` style="text-align: ${helpers.escapeAttr(item.align)};"` : '';
           return `<div class="grid-field-row">
           <div class="grid-field-head">
             <div class="section-drag-title">
@@ -70,7 +69,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
             }
           </div>
-          <div class="grid-item-editor-shell"${shellStyle}>
+          <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
           </div>
         </div>
@@ -118,7 +117,6 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
       const cellStyle = [
         `grid-column: ${gridColumn};`,
-        item.item.align ? `text-align: ${item.item.align};` : '',
       ].filter(Boolean).join(' ');
       return `<div class="reader-grid-cell" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
     })

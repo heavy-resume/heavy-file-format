@@ -7,6 +7,7 @@ import type { VisualDocument } from '../src/types';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob, preparePdfExport } from '../src/pdf-export/export';
 import { createPdfExportRuleRecorder, resolvePdfExportStrategy } from '../src/pdf-export/strategy';
+import { deserializeDocument } from '../src/serialization';
 
 vi.mock('pdfmake/build/pdfmake.js', () => ({
   default: {
@@ -270,14 +271,16 @@ describe('PDF export strategy', () => {
     expect(serialized).not.toContain('"text":"Project"');
   });
 
-  test('exports right-aligned grid item text into the PDF definition', async () => {
+  test('exports text css alignment inside a grid into the PDF definition', async () => {
     const document = createDocument();
     const grid = createEmptyBlock('grid');
+    const rightText = createTextBlock('right-grid-text', 'Right cell');
+    rightText.schema.css = 'margin: 0; text-align: right;';
     grid.schema.id = 'aligned-grid';
     grid.schema.gridColumns = 2;
     grid.schema.gridItems = [
       { id: 'left-grid-cell', block: createTextBlock('left-grid-text', 'Left cell') },
-      { id: 'right-grid-cell', align: 'right', block: createTextBlock('right-grid-text', 'Right cell') },
+      { id: 'right-grid-cell', block: rightText },
     ];
     document.sections = [createSection('aligned-grid-section', [grid])];
 
@@ -287,8 +290,36 @@ describe('PDF export strategy', () => {
 
     expect(gridNode.columns[0].stack[0]).toEqual(expect.objectContaining({ text: 'Left cell' }));
     expect(gridNode.columns[0].stack[0]).not.toHaveProperty('alignment');
-    expect(gridNode.columns[1]).toEqual(expect.objectContaining({ alignment: 'right' }));
+    expect(gridNode.columns[1]).not.toHaveProperty('alignment');
     expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
+  });
+
+  test('exports right-aligned text from parsed HVY grid CSS', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"awards"}-->
+#! Awards
+
+ <!--hvy:grid {"css":"margin: 0 0 0.35rem;","gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"award-details"}-->
+
+   <!--hvy:text {"css":"margin: 0;"}-->
+    Premise Impact Award Winner
+
+  <!--hvy:grid:1 {"id":"award-date"}-->
+
+   <!--hvy:text {"css":"margin: 0; text-align: right;","placeholder":"Date"}-->
+    Q4 2018
+`, '.phvy');
+
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const gridNode = expectedResult.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
+
+    expect(gridNode.columns[1]).not.toHaveProperty('alignment');
+    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Q4 2018', alignment: 'right' }));
   });
 
   test('exports right-aligned child text inside a grid into the PDF definition', async () => {

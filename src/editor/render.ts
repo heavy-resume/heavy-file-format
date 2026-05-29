@@ -896,7 +896,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
           const cellStyle = [
             `grid-column: ${gridColumn};`,
-            item.align ? `text-align: ${item.align};` : '',
           ].filter(Boolean).join(' ');
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({

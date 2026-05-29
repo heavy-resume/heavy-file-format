@@ -1,4 +1,4 @@
-import type { CarouselImage, GridItem, VisualBlock, VisualSection } from '../editor/types';
+import type { Align, CarouselImage, VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { getImageAttachment } from '../attachments';
 import { resolveBaseComponentFromMeta } from '../component-defs';
@@ -140,7 +140,7 @@ function renderBlock(
   switch (baseComponent) {
     case 'text':
       node = hasRenderablePdfTextBlock(block.text)
-        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, block.schema.align)
+        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, getPdfTextAlignment(block))
         : null;
       break;
     case 'code':
@@ -199,37 +199,20 @@ function renderGridBlock(
     const stack = renderBlocks(document, resolved, [item.block]);
     return {
       width: '*',
-      ...(item.align ? { alignment: item.align } : {}),
-      stack: applyGridItemAlignment(stack, item.align),
+      stack,
     };
   });
   return columns.length ? { columns, columnGap: 12 } : placeholderNode('Empty grid.');
 }
 
-function applyGridItemAlignment(nodes: HvyPdfMakeNode[], align: GridItem['align']): HvyPdfMakeNode[] {
-  if (!align) {
-    return nodes;
-  }
-  return nodes.map((node) => applyAlignmentToPdfNode(node, align));
+function getPdfTextAlignment(block: VisualBlock): Align | undefined {
+  return getTextAlignFromCss(block.schema.css) ?? block.schema.align;
 }
 
-function applyAlignmentToPdfNode(node: HvyPdfMakeNode, align: NonNullable<GridItem['align']>): HvyPdfMakeNode {
-  if (typeof node === 'string') {
-    return { text: node, alignment: align };
-  }
-  if (node.alignment) {
-    return node;
-  }
-  if (node.stack) {
-    return { ...node, alignment: align, stack: node.stack.map((child) => applyAlignmentToPdfNode(child, align)) };
-  }
-  if (node.ul) {
-    return { ...node, alignment: align, ul: node.ul.map((child) => applyAlignmentToPdfNode(child, align)) };
-  }
-  if (node.ol) {
-    return { ...node, alignment: align, ol: node.ol.map((child) => applyAlignmentToPdfNode(child, align)) };
-  }
-  return { ...node, alignment: align };
+function getTextAlignFromCss(css: string): Align | undefined {
+  const match = /(?:^|;)\s*text-align\s*:\s*(left|center|right)\s*(?:;|$)/i.exec(css);
+  const align = match?.[1]?.toLowerCase();
+  return align === 'left' || align === 'center' || align === 'right' ? align : undefined;
 }
 
 function renderExpandableBlock(

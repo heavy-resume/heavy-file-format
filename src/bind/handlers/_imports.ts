@@ -27,8 +27,21 @@ export { submitCliCommand } from '../../cli-ui/submit';
 export { restoreCliViewAfterRender } from '../../cli-ui/focus';
 
 import { getTagState, setTagState, getTagRenderOptions } from '../../block-ops';
+import { parseTags } from '../../editor/tag-editor';
+import { setSearchExcludeTags } from '../../search/actions';
+import { state as appState } from '../../state';
 export const tagStateHelpers = {
-  getTagState,
-  setTagState,
-  getRenderOptions: getTagRenderOptions,
+  getTagState: (target: HTMLElement) => target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags'
+    ? parseTags(appState.search.excludeTags ?? '')
+    : getTagState(target),
+  setTagState: (target: HTMLElement, tags: string[]) => {
+    if (target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags') {
+      setSearchExcludeTags(tags);
+      return;
+    }
+    setTagState(target, tags);
+  },
+  getRenderOptions: (target: HTMLElement) => target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags'
+    ? {}
+    : getTagRenderOptions(target),
 };

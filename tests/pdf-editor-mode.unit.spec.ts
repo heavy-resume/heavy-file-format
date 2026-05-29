@@ -11,6 +11,7 @@ import { initCallbacks, initState, REUSABLE_SECTION_PREFIX, state } from '../src
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance } from '../src/pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from '../src/pdf-document-theme';
 import { setHostPlugins } from '../src/plugins/registry';
 import type { VisualDocument } from '../src/types';
 import { escapeHtml } from '../src/utils';
@@ -220,6 +221,32 @@ test('PHVY reader rendering omits sidebar surface affordances', () => {
 
   expect(renderer.renderSidebarSections([main, sidebar])).toBe('');
   expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
+});
+
+test('PHVY viewer paper colors default to white and black', () => {
+  const document = createPdfDocument();
+
+  const expectedResult = renderPdfDocumentViewerThemeStyle(document, escapeHtml);
+
+  expect(expectedResult).toContain('--hvy-bg: #ffffff;');
+  expect(expectedResult).toContain('--hvy-text: #000000;');
+  expect(expectedResult).toContain('--hvy-surface: #ffffff;');
+});
+
+test('PHVY viewer paper colors use document theme overrides', () => {
+  const document = createPdfDocument();
+  document.meta.theme = {
+    colors: {
+      '--hvy-bg': '#f8fafc',
+      '--hvy-text': '#020617',
+    },
+  };
+
+  const expectedResult = renderPdfDocumentViewerThemeStyle(document, escapeHtml);
+
+  expect(expectedResult).toContain('--hvy-bg: #f8fafc;');
+  expect(expectedResult).toContain('--hvy-text: #020617;');
+  expect(expectedResult).toContain('--hvy-surface: #f8fafc;');
 });
 
 test('PHVY AI reader rendering omits sidebar add ghost', () => {

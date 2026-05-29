@@ -6,6 +6,7 @@ import { highlightPlainText } from './highlight';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { closeIcon, funnelIcon, magnifyingGlassIcon } from '../icons';
+import { renderTagEditor } from '../editor/tag-editor';
 
 interface SearchRenderDeps {
   escapeAttr: (value: string) => string;
@@ -21,7 +22,7 @@ const CATEGORY_LABELS: Record<SearchResultCategory, string> = {
 };
 
 export function renderSearchLauncher(search: SearchState): string {
-  const filtering = search.filterEnabled && search.submittedQuery.trim().length > 0;
+  const filtering = search.filterEnabled && (search.submittedQuery.trim().length > 0 || (search.submittedExcludeTags ?? '').trim().length > 0);
   return `<button
     type="button"
     class="hvy-floating-launcher search-launcher${search.open ? ' is-active' : ''}${filtering ? ' is-filtering' : ''}"
@@ -204,7 +205,8 @@ function renderSearchInput(search: SearchState, deps: SearchRenderDeps, options:
 function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   const applied = search.filterEnabled
     && search.queryDraft.trim() === search.submittedQuery.trim()
-    && search.filterQueryMode === search.submittedFilterQueryMode;
+    && search.filterQueryMode === search.submittedFilterQueryMode
+    && (search.excludeTags ?? '').trim() === (search.submittedExcludeTags ?? '').trim();
   const noResults = !search.isLoading
     && !search.error
     && !applied
@@ -227,6 +229,10 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
       placeholder: search.filterQueryMode === 'semantic' ? 'Describe what should stay visible' : 'Filter document',
       multiline: search.filterQueryMode === 'semantic',
     })}
+    <div class="search-exclude-tags-field">
+      <label class="search-exclude-tags-label" for="searchExcludeTagsInput">Exclude by tag</label>
+      ${renderTagEditor('search-exclude-tags', search.excludeTags ?? '', { placeholder: 'Add tag to exclude' }, deps).replace('class="tag-editor-input"', 'id="searchExcludeTagsInput" class="tag-editor-input"')}
+    </div>
     ${status ? `<div class="search-status${search.error ? ' is-error' : ''}${noResults ? ' is-empty' : ''}" role="status">${deps.escapeHtml(status)}</div>` : ''}
     ${semanticProgress ? renderSemanticProgress(semanticProgress) : ''}
     <div class="search-filter-box">

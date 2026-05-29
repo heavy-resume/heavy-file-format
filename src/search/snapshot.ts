@@ -24,6 +24,7 @@ export function createEmptySearchSnapshot(): HvySearchSnapshot {
     categories: [...SEARCH_CATEGORY_ORDER],
     filterEnabled: false,
     filterMode: 'deprioritize',
+    excludeTags: '',
     results: [],
     activeResultId: null,
   };
@@ -37,6 +38,7 @@ export function createSearchSnapshot(options: {
   categories?: SearchCategory[];
   filterEnabled?: boolean;
   filterMode?: HvySearchSnapshot['filterMode'];
+  excludeTags?: string;
   activeResultId?: string | null;
 }): HvySearchSnapshot {
   return normalizeSearchSnapshotInput(options);
@@ -98,9 +100,10 @@ export function normalizeSearchSnapshotInput(input?: HvySearchSnapshotInput | nu
     return createEmptySearchSnapshot();
   }
   const query = typeof input.query === 'string' ? input.query.trim() : '';
+  const excludeTags = typeof input.excludeTags === 'string' ? input.excludeTags.trim() : '';
   const mode = input.mode === 'semantic' ? 'semantic' : 'keyword';
   const results = (input.results ?? []).map(normalizeSearchResult);
-  const filterEnabled = input.filterEnabled === false ? false : Boolean(query && results.length > 0 && (input.filterEnabled ?? true));
+  const filterEnabled = input.filterEnabled === false ? false : Boolean((excludeTags || (query && results.length > 0)) && (input.filterEnabled ?? true));
   const activeResultId = normalizeActiveResultId(input.activeResultId ?? null, results);
   return {
     query,
@@ -109,6 +112,7 @@ export function normalizeSearchSnapshotInput(input?: HvySearchSnapshotInput | nu
     categories: normalizeSnapshotCategories(input.categories),
     filterEnabled,
     filterMode: input.filterMode === 'hide' ? 'hide' : 'deprioritize',
+    excludeTags,
     results,
     activeResultId,
   };
@@ -128,6 +132,8 @@ export function searchSnapshotToState(input?: HvySearchSnapshotInput | null): Se
     filterMode: snapshot.filterMode,
     filterQueryMode: snapshot.mode,
     submittedFilterQueryMode: snapshot.mode,
+    excludeTags: snapshot.excludeTags,
+    submittedExcludeTags: snapshot.excludeTags,
     activeResultId: snapshot.activeResultId ?? null,
     results: snapshot.results,
     navigationResultIds: snapshot.results.map((result) => result.id),
@@ -146,6 +152,7 @@ export function searchStateToSnapshot(search: SearchState): HvySearchSnapshot {
     categories: search.categories,
     filterEnabled: search.filterEnabled,
     filterMode: search.filterMode,
+    excludeTags: search.submittedExcludeTags || search.excludeTags,
     results: search.results,
     activeResultId: search.activeResultId,
   });

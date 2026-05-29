@@ -152,6 +152,7 @@ export interface HvySearchSnapshot {
   categories: SearchCategory[];
   filterEnabled: boolean;
   filterMode: SearchFilterMode;
+  excludeTags: string;
   results: HvySearchResult[];
   activeResultId?: string | null;
 }
@@ -172,6 +173,7 @@ export interface HvySearchSnapshotInput {
   categories?: SearchCategory[] | Partial<Record<SearchCategory, boolean>>;
   filterEnabled?: boolean;
   filterMode?: SearchFilterMode;
+  excludeTags?: string;
   results?: HvySearchResult[];
   activeResultId?: string | null;
 }
@@ -187,6 +189,8 @@ export interface SearchState {
   filterMode: SearchFilterMode;
   filterQueryMode: SearchFilterQueryMode;
   submittedFilterQueryMode: SearchFilterQueryMode;
+  excludeTags?: string;
+  submittedExcludeTags?: string;
   resultsCollapsed: boolean;
   activeResultId: string | null;
   isLoading: boolean;

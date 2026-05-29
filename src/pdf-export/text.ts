@@ -8,6 +8,8 @@ interface PdfTextLine {
 
 export interface PdfTextBlockStyle {
   bold?: boolean;
+  color?: string;
+  fillColor?: string;
 }
 
 export function renderPdfTextBlock(
@@ -171,5 +173,10 @@ function applyTextAlignment<T extends HvyPdfMakeNodeObject>(node: T, align: Alig
 }
 
 function applyTextStyle<T extends HvyPdfMakeNodeObject>(node: T, textStyle: PdfTextBlockStyle): T {
-  return textStyle.bold === undefined ? node : { ...node, bold: textStyle.bold };
+  return {
+    ...node,
+    ...(textStyle.bold === undefined ? {} : { bold: textStyle.bold }),
+    ...(textStyle.color ? { color: textStyle.color } : {}),
+    ...(textStyle.fillColor ? { fillColor: textStyle.fillColor } : {}),
+  };
 }

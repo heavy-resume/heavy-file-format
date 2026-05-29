@@ -752,6 +752,11 @@ body {
   min-height: 0;
 }
 
+.phvy-viewer-shell {
+  background: var(--hvy-bg);
+  color: var(--hvy-text);
+}
+
 .viewer-shell .reader-document {
   height: 100%;
   overflow: auto;

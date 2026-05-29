@@ -34,6 +34,7 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -727,7 +728,10 @@ function renderApp(): void {
                     </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`)}>
+              : `<div${renderResponsivePreviewFrameAttrs(
+                  `viewer-shell ${pdfDocument && !isAiView ? 'phvy-viewer-shell ' : ''}${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`,
+                  pdfDocument && !isAiView ? renderPdfDocumentViewerThemeStyle(state.document, escapeAttr) : ''
+                )}>
                    ${renderTransientNotice()}
                    ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                      <aside class="viewer-sidebar">
@@ -1032,7 +1036,7 @@ function isSameReaderView(left: ReaderViewFilter, right: ReaderViewFilter): bool
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function renderResponsivePreviewFrameAttrs(baseClass: string): string {
+function renderResponsivePreviewFrameAttrs(baseClass: string, inlineStyle = ''): string {
   const maxWidth = typeof state.document.meta.reader_max_width === 'string' ? state.document.meta.reader_max_width.trim() : '';
   const width =
     state.responsivePreview === 'phone'
@@ -1043,7 +1047,8 @@ function renderResponsivePreviewFrameAttrs(baseClass: string): string {
       ? maxWidth || '960px'
       : '';
   const className = `${baseClass} hvy-preview-frame hvy-preview-frame-${state.responsivePreview}`;
-  const style = width ? ` style="width: ${escapeAttr(width)};"` : '';
+  const styleValues = [width ? `width: ${escapeAttr(width)};` : '', inlineStyle].filter(Boolean).join(' ');
+  const style = styleValues ? ` style="${styleValues}"` : '';
   return ` class="${escapeAttr(className)}"${style}`;
 }
 

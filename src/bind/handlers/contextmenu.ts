@@ -66,7 +66,7 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
 
-    const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+    const filtering = state.search.filterEnabled && (state.search.submittedQuery.trim().length > 0 || (state.search.submittedExcludeTags ?? '').trim().length > 0);
     openReaderContextPopover(app, event, filtering);
     if (state.contextMenu?.kind === 'ai') {
       dismissAiModeTip(app);
@@ -283,7 +283,7 @@ function renderContextMenuElement(app: HTMLElement): void {
   if (!menu) {
     return;
   }
-  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  const filtering = state.search.filterEnabled && (state.search.submittedQuery.trim().length > 0 || (state.search.submittedExcludeTags ?? '').trim().length > 0);
   const root = menu.kind === 'editor' && menu.surface === 'modal'
     ? app.querySelector<HTMLElement>('#modalRoot') ?? app
     : app.querySelector<HTMLElement>(menu.kind === 'editor' ? '.editor-shell' : '.viewer-shell') ?? app;

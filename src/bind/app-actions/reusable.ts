@@ -3,6 +3,8 @@ import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-o
 import { getComponentDefs, getSectionDefs, isBuiltinComponent } from '../../component-defs';
 import { findBlockByIds, setActiveEditorBlock, getTagState, setTagState, getTagRenderOptions } from '../../block-ops';
 import { handleRemoveTag } from '../../editor/tag-editor';
+import { parseTags } from '../../editor/tag-editor';
+import { refreshSearchFilterButton, setSearchExcludeTags } from '../../search/actions';
 import { createEmptySection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
@@ -11,9 +13,19 @@ import { stringify as stringifyYaml } from 'yaml';
 import type { AppActionHandler } from './types';
 
 const tagStateHelpers = {
-  getTagState,
-  setTagState,
-  getRenderOptions: getTagRenderOptions,
+  getTagState: (target: HTMLElement) => target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags'
+    ? parseTags(state.search.excludeTags ?? '')
+    : getTagState(target),
+  setTagState: (target: HTMLElement, tags: string[]) => {
+    if (target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags') {
+      setSearchExcludeTags(tags);
+      return;
+    }
+    setTagState(target, tags);
+  },
+  getRenderOptions: (target: HTMLElement) => target.dataset.field === 'search-exclude-tags-input' || target.dataset.tagField === 'search-exclude-tags'
+    ? {}
+    : getTagRenderOptions(target),
 };
 
 const addComponentDef: AppActionHandler = () => {
@@ -179,8 +191,11 @@ const openSaveSectionDef: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
-const removeTag: AppActionHandler = ({ actionButton }) => {
+const removeTag: AppActionHandler = ({ app, actionButton }) => {
   handleRemoveTag(actionButton, tagStateHelpers);
+  if (actionButton.dataset.tagField === 'search-exclude-tags') {
+    refreshSearchFilterButton(app);
+  }
 };
 
 const addTemplateField: AppActionHandler = ({ actionButton }) => {

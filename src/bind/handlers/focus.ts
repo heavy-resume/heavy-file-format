@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { commitTextFillInElement } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
+import { refreshSearchFilterButton } from '../../search/actions';
 
 export function bindFocus(app: HTMLElement): void {
   app.addEventListener('focusin', (event) => {
@@ -50,6 +51,9 @@ export function bindFocus(app: HTMLElement): void {
     }
     if (target instanceof HTMLInputElement) {
       commitTagEditorDraft(target, tagStateHelpers);
+      if (target.dataset.field === 'search-exclude-tags-input') {
+        refreshSearchFilterButton(app);
+      }
       if (target.dataset.field === 'section-title') {
         const sectionKey = target.dataset.sectionKey;
         const section = sectionKey ? findSectionByKey(state.document.sections, sectionKey) : null;

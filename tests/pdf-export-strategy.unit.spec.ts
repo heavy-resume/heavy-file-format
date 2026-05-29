@@ -311,6 +311,26 @@ describe('PDF export strategy', () => {
     expect(serialized).not.toContain('"text":"Plain paragraph","style":"paragraph","bold":true');
   });
 
+  test('exports text css colors into the PDF definition', () => {
+    const document = createDocument();
+    document.meta.theme = { colors: { '--hvy-surface': '#ffeecc' } };
+    const headerText = createTextBlock('header-text', 'Header text');
+    headerText.schema.css = 'margin: 0; color: #111827; background-color: #f8fafc;';
+    const themedText = createTextBlock('themed-text', 'Themed text');
+    themedText.schema.css = 'margin: 0; background: var(--hvy-surface);';
+    document.sections = [createSection('colored-text-section', [headerText, themedText])];
+
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).toContain('"text":"Header text"');
+    expect(serialized).toContain('"color":"#111827"');
+    expect(serialized).toContain('"fillColor":"#f8fafc"');
+    expect(serialized).toContain('"text":"Themed text"');
+    expect(serialized).toContain('"fillColor":"#ffeecc"');
+    expect(serialized).not.toContain('"background"');
+  });
+
   test('exports right-aligned text from parsed HVY grid CSS', () => {
     const document = deserializeDocument(`---
 hvy_version: 0.1

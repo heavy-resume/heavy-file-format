@@ -13,6 +13,7 @@ import { filterTemplateVisibleSections } from '../template-hide';
 import { focusSearchInput } from './render';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { searchSnapshotToState } from './snapshot';
+import { parseTags, serializeTags } from '../editor/tag-editor';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 export function openSearch(app: HTMLElement): void {
@@ -31,7 +32,7 @@ export function expandSearchResults(app: HTMLElement): void {
 }
 
 export function closeSearch(): void {
-  const keepFilter = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
+  const keepFilter = state.search.filterEnabled && isSearchFilterActive();
   state.search.open = false;
   state.search.resultsCollapsed = false;
   if (!keepFilter) {
@@ -59,6 +60,8 @@ export function stopSearch(): void {
   state.search.activeResultId = null;
   state.search.navigationResultIds = [];
   state.search.filterEnabled = false;
+  state.search.excludeTags = '';
+  state.search.submittedExcludeTags = '';
   state.search.results = [];
   state.search.clearedSectionKeys = [];
   state.search.clearedBlockIds = [];
@@ -325,6 +328,7 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   if (!enabled) {
     state.search.filterEnabled = false;
     state.search.submittedQuery = '';
+    state.search.submittedExcludeTags = '';
     state.search.activeResultId = null;
     state.search.navigationResultIds = [];
     state.search.open = false;
@@ -345,7 +349,8 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   } else if (queryChanged) {
     await submitSearch();
   }
-  if (!state.search.submittedQuery.trim() || state.search.error || state.search.results.length === 0) {
+  state.search.submittedExcludeTags = normalizeExcludeTags(state.search.excludeTags ?? '');
+  if (!isSearchFilterActive() || state.search.error || (state.search.submittedQuery.trim() && state.search.results.length === 0)) {
     state.search.filterEnabled = false;
     state.search.open = true;
     state.search.resultsCollapsed = false;
@@ -363,6 +368,32 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
   state.search.resultsCollapsed = false;
   getRefreshReaderPanels()();
   getRenderApp()();
+}
+
+export function setSearchExcludeTags(tags: string[]): void {
+  state.search.excludeTags = serializeTags(tags);
+}
+
+export function refreshSearchFilterButton(app: ParentNode): void {
+  const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"], [data-action="stop-search-request"]');
+  if (!filterButton) {
+    return;
+  }
+  const applied = isSearchFilterApplied();
+  const noResults = !state.search.isLoading
+    && !state.search.error
+    && !applied
+    && state.search.submittedQuery.trim().length > 0
+    && state.search.queryDraft.trim() === state.search.submittedQuery.trim()
+    && state.search.filterQueryMode === state.search.submittedFilterQueryMode
+    && state.search.results.length === 0;
+  filterButton.dataset.action = 'apply-search-filter';
+  filterButton.classList.remove('danger');
+  filterButton.classList.add('secondary');
+  filterButton.classList.toggle('is-active', applied);
+  filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
+  filterButton.disabled = noResults;
+  filterButton.textContent = noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter';
 }
 
 async function submitSemanticFilter(): Promise<void> {
@@ -443,7 +474,7 @@ async function submitSemanticFilter(): Promise<void> {
 }
 
 export function clearFilteringForTarget(sectionKey: string, blockId?: string): void {
-  if (!state.search.filterEnabled || !state.search.submittedQuery.trim()) {
+  if (!state.search.filterEnabled || !isSearchFilterActive()) {
     return;
   }
   const clearBlockId = blockId ? getFilterClearBlockTarget(sectionKey, blockId) : null;
@@ -592,5 +623,14 @@ function getSearchResultTargetKey(result: HvySearchResult): string {
 export function isSearchFilterApplied(): boolean {
   return state.search.filterEnabled
     && state.search.queryDraft.trim() === state.search.submittedQuery.trim()
-    && state.search.filterQueryMode === state.search.submittedFilterQueryMode;
+    && state.search.filterQueryMode === state.search.submittedFilterQueryMode
+    && normalizeExcludeTags(state.search.excludeTags ?? '') === normalizeExcludeTags(state.search.submittedExcludeTags ?? '');
+}
+
+function isSearchFilterActive(): boolean {
+  return state.search.submittedQuery.trim().length > 0 || parseTags(state.search.submittedExcludeTags ?? '').length > 0;
+}
+
+function normalizeExcludeTags(value: string): string {
+  return serializeTags(parseTags(value));
 }

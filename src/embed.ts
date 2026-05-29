@@ -3,6 +3,8 @@ import './host-overrides.css';
 import './style.css';
 
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
+import { isPdfDocument } from './pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import {
   activateStateRuntime,
   createStateRuntime,
@@ -386,12 +388,13 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const readerWarningsHtml = renderer.renderWarnings();
   const readerSidebarSectionsHtml = renderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
+  const pdfDocument = isPdfDocument(state.document);
   capturePluginFocus();
   root.innerHTML = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
-          <div class="viewer-shell ${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+          <div class="viewer-shell ${pdfDocument ? 'phvy-viewer-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}"${pdfDocument ? ` style="${renderPdfDocumentViewerThemeStyle(state.document, escapeAttr)}"` : ''}>
             ${renderTransientNotice()}
             ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
               <aside class="viewer-sidebar">

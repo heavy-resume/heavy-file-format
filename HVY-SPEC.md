@@ -912,6 +912,8 @@ PDF-template authoring supports these component base types:
 
 Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
 
+PDF export renderers SHOULD map PDF-safe text component inline `css` declarations onto equivalent PDF text properties when a direct equivalent exists. At minimum, `text-align: left|center|right` maps to PDF text alignment, and `font-weight: bold` or numeric weights of `600` and above map to bold PDF text.
+
 With optional schema:
 
 ```yaml

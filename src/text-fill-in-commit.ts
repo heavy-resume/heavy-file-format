@@ -3,7 +3,11 @@ import { runDocumentEditHooksAfterCommit } from './document-edit-hooks';
 import { state } from './state';
 import { saveSessionState } from './state-persistence';
 
-export function commitTextFillInElement(target: HTMLElement | null | undefined, source = 'unknown'): boolean {
+export function commitTextFillInElement(
+  target: HTMLElement | null | undefined,
+  source = 'unknown',
+  options: { migrateFillInPlaceholders?: boolean } = {}
+): boolean {
   if (target?.dataset.field !== 'text-fill-in-value') {
     console.debug('[hvy:fill-in-commit]', {
       source,
@@ -20,7 +24,7 @@ export function commitTextFillInElement(target: HTMLElement | null | undefined, 
   const blockBefore = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
   const textBefore = blockBefore?.text ?? null;
   const fillInBefore = blockBefore?.schema.fillIn ?? null;
-  const handled = handleBlockFieldInput(target);
+  const handled = handleBlockFieldInput(target, { migrateFillInPlaceholders: options.migrateFillInPlaceholders !== false });
   if (handled) {
     saveSessionState(state);
     runDocumentEditHooksAfterCommit();

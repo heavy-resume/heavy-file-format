@@ -1773,6 +1773,7 @@ hvy_version: 0.1
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
   await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
@@ -1818,6 +1819,7 @@ hvy_version: 0.1
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
   await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
@@ -1827,6 +1829,109 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
+});
+
+test('text toolbar fill-in button follows the active selection', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await page.locator('.section-title-passive', { hasText: 'Header' }).click();
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+});
+
+test('text toolbar fill-in preserves heading syntax when the whole heading is selected', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+  await page.locator('.text-fill-in-selection-button').evaluate((button: HTMLButtonElement) => button.click());
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# <!-- value {"placeholder":"Name"} -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value {"placeholder":"# Name"} -->');
+});
+
+test('text fill-in editor keeps rich text toolbar available for heading changes', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"role","placeholder":"Role","fillIn":true}-->
+  <!-- value {"placeholder":"Role"} -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="role"] .text-fill-in-box').click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.getByRole('button', { name: 'H3' })).toBeVisible();
+  await activeBlock.locator('[data-field="text-fill-in-value"]').evaluate((fillIn) => {
+    const range = document.createRange();
+    range.selectNode(fillIn);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await activeBlock.getByRole('button', { name: 'H3' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('### <!-- value {"placeholder":"Role"} -->');
 });
 
 test('text fill-in preserves multiple slots while typing', async ({ page }) => {

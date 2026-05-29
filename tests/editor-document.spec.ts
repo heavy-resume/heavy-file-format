@@ -3094,6 +3094,52 @@ section_defs:
   await expect(page.locator('#rawEditor')).toHaveValue(/repeatable: true/);
 });
 
+test('section template heading edits do not render block cancel or done controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      blocks:
+        - id: feature-heading
+          text: "# Feature Role"
+          schema:
+            component: text
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await sectionTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('.editor-block-passive').click();
+  const activeBlock = modal.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.locator('.rich-editor h1').click();
+  await activeBlock.getByRole('button', { name: 'H3' }).click();
+
+  await expect(activeBlock.locator('.rich-editor h3')).toContainText('Feature Role');
+  await expect(activeBlock.locator('.rich-editor h3 h1')).toHaveCount(0);
+  await expect(activeBlock.locator('.editor-block-done-row')).toHaveCount(0);
+  await expect(activeBlock.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  await expect(activeBlock.getByRole('button', { name: 'Done' })).toHaveCount(0);
+
+  await modal.getByRole('button', { name: 'HVY' }).click();
+  await expect(page.locator('#reusableDefinitionRawInput')).toContainText('text: "### Feature Role"');
+  await expect(page.locator('#reusableDefinitionRawInput')).not.toContainText('text: "# Feature Role"');
+});
+
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 

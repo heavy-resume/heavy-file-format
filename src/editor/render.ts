@@ -529,6 +529,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const canRemove = isActive && !structurallyLocked;
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
+    const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
     const placementActions = canRemove
       ? isPlacementSource
         ? `<button type="button" class="secondary" data-action="cancel-component-placement" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Cancel place</button>`
@@ -581,7 +582,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${anchorAttrs.overlay}
         </div>
         ${
-          isActiveFrame
+          showActiveBlockDoneRow
             ? `<div class="editor-block-done-row">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
                   sectionKey

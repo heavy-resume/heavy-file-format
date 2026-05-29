@@ -13,7 +13,7 @@ import type {
   HvyPdfMakeNodeObject,
 } from './types';
 import { resolvePdfExportStrategy } from './strategy';
-import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock } from './text';
+import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock, type PdfTextBlockStyle } from './text';
 
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
@@ -140,7 +140,7 @@ function renderBlock(
   switch (baseComponent) {
     case 'text':
       node = hasRenderablePdfTextBlock(block.text)
-        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, getPdfTextAlignment(block))
+        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, getPdfTextAlignment(block), getPdfTextBlockStyle(block))
         : null;
       break;
     case 'code':
@@ -209,10 +209,42 @@ function getPdfTextAlignment(block: VisualBlock): Align | undefined {
   return getTextAlignFromCss(block.schema.css) ?? block.schema.align;
 }
 
+function getPdfTextBlockStyle(block: VisualBlock): PdfTextBlockStyle {
+  const style: PdfTextBlockStyle = {};
+  const fontWeight = getCssDeclarationValue(block.schema.css, 'font-weight')?.toLowerCase();
+  const numericWeight = fontWeight ? Number.parseInt(fontWeight, 10) : NaN;
+  if (fontWeight === 'bold' || numericWeight >= 600) {
+    style.bold = true;
+  } else if (fontWeight === 'normal' || numericWeight <= 500) {
+    style.bold = false;
+  }
+  return style;
+}
+
 function getTextAlignFromCss(css: string): Align | undefined {
-  const match = /(?:^|;)\s*text-align\s*:\s*(left|center|right)\s*(?:;|$)/i.exec(css);
-  const align = match?.[1]?.toLowerCase();
+  const align = getCssDeclarationValue(css, 'text-align')?.toLowerCase();
   return align === 'left' || align === 'center' || align === 'right' ? align : undefined;
+}
+
+function getCssDeclarationValue(css: string, propertyName: string): string | null {
+  const property = propertyName.toLowerCase();
+  const declaration = css
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const separator = part.indexOf(':');
+      if (separator === -1) {
+        return null;
+      }
+      return {
+        property: part.slice(0, separator).trim().toLowerCase(),
+        value: part.slice(separator + 1).trim(),
+      };
+    })
+    .filter((entry): entry is { property: string; value: string } => Boolean(entry))
+    .find((entry) => entry.property === property);
+  return declaration?.value ?? null;
 }
 
 function renderExpandableBlock(

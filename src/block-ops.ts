@@ -19,10 +19,12 @@ import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
+import { createTextFillInMarker, hasTextFillInMarker, prepareTextFillIn } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
+
+const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -173,7 +175,7 @@ export function resolveBlockContext(target: HTMLElement): { block: VisualBlock; 
   return block ? { block, row: null } : null;
 }
 
-export function handleBlockFieldInput(target: HTMLElement): boolean {
+export function handleBlockFieldInput(target: HTMLElement, options: { migrateFillInPlaceholders?: boolean } = {}): boolean {
   const field = target.dataset.field;
   if (!field) {
     return false;
@@ -192,16 +194,23 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
   const block = context.block;
 
-  if (field === 'block-rich') {
+  if (field === 'block-rich' || field === 'text-fill-in-rich') {
     let turndownMs = 0;
     let syncMs = 0;
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
-    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(
+      field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : target.innerHTML
+    )));
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
+    if (field === 'text-fill-in-rich') {
+      block.schema.fillIn = hasTextFillInMarker(block.text);
+    }
     turndownMs = performance.now() - stepStartedAt;
-    syncEditableTaskListMarkup(target, block.text);
+    if (field === 'block-rich') {
+      syncEditableTaskListMarkup(target, block.text);
+    }
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     syncMs = performance.now() - stepStartedAt;
@@ -222,8 +231,12 @@ export function handleBlockFieldInput(target: HTMLElement): boolean {
   }
 
   if (field === 'text-fill-in-value') {
-    block.text = buildTextFromFillInEditor(target);
+    block.text = buildTextFromFillInEditor(target, block, options.migrateFillInPlaceholders === true);
     block.schema.fillIn = hasTextFillInMarker(block.text);
+    if (options.migrateFillInPlaceholders === true) {
+      block.schema.placeholder = '';
+    }
+    scheduleCompletedMultiSlotFillInBlur(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (!target.closest('.editor-tree, .hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
@@ -500,7 +513,7 @@ function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
   return !target.closest('.editor-tree, .hvy-ai-reader-surface');
 }
 
-function buildTextFromFillInEditor(target: HTMLElement): string {
+function buildTextFromFillInEditor(target: HTMLElement, block: VisualBlock, migrateFillInPlaceholders: boolean): string {
   const editor = target.closest<HTMLElement>('.text-fill-in-editor');
   if (!editor) {
     return target.textContent ?? '';
@@ -522,9 +535,63 @@ function buildTextFromFillInEditor(target: HTMLElement): string {
         return part;
       }
       const value = (fillIns[index]?.textContent ?? '').replaceAll('\u200b', '');
-      return `${part}${value.length > 0 ? value : createTextFillInMarker(fillIns[index]?.dataset.placeholder ?? '')}`;
+      return `${part}${value.length > 0 ? value : createTextFillInMarker(getTextFillInSlotPlaceholder(fillIns[index], block, index, migrateFillInPlaceholders))}`;
     })
     .join('');
+}
+
+function scheduleCompletedMultiSlotFillInBlur(target: HTMLElement, block: VisualBlock): void {
+  const existingTimer = completedMultiSlotFillInBlurTimers.get(target);
+  if (existingTimer !== undefined) {
+    window.clearTimeout(existingTimer);
+  }
+  const editor = target.closest<HTMLElement>('.text-fill-in-editor');
+  const startedAsMultiSlot = (editor?.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]').length ?? 0) > 1;
+  if (!startedAsMultiSlot || block.schema.fillIn) {
+    completedMultiSlotFillInBlurTimers.delete(target);
+    return;
+  }
+  completedMultiSlotFillInBlurTimers.set(target, window.setTimeout(() => {
+    completedMultiSlotFillInBlurTimers.delete(target);
+    if (document.activeElement === target && !block.schema.fillIn) {
+      target.blur();
+    }
+  }, 250));
+}
+
+function getTextFillInSlotPlaceholder(fillIn: HTMLElement | undefined, block: VisualBlock, index: number, migrateFillInPlaceholders: boolean): string {
+  const markerPlaceholder = fillIn?.dataset.placeholder ?? '';
+  if (!migrateFillInPlaceholders) {
+    return markerPlaceholder;
+  }
+  if (markerPlaceholder && markerPlaceholder !== 'value') {
+    return markerPlaceholder;
+  }
+  const blockPlaceholder = block.schema.placeholder
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)[index] ?? '';
+  return blockPlaceholder || markerPlaceholder;
+}
+
+function getTextFillInRichEditorHtml(editor: HTMLElement): string {
+  const clone = editor.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll<HTMLElement>('[data-field="text-fill-in-value"]').forEach((fillIn) => {
+    const value = (fillIn.textContent ?? '').replaceAll('\u200b', '');
+    if (value.length > 0) {
+      fillIn.replaceWith(document.createTextNode(value));
+      return;
+    }
+    const marker = document.createElement('span');
+    marker.dataset.hvyFillInMarker = 'true';
+    const placeholder = fillIn.dataset.placeholder ?? '';
+    if (placeholder) {
+      marker.setAttribute('data-placeholder', placeholder);
+    }
+    marker.textContent = placeholder || 'value';
+    fillIn.replaceWith(marker);
+  });
+  return clone.innerHTML;
 }
 
 function getInlineEditableMarkdown(target: HTMLElement): string {
@@ -1015,7 +1082,7 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
 }
 
 function applyTextLineStyleToSelection(editable: HTMLElement, styleName: string): void {
-  if (editable.dataset.field !== 'block-rich') {
+  if (editable.dataset.field !== 'block-rich' && editable.dataset.field !== 'text-fill-in-rich') {
     return;
   }
   const range = getEditableSelectionRange(editable);
@@ -1163,7 +1230,8 @@ function applyTextFillInSlot(editable: HTMLElement): void {
     : editable.dataset.fillInSelectionText?.trim() ?? '';
   recordHistory(`text:${block.id}:fill-in:set`);
   if (selectedText && block.text.includes(selectedText)) {
-    block.text = block.text.replace(selectedText, createTextFillInMarker(selectedText));
+    block.text = block.text.replace(selectedText, prepareTextFillIn(selectedText).text);
+    block.schema.placeholder = '';
   } else if (block.text.trim().length === 0) {
     block.text = createTextFillInMarker();
   } else {
@@ -1541,27 +1609,31 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
   if (!block || block.tagName === 'LI' || block.tagName === 'PRE') {
     return;
   }
+  const targetBlock = block === editable ? getEditableRootBlockForFormatting(editable) ?? block : block;
+  if (targetBlock.tagName === 'LI' || targetBlock.tagName === 'PRE') {
+    return;
+  }
   const selection = window.getSelection();
   const previousRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
   const previousTextSelection =
-    previousRange && isRangeInsideElement(block, previousRange)
+    previousRange && isRangeInsideElement(targetBlock, previousRange)
       ? {
-          start: getTextOffset(block, previousRange.startContainer, previousRange.startOffset),
-          end: getTextOffset(block, previousRange.endContainer, previousRange.endOffset),
+          start: getTextOffset(targetBlock, previousRange.startContainer, previousRange.startOffset),
+          end: getTextOffset(targetBlock, previousRange.endContainer, previousRange.endOffset),
         }
       : null;
   const replacement = document.createElement(tagName);
-  while (block.firstChild) {
-    replacement.appendChild(block.firstChild);
+  while (targetBlock.firstChild) {
+    replacement.appendChild(targetBlock.firstChild);
   }
   const needsTypingAnchor = tagName !== 'p' && (!replacement.textContent || replacement.textContent === '\u200b');
   if (!replacement.firstChild || (replacement.childNodes.length === 1 && replacement.firstChild instanceof HTMLBRElement)) {
     replacement.replaceChildren(document.createTextNode(needsTypingAnchor ? '\u200b' : ''));
   }
-  if (block === editable) {
+  if (targetBlock === editable) {
     editable.replaceChildren(replacement);
   } else {
-    block.replaceWith(replacement);
+    targetBlock.replaceWith(replacement);
   }
   if (needsTypingAnchor && replacement.firstChild) {
     placeCaretAtEnd(replacement);
@@ -1586,6 +1658,30 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
     placeCaretInside(replacement);
     refocusEditablePreservingSelection(editable);
   }
+}
+
+function getEditableRootBlockForFormatting(editable: HTMLElement): HTMLElement | null {
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  if (range?.startContainer === editable) {
+    const offsetChild = editable.childNodes[Math.min(range.startOffset, editable.childNodes.length - 1)] ?? null;
+    const previousChild = range.startOffset > 0 ? editable.childNodes[range.startOffset - 1] ?? null : null;
+    const candidate = getBlockElementCandidate(offsetChild) ?? getBlockElementCandidate(previousChild);
+    if (candidate) {
+      return candidate;
+    }
+  }
+  if (editable.children.length === 1) {
+    return getBlockElementCandidate(editable.firstElementChild);
+  }
+  return null;
+}
+
+function getBlockElementCandidate(node: Node | null): HTMLElement | null {
+  if (!(node instanceof HTMLElement)) {
+    return null;
+  }
+  return /^(P|DIV|LI|BLOCKQUOTE|PRE|H[1-6])$/.test(node.tagName) ? node : null;
 }
 
 function refocusEditablePreservingSelection(editable: HTMLElement): void {
@@ -1624,13 +1720,11 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
-  textEditorShell?.classList.toggle(
-    'has-fill-in-selection',
-    editable.dataset.field === 'block-rich' && Boolean(range && !range.collapsed && range.toString().trim().length > 0)
-  );
   if (editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0) {
+    textEditorShell?.classList.add('has-fill-in-selection');
     editable.dataset.fillInSelectionText = range.toString().trim();
-  } else {
+  } else if (!textEditorShell || !document.activeElement || !textEditorShell.contains(document.activeElement)) {
+    textEditorShell?.classList.remove('has-fill-in-selection');
     delete editable.dataset.fillInSelectionText;
   }
   const toolbars = [

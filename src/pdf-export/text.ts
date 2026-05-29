@@ -6,15 +6,23 @@ interface PdfTextLine {
   text: string;
 }
 
+export interface PdfTextBlockStyle {
+  bold?: boolean;
+}
+
 export function renderPdfTextBlock(
   text: string,
   _placeholder: string,
   decision: HvyPdfExportDecision,
-  align?: Align
+  align?: Align,
+  textStyle: PdfTextBlockStyle = {}
 ): HvyPdfMakeNodeObject {
   const lines = splitPdfTextLines(getPdfTextBlockSource(text));
   if (!lines.length) {
-    return applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align);
+    return applyTextStyle(
+      applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align),
+      textStyle
+    );
   }
   const stack: HvyPdfMakeNode[] = [];
   let listItems: HvyPdfMakeNode[] = [];
@@ -32,23 +40,33 @@ export function renderPdfTextBlock(
     const style = getPdfTextLineStyle(line.styleName, decision);
     if (heading) {
       flushList();
-      stack.push(applyTextAlignment({
-        text: heading[2],
-        style: getHeadingStyle(heading[1].length, style),
-        headlineLevel: heading[1].length,
-        hvyKeepWithNext: true,
-      }, align));
+      stack.push(
+        applyTextStyle(
+          applyTextAlignment({
+            text: heading[2],
+            style: getHeadingStyle(heading[1].length, style),
+            headlineLevel: heading[1].length,
+            hvyKeepWithNext: true,
+          }, align),
+          textStyle
+        )
+      );
     } else if (bullet) {
       activeListStyle = style;
-      listItems.push(applyTextAlignment({ text: bullet[1], style }, align));
+      listItems.push(applyTextStyle(applyTextAlignment({ text: bullet[1], style }, align), textStyle));
     } else {
       flushList();
-      stack.push(applyTextAlignment({
-        text: line.text,
-        style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
-        headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
-        hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
-      }, align));
+      stack.push(
+        applyTextStyle(
+          applyTextAlignment({
+            text: line.text,
+            style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
+            headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
+            hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
+          }, align),
+          textStyle
+        )
+      );
     }
   }
   flushList();
@@ -150,4 +168,8 @@ function getHeadingStyle(level: number, lineStyle: string): string[] {
 
 function applyTextAlignment<T extends HvyPdfMakeNodeObject>(node: T, align: Align | undefined): T {
   return align && align !== 'left' ? { ...node, alignment: align } : node;
+}
+
+function applyTextStyle<T extends HvyPdfMakeNodeObject>(node: T, textStyle: PdfTextBlockStyle): T {
+  return textStyle.bold === undefined ? node : { ...node, bold: textStyle.bold };
 }

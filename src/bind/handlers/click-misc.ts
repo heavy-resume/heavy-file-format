@@ -7,6 +7,10 @@ import { templateDefinitionDetailsKey } from '../../editor/render';
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
+  document.addEventListener('selectionchange', () => {
+    refreshSelectionDrivenRichToolbarState(app);
+  });
+
   app.addEventListener('toggle', (event) => {
     const details = event.target instanceof HTMLElement
       ? event.target.closest<HTMLDetailsElement>('details.template-def-details[data-template-kind]')
@@ -174,6 +178,30 @@ function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): vo
   picker.dataset.activePane = 'root';
   placeComponentPicker(picker);
   revealComponentPicker(picker);
+}
+
+function refreshSelectionDrivenRichToolbarState(app: HTMLElement): void {
+  const richTarget = getRichTargetFromSelection(app);
+  app.querySelectorAll<HTMLElement>('.text-editor-shell.has-fill-in-selection').forEach((shell) => {
+    if (!richTarget || !shell.contains(richTarget)) {
+      shell.classList.remove('has-fill-in-selection');
+    }
+  });
+  if (richTarget) {
+    refreshRichToolbarState(richTarget);
+  }
+}
+
+function getRichTargetFromSelection(app: HTMLElement): HTMLElement | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const target = element ? getRichTarget(element) : null;
+  return target && app.contains(target) ? target : null;
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

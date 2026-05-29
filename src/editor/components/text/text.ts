@@ -10,6 +10,16 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
   const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
   if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
+    const richToolbar = fillInParts.length === 2
+      ? helpers.renderRichToolbar(sectionKey, block.id, { field: 'text-fill-in-rich', includeAlign: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })
+      : '';
+    const richEditorAttributes = richToolbar
+      ? `
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(block.id)}"
+        data-field="text-fill-in-rich"
+        contenteditable="false"`
+      : '';
     const fillInSource = fillInParts
       .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
       .join('');
@@ -30,6 +40,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       );
     }
     return `
+      ${richToolbar}
       <div class="rich-toolbar text-fill-in-toolbar">
         <div class="toolbar-segment" role="group" aria-label="Fill-in slot">
           <button
@@ -41,7 +52,12 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
           >Remove Fill-in</button>
         </div>
       </div>
-      <div class="rich-editor text-fill-in-editor" data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"${alignStyle}>
+      <div
+        class="rich-editor text-fill-in-editor"
+        ${richEditorAttributes}
+        data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"
+        ${alignStyle}
+      >
         ${html}
       </div>
     `;

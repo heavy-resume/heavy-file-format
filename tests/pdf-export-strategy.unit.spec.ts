@@ -7,6 +7,7 @@ import type { VisualDocument } from '../src/types';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob, preparePdfExport } from '../src/pdf-export/export';
 import { createPdfExportRuleRecorder, resolvePdfExportStrategy } from '../src/pdf-export/strategy';
+import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import { deserializeDocument } from '../src/serialization';
 
 vi.mock('pdfmake/build/pdfmake.js', () => ({
@@ -294,6 +295,22 @@ describe('PDF export strategy', () => {
     expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Right cell', alignment: 'right' }));
   });
 
+  test('exports text css font weight into the PDF definition', () => {
+    const document = createDocument();
+    const roleText = createTextBlock('role-text', 'Senior Software Engineer II');
+    roleText.schema.css = 'margin: 0.35rem 0; font-weight: 700;';
+    const plainText = createTextBlock('plain-text', 'Plain paragraph');
+    document.sections = [createSection('weighted-text-section', [roleText, plainText])];
+
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).toContain('"text":"Senior Software Engineer II"');
+    expect(serialized).toContain('"bold":true');
+    expect(serialized).toContain('"text":"Plain paragraph"');
+    expect(serialized).not.toContain('"text":"Plain paragraph","style":"paragraph","bold":true');
+  });
+
   test('exports right-aligned text from parsed HVY grid CSS', () => {
     const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -316,10 +333,36 @@ hvy_version: 0.1
 `, '.phvy');
 
     const expectedResult = buildPdfExportDocDefinition(document);
-    const gridNode = expectedResult.content[0].stack.find((node: { columns?: unknown[] }) => Array.isArray(node.columns));
+    const firstSection = expectedResult.content[0];
+    expect(typeof firstSection).not.toBe('string');
+    if (typeof firstSection === 'string') return;
+    const gridNode = firstSection.stack?.find(
+      (node): node is HvyPdfMakeNodeObject => typeof node !== 'string' && Array.isArray(node.columns)
+    );
 
-    expect(gridNode.columns[1]).not.toHaveProperty('alignment');
-    expect(gridNode.columns[1].stack[0]).toEqual(expect.objectContaining({ text: 'Q4 2018', alignment: 'right' }));
+    expect(gridNode?.columns?.[1]).not.toHaveProperty('alignment');
+    expect(gridNode?.columns?.[1]).toEqual(expect.objectContaining({ stack: expect.any(Array) }));
+    if (typeof gridNode?.columns?.[1] === 'string') return;
+    expect(gridNode?.columns?.[1]?.stack?.[0]).toEqual(expect.objectContaining({ text: 'Q4 2018', alignment: 'right' }));
+  });
+
+  test('exports bold text from parsed PHVY font weight CSS', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"experience"}-->
+#! Experience
+
+<!--hvy:text {"css":"margin: 0.35rem 0; font-weight: 700;"}-->
+ Senior Software Engineer II
+`, '.phvy');
+
+    const expectedResult = buildPdfExportDocDefinition(document);
+    const serialized = JSON.stringify(expectedResult.content);
+
+    expect(serialized).toContain('"text":"Senior Software Engineer II"');
+    expect(serialized).toContain('"bold":true');
   });
 
   test('exports right-aligned child text inside a grid into the PDF definition', async () => {

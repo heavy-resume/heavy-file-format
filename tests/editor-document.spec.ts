@@ -3349,6 +3349,7 @@ test('document ai context is editable metadata and keeps focus while typing', as
   await page.getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
+  await page.locator('.meta-expandable-field', { hasText: 'AI Context' }).locator('summary').click();
   const aiContext = page.locator('[data-field="meta-ai-context"]');
   await aiContext.fill('');
   await aiContext.type('Use top skills as featured skills.');
@@ -3366,6 +3367,7 @@ test('document ai import guidance is editable metadata and keeps focus while typ
   await page.getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
+  await page.locator('.meta-expandable-field', { hasText: 'AI Import Guidance' }).locator('summary').click();
   const importGuidance = page.locator('[data-field="meta-ai-import-guidance"]');
   await importGuidance.fill('');
   await importGuidance.type('Route scattered awards into the Awards template.');

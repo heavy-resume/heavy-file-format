@@ -1169,22 +1169,34 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
-        <label>
-          <span>AI Context</span>
-          <textarea
-            rows="4"
-            data-field="meta-ai-context"
-            placeholder="Tell the AI how this document is organized and what intent to preserve."
-          >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
-        </label>
-        <label>
-          <span>AI Import Guidance</span>
-          <textarea
-            rows="5"
-            data-field="meta-ai-import-guidance"
-            placeholder="Tell import how source facts should map to sections, templates, and template records."
-          >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
-        </label>
+        <details class="meta-expandable-field">
+          <summary>
+            <span>AI Context</span>
+            ${String(state.documentMeta['ai-context'] ?? '').trim() ? '<span class="muted">Configured</span>' : ''}
+          </summary>
+          <label>
+            <span>Instructions</span>
+            <textarea
+              rows="4"
+              data-field="meta-ai-context"
+              placeholder="Tell the AI how this document is organized and what intent to preserve."
+            >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
+          </label>
+        </details>
+        <details class="meta-expandable-field">
+          <summary>
+            <span>AI Import Guidance</span>
+            ${String(state.documentMeta['ai-import-guidance'] ?? '').trim() ? '<span class="muted">Configured</span>' : ''}
+          </summary>
+          <label>
+            <span>Instructions</span>
+            <textarea
+              rows="5"
+              data-field="meta-ai-import-guidance"
+              placeholder="Tell import how source facts should map to sections, templates, and template records."
+            >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
+          </label>
+        </details>
         <div class="editor-grid">
           <label>
             <span>Empty Descriptions</span>

@@ -1832,6 +1832,50 @@
   font-size: 0.9rem;
 }
 
+.meta-expandable-field {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  overflow: clip;
+}
+
+.meta-expandable-field summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.52rem 0.62rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  list-style: none;
+}
+
+.meta-expandable-field summary::-webkit-details-marker {
+  display: none;
+}
+
+.meta-expandable-field summary::after {
+  content: '';
+  width: 0.48rem;
+  height: 0.48rem;
+  border-right: 2px solid var(--hvy-text-muted);
+  border-bottom: 2px solid var(--hvy-text-muted);
+  transform: rotate(45deg);
+  transition: transform 0.16s ease;
+}
+
+.meta-expandable-field[open] summary {
+  border-bottom: 1px solid var(--hvy-border-input);
+}
+
+.meta-expandable-field[open] summary::after {
+  transform: rotate(225deg);
+}
+
+.meta-expandable-field label {
+  padding: 0.62rem;
+}
+
 .meta-panel input:not([type='checkbox']),
 .meta-panel textarea {
   width: 100%;

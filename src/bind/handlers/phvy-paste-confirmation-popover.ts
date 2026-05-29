@@ -22,7 +22,7 @@ export function openPhvyPasteConfirmationPopover(confirmPaste: () => void, cance
   `;
 
   modal.addEventListener('click', (event) => {
-    const target = event.target instanceof Element ? event.target : null;
+    const target = hasClosest(event.target) ? event.target : null;
     const action = target?.closest<HTMLElement>('[data-phvy-paste-action]')?.dataset.phvyPasteAction;
     if (action === 'confirm' && pendingConfirmPaste) {
       const confirm = pendingConfirmPaste;
@@ -38,6 +38,10 @@ export function openPhvyPasteConfirmationPopover(confirmPaste: () => void, cance
   });
 
   app.append(modal);
+}
+
+function hasClosest(value: EventTarget | null): value is HTMLElement {
+  return !!value && typeof (value as HTMLElement).closest === 'function';
 }
 
 export function closePhvyPasteConfirmationPopover(): void {

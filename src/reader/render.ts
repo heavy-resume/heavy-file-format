@@ -35,7 +35,7 @@ import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
-import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
+import { filterTemplateVisibleSections, isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
 import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
@@ -668,7 +668,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
-    if (state.currentView === 'viewer' && block.schema.editorOnly) {
+    if (state.currentView === 'viewer' && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block))) {
       return true;
     }
     return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);

@@ -1656,6 +1656,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </label>
         ${textMetaFields}
         <label>
+          <span>Hide If Yes</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-hide-if-yes"
+            placeholder="{% field | isempty %}"
+            value="${deps.escapeAttr(block.schema.hideIfYes)}"
+          />
+        </label>
+        <label>
           <div>Visible When Function Body</div>
           <div>Controls when this block is visible. Returns boolean.</div>
           <textarea

@@ -789,6 +789,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
+    hideIfYes: schema.hideIfYes,
     placeholder: schema.placeholder,
     fillIn: schema.fillIn,
   };
@@ -919,6 +920,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
   if (typeof value.tags === 'string') schema.tags = validateTags(value.tags, `${component}.json tags`);
   if (typeof value.description === 'string') schema.description = value.description;
+  if (typeof value.hideIfYes === 'string') schema.hideIfYes = value.hideIfYes;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
   if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;

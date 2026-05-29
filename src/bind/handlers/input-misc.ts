@@ -537,6 +537,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-hide-if-yes' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.hideIfYes = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-editor-only' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

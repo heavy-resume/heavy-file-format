@@ -510,6 +510,7 @@ function copyReusableSchemaFields(source: BlockSchema, target: BlockSchema): voi
   if (source.groupKeys && typeof source.groupKeys === 'object') target.groupKeys = { ...source.groupKeys };
   if (typeof source.tags === 'string') target.tags = source.tags;
   if (typeof source.description === 'string') target.description = source.description;
+  if (typeof source.hideIfYes === 'string') target.hideIfYes = source.hideIfYes;
   if (typeof source.visibleScript === 'string') target.visibleScript = source.visibleScript;
   if (typeof source.placeholder === 'string') target.placeholder = source.placeholder;
   if (typeof source.fillIn === 'boolean') target.fillIn = source.fillIn;

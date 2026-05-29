@@ -5,7 +5,7 @@ import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getPdfDocumentViewerThemeVariables } from '../pdf-document-theme';
 import { cssFragmentTriggersNetwork } from '../css-sanitizer';
 import { isExternalCssAllowed } from '../reference-config';
-import { isSectionHiddenByTemplateMarker } from '../template-hide';
+import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportOptions,
@@ -135,7 +135,7 @@ function renderBlock(
   block: VisualBlock
 ): HvyPdfMakeNodeObject | null {
   const decision = resolved.getBlockDecision(block.id);
-  if (block.schema.editorOnly || decision.visibility === 'hide') {
+  if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block) || decision.visibility === 'hide') {
     return null;
   }
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);

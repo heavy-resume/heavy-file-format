@@ -225,6 +225,7 @@ Common block metadata fields include:
 - `groupKeys`
 - `tags`
 - `description`
+- `hideIfYes`
 - `visibleScript`
 - `placeholder`
 - `fillIn`
@@ -232,6 +233,7 @@ Common block metadata fields include:
 
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+`hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
 `editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
@@ -579,12 +581,14 @@ Component templates MAY include value tokens in any string field. Tokens use Mar
 {% organization %}
 {% role | text %}
 {% description | block %}
+{% description | isempty %}
 {% project-link %}
 ```
 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
+- `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.

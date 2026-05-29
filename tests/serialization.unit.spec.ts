@@ -569,6 +569,25 @@ Dependent text
   expect(expectedResult).toContain('"visibleScript":"return not doc.component.is_empty');
 });
 
+test('round-trips block hide-if-yes markers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+<!--hvy:text {"id":"optional-detail","hideIfYes":"yes"}-->
+Optional detail
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.hideIfYes).toBe('yes');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('"hideIfYes":"yes"');
+});
+
 test('section priority round-trips as section metadata', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

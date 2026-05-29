@@ -1305,6 +1305,7 @@ function serializeBlockSchema(
   }
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
+  addIfChanged(payload, 'hideIfYes', schema.hideIfYes, defaults.hideIfYes);
   addIfChanged(payload, 'visibleScript', schema.visibleScript, defaults.visibleScript);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
   addIfChanged(payload, 'fillIn', schema.fillIn, defaults.fillIn);

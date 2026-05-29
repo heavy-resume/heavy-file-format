@@ -1,7 +1,7 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { VisualDocument } from './types';
 import { renderAltAnnotationsAsFullText } from './markdown';
-import { isSectionHiddenByTemplateMarker } from './template-hide';
+import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from './template-hide';
 import { hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 
 export function exportDocumentSourceMarkdown(document: VisualDocument): string {
@@ -24,7 +24,7 @@ function renderSectionMarkdown(section: VisualSection): string[] {
 }
 
 function renderBlockMarkdown(block: VisualBlock): string[] {
-  if (block.schema.editorOnly) {
+  if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block)) {
     return [];
   }
   const component = block.schema.kind;

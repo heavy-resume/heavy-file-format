@@ -52,6 +52,7 @@ export interface BaseBlockSchema {
   groupKeys: Record<string, string>;
   tags: string;
   description: string;
+  hideIfYes: string;
   visibleScript: string;
   placeholder: string;
   fillIn: boolean;

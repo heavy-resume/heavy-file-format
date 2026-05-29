@@ -27,7 +27,7 @@ export function createGridItem(
   _columns: number,
   createBlock: (component: string, skip: boolean) => VisualBlock
 ): GridItem {
-  return { id: makeId('griditem'), block: createBlock('text', true) };
+  return { id: makeId('griditem'), idGenerated: true, block: createBlock('text', true) };
 }
 
 export function parseGridItems(
@@ -44,8 +44,10 @@ export function parseGridItems(
         return;
       }
       const item = raw as JsonObject;
+      const authoredId = item.idGenerated === true ? '' : typeof item.id === 'string' && item.id.trim().length > 0 ? item.id : '';
       items.push({
-        id: typeof item.id === 'string' ? item.id : makeId('griditem'),
+        id: authoredId || makeId('griditem'),
+        idGenerated: !authoredId,
         block: item.block ? parseBlock(item.block) : (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -65,6 +67,7 @@ export function parseGridItems(
       const item = raw as JsonObject;
       items.push({
         id: makeId('griditem'),
+        idGenerated: true,
         block: (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -87,6 +90,7 @@ export function parseGridItems(
   legacyKeys.forEach((key) => {
     items.push({
       id: makeId('griditem'),
+      idGenerated: true,
       block: (() => {
         const block = createBlock('text', true);
         block.text = typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '';

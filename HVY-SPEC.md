@@ -325,6 +325,8 @@ Grid blocks can be emitted with specialized directives so grid item content rema
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
 
+Grid item `id` metadata is optional. Authoring clients MAY generate transient item ids for editing controls, but MUST NOT serialize generated ids back into inline `gridItems` or `hvy:grid:N` metadata when the author did not provide an id.
+
 Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:

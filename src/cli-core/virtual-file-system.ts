@@ -699,7 +699,7 @@ function insertBlock(blocks: VisualBlock[], block: VisualBlock, index: number): 
 }
 
 function insertGridItem(gridItems: GridItem[], block: VisualBlock, index: number): void {
-  const item = { id: makeId('griditem'), block };
+  const item = { id: makeId('griditem'), idGenerated: true, block };
   gridItems.splice(resolveInsertIndex(index, gridItems.length), 0, item);
 }
 

@@ -366,8 +366,10 @@ function parseBlocks(
       return;
     }
     if (attach.kind === 'grid') {
+      const authoredId = typeof attach.meta.id === 'string' && attach.meta.id.trim().length > 0 ? attach.meta.id : '';
       attach.parent.schema.gridItems.push({
-        id: typeof attach.meta.id === 'string' ? attach.meta.id : makeId('griditem'),
+        id: authoredId || makeId('griditem'),
+        idGenerated: !authoredId,
         block,
       });
       return;
@@ -918,8 +920,7 @@ function concatAttachmentBytes(attachments: DocumentAttachment[]): Uint8Array {
 }
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
-  const rawMeta = stripEditorStateFromSerializedValue(document.meta) as JsonObject;
-  const serializedMeta: JsonObject = { ...rawMeta };
+  const serializedMeta: JsonObject = { ...document.meta };
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -930,10 +931,10 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
       .map((def) => serializeSectionDef(def));
   }
-  const headerMeta = {
+  const headerMeta = stripEditorStateFromSerializedValue({
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,
-  };
+  }) as JsonObject;
   return stringifyYaml(headerMeta).trim();
 }
 
@@ -1042,7 +1043,7 @@ function stripEditorStateFromSerializedValue(value: unknown): unknown {
   }
   const cleaned: JsonObject = {};
   Object.entries(value as JsonObject).forEach(([key, item]) => {
-    if (key === 'schemaMode') {
+    if (key === 'schemaMode' || key === 'idGenerated') {
       return;
     }
     cleaned[key] = stripEditorStateFromSerializedValue(item) as JsonObject[keyof JsonObject];
@@ -1346,7 +1347,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'gridColumns', schema.gridColumns, defaults.gridColumns);
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
-        id: item.id,
+        ...(item.idGenerated ? {} : { id: item.id }),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1596,9 +1597,7 @@ function serializeExpandablePart(
 function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
-    {
-      id: item.id,
-    },
+    item.idGenerated ? {} : { id: item.id },
     item.block,
     indent,
     documentMeta

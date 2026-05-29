@@ -865,8 +865,10 @@ export function ensureGridItems(schema: BlockSchema): void {
     return;
   }
   schema.gridItems = schema.gridItems.map((item) => {
+    const generated = !item.id;
     return {
       id: item.id || makeId('griditem'),
+      idGenerated: item.idGenerated === true || generated,
       block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
         ? item.block
         : item.block ? _parseBlock(item.block) : _createBlock('text', true),

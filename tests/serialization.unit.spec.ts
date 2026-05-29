@@ -830,6 +830,41 @@ component_defs:
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
 });
 
+test('inline grid items without authored ids do not gain serialized random ids', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: resume-header
+    baseType: grid
+    schema:
+      gridColumns: 2
+      gridItems:
+        - block:
+            text: <!-- value {"placeholder":"Location"} -->
+            schema:
+              component: text
+              css: "margin: 0;"
+              fillIn: true
+        - id: dates
+          block:
+            text: <!-- value {"placeholder":"Dates"} -->
+            schema:
+              component: text
+              css: "margin: 0; text-align: right;"
+              fillIn: true
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('gridItems:\n        - block:');
+  expect(output).not.toMatch(/id: griditem-[a-z0-9]+/);
+  expect(output).toContain('id: dates');
+});
+
 test('component def expandable slot css survives header serialization', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

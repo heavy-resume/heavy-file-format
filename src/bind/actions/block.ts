@@ -519,7 +519,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
       return;
     }
     const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
-    gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
+    gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), idGenerated: true, block: placedBlock });
   } else if (targetBlockList) {
     const insertIndex = getPlacementInsertIndex(targetBlockList, targetPlacement, targetBlockId);
     if (
@@ -691,6 +691,7 @@ function insertBlockRelativeToTarget(
       }
       gridItems.splice(placement === 'before' ? targetGridIndex : targetGridIndex + 1, 0, {
         id: makeId('griditem'),
+        idGenerated: true,
         block: newBlock,
       });
       return true;
@@ -790,6 +791,7 @@ function reassignBlockIds(block: VisualBlock): void {
   (block.schema.expandableContentBlocks?.children ?? []).forEach(reassignBlockIds);
   (block.schema.gridItems ?? []).forEach((item) => {
     item.id = makeId('griditem');
+    item.idGenerated = true;
     reassignBlockIds(item.block);
   });
 }

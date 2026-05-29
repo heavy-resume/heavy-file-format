@@ -592,7 +592,7 @@ function resolveInsertIndex(index: HvyInsertIndex, childCount: number): number {
 }
 
 function createCliGridItem(block: VisualBlock): GridItem {
-  return { id: makeId('griditem'), block };
+  return { id: makeId('griditem'), idGenerated: true, block };
 }
 
 function formatCreatedComponentDirectory(
@@ -945,6 +945,7 @@ function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.compone
     cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
       ...item,
       id: item.id || makeId('griditem'),
+      idGenerated: item.idGenerated === true || !item.id,
       block: item.block && isVisualBlockLike(item.block)
         ? cloneCliVisualBlock(item.block, documentMeta)
         : createBlockFromSchema(defaultBlockSchema('text'), ''),

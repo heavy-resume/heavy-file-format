@@ -1542,13 +1542,23 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 </label>`
               : `<div class="reusable-definition-editor">
                   ${componentTemplate
-                    ? `<div class="reusable-definition-hvy-surface">${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}</div>`
+                    ? `<div class="reusable-definition-hvy-surface">
+                        ${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}
+                        <details class="meta-expandable-field">
+                          <summary><span>Template Meta</span></summary>
+                          ${deps.renderBlockMetaFields(componentTemplateSectionKey, componentTemplate)}
+                        </details>
+                      </div>`
                     : ''}
                   ${sectionTemplate
                     ? `<div class="reusable-definition-section-surface">
                         <label>
                           <span>Section Title</span>
                           <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
+                        </label>
+                        <label class="checkbox-label">
+                          <span>Locked</span>
+                          <input type="checkbox" data-field="section-lock" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" ${sectionTemplate.lock ? 'checked' : ''} />
                         </label>
                         ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
                       </div>`

@@ -153,6 +153,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
@@ -432,6 +433,12 @@ editorRenderer = createEditorRenderer(
     },
     get mobileAdjustmentMode() {
       return state.editorMode === 'mobile-adjustment';
+    },
+    get editingReusableDefinition() {
+      return state.reusableDefinitionEditModal?.mode === 'edit';
+    },
+    get openTemplateDefinitionKeys() {
+      return state.openTemplateDefinitionKeys;
     },
     get descriptionPopulate() {
       return state.descriptionPopulate;

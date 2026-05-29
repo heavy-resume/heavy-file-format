@@ -281,6 +281,18 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-lock' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.lock = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      getRenderApp()();
+      return;
+    }
+
     if (field === 'block-component-list-item-label' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

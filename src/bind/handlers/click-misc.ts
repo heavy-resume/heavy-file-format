@@ -2,10 +2,33 @@ import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation,
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
+import { templateDefinitionDetailsKey } from '../../editor/render';
 
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
+  app.addEventListener('toggle', (event) => {
+    const details = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLDetailsElement>('details.template-def-details[data-template-kind]')
+      : null;
+    if (!details || !app.contains(details)) {
+      return;
+    }
+    const kind = details.dataset.templateKind === 'section' ? 'section' : details.dataset.templateKind === 'component' ? 'component' : null;
+    const index = Number.parseInt(details.dataset.defIndex ?? details.dataset.sectionDefIndex ?? '', 10);
+    if (!kind || Number.isNaN(index)) {
+      return;
+    }
+    const key = templateDefinitionDetailsKey(kind, index);
+    const openKeys = new Set(state.openTemplateDefinitionKeys);
+    if (details.open) {
+      openKeys.add(key);
+    } else {
+      openKeys.delete(key);
+    }
+    state.openTemplateDefinitionKeys = [...openKeys];
+  }, true);
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');

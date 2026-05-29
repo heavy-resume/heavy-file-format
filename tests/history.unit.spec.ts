@@ -77,6 +77,7 @@ function createHistoryTestState(): AppState {
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     selectedReusableComponentName: null,

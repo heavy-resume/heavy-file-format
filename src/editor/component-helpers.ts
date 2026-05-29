@@ -50,6 +50,7 @@ export interface ComponentRenderHelpers {
   isExpandableEditorPanelOpen: (sectionKey: string, blockId: string, panel: 'stub' | 'expanded', fallback: boolean) => boolean;
   isAdvancedEditorMode: () => boolean;
   isMobileAdjustmentMode: () => boolean;
+  isReusableDefinitionEditor?: () => boolean;
   isPdfDocument?: () => boolean;
   getTextLineStyles?: () => TextLineStyles;
 }

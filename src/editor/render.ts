@@ -133,6 +133,8 @@ interface EditorRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
+  editingReusableDefinition?: boolean;
+  openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
   descriptionPopulate?: {
@@ -519,7 +521,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
-    const structurallyLocked = parentLocked || (isDirectSectionBlock && owningSection?.lock === true);
+    const editingReusableDefinition = state.editingReusableDefinition === true;
+    const structurallyLocked = !editingReusableDefinition && (parentLocked || (isDirectSectionBlock && owningSection?.lock === true));
     const blockMove = isActiveFrame
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
       : { canMoveUp: false, canMoveDown: false };
@@ -1242,7 +1245,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map(
           (def, index) => {
             const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-            return `<details class="component-def template-def-details">
+            const detailsKey = templateDefinitionDetailsKey('component', index);
+            return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                 <summary class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
@@ -1320,7 +1324,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .map(
             (def, index) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-              return `<details class="component-def template-def-details">
+              const detailsKey = templateDefinitionDetailsKey('section', index);
+              return `<details class="component-def template-def-details" data-template-kind="section" data-section-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                       <summary class="template-def-summary">
                         <span class="template-def-summary-text">
                           <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
@@ -1636,6 +1641,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             data-field="block-placeholder"
             placeholder="Shown when block is empty"
             value="${deps.escapeAttr(block.schema.placeholder)}"
+          />
+        </label>
+        <label class="checkbox-label">
+          <span>Locked</span>
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-lock"
+            ${block.schema.lock ? 'checked' : ''}
           />
         </label>
         ${textMetaFields}
@@ -2144,6 +2159,10 @@ function findSectionLocation(
     }
   }
   return null;
+}
+
+export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
+  return `${kind}:${index}`;
 }
 
 function normalizeEmptySectionHeadingLevel(value: string | undefined): 'h1' | 'h2' | 'h3' {

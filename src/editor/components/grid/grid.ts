@@ -4,6 +4,7 @@ import type { GridItem, VisualBlock } from '../../types';
 import { closeIcon } from '../../../icons';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const firstPlacementTarget = helpers.renderComponentPlacementTarget({
     container: 'grid',
     sectionKey,
@@ -12,7 +13,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     targetGridItemId: block.schema.gridItems[0]?.id,
   });
   const placementMode = firstPlacementTarget.length > 0;
-  const addGridGhost = block.schema.lock || placementMode
+  const addGridGhost = locked || placementMode
     ? ''
     : `<div class="ghost-section-card add-ghost grid-add-ghost">
         ${helpers.renderAddComponentPicker({
@@ -70,7 +71,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             }
           </div>
           <div class="grid-item-editor-shell">
-            ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
+            ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
           </div>
         </div>
         ${helpers.renderComponentPlacementTarget({

@@ -385,6 +385,7 @@ export interface AppState {
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
+  openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
   descriptionPopulate?: {

@@ -234,6 +234,7 @@ function createEmbedState(
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },

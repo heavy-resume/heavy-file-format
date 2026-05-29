@@ -930,6 +930,7 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
+    isReusableDefinitionEditor: () => state.reusableDefinitionEditModal?.mode === 'edit',
     isPdfDocument: () => isPdfDocument(state.document),
     getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };

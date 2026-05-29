@@ -6,6 +6,7 @@ import { handleRemoveTag } from '../../editor/tag-editor';
 import { createEmptySection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
+import { templateDefinitionDetailsKey } from '../../editor/render';
 import { stringify as stringifyYaml } from 'yaml';
 import type { AppActionHandler } from './types';
 
@@ -56,6 +57,7 @@ const removeComponentDefFlavor: AppActionHandler = ({ actionButton }) => {
   }
   recordHistory(`def:${defIndex}:flavor:${flavorIndex}:remove`);
   def.flavors.splice(flavorIndex, 1);
+  keepTemplateDefinitionOpen('component', defIndex);
   state.document.meta.component_defs = defs;
   getRenderApp()();
 };
@@ -85,9 +87,17 @@ const removeSectionDefFlavor: AppActionHandler = ({ actionButton }) => {
     return;
   }
   def.flavors.splice(flavorIndex, 1);
+  keepTemplateDefinitionOpen('section', idx);
   state.document.meta.section_defs = defs;
   getRenderApp()();
 };
+
+function keepTemplateDefinitionOpen(kind: 'component' | 'section', index: number): void {
+  const key = templateDefinitionDetailsKey(kind, index);
+  if (!state.openTemplateDefinitionKeys.includes(key)) {
+    state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, key];
+  }
+}
 
 const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
   const kind = actionButton.dataset.templateKind;

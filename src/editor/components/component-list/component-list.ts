@@ -9,6 +9,7 @@ import { getComponentListDisplayState, parseComponentListRuntimeView, resolveCom
 export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureComponentListBlocks(block);
   const pdfDocument = helpers.isPdfDocument?.() === true;
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
   const listComponent = block.schema.componentListComponent || 'text';
   const editorResolved = resolveComponentListItems(block);
@@ -17,7 +18,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
     : [...editorResolved.groups.flatMap((group) => group.blocks), ...editorResolved.missingBlocks];
   const editorBlockList = renderComponentListPlacementBlockList(sectionKey, block, editorBlocks, helpers);
   const placementMode = editorBlockList.length > 0 && editorBlockList.includes('component-placement-target');
-  const addControl = block.schema.lock
+  const addControl = locked
     || pdfDocument
     || placementMode
     ? ''
@@ -55,8 +56,9 @@ function renderComponentListPlacementBlockList(
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const pdfDocument = helpers.isPdfDocument?.() === true;
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const output: string[] = [];
-  if (!block.schema.lock && !pdfDocument && blocks.length > 0) {
+  if (!locked && !pdfDocument && blocks.length > 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'component-list',
       sectionKey,
@@ -66,8 +68,8 @@ function renderComponentListPlacementBlockList(
     }));
   }
   for (const innerBlock of blocks) {
-    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock));
-    if (!block.schema.lock && !pdfDocument) {
+    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
+    if (!locked && !pdfDocument) {
       output.push(helpers.renderComponentPlacementTarget({
         container: 'component-list',
         sectionKey,
@@ -77,7 +79,7 @@ function renderComponentListPlacementBlockList(
       }));
     }
   }
-  if (!block.schema.lock && !pdfDocument && blocks.length === 0) {
+  if (!locked && !pdfDocument && blocks.length === 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'component-list',
       sectionKey,

@@ -866,16 +866,16 @@ This styles visible ATX headings (`#` through `######`) inside `text` components
 heading_styles:
   h2:
     label: Heading 2
-    css: "margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
-    afterContentMarginTop: "0.7rem"
+    css: "margin: 1.5rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1.5rem"
   h3:
     label: Heading 3
-    css: "margin: 0.85rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
-    afterContentMarginTop: "1.1rem"
+    css: "margin: 1rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1rem"
 ```
 
 Rules:
-- Keys under `heading_styles` are `h1` through `h6`.
+- Keys under `heading_styles` are `h1` through `h4`.
 - `css` is an optional inline CSS declaration string applied to that rendered heading level and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - `afterContentMarginTop` is an optional CSS length or expression used as the top margin when that heading follows prose, a list, blockquote, or code block in the same text component.
 - Renderers SHOULD remove the top margin from the first visible heading in a text block or styled text-line wrapper so a heading at the start of a section aligns with the section content.

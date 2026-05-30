@@ -4,6 +4,7 @@ import {
   getHeadingStyleSurfaceClass,
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
+  syncHeadingStyleAfterContentMarginTop,
   updateHeadingStyleSpacingCss,
   writeHeadingStylesToMeta,
 } from '../src/heading-styles';
@@ -13,14 +14,24 @@ test('heading styles expose adjusted defaults and first-heading reset CSS', () =
   const meta = {};
   const styles = getHeadingStylesFromMeta(meta);
 
-  expect(styles.h3.css).toContain('margin: 0.85rem 0 0.2rem;');
-  expect(styles.h3.afterContentMarginTop).toBe('1.1rem');
+  expect(Object.keys(styles)).toEqual(['h1', 'h2', 'h3', 'h4']);
+  expect(styles.h1.css).toContain('margin: 2rem 0 0.2rem;');
+  expect(styles.h1.afterContentMarginTop).toBe('2rem');
+  expect(styles.h2.css).toContain('margin: 1.5rem 0 0.2rem;');
+  expect(styles.h2.afterContentMarginTop).toBe('1.5rem');
+  expect(styles.h3.css).toContain('margin: 1rem 0 0.2rem;');
+  expect(styles.h3.afterContentMarginTop).toBe('1rem');
+  expect(styles.h4.css).toContain('margin: 0.5rem 0 0.2rem;');
+  expect(styles.h4.afterContentMarginTop).toBe('0.5rem');
 
   const className = getHeadingStyleSurfaceClass(meta);
   const styleElement = renderHeadingStyleElement(meta, className);
 
   expect(styleElement).toContain(`.${className} :is(.reader-block, .rich-editor) h3`);
-  expect(styleElement).toContain(`+ h3 { margin-top: 1.1rem; }`);
+  expect(styleElement).toContain(`+ h3 { margin-top: 1rem; }`);
+  expect(styleElement).not.toContain('Heading 5');
+  expect(styleElement).not.toContain(' h5 {');
+  expect(styleElement).not.toContain(' h6 {');
   expect(styleElement).toContain('margin-top: 0;');
 });
 
@@ -30,6 +41,27 @@ test('heading style spacing updates preserve other declarations', () => {
   expect(css).toContain('margin-top: 1rem;');
   expect(css).toContain('margin-bottom: 0.2rem;');
   expect(css).toContain('font-weight: 700;');
+});
+
+test('syncs after-content margin when heading top margin changes', () => {
+  const styles = getHeadingStylesFromMeta({});
+  const previousCss = styles.h2.css;
+  const css = updateHeadingStyleSpacingCss(styles.h2.css, 'margin-top', '1rem');
+
+  const result = syncHeadingStyleAfterContentMarginTop({ ...styles.h2, css }, previousCss);
+
+  expect(result.afterContentMarginTop).toBe('1rem');
+});
+
+test('leaves after-content margin when heading top margin is unchanged', () => {
+  const styles = getHeadingStylesFromMeta({});
+
+  const result = syncHeadingStyleAfterContentMarginTop(
+    { ...styles.h2, css: `${styles.h2.css} color: red;` },
+    styles.h2.css
+  );
+
+  expect(result.afterContentMarginTop).toBe(styles.h2.afterContentMarginTop);
 });
 
 test('preserves heading_styles in document front matter on round-trip', () => {
@@ -71,4 +103,6 @@ test('writes edited heading styles to metadata', () => {
       },
     },
   });
+  expect((meta.heading_styles as Record<string, unknown>).h5).toBeUndefined();
+  expect((meta.heading_styles as Record<string, unknown>).h6).toBeUndefined();
 });

@@ -21,6 +21,7 @@ import {
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
   sanitizeHeadingStyleCss,
+  syncHeadingStyleAfterContentMarginTop,
   updateHeadingStyleSpacingCss,
   writeHeadingStylesToMeta,
   type HeadingStyleName,
@@ -211,9 +212,10 @@ export function bindInputBlock(app: HTMLElement): void {
       if (!name) return;
       recordHistory(`meta:heading-style:css:${name}`);
       const styles = getHeadingStylesFromMeta(state.document.meta);
-      styles[name] = { ...styles[name], css: sanitizeHeadingStyleCss(target.value) };
+      styles[name] = syncHeadingStyleAfterContentMarginTop({ ...styles[name], css: sanitizeHeadingStyleCss(target.value) }, styles[name].css);
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleEditingUi(app, name, styles[name].css);
+      refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
       getRefreshReaderPanels()();
       return;
@@ -226,9 +228,10 @@ export function bindInputBlock(app: HTMLElement): void {
       recordHistory(`meta:heading-style:spacing:${name}:${property}`);
       const styles = getHeadingStylesFromMeta(state.document.meta);
       const nextCss = updateHeadingStyleSpacingCss(styles[name].css, property, target.value);
-      styles[name] = { ...styles[name], css: nextCss };
+      styles[name] = syncHeadingStyleAfterContentMarginTop({ ...styles[name], css: nextCss }, styles[name].css);
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleEditingUi(app, name, nextCss);
+      refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
       getRefreshReaderPanels()();
       return;
@@ -631,7 +634,7 @@ function refreshTextLineStyleLabelUi(app: HTMLElement, name: string, label: stri
 
 function getHeadingStyleName(target: HTMLElement): HeadingStyleName | null {
   const name = target.dataset.headingStyleName ?? '';
-  return /^(h[1-6])$/.test(name) ? name as HeadingStyleName : null;
+  return /^(h[1-4])$/.test(name) ? name as HeadingStyleName : null;
 }
 
 function refreshHeadingStyleEditingUi(app: HTMLElement, name: HeadingStyleName, css: string): void {
@@ -650,6 +653,14 @@ function refreshHeadingStyleEditingUi(app: HTMLElement, name: HeadingStyleName, 
         input.value = value;
       }
     });
+  });
+}
+
+function refreshHeadingStyleAfterMarginUi(app: HTMLElement, name: HeadingStyleName, value: string): void {
+  app.querySelectorAll<HTMLInputElement>(`input[data-field="heading-style-after-margin-top"][data-heading-style-name="${cssEscape(name)}"]`).forEach((input) => {
+    if (document.activeElement !== input) {
+      input.value = value;
+    }
   });
 }
 

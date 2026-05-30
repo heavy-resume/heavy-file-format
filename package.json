@@ -4,6 +4,7 @@
   "type": "module",
   "files": [
     "dist-embed",
+    "scripts/hvy-mcp-cli.mjs",
     "src",
     "AI-RESPONSE-FORMAT.md",
     "HVY-SPEC.md",
@@ -18,6 +19,11 @@
       "types": "./src/embed.ts",
       "default": "./dist-embed/hvy-embed.js"
     },
+    "./cli-core": {
+      "types": "./src/cli-core/index.ts",
+      "default": "./src/cli-core/index.ts"
+    },
+    "./mcp-cli-runner": "./scripts/hvy-mcp-cli.mjs",
     "./dist-embed/*": "./dist-embed/*",
     "./package.json": "./package.json"
   },

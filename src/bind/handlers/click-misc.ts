@@ -187,9 +187,17 @@ function refreshSelectionDrivenRichToolbarState(app: HTMLElement): void {
       shell.classList.remove('has-fill-in-selection');
     }
   });
-  if (richTarget) {
+  if (richTarget && hasNonEmptySelection()) {
     refreshRichToolbarState(richTarget);
   }
+}
+
+function hasNonEmptySelection(): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || selection.isCollapsed) {
+    return false;
+  }
+  return selection.getRangeAt(0).toString().trim().length > 0;
 }
 
 function getRichTargetFromSelection(app: HTMLElement): HTMLElement | null {

@@ -1731,10 +1731,16 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
 function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
-  if (editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0) {
+  const hasFillInSelection = editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0;
+  if (hasFillInSelection) {
     textEditorShell?.classList.add('has-fill-in-selection');
     editable.dataset.fillInSelectionText = range.toString().trim();
-  } else if (!textEditorShell || !document.activeElement || !textEditorShell.contains(document.activeElement)) {
+  } else if (
+    (editable.dataset.field === 'block-rich' && range) ||
+    !textEditorShell ||
+    !document.activeElement ||
+    !textEditorShell.contains(document.activeElement)
+  ) {
     textEditorShell?.classList.remove('has-fill-in-selection');
     delete editable.dataset.fillInSelectionText;
   }

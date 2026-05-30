@@ -1865,6 +1865,59 @@ hvy_version: 0.1
   await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
 });
 
+test('text toolbar fill-in button clears after the selection collapses in the same editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name Title
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const textNode = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.indexOf('Name');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Name'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await richEditor.locator('h1').evaluate((heading) => {
+    const textNode = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const offset = textNode.textContent.indexOf('Title');
+    const range = document.createRange();
+    range.setStart(textNode, offset);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('mouseup');
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+
+  await richEditor.pressSequentially('New ');
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+});
+
 test('text toolbar fill-in preserves heading syntax when the whole heading is selected', async ({ page }) => {
   await page.goto('/');
 

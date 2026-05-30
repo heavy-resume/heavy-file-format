@@ -179,7 +179,8 @@ export function bindContextmenu(app: HTMLElement): void {
 
 function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
   const target = event.target as HTMLElement;
-  if (target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover')) {
+  const pasteTargetAttrs = getComponentPasteTargetAttrsFromElement(target);
+  if (!pasteTargetAttrs && target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover')) {
     return;
   }
   const blockElement = target.closest<HTMLElement>('.editor-block[data-active-editor-block="true"], .editor-block-passive[data-section-key][data-block-id]');
@@ -197,11 +198,31 @@ function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
     kind: 'editor',
     sectionKey,
     ...(blockId ? { blockId } : {}),
+    ...(pasteTargetAttrs ? { pasteComponentAttrs: pasteTargetAttrs } : {}),
     x: Number.isFinite(event.clientX) ? event.clientX - shellRect.left : 16,
     y: Number.isFinite(event.clientY) ? event.clientY - shellRect.top : 16,
     ...(modalRoot ? { surface: 'modal' as const } : {}),
   };
   renderContextMenuElement(app);
+}
+
+function getComponentPasteTargetAttrsFromElement(target: HTMLElement): Record<string, string> | null {
+  const pasteTarget = target.closest<HTMLElement>('[data-paste-placement-container][data-paste-placement]');
+  if (!pasteTarget) {
+    return null;
+  }
+  const placementContainer = pasteTarget.dataset.pastePlacementContainer ?? '';
+  const placement = pasteTarget.dataset.pastePlacement ?? '';
+  if (!placementContainer || !placement) {
+    return null;
+  }
+  return {
+    placementContainer,
+    placement,
+    ...(pasteTarget.dataset.pasteParentBlockId ? { parentBlockId: pasteTarget.dataset.pasteParentBlockId } : {}),
+    ...(pasteTarget.dataset.pasteTargetBlockId ? { targetBlockId: pasteTarget.dataset.pasteTargetBlockId } : {}),
+    ...(pasteTarget.dataset.pasteTargetGridItemId ? { targetGridItemId: pasteTarget.dataset.pasteTargetGridItemId } : {}),
+  };
 }
 
 function dismissAiModeTip(app: HTMLElement): void {
@@ -410,6 +431,12 @@ function renderContextMenuElement(app: HTMLElement): void {
 }
 
 function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: string }): Record<string, string> {
+  if ('pasteComponentAttrs' in menu && menu.pasteComponentAttrs) {
+    return {
+      sectionKey: menu.sectionKey,
+      ...menu.pasteComponentAttrs,
+    };
+  }
   const fallback = {
     sectionKey: menu.sectionKey,
     placementContainer: 'section',

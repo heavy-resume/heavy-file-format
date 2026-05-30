@@ -537,6 +537,9 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   syncReusableTemplateForBlock(sectionKey, syncBlockId);
   state.componentPlacement = null;
   setActiveEditorBlock(sectionKey, activePlacedBlockId);
+  if (placementMode === 'copy') {
+    markActiveEditorBlockAsNew(activePlacedBlockId);
+  }
   getRenderApp()();
 };
 

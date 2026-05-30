@@ -431,6 +431,7 @@ export interface ContextMenuState {
   kind: 'filter' | 'ai' | 'editor';
   sectionKey: string;
   blockId?: string;
+  pasteComponentAttrs?: Record<string, string>;
   x: number;
   y: number;
   surface?: 'modal';

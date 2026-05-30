@@ -216,6 +216,7 @@ Optional CSS metadata directive (must appear immediately above CSS fence):
 Section metadata optionally includes a `blocks` array describing per-block rendering metadata for authoring tools and implementations.
 
 Common block metadata fields include:
+- `id`
 - `component`
 - `editorOnly`
 - `lock`
@@ -231,6 +232,7 @@ Common block metadata fields include:
 - `fillIn`
 - `css`
 
+`id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
 `hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.

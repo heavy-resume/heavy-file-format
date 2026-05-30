@@ -3819,6 +3819,12 @@ hvy_version: 0.1
   await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
   await expect(page.locator('#aiReaderDocument')).toContainText('Existing todo');
 
+  await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover')).toContainText('Edit component');
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.locator('.hvy-context-popover-backdrop').click();
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
+
   await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click();
   await expect(page.locator('#aiReaderDocument .rich-editor')).toBeVisible();
   await page.locator('#aiReaderDocument .rich-editor').fill('AI draft summary');

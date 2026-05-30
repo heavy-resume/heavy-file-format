@@ -230,6 +230,7 @@ export type BlockSchema = ComponentBlockSchema & RuntimeSchemaFieldAccess;
 
 export interface VisualBlock {
   id: string;
+  idGenerated?: boolean;
   text: string;
   schema: BlockSchema;
   schemaMode: boolean;

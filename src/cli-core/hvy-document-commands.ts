@@ -518,7 +518,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   }
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
-  const block = createCliComponentBlock(ctx.document, params.component, id, params.templateValues ?? null);
+  const block = createCliComponentBlock(ctx.document, params.component, id, !params.id, params.templateValues ?? null);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
@@ -879,7 +879,7 @@ function formatAvailableSectionTemplates(document: VisualDocument): string {
   return names.join(', ') || '(none)';
 }
 
-function createCliComponentBlock(document: VisualDocument, component: string, id: string, templateValues: Record<string, string> | null = null): VisualBlock {
+function createCliComponentBlock(document: VisualDocument, component: string, id: string, idGenerated: boolean, templateValues: Record<string, string> | null = null): VisualBlock {
   const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
   const variables = extractReusableTemplateVariablesFromDefinition(definition);
   if (!templateValues && variables.length > 0) {
@@ -896,10 +896,12 @@ function createCliComponentBlock(document: VisualDocument, component: string, id
     : createBlockFromSchema(createCliComponentSchema(document, component), '');
   block.schema.component = component;
   block.schema.id = id;
+  block.idGenerated = idGenerated;
   if (templateValues) {
     applyReusableTemplateValues(block, templateValues, variables);
     block.schema.component = component;
     block.schema.id = id;
+    block.idGenerated = idGenerated;
   }
   return block;
 }

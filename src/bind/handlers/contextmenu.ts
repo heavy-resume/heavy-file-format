@@ -97,7 +97,7 @@ export function bindContextmenu(app: HTMLElement): void {
       clearAiLongPress();
       return;
     }
-    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    const blockElement = getAiContextBlockElement(target);
     if (!blockElement?.dataset.sectionKey || !blockElement.dataset.blockId) {
       clearAiLongPress();
       return;
@@ -146,7 +146,7 @@ export function bindContextmenu(app: HTMLElement): void {
       lastAiTap = null;
       return;
     }
-    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    const blockElement = getAiContextBlockElement(target);
     const sectionKey = blockElement?.dataset.sectionKey ?? '';
     const blockId = blockElement?.dataset.blockId ?? '';
     if (!sectionKey || !blockId) {
@@ -233,9 +233,31 @@ function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {
   );
 }
 
+function getAiContextBlockElement(target: HTMLElement): HTMLElement | null {
+  return target.closest<HTMLElement>(
+    [
+      '.reader-block[data-section-key][data-block-id]',
+      '.editor-block[data-section-key][data-block-id]',
+      '.editor-block-passive[data-section-key][data-block-id]',
+    ].join(',')
+  );
+}
+
+function getAiContextBlockSelector(sectionKey: string, blockId: string): string {
+  const sectionSelector = `[data-section-key="${cssEscape(sectionKey)}"]`;
+  const blockSelector = `[data-block-id="${cssEscape(blockId)}"]`;
+  return [
+    `.reader-block${sectionSelector}${blockSelector}`,
+    `.editor-block${sectionSelector}${blockSelector}`,
+    `.editor-block-passive${sectionSelector}${blockSelector}`,
+  ].join(',');
+}
+
 function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerEvent, filtering: boolean): void {
   const target = event.target as HTMLElement;
-  const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+  const blockElement = state.currentView === 'ai'
+    ? getAiContextBlockElement(target)
+    : target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
   const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
   if (!blockElement && !sectionElement) {
     return;
@@ -289,8 +311,7 @@ function renderContextMenuElement(app: HTMLElement): void {
     : app.querySelector<HTMLElement>(menu.kind === 'editor' ? '.editor-shell' : '.viewer-shell') ?? app;
   root.classList.add('is-context-menu-open');
   if (menu.kind === 'ai' && menu.blockId) {
-    const target = root
-      .querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+    const target = root.querySelector<HTMLElement>(getAiContextBlockSelector(menu.sectionKey, menu.blockId));
     target?.classList.add('is-context-menu-target');
   } else if (menu.kind === 'editor') {
     const target = menu.blockId
@@ -312,7 +333,11 @@ function renderContextMenuElement(app: HTMLElement): void {
     });
   }
   const target = menu.blockId
-    ? root.querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+    ? root.querySelector<HTMLElement>(
+      menu.kind === 'ai'
+        ? getAiContextBlockSelector(menu.sectionKey, menu.blockId)
+        : `.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`
+    )
     : null;
   const clone = menu.kind === 'ai' && target && menu.targetRect ? cloneContextMenuTarget(target, menu.targetRect) : null;
   const popover = document.createElement('section');

@@ -1277,6 +1277,7 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
 function serializeBlockSchema(
   schema: BlockSchema,
   options: {
+    omitId?: boolean;
     omitComponent?: boolean;
     omitContainerBlocks?: boolean;
     omitComponentListBlocks?: boolean;
@@ -1289,7 +1290,9 @@ function serializeBlockSchema(
   const defaults = getSerializationSchemaDefaults(schema.component, component, documentMeta);
   const payload: JsonObject = {};
 
-  addIfChanged(payload, 'id', schema.id, defaults.id);
+  if (!options.omitId) {
+    addIfChanged(payload, 'id', schema.id, defaults.id);
+  }
   if (!options.omitComponent) {
     payload.component = schema.component;
   }
@@ -1416,24 +1419,26 @@ function serializeBlock(
   documentMeta: JsonObject | null,
   override?: { name: string; schema?: JsonObject }
 ): string {
-  const blockDirective = override ?? serializeBlockDirective(block.schema, documentMeta);
+  const blockDirective = override ?? serializeBlockDirective(block, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
   const text = serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
-function serializeBlockDirective(schema: BlockSchema, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
+function serializeBlockDirective(block: VisualBlock, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
+  const schema = block.schema;
   const component = schema.component.trim();
+  const omitId = block.idGenerated === true;
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema, documentMeta), documentMeta),
+    schema: serializeBlockSchema(schema, { omitId, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
   };
 }
 
@@ -1644,7 +1649,7 @@ function nestedBlockOmitOptions(schema: BlockSchema, documentMeta: JsonObject | 
 function serializeVisualBlock(block: VisualBlock, documentMeta: JsonObject | null = null): JsonObject {
   return {
     text: block.text,
-    schema: serializeBlockSchema(block.schema, {}, documentMeta),
+    schema: serializeBlockSchema(block.schema, { omitId: block.idGenerated === true }, documentMeta),
   };
 }
 

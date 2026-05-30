@@ -40,6 +40,55 @@ test('markdown shortcuts create quote and code blocks in text editor', async ({ 
   await expect(editor.locator('pre')).toHaveAttribute('data-code-language', 'json');
 });
 
+test('inline code shortcut stops formatting after the closing backtick', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.type('Use `code` after');
+
+  await expect(editor.locator('code')).toHaveText('code');
+  await expect(editor.locator('code')).not.toContainText('after');
+  await expect(editor).toContainText('Use code after');
+});
+
+test('typing at the end of inline code exits code formatting', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Use <code>study-tools</code></p>';
+    const code = node.querySelector('code')!;
+    const textNode = code.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, textNode.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.focus();
+  await page.keyboard.type(' after');
+
+  await expect(editor.locator('code')).toHaveText('study-tools');
+  await expect(editor.locator('code')).not.toContainText('after');
+  await expect(editor).toContainText('Use study-tools after');
+});
+
 test('empty code blocks can be removed with backspace and delete', async ({ page }) => {
   await page.goto('/');
 

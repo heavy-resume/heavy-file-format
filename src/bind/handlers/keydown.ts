@@ -1,4 +1,4 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
@@ -9,6 +9,7 @@ export function bindKeydown(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     const richTarget = getRichTarget(target);
     if (richTarget) {
+      handleRichEditorKeyup(richTarget);
       refreshRichToolbarState(richTarget);
     }
   });

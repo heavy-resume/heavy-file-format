@@ -200,6 +200,8 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     normalizeEditableListDom(target);
+    convertInlineCodeInsertedShortcut(target);
+    normalizeInlineCodeTextNodes(target);
     const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(
       field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : target.innerHTML
     )));
@@ -1699,6 +1701,15 @@ export function refreshRichToolbarState(editable: HTMLElement): void {
   updateRichToolbarState(editable);
 }
 
+export function handleRichEditorKeyup(editable: HTMLElement): boolean {
+  if (!convertInlineCodeInsertedShortcut(editable)) {
+    return false;
+  }
+  editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  updateRichToolbarState(editable);
+  return true;
+}
+
 export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range) {
@@ -1952,6 +1963,20 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return false;
   }
 
+  if (event.key.length === 1 && insertTextAfterInlineCodeAtEnd(editable, event.key)) {
+    event.preventDefault();
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (event.key === '`' && convertInlineCodeAltcut(editable)) {
+    event.preventDefault();
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.key === ' ' && convertMarkdownQuoteAltcut(editable)) {
     event.preventDefault();
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2014,6 +2039,12 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   if (isSelectionInsideCodeBlock(editable)) {
     insertTextInSelectionCodeBlock(editable, event.data);
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (insertTextAfterInlineCodeAtEnd(editable, event.data)) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
     return true;
   }
 
@@ -2271,6 +2302,14 @@ function convertMarkdownQuoteAltcut(editable: HTMLElement): boolean {
 }
 
 function convertInlineCodeAltcut(editable: HTMLElement): boolean {
+  return convertInlineCodeShortcut(editable, false);
+}
+
+function convertInlineCodeInsertedShortcut(editable: HTMLElement): boolean {
+  return convertInlineCodeShortcut(editable, true);
+}
+
+function convertInlineCodeShortcut(editable: HTMLElement, closingTickInserted: boolean): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range || !range.collapsed) {
     return false;
@@ -2284,11 +2323,18 @@ function convertInlineCodeAltcut(editable: HTMLElement): boolean {
   prefixRange.selectNodeContents(block);
   prefixRange.setEnd(range.startContainer, range.startOffset);
   const prefix = prefixRange.toString();
-  const openingTickIndex = prefix.lastIndexOf('`');
+  if (closingTickInserted && !prefix.endsWith('`')) {
+    return false;
+  }
+  const openingTickIndex = closingTickInserted
+    ? prefix.lastIndexOf('`', prefix.length - 2)
+    : prefix.lastIndexOf('`');
   if (openingTickIndex < 0) {
     return false;
   }
-  const codeText = prefix.slice(openingTickIndex + 1);
+  const codeText = closingTickInserted
+    ? prefix.slice(openingTickIndex + 1, -1)
+    : prefix.slice(openingTickIndex + 1);
   if (codeText.length === 0 || /[\r\n]/.test(codeText)) {
     return false;
   }
@@ -2305,7 +2351,7 @@ function convertInlineCodeAltcut(editable: HTMLElement): boolean {
 
   const code = document.createElement('code');
   code.textContent = codeText;
-  const boundary = document.createTextNode('');
+  const boundary = document.createTextNode('\u200b');
   const fragment = document.createDocumentFragment();
   fragment.appendChild(code);
   fragment.appendChild(boundary);
@@ -2320,6 +2366,64 @@ function convertInlineCodeAltcut(editable: HTMLElement): boolean {
   return true;
 }
 
+function normalizeInlineCodeTextNodes(editable: HTMLElement): boolean {
+  const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (!parent || parent.closest('code, pre')) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return /`[^`\r\n]+`/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const targets: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) {
+      targets.push(current);
+    }
+    current = walker.nextNode();
+  }
+  let changed = false;
+  for (const textNode of targets) {
+    changed = replaceInlineCodeInTextNode(textNode) || changed;
+  }
+  return changed;
+}
+
+function replaceInlineCodeInTextNode(textNode: Text): boolean {
+  const text = textNode.textContent ?? '';
+  const match = /`([^`\r\n]+)`/.exec(text);
+  if (!match || typeof match.index !== 'number') {
+    return false;
+  }
+  const selection = window.getSelection();
+  const selectedOffset = selection?.rangeCount && selection.getRangeAt(0).startContainer === textNode
+    ? selection.getRangeAt(0).startOffset
+    : null;
+  const before = text.slice(0, match.index);
+  const codeText = match[1] ?? '';
+  const after = text.slice(match.index + match[0].length);
+  const fragment = document.createDocumentFragment();
+  if (before.length > 0) {
+    fragment.appendChild(document.createTextNode(before));
+  }
+  const code = document.createElement('code');
+  code.textContent = codeText;
+  fragment.appendChild(code);
+  const afterNode = document.createTextNode(after.length > 0 ? after : '\u200b');
+  fragment.appendChild(afterNode);
+  textNode.replaceWith(fragment);
+  if (selectedOffset !== null && selectedOffset >= match.index + match[0].length) {
+    const range = document.createRange();
+    range.setStart(afterNode, after.length > 0 ? Math.min(after.length, selectedOffset - (match.index + match[0].length)) : afterNode.data.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+  return true;
+}
+
 function exitInlineCodeAtEnd(editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range || !range.collapsed) {
@@ -2330,6 +2434,31 @@ function exitInlineCodeAtEnd(editable: HTMLElement): boolean {
     return false;
   }
   moveCollapsedCaretOutsideInline(code, range);
+  return true;
+}
+
+function insertTextAfterInlineCodeAtEnd(editable: HTMLElement, text: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || !range.collapsed) {
+    return false;
+  }
+  const code = getInlineAncestor(range, editable, 'code');
+  if (!code || !isCollapsedSelectionAtEndOf(code)) {
+    return false;
+  }
+  moveCollapsedCaretOutsideInline(code, range);
+  const nextRange = getEditableSelectionRange(editable);
+  if (!nextRange) {
+    return false;
+  }
+  nextRange.deleteContents();
+  const textNode = document.createTextNode(text === ' ' ? '\u00a0' : text);
+  nextRange.insertNode(textNode);
+  nextRange.setStart(textNode, textNode.data.length);
+  nextRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
   return true;
 }
 
@@ -2766,7 +2895,14 @@ function getSelectionBlockElement(editable: HTMLElement): HTMLElement | null {
   if (!selection?.rangeCount) {
     return null;
   }
-  return getBlockElementContaining(editable, selection.getRangeAt(0).startContainer);
+  const range = selection.getRangeAt(0);
+  if (range.startContainer === editable) {
+    const child = editable.childNodes[Math.max(0, range.startOffset - 1)] ?? editable.childNodes[range.startOffset];
+    if (child) {
+      return getBlockElementContaining(editable, child);
+    }
+  }
+  return getBlockElementContaining(editable, range.startContainer);
 }
 
 function getBlockElementContaining(editable: HTMLElement, container: Node): HTMLElement | null {

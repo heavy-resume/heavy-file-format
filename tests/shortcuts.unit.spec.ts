@@ -22,8 +22,12 @@ vi.mock('../src/bind/handlers/_imports', () => {
 class TestHTMLElement extends EventTarget {
   isContentEditable = false;
   themeModalAncestor = false;
+  richEditorAncestor = false;
 
   closest(selector: string) {
+    if (selector === '.rich-editor' && this.richEditorAncestor) {
+      return this;
+    }
     return selector === '.theme-modal' && this.themeModalAncestor ? this : null;
   }
 }
@@ -51,6 +55,16 @@ test('native undo targets keep browser undo behavior', async () => {
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
   expect(isNativeUndoTarget(editable)).toBe(true);
+});
+
+test('rich editors use document undo behavior', async () => {
+  const { isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
+
+  const editable = new TestHTMLElement();
+  editable.isContentEditable = true;
+  editable.richEditorAncestor = true;
+
+  expect(isNativeUndoTarget(editable)).toBe(false);
 });
 
 test('theme modal controls use document undo behavior', async () => {

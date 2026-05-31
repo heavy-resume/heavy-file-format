@@ -3422,6 +3422,65 @@ hvy_version: 0.1
   expect((await page.locator('#rawEditor').inputValue()).match(/Alpha/g)).toHaveLength(1);
 });
 
+test('undo restores a deleted component', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="remove-block"]').click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('#editorTree')).not.toContainText('Beta');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('#editorTree')).toContainText('Beta');
+});
+
+test('undo restores a deleted nested component', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:container {"id":"box","containerTitle":"Box"}-->
+  <!--hvy:text {"id":"alpha"}-->
+   Alpha
+
+  <!--hvy:text {"id":"beta"}-->
+   Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).last().click();
+  await page.getByRole('button', { name: 'Remove text' }).click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('#editorTree')).not.toContainText('Beta');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('#editorTree')).toContainText('Beta');
+});
+
 test('component move and copy work between main and sidebar sections', async ({ page }) => {
   await page.goto('/');
 

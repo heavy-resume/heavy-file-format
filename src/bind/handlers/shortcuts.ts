@@ -75,6 +75,9 @@ export function isNativeUndoTarget(target: EventTarget | null): boolean {
   if (target.closest('.theme-modal')) {
     return false;
   }
+  if (target.closest('.rich-editor')) {
+    return false;
+  }
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
     return true;
   }

@@ -3140,6 +3140,87 @@ section_defs:
   await expect(page.locator('#reusableDefinitionRawInput')).not.toContainText('text: "# Feature Role"');
 });
 
+test('template component editor opens nested component meta and returns to template editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: Feature Card
+    baseType: container
+    template:
+      id: feature-card
+      schema:
+        component: container
+        containerBlocks:
+          - id: feature-title
+            text: "### Feature Title"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const componentTemplate = page.locator('.component-def', { hasText: 'Feature Card' });
+  await componentTemplate.locator('summary').click();
+  await componentTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const templateEditor = page.locator('.reusable-definition-modal');
+  await templateEditor.locator('.editor-block-passive', { hasText: 'Feature Title' }).click();
+  await expect(templateEditor.getByRole('button', { name: 'Make Template' })).toHaveCount(0);
+  await templateEditor.locator('[data-action="open-component-meta"]').click();
+
+  const componentMeta = page.locator('.component-meta-modal', { hasText: 'Component Meta: text' });
+  await expect(componentMeta).toBeVisible();
+  await componentMeta.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.reusable-definition-modal', { hasText: 'Edit Feature Card' })).toBeVisible();
+});
+
+test('section template editor opens section meta and returns to template editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      customId: feature-template
+      blocks:
+        - id: feature-heading
+          text: "# Feature"
+          schema:
+            component: text
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await sectionTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const templateEditor = page.locator('.reusable-definition-modal', { hasText: 'Edit Feature' });
+  await templateEditor.getByRole('button', { name: 'Meta' }).click();
+
+  const sectionMeta = page.locator('.section-meta-modal', { hasText: 'Section Meta: Feature' });
+  await expect(sectionMeta).toBeVisible();
+  await sectionMeta.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.reusable-definition-modal', { hasText: 'Edit Feature' })).toBeVisible();
+});
+
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 

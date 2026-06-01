@@ -469,6 +469,14 @@ function emptyExpandResult(): ExpandResult {
 }
 
 export function closeModal(): void {
+  if (state.reusableDefinitionEditModal && state.componentMetaModal) {
+    state.componentMetaModal = null;
+    return;
+  }
+  if (state.reusableDefinitionEditModal && state.modalSectionKey) {
+    state.modalSectionKey = null;
+    return;
+  }
   const sqliteRowComponentModal = state.sqliteRowComponentModal;
   if (
     sqliteRowComponentModal

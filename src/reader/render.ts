@@ -1498,6 +1498,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
+    const nestedTemplateMetaModal = renderNestedTemplateMetaModal();
+    if (nestedTemplateMetaModal) {
+      return nestedTemplateMetaModal;
+    }
+
     if (state.reusableDefinitionEditModal) {
       const modal = state.reusableDefinitionEditModal;
       const componentDefinitions = getComponentDefsFromMeta(state.documentMeta);
@@ -1560,6 +1565,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                           <span>Locked</span>
                           <input type="checkbox" data-field="section-lock" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" ${sectionTemplate.lock ? 'checked' : ''} />
                         </label>
+                        <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(sectionTemplateKey)}">Meta</button>
                         ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
                       </div>`
                     : ''}
@@ -1605,35 +1611,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
 
     if (state.componentMetaModal) {
-      const block = deps.findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
-      if (!block) {
-        return '';
-      }
-      return `
-        <div id="modalRoot" class="modal-root">
-          <div class="modal-overlay" data-modal-action="close-overlay"></div>
-          <section class="modal-panel component-meta-modal">
-            <div class="modal-head">
-              <h3>Component Meta: ${deps.escapeHtml(block.schema.component)}</h3>
-              <div class="modal-head-actions">
-                <button
-                  type="button"
-                  class="ghost lock-toggle-button"
-                  data-modal-action="toggle-component-lock"
-                  data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
-                  data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
-                  aria-pressed="${block.schema.lock ? 'true' : 'false'}"
-                  title="${block.schema.lock ? 'Unlock' : 'Lock'}"
-                  aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
-                >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
-                <button type="button" class="hvy-button" data-modal-action="close">Close</button>
-              </div>
-            </div>
-            <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
-            ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
-          </section>
-        </div>
-      `;
+      return renderComponentMetaModal();
     }
 
     if (state.dbTableQueryModal) {
@@ -1804,6 +1782,58 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
+    return renderSectionMetaModal();
+  }
+
+  function renderNestedTemplateMetaModal(): string {
+    if (!state.reusableDefinitionEditModal) {
+      return '';
+    }
+    if (state.componentMetaModal) {
+      return renderComponentMetaModal();
+    }
+    if (state.modalSectionKey) {
+      return renderSectionMetaModal();
+    }
+    return '';
+  }
+
+  function renderComponentMetaModal(): string {
+    if (!state.componentMetaModal) {
+      return '';
+    }
+    const block = deps.findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
+    if (!block) {
+      return '';
+    }
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel component-meta-modal">
+          <div class="modal-head">
+            <h3>Component Meta: ${deps.escapeHtml(block.schema.component)}</h3>
+            <div class="modal-head-actions">
+              <button
+                type="button"
+                class="ghost lock-toggle-button"
+                data-modal-action="toggle-component-lock"
+                data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
+                data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
+                aria-pressed="${block.schema.lock ? 'true' : 'false'}"
+                title="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
+              >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
+            </div>
+          </div>
+          <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
+          ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderSectionMetaModal(): string {
     if (!state.modalSectionKey) {
       return '';
     }

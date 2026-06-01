@@ -536,11 +536,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
            <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
       : '';
+    const makeTemplateAction = editingReusableDefinition
+      ? ''
+      : `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>`;
     const componentMetaActions = state.showAdvancedEditor && isActive
       ? `<div class="editor-block-context-actions" aria-label="Component options">
-          <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>
+          ${makeTemplateAction}
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>

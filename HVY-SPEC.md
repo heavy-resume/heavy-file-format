@@ -331,6 +331,8 @@ Grid item `id` metadata is optional. Authoring clients MAY generate transient it
 
 Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
+Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
+
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
 ```markdown

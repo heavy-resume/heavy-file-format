@@ -14,7 +14,7 @@ import { renderPluginReader } from '../editor/components/plugin/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table/table';
 import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
-import type { ComponentRenderHelpers } from '../editor/component-helpers';
+import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../editor/component-helpers';
 import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
@@ -106,10 +106,6 @@ interface ReaderRenderDeps {
   renderReusableSectionOptions: (selected: string) => string;
   getSectionDefs: () => unknown[];
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
-}
-
-export interface ReaderBlockRenderOptions {
-  suppressAiEditorDelegation?: boolean;
 }
 
 export interface ReaderRenderer {
@@ -440,7 +436,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const anchor = getReaderButtonAnchor(section, block);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const blockStyle = sanitizeReaderBlockCss(block.schema.css, options);
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
@@ -529,6 +526,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderMaybeCollapsedBlockShell(renderCarouselReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function sanitizeReaderBlockCss(css: string, options: ReaderBlockRenderOptions): string {
+    const sanitized = sanitizeInlineCss(css);
+    if (!options.trimVerticalEdgeMargin) {
+      return sanitized;
+    }
+    return `${sanitized}${sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';'} margin-top: 0; margin-bottom: 0;`;
   }
 
   function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {

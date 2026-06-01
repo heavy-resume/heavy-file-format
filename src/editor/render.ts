@@ -1,9 +1,8 @@
 import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
-import type { ComponentRenderHelpers } from './component-helpers';
+import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
 import type { ComponentPlacementState } from '../types';
-import type { ReaderBlockRenderOptions } from '../reader/render';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';

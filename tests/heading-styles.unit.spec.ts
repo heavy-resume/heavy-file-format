@@ -93,7 +93,7 @@ heading_styles:
 });
 
 test('writes edited heading styles to metadata', () => {
-  const meta = {};
+  const meta: Record<string, unknown> = {};
   const styles = getHeadingStylesFromMeta(meta);
   styles.h2.css = updateHeadingStyleSpacingCss(styles.h2.css, 'margin-top', '0.8rem');
 

@@ -108,7 +108,7 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
     .map((orderedBlock) => {
       const item = itemsByBlock.get(orderedBlock);
-      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock) } : null;
+      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock, { trimVerticalEdgeMargin: true }) } : null;
     })
     .filter((item): item is { item: GridItem; html: string } => item !== null)
     .filter((item) => item.html.trim().length > 0);

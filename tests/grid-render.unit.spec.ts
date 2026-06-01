@@ -185,3 +185,19 @@ test('grid reader renders grid cells without slot alignment metadata', () => {
   expect(expectedResult).toContain('grid-column: 2 / span 1;');
   expect(expectedResult).not.toContain('text-align: right;');
 });
+
+test('grid reader trims vertical edge margins from direct cell blocks', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'left-item',
+    block: createEmptyBlock('expandable'),
+  });
+  grid.schema.gridItems[0]!.block.schema.css = 'margin: 0.5rem 0;';
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: (_section, block, options) => `<div style="${block.schema.css}${options?.trimVerticalEdgeMargin ? ' margin-top: 0; margin-bottom: 0;' : ''}"></div>`,
+  });
+
+  expect(expectedResult).toContain('margin: 0.5rem 0; margin-top: 0; margin-bottom: 0;');
+});

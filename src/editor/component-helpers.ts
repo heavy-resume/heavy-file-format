@@ -26,7 +26,7 @@ export interface ComponentRenderHelpers {
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
-  renderReaderBlock: (section: VisualSection, block: VisualBlock) => string;
+  renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
@@ -53,6 +53,11 @@ export interface ComponentRenderHelpers {
   isReusableDefinitionEditor?: () => boolean;
   isPdfDocument?: () => boolean;
   getTextLineStyles?: () => TextLineStyles;
+}
+
+export interface ReaderBlockRenderOptions {
+  suppressAiEditorDelegation?: boolean;
+  trimVerticalEdgeMargin?: boolean;
 }
 
 export interface AddComponentPickerOptions {

@@ -2,6 +2,7 @@ export type JsonObject = Record<string, unknown>;
 
 export interface HvySection {
   id: string;
+  idGenerated?: boolean;
   title: string;
   level: number;
   contentMarkdown: string;

@@ -478,6 +478,7 @@ export function assignSectionTitleAndGeneratedId(sections: VisualSection[], sect
     return;
   }
   section.customId = createUniqueSectionIdFromTitle(nextTitle, sections, section.key);
+  section.customIdGenerated = section.customId.length > 0;
 }
 
 export function createUniqueSectionIdFromTitle(title: string, sections: VisualSection[], excludeSectionKey?: string): string {

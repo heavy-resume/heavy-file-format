@@ -241,6 +241,7 @@ export type SectionLocation = 'main' | 'sidebar';
 export interface VisualSection {
   key: string;
   customId: string;
+  customIdGenerated?: boolean;
   contained: boolean;
   editorOnly: boolean;
   lock: boolean;

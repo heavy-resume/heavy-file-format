@@ -1091,6 +1091,7 @@ function replaceDocumentContents(target: VisualDocument, source: VisualDocument)
 function replaceSectionContents(target: VisualSection, source: VisualSection): void {
   const key = target.key;
   target.customId = source.customId;
+  target.customIdGenerated = source.customIdGenerated;
   target.contained = source.contained;
   target.lock = source.lock;
   target.idEditorOpen = source.idEditorOpen;

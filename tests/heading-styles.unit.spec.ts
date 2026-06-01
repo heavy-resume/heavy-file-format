@@ -10,7 +10,7 @@ import {
 } from '../src/heading-styles';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
-test('heading styles expose adjusted defaults and first-heading reset CSS', () => {
+test('heading styles expose adjusted defaults and edge-heading reset CSS', () => {
   const meta = {};
   const styles = getHeadingStylesFromMeta(meta);
 
@@ -33,6 +33,9 @@ test('heading styles expose adjusted defaults and first-heading reset CSS', () =
   expect(styleElement).not.toContain(' h5 {');
   expect(styleElement).not.toContain(' h6 {');
   expect(styleElement).toContain('margin-top: 0;');
+  expect(styleElement).toContain('> :is(h1, h2, h3, h4, h5, h6):last-child');
+  expect(styleElement).toContain('> .hvy-text-line-style:last-child > :is(h1, h2, h3, h4, h5, h6):last-of-type');
+  expect(styleElement).toContain('margin-bottom: 0;');
 });
 
 test('heading style spacing updates preserve other declarations', () => {

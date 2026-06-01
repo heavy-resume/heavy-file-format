@@ -3006,7 +3006,15 @@ function applyGeneratedImportTemplateSection(
     }
     adjustImportSectionLevel(generated, target.level);
     generated.key = target.key;
-    generated.customId = trimImportString(target.customId) || application.target.id || generated.customId;
+    const targetId = trimImportString(target.customId);
+    const applicationTargetId = trimImportString(application.target.id);
+    if (targetId) {
+      generated.customId = targetId;
+      generated.customIdGenerated = target.customIdGenerated;
+    } else if (applicationTargetId) {
+      generated.customId = applicationTargetId;
+      generated.customIdGenerated = false;
+    }
     location.container.splice(location.index, 1, generated);
     return {
       message: `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`,

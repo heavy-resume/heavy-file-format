@@ -9,6 +9,33 @@ import {
 
 registerSerializationTestState();
 
+test('does not serialize generated section ids into directives', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {}-->
+#! AI Features
+`, '.hvy');
+
+  expect(document.sections[0]?.customId).toBe('ai-features');
+  expect(serializeDocument(document)).toContain('<!--hvy: {"lock":false,"expanded":true,"highlight":false}-->');
+  expect(serializeDocument(document)).not.toContain('"id":"ai-features"');
+  expect(serializeDocument(document)).not.toContain('"id":"section-');
+});
+
+test('serializes authored section ids into directives', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"ai-features"}-->
+#! AI Features
+`, '.hvy');
+
+  expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
+});
+
 test('serializes a single block fragment without document wrappers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

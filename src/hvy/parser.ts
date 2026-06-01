@@ -251,6 +251,7 @@ function assignGeneratedIds(sections: HvySection[], used = new Set<string>()): v
   sections.forEach((section) => {
     if (!section.id || section.id.trim().length === 0) {
       section.id = uniqueGeneratedSectionId(slugify(section.title || 'untitled'), used);
+      section.idGenerated = true;
     }
     if (!used.has(section.id)) {
       used.add(section.id);

@@ -139,6 +139,7 @@ export function bindInputMisc(app: HTMLElement): void {
         return;
       }
       section.customId = sanitizeOptionalId(target.value);
+      section.customIdGenerated = false;
       getRefreshReaderPanels()();
       return;
     }

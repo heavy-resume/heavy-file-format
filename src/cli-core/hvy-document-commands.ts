@@ -434,6 +434,7 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
   const parent = findSectionParent(ctx, parentPath);
   const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1);
   section.customId = definition.template.customId;
+  section.customIdGenerated = definition.template.customIdGenerated;
   if (templateValues) {
     applyReusableSectionTemplateValues(section, templateValues, variables);
   }

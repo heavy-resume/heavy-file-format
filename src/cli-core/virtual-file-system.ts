@@ -758,7 +758,10 @@ function formatSectionAbout(section: VisualSection): string {
 }
 
 function applySectionJson(section: VisualSection, value: JsonObject): void {
-  if (typeof value.id === 'string') section.customId = value.id;
+  if (typeof value.id === 'string') {
+    section.customId = value.id;
+    section.customIdGenerated = false;
+  }
   if (typeof value.title === 'string') section.title = value.title;
   if (typeof value.level === 'number') section.level = Math.max(1, Math.min(6, Math.floor(value.level)));
   if (typeof value.lock === 'boolean') section.lock = value.lock;

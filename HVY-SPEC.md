@@ -177,7 +177,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - `#!` lines are consumed by the parser and not rendered.
 - If no `#!` follows the directive, the section title defaults to `id`.
-- If `id` is omitted, authoring tools SHOULD derive it from the section title as a lowercase slug and make it unique within the document.
+- `id` is optional. Authoring clients MAY generate transient section ids for editing controls, navigation, and runtime anchors, but MUST NOT serialize generated ids back into section metadata when the author did not provide an id.
 - If multiple directives precede the same `#!` line, they are merged (last key wins).
 
 ### 5.4 Document-level directives
@@ -881,6 +881,7 @@ Rules:
 - `css` is an optional inline CSS declaration string applied to that rendered heading level and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - `afterContentMarginTop` is an optional CSS length or expression used as the top margin when that heading follows prose, a list, blockquote, or code block in the same text component.
 - Renderers SHOULD remove the top margin from the first visible heading in a text block or styled text-line wrapper so a heading at the start of a section aligns with the section content.
+- Renderers SHOULD remove the bottom margin from the last visible heading in a text block or styled text-line wrapper so a heading at the bottom of a component does not add trailing space.
 - Unknown heading style fields MUST be ignored.
 
 ## 6. Template & Schema (`.thvy`)

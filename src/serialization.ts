@@ -5,7 +5,6 @@ import { parseHvy } from './hvy/parser';
 import { convertMarkdownToHvyDocument } from './markdown-import';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
-import { getSectionId } from './section-ops';
 import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
@@ -172,6 +171,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
   return {
     key: makeId('section'),
     customId,
+    customIdGenerated: section.idGenerated === true && typeof sectionMeta.id !== 'string',
     contained: sectionMeta.contained !== false,
     editorOnly: sectionMeta.editorOnly === true,
     lock: sectionMeta.lock === true,
@@ -1223,8 +1223,9 @@ function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachment
 
 function serializeSection(section: VisualSection, level: number, documentMeta: JsonObject | null): string {
   const heading = `#! ${section.title}`;
+  const authoredId = section.customIdGenerated === true ? '' : section.customId.trim();
   const meta: JsonObject = {
-    id: getSectionId(section),
+    ...(authoredId.length > 0 ? { id: authoredId } : {}),
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,

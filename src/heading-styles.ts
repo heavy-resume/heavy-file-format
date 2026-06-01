@@ -136,7 +136,13 @@ export function renderHeadingStyleElement(meta: Record<string, unknown>, classNa
     `${selectorPrefix} .editor-block-passive .reader-block > :is(h1, h2, h3, h4, h5, h6):first-child`,
     `${selectorPrefix} .editor-block-passive .reader-block > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type`,
   ].join(', ');
-  const css = [...selectors, ...afterSelectors, `${resetSelectors} { margin-top: 0; }`]
+  const bottomResetSelectors = [
+    `${selectorPrefix} :is(.reader-block, .rich-editor) > :is(h1, h2, h3, h4, h5, h6):last-child`,
+    `${selectorPrefix} :is(.reader-block, .rich-editor) > .hvy-text-line-style:last-child > :is(h1, h2, h3, h4, h5, h6):last-of-type`,
+    `${selectorPrefix} .editor-block-passive .reader-block > :is(h1, h2, h3, h4, h5, h6):last-child`,
+    `${selectorPrefix} .editor-block-passive .reader-block > .hvy-text-line-style:last-child > :is(h1, h2, h3, h4, h5, h6):last-of-type`,
+  ].join(', ');
+  const css = [...selectors, ...afterSelectors, `${resetSelectors} { margin-top: 0; }`, `${bottomResetSelectors} { margin-bottom: 0; }`]
     .join('\n')
     .replace(/<\/style/gi, '<\\/style');
   return `<style data-hvy-heading-styles="true">${css}</style>`;

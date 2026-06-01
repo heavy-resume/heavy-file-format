@@ -206,6 +206,7 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
   return {
     key: makeId('section'),
     customId: sanitizeOptionalId(typeof raw.customId === 'string' ? raw.customId : typeof raw.id === 'string' ? raw.id : ''),
+    customIdGenerated: raw.customIdGenerated === true,
     contained: raw.contained !== false,
     editorOnly: raw.editorOnly === true,
     lock: raw.lock === true,
@@ -548,6 +549,7 @@ export function createEmptySection(level: number, component = 'container', isGho
   return {
     key: makeId('section'),
     customId: '',
+    customIdGenerated: false,
     contained: true,
     editorOnly: false,
     lock: false,

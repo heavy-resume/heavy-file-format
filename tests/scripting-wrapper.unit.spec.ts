@@ -79,6 +79,13 @@ test('buildPythonProgram exposes doc.tool attributes with keyword arguments', ()
   expect(expectedResult).toContain("'doc': __HvyDocProxy__(__hvy_runtime__.doc)");
 });
 
+test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
+  const expectedResult = buildPythonProgram('runtime-doc-json-test');
+
+  expect(expectedResult).toContain('class __HvyDocProxy__:');
+  expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
+});
+
 test('instrumentPythonSource skips blank lines and comments while preserving nested indentation', () => {
   expect(
     instrumentPythonSource(
@@ -328,6 +335,38 @@ test('createScriptingRuntime stores script logs', () => {
   runtime.doc.log_json('["before",{"count":2}]');
 
   expect(runtime.stats.logs).toEqual(['before {"count":2}']);
+});
+
+test('createScriptingRuntime exposes doc.json response parsing helpers', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+  });
+
+  const object = runtime.doc.json.parse_object('```json\n{"question":"What changed?","nested":{"answer":"doc.json"}}\n```') as Record<string, unknown> & {
+    get(key: string, defaultValue?: unknown): unknown;
+  };
+  expect(object.question).toBe('What changed?');
+  expect(object.get('question')).toBe('What changed?');
+  expect(object.get('missing', 'fallback')).toBe('fallback');
+  expect((object.nested as { get(key: string): unknown }).get('answer')).toBe('doc.json');
+
+  const array = runtime.doc.json.parse_array('Response:\n```json\n[{"source_id":"intro"},{"source_id":"details"}]\n```') as Array<{
+    get(key: string): unknown;
+  }>;
+  expect(array).toHaveLength(2);
+  expect(array[0]?.get('source_id')).toBe('intro');
+
+  expect(runtime.doc.json.parse('The object is {"ok":true}.')).toEqual({ ok: true });
+});
+
+test('createScriptingRuntime doc.json throws for invalid or mismatched response shapes', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+  });
+
+  expect(() => runtime.doc.json.parse('not json')).toThrow('Response was not valid JSON.');
+  expect(() => runtime.doc.json.parse_array('{"items":[]}')).toThrow('Return exactly one JSON array.');
+  expect(() => runtime.doc.json.parse_object('[{"item":1}]')).toThrow('Return exactly one JSON object.');
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {

@@ -8,6 +8,7 @@ import { executeDocumentEditToolByName } from '../../ai-document-edit';
 import { executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../../cli-core/commands';
 import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
+import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeDocument } from '../../serialization';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
@@ -47,6 +48,7 @@ interface ScriptingDocApi {
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
   db: ScriptingDbApi;
+  json: ScriptingJsonApi;
   export: ScriptingExportApi;
   cli: ScriptingCliApi;
   rerender: () => void;
@@ -90,6 +92,12 @@ export interface ScriptingFormApi {
 export interface ScriptingDbApi {
   query(sql: string, params?: unknown): Record<string, unknown>[];
   execute(sql: string, params?: unknown): string;
+}
+
+export interface ScriptingJsonApi {
+  parse(response: string): unknown;
+  parse_array(response: string): unknown[];
+  parse_object(response: string): JsonObject;
 }
 
 export interface ScriptingCliApi {
@@ -163,6 +171,54 @@ function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi
     keep_together: (idOrTag) => recorder.keep_together(String(idOrTag)),
     style: (idOrTag, style) => recorder.style(String(idOrTag), normalizeScriptObject(style)),
     strategy: (rule) => recorder.strategy(normalizeExportRuleInput(rule)),
+  };
+}
+
+function throwJsonParseError(result: { ok: false; message: string }): never {
+  throw new Error(result.message);
+}
+
+function addJsonObjectHelpers(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(addJsonObjectHelpers);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  for (const [key, item] of Object.entries(record)) {
+    record[key] = addJsonObjectHelpers(item);
+  }
+  Object.defineProperty(record, 'get', {
+    value: (key: unknown, defaultValue: unknown = null) => (
+      Object.prototype.hasOwnProperty.call(record, String(key)) ? record[String(key)] : defaultValue
+    ),
+    enumerable: false,
+    configurable: true,
+  });
+  return record;
+}
+
+function createJsonApi(): ScriptingJsonApi {
+  return {
+    parse: (response) => {
+      const result = parseJsonValueResponse(String(response ?? ''));
+      return result.ok ? addJsonObjectHelpers(result.value) : throwJsonParseError(result);
+    },
+    parse_array: (response) => {
+      const result = parseJsonValueResponse(String(response ?? ''));
+      if (!result.ok) {
+        return throwJsonParseError(result);
+      }
+      if (!Array.isArray(result.value)) {
+        throw new Error('Return exactly one JSON array.');
+      }
+      return addJsonObjectHelpers(result.value) as unknown[];
+    },
+    parse_object: (response) => {
+      const result = parseJsonObjectResponse(String(response ?? ''));
+      return result.ok ? addJsonObjectHelpers(result.value) as JsonObject : throwJsonParseError(result);
+    },
   };
 }
 
@@ -294,6 +350,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     },
     form: options.form ?? createUnavailableFormApi(),
     db: options.db ?? createUnavailableDbApi(),
+    json: createJsonApi(),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
     cli: {
       run: (command) => {

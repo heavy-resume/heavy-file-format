@@ -22,6 +22,7 @@ doc.db.query("SELECT * FROM fake_widgets")
 doc.db.execute("INSERT INTO fake_widgets (label) VALUES (?)", ["Orbital Widget"])
 doc.cli.run("hvy request_structure --collapse")
 doc.cli.write("/id/example/text.txt", "Updated text")
+doc.json.parse_array(response)
 doc.tool.request_structure()
 ```
 
@@ -52,6 +53,14 @@ component = doc.tool.view_component(component_ref="C3")
 doc.tool.patch_component(component_ref="C3", edits=[{"op": "replace", "start_line": 2, "end_line": 2, "text": " New text"}])
 for xref in doc.tool.get_updated_components("xref"):
     source = xref.get_parent_by_tag("reciprocal-xref-source")
+```
+
+Parse structured LLM responses from AI form submit scripts with `doc.json`:
+
+```python
+items = doc.json.parse_array(response)
+first_title = str(items[0].get("title", ""))
+payload = doc.json.parse_object(response)
 ```
 
 `get_updated_components` returns changed components plus removed component

@@ -147,6 +147,10 @@
   margin-top: 0.2rem;
 }
 
+.reader-container-body > .reader-block-text:last-child {
+  margin-bottom: 0 !important;
+}
+
 .reader-grid-cell > .reader-block-container > .reader-container {
   height: 100%;
   min-height: 100%;

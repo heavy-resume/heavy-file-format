@@ -1615,6 +1615,10 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
   if (targetBlock.tagName === 'LI' || targetBlock.tagName === 'PRE') {
     return;
   }
+  if (tagName === 'p' && targetBlock.parentElement instanceof HTMLLIElement) {
+    unwrapBlockInsideListItem(targetBlock, editable);
+    return;
+  }
   const selection = window.getSelection();
   const previousRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
   const previousTextSelection =
@@ -1660,6 +1664,29 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
     placeCaretInside(replacement);
     refocusEditablePreservingSelection(editable);
   }
+}
+
+function unwrapBlockInsideListItem(block: HTMLElement, editable: HTMLElement): void {
+  const item = block.parentElement;
+  if (!(item instanceof HTMLLIElement)) {
+    return;
+  }
+  const selection = window.getSelection();
+  const previousRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  if (!block.firstChild) {
+    block.appendChild(document.createTextNode('\u200b'));
+  }
+  while (block.firstChild) {
+    item.insertBefore(block.firstChild, block);
+  }
+  block.remove();
+  if (previousRange && item.contains(previousRange.startContainer) && item.contains(previousRange.endContainer)) {
+    selection?.removeAllRanges();
+    selection?.addRange(previousRange);
+  } else {
+    placeCaretInside(item);
+  }
+  refocusEditablePreservingSelection(editable);
 }
 
 function getEditableRootBlockForFormatting(editable: HTMLElement): HTMLElement | null {
@@ -1913,6 +1940,11 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return true;
   }
 
+  if ((event.key === 'Backspace' || event.key === 'Delete') && isSelectionInsideEditableList(editable)) {
+    const pruneActiveItem = !window.getSelection()?.isCollapsed;
+    scheduleEmptyListItemPruneAfterDeletion(editable, { pruneActiveItem });
+  }
+
   if (event.key === 'Tab' && isSelectionInsideEditableList(editable)) {
     event.preventDefault();
     const selectionSnapshot = moveSelectionListItemNesting(editable, event.shiftKey ? 'outdent' : 'indent');
@@ -2039,6 +2071,11 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'deleteByCut' && isSelectionInsideEditableList(editable)) {
+    scheduleEmptyListItemPruneAfterDeletion(editable, { pruneActiveItem: true });
+    return false;
+  }
+
   if (event.inputType === 'deleteContentBackward') {
     if (!handleInlineCheckboxBackspace(editable)) {
       return false;
@@ -2128,6 +2165,51 @@ function normalizeEditableListDom(editable: HTMLElement): void {
   });
 }
 
+function scheduleEmptyListItemPruneAfterDeletion(editable: HTMLElement, options: { pruneActiveItem: boolean }): void {
+  window.setTimeout(() => {
+    if (!editable.isConnected || !pruneEmptyListItemsAwayFromSelection(editable, options)) {
+      return;
+    }
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+  }, 0);
+}
+
+function pruneEmptyListItemsAwayFromSelection(editable: HTMLElement, options: { pruneActiveItem: boolean }): boolean {
+  const activeItem = getSelectionListItem(editable);
+  let changed = false;
+  editable.querySelectorAll<HTMLLIElement>('li').forEach((item) => {
+    if ((item === activeItem && !options.pruneActiveItem) || !isEffectivelyEmptyContinuationListItem(item)) {
+      return;
+    }
+    if (item === activeItem) {
+      placeCaretNearRemovedListItem(item);
+    }
+    item.remove();
+    changed = true;
+  });
+  if (changed) {
+    editable.querySelectorAll<HTMLUListElement | HTMLOListElement>('ul, ol').forEach((list) => {
+      if (list.children.length === 0) {
+        list.remove();
+      }
+    });
+  }
+  return changed;
+}
+
+function placeCaretNearRemovedListItem(item: HTMLLIElement): void {
+  const previous = item.previousElementSibling;
+  if (previous instanceof HTMLElement) {
+    placeCaretAtEnd(previous);
+    return;
+  }
+  const next = item.nextElementSibling;
+  if (next instanceof HTMLElement) {
+    placeCaretInside(next);
+  }
+}
+
 type EditableListTagName = 'ul' | 'ol';
 
 function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName): void {
@@ -2140,7 +2222,7 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
       convertListTypeForItem(item, tagName);
       return;
     }
-    unwrapListItem(item);
+    unwrapListItem(item, editable);
     return;
   }
 
@@ -2289,27 +2371,12 @@ function wrapSelectedBlocksInList(blocks: HTMLElement[], tagName: EditableListTa
   }
 }
 
-function unwrapListItem(item: HTMLLIElement): void {
+function unwrapListItem(item: HTMLLIElement, editable: HTMLElement): void {
   const list = item.parentElement;
   if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
     return;
   }
-  const paragraph = document.createElement('p');
-  while (item.firstChild) {
-    if (item.firstChild instanceof HTMLUListElement || item.firstChild instanceof HTMLOListElement) {
-      item.firstChild.remove();
-      continue;
-    }
-    paragraph.appendChild(item.firstChild);
-  }
-  if (!paragraph.firstChild) {
-    paragraph.appendChild(document.createElement('br'));
-  }
-  list.parentNode?.insertBefore(paragraph, list);
-  item.remove();
-  if (list.children.length === 0) {
-    list.remove();
-  }
+  const paragraph = splitListItemToParagraph(item, editable, { forceEmpty: false });
   placeCaretAtEnd(paragraph);
 }
 
@@ -2326,21 +2393,181 @@ function exitEmptyListItemAtSelection(editable: HTMLElement): boolean {
   if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
     return false;
   }
-  const nextItem = item.nextElementSibling;
-  if (nextItem instanceof HTMLLIElement) {
-    item.remove();
-    placeCaretInside(nextItem);
-    return true;
-  }
-  const exitAfter = getRootEditableList(list, editable);
-  const paragraph = document.createElement('p');
-  paragraph.appendChild(document.createElement('br'));
-  exitAfter.parentNode?.insertBefore(paragraph, exitAfter.nextSibling);
-  item.remove();
+  const paragraph = splitListItemToParagraph(item, editable, { forceEmpty: true });
   removeEmptyListAncestors(list);
   placeCaretInside(paragraph);
   refocusEditablePreservingSelection(editable);
   return true;
+}
+
+function splitListItemToParagraph(item: HTMLLIElement, editable: HTMLElement, options: { forceEmpty: boolean }): HTMLParagraphElement {
+  const list = item.parentElement;
+  if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement) || !list.parentNode) {
+    const fallback = document.createElement('p');
+    fallback.appendChild(document.createElement('br'));
+    return fallback;
+  }
+  const paragraph = document.createElement('p');
+  if (options.forceEmpty) {
+    paragraph.appendChild(document.createElement('br'));
+  } else {
+    moveListItemContentToParagraph(item, paragraph);
+  }
+  if (!paragraph.firstChild) {
+    paragraph.appendChild(document.createElement('br'));
+  }
+
+  const parent = list.parentNode;
+  const afterList = document.createElement(list.tagName.toLowerCase()) as HTMLUListElement | HTMLOListElement;
+  while (item.nextSibling) {
+    afterList.appendChild(item.nextSibling);
+  }
+  item.remove();
+
+  if (list.children.length > 0) {
+    parent.insertBefore(paragraph, list.nextSibling);
+  } else {
+    parent.insertBefore(paragraph, list);
+    list.remove();
+  }
+
+  pruneEmptyContinuationListItems(afterList);
+  if (afterList.children.length > 0) {
+    parent.insertBefore(afterList, paragraph.nextSibling);
+  }
+  hoistSplitParagraphToEditableRoot(paragraph, editable);
+  return paragraph;
+}
+
+function hoistSplitParagraphToEditableRoot(paragraph: HTMLParagraphElement, editable: HTMLElement): void {
+  while (paragraph.parentElement && paragraph.parentElement !== editable) {
+    const item = paragraph.parentElement;
+    const list = item.parentElement;
+    if (!(item instanceof HTMLLIElement) || !(list instanceof HTMLUListElement || list instanceof HTMLOListElement) || !list.parentNode) {
+      return;
+    }
+    const continuationItem = document.createElement('li');
+    while (paragraph.nextSibling) {
+      continuationItem.appendChild(paragraph.nextSibling);
+    }
+    item.removeChild(paragraph);
+    if (continuationItem.childNodes.length > 0) {
+      insertContinuationListItem(list, continuationItem, item.nextSibling);
+    }
+
+    const parent = list.parentNode;
+    const afterList = document.createElement(list.tagName.toLowerCase()) as HTMLUListElement | HTMLOListElement;
+    while (item.nextSibling) {
+      afterList.appendChild(item.nextSibling);
+    }
+    pruneEmptyContinuationListItems(afterList);
+
+    if (isEffectivelyEmptyBlock(item)) {
+      item.remove();
+    }
+    if (list.children.length > 0) {
+      parent.insertBefore(paragraph, list.nextSibling);
+    } else {
+      parent.insertBefore(paragraph, list);
+      list.remove();
+    }
+    if (afterList.children.length > 0) {
+      parent.insertBefore(afterList, paragraph.nextSibling);
+    }
+  }
+}
+
+function insertContinuationListItem(list: HTMLUListElement | HTMLOListElement, item: HTMLLIElement, before: ChildNode | null): void {
+  const singleListChild = getOnlyListChild(item);
+  if (singleListChild && singleListChild.tagName === list.tagName) {
+    drainContinuationListItems(list, singleListChild, before);
+    return;
+  }
+  list.insertBefore(item, before);
+}
+
+function drainContinuationListItems(
+  targetList: HTMLUListElement | HTMLOListElement,
+  sourceList: HTMLUListElement | HTMLOListElement,
+  before: ChildNode | null
+): void {
+  while (sourceList.firstElementChild) {
+    const item = sourceList.firstElementChild;
+    if (!(item instanceof HTMLLIElement)) {
+      sourceList.removeChild(item);
+      continue;
+    }
+    const nestedList = getOnlyListChild(item);
+    if (nestedList && nestedList.tagName === targetList.tagName) {
+      drainContinuationListItems(targetList, nestedList, before);
+      item.remove();
+      continue;
+    }
+    if (isEffectivelyEmptyContinuationListItem(item)) {
+      item.remove();
+      continue;
+    }
+    targetList.insertBefore(item, before);
+  }
+}
+
+function pruneEmptyContinuationListItems(list: HTMLUListElement | HTMLOListElement): void {
+  Array.from(list.children).forEach((child) => {
+    if (child instanceof HTMLLIElement && isEffectivelyEmptyContinuationListItem(child)) {
+      child.remove();
+    }
+  });
+}
+
+function isEffectivelyEmptyContinuationListItem(item: HTMLLIElement): boolean {
+  if (Array.from(item.children).some((child) => child instanceof HTMLUListElement || child instanceof HTMLOListElement)) {
+    return false;
+  }
+  return isEffectivelyEmptyBlock(item);
+}
+
+function getOnlyListChild(item: HTMLLIElement): HTMLUListElement | HTMLOListElement | null {
+  const meaningfulChildren = Array.from(item.childNodes).filter((child) => {
+    if (child instanceof Text) {
+      return child.data.replace(/\u200b/g, '').trim().length > 0;
+    }
+    if (child instanceof HTMLBRElement) {
+      return false;
+    }
+    if (child instanceof HTMLElement && /^(P|DIV|BLOCKQUOTE|H[1-6])$/.test(child.tagName) && isEffectivelyEmptyBlock(child)) {
+      return false;
+    }
+    return true;
+  });
+  return meaningfulChildren.length === 1 &&
+    (meaningfulChildren[0] instanceof HTMLUListElement || meaningfulChildren[0] instanceof HTMLOListElement)
+    ? meaningfulChildren[0]
+    : null;
+}
+
+function moveListItemContentToParagraph(item: HTMLLIElement, paragraph: HTMLParagraphElement): void {
+  while (item.firstChild) {
+    const child = item.firstChild;
+    if (child instanceof HTMLUListElement || child instanceof HTMLOListElement) {
+      child.remove();
+      continue;
+    }
+    if (child instanceof HTMLElement && /^(P|DIV|BLOCKQUOTE|H[1-6])$/.test(child.tagName)) {
+      appendBlockContentsToParagraph(child, paragraph);
+      child.remove();
+      continue;
+    }
+    paragraph.appendChild(child);
+  }
+}
+
+function appendBlockContentsToParagraph(block: HTMLElement, paragraph: HTMLParagraphElement): void {
+  if (paragraph.textContent?.trim() && paragraph.lastChild && !(paragraph.lastChild instanceof HTMLBRElement)) {
+    paragraph.appendChild(document.createElement('br'));
+  }
+  while (block.firstChild) {
+    paragraph.appendChild(block.firstChild);
+  }
 }
 
 function isEmptyEditableListItem(item: HTMLLIElement): boolean {
@@ -2349,18 +2576,6 @@ function isEmptyEditableListItem(item: HTMLLIElement): boolean {
     return false;
   }
   return (item.textContent ?? '').replace(/\u200b/g, '').replace(/\u00a0/g, ' ').trim().length === 0;
-}
-
-function getRootEditableList(list: HTMLUListElement | HTMLOListElement, editable: HTMLElement): HTMLUListElement | HTMLOListElement {
-  let current: HTMLUListElement | HTMLOListElement = list;
-  while (
-    current.parentElement instanceof HTMLLIElement &&
-    (current.parentElement.parentElement instanceof HTMLUListElement || current.parentElement.parentElement instanceof HTMLOListElement) &&
-    editable.contains(current.parentElement.parentElement)
-  ) {
-    current = current.parentElement.parentElement;
-  }
-  return current;
 }
 
 function removeEmptyListAncestors(list: HTMLUListElement | HTMLOListElement): void {

@@ -11,7 +11,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns } from './grid-ops';
-import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, turndown } from './markdown';
+import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
@@ -199,6 +199,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     let syncMs = 0;
     let refreshMs = 0;
     let stepStartedAt = performance.now();
+    removeNonTextContentFromRichEditor(target);
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
@@ -386,6 +387,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
       return true;
     }
     let stepStartedAt = performance.now();
+    removeNonTextContentFromRichEditor(target);
     normalizeEditableListDom(target);
     item.block.text = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
     turndownMs = performance.now() - stepStartedAt;

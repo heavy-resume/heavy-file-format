@@ -7,6 +7,7 @@ import {
   markdownToReaderHtml,
   normalizeMarkdownIndentation,
   normalizeMarkdownLists,
+  removeNonTextContentFromRichEditor,
   turndown,
 } from '../src/markdown';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
@@ -117,6 +118,30 @@ test('serializes editor inline code with markdown backticks', () => {
 
 test('serializes editor inline code with literal angle brackets', () => {
   expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
+});
+
+test('does not render markdown image syntax in text components', () => {
+  expect(markdownToReaderHtml('Before ![Alt](https://example.invalid/image.png) after.')).toBe('<p>Before  after.</p>\n');
+});
+
+test('does not serialize pasted image html into text component markdown', () => {
+  expect(turndown.turndown('<p>Before <img src="data:image/png;base64,AAAA" alt="Alt"> after.</p>')).toBe('Before  after.');
+});
+
+test('removes non-text media from rich editor content before serialization', () => {
+  const removed: string[] = [];
+
+  removeNonTextContentFromRichEditor({
+    querySelectorAll: (selector: string) => {
+      expect(selector).toContain('img');
+      return [
+        { remove: () => removed.push('img') },
+        { remove: () => removed.push('canvas') },
+      ] as unknown as NodeListOf<HTMLElement>;
+    },
+  } as unknown as ParentNode);
+
+  expect(removed).toEqual(['img', 'canvas']);
 });
 
 test('renders hvy alt annotations as responsive spans', () => {

@@ -30,6 +30,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
+Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.

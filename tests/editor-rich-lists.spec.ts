@@ -255,3 +255,40 @@ test('tab indents list items inside the rich editor', async ({ page }) => {
   await page.locator('[data-action="activate-block"]').first().click();
   await expect(page.locator(activeEditorBlockSelector).first().locator('.rich-editor').first().locator('ul ul li')).toContainText('Child');
 });
+
+test('enter on an empty trailing bullet exits the list', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<ul><li>Parent</li><li><br></li></ul>';
+    const emptyItem = node.querySelectorAll('li')[1];
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(emptyItem!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await editor.evaluate((node) => {
+    node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  });
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listItems: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+    paragraphCount: node.querySelectorAll('p').length,
+    html: node.innerHTML,
+    caretBlock: window.getSelection()?.anchorNode instanceof Element
+      ? window.getSelection()?.anchorNode.closest('p, li')?.tagName
+      : window.getSelection()?.anchorNode?.parentElement?.closest('p, li')?.tagName,
+  }));
+  expect(expectedResult.listItems).toEqual(['Parent']);
+  expect(expectedResult.paragraphCount).toBe(1);
+  expect(expectedResult.html).not.toContain('<li><br></li><li>');
+  expect(expectedResult.caretBlock).toBe('P');
+});

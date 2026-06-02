@@ -1915,9 +1915,11 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 
   if (event.key === 'Tab' && isSelectionInsideEditableList(editable)) {
     event.preventDefault();
-    moveSelectionListItemNesting(editable, event.shiftKey ? 'outdent' : 'indent');
-    normalizeEditableListDom(editable);
+    const selectionSnapshot = moveSelectionListItemNesting(editable, event.shiftKey ? 'outdent' : 'indent');
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    restoreMovedListItemSelection(selectionSnapshot, editable);
+    updateRichToolbarState(editable);
+    window.setTimeout(() => restoreMovedListItemSelection(selectionSnapshot, editable), 0);
     return true;
   }
 
@@ -1990,6 +1992,13 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   if (event.key === 'Enter') {
+    if (exitEmptyListItemAtSelection(editable)) {
+      event.preventDefault();
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+
     if (exitTextLineStyleAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2233,6 +2242,67 @@ function unwrapListItem(item: HTMLLIElement): void {
   placeCaretAtEnd(paragraph);
 }
 
+function exitEmptyListItemAtSelection(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const item = getSelectionListItem(editable);
+  if (!item || !isEmptyEditableListItem(item)) {
+    return false;
+  }
+  const list = item.parentElement;
+  if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
+    return false;
+  }
+  const nextItem = item.nextElementSibling;
+  if (nextItem instanceof HTMLLIElement) {
+    item.remove();
+    placeCaretInside(nextItem);
+    return true;
+  }
+  const exitAfter = getRootEditableList(list, editable);
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(document.createElement('br'));
+  exitAfter.parentNode?.insertBefore(paragraph, exitAfter.nextSibling);
+  item.remove();
+  removeEmptyListAncestors(list);
+  placeCaretInside(paragraph);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function isEmptyEditableListItem(item: HTMLLIElement): boolean {
+  const hasNestedList = Array.from(item.children).some((child) => child instanceof HTMLUListElement || child instanceof HTMLOListElement);
+  if (hasNestedList) {
+    return false;
+  }
+  return (item.textContent ?? '').replace(/\u200b/g, '').replace(/\u00a0/g, ' ').trim().length === 0;
+}
+
+function getRootEditableList(list: HTMLUListElement | HTMLOListElement, editable: HTMLElement): HTMLUListElement | HTMLOListElement {
+  let current: HTMLUListElement | HTMLOListElement = list;
+  while (
+    current.parentElement instanceof HTMLLIElement &&
+    (current.parentElement.parentElement instanceof HTMLUListElement || current.parentElement.parentElement instanceof HTMLOListElement) &&
+    editable.contains(current.parentElement.parentElement)
+  ) {
+    current = current.parentElement.parentElement;
+  }
+  return current;
+}
+
+function removeEmptyListAncestors(list: HTMLUListElement | HTMLOListElement): void {
+  let current: HTMLElement | null = list;
+  while (current instanceof HTMLUListElement || current instanceof HTMLOListElement) {
+    const next: HTMLElement | null = current.parentElement instanceof HTMLLIElement ? current.parentElement.parentElement : null;
+    if (current.children.length === 0) {
+      current.remove();
+    }
+    current = next;
+  }
+}
+
 function convertListTypeForItem(item: HTMLLIElement, tagName: EditableListTagName): void {
   const list = item.parentElement;
   if (!(list instanceof HTMLUListElement || list instanceof HTMLOListElement)) {
@@ -2246,16 +2316,99 @@ function convertListTypeForItem(item: HTMLLIElement, tagName: EditableListTagNam
   placeCaretInside(item);
 }
 
-function moveSelectionListItemNesting(editable: HTMLElement, direction: 'indent' | 'outdent'): void {
+interface MovedListItemSelection {
+  item: HTMLLIElement;
+  snapshot: ListItemSelectionSnapshot | null;
+}
+
+function moveSelectionListItemNesting(editable: HTMLElement, direction: 'indent' | 'outdent'): MovedListItemSelection | null {
   const item = getSelectionListItem(editable);
   if (!item) {
-    return;
+    return null;
   }
+  const selectionSnapshot = captureListItemSelection(item);
   if (direction === 'indent') {
     indentListItem(item);
   } else {
     outdentListItem(item);
   }
+  normalizeEditableListDom(editable);
+  if (!restoreListItemSelection(item, selectionSnapshot)) {
+    placeCaretInside(item);
+  }
+  refocusEditablePreservingSelection(editable);
+  return { item, snapshot: selectionSnapshot };
+}
+
+interface ListItemSelectionSnapshot {
+  startContainer: Node;
+  startOffset: number;
+  endContainer: Node;
+  endOffset: number;
+  textStart: number | null;
+  textEnd: number | null;
+}
+
+function captureListItemSelection(item: HTMLLIElement): ListItemSelectionSnapshot | null {
+  const range = getEditableSelectionRange(item);
+  if (!range) {
+    return null;
+  }
+  return {
+    startContainer: range.startContainer,
+    startOffset: range.startOffset,
+    endContainer: range.endContainer,
+    endOffset: range.endOffset,
+    textStart: getTextOffset(item, range.startContainer, range.startOffset),
+    textEnd: getTextOffset(item, range.endContainer, range.endOffset),
+  };
+}
+
+function restoreListItemSelection(item: HTMLLIElement, snapshot: ListItemSelectionSnapshot | null): boolean {
+  if (!snapshot || !item.isConnected) {
+    return false;
+  }
+  if (
+    isNodeInsideElement(item, snapshot.startContainer) &&
+    isNodeInsideElement(item, snapshot.endContainer) &&
+    restoreSelectionByContainers(snapshot)
+  ) {
+    return true;
+  }
+  return snapshot.textStart !== null && snapshot.textEnd !== null
+    ? restoreSelectionByTextOffsets(item, snapshot.textStart, snapshot.textEnd)
+    : false;
+}
+
+function restoreMovedListItemSelection(movedSelection: MovedListItemSelection | null, editable: HTMLElement): void {
+  if (!movedSelection || !editable.contains(movedSelection.item)) {
+    return;
+  }
+  if (!restoreListItemSelection(movedSelection.item, movedSelection.snapshot)) {
+    placeCaretInside(movedSelection.item);
+  }
+  refocusEditablePreservingSelection(editable);
+}
+
+function restoreSelectionByContainers(snapshot: ListItemSelectionSnapshot): boolean {
+  const selection = window.getSelection();
+  if (!selection) {
+    return false;
+  }
+  try {
+    const range = document.createRange();
+    range.setStart(snapshot.startContainer, snapshot.startOffset);
+    range.setEnd(snapshot.endContainer, snapshot.endOffset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isNodeInsideElement(element: HTMLElement, node: Node): boolean {
+  return node === element || element.contains(node);
 }
 
 function indentListItem(item: HTMLLIElement): void {

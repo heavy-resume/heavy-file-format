@@ -1,10 +1,19 @@
-import { getActiveStateRuntime, runWithStateRuntime } from '../../state';
+import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
 import { undoState, redoState } from './_imports';
 import { openSearch } from '../../search/actions';
+import { consumeNextUndoTargetsDocument } from '../../edit-command-routing';
 
 const shortcutRoots = new WeakSet<HTMLElement>();
+const shortcutRootRuntimes = new WeakMap<HTMLElement, StateRuntime | null>();
 
 export function bindShortcuts(_app: HTMLElement): void {
+  let boundRuntime: StateRuntime | null = null;
+  try {
+    boundRuntime = getActiveStateRuntime();
+  } catch {
+    boundRuntime = null;
+  }
+  shortcutRootRuntimes.set(_app, boundRuntime);
   if (shortcutRoots.has(_app)) {
     return;
   }
@@ -15,13 +24,10 @@ export function bindShortcuts(_app: HTMLElement): void {
     }
     return typeof _app.contains === 'function' ? _app.contains(node) : true;
   };
-  let runtime: ReturnType<typeof getActiveStateRuntime> | null = null;
-  try {
-    runtime = getActiveStateRuntime();
-  } catch {
-    runtime = null;
-  }
   window.addEventListener('keydown', (event) => {
+    if ('isConnected' in _app && !_app.isConnected) {
+      return;
+    }
     const targetInsideApp = event.target instanceof HTMLElement && containsAppNode(event.target);
     const activeElement = typeof document === 'undefined' ? null : document.activeElement;
     const focusInsideApp = activeElement instanceof HTMLElement && containsAppNode(activeElement);
@@ -30,9 +36,6 @@ export function bindShortcuts(_app: HTMLElement): void {
       return;
     }
     const handleShortcut = () => {
-      if (isNativeUndoTarget(event.target)) {
-        return;
-      }
       const meta = event.metaKey || event.ctrlKey;
       if (!meta) {
         return;
@@ -47,15 +50,23 @@ export function bindShortcuts(_app: HTMLElement): void {
         return;
       }
       if (key === 'z' && !event.shiftKey) {
+        const routeToDocument = consumeNextUndoTargetsDocument();
+        if (!routeToDocument && isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'undo')) {
+          return;
+        }
         event.preventDefault();
         undoState();
         return;
       }
       if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        if (isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'redo')) {
+          return;
+        }
         event.preventDefault();
         redoState();
       }
     };
+    const runtime = shortcutRootRuntimes.get(_app) ?? null;
     if (runtime) {
       runWithStateRuntime(runtime, handleShortcut);
     } else {
@@ -75,11 +86,18 @@ export function isNativeUndoTarget(target: EventTarget | null): boolean {
   if (target.closest('.theme-modal')) {
     return false;
   }
-  if (target.closest('.rich-editor')) {
-    return false;
-  }
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
     return true;
   }
   return target.isContentEditable;
+}
+
+function hasNativeEditCommand(target: EventTarget | null, command: 'undo' | 'redo'): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return typeof document !== 'undefined' && document.queryCommandEnabled(command);
+  }
+  return true;
 }

@@ -10,6 +10,7 @@ import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
+import { capturePaneScroll } from '../../scroll';
 import {
   cloneComponentClipboardEntry,
   collectBlockAttachments,
@@ -21,6 +22,7 @@ import {
 import { showTransientNotice } from '../../transient-notice';
 import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
+import { routeNextUndoToDocument } from '../../edit-command-routing';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -213,11 +215,12 @@ const removeBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
   getRenderApp()();
 };
 
-const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName }) => {
+const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusableName }) => {
   if (!blockId) {
     return;
   }
   recordHistory();
+  const scrollBeforeDelete = capturePaneScroll(state.paneScroll, app);
   const sqliteRowModal = state.sqliteRowComponentModal;
   if (sqliteRowModal?.sectionKey === sectionKey) {
     const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
@@ -237,12 +240,15 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
     }
     if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
       setActiveEditorBlock(sectionKey, parentId);
+      state.pendingEditorActivation = null;
     }
     state.sqliteRowComponentModal = {
       ...sqliteRowModal,
       blocks: [...sqliteRowModal.blocks],
       error: null,
     };
+    state.pendingPaneScrollRestore = scrollBeforeDelete;
+    routeNextUndoToDocument();
     getRenderApp()();
     return;
   }
@@ -272,7 +278,10 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
   }
   if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
     setActiveEditorBlock(sectionKey, parentId);
+    state.pendingEditorActivation = null;
   }
+  state.pendingPaneScrollRestore = scrollBeforeDelete;
+  routeNextUndoToDocument();
   getRenderApp()();
 };
 
@@ -460,6 +469,14 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     && placedBlock.schema.containerBlocks.length > 0;
   let activePlacedBlockId = placedBlock.id;
   let syncBlockId = placedBlock.id;
+  let placementHistoryRecorded = false;
+  const recordPlacementHistory = (): void => {
+    if (placementHistoryRecorded) {
+      return;
+    }
+    placementHistoryRecorded = true;
+    recordComponentPlacementHistory();
+  };
   if (placementMode === 'copy') {
     const prepared = prepareBlockForDocumentPasteWithResult(state.document, placedBlock);
     if (
@@ -488,6 +505,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
       getRenderApp()();
       return;
     }
+    recordPlacementHistory();
     installEditorClipboardComponentDefinitions(state.document);
     installEditorClipboardAttachments(state.document);
     if (prepared.removedCount > 0) {
@@ -503,7 +521,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   }
 
   if (placementMode === 'move') {
-    recordHistory(`component-${placementMode}`);
+    recordPlacementHistory();
     if (!placement || !removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
       state.componentPlacement = null;
       getRenderApp()();
@@ -511,7 +529,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     }
     syncReusableTemplateForBlock(placement.sectionKey, placement.blockId);
   } else {
-    recordHistory(`component-${placementMode}`);
+    recordPlacementHistory();
   }
 
   if (placementContainer === 'grid') {
@@ -537,11 +555,20 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   syncReusableTemplateForBlock(sectionKey, syncBlockId);
   state.componentPlacement = null;
   setActiveEditorBlock(sectionKey, activePlacedBlockId);
+  state.pendingEditorActivation = null;
   if (placementMode === 'copy') {
     markActiveEditorBlockAsNew(activePlacedBlockId);
   }
+  routeNextUndoToDocument();
   getRenderApp()();
 };
+
+function recordComponentPlacementHistory(): void {
+  const placement = state.componentPlacement;
+  state.componentPlacement = null;
+  recordHistory();
+  state.componentPlacement = placement;
+}
 
 function shouldConfirmReusableDefinitionPhvyPaste(sectionKey: string, actionButton: HTMLElement): boolean {
   if (

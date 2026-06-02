@@ -37,11 +37,20 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   </div>
   <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[
-      firstPlacementTarget,
+      block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(
-        (item) => {
+        (item, index) => {
           const canChangeComponent = isBlankDefaultGridItem(item.block);
+          const beforePlacementTarget = index === 0 ? firstPlacementTarget : '';
+          const afterPlacementTarget = helpers.renderComponentPlacementTarget({
+            container: 'grid',
+            sectionKey,
+            parentBlockId: block.id,
+            placement: 'after',
+            targetGridItemId: item.id,
+          });
           return `<div class="grid-field-row">
+          ${beforePlacementTarget}
           <div class="grid-field-head">
             <div class="section-drag-title">
               <div class="editor-order-controls">
@@ -73,14 +82,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
           </div>
+          ${afterPlacementTarget}
         </div>
-        ${helpers.renderComponentPlacementTarget({
-          container: 'grid',
-          sectionKey,
-          parentBlockId: block.id,
-          placement: 'after',
-          targetGridItemId: item.id,
-        })}`;
+        `;
         }
       ),
       addGridGhost,

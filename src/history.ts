@@ -257,6 +257,19 @@ function restoreFromSnapshot(snapshot: string): void {
     state.paletteOverrideId = parsed.paletteOverrideId ?? null;
     savePaletteOverrideId(state.paletteOverrideId);
     state.componentPlacement = null;
+    state.pendingEditorActivation = null;
+    state.pendingEditorDeactivation = null;
+    state.activeEditorBlock = null;
+    state.activeTextEditorMode = null;
+    state.aiEditorHostBlock = null;
+    state.aiEditorHostSectionKey = null;
+    state.activeEditorBlockPath = [];
+    state.activeEditorBlockSnapshot = null;
+    state.activeEditorBlockSnapshots = [];
+    state.activeEditorNewBlockIds.clear();
+    state.activeEditorBlockReturnScroll = null;
+    state.activeEditorSectionTitleKey = null;
+    state.clearSectionTitleOnFocusKey = null;
     if (typeof document !== 'undefined') {
       applyTheme();
     }

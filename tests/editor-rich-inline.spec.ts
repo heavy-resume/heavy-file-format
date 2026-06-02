@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+test('undo inside active rich text editor keeps focus on text changes', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const editor = activeBlock.locator('.rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Base text</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.keyboard.type(' added');
+  await expect(editor).toContainText('Base text added');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(activeBlock).toHaveCount(1);
+  await expect(editor).toContainText('Base text');
+  await expect(editor).not.toContainText('added');
+});
+
 test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {
   await page.goto('/');
 

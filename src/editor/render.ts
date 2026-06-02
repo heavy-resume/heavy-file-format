@@ -903,6 +903,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           const cellStyle = [
             `grid-column: ${gridColumn};`,
           ].filter(Boolean).join(' ');
+          const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
                 container: 'grid',
@@ -912,14 +913,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 targetGridItemId: item.id,
               })
             : '';
-          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${renderPassiveEditorBlock(
+          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections
-          )}</div>${trailingPlacementTarget}`;
+          )}${trailingPlacementTarget}</div>`;
         })
         .join('');
-      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${leadingPlacementTarget}${cells}</div>`;
+      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
     }
 
     if (base === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {

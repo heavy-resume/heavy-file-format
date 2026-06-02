@@ -29,6 +29,13 @@ function writeFileCommand(path: string, content: string): string {
   return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
 
+async function countDocumentText(page: Page, text: string): Promise<number> {
+  return page.evaluate(async (needle) => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return JSON.stringify(state.document).split(needle).length - 1;
+  }, text);
+}
+
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
 
@@ -3425,6 +3432,9 @@ hvy_version: 0.1
 test('undo restores a deleted component', async ({ page }) => {
   await page.goto('/');
 
+  const fillerBlocks = Array.from({ length: 18 }, (_, index) => ` <!--hvy:text {"id":"filler-${index}"}-->
+  Filler ${index}
+`).join('\n');
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -3436,12 +3446,17 @@ hvy_version: 0.1
  <!--hvy:text {"id":"alpha"}-->
   Alpha
 
+${fillerBlocks}
  <!--hvy:text {"id":"beta"}-->
   Beta
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
+  const editorTree = page.locator('#editorTree');
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).scrollIntoViewIfNeeded();
+  const scrolledTop = await editorTree.evaluate((node) => node.scrollTop);
+  expect(scrolledTop).toBeGreaterThan(0);
   await page.locator('.editor-block-passive', { hasText: 'Beta' }).click();
   await page.locator('.editor-block[data-active-editor-block="true"] [data-action="remove-block"]').click();
   await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
@@ -3449,6 +3464,7 @@ hvy_version: 0.1
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
   await expect(page.locator('#editorTree')).toContainText('Beta');
+  await expect.poll(() => editorTree.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
 });
 
 test('undo restores a deleted nested component', async ({ page }) => {
@@ -3479,6 +3495,110 @@ hvy_version: 0.1
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
   await expect(page.locator('#editorTree')).toContainText('Beta');
+});
+
+test('undo restores an expandable content pane pasted into a container above its grid', async ({ page }) => {
+  await page.goto('/');
+
+  const fillerBlocks = Array.from({ length: 14 }, (_, index) => ` <!--hvy:text {"id":"filler-${index}"}-->
+  Filler ${index}
+`).join('\n');
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+${fillerBlocks}
+ <!--hvy:container {"id":"destination","containerTitle":"Destination"}-->
+  <!--hvy:text {"id":"destination-existing"}-->
+   Destination starter
+
+ <!--hvy:grid {"id":"cards","gridColumns":1}-->
+  <!--hvy:grid:0 {"id":"card-slot"}-->
+   <!--hvy:expandable {"id":"card","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"id":"card-title"}-->
+      Card title
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"id":"card-detail"}-->
+      Card detail
+`;
+  await page.evaluate(async (rawSource) => {
+    const [{ state, getRenderApp }, { deserializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    state.document = deserializeDocument(rawSource, '.hvy');
+    state.rawEditorText = rawSource;
+    state.currentView = 'editor';
+    state.editorMode = 'basic';
+    state.metaPanelOpen = false;
+    state.activeEditorBlock = null;
+    state.activeEditorBlockPath = [];
+    state.componentPlacement = null;
+    state.history = [];
+    state.future = [];
+    getRenderApp()();
+  }, source);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditor.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(page.locator('[data-action="place-component"]')).not.toHaveCount(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'Destination starter' }).first().click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+
+  const editorTree = page.locator('#editorTree');
+  const beforeUndoScrollTop = await editorTree.evaluate((node) => {
+    node.scrollTop = 120;
+    return node.scrollTop;
+  });
+  expect(beforeUndoScrollTop).toBeGreaterThan(0);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(0);
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
+  await expect.poll(() => editorTree.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditorAfterUndo = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditorAfterUndo.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditorAfterUndo.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(page.locator('[data-action="place-component"]')).not.toHaveCount(0);
+
+  await page.locator('[data-placement-container="section"][data-placement="before"]').first().click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(0);
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditorForContextPaste = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditorForContextPaste.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditorForContextPaste.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await cardEditorForContextPaste.locator('.expandable-part-expanded').getByRole('button', { name: 'Cancel place', exact: true }).click();
+  await page.locator('#editorTree [data-paste-placement-container="section"]').first().dispatchEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 260,
+    clientY: 260,
+  });
+  await page.getByRole('button', { name: 'Paste component' }).click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
 });
 
 test('component move and copy work between main and sidebar sections', async ({ page }) => {
@@ -3556,6 +3676,17 @@ hvy_version: 0.1
   await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
 
   await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(3);
+  await expect.poll(async () => {
+    return page.locator('.grid-fields > .grid-field-row, .editor-grid-passive-preview > .reader-grid-cell').evaluateAll((cells) => {
+      const [first, second] = cells as HTMLElement[];
+      if (!first || !second) {
+        return false;
+      }
+      const firstRect = first.getBoundingClientRect();
+      const secondRect = second.getBoundingClientRect();
+      return Math.abs(firstRect.top - secondRect.top) < 8 && secondRect.left > firstRect.left;
+    });
+  }).toBe(true);
   await expect(page.locator('.grid-add-ghost')).toHaveCount(0);
   await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
 

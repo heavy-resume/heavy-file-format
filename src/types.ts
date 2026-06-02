@@ -77,6 +77,7 @@ export interface ChatSettings {
   model: string;
   compactionProvider?: ChatProvider;
   compactionModel?: string;
+  maxContextChars?: number;
   toolLoopCompaction?: ToolLoopCompactionOptions;
 }
 

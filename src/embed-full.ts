@@ -15,7 +15,7 @@ import {
   runWithStateRuntimeAsync,
   type StateRuntime,
 } from './state';
-import type { AppState, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -117,6 +117,7 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  chatSettings?: Partial<ChatSettings> | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
@@ -786,10 +787,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     sessionStorageKey
   );
-  const runtime = createStateRuntime(applyEmbeddedSessionState(
+  const runtimeState = applyEmbeddedSessionState(
     initialState,
     options.storageKey ? loadSessionState(options.storageKey) : null
-  ));
+  );
+  if (options.chatSettings) {
+    runtimeState.chat.settings = {
+      ...runtimeState.chat.settings,
+      ...options.chatSettings,
+    };
+  }
+  const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
   const sessionPersistence = options.storageKey ? bindSessionPersistence(runtime) : null;

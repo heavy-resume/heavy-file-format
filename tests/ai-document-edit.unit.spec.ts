@@ -1243,6 +1243,79 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).not.toContain('resume-awards');
 });
 
+test('buildImportPlanForDocument excludes protected sections from import targets', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."}}}'
+  );
+  requestProxyCompletionMock.mockResolvedValueOnce('{"sections":{}}');
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - [summary, protected-notes, protected-child]
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy: {"id":"protected-notes","protect_from_import":true}-->
+#! Protected Notes
+
+<!--hvy:subsection {"id":"protected-child"}-->
+#! Protected Child
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Summary and protected notes',
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.preplanTargetId)).toEqual(['summary']);
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).toContain('Target key: summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).not.toContain('protected-notes');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[1]?.content).not.toContain('protected-child');
+});
+
+test('buildImportPlanForDocument newSectionsOnly does not expose body section targets', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Details","templateName":"Details"}]}'
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defs:
+  - name: Details
+    template:
+      id: details-template
+      title: Details
+      blocks: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported details',
+    newSectionsOnly: true,
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.[0]?.target.kind).toBe('definition');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages[0]?.content).toContain('Do not use sectionId.');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('Do not use `sectionId`');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).not.toContain('- body: Summary');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.context).toContain('- definition: Details');
+});
+
 test('resume template importPreplan resolves expected grouped targets', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"sections":{"header":{"import_selection":"has_data_include","information":"Header facts."},"summary":{"import_selection":"has_data_include","information":"Summary facts."},"locations":{"import_selection":"has_data_include","information":"Location facts."}}}'
@@ -1468,7 +1541,7 @@ component_defs:
 <!--hvy: {"id":"languages","location":"sidebar"}-->
 #! Languages
 
-<!--hvy:component-list {"componentListComponent":"language-record","componentListItemLabel":"language"}-->
+<!--hvy:component-list {"componentListComponent":"missing-language-record","componentListItemLabel":"language"}-->
 `, '.hvy');
 
   const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
@@ -3492,6 +3565,77 @@ hvy_version: 0.1
   expect(result.status).toBe('error');
   expect(result.message).toContain('Import plan target was not found');
   expect(result.message).toContain('missing-summary');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('importTextIntoDocument rejects protected body targets before mutation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary","protect_from_import":true}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    steps: [
+      {
+        sectionTitle: 'Summary',
+        instruction: 'Create a Summary section from imported summary',
+        target: { kind: 'body', id: 'summary', title: 'Summary' },
+      },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const expectedResult = serializeDocument(document);
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('Import plan target was not found');
+  expect(expectedResult).toContain('Existing content');
+  expect(requestProxyCompletionMock).not.toHaveBeenCalled();
+});
+
+test('importTextIntoDocument newSectionsOnly rejects existing body targets before mutation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-text"}-->
+Existing content
+`, '.hvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'notes.txt',
+    sourceText: 'Imported summary',
+    newSectionsOnly: true,
+    steps: [
+      {
+        sectionTitle: 'Summary',
+        instruction: 'Create a Summary section from imported summary',
+        target: { kind: 'body', id: 'summary', title: 'Summary' },
+      },
+    ],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const expectedResult = serializeDocument(document);
+  expect(result.status).toBe('error');
+  expect(result.message).toContain('Import plan target was not found');
+  expect(expectedResult).toContain('Existing content');
   expect(requestProxyCompletionMock).not.toHaveBeenCalled();
 });
 

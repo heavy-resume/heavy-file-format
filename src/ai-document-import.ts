@@ -107,6 +107,7 @@ export interface BuildImportPlanOptions {
   sourceName?: string;
   sourceText: string;
   instructions?: string;
+  newSectionsOnly?: boolean;
   llm?: HvyImportLlmOptions;
   requestMode?: ProxyCompletionParams['mode'];
   maxContextChars?: number;
@@ -247,6 +248,10 @@ interface ImportFillInTarget {
   markerIndex?: number;
 }
 
+interface ImportSectionCandidateOptions {
+  newSectionsOnly?: boolean;
+}
+
 export type ImportPlanStepInput = string | ImportPlanStep | {
   sectionTitle?: string;
   section?: string;
@@ -269,6 +274,7 @@ export interface ImportFromTextOptions {
   sourceName?: string;
   sourceText: string;
   instructions?: string;
+  newSectionsOnly?: boolean;
   steps: ImportPlanStepInput[];
   llm?: HvyImportLlmOptions;
   requestMode?: ProxyCompletionParams['mode'];
@@ -294,7 +300,7 @@ export async function buildImportPlanForDocument(
   const traceRecorder = createImportTraceRecorder(options);
   options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${formatImportSourceProgress(options.sourceName)}.` });
   try {
-    const preplanSteps = buildImportPlanStepsFromPreplan(document);
+    const preplanSteps = buildImportPlanStepsFromPreplan(document, options);
     if (preplanSteps.length > 0) {
       const llm = requireImportLlm(options.llm);
       throwIfAborted(options.signal);
@@ -302,7 +308,7 @@ export async function buildImportPlanForDocument(
       options.onProgress?.({ phase: 'thinking', message: 'Extracting preplanned section information.' });
       const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall, traceRecorder);
       const requestMode = getImportRequestMode(options);
-      const filteredSteps = filterImportPlanStepsForRequestMode(extractedSteps, document, requestMode);
+      const filteredSteps = filterImportPlanStepsForRequestMode(extractedSteps, document, requestMode, options);
       const templateDefinitionError = validateImportTemplateDefinitionTargets(filteredSteps, document, requestMode);
       if (templateDefinitionError) {
         return withImportTrace({ status: 'error', message: templateDefinitionError }, options, traceRecorder);
@@ -326,13 +332,13 @@ export async function buildImportPlanForDocument(
           id: 'ai-import-plan-task',
           role: 'user',
           content: buildImportTaskMessage(
-            buildImportPlanPrompt(options.sourceName, options.instructions, requestMode),
-            buildImportPlanResponseInstructions(requestMode)
+            buildImportPlanPrompt(options.sourceName, options.instructions, requestMode, options.newSectionsOnly === true),
+            buildImportPlanResponseInstructions(requestMode, options.newSectionsOnly === true)
           ),
         },
       ],
-      context: buildImportPlanContext(document, options.sourceName, options.sourceText),
-      responseInstructions: buildImportPlanResponseInstructions(requestMode),
+      context: buildImportPlanContext(document, options.sourceName, options.sourceText, options),
+      responseInstructions: buildImportPlanResponseInstructions(requestMode, options.newSectionsOnly === true),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: requestMode,
       maxContextChars: options.maxContextChars,
@@ -341,7 +347,7 @@ export async function buildImportPlanForDocument(
       signal: options.signal,
     });
     throwIfAborted(options.signal);
-    const steps = filterImportPlanStepsForRequestMode(parseImportPlanSteps(response, document), document, requestMode);
+    const steps = filterImportPlanStepsForRequestMode(parseImportPlanSteps(response, document, options), document, requestMode, options);
     const templateDefinitionError = validateImportTemplateDefinitionTargets(steps, document, requestMode);
     if (templateDefinitionError) {
       return withImportTrace({ status: 'error', message: templateDefinitionError }, options, traceRecorder);
@@ -350,7 +356,7 @@ export async function buildImportPlanForDocument(
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
-    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, document, llm, beforeLlmCall, requestMode, options.maxContextChars, options.signal, traceRecorder);
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, document, llm, beforeLlmCall, requestMode, options.maxContextChars, options.signal, traceRecorder, options);
     if (dedupedSteps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan after deduping.' }, options, traceRecorder);
     }
@@ -377,7 +383,7 @@ export async function importTextIntoDocument(
   }
 ): Promise<ImportFromTextResult> {
   const traceRecorder = createImportTraceRecorder(options);
-  const steps = normalizeImportPlanSteps(options.steps, document);
+  const steps = normalizeImportPlanSteps(options.steps, document, options);
   if (steps.length === 0) {
     return withImportTrace({ status: 'error', message: 'Import requires at least one approved plan step.' }, options, traceRecorder);
   }
@@ -390,14 +396,14 @@ export async function importTextIntoDocument(
   if (pdfTemplateImportPlanError) {
     return withImportTrace({ status: 'error', message: pdfTemplateImportPlanError }, options, traceRecorder);
   }
-  const executablePlanSteps = forcePdfTemplateImportTemplateMode(steps, document, requestMode);
+  const executablePlanSteps = forcePdfTemplateImportTemplateMode(steps, document, requestMode, options);
   options.onProgress?.({ phase: 'starting', message: `Importing ${formatImportSourceProgress(options.sourceName)}.` });
   try {
     const llm = requireImportLlm(options.llm);
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
     throwIfAborted(options.signal);
     for (const step of executablePlanSteps) {
-      resolveImportStepApplication(document, step);
+      resolveImportStepApplication(document, step, options);
     }
     const executableSteps = executablePlanSteps;
     if (executableSteps.length === 0) {
@@ -408,7 +414,7 @@ export async function importTextIntoDocument(
     const appliedSections: AppliedImportSectionResult[] = [];
     const rawGeneratedSectionKeys: string[] = [];
     for (const [index, step] of executableSteps.entries()) {
-      const application = resolveImportStepApplication(document, step);
+      const application = resolveImportStepApplication(document, step, options);
       throwIfAborted(options.signal);
       if (step.importMode === 'template') {
         const templateStructure = resolveImportTemplateStructureForStep(document, step);
@@ -609,7 +615,7 @@ export async function importTextIntoDocument(
   }
 }
 
-function buildImportPlanPrompt(sourceName: string | undefined, instructions: string | undefined, requestMode: ProxyCompletionParams['mode']): string {
+function buildImportPlanPrompt(sourceName: string | undefined, instructions: string | undefined, requestMode: ProxyCompletionParams['mode'], newSectionsOnly = false): string {
   if (isPdfTemplateImportMode(requestMode)) {
     return buildPdfTemplateImportPlanPrompt(sourceName, instructions);
   }
@@ -618,10 +624,14 @@ function buildImportPlanPrompt(sourceName: string | undefined, instructions: str
     '',
     'You have the current HVY template section outline and the incoming data in context. Do not use tools. Do not mutate anything.',
     'Treat the current document primarily as a starting template/scaffold for a new document.',
-    'The template section list is a target inventory, not an ordering requirement. Existing body sections are replaced in place during execution.',
+    newSectionsOnly
+      ? 'The template section list is a target inventory, not an ordering requirement. Existing body sections are not available as import targets; every step must create a new section.'
+      : 'The template section list is a target inventory, not an ordering requirement. Existing body sections are replaced in place during execution.',
     'Plan section-sized work only. Each approved step will later generate one complete raw HVY section in one shot.',
     'Use one step per final document section. Do not make separate component-level steps and do not bundle multiple sections into one step.',
-    'Each step must explicitly identify the matching existing body section by sectionId, the matching reusable template by templateName, or omit both when no listed section fits.',
+    newSectionsOnly
+      ? 'Each step must explicitly identify the matching reusable template by templateName, or omit it when no listed reusable template fits. Do not use sectionId.'
+      : 'Each step must explicitly identify the matching existing body section by sectionId, the matching reusable template by templateName, or omit both when no listed section fits.',
     'Each step should name the final section. Keep the plan short.',
     'Do not copy specific source facts into the plan. Names, dates, entity names, labels, links, bullets, metrics, and other exact facts will be extracted in a later step.',
     'Decide from the imported source text whether each section exists. If the source contains a distinct section, create a concrete step for it. If it does not, omit that section entirely.',
@@ -662,13 +672,13 @@ function buildImportTaskMessage(prompt: string, responseInstructions: string): s
   ].join('\n');
 }
 
-function buildImportPlanContext(document: VisualDocument, sourceName: string | undefined, sourceText: string): string {
+function buildImportPlanContext(document: VisualDocument, sourceName: string | undefined, sourceText: string, options: ImportSectionCandidateOptions = {}): string {
   return [
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN TEMPLATE SECTIONS ===',
     'Template section inventory for resolving section targets; this is not an ordering requirement:',
-    buildImportTemplateSectionOutline(document),
+    buildImportTemplateSectionOutline(document, options),
     '=== END TEMPLATE SECTIONS ===',
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
@@ -680,10 +690,17 @@ function buildImportPlanContext(document: VisualDocument, sourceName: string | u
   ].join('\n');
 }
 
-function buildImportTemplateSectionOutline(document: VisualDocument): string {
+function buildImportTemplateSectionOutline(document: VisualDocument, options: ImportSectionCandidateOptions = {}): string {
   const lines: string[] = [];
   const appendSections = (sections: VisualDocument['sections'], depth: number): void => {
     for (const section of sections) {
+      if (section.protect_from_import === true) {
+        continue;
+      }
+      if (options.newSectionsOnly === true) {
+        appendSections(section.children, depth);
+        continue;
+      }
       const title = trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section';
       const id = trimImportString(section.customId);
       const details = [
@@ -743,7 +760,7 @@ function getImportSectionDefinitions(document: VisualDocument): SectionDefinitio
     : [];
 }
 
-function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams['mode'] = 'document-edit'): string {
+function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams['mode'] = 'document-edit', newSectionsOnly = false): string {
   if (isPdfTemplateImportMode(requestMode)) {
     return buildPdfTemplateImportPlanResponseInstructions();
   }
@@ -752,7 +769,9 @@ function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams[
     'Shape:',
     '{"steps":[{"section":"Blip Overview","sectionId":"blip-overview"},{"section":"Widget Records","templateName":"Widget Records"},{"section":"Extra Notes"}]}',
     '',
-    'Use `sectionId` only for an existing body section id from the template section outline.',
+    newSectionsOnly
+      ? 'Do not use `sectionId`; existing body sections are not import targets for this plan.'
+      : 'Use `sectionId` only for an existing body section id from the template section outline.',
     'Use `templateName` only for a reusable/template section name from the template section outline.',
     'When no listed section fits a distinct source-backed topic, include only `section` so execution may create a new blank section.',
     'Each step should be a section to create from the incoming data. Try to fit data to the template and only add sections if needed. Things outside the intent of the incoming data can be discarded.',
@@ -788,7 +807,7 @@ function buildPdfTemplateImportPlanResponseInstructions(): string {
   ].join('\n');
 }
 
-function parseImportPlanSteps(response: string, document: VisualDocument): ImportPlanStep[] {
+function parseImportPlanSteps(response: string, document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
   const trimmed = response.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1]?.trim();
   const jsonText = fenced ?? trimmed;
@@ -801,7 +820,7 @@ function parseImportPlanSteps(response: string, document: VisualDocument): Impor
     if (maybePlan.tool !== undefined && maybePlan.tool !== 'plan') {
       return [];
     }
-    return normalizeImportPlanSteps(Array.isArray(maybePlan.steps) ? maybePlan.steps : [], document);
+    return normalizeImportPlanSteps(Array.isArray(maybePlan.steps) ? maybePlan.steps : [], document, options);
   } catch {
     return [];
   }
@@ -815,9 +834,10 @@ async function dedupeImportPlanStepsWithModel(
   requestMode: ProxyCompletionParams['mode'],
   maxContextChars: number | undefined,
   signal?: AbortSignal,
-  traceRecorder?: HvyImportTraceRecorder
+  traceRecorder?: HvyImportTraceRecorder,
+  options: ImportSectionCandidateOptions = {}
 ): Promise<ImportPlanStep[]> {
-  const dedupeSteps = filterImportPlanStepsForRequestMode(steps, document, requestMode);
+  const dedupeSteps = filterImportPlanStepsForRequestMode(steps, document, requestMode, options);
   if (dedupeSteps.length <= 1) {
     return dedupeSteps;
   }
@@ -847,7 +867,7 @@ async function dedupeImportPlanStepsWithModel(
   throwIfAborted(signal);
   const keepIds = parseImportSectionDedupeResponse(response, candidates);
   const keepSet = new Set(keepIds);
-  return filterImportPlanStepsForRequestMode(candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step), document, requestMode);
+  return filterImportPlanStepsForRequestMode(candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step), document, requestMode, options);
 }
 
 interface ImportSectionDedupeCandidate {
@@ -961,16 +981,16 @@ type ImportPreplanGroup = {
   steps: ImportPlanStep[];
 };
 
-function buildImportPlanStepsFromPreplan(document: VisualDocument): ImportPlanStep[] {
-  return getImportPreplanGroups(document).flatMap((group) => group.steps);
+function buildImportPlanStepsFromPreplan(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
+  return getImportPreplanGroups(document, options).flatMap((group) => group.steps);
 }
 
-function getImportPreplanGroups(document: VisualDocument): ImportPreplanGroup[] {
+function getImportPreplanGroups(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPreplanGroup[] {
   const raw = document.meta.importPreplan;
   if (!Array.isArray(raw)) {
     return [];
   }
-  const candidates = getImportTemplateSectionCandidates(document);
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const groups: ImportPreplanGroup[] = [];
   raw.forEach((entry) => {
     const ids = (Array.isArray(entry) ? entry : [entry])
@@ -1015,7 +1035,7 @@ function resolveImportPreplanTarget(id: string, candidates: ImportTemplateSectio
 
 async function preparePreplannedImportSteps(
   document: VisualDocument,
-  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal' | 'requestMode' | 'maxContextChars'>,
+  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal' | 'requestMode' | 'maxContextChars' | 'newSectionsOnly'>,
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
@@ -1076,7 +1096,7 @@ async function preparePreplannedImportSteps(
         ),
       },
     ],
-    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted),
+    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted, options),
     responseInstructions: buildImportMissingSectionsResponseInstructions(),
     systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
     mode: getImportRequestMode(options),
@@ -1086,12 +1106,12 @@ async function preparePreplannedImportSteps(
     signal: options.signal,
   });
   throwIfAborted(options.signal);
-  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted);
+  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted, options);
   const candidates = [...extracted, ...missingSteps];
   if (candidates.length <= 1) {
     return candidates;
   }
-  return dedupeImportPlanStepsWithModel(candidates, document, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
+  return dedupeImportPlanStepsWithModel(candidates, document, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder, options);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -1247,10 +1267,11 @@ function buildImportMissingSectionsContext(
   sourceName: string | undefined,
   sourceText: string,
   allPreplanSteps: ImportPlanStep[],
-  extractedSteps: ImportPlanStep[]
+  extractedSteps: ImportPlanStep[],
+  options: ImportSectionCandidateOptions = {}
 ): string {
   const seenTargets = new Set(allPreplanSteps.map((step) => formatImportPlanTarget(step.target)));
-  const remaining = getImportTemplateSectionCandidates(document)
+  const remaining = getImportTemplateSectionCandidates(document, options)
     .filter((candidate) => candidate.sectionDefinition?.repeatable === true || !seenTargets.has(formatImportPlanTarget(candidateToImportPlanTarget(candidate))));
   return [
     buildImportGuidanceFrame(document),
@@ -1301,7 +1322,8 @@ function parseImportMissingSectionsResponse(
   response: string,
   document: VisualDocument,
   allPreplanSteps: ImportPlanStep[],
-  extractedSteps: ImportPlanStep[]
+  extractedSteps: ImportPlanStep[],
+  options: ImportSectionCandidateOptions = {}
 ): ImportPlanStep[] {
   const parsed = parseImportJsonObject(response);
   const sections = parsed?.sections;
@@ -1315,7 +1337,7 @@ function parseImportMissingSectionsResponse(
       .map(normalizeImportMissingSectionTitle)
       .filter(Boolean)
   );
-  const candidates = getImportTemplateSectionCandidates(document);
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const result: ImportPlanStep[] = [];
   for (const [sectionName, raw] of Object.entries(sections as Record<string, unknown>)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -1359,8 +1381,8 @@ function isConditionalImportPlanStep(step: string): boolean {
   return /\b(?:if|otherwise|unless|may|might)\b|\bonly\s+if\b|\bas\s+needed\b|\bwhen\s+needed\b|\bif\s+(?:present|available|applicable|needed)\b|\bleave\s+(?:the\s+)?(?:template'?s\s+)?[\s\S]{0,80}\bunmodified\b/i.test(step);
 }
 
-function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: VisualDocument): ImportPlanStep[] {
-  const candidates = getImportTemplateSectionCandidates(document);
+function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const normalized: ImportPlanStep[] = [];
   for (const rawStep of steps) {
     const step = normalizeImportPlanStep(rawStep, candidates);
@@ -1375,12 +1397,17 @@ function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: Visual
 function filterImportPlanStepsForRequestMode(
   steps: ImportPlanStep[],
   document: VisualDocument,
-  requestMode: ProxyCompletionParams['mode']
+  requestMode: ProxyCompletionParams['mode'],
+  options: ImportSectionCandidateOptions = {}
 ): ImportPlanStep[] {
+  const candidates = getImportTemplateSectionCandidates(document, options);
+  steps = steps.filter((step) => step.target.kind !== 'body' || findImportCandidateForTarget(candidates, step.target));
+  if (options.newSectionsOnly === true) {
+    steps = steps.filter((step) => step.target.kind !== 'body');
+  }
   if (!isPdfTemplateImportMode(requestMode)) {
     return steps;
   }
-  const candidates = getImportTemplateSectionCandidates(document);
   const usedTargets = new Set<string>();
   const filtered = steps.filter((step) => {
     if (step.target.kind === 'blank') {
@@ -1397,18 +1424,19 @@ function filterImportPlanStepsForRequestMode(
     usedTargets.add(key);
     return true;
   });
-  return forcePdfTemplateImportTemplateMode(filtered, document, requestMode);
+  return forcePdfTemplateImportTemplateMode(filtered, document, requestMode, options);
 }
 
 function forcePdfTemplateImportTemplateMode(
   steps: ImportPlanStep[],
   document: VisualDocument,
-  requestMode: ProxyCompletionParams['mode']
+  requestMode: ProxyCompletionParams['mode'],
+  options: ImportSectionCandidateOptions = {}
 ): ImportPlanStep[] {
   if (!isPdfTemplateImportMode(requestMode)) {
     return steps;
   }
-  const candidates = getImportTemplateSectionCandidates(document);
+  const candidates = getImportTemplateSectionCandidates(document, options);
   return steps.map((step) => {
     const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, step.target);
     return {
@@ -2396,7 +2424,7 @@ type ImportStepApplication =
   | { kind: 'append-from-definition'; target: ImportTemplateSectionCandidate }
   | { kind: 'blank'; title: string };
 
-function getImportTemplateSectionCandidates(document: VisualDocument): ImportTemplateSectionCandidate[] {
+function getImportTemplateSectionCandidates(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportTemplateSectionCandidate[] {
   const candidates: ImportTemplateSectionCandidate[] = [];
   const componentDefs = Array.isArray(document.meta.component_defs) ? document.meta.component_defs : [];
   const sectionDefinitions = getImportSectionDefinitions(document);
@@ -2405,18 +2433,23 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
       if (section.exclude_from_import === true) {
         continue;
       }
-      const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
-      candidates.push({
-        title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
-        id: trimImportString(section.customId),
-        definitionKey: '',
-        name: '',
-        section,
-        source: 'body',
-        documentExtension: document.extension,
-        componentDefs,
-        sectionDefinition,
-      });
+      if (section.protect_from_import === true) {
+        continue;
+      }
+      if (options.newSectionsOnly !== true) {
+        const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
+        candidates.push({
+          title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
+          id: trimImportString(section.customId),
+          definitionKey: '',
+          name: '',
+          section,
+          source: 'body',
+          documentExtension: document.extension,
+          componentDefs,
+          sectionDefinition,
+        });
+      }
       appendSections(section.children);
     }
   };
@@ -2458,8 +2491,8 @@ function getImportSectionDefinitionKey(definition: SectionDefinition): string {
   return trimImportString(definition.key) || trimImportString(definition.name);
 }
 
-function resolveImportStepApplication(document: VisualDocument, step: ImportPlanStep): ImportStepApplication {
-  const candidates = getImportTemplateSectionCandidates(document);
+function resolveImportStepApplication(document: VisualDocument, step: ImportPlanStep, options: ImportSectionCandidateOptions = {}): ImportStepApplication {
+  const candidates = getImportTemplateSectionCandidates(document, options);
   if (step.target.kind === 'blank') {
     return { kind: 'blank', title: step.sectionTitle || step.target.title || 'Imported Section' };
   }

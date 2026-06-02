@@ -254,6 +254,7 @@ Section metadata also includes optional presentation keys such as:
 - `contained`
 - `hideIfUnmodified`
 - `exclude_from_import`
+- `protect_from_import`
 - `css`
 - `location`
 - `templateKey`
@@ -266,6 +267,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
+`protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 `templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 

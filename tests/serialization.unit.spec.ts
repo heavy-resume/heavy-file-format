@@ -78,6 +78,7 @@ section_defs:
       title: Projects
       level: 1
       exclude_from_import: true
+      protect_from_import: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -95,7 +96,7 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true,"protect_from_import":true}-->
 #! Projects
 `, '.hvy');
 
@@ -103,8 +104,9 @@ section_defs:
 
   expect(expectedResult).toContain('key: resume-projects');
   expect(expectedResult).toContain('exclude_from_import: true');
+  expect(expectedResult).toContain('protect_from_import: true');
   expect(expectedResult).toContain('repeatable: true');
-  expect(expectedResult).toContain('"exclude_from_import":true,"templateKey":"resume-projects"');
+  expect(expectedResult).toContain('"exclude_from_import":true,"protect_from_import":true,"templateKey":"resume-projects"');
   expect(expectedResult).not.toContain('idEditorOpen');
 });
 

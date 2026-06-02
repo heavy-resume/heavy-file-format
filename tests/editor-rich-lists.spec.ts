@@ -128,6 +128,105 @@ test('list action still creates a normal list without checkbox coercion', async 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(0);
 });
 
+test('list action converts the first paragraph when the caret is on the first line', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<p>First item</p><p>Second item</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await activeEditorBlock.locator('[data-rich-action="list"]').click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+    paragraphs: Array.from(node.querySelectorAll('p')).map((paragraph) => paragraph.textContent ?? ''),
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    items: ['First item'],
+    paragraphs: ['Second item'],
+  });
+});
+
+test('list action works after clicking into the first visible line', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<p>First item</p><p>Second item</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  await editor.locator('p').first().click({ position: { x: 4, y: 8 } });
+
+  await activeEditorBlock.locator('[data-rich-action="list"]').click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+    paragraphs: Array.from(node.querySelectorAll('p')).map((paragraph) => paragraph.textContent ?? ''),
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    items: ['First item'],
+    paragraphs: ['Second item'],
+  });
+});
+
+test('list action converts bare first-line editor text into a bullet', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.textContent = 'First item';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const textNode = node.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await activeEditorBlock.locator('[data-rich-action="list"]').click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+    directText: Array.from(node.childNodes)
+      .filter((child) => child.nodeType === Node.TEXT_NODE)
+      .map((child) => child.textContent ?? '')
+      .filter((text) => text.trim().length > 0),
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    items: ['First item'],
+    directText: [],
+  });
+});
+
 test('list action converts every selected paragraph into bullets', async ({ page }) => {
   await openDefaultDocument(page);
 
@@ -146,6 +245,7 @@ test('list action converts every selected paragraph into bullets', async ({ page
     range.setEnd(paragraphs[2]!.firstChild!, paragraphs[2]!.textContent!.length);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
 
   await activeEditorBlock.locator('[data-rich-action="list"]').click();
@@ -180,6 +280,7 @@ test('numbered list action converts selected paragraphs into ordered list items'
     range.setEnd(paragraphs[2]!.firstChild!, paragraphs[2]!.textContent!.length);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
 
   await activeEditorBlock.locator('[data-rich-action="ordered-list"]').click();
@@ -279,14 +380,17 @@ test('enter on an empty trailing bullet exits the list', async ({ page }) => {
     node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   });
 
-  const expectedResult = await editor.evaluate((node) => ({
-    listItems: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
-    paragraphCount: node.querySelectorAll('p').length,
-    html: node.innerHTML,
-    caretBlock: window.getSelection()?.anchorNode instanceof Element
-      ? window.getSelection()?.anchorNode.closest('p, li')?.tagName
-      : window.getSelection()?.anchorNode?.parentElement?.closest('p, li')?.tagName,
-  }));
+  const expectedResult = await editor.evaluate((node) => {
+    const anchorNode = window.getSelection()?.anchorNode;
+    return {
+      listItems: Array.from(node.querySelectorAll('li')).map((item) => item.textContent ?? ''),
+      paragraphCount: node.querySelectorAll('p').length,
+      html: node.innerHTML,
+      caretBlock: anchorNode instanceof Element
+        ? anchorNode.closest('p, li')?.tagName
+        : anchorNode?.parentElement?.closest('p, li')?.tagName,
+    };
+  });
   expect(expectedResult.listItems).toEqual(['Parent']);
   expect(expectedResult.paragraphCount).toBe(1);
   expect(expectedResult.html).not.toContain('<li><br></li><li>');

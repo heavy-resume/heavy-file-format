@@ -67,7 +67,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     if (richButton) {
       const editable = getRichEditableForButton(app, richButton);
       if (editable) {
-        storeCurrentRichSelection(editable);
+        storeCurrentRichSelection(editable, { preserveExistingSelection: true });
       }
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
@@ -517,7 +517,7 @@ function isRangeInside(editable: HTMLElement, range: Range): boolean {
   return editable.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editable;
 }
 
-function storeCurrentRichSelection(editable: HTMLElement): RichToolbarSelection | null {
+function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExistingSelection?: boolean } = {}): RichToolbarSelection | null {
   const selection = window.getSelection();
   if (!selection?.rangeCount) {
     return null;
@@ -525,6 +525,16 @@ function storeCurrentRichSelection(editable: HTMLElement): RichToolbarSelection 
   const range = selection.getRangeAt(0);
   if (!isRangeInside(editable, range)) {
     return null;
+  }
+  const existing = richToolbarSelections.get(editable);
+  if (
+    options.preserveExistingSelection &&
+    range.collapsed &&
+    existing &&
+    !existing.range.collapsed &&
+    isRangeInside(editable, existing.range)
+  ) {
+    return existing;
   }
   const clone = range.cloneRange();
   const stored = {

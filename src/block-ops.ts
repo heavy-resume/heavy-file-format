@@ -2145,7 +2145,12 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
   }
 
   const block = getSelectionBlockElement(editable);
-  if (!block || block === editable || block.tagName === 'PRE') {
+  const rootInlineNodes = block === editable ? getSelectedEditableRootInlineRun(editable) : [];
+  if (!block || (block === editable && rootInlineNodes.length === 0) || block.tagName === 'PRE') {
+    return;
+  }
+  if (rootInlineNodes.length > 0) {
+    wrapRootInlineRunInList(editable, rootInlineNodes, tagName);
     return;
   }
   const selectedBlocks = getSelectedEditableTextBlocks(editable);
@@ -2180,6 +2185,72 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
     return;
   }
   placeCaretAtEnd(listItem);
+}
+
+function getSelectedEditableRootInlineRun(editable: HTMLElement): Node[] {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return [];
+  }
+  const child = getEditableRootSelectionChild(editable, range);
+  if (!child || isEditableRootBlockBoundary(child)) {
+    return [];
+  }
+  const nodes: Node[] = [child];
+  let previous = child.previousSibling;
+  while (previous && !isEditableRootBlockBoundary(previous)) {
+    nodes.unshift(previous);
+    previous = previous.previousSibling;
+  }
+  let next = child.nextSibling;
+  while (next && !isEditableRootBlockBoundary(next)) {
+    nodes.push(next);
+    next = next.nextSibling;
+  }
+  return hasVisibleEditableRootContent(nodes) ? nodes : [];
+}
+
+function getEditableRootSelectionChild(editable: HTMLElement, range: Range): Node | null {
+  if (range.startContainer === editable) {
+    return editable.childNodes[Math.min(range.startOffset, editable.childNodes.length - 1)] ?? null;
+  }
+  let node: Node | null = range.startContainer;
+  while (node?.parentNode && node.parentNode !== editable) {
+    node = node.parentNode;
+  }
+  return node?.parentNode === editable ? node : null;
+}
+
+function isEditableRootBlockBoundary(node: Node): boolean {
+  return node instanceof HTMLElement && /^(P|DIV|UL|OL|LI|BLOCKQUOTE|PRE|H[1-6])$/.test(node.tagName);
+}
+
+function hasVisibleEditableRootContent(nodes: Node[]): boolean {
+  return nodes.some((node) => {
+    if (node instanceof HTMLBRElement) {
+      return false;
+    }
+    return (node.textContent ?? '').replace(/\u200b/g, '').trim().length > 0;
+  });
+}
+
+function wrapRootInlineRunInList(editable: HTMLElement, nodes: Node[], tagName: EditableListTagName): void {
+  const firstNode = nodes[0];
+  if (!firstNode?.parentNode) {
+    return;
+  }
+  const list = document.createElement(tagName);
+  const listItem = document.createElement('li');
+  firstNode.parentNode.insertBefore(list, firstNode);
+  for (const node of nodes) {
+    listItem.appendChild(node);
+  }
+  if (!listItem.firstChild) {
+    listItem.appendChild(document.createTextNode('\u200b'));
+  }
+  list.appendChild(listItem);
+  placeCaretAtEnd(listItem);
+  refocusEditablePreservingSelection(editable);
 }
 
 function getSelectedEditableTextBlocks(editable: HTMLElement): HTMLElement[] {

@@ -30,6 +30,7 @@ import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../headi
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
+import { visitBlocks } from '../section-ops';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
@@ -1959,10 +1960,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderLinkInlineModal(): string {
-    const ids = deps
-      .flattenSections(state.documentSections)
-      .filter((section) => !section.isGhost)
-      .map((section) => `#${deps.getSectionId(section)}`);
+    const ids = getLinkInlineTargetIds();
     return `
       <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
         <div class="link-inline-overlay" data-link-modal-action="cancel"></div>
@@ -1982,6 +1980,26 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </section>
       </div>
     `;
+  }
+
+  function getLinkInlineTargetIds(): string[] {
+    const ids = new Set<string>();
+    const visibleSections = deps
+      .flattenSections(state.documentSections)
+      .filter((section) => !section.isGhost);
+    for (const section of visibleSections) {
+      const sectionId = deps.getSectionId(section).trim();
+      if (sectionId) {
+        ids.add(`#${sectionId}`);
+      }
+    }
+    visitBlocks(visibleSections, (block) => {
+      const blockId = getBlockDomId(block);
+      if (blockId) {
+        ids.add(`#${blockId}`);
+      }
+    });
+    return [...ids];
   }
 
   function renderWarnings(): string {

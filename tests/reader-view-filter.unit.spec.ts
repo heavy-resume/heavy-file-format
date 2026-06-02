@@ -412,6 +412,113 @@ print("maintenance script")
   expect(renderer.renderReaderSections(document.sections)).toContain('maintenance script');
 });
 
+test('inline link modal includes component ids as document targets', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:container {"id":"outer-container"}-->
+
+  <!--hvy:text {"id":"nested-note"}-->
+   Nested note
+`, '.hvy');
+  let helpers: ComponentRenderHelpers;
+  const state = {
+    documentMeta: document.meta,
+    documentSections: document.sections,
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    contextMenu: null,
+    activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    pdfTemplateImportModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    reusableDefinitionEditModal: null,
+    sectionTemplateFlavorModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    themeModalMode: 'full' as const,
+    paletteOverrideId: null,
+    theme: { colors: {} },
+    currentView: 'editor' as const,
+    showAdvancedEditor: false,
+    responsivePreview: 'full' as const,
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {},
+    search: createDefaultSearchState(),
+    readerViewActivatedTargets: new Set<string>(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: true,
+  };
+  const renderer = createReaderRenderer(state, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => helpers,
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '',
+    getSectionDefs: () => [],
+    renderBlockMetaFields: () => '',
+  });
+  helpers = {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    markdownToEditorHtml: escapeHtml,
+    renderRichToolbar: () => '',
+    renderEditorBlock: () => '',
+    renderPassiveEditorBlock: () => '',
+    renderReaderBlock: renderer.renderReaderBlock,
+    renderReaderBlocks: renderer.renderReaderBlocks,
+    renderReaderListBlocks: renderer.renderReaderListBlocks,
+    orderReaderBlocks: renderer.orderReaderBlocks,
+    orderReaderListBlocks: renderer.orderReaderListBlocks,
+    isReaderViewPrioritizedBlock: () => false,
+    renderComponentFragment: (_componentName: string, content: string) => escapeHtml(content),
+    renderComponentOptions: () => '',
+    renderAddComponentPicker: () => '',
+    renderComponentPlacementTarget: () => '',
+    renderOption: () => '',
+    getDocumentComponentCss: () => '',
+    getXrefTargetOptions: () => [],
+    isXrefTargetValid: () => true,
+    getTableColumns: () => [],
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    getSelectedAddComponent: (_key: string, fallback: string) => fallback,
+    getComponentListReaderViewId: () => '',
+    getReaderContainerExpanded: (_key: string, fallback: boolean) => fallback,
+    isExpandableEditorPanelOpen: (_sectionKey: string, _blockId: string, _panel: 'stub' | 'expanded', fallback: boolean) => fallback,
+    isAdvancedEditorMode: () => false,
+    isMobileAdjustmentMode: () => false,
+  };
+
+  const expectedResult = renderer.renderLinkInlineModal();
+
+  expect(expectedResult).toContain('value="#summary"');
+  expect(expectedResult).toContain('value="#outer-container"');
+  expect(expectedResult).toContain('value="#nested-note"');
+});
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

@@ -1289,6 +1289,60 @@ text_line_styles:
   }).toBeLessThan(2);
 });
 
+test('ai context clone preserves heading section spacing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"sectioned-text"}-->
+  ## Alpha
+  First paragraph.
+
+  ## Beta
+  Second paragraph.
+
+  ## Gamma
+  Third paragraph.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Gamma' });
+  const before = await block.evaluate((element) => {
+    const headings = Array.from(element.querySelectorAll('h2'));
+    const blockBox = element.getBoundingClientRect();
+    const betaBox = headings[1]?.getBoundingClientRect();
+    return {
+      height: Math.round(blockBox.height),
+      betaOffset: betaBox ? Math.round(betaBox.top - blockBox.top) : -1,
+      betaMarginTop: headings[1] ? getComputedStyle(headings[1]).marginTop : '',
+    };
+  });
+
+  await block.click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+
+  const after = await page.locator('.hvy-context-popover-clone .reader-block-text').evaluate((element) => {
+    const headings = Array.from(element.querySelectorAll('h2'));
+    const blockBox = element.getBoundingClientRect();
+    const betaBox = headings[1]?.getBoundingClientRect();
+    return {
+      height: Math.round(blockBox.height),
+      betaOffset: betaBox ? Math.round(betaBox.top - blockBox.top) : -1,
+      betaMarginTop: headings[1] ? getComputedStyle(headings[1]).marginTop : '',
+    };
+  });
+
+  expect(after).toEqual(before);
+  expect(after.betaMarginTop).toBe('24px');
+});
+
 test('ai context clone preserves target position above preview top', async ({ page }) => {
   await page.goto('/');
 

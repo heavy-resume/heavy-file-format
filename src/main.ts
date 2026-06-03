@@ -287,10 +287,7 @@ function renderContextMenu(): string {
 
 function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<NonNullable<typeof state.contextMenu>['targetRect']>): string {
   const clone = target.cloneNode(true) as HTMLElement;
-  clone.classList.add('hvy-context-popover-clone');
-  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
-  clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');
   clone.querySelectorAll('[id]').forEach((element) => {
     element.removeAttribute('id');
@@ -298,11 +295,27 @@ function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<Non
   clone.querySelectorAll('input, textarea, select, button, a, [tabindex]').forEach((element) => {
     element.setAttribute('tabindex', '-1');
   });
-  clone.style.left = `${rect.left}px`;
-  clone.style.top = `${rect.top}px`;
-  clone.style.width = `${rect.width}px`;
   clone.style.margin = '0';
-  return clone.outerHTML;
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('hvy-context-popover-clone');
+  getContextMenuSurfaceClasses(target).forEach((className) => {
+    wrapper.classList.add(className);
+  });
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.style.left = `${rect.left}px`;
+  wrapper.style.top = `${rect.top}px`;
+  wrapper.style.width = `${rect.width}px`;
+  wrapper.append(clone);
+  return wrapper.outerHTML;
+}
+
+function getContextMenuSurfaceClasses(target: HTMLElement): string[] {
+  const surface = target.closest<HTMLElement>('.hvy-surface');
+  const classes = surface ? Array.from(surface.classList) : [];
+  if (!classes.includes('hvy-surface')) {
+    classes.unshift('hvy-surface');
+  }
+  return classes;
 }
 
 function cssEscape(value: string): string {

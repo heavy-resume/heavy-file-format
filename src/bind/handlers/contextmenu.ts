@@ -430,8 +430,8 @@ function renderContextMenuElement(app: HTMLElement): void {
   menu.y = position.y;
 }
 
-function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: string }): Record<string, string> {
-  if ('pasteComponentAttrs' in menu && menu.pasteComponentAttrs) {
+function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: string; pasteComponentAttrs?: Record<string, string> }): Record<string, string> {
+  if (menu.pasteComponentAttrs) {
     return {
       sectionKey: menu.sectionKey,
       ...menu.pasteComponentAttrs,
@@ -564,11 +564,18 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   if (!rect) {
     return null;
   }
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('hvy-context-popover-clone');
+  getContextMenuSurfaceClasses(target).forEach((className) => {
+    wrapper.classList.add(className);
+  });
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.style.left = `${rect.left}px`;
+  wrapper.style.top = `${rect.top}px`;
+  wrapper.style.width = `${rect.width}px`;
+
   const clone = target.cloneNode(true) as HTMLElement;
-  clone.classList.add('hvy-context-popover-clone');
-  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
-  clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');
   clone.querySelectorAll('[id]').forEach((element) => {
     element.removeAttribute('id');
@@ -576,9 +583,16 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   clone.querySelectorAll('input, textarea, select, button, a, [tabindex]').forEach((element) => {
     element.setAttribute('tabindex', '-1');
   });
-  clone.style.left = `${rect.left}px`;
-  clone.style.top = `${rect.top}px`;
-  clone.style.width = `${rect.width}px`;
   clone.style.margin = '0';
-  return clone;
+  wrapper.append(clone);
+  return wrapper;
+}
+
+function getContextMenuSurfaceClasses(target: HTMLElement): string[] {
+  const surface = target.closest<HTMLElement>('.hvy-surface');
+  const classes = surface ? Array.from(surface.classList) : [];
+  if (!classes.includes('hvy-surface')) {
+    classes.unshift('hvy-surface');
+  }
+  return classes;
 }

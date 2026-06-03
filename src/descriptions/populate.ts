@@ -151,11 +151,11 @@ async function populateBlockDescriptions(
   }
   const blockTrail = appendBlockTrail(parentTrail, block);
   const blockTree = appendBlockParentTree(parentTree, block);
-  updated += await processInBatches(block.schema.containerBlocks, (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
-  updated += await processInBatches(block.schema.componentListBlocks, (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
-  updated += await processInBatches(block.schema.expandableStubBlocks.children, (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
-  updated += await processInBatches(block.schema.expandableContentBlocks.children, (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
-  updated += await processInBatches(block.schema.gridItems.map((item) => item.block), (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
+  updated += await processInBatches(block.schema.containerBlocks ?? [], (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
+  updated += await processInBatches(block.schema.componentListBlocks ?? [], (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
+  updated += await processInBatches(block.schema.expandableStubBlocks?.children ?? [], (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
+  updated += await processInBatches(block.schema.expandableContentBlocks?.children ?? [], (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
+  updated += await processInBatches((block.schema.gridItems ?? []).map((item) => item.block), (child) => populateBlockDescriptions(document, section, child, blockTrail, blockTree, run, signal), signal);
   return updated;
 }
 
@@ -187,11 +187,11 @@ function countBlockTargets(block: VisualBlock): number {
       + (block.schema.component === 'expandable' && !block.schema.expandableContentDescription.trim() ? 1 : 0)
     : 0;
   return blockTargets
-    + block.schema.containerBlocks.reduce((total, child) => total + countBlockTargets(child), 0)
-    + block.schema.componentListBlocks.reduce((total, child) => total + countBlockTargets(child), 0)
-    + block.schema.expandableStubBlocks.children.reduce((total, child) => total + countBlockTargets(child), 0)
-    + block.schema.expandableContentBlocks.children.reduce((total, child) => total + countBlockTargets(child), 0)
-    + block.schema.gridItems.reduce((total, item) => total + countBlockTargets(item.block), 0);
+    + (block.schema.containerBlocks ?? []).reduce((total, child) => total + countBlockTargets(child), 0)
+    + (block.schema.componentListBlocks ?? []).reduce((total, child) => total + countBlockTargets(child), 0)
+    + (block.schema.expandableStubBlocks?.children ?? []).reduce((total, child) => total + countBlockTargets(child), 0)
+    + (block.schema.expandableContentBlocks?.children ?? []).reduce((total, child) => total + countBlockTargets(child), 0)
+    + (block.schema.gridItems ?? []).reduce((total, item) => total + countBlockTargets(item.block), 0);
 }
 
 function countMissingLeafDescriptions(document: VisualDocument): number {
@@ -204,11 +204,11 @@ function countMissingLeafDescriptions(document: VisualDocument): number {
 function countLeafBlockDescriptions(block: VisualBlock): number {
   const leafDescription = !isStructuralDescriptionBlock(block) && !block.schema.description.trim() ? 1 : 0;
   return leafDescription
-    + block.schema.containerBlocks.reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
-    + block.schema.componentListBlocks.reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
-    + block.schema.expandableStubBlocks.children.reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
-    + block.schema.expandableContentBlocks.children.reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
-    + block.schema.gridItems.reduce((total, item) => total + countLeafBlockDescriptions(item.block), 0);
+    + (block.schema.containerBlocks ?? []).reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
+    + (block.schema.componentListBlocks ?? []).reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
+    + (block.schema.expandableStubBlocks?.children ?? []).reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
+    + (block.schema.expandableContentBlocks?.children ?? []).reduce((total, child) => total + countLeafBlockDescriptions(child), 0)
+    + (block.schema.gridItems ?? []).reduce((total, item) => total + countLeafBlockDescriptions(item.block), 0);
 }
 
 function isStructuralDescriptionBlock(block: VisualBlock): boolean {
@@ -220,14 +220,14 @@ function isStructuralDescriptionBlock(block: VisualBlock): boolean {
   }
   return block.schema.component === 'component-list'
     || block.schema.component === 'expandable'
-    || block.schema.containerBlocks.length > 0
-    || block.schema.componentListBlocks.length > 0
-    || block.schema.expandableStubBlocks.children.length > 0
-    || block.schema.expandableContentBlocks.children.length > 0;
+    || (block.schema.containerBlocks ?? []).length > 0
+    || (block.schema.componentListBlocks ?? []).length > 0
+    || (block.schema.expandableStubBlocks?.children ?? []).length > 0
+    || (block.schema.expandableContentBlocks?.children ?? []).length > 0;
 }
 
 function hasPlainContainerDescriptionTarget(block: VisualBlock): boolean {
-  return block.schema.containerTitle.trim().length > 0 || hasContainerBorderCss(block.schema.css);
+  return (block.schema.containerTitle ?? '').trim().length > 0 || hasContainerBorderCss(block.schema.css);
 }
 
 function reportProgress(run: PopulateDescriptionsRunState, current: string): void {
@@ -260,8 +260,8 @@ function appendBlockTrail(parentTrail: string[], block: VisualBlock): string[] {
 function appendBlockParentTree(parentTree: HvyDescriptionParentContext[], block: VisualBlock): HvyDescriptionParentContext[] {
   const label = getBlockLocationLabel(block)
     || block.schema.description.trim()
-    || block.schema.componentListItemLabel.trim()
-    || block.schema.componentListComponent.trim()
+    || (block.schema.componentListItemLabel ?? '').trim()
+    || (block.schema.componentListComponent ?? '').trim()
     || block.schema.component.trim();
   const description = block.schema.description.trim();
   if (!label && !description) {
@@ -275,9 +275,9 @@ function appendBlockParentTree(parentTree: HvyDescriptionParentContext[], block:
 
 function getBlockLocationLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
+    || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || block.schema.imageAlt.trim()
+    || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]));
 }
@@ -286,13 +286,13 @@ function getTableRowLabel(block: VisualBlock): string {
   if (block.schema.component !== 'table') {
     return '';
   }
-  return firstLine(block.schema.tableRows[0]?.cells.join(' ') ?? '');
+  return firstLine(block.schema.tableRows?.[0]?.cells.join(' ') ?? '');
 }
 
 function getNestedHeadingLabel(block: VisualBlock, seen = new Set<VisualBlock>()): string {
   const nestedBlocks = [
-    ...(block.schema.expandableContentBlocks.children ?? []),
-    ...(block.schema.expandableStubBlocks.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
     ...(block.schema.containerBlocks ?? []),
     ...(block.schema.componentListBlocks ?? []),
     ...(block.schema.gridItems ?? []).map((item) => item.block),

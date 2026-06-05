@@ -6,10 +6,12 @@ Chart attributes live in pluginConfig:
 - xAxisLabel: optional horizontal axis label.
 - yAxisLabel: optional vertical axis label.
 - legend: boolean, default true.
-- colorScheme: auto, light, or dark.
 
 The plugin text body is CSV. The first row is treated as headers. For bar, line,
 radar, and polarArea charts, the first column is labels and remaining columns are
 numeric datasets. For pie and doughnut charts, the first column is labels and the
 first numeric data column is used. Scatter expects x and y columns; bubble expects
 x, y, and r columns.
+
+Graph does not define graph-specific document theme colors. It derives chart text,
+grid, outlines, and series colors from the shared HVY theme variables.

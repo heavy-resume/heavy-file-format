@@ -330,17 +330,6 @@
   background: var(--hvy-table-header);
 }
 
-.editor-block-passive .reader-table td[data-placeholder]:empty::before {
-  content: attr(data-placeholder);
-  color: var(--hvy-text-muted);
-  pointer-events: none;
-}
-
-.hvy-surface-phone .editor-block-passive .reader-table td[data-placeholder-compact]:empty::before,
-.hvy-surface-tablet .editor-block-passive .reader-table td[data-placeholder-compact]:empty::before {
-  content: attr(data-placeholder-compact);
-}
-
 .table-main-row {
   height: 3ch;
 }

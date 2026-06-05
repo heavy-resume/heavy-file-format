@@ -704,6 +704,8 @@ Color themes are implemented intrinsically by the viewer application. A `.hvy` o
 
 A theme exposes CSS custom properties that document and component CSS refer to with `var(...)`. This keeps color choices centralized and makes light/dark variants a data change rather than a content change.
 
+Theme variables describe shared document roles. Plugins MUST NOT add plugin-specific global theme variables such as `--hvy-<plugin>-text` or `--hvy-<plugin>-series-1` for their internal rendering. A plugin SHOULD derive its colors from existing shared roles such as text, surface, border, accent, status, highlight, and link variables, or expose plugin-local styling through `pluginConfig` / plugin content when that styling is part of the plugin contract.
+
 #### Naming
 
 Each entry under `theme.colors` is a CSS custom property name mapped directly to a value. The key **is** the CSS variable name — no transformation is applied:
@@ -1296,7 +1298,7 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true,"colorScheme":"auto"}}-->
+<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true}}-->
 Label,Value
 Example A,10
 Example B,20
@@ -1309,15 +1311,11 @@ Plugin-specific rules:
 - `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
   `pluginConfig.yAxisLabel` are optional strings.
 - `pluginConfig.legend` is optional and defaults to `true`.
-- `pluginConfig.colorScheme` is optional and defaults to `"auto"`. Supported
-  values are `"auto"`, `"light"`, and `"dark"`. `"auto"` uses active HVY theme
-  graph colors; `"light"` and `"dark"` force built-in graph schemes.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
-- Theme colors for graph rendering are configurable under `theme.colors` with
-  `--hvy-graph-text`, `--hvy-graph-grid`, `--hvy-graph-axis`,
-  `--hvy-graph-outline`, and `--hvy-graph-series-1` through
-  `--hvy-graph-series-8`.
+- Graph renderers MUST use existing shared theme color variables for chart text,
+  grid lines, outlines, and series colors. The graph plugin MUST NOT define
+  graph-specific document theme color variables.
 - For `"bar"`, `"line"`, and `"radar"` charts, the first CSV column is labels
   and all following columns are numeric datasets.
 - For `"pie"`, `"doughnut"`, and `"polarArea"` charts, the first CSV column is

@@ -4,6 +4,8 @@ Prefer theme variables and reusable defaults over repeated one-off inline stylin
 
 Use component `css`, section `css`, `component_defaults`, and `section_defaults` for CSS properties. Use `theme.colors` for shared custom properties such as `--hvy-bg`, `--hvy-text`, and `--hvy-accent-1`.
 
+Theme colors are shared document roles, not plugin namespaces. Plugins should use existing theme roles for their rendering instead of adding plugin-specific global variables such as `--hvy-<plugin>-text`.
+
 Inspect styling sources:
 
 ```shell

@@ -213,15 +213,13 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
         .map(
           (row) => `
             <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}">
-              ${columns.map((column, cellIndex) => {
-                const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
+              ${columns.map((_column, cellIndex) => {
+                const rawValue = row.cells[cellIndex] ?? '';
+                const value = helpers.escapeHtml(rawValue);
                 const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
-                const rawPlaceholder = column || 'Cell value';
-                const placeholder = helpers.escapeAttr(renderAltAnnotationsAsFullText(rawPlaceholder));
-                const compactPlaceholder = helpers.escapeAttr(renderAltAnnotationsAsMobileText(rawPlaceholder));
                 return value
-                  ? `<td title="${title}">${renderTableInlineReaderHtml(row.cells[cellIndex] ?? '', block, helpers)}</td>`
-                  : `<td data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
+                  ? `<td title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`
+                  : '<td></td>';
               }).join('')}
             </tr>
             `

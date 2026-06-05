@@ -18,6 +18,8 @@ import { logClickTrace } from '../click-trace';
 interface RichToolbarSelection {
   range: Range;
   anchor: HTMLAnchorElement | null;
+  linkHref: string | null;
+  linkText: string | null;
 }
 
 const richToolbarSelections = new WeakMap<HTMLElement, RichToolbarSelection>();
@@ -549,9 +551,12 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
     return existing;
   }
   const clone = range.cloneRange();
+  const anchor = findLinkAnchorForRange(editable, clone);
   const stored = {
     range: clone,
-    anchor: findLinkAnchorForRange(editable, clone),
+    anchor,
+    linkHref: anchor?.getAttribute('href') ?? null,
+    linkText: anchor?.textContent ?? null,
   };
   richToolbarSelections.set(editable, stored);
   return stored;
@@ -559,8 +564,11 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
 
 function restoreRichToolbarSelection(editable: HTMLElement): RichToolbarSelection | null {
   const stored = richToolbarSelections.get(editable);
-  if (!stored || !isRangeInside(editable, stored.range)) {
+  if (!stored) {
     return null;
+  }
+  if (!isRangeInside(editable, stored.range)) {
+    return recoverRichToolbarLinkSelection(editable, stored);
   }
   const selection = window.getSelection();
   selection?.removeAllRanges();
@@ -568,10 +576,37 @@ function restoreRichToolbarSelection(editable: HTMLElement): RichToolbarSelectio
   return stored;
 }
 
+function recoverRichToolbarLinkSelection(editable: HTMLElement, stored: RichToolbarSelection): RichToolbarSelection | null {
+  if (!stored.linkHref) {
+    return null;
+  }
+  const hrefMatches = Array.from(editable.querySelectorAll<HTMLAnchorElement>('a')).filter((anchor) =>
+    anchor.getAttribute('href') === stored.linkHref
+  );
+  const textMatches = hrefMatches.filter((anchor) => (anchor.textContent ?? '') === stored.linkText);
+  const anchor = textMatches.length === 1 ? textMatches[0] : hrefMatches.length === 1 ? hrefMatches[0] : null;
+  if (!anchor) {
+    return null;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(anchor);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const recovered = {
+    range,
+    anchor,
+    linkHref: anchor.getAttribute('href') ?? null,
+    linkText: anchor.textContent ?? null,
+  };
+  richToolbarSelections.set(editable, recovered);
+  return recovered;
+}
+
 function findLinkAnchorForRange(editable: HTMLElement, range: Range): HTMLAnchorElement | null {
   for (const node of [range.startContainer, range.endContainer, range.commonAncestorContainer]) {
     const element = node instanceof Element ? node : node.parentNode instanceof Element ? node.parentNode : null;
-    const anchor = element?.closest<HTMLAnchorElement>('a[href]') ?? null;
+    const anchor = element?.closest<HTMLAnchorElement>('a') ?? null;
     if (anchor && editable.contains(anchor)) {
       return anchor;
     }

@@ -32,14 +32,14 @@ body {
   transition: none !important;
 }
 
-.hvy-embed-layout a {
+.hvy-embed-layout a[href] {
   color: var(--hvy-link-color);
   transition:
     color 140ms ease,
     text-shadow 140ms ease;
 }
 
-.hvy-embed-layout a:hover {
+.hvy-embed-layout a[href]:hover {
   color: var(--hvy-link-hover-color, var(--hvy-link-color));
   text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }

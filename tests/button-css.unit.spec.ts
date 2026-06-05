@@ -20,3 +20,11 @@ test('floating launchers share one explicit reset class', () => {
   expect(searchCssSource).not.toContain('.hvy-embed-layout .search-launcher');
   expect(searchCssSource.match(/\.search-launcher\s*\{[^}]*\}/)?.[0] ?? '').not.toContain('!important');
 });
+
+test('embed link hover styling only applies to anchors with href values', () => {
+  const source = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+
+  expect(source).toContain('.hvy-embed-layout a[href]');
+  expect(source).toContain('.hvy-embed-layout a[href]:hover');
+  expect(source).not.toContain('.hvy-embed-layout a:hover');
+});

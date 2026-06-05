@@ -464,6 +464,90 @@ test('enter keeps paragraph style active on the new line', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
 });
 
+test('enter on a styled continuation line inserts one styled line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
+      (line.textContent ?? '').replace(/\u200b/g, '').trim()
+    ),
+  }));
+
+  expect(expectedResult).toEqual({
+    styledLines: ['^role^Styled line', '^role^', '^role^'],
+  });
+});
+
+test('enter in the middle of a paragraph style splits into two styled lines', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, 'Styled'.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('continued ');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    childTags: Array.from(node.children).map((child) => child.tagName),
+    nestedBlocks: node.querySelectorAll('[data-hvy-text-line-style] [data-hvy-text-line-style], [data-hvy-text-line-style] div').length,
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
+      (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, '')
+    ),
+  }));
+
+  expect(expectedResult).toEqual({
+    childTags: ['DIV', 'DIV'],
+    nestedBlocks: 0,
+    styledLines: ['Styled', 'continued line'],
+  });
+});
+
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
   await page.goto('/');
 

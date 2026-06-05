@@ -52,7 +52,9 @@ export function openLinkInlineModal(
   const selection = window.getSelection();
   const selectedRange = range ?? (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
   const selectedAnchor = anchor ?? findLinkAnchorForRange(editable, selectedRange);
-  const linkValue = initialValue || selectedAnchor?.getAttribute('href') || '';
+  const linkValue = normalizeLinkInputValue(
+    initialValue || selectedAnchor?.getAttribute('href') || inferLinkValueFromRange(selectedRange) || ''
+  );
 
   setPendingLinkEditable(editable);
   setPendingLinkAnchor(selectedAnchor ?? null);
@@ -96,7 +98,7 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
     closeLinkInlineModal(app);
     return;
   }
-  const value = input.value.trim();
+  const value = normalizeLinkInputValue(input.value);
   if (!value) {
     pendingLinkEditable.focus();
     if (pendingLinkAnchor && pendingLinkEditable.contains(pendingLinkAnchor)) {
@@ -107,7 +109,7 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
     closeLinkInlineModal(app);
     return;
   }
-  const link = value.startsWith('#') ? value : value;
+  const link = value;
   pendingLinkEditable.focus();
   if (pendingLinkAnchor && pendingLinkEditable.contains(pendingLinkAnchor)) {
     pendingLinkAnchor.setAttribute('href', link);
@@ -163,7 +165,7 @@ function findLinkAnchorForRange(editable: HTMLElement, range: Range | null): HTM
     return ancestor;
   }
   if (ancestor instanceof Element) {
-    const anchor = ancestor.querySelector<HTMLAnchorElement>('a[href]');
+    const anchor = ancestor.querySelector<HTMLAnchorElement>('a');
     return anchor && editable.contains(anchor) && range.intersectsNode(anchor) ? anchor : null;
   }
   return null;
@@ -171,6 +173,28 @@ function findLinkAnchorForRange(editable: HTMLElement, range: Range | null): HTM
 
 function findClosestEditableAnchor(editable: HTMLElement, node: Node): HTMLAnchorElement | null {
   const element = node instanceof Element ? node : node.parentNode instanceof Element ? node.parentNode : null;
-  const anchor = element?.closest<HTMLAnchorElement>('a[href]') ?? null;
+  const anchor = element?.closest<HTMLAnchorElement>('a') ?? null;
   return anchor && editable.contains(anchor) ? anchor : null;
+}
+
+function inferLinkValueFromRange(range: Range | null): string {
+  if (!range || range.collapsed) {
+    return '';
+  }
+  return normalizeLinkInputValue(range.toString());
+}
+
+function normalizeLinkInputValue(value: string): string {
+  const trimmed = value.trim();
+  if (/^mailto:/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (isEmailAddress(trimmed)) {
+    return `mailto:${trimmed}`;
+  }
+  return trimmed;
+}
+
+function isEmailAddress(value: string): boolean {
+  return /^[^\s:@<>()[\]]+@[^\s:@<>()[\]]+\.[^\s:@<>()[\]]+$/.test(value);
 }

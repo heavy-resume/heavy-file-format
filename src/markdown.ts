@@ -39,6 +39,14 @@ turndown.addRule('inline-code-literal-text', {
   },
 });
 
+turndown.addRule('hvy-link', {
+  filter: (node) => node.nodeName === 'A',
+  replacement: (content, node) => {
+    const href = (node as HTMLAnchorElement).getAttribute('href')?.trim() ?? '';
+    return href.length > 0 ? `[${content}](${href})` : content;
+  },
+});
+
 turndown.addRule('non-text-media', {
   filter: (node) => isNonTextMediaElement(node),
   replacement: () => '',

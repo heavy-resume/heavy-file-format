@@ -2047,7 +2047,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
       return true;
     }
 
-    if (exitTextLineStyleAtSelection(editable)) {
+    if (continueTextLineStyleAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
       updateRichToolbarState(editable);
@@ -3155,13 +3155,13 @@ function exitInlineFormattingAtParagraphEnd(editable: HTMLElement): boolean {
   return true;
 }
 
-function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
+function continueTextLineStyleAtSelection(editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range?.collapsed) {
     return false;
   }
   const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
-  if (!styled || styled === editable || !isCollapsedSelectionAtEndOf(styled)) {
+  if (!styled || styled === editable) {
     return false;
   }
   const styleName = styled.dataset.hvyTextLineStyle ?? '';
@@ -3169,12 +3169,38 @@ function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
     return false;
   }
   const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
-  const paragraph = document.createElement('p');
-  paragraph.appendChild(document.createTextNode('\u200b'));
-  wrapper.appendChild(paragraph);
+  const block = getSelectionBlockElement(editable);
+  const currentBlock = block && block !== editable && styled.contains(block) && !block.matches('.hvy-text-line-style-marker')
+    ? block
+    : null;
+  const nextBlock = currentBlock
+    ? currentBlock.cloneNode(false) as HTMLElement
+    : document.createElement('p');
+  if (currentBlock) {
+    const tailRange = document.createRange();
+    tailRange.selectNodeContents(currentBlock);
+    tailRange.setStart(range.startContainer, range.startOffset);
+    nextBlock.appendChild(tailRange.extractContents());
+    let sibling = currentBlock.nextSibling;
+    while (sibling) {
+      const nextSibling = sibling.nextSibling;
+      nextBlock.appendChild(sibling);
+      sibling = nextSibling;
+    }
+    ensureEditableBlockHasCaretContent(currentBlock);
+  }
+  ensureEditableBlockHasCaretContent(nextBlock);
+  wrapper.appendChild(nextBlock);
   styled.parentNode?.insertBefore(wrapper, styled.nextSibling);
-  placeCaretAtEnd(paragraph);
+  placeCaretInside(nextBlock);
   return true;
+}
+
+function ensureEditableBlockHasCaretContent(block: HTMLElement): void {
+  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
+    return;
+  }
+  block.replaceChildren(document.createTextNode('\u200b'));
 }
 
 function exitEmptyQuoteAtSelection(editable: HTMLElement): boolean {

@@ -120,6 +120,20 @@ test('serializes editor inline code with literal angle brackets', () => {
   expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
 });
 
+test('serializes mailto links and drops empty editor links to plain text', () => {
+  expect(turndown.turndown('<p><a href="mailto:person@example.com">person@example.com</a></p>')).toBe(
+    '[person@example.com](mailto:person@example.com)'
+  );
+  expect(turndown.turndown('<p><a href="">person@example.com</a></p>')).toBe('person@example.com');
+  expect(turndown.turndown('<p><a>person@example.com</a></p>')).toBe('person@example.com');
+});
+
+test('renders mailto links from text markdown', () => {
+  expect(markdownToReaderHtml('[person@example.com](mailto:person@example.com)')).toContain(
+    '<a href="mailto:person@example.com">person@example.com</a>'
+  );
+});
+
 test('does not render markdown image syntax in text components', () => {
   expect(markdownToReaderHtml('Before ![Alt](https://example.invalid/image.png) after.')).toBe('<p>Before  after.</p>\n');
 });

@@ -9,6 +9,7 @@ export function bindFocus(app: HTMLElement): void {
     if (target.dataset.field !== 'table-cell' && target.dataset.field !== 'table-column') {
       return;
     }
+    target.classList.add('is-inline-editing');
     const sectionKey = target.dataset.sectionKey ?? '';
     const blockId = target.dataset.blockId ?? '';
     const rowIndex = target.dataset.rowIndex ?? '';
@@ -48,6 +49,7 @@ export function bindFocus(app: HTMLElement): void {
     }
     if (target.dataset.field === 'table-cell' || target.dataset.field === 'table-column') {
       commitInlineTableEdit(target);
+      target.classList.remove('is-inline-editing');
     }
     if (target instanceof HTMLInputElement) {
       commitTagEditorDraft(target, tagStateHelpers);

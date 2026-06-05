@@ -237,7 +237,7 @@ function moveTableCellFocus(
     context.block.schema.tableRows.push(createDefaultTableRow(columnCount));
     syncReusableTemplateForBlock(sectionKey, context.block.id);
     getRefreshReaderPanels()();
-    setActiveEditorBlock(sectionKey, blockId);
+    state.pendingEditorActivation = null;
     getRenderApp()();
     requestAnimationFrame(() => focusTableCell(app, sectionKey, blockId, nextRowIndex, nextCellIndex));
     return;

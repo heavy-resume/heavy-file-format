@@ -114,6 +114,60 @@ hvy_version: 0.1
   expect(expectedResult.buttonCellCenterDeltaY).toBeLessThanOrEqual(1);
 });
 
+test('empty static table rows delete without confirmation while filled rows still confirm', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-empty-delete-test"}-->
+#! Table Empty Delete Test
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["",""]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+
+  await page.locator('[data-action="remove-table-row"][data-row-index="1"]').click();
+  await expect(page.locator('.remove-confirmation-modal')).toHaveCount(0);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="1"][data-cell-index="0"]')).toHaveCount(0);
+
+  await page.locator('[data-action="remove-table-row"][data-row-index="0"]').click();
+  await expect(page.locator('.remove-confirmation-modal')).toBeVisible();
+  await page.locator('.remove-confirmation-modal').getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('filled static table row delete opens confirmation from an active cell on the first click', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-active-delete-test"}-->
+#! Table Active Delete Test
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+  const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await firstCell.click();
+  await expect(firstCell).toBeFocused();
+  await page.keyboard.type(' edited');
+  await expect(firstCell).toContainText('Alpha edited');
+
+  await page.locator('[data-action="remove-table-row"][data-row-index="0"]').click();
+  await expect(page.locator('.remove-confirmation-modal')).toBeVisible();
+});
+
 test('active table editor tabs through cells before row controls', async ({ page }) => {
   await page.goto('/');
 
@@ -181,6 +235,9 @@ hvy_version: 0.1
   await page.keyboard.press('Enter');
   const addedRowFirstCell = page.locator('[data-field="table-cell"][data-row-index="1"][data-cell-index="0"]');
   await expect(addedRowFirstCell).toBeFocused();
+  await page.waitForTimeout(100);
+  await expect(addedRowFirstCell).toBeFocused();
+  await expect(page.locator('[data-field="table-column"][data-column-index="0"]')).not.toBeFocused();
   await expect(firstCell).toContainText('Second line');
   await page.keyboard.type('Beta');
   await expect(addedRowFirstCell).toContainText('Beta');

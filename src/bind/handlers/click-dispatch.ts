@@ -91,6 +91,9 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
     }
+    if (actionButton && isTableEditorActionButton(actionButton)) {
+      event.preventDefault();
+    }
     if (actionButton?.dataset.action === 'set-editor-mode' || actionButton?.dataset.action === 'switch-view') {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:preserve-fill-in-for-shell-action', {
@@ -397,6 +400,15 @@ function isPlacementModeAction(action: string): boolean {
     || action === 'toggle-expandable-editor-panel';
 }
 
+function isTableEditorActionButton(actionButton: HTMLElement): boolean {
+  const action = actionButton.dataset.action ?? '';
+  return (action === 'remove-table-row'
+    || action === 'remove-table-column'
+    || action === 'add-table-row'
+    || action === 'add-table-column')
+    && Boolean(actionButton.closest('.table-editor'));
+}
+
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {
   const action = actionButton.dataset.action;
   if (!action) {
@@ -413,7 +425,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
     return false;
   }
 
-  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
+  if (requiresRemoveConfirmation(action, actionButton) && !confirmedRemoveReady) {
     logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
     openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
     return true;
@@ -596,7 +608,10 @@ function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HT
   return app.querySelector<HTMLElement>(selector);
 }
 
-function requiresRemoveConfirmation(action: string): boolean {
+function requiresRemoveConfirmation(action: string, actionButton: HTMLElement): boolean {
+  if (action === 'remove-table-row' && isEmptyTableRowRemoval(actionButton)) {
+    return false;
+  }
   return new Set([
     'remove-block',
     'remove-section',
@@ -611,4 +626,20 @@ function requiresRemoveConfirmation(action: string): boolean {
     'remove-component-def',
     'remove-section-def',
   ]).has(action);
+}
+
+function isEmptyTableRowRemoval(actionButton: HTMLElement): boolean {
+  const sectionKey = getActionSectionKey(actionButton);
+  const blockId = actionButton.dataset.blockId ?? '';
+  const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
+  if (!sectionKey || !blockId || Number.isNaN(rowIndex)) {
+    return false;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  const row = block?.schema.tableRows[rowIndex];
+  if (!row) {
+    return false;
+  }
+  const cellCount = Math.max(block.schema.tableColumns.length, row.cells.length);
+  return Array.from({ length: cellCount }).every((_item, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
 }

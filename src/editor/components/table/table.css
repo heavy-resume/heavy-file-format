@@ -170,27 +170,35 @@
 }
 
 .inline-editable {
-  display: grid;
+  display: block;
   min-height: 1.5rem;
   outline: none;
 }
 
-.inline-editable:not(:focus-within):empty::before,
-.inline-editable:not(:focus-within):has(> br:only-child)::before,
-.inline-editable:not(:focus-within):has(> p:only-child:empty)::before,
-.inline-editable:not(:focus-within):has(> p:only-child > br:only-child)::before {
+.table-column-head:focus-within
+  .inline-editable:not(:focus-within):is(:empty, :has(> br:only-child), :has(> p:only-child:empty), :has(> p:only-child > br:only-child))::before,
+.table-row-editor-empty
+  .inline-editable:not(:focus-within):is(:empty, :has(> br:only-child), :has(> p:only-child:empty), :has(> p:only-child > br:only-child))::before {
   content: attr(data-placeholder);
   color: var(--hvy-text-muted);
 }
 
-.hvy-surface-phone .table-inline-text[data-placeholder-compact]:not(:focus-within):empty::before,
-.hvy-surface-phone .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> br:only-child)::before,
-.hvy-surface-phone .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> p:only-child:empty)::before,
-.hvy-surface-phone .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> p:only-child > br:only-child)::before,
-.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:not(:focus-within):empty::before,
-.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> br:only-child)::before,
-.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> p:only-child:empty)::before,
-.hvy-surface-tablet .table-inline-text[data-placeholder-compact]:not(:focus-within):has(> p:only-child > br:only-child)::before {
+:is(.hvy-surface-phone, .hvy-surface-tablet)
+  .table-column-head:focus-within
+  .table-inline-text[data-placeholder-compact]:not(:focus-within):is(
+    :empty,
+    :has(> br:only-child),
+    :has(> p:only-child:empty),
+    :has(> p:only-child > br:only-child)
+  )::before,
+:is(.hvy-surface-phone, .hvy-surface-tablet)
+  .table-row-editor-empty
+  .table-inline-text[data-placeholder-compact]:not(:focus-within):is(
+    :empty,
+    :has(> br:only-child),
+    :has(> p:only-child:empty),
+    :has(> p:only-child > br:only-child)
+  )::before {
   content: attr(data-placeholder-compact);
 }
 
@@ -350,6 +358,17 @@
 
 .reader-table th {
   background: var(--hvy-table-header);
+}
+
+.editor-block-passive .reader-table .table-main-row-empty td[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--hvy-text-muted);
+  pointer-events: none;
+}
+
+.hvy-surface-phone .editor-block-passive .reader-table .table-main-row-empty td[data-placeholder-compact]:empty::before,
+.hvy-surface-tablet .editor-block-passive .reader-table .table-main-row-empty td[data-placeholder-compact]:empty::before {
+  content: attr(data-placeholder-compact);
 }
 
 .table-main-row {

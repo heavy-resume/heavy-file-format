@@ -1,4 +1,4 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, createDefaultTableRow, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, syncReusableTemplateForBlock } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
@@ -111,6 +111,9 @@ export function bindKeydown(app: HTMLElement): void {
       }
       return;
     }
+    if (target.dataset.field === 'table-cell' && handleTableCellSpreadsheetKeydown(app, event, target)) {
+      return;
+    }
     if (target.dataset.inlineText === 'true' && event.key === 'Enter') {
       event.preventDefault();
       return;
@@ -172,6 +175,127 @@ export function bindKeydown(app: HTMLElement): void {
       openLinkInlineModal(app, richTarget);
     }
   });
+}
+
+function handleTableCellSpreadsheetKeydown(app: HTMLElement, event: KeyboardEvent, target: HTMLElement): boolean {
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    moveTableCellFocus(app, target, event.shiftKey ? -1 : 1);
+    return true;
+  }
+  if (event.key !== 'Enter') {
+    return false;
+  }
+  event.preventDefault();
+  if (event.shiftKey) {
+    insertTableCellLineBreak(target);
+    target.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    refreshRichToolbarState(target);
+    return true;
+  }
+  moveTableCellFocus(app, target, 1, { forceNextRow: true });
+  return true;
+}
+
+function moveTableCellFocus(
+  app: HTMLElement,
+  currentCell: HTMLElement,
+  direction: -1 | 1,
+  options: { forceNextRow?: boolean } = {}
+): void {
+  currentCell.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  const context = resolveBlockContext(currentCell);
+  const sectionKey = currentCell.dataset.sectionKey ?? '';
+  const blockId = currentCell.dataset.blockId ?? '';
+  const currentRowIndex = Number.parseInt(currentCell.dataset.rowIndex ?? '', 10);
+  const currentCellIndex = Number.parseInt(currentCell.dataset.cellIndex ?? '', 10);
+  if (!context || !sectionKey || !blockId || Number.isNaN(currentRowIndex) || Number.isNaN(currentCellIndex)) {
+    return;
+  }
+
+  const columnCount = Math.max(1, getTableColumns(context.block.schema).length);
+  let nextRowIndex = currentRowIndex;
+  let nextCellIndex = currentCellIndex + direction;
+  if (options.forceNextRow) {
+    nextRowIndex = currentRowIndex + 1;
+    nextCellIndex = currentCellIndex;
+  } else if (nextCellIndex >= columnCount) {
+    nextRowIndex += 1;
+    nextCellIndex = 0;
+  } else if (nextCellIndex < 0) {
+    nextRowIndex -= 1;
+    nextCellIndex = columnCount - 1;
+  }
+
+  if (nextRowIndex < 0) {
+    focusTableCell(app, sectionKey, blockId, 0, 0);
+    return;
+  }
+
+  if (nextRowIndex >= context.block.schema.tableRows.length) {
+    recordHistory(`table-row-keyboard-add:${sectionKey}:${blockId}`);
+    context.block.schema.tableRows.push(createDefaultTableRow(columnCount));
+    syncReusableTemplateForBlock(sectionKey, context.block.id);
+    getRefreshReaderPanels()();
+    setActiveEditorBlock(sectionKey, blockId);
+    getRenderApp()();
+    requestAnimationFrame(() => focusTableCell(app, sectionKey, blockId, nextRowIndex, nextCellIndex));
+    return;
+  }
+
+  syncReusableTemplateForBlock(sectionKey, context.block.id);
+  getRefreshReaderPanels()();
+  focusTableCell(app, sectionKey, blockId, nextRowIndex, nextCellIndex);
+}
+
+function focusTableCell(app: HTMLElement, sectionKey: string, blockId: string, rowIndex: number, cellIndex: number): void {
+  const selector = `[data-field="table-cell"][data-section-key="${cssEscapeForSelector(sectionKey)}"][data-block-id="${cssEscapeForSelector(blockId)}"][data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`;
+  const nextCell = app.querySelector<HTMLElement>(selector);
+  if (!nextCell) {
+    return;
+  }
+  nextCell.focus({ preventScroll: true });
+  placeCaretAtEnd(nextCell);
+  refreshRichToolbarState(nextCell);
+}
+
+function insertTableCellLineBreak(target: HTMLElement): void {
+  target.focus();
+  if (document.execCommand('insertLineBreak')) {
+    return;
+  }
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  if (!selection || !range || !target.contains(range.commonAncestorContainer)) {
+    target.append(document.createElement('br'));
+    placeCaretAtEnd(target);
+    return;
+  }
+  range.deleteContents();
+  const br = document.createElement('br');
+  range.insertNode(br);
+  range.setStartAfter(br);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function placeCaretAtEnd(target: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function cssEscapeForSelector(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
 }
 
 function insertFillInLineBreak(editable: HTMLElement): void {

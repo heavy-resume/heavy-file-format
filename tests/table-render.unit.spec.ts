@@ -149,18 +149,19 @@ test('table editor cell placeholders carry full and compact alt text', () => {
   expect(html).not.toContain('data-placeholder="<!--hvy:alt');
 });
 
-test('reader table empty cells do not render inactive editor placeholders', () => {
+test('reader table placeholders are available only for wholly empty rows', () => {
   const helpers = {
     ...createHelpers(),
     getTableColumns: (schema: VisualBlock['schema']) => schema.tableColumns,
   };
-  const block = createTableBlock([['', '', '']]);
+  const block = createTableBlock([['2026', '', 'Open'], ['', '', '']]);
   block.schema.tableColumns = ['YEAR', '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->', 'TITLE'];
 
   const html = renderTableReader(section, block, helpers);
 
   expect(html).toContain('<td></td>');
-  expect(html).not.toContain('data-placeholder=');
-  expect(html).not.toContain('data-placeholder-compact=');
-  expect(html).not.toContain('<!--hvy:alt');
+  expect(html).toContain('table-main-row-empty');
+  expect(html).toContain('data-placeholder="ORGANIZATION"');
+  expect(html).toContain('data-placeholder-compact="ORG"');
+  expect(html).not.toContain('data-placeholder="<!--hvy:alt');
 });

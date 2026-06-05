@@ -461,7 +461,8 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const cellIndex = Number.parseInt(target.dataset.cellIndex ?? '', 10);
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
-      row.cells[cellIndex] = getInlineEditableMarkdown(target);
+      row.cells[cellIndex] = getInlineEditableMarkdown(target, { preserveLineBreaks: true });
+      syncTableRowEmptyClass(target);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -598,8 +599,20 @@ function getTextFillInRichEditorHtml(editor: HTMLElement): string {
   return clone.innerHTML;
 }
 
-function getInlineEditableMarkdown(target: HTMLElement): string {
-  return normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replace(/\s*\n+\s*/g, ' ').trim();
+function getInlineEditableMarkdown(target: HTMLElement, options: { preserveLineBreaks?: boolean } = {}): string {
+  const markdown = normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replaceAll('\u200b', '');
+  return options.preserveLineBreaks
+    ? markdown.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').trim()
+    : markdown.replace(/\s*\n+\s*/g, ' ').trim();
+}
+
+function syncTableRowEmptyClass(target: HTMLElement): void {
+  const row = target.closest<HTMLElement>('.table-row-editor');
+  if (!row) {
+    return;
+  }
+  const cells = Array.from(row.querySelectorAll<HTMLElement>('[data-field="table-cell"]'));
+  row.classList.toggle('table-row-editor-empty', cells.every((cell) => getInlineEditableMarkdown(cell).trim().length === 0));
 }
 
 export function commitInlineTableEdit(target: HTMLElement): void {

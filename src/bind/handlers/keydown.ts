@@ -3,6 +3,7 @@ import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
 import { handleEscapeKey } from './escape';
+import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 
 export function bindKeydown(app: HTMLElement): void {
   app.addEventListener('keyup', (event) => {
@@ -98,7 +99,8 @@ export function bindKeydown(app: HTMLElement): void {
         if ((event.metaKey || event.ctrlKey) && section.title.trim().length > 0 && section.blocks.length === 0 && section.children.length === 0) {
           recordHistory(`section-title-heading:${section.key}`);
           const newBlock = createEmptyBlock('text');
-          newBlock.text = `${'#'.repeat(getEmptySectionHeadingLevel(section.key))} ${section.title.trim()}`;
+          const headingLevel = emptySectionHeadingLevelToNumber(rememberEmptySectionHeadingLevel(section.key, getEmptySectionHeadingLevel(section.key)));
+          newBlock.text = `${'#'.repeat(headingLevel)} ${section.title.trim()}`;
           section.blocks.push(newBlock);
           state.activeEditorSectionTitleKey = null;
           state.clearSectionTitleOnFocusKey = null;
@@ -326,15 +328,4 @@ function getRichTarget(target: HTMLElement): HTMLElement | null {
     : target.closest<HTMLElement>(
         '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="table-column"], [data-field="table-cell"]'
       );
-}
-
-function getEmptySectionHeadingLevel(sectionKey: string): 1 | 2 | 3 {
-  const value = state.addComponentBySection[`empty-heading:${sectionKey}`];
-  if (value === 'h2') {
-    return 2;
-  }
-  if (value === 'h3') {
-    return 3;
-  }
-  return 1;
 }

@@ -2547,6 +2547,33 @@ test('new section title creates a matching section id', async ({ page }) => {
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"launch-plan"');
 });
 
+test('empty section heading level defaults to last used across ghost and title shortcuts', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  let section = page.locator('.editor-section-card').last();
+  let titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory One');
+  await titleInput.press('Enter');
+  await section.locator('[data-field="empty-section-heading-level"]').selectOption('h2');
+  await section.locator('.empty-section-heading-ghost .ghost-label').click();
+  await expect(section.locator('.rich-editor h2')).toContainText('Memory One');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  section = page.locator('.editor-section-card').last();
+  titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory Two');
+  await titleInput.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  await expect(section.locator('.rich-editor h2')).toContainText('Memory Two');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  section = page.locator('.editor-section-card').last();
+  titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory Three');
+  await titleInput.press('Enter');
+  await expect(section.locator('[data-field="empty-section-heading-level"]')).toHaveValue('h2');
+});
+
 test('edit sidebar add section creates a sidebar section', async ({ page }) => {
   await page.goto('/');
 

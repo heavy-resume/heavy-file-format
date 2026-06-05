@@ -26,6 +26,7 @@ import {
   writeHeadingStylesToMeta,
   type HeadingStyleName,
 } from '../../heading-styles';
+import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
 
@@ -516,7 +517,7 @@ export function bindInputBlock(app: HTMLElement): void {
     if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
       const key = target.dataset.sectionKey;
       if (key) {
-        state.addComponentBySection[`empty-heading:${key}`] = target.value;
+        rememberEmptySectionHeadingLevel(key, target.value);
       }
       return;
     }

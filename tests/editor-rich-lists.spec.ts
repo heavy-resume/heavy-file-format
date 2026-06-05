@@ -172,6 +172,43 @@ test('list action converts the first paragraph when the caret is on the first li
   });
 });
 
+test('list action creates a bullet on an empty first line', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await storeRichSelection(editor);
+
+  await activeEditorBlock.locator('[data-rich-action="list"]').click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    itemCount: node.querySelectorAll('li').length,
+    paragraphCount: node.querySelectorAll('p').length,
+    text: (node.querySelector('li')?.textContent ?? '').replace(/\u200b/g, ''),
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    itemCount: 1,
+    paragraphCount: 0,
+    text: '',
+  });
+});
+
 test('list action works after clicking into the first visible line', async ({ page }) => {
   await openDefaultDocument(page);
 

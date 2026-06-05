@@ -36,6 +36,7 @@ import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
+import { getEmptySectionHeadingLevel } from '../section-heading-memory';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -313,8 +314,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && section.title.trim().length > 0
       && section.blocks.length === 0
       && section.children.length === 0;
-    const emptyHeadingKey = `empty-heading:${section.key}`;
-    const emptyHeadingLevel = normalizeEmptySectionHeadingLevel(state.addComponentBySection[emptyHeadingKey]);
+    const emptyHeadingLevel = getEmptySectionHeadingLevel(section.key);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
         deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
@@ -2177,13 +2177,6 @@ function findSectionLocation(
 
 export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
   return `${kind}:${index}`;
-}
-
-function normalizeEmptySectionHeadingLevel(value: string | undefined): 'h1' | 'h2' | 'h3' {
-  if (value === 'h2' || value === 'h3') {
-    return value;
-  }
-  return 'h1';
 }
 
 function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {

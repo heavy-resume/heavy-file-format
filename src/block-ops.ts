@@ -2243,7 +2243,13 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
 
   const block = getSelectionBlockElement(editable);
   const rootInlineNodes = block === editable ? getSelectedEditableRootInlineRun(editable) : [];
-  if (!block || (block === editable && rootInlineNodes.length === 0) || block.tagName === 'PRE') {
+  if (!block || block.tagName === 'PRE') {
+    return;
+  }
+  if (block === editable && rootInlineNodes.length === 0) {
+    if (isEffectivelyEmptyBlock(editable)) {
+      replaceEmptyEditableWithList(editable, tagName);
+    }
     return;
   }
   if (rootInlineNodes.length > 0) {
@@ -2282,6 +2288,16 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
     return;
   }
   placeCaretAtEnd(listItem);
+}
+
+function replaceEmptyEditableWithList(editable: HTMLElement, tagName: EditableListTagName): void {
+  const list = document.createElement(tagName);
+  const listItem = document.createElement('li');
+  listItem.appendChild(document.createTextNode('\u200b'));
+  list.appendChild(listItem);
+  editable.replaceChildren(list);
+  placeCaretAtEnd(listItem);
+  refocusEditablePreservingSelection(editable);
 }
 
 function getSelectedEditableRootInlineRun(editable: HTMLElement): Node[] {

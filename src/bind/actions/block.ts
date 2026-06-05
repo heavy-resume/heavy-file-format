@@ -23,6 +23,7 @@ import { showTransientNotice } from '../../transient-notice';
 import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
 import { routeNextUndoToDocument } from '../../edit-command-routing';
+import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -76,7 +77,7 @@ const addEmptySectionHeading: ActionHandler = ({ section }) => {
     return;
   }
   recordHistory();
-  const headingLevel = normalizeEmptySectionHeadingLevel(state.addComponentBySection[`empty-heading:${section.key}`]);
+  const headingLevel = emptySectionHeadingLevelToNumber(rememberEmptySectionHeadingLevel(section.key, getEmptySectionHeadingLevel(section.key)));
   const newBlock = createEmptyBlock('text');
   newBlock.text = `${'#'.repeat(headingLevel)} ${section.title.trim()}`;
   section.blocks.push(newBlock);
@@ -847,14 +848,4 @@ function centerPlacementSourceAfterRender(): void {
       });
     });
   });
-}
-
-function normalizeEmptySectionHeadingLevel(value: string | undefined): 1 | 2 | 3 {
-  if (value === 'h2') {
-    return 2;
-  }
-  if (value === 'h3') {
-    return 3;
-  }
-  return 1;
 }

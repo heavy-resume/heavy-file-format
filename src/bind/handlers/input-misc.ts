@@ -8,6 +8,7 @@ import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
+import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -97,7 +98,7 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
     if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
-      state.addComponentBySection[`empty-heading:${sectionKey}`] = target.value;
+      rememberEmptySectionHeadingLevel(sectionKey, target.value);
       console.debug('[hvy:perf] input:end', { eventId, field, elapsedMs: Number((performance.now() - startedAt).toFixed(2)) });
       return;
     }

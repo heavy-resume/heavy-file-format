@@ -434,6 +434,7 @@ function addSectionFromTemplate(ctx: HvyDocumentCommandContext, args: string[], 
   const parent = findSectionParent(ctx, parentPath);
   const section = cloneReusableSection(definition.template, parent ? parent.level + 1 : 1);
   section.customId = definition.template.customId;
+  section.customIdGenerated = definition.template.customIdGenerated;
   if (templateValues) {
     applyReusableSectionTemplateValues(section, templateValues, variables);
   }
@@ -518,7 +519,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   }
   const resolvedParentPath = resolveVirtualPath(ctx.fs, ctx.cwd, params.parentPath);
   const id = params.id || generateStableCliComponentId(ctx.fs, resolvedParentPath, params.component);
-  const block = createCliComponentBlock(ctx.document, params.component, id, params.templateValues ?? null);
+  const block = createCliComponentBlock(ctx.document, params.component, id, !params.id, params.templateValues ?? null);
   const parentBlock = findBlockForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming);
   const target = findBlockInsertionTargetForVirtualDirectory(ctx.document, resolvedParentPath, ctx.pathNaming)
     ?? findDirectBlockInsertionTarget(ctx, resolvedParentPath);
@@ -592,7 +593,7 @@ function resolveInsertIndex(index: HvyInsertIndex, childCount: number): number {
 }
 
 function createCliGridItem(block: VisualBlock): GridItem {
-  return { id: makeId('griditem'), block };
+  return { id: makeId('griditem'), idGenerated: true, block };
 }
 
 function formatCreatedComponentDirectory(
@@ -879,7 +880,7 @@ function formatAvailableSectionTemplates(document: VisualDocument): string {
   return names.join(', ') || '(none)';
 }
 
-function createCliComponentBlock(document: VisualDocument, component: string, id: string, templateValues: Record<string, string> | null = null): VisualBlock {
+function createCliComponentBlock(document: VisualDocument, component: string, id: string, idGenerated: boolean, templateValues: Record<string, string> | null = null): VisualBlock {
   const definition = getComponentDefsFromMeta(document.meta).find((item) => item.name === component);
   const variables = extractReusableTemplateVariablesFromDefinition(definition);
   if (!templateValues && variables.length > 0) {
@@ -896,10 +897,12 @@ function createCliComponentBlock(document: VisualDocument, component: string, id
     : createBlockFromSchema(createCliComponentSchema(document, component), '');
   block.schema.component = component;
   block.schema.id = id;
+  block.idGenerated = idGenerated;
   if (templateValues) {
     applyReusableTemplateValues(block, templateValues, variables);
     block.schema.component = component;
     block.schema.id = id;
+    block.idGenerated = idGenerated;
   }
   return block;
 }
@@ -945,6 +948,7 @@ function cloneCliBlockSchema(schema: BlockSchema, componentName = schema.compone
     cloned.gridItems = (cloned.gridItems ?? []).map((item) => ({
       ...item,
       id: item.id || makeId('griditem'),
+      idGenerated: item.idGenerated === true || !item.id,
       block: item.block && isVisualBlockLike(item.block)
         ? cloneCliVisualBlock(item.block, documentMeta)
         : createBlockFromSchema(defaultBlockSchema('text'), ''),

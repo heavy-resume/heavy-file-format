@@ -6,7 +6,7 @@ import {
   updateStyleSpacingCss,
 } from './text-line-styles';
 
-export type HeadingStyleName = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+export type HeadingStyleName = 'h1' | 'h2' | 'h3' | 'h4';
 
 export interface HeadingStyle {
   label: string;
@@ -16,38 +16,28 @@ export interface HeadingStyle {
 
 export type HeadingStyles = Record<HeadingStyleName, HeadingStyle>;
 
-export const HEADING_STYLE_NAMES: readonly HeadingStyleName[] = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+export const HEADING_STYLE_NAMES: readonly HeadingStyleName[] = ['h1', 'h2', 'h3', 'h4'];
 
 const DEFAULT_HEADING_STYLES: HeadingStyles = {
   h1: {
     label: 'Heading 1',
-    css: 'margin: 0.35rem 0 0.2rem; font-size: 2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '0.7rem',
+    css: 'margin: 2rem 0 0.2rem; font-size: 2rem; font-weight: 700; line-height: 1.15;',
+    afterContentMarginTop: '2rem',
   },
   h2: {
     label: 'Heading 2',
-    css: 'margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '0.7rem',
+    css: 'margin: 1.5rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
+    afterContentMarginTop: '1.5rem',
   },
   h3: {
     label: 'Heading 3',
-    css: 'margin: 0.85rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '1.1rem',
+    css: 'margin: 1rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
+    afterContentMarginTop: '1rem',
   },
   h4: {
     label: 'Heading 4',
-    css: 'margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '0.7rem',
-  },
-  h5: {
-    label: 'Heading 5',
-    css: 'margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '0.7rem',
-  },
-  h6: {
-    label: 'Heading 6',
-    css: 'margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
-    afterContentMarginTop: '0.7rem',
+    css: 'margin: 0.5rem 0 0.2rem; font-weight: 700; line-height: 1.15;',
+    afterContentMarginTop: '0.5rem',
   },
 };
 
@@ -105,6 +95,18 @@ export function updateHeadingStyleSpacingCss(css: string, property: string, valu
   return updateStyleSpacingCss(css, property, value);
 }
 
+export function syncHeadingStyleAfterContentMarginTop(style: HeadingStyle, previousCss: string): HeadingStyle {
+  const previousTop = getHeadingStyleSpacing(previousCss)['margin-top'] ?? '';
+  const nextTop = getHeadingStyleSpacing(style.css)['margin-top'] ?? '';
+  if (nextTop === previousTop) {
+    return style;
+  }
+  return {
+    ...style,
+    afterContentMarginTop: sanitizeHeadingMarginTop(nextTop),
+  };
+}
+
 export function formatHeadingStyleCssLines(css: string): string {
   return formatStyleCssLines(css);
 }
@@ -134,7 +136,13 @@ export function renderHeadingStyleElement(meta: Record<string, unknown>, classNa
     `${selectorPrefix} .editor-block-passive .reader-block > :is(h1, h2, h3, h4, h5, h6):first-child`,
     `${selectorPrefix} .editor-block-passive .reader-block > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type`,
   ].join(', ');
-  const css = [...selectors, ...afterSelectors, `${resetSelectors} { margin-top: 0; }`]
+  const bottomResetSelectors = [
+    `${selectorPrefix} :is(.reader-block, .rich-editor) > :is(h1, h2, h3, h4, h5, h6):last-child`,
+    `${selectorPrefix} :is(.reader-block, .rich-editor) > .hvy-text-line-style:last-child > :is(h1, h2, h3, h4, h5, h6):last-of-type`,
+    `${selectorPrefix} .editor-block-passive .reader-block > :is(h1, h2, h3, h4, h5, h6):last-child`,
+    `${selectorPrefix} .editor-block-passive .reader-block > .hvy-text-line-style:last-child > :is(h1, h2, h3, h4, h5, h6):last-of-type`,
+  ].join(', ');
+  const css = [...selectors, ...afterSelectors, `${resetSelectors} { margin-top: 0; }`, `${bottomResetSelectors} { margin-bottom: 0; }`]
     .join('\n')
     .replace(/<\/style/gi, '<\\/style');
   return `<style data-hvy-heading-styles="true">${css}</style>`;

@@ -1,5 +1,8 @@
 import { state, openLinkInlineModal } from './_imports';
 import { getAiEditorDoubleClickDelayMs } from '../../reference-config';
+import { hasComponentInEditorClipboard, hasSectionInEditorClipboard } from '../../editor-clipboard';
+import { findBlockByIds } from '../../block-ops';
+import { findBlockContainerById } from '../../section-ops';
 
 const AI_DOUBLE_TAP_DISTANCE_PX = 28;
 const AI_LONG_PRESS_MS = 560;
@@ -53,14 +56,17 @@ export function bindContextmenu(app: HTMLElement): void {
       return;
     }
 
-    const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
     if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
+      if (state.currentView === 'editor') {
+        openEditorContextPopover(app, event);
+      }
       return;
     }
     if (state.currentView === 'ai' && isNativeContextMenuModifier(event)) {
       return;
     }
 
+    const filtering = state.search.filterEnabled && (state.search.submittedQuery.trim().length > 0 || (state.search.submittedExcludeTags ?? '').trim().length > 0);
     openReaderContextPopover(app, event, filtering);
     if (state.contextMenu?.kind === 'ai') {
       dismissAiModeTip(app);
@@ -91,7 +97,7 @@ export function bindContextmenu(app: HTMLElement): void {
       clearAiLongPress();
       return;
     }
-    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    const blockElement = getAiContextBlockElement(target);
     if (!blockElement?.dataset.sectionKey || !blockElement.dataset.blockId) {
       clearAiLongPress();
       return;
@@ -140,7 +146,7 @@ export function bindContextmenu(app: HTMLElement): void {
       lastAiTap = null;
       return;
     }
-    const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+    const blockElement = getAiContextBlockElement(target);
     const sectionKey = blockElement?.dataset.sectionKey ?? '';
     const blockId = blockElement?.dataset.blockId ?? '';
     if (!sectionKey || !blockId) {
@@ -169,6 +175,54 @@ export function bindContextmenu(app: HTMLElement): void {
       suppressNextAiContextClickUntil = window.performance.now() + AI_CONTEXT_CLICK_SUPPRESS_MS;
     }
   });
+}
+
+function openEditorContextPopover(app: HTMLElement, event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  const pasteTargetAttrs = getComponentPasteTargetAttrsFromElement(target);
+  if (!pasteTargetAttrs && target.closest('button, input, textarea, select, [contenteditable="true"], .hvy-context-popover')) {
+    return;
+  }
+  const blockElement = target.closest<HTMLElement>('.editor-block[data-active-editor-block="true"], .editor-block-passive[data-section-key][data-block-id]');
+  const sectionElement = target.closest<HTMLElement>('.editor-section-card[data-section-key]');
+  const addSectionGhost = target.closest<HTMLElement>('.reusable-section-ghost[data-section-key][data-section-location]');
+  const sectionKey = blockElement?.dataset.sectionKey ?? sectionElement?.dataset.sectionKey ?? addSectionGhost?.dataset.sectionKey ?? '';
+  const blockId = blockElement?.dataset.blockId ?? blockElement?.dataset.activeBlockId ?? '';
+  if (!sectionKey) {
+    return;
+  }
+  const modalRoot = target.closest<HTMLElement>('#modalRoot');
+  const shellRect = (modalRoot ?? app.querySelector<HTMLElement>('.editor-shell') ?? app).getBoundingClientRect();
+  event.preventDefault();
+  state.contextMenu = {
+    kind: 'editor',
+    sectionKey,
+    ...(blockId ? { blockId } : {}),
+    ...(pasteTargetAttrs ? { pasteComponentAttrs: pasteTargetAttrs } : {}),
+    x: Number.isFinite(event.clientX) ? event.clientX - shellRect.left : 16,
+    y: Number.isFinite(event.clientY) ? event.clientY - shellRect.top : 16,
+    ...(modalRoot ? { surface: 'modal' as const } : {}),
+  };
+  renderContextMenuElement(app);
+}
+
+function getComponentPasteTargetAttrsFromElement(target: HTMLElement): Record<string, string> | null {
+  const pasteTarget = target.closest<HTMLElement>('[data-paste-placement-container][data-paste-placement]');
+  if (!pasteTarget) {
+    return null;
+  }
+  const placementContainer = pasteTarget.dataset.pastePlacementContainer ?? '';
+  const placement = pasteTarget.dataset.pastePlacement ?? '';
+  if (!placementContainer || !placement) {
+    return null;
+  }
+  return {
+    placementContainer,
+    placement,
+    ...(pasteTarget.dataset.pasteParentBlockId ? { parentBlockId: pasteTarget.dataset.pasteParentBlockId } : {}),
+    ...(pasteTarget.dataset.pasteTargetBlockId ? { targetBlockId: pasteTarget.dataset.pasteTargetBlockId } : {}),
+    ...(pasteTarget.dataset.pasteTargetGridItemId ? { targetGridItemId: pasteTarget.dataset.pasteTargetGridItemId } : {}),
+  };
 }
 
 function dismissAiModeTip(app: HTMLElement): void {
@@ -200,9 +254,31 @@ function shouldIgnoreAiContextGestureTarget(target: HTMLElement): boolean {
   );
 }
 
+function getAiContextBlockElement(target: HTMLElement): HTMLElement | null {
+  return target.closest<HTMLElement>(
+    [
+      '.reader-block[data-section-key][data-block-id]',
+      '.editor-block[data-section-key][data-block-id]',
+      '.editor-block-passive[data-section-key][data-block-id]',
+    ].join(',')
+  );
+}
+
+function getAiContextBlockSelector(sectionKey: string, blockId: string): string {
+  const sectionSelector = `[data-section-key="${cssEscape(sectionKey)}"]`;
+  const blockSelector = `[data-block-id="${cssEscape(blockId)}"]`;
+  return [
+    `.reader-block${sectionSelector}${blockSelector}`,
+    `.editor-block${sectionSelector}${blockSelector}`,
+    `.editor-block-passive${sectionSelector}${blockSelector}`,
+  ].join(',');
+}
+
 function openReaderContextPopover(app: HTMLElement, event: MouseEvent | PointerEvent, filtering: boolean): void {
   const target = event.target as HTMLElement;
-  const blockElement = target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
+  const blockElement = state.currentView === 'ai'
+    ? getAiContextBlockElement(target)
+    : target.closest<HTMLElement>('.reader-block[data-section-key][data-block-id]');
   const sectionElement = target.closest<HTMLElement>('.reader-section[data-section-key]');
   if (!blockElement && !sectionElement) {
     return;
@@ -250,18 +326,26 @@ function renderContextMenuElement(app: HTMLElement): void {
   if (!menu) {
     return;
   }
-  const filtering = state.search.filterEnabled && state.search.submittedQuery.trim().length > 0;
-  const root = app.querySelector<HTMLElement>('.viewer-shell') ?? app;
+  const filtering = state.search.filterEnabled && (state.search.submittedQuery.trim().length > 0 || (state.search.submittedExcludeTags ?? '').trim().length > 0);
+  const root = menu.kind === 'editor' && menu.surface === 'modal'
+    ? app.querySelector<HTMLElement>('#modalRoot') ?? app
+    : app.querySelector<HTMLElement>(menu.kind === 'editor' ? '.editor-shell' : '.viewer-shell') ?? app;
   root.classList.add('is-context-menu-open');
   if (menu.kind === 'ai' && menu.blockId) {
-    const target = root
-      .querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+    const target = root.querySelector<HTMLElement>(getAiContextBlockSelector(menu.sectionKey, menu.blockId));
+    target?.classList.add('is-context-menu-target');
+  } else if (menu.kind === 'editor') {
+    const target = menu.blockId
+      ? root.querySelector<HTMLElement>(`.editor-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+      : root.querySelector<HTMLElement>(`.editor-section-card[data-section-key="${cssEscape(menu.sectionKey)}"]`);
     target?.classList.add('is-context-menu-target');
   }
-  const backdrop = document.createElement('div');
-  backdrop.className = 'hvy-context-popover-backdrop';
-  backdrop.setAttribute('aria-hidden', 'true');
-  if (menu.targetRect) {
+  const backdrop = menu.kind === 'editor' ? null : document.createElement('div');
+  if (backdrop) {
+    backdrop.className = 'hvy-context-popover-backdrop';
+    backdrop.setAttribute('aria-hidden', 'true');
+  }
+  if (backdrop && menu.targetRect) {
     applyBackdropTargetRect(backdrop, menu.targetRect);
     ['top', 'left', 'right', 'bottom', 'target'].forEach((part) => {
       const panel = document.createElement('div');
@@ -270,24 +354,68 @@ function renderContextMenuElement(app: HTMLElement): void {
     });
   }
   const target = menu.blockId
-    ? root.querySelector<HTMLElement>(`.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`)
+    ? root.querySelector<HTMLElement>(
+      menu.kind === 'ai'
+        ? getAiContextBlockSelector(menu.sectionKey, menu.blockId)
+        : `.reader-block[data-section-key="${cssEscape(menu.sectionKey)}"][data-block-id="${cssEscape(menu.blockId)}"]`
+    )
     : null;
   const clone = menu.kind === 'ai' && target && menu.targetRect ? cloneContextMenuTarget(target, menu.targetRect) : null;
   const popover = document.createElement('section');
   popover.className = 'hvy-context-popover';
-  popover.setAttribute('aria-label', menu.kind === 'ai' ? 'Component options' : 'Filter options');
+  popover.setAttribute('aria-label', menu.kind === 'editor' || menu.kind === 'ai' ? 'Component options' : 'Filter options');
   popover.style.left = `${menu.x}px`;
   popover.style.top = `${menu.y}px`;
 
-  const addButton = (label: string, action: string): void => {
+  const addButton = (label: string, action: string, attrs: Record<string, string> = {}): void => {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.action = action;
+    Object.entries(attrs).forEach(([name, value]) => {
+      button.dataset[name] = value;
+    });
+    button.textContent = label;
+    popover.append(button);
+  };
+  const addDisabledItem = (label: string): void => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.disabled = true;
     button.textContent = label;
     popover.append(button);
   };
 
-  if (menu.kind === 'ai') {
+  if (menu.kind === 'editor') {
+    let itemCount = 0;
+    if (menu.blockId) {
+      addButton('Copy component', 'copy-component', { sectionKey: menu.sectionKey, blockId: menu.blockId });
+      addButton('Cut component', 'start-component-move', { sectionKey: menu.sectionKey, blockId: menu.blockId });
+      itemCount += 1;
+    }
+    if (menu.sectionKey !== '__top_level__' && menu.sectionKey !== '__sidebar_top_level__') {
+      addButton('Copy section', 'copy-section', { sectionKey: menu.sectionKey });
+      itemCount += 1;
+    }
+    if (hasComponentInEditorClipboard() && menu.sectionKey !== '__top_level__' && menu.sectionKey !== '__sidebar_top_level__') {
+      addButton('Paste component', 'place-component', getComponentPasteContextAttrs(menu));
+      itemCount += 1;
+    }
+    if (hasSectionInEditorClipboard()) {
+      if (menu.sectionKey === '__top_level__' || menu.sectionKey === '__sidebar_top_level__') {
+        addButton('Paste section', 'paste-section', {
+          sectionKey: menu.sectionKey,
+          sectionLocation: menu.sectionKey === '__sidebar_top_level__' ? 'sidebar' : 'main',
+        });
+        itemCount += 1;
+      } else {
+        addButton('Paste section after', 'paste-section-after', { sectionKey: menu.sectionKey });
+        itemCount += 1;
+      }
+    }
+    if (itemCount === 0) {
+      addDisabledItem('Nothing to paste');
+    }
+  } else if (menu.kind === 'ai') {
     addButton('Edit component', 'edit-context-component');
     addButton('Request changes', 'request-context-component-changes');
     if (filtering) {
@@ -296,10 +424,94 @@ function renderContextMenuElement(app: HTMLElement): void {
   } else {
     addButton('Clear filtering', 'clear-target-filtering');
   }
-  root.append(backdrop, ...(clone ? [clone] : []), popover);
+  root.append(...(backdrop ? [backdrop] : []), ...(clone ? [clone] : []), popover);
   const position = placeContextMenuPopover(root, popover, menu.x, menu.y);
   menu.x = position.x;
   menu.y = position.y;
+}
+
+function getComponentPasteContextAttrs(menu: { sectionKey: string; blockId?: string; pasteComponentAttrs?: Record<string, string> }): Record<string, string> {
+  if (menu.pasteComponentAttrs) {
+    return {
+      sectionKey: menu.sectionKey,
+      ...menu.pasteComponentAttrs,
+    };
+  }
+  const fallback = {
+    sectionKey: menu.sectionKey,
+    placementContainer: 'section',
+    placement: 'end',
+  };
+  if (!menu.blockId) {
+    return fallback;
+  }
+  const location = findBlockContainerById(state.document.sections, menu.sectionKey, menu.blockId);
+  if (!location) {
+    return {
+      ...fallback,
+      placement: 'after',
+      targetBlockId: menu.blockId,
+    };
+  }
+  if (!location.ownerBlockId) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'section',
+      placement: 'after',
+      targetBlockId: menu.blockId,
+    };
+  }
+  const owner = findBlockByIds(menu.sectionKey, location.ownerBlockId);
+  if (!owner) {
+    return fallback;
+  }
+  if ((owner.schema.containerBlocks ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'container',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.componentListBlocks ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'component-list',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.expandableStubBlocks?.children ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'expandable-stub',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  if ((owner.schema.expandableContentBlocks?.children ?? []).some((block) => block.id === menu.blockId)) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'expandable-content',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetBlockId: menu.blockId,
+    };
+  }
+  const gridItem = (owner.schema.gridItems ?? []).find((item) => item.block.id === menu.blockId);
+  if (gridItem) {
+    return {
+      sectionKey: menu.sectionKey,
+      placementContainer: 'grid',
+      placement: 'after',
+      parentBlockId: owner.id,
+      targetGridItemId: gridItem.id,
+    };
+  }
+  return fallback;
 }
 
 export function closeReaderContextPopover(app: HTMLElement, clearState = true): void {
@@ -307,7 +519,8 @@ export function closeReaderContextPopover(app: HTMLElement, clearState = true): 
     state.contextMenu = null;
   }
   app.querySelector('.viewer-shell')?.classList.remove('is-context-menu-open');
-  app.querySelectorAll('.reader-block.is-context-menu-target').forEach((element) => {
+  app.querySelector('.editor-shell')?.classList.remove('is-context-menu-open');
+  app.querySelectorAll('.is-context-menu-target').forEach((element) => {
     element.classList.remove('is-context-menu-target');
   });
   app.querySelector('.hvy-context-popover-clone')?.remove();
@@ -351,11 +564,18 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   if (!rect) {
     return null;
   }
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('hvy-context-popover-clone');
+  getContextMenuSurfaceClasses(target).forEach((className) => {
+    wrapper.classList.add(className);
+  });
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.style.left = `${rect.left}px`;
+  wrapper.style.top = `${rect.top}px`;
+  wrapper.style.width = `${rect.width}px`;
+
   const clone = target.cloneNode(true) as HTMLElement;
-  clone.classList.add('hvy-context-popover-clone');
-  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
-  clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');
   clone.querySelectorAll('[id]').forEach((element) => {
     element.removeAttribute('id');
@@ -363,9 +583,16 @@ function cloneContextMenuTarget(target: HTMLElement, rect: NonNullable<typeof st
   clone.querySelectorAll('input, textarea, select, button, a, [tabindex]').forEach((element) => {
     element.setAttribute('tabindex', '-1');
   });
-  clone.style.left = `${rect.left}px`;
-  clone.style.top = `${rect.top}px`;
-  clone.style.width = `${rect.width}px`;
   clone.style.margin = '0';
-  return clone;
+  wrapper.append(clone);
+  return wrapper;
+}
+
+function getContextMenuSurfaceClasses(target: HTMLElement): string[] {
+  const surface = target.closest<HTMLElement>('.hvy-surface');
+  const classes = surface ? Array.from(surface.classList) : [];
+  if (!classes.includes('hvy-surface')) {
+    classes.unshift('hvy-surface');
+  }
+  return classes;
 }

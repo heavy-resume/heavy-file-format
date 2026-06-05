@@ -43,6 +43,9 @@ theme:
   rather than `hvy plugin db-table query/exec`.
   - `doc.cli.write(path, content)` — replace a writable non-raw virtual file such as `/id/example/text.json` or
   `/id/example/text.txt` and return the write result.
+  - `doc.json.parse(response)` / `doc.json.parse_array(response)` / `doc.json.parse_object(response)` — extract
+  structured JSON from an LLM response, including fenced JSON or wrapper prose. Array/object helpers require that exact
+  top-level shape and raise an error otherwise.
   - Plugin-provided APIs may also be present on `doc` when the relevant plugin is available. Use the relevant plugin's
   help for that API.
   - `doc.rerender()` — flush any pending re-render now (usually unnecessary; the host re-renders automatically when the
@@ -133,6 +136,14 @@ theme:
   ```python
   out = doc.cli.run("hvy request_structure --collapse")
   doc.header.set("structure_preview", out[:200])
+  ```
+  
+  Parse a structured LLM response inside an AI form submit script:
+  
+  ```python
+  cards = doc.json.parse_array(response)
+  first_question = str(cards[0].get("question", ""))
+  doc.header.set("first_generated_question", first_question)
   ```
 <!--hvy: {"id":"limits","lock":false,"expanded":false,"highlight":false}-->
 #! Limits and security

@@ -17,7 +17,7 @@ export type SortKeyValue = number | string;
 
 export interface GridItem {
   id: string;
-  align?: Align;
+  idGenerated?: boolean;
   block: VisualBlock;
 }
 
@@ -53,6 +53,7 @@ export interface BaseBlockSchema {
   groupKeys: Record<string, string>;
   tags: string;
   description: string;
+  hideIfYes: string;
   visibleScript: string;
   placeholder: string;
   fillIn: boolean;
@@ -229,6 +230,7 @@ export type BlockSchema = ComponentBlockSchema & RuntimeSchemaFieldAccess;
 
 export interface VisualBlock {
   id: string;
+  idGenerated?: boolean;
   text: string;
   schema: BlockSchema;
   schemaMode: boolean;
@@ -239,6 +241,7 @@ export type SectionLocation = 'main' | 'sidebar';
 export interface VisualSection {
   key: string;
   customId: string;
+  customIdGenerated?: boolean;
   contained: boolean;
   editorOnly: boolean;
   lock: boolean;
@@ -255,6 +258,7 @@ export interface VisualSection {
   location: SectionLocation;
   hideIfUnmodified?: boolean;
   exclude_from_import?: boolean;
+  protect_from_import?: boolean;
   templateKey?: string;
   blocks: VisualBlock[];
   children: VisualSection[];

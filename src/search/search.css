@@ -359,6 +359,26 @@
   overflow: auto;
 }
 
+.search-exclude-tags-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.search-exclude-tags-label {
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.search-exclude-tags-field .tag-editor {
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent);
+}
+
 .search-filter-box {
   display: grid;
   gap: 0.75rem;

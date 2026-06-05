@@ -15,7 +15,7 @@ import {
   runWithStateRuntimeAsync,
   type StateRuntime,
 } from './state';
-import type { AppState, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -79,6 +79,7 @@ import { createDefaultSearchState } from './search/state';
 import { renderSearchLauncher, renderSearchModal } from './search/render';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
+import { centerPendingEditorSection } from './scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { resetTransientUiState } from './navigation';
@@ -86,6 +87,7 @@ import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import {
   buildImportPlanForDocument,
@@ -104,6 +106,7 @@ import {
 import type { HvyPdfExportOptions } from './pdf-export/types';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
+import { setEditorClipboardHost } from './editor-clipboard';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -114,6 +117,7 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  chatSettings?: Partial<ChatSettings> | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
@@ -121,6 +125,7 @@ export interface HvyMountOptions {
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
+  editorClipboard?: HvyEditorClipboardHost | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -185,7 +190,7 @@ function createEmbedState(
       popupY: 0,
       requestNonce: 0,
     },
-    paneScroll: { editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
+    paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
@@ -211,10 +216,12 @@ function createEmbedState(
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    reusableDefinitionEditModal: null,
     sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
@@ -245,6 +252,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -341,6 +349,8 @@ function ensureRenderers(): void {
       get currentView() { return state.currentView; },
       get responsivePreview() { return state.responsivePreview; },
       get mobileAdjustmentMode() { return state.editorMode === 'mobile-adjustment'; },
+      get editingReusableDefinition() { return state.reusableDefinitionEditModal?.mode === 'edit'; },
+      get openTemplateDefinitionKeys() { return state.openTemplateDefinitionKeys; },
       get descriptionPopulate() { return state.descriptionPopulate; },
       get openTextLineStyleName() { return state.openTextLineStyleName; },
       get paragraphStyleRecentNames() { return state.paragraphStyleRecentNames; },
@@ -388,6 +398,7 @@ function ensureRenderers(): void {
       get pdfTemplateImportModal() { return state.pdfTemplateImportModal; },
       get reusableSaveModal() { return state.reusableSaveModal; },
       get reusableTemplateModal() { return state.reusableTemplateModal; },
+      get reusableDefinitionEditModal() { return state.reusableDefinitionEditModal; },
       get sectionTemplateFlavorModal() { return state.sectionTemplateFlavorModal; },
       get componentMetaModal() { return state.componentMetaModal; },
       get themeModalOpen() { return state.themeModalOpen; },
@@ -418,7 +429,7 @@ function ensureRenderers(): void {
       ensureExpandableBlocks,
       ensureGridItems,
       getComponentRenderHelpers: localGetComponentRenderHelpers,
-      renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+      renderEditorBlock: (sectionKey, block, rootSections) => editorRenderer.renderEditorBlock(sectionKey, block, rootSections ?? state.document.sections),
       renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
       renderComponentOptions: renderDocumentComponentOptions,
       renderReusableSectionOptions,
@@ -460,6 +471,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
               ? isDocumentMetaView
                 ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                 : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
+                  ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                     <aside class="editor-sidebar">
                       <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -470,7 +482,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                     </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`
-              : `<div class="viewer-shell ${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+              : `<div class="viewer-shell ${pdfDocument && !isAi ? 'phvy-viewer-shell ' : ''}${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}"${pdfDocument && !isAi ? ` style="${renderPdfDocumentViewerThemeStyle(state.document, escapeAttr)}"` : ''}>
+                  ${renderTransientNotice()}
                   ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                     <aside class="viewer-sidebar">
                       <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -514,6 +527,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
+  centerPendingEditorSection(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
 }
@@ -556,6 +570,14 @@ function bindEmbedUi(root: HTMLElement, runtime: StateRuntime): void {
 
 function cancelPendingEmbedUiBind(root: HTMLElement): void {
   embedUiBindGenerations.set(root, (embedUiBindGenerations.get(root) ?? 0) + 1);
+}
+
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
 }
 
 function renderSidebarTabLabel(): string {
@@ -765,10 +787,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     sessionStorageKey
   );
-  const runtime = createStateRuntime(applyEmbeddedSessionState(
+  const runtimeState = applyEmbeddedSessionState(
     initialState,
     options.storageKey ? loadSessionState(options.storageKey) : null
-  ));
+  );
+  if (options.chatSettings) {
+    runtimeState.chat.settings = {
+      ...runtimeState.chat.settings,
+      ...options.chatSettings,
+    };
+  }
+  const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
   const sessionPersistence = options.storageKey ? bindSessionPersistence(runtime) : null;
@@ -783,6 +812,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   setHostChatClient(options.chatClient ?? window.HVY_CHAT_CLIENT ?? null);
+  setEditorClipboardHost(options.editorClipboard ?? null);
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
@@ -797,6 +827,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         cancelPendingEmbedUiBind(options.root);
         options.root.innerHTML = '';
         setHostChatClient(null);
+        setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
         resetPluginDocumentHookState();

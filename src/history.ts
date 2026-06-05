@@ -1,15 +1,31 @@
 import { state, HISTORY_GROUP_WINDOW_MS, incrementHistorySnapshotCount, incrementRecordHistoryCount, getRenderApp } from './state';
 import { debugMeasure } from './utils';
-import type { VisualDocument } from './types';
+import type { DocumentAttachment, VisualDocument } from './types';
 import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
+import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 
-export function snapshotState(): string {
+interface HistorySnapshotOptions {
+  includeDatabaseAttachment?: boolean;
+}
+
+interface SerializedHistoryAttachment {
+  id: string;
+  meta: DocumentAttachment['meta'];
+  bytes: number[];
+}
+
+let databaseAttachmentChangedSinceHistory = false;
+
+export function snapshotState(options: HistorySnapshotOptions = {}): string {
   return JSON.stringify(
     {
-      document: state.document,
+      document: documentToHistorySnapshot(state.document),
+      ...(options.includeDatabaseAttachment
+        ? { databaseAttachment: serializeHistoryAttachment(getAttachment(state.document, DB_ATTACHMENT_ID)) }
+        : {}),
       templateValues: state.templateValues,
       filename: state.filename,
       editorMode: state.editorMode,
@@ -29,7 +45,7 @@ export function commitHistorySnapshot(): void {
     return;
   }
   const snapshotId = incrementHistorySnapshotCount();
-  const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, snapshotState);
+  const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, () => snapshotState());
   const last = state.history[state.history.length - 1];
   if (last !== snap) {
     state.history.push(snap);
@@ -109,14 +125,38 @@ export function recordHistory(group?: string): void {
   notifyDocumentMayHaveChanged(group, changeSource);
 }
 
+export function recordDatabaseAttachmentHistory(): void {
+  if (state.isRestoring) {
+    return;
+  }
+  ensureHistoryInitialized();
+  const snap = snapshotState({ includeDatabaseAttachment: true });
+  if (state.history[state.history.length - 1] !== snap) {
+    state.history.push(snap);
+    if (state.history.length > 200) {
+      state.history.shift();
+    }
+    state.future = [];
+    saveSessionState(state);
+  }
+  databaseAttachmentChangedSinceHistory = false;
+}
+
+export function markDatabaseAttachmentChanged(): void {
+  if (!state.isRestoring) {
+    databaseAttachmentChangedSinceHistory = true;
+  }
+}
+
 export function undoState(): void {
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
-  const current = snapshotState();
+  const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
   const last = state.history[state.history.length - 1];
   if (last !== current) {
     state.history.push(current);
   }
+  databaseAttachmentChangedSinceHistory = false;
   if (state.history.length <= 1) {
     return;
   }
@@ -187,8 +227,10 @@ function restoreModalScroll(scroll: { selector: string; scrollTop: number } | nu
 
 function restoreFromSnapshot(snapshot: string): void {
   try {
+    const liveAttachments = state.document.attachments;
     const parsed = JSON.parse(snapshot) as {
       document: VisualDocument;
+      databaseAttachment?: SerializedHistoryAttachment | null;
       templateValues: Record<string, string>;
       filename: string;
       editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
@@ -198,7 +240,13 @@ function restoreFromSnapshot(snapshot: string): void {
       rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
       paletteOverrideId?: string | null;
     };
-    state.document = parsed.document;
+    state.document = {
+      ...parsed.document,
+      attachments: liveAttachments,
+    };
+    if (Object.prototype.hasOwnProperty.call(parsed, 'databaseAttachment')) {
+      restoreDatabaseAttachment(parsed.databaseAttachment ?? null);
+    }
     state.templateValues = parsed.templateValues ?? {};
     state.filename = parsed.filename ?? 'document.hvy';
     state.editorMode = parsed.editorMode ?? 'basic';
@@ -209,10 +257,54 @@ function restoreFromSnapshot(snapshot: string): void {
     state.paletteOverrideId = parsed.paletteOverrideId ?? null;
     savePaletteOverrideId(state.paletteOverrideId);
     state.componentPlacement = null;
+    state.pendingEditorActivation = null;
+    state.pendingEditorDeactivation = null;
+    state.activeEditorBlock = null;
+    state.activeTextEditorMode = null;
+    state.aiEditorHostBlock = null;
+    state.aiEditorHostSectionKey = null;
+    state.activeEditorBlockPath = [];
+    state.activeEditorBlockSnapshot = null;
+    state.activeEditorBlockSnapshots = [];
+    state.activeEditorNewBlockIds.clear();
+    state.activeEditorBlockReturnScroll = null;
+    state.activeEditorSectionTitleKey = null;
+    state.clearSectionTitleOnFocusKey = null;
     if (typeof document !== 'undefined') {
       applyTheme();
     }
   } catch {
     // no-op
   }
+}
+
+function documentToHistorySnapshot(document: VisualDocument): VisualDocument {
+  return {
+    ...document,
+    attachments: [],
+  };
+}
+
+function serializeHistoryAttachment(attachment: DocumentAttachment | null): SerializedHistoryAttachment | null {
+  if (!attachment) {
+    return null;
+  }
+  return {
+    id: attachment.id,
+    meta: attachment.meta,
+    bytes: Array.from(attachment.bytes),
+  };
+}
+
+function restoreDatabaseAttachment(attachment: SerializedHistoryAttachment | null): void {
+  if (!attachment) {
+    removeAttachment(state.document, DB_ATTACHMENT_ID);
+    return;
+  }
+  setAttachment(
+    state.document,
+    DB_ATTACHMENT_ID,
+    attachment.meta,
+    new Uint8Array(attachment.bytes)
+  );
 }

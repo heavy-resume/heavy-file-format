@@ -26,13 +26,13 @@
 
   --hvy-accent-1: #2c5e78;
   --hvy-accent-1-alt: #1f4f63;
-  --hvy-accent-1-text: #000000;
+  --hvy-accent-1-text: #fcfcfc;
   --hvy-accent-2: #325f6e;
   --hvy-accent-2-alt: #244355;
 
   --hvy-button-bg: #4a8fab;
   --hvy-button-hover-bg: rgba(74, 143, 171, 0.22);
-  --hvy-button-text: #000000;
+  --hvy-button-text: #ffffff;
   --hvy-button-hover-text: #2c5e78;
 
   --hvy-highlight-1: rgba(31, 122, 140, 0.15);

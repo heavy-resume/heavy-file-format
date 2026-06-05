@@ -3,7 +3,7 @@ import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
-import { coerceGridColumns, coerceGridItemAlign, parseGridItems as _parseGridItems } from './grid-ops';
+import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
@@ -27,6 +27,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     groupKeys: {},
     tags: '',
     description: '',
+    hideIfYes: '',
     visibleScript: '',
     placeholder: '',
     fillIn: false,
@@ -205,6 +206,7 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
   return {
     key: makeId('section'),
     customId: sanitizeOptionalId(typeof raw.customId === 'string' ? raw.customId : typeof raw.id === 'string' ? raw.id : ''),
+    customIdGenerated: raw.customIdGenerated === true,
     contained: raw.contained !== false,
     editorOnly: raw.editorOnly === true,
     lock: raw.lock === true,
@@ -221,6 +223,7 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
     location: raw.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: raw.hideIfUnmodified === true,
     exclude_from_import: raw.exclude_from_import === true,
+    protect_from_import: raw.protect_from_import === true,
     templateKey: typeof raw.templateKey === 'string' ? raw.templateKey : undefined,
     blocks: Array.isArray(raw.blocks) ? raw.blocks.map((block) => parseVisualBlock(block, seen, documentMeta)) : [],
     children: Array.isArray(raw.children)
@@ -331,6 +334,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
+    hideIfYes: typeof candidate.hideIfYes === 'string' ? candidate.hideIfYes : defaults.hideIfYes,
     visibleScript: typeof candidate.visibleScript === 'string' ? candidate.visibleScript : defaults.visibleScript,
     placeholder: typeof candidate.placeholder === 'string' ? candidate.placeholder : defaults.placeholder,
     fillIn: candidate.fillIn === true,
@@ -546,6 +550,7 @@ export function createEmptySection(level: number, component = 'container', isGho
   return {
     key: makeId('section'),
     customId: '',
+    customIdGenerated: false,
     contained: true,
     editorOnly: false,
     lock: false,
@@ -560,6 +565,8 @@ export function createEmptySection(level: number, component = 'container', isGho
     description: '',
     location: 'main',
     hideIfUnmodified: false,
+    exclude_from_import: false,
+    protect_from_import: false,
     templateKey: undefined,
     blocks: component ? [createEmptyBlock(component)] : [],
     children: [],
@@ -682,6 +689,8 @@ function cloneReusableSectionWithDelta(section: VisualSection, levelDelta: numbe
     description: section.description,
     location: section.location ?? 'main',
     hideIfUnmodified: section.hideIfUnmodified === true,
+    exclude_from_import: section.exclude_from_import === true,
+    protect_from_import: section.protect_from_import === true,
     templateKey: section.templateKey,
     blocks: section.blocks.map((block) => cloneReusableBlock(block)),
     children: section.children.map((child) => cloneReusableSectionWithDelta(child, levelDelta)),
@@ -863,10 +872,10 @@ export function ensureGridItems(schema: BlockSchema): void {
     return;
   }
   schema.gridItems = schema.gridItems.map((item) => {
-    const align = coerceGridItemAlign(item.align);
+    const generated = !item.id;
     return {
       id: item.id || makeId('griditem'),
-      ...(align ? { align } : {}),
+      idGenerated: item.idGenerated === true || generated,
       block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
         ? item.block
         : item.block ? _parseBlock(item.block) : _createBlock('text', true),

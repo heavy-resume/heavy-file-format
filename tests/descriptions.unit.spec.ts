@@ -4,11 +4,13 @@ import { setReferenceAppConfig } from '../src/reference-config';
 import { deserializeDocument } from '../src/serialization';
 import { populateMissingDescriptions } from '../src/descriptions/populate';
 import { buildDescriptionRequest, openAiDescriptionProvider } from '../src/descriptions/provider';
+import { setHostChatClient } from '../src/chat/chat';
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   setReferenceAppConfig(null);
+  setHostChatClient(null);
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
@@ -191,7 +193,7 @@ hvy_version: 0.1
   ]]);
 });
 
-test('openAiDescriptionProvider sends the app proxy payload with reasoning disabled', async () => {
+test('openAiDescriptionProvider sends the app proxy payload', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -223,9 +225,11 @@ hvy_version: 0.1
     provider: 'openai',
     model: 'gpt-5.4-nano',
     mode: 'qa',
-    openAiReasoningEffort: 'none',
-    messages: [{ role: 'user', content: 'Write the description now.' }],
   });
+  expect(payload.messages).toEqual([
+    { id: 'system', role: 'system', content: 'Return only the description text.' },
+    { id: 'description-request', role: 'user', content: 'Write the description now.' },
+  ]);
   expect(payload.context).toContain('Generate one concise search location description');
   expect(payload.context).toContain('Write a shorthand label, not a sentence.');
   expect(payload.context).toContain('Keep it under 8 words when possible.');
@@ -234,4 +238,40 @@ hvy_version: 0.1
   expect(payload.context).toContain('Combine the owning context with the local function when both are available.');
   expect(payload.context).toContain('If an owning context is provided, include it in the description.');
   expect(payload).not.toHaveProperty('input');
+});
+
+test('openAiDescriptionProvider uses the installed host chat client', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript
+`, '.hvy');
+  globalThis.fetch = vi.fn() as typeof fetch;
+  const complete = vi.fn(async () => ({ output: 'TypeScript skill summary' }));
+  setHostChatClient({ complete });
+
+  const expectedResult = await openAiDescriptionProvider(buildDescriptionRequest({
+    document,
+    section: document.sections[0]!,
+    block: document.sections[0]!.blocks[0]!,
+    kind: 'block',
+    parentTrail: ['Skills'],
+  }));
+
+  expect(expectedResult.description).toBe('TypeScript skill summary');
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+  expect(complete).toHaveBeenCalledTimes(1);
+  const [request, options] = complete.mock.calls[0] as any[];
+  expect(request).toMatchObject({
+    provider: 'openai',
+    model: 'gpt-5.4-nano',
+    mode: 'qa',
+  });
+  expect(options?.debugLabel).toBe('description-generation');
+  expect(request.context).toContain('Generate one concise search location description');
 });

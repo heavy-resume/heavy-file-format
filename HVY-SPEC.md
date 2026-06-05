@@ -30,6 +30,7 @@ Rule: Any valid `.md` file is valid `.hvy`.
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
+Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
 - ATX headings define section boundaries. A heading with greater depth becomes a child section of the nearest prior heading with lower depth. Markdown before the first heading goes into an "Imported Markdown" section.
@@ -177,7 +178,7 @@ Rules:
 - The payload MUST be valid JSON object.
 - `#!` lines are consumed by the parser and not rendered.
 - If no `#!` follows the directive, the section title defaults to `id`.
-- If `id` is omitted, authoring tools SHOULD derive it from the section title as a lowercase slug and make it unique within the document.
+- `id` is optional. Authoring clients MAY generate transient section ids for editing controls, navigation, and runtime anchors, but MUST NOT serialize generated ids back into section metadata when the author did not provide an id.
 - If multiple directives precede the same `#!` line, they are merged (last key wins).
 
 ### 5.4 Document-level directives
@@ -216,6 +217,7 @@ Optional CSS metadata directive (must appear immediately above CSS fence):
 Section metadata optionally includes a `blocks` array describing per-block rendering metadata for authoring tools and implementations.
 
 Common block metadata fields include:
+- `id`
 - `component`
 - `editorOnly`
 - `lock`
@@ -225,19 +227,22 @@ Common block metadata fields include:
 - `groupKeys`
 - `tags`
 - `description`
+- `hideIfYes`
 - `visibleScript`
 - `placeholder`
 - `fillIn`
 - `css`
 
+`id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+`hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
 `editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
 `lock` is an optional boolean. Use it to prevent structural additions inside that block, such as nested child blocks or table-column changes.
 `placeholder` is an optional string. Display it as plain hint text when the block's content is empty, helping template authors communicate intent to document authors. It applies to text-based blocks and grid item blocks. It is not parsed as Markdown or HVY content.
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat each `<!-- value -->` or `<!-- value {"placeholder":"Label"} -->` marker in the text body as an editable fill-in region in basic editing modes. Text outside the markers is scaffold text and SHOULD NOT be edited by constrained/basic editors. Fill-in placeholder labels belong on the value marker, not on the block-level `placeholder` field; the block-level field remains reserved for whole-block empty-content hints. When all markers are filled or removed and no value marker remains, tools SHOULD treat the block like regular text again.
-`componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"` or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and dropping generic suffixes such as `record`, `entry`, or `item`.
+`componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"`, `"resume item"`, or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. When a `component-list` is configured with a non-default `componentListComponent`, authoring tools SHOULD write `componentListItemLabel` with the intended item label instead of relying on reader inference. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and MAY drop generic suffixes such as `record`, `entry`, or `card` from machine-style component names such as `skill-record` or `tool-tech-xref-card`.
 `sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting without changing source document order.
 `groupKeys` is an optional object on any block. Keys are human-readable grouping names and MAY contain spaces. Values MUST be strings. Component-list views use these values to create reader-only grouped displays.
 
@@ -250,6 +255,7 @@ Section metadata also includes optional presentation keys such as:
 - `contained`
 - `hideIfUnmodified`
 - `exclude_from_import`
+- `protect_from_import`
 - `css`
 - `location`
 - `templateKey`
@@ -262,6 +268,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
+`protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
 `location` is an optional string. Use it to route a section to a named layout zone in the viewer. Defined values are `"main"` (default) and `"sidebar"`. Unknown values SHOULD be treated as `"main"`.
 `templateKey` is optional authoring metadata identifying the section template definition that created the section. Authoring tools SHOULD use it to decide whether non-repeatable section template definitions have already been used.
 
@@ -323,7 +330,11 @@ Grid blocks can be emitted with specialized directives so grid item content rema
   <!--hvy:component-list {"componentListComponent":"text"}-->
 ```
 
-Grid slot directives MAY include `id` and `align`. `align` accepts `left`, `center`, or `right` and applies to the rendered grid cell, allowing child text to inherit the cell alignment unless the child block sets its own alignment.
+Grid item `id` metadata is optional. Authoring clients MAY generate transient item ids for editing controls, but MUST NOT serialize generated ids back into inline `gridItems` or `hvy:grid:N` metadata when the author did not provide an id.
+
+Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
+
+Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
@@ -579,12 +590,14 @@ Component templates MAY include value tokens in any string field. Tokens use Mar
 {% organization %}
 {% role | text %}
 {% description | block %}
+{% description | isempty %}
 {% project-link %}
 ```
 
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
+- `isempty` resolves to `yes` when the value is empty or whitespace-only, and `no` otherwise. It does not change the variable's text/block validation type.
 - Variable names MUST be identifier-like strings: letters, numbers, underscores, and hyphens, starting with a letter or underscore.
 - Repeated variables use the same value; conflicting types for the same variable are invalid.
 - Blank values are allowed. Replacing a token with a blank value does not remove or change separate schema fields such as `placeholder`.
@@ -860,19 +873,20 @@ This styles visible ATX headings (`#` through `######`) inside `text` components
 heading_styles:
   h2:
     label: Heading 2
-    css: "margin: 0.35rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
-    afterContentMarginTop: "0.7rem"
+    css: "margin: 1.5rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1.5rem"
   h3:
     label: Heading 3
-    css: "margin: 0.85rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
-    afterContentMarginTop: "1.1rem"
+    css: "margin: 1rem 0 0.2rem; font-weight: 700; line-height: 1.15;"
+    afterContentMarginTop: "1rem"
 ```
 
 Rules:
-- Keys under `heading_styles` are `h1` through `h6`.
+- Keys under `heading_styles` are `h1` through `h4`.
 - `css` is an optional inline CSS declaration string applied to that rendered heading level and MUST be sanitized using the same rules as other document-supplied inline CSS.
 - `afterContentMarginTop` is an optional CSS length or expression used as the top margin when that heading follows prose, a list, blockquote, or code block in the same text component.
 - Renderers SHOULD remove the top margin from the first visible heading in a text block or styled text-line wrapper so a heading at the start of a section aligns with the section content.
+- Renderers SHOULD remove the bottom margin from the last visible heading in a text block or styled text-line wrapper so a heading at the bottom of a component does not add trailing space.
 - Unknown heading style fields MUST be ignored.
 
 ## 6. Template & Schema (`.thvy`)
@@ -905,11 +919,14 @@ A `.phvy` file is a HVY-family document intended for PDF template authoring and 
 PDF-template authoring supports these component base types:
 - `text`
 - `container`
+- `component-list`
 - `grid`
 - `image`
 - `table` when static table support is enabled
 
 Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
+
+PDF export renderers SHOULD map PDF-safe text component inline `css` declarations onto equivalent PDF text properties when a direct equivalent exists. At minimum, `text-align: left|center|right` maps to PDF text alignment, `font-weight: bold` or numeric weights of `600` and above map to bold PDF text, `color` maps to PDF text color, and simple `background` / `background-color` color values map to PDF text fill/background color. CSS custom properties MAY be resolved through the document theme when the resolved value is a PDF-safe color.
 
 With optional schema:
 

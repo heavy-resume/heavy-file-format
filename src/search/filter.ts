@@ -1,5 +1,6 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { SearchState } from './types';
+import { parseTags } from '../editor/tag-editor';
 
 const FILTER_CONTEXT_DEPTH = 1;
 
@@ -11,6 +12,7 @@ export interface SearchFilterContext {
   matchedBlocks: Set<string>;
   visibleSections: Set<string>;
   visibleBlocks: Set<string>;
+  excludedBlocks: Set<string>;
   query: string;
   caseSensitive: boolean;
 }
@@ -23,7 +25,10 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   const semanticMatchedTargetIds = new Set<string>();
   const visibleSections = new Set<string>();
   const visibleBlocks = new Set<string>();
-  const active = search.submittedQuery.trim().length > 0;
+  const excludedBlocks = new Set<string>();
+  const excludeTags = parseTags(search.submittedExcludeTags ?? '');
+  const hasSubmittedQuery = search.submittedQuery.trim().length > 0;
+  const active = hasSubmittedQuery || excludeTags.length > 0;
   const filtering = search.filterEnabled && active;
   if (!active) {
     return {
@@ -34,10 +39,13 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       matchedBlocks,
       visibleSections,
       visibleBlocks,
+      excludedBlocks,
       query: '',
       caseSensitive: search.caseSensitive,
     };
   }
+
+  addExcludedBlocksByTags(sections, excludeTags, excludedBlocks);
 
   for (const result of search.results) {
     addResultTargetIds(result, matchedTargetIds);
@@ -77,7 +85,7 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
 
   const visitBlock = (block: VisualBlock, forceVisible = false): boolean => {
     const semanticBlockMatched = semanticMatchedBlocks.has(block.id);
-    let visible = forceVisible || matchedBlocks.has(block.id);
+    let visible = forceVisible || matchedBlocks.has(block.id) || (filtering && !hasSubmittedQuery && !excludedBlocks.has(block.id));
     for (const child of block.schema.containerBlocks ?? []) {
       visible = visitBlock(child, forceVisible) || visible;
     }
@@ -110,11 +118,17 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
         markBlockStructuralContextVisible(block);
       }
     }
+    if (excludedBlocks.has(block.id)) {
+      visibleBlocks.delete(block.id);
+      return false;
+    }
     return visible;
   };
 
   const markBlockTreeVisible = (block: VisualBlock): void => {
-    visibleBlocks.add(block.id);
+    if (!excludedBlocks.has(block.id)) {
+      visibleBlocks.add(block.id);
+    }
     (block.schema.containerBlocks ?? []).forEach(markBlockTreeVisible);
     (block.schema.componentListBlocks ?? []).forEach(markBlockTreeVisible);
     (block.schema.expandableStubBlocks?.children ?? []).forEach(markBlockTreeVisible);
@@ -123,7 +137,9 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 
   const markBlockContextVisible = (block: VisualBlock, depth: number): void => {
-    visibleBlocks.add(block.id);
+    if (!excludedBlocks.has(block.id)) {
+      visibleBlocks.add(block.id);
+    }
     if (depth <= 0) {
       return;
     }
@@ -132,10 +148,10 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
   };
 
   const markBlockStructuralContextVisible = (block: VisualBlock): void => {
-    (block.schema.containerBlocks ?? []).forEach((child) => visibleBlocks.add(child.id));
+    (block.schema.containerBlocks ?? []).forEach((child) => addVisibleBlock(child));
     (block.schema.expandableStubBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
     (block.schema.expandableContentBlocks?.children ?? []).forEach(markExpandableContextChildVisible);
-    (block.schema.gridItems ?? []).forEach((item) => visibleBlocks.add(item.block.id));
+    (block.schema.gridItems ?? []).forEach((item) => addVisibleBlock(item.block));
   };
 
   const markExpandableContextChildVisible = (block: VisualBlock): void => {
@@ -143,24 +159,24 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
       markTransparentLayoutContextVisible(block);
       return;
     }
-    visibleBlocks.add(block.id);
+    addVisibleBlock(block);
   };
 
   const markTransparentLayoutContextVisible = (block: VisualBlock): void => {
-    visibleBlocks.add(block.id);
+    addVisibleBlock(block);
     (block.schema.containerBlocks ?? []).forEach((child) => {
       if (isTransparentLayoutBlock(child)) {
         markTransparentLayoutContextVisible(child);
         return;
       }
-      visibleBlocks.add(child.id);
+      addVisibleBlock(child);
     });
     (block.schema.gridItems ?? []).forEach((item) => {
       if (isTransparentLayoutBlock(item.block)) {
         markTransparentLayoutContextVisible(item.block);
         return;
       }
-      visibleBlocks.add(item.block.id);
+      addVisibleBlock(item.block);
     });
   };
 
@@ -176,6 +192,12 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     section.blocks.forEach((block) => visitBlock(block, true));
     section.children.forEach(markSectionTreeVisible);
     return true;
+  };
+
+  const addVisibleBlock = (block: VisualBlock): void => {
+    if (!excludedBlocks.has(block.id)) {
+      visibleBlocks.add(block.id);
+    }
   };
 
   sections.forEach((section) => visitSection(section, []));
@@ -203,9 +225,33 @@ export function createSearchFilterContext(sections: VisualSection[], search: Sea
     matchedBlocks,
     visibleSections,
     visibleBlocks,
+    excludedBlocks,
     query: search.submittedQuery,
     caseSensitive: search.caseSensitive,
   };
+}
+
+function addExcludedBlocksByTags(sections: VisualSection[], excludeTags: string[], excludedBlocks: Set<string>): void {
+  if (excludeTags.length === 0) {
+    return;
+  }
+  const normalizedExcludeTags = new Set(excludeTags.map(normalizeTag));
+  const visitBlock = (block: VisualBlock): void => {
+    if (parseTags(block.schema.tags ?? '').some((tag) => normalizedExcludeTags.has(normalizeTag(tag)))) {
+      excludedBlocks.add(block.id);
+    }
+    for (const child of getBlockChildren(block)) {
+      visitBlock(child);
+    }
+  };
+  for (const section of sections) {
+    section.blocks.forEach(visitBlock);
+    addExcludedBlocksByTags(section.children, excludeTags, excludedBlocks);
+  }
+}
+
+function normalizeTag(tag: string): string {
+  return tag.trim().toLocaleLowerCase();
 }
 
 function addResultTargetIds(result: SearchState['results'][number], targetIds: Set<string>): void {
@@ -378,7 +424,7 @@ export function isSectionSearchVisible(context: SearchFilterContext, section: Vi
 }
 
 export function isBlockSearchVisible(context: SearchFilterContext, block: VisualBlock): boolean {
-  return !context.filtering || context.filterMode !== 'hide' || context.visibleBlocks.has(block.id);
+  return !context.filtering || context.filterMode !== 'hide' || (!context.excludedBlocks.has(block.id) && context.visibleBlocks.has(block.id));
 }
 
 export function isSectionSearchMatch(context: SearchFilterContext, section: VisualSection): boolean {
@@ -394,7 +440,7 @@ export function isSectionSearchDeprioritized(context: SearchFilterContext, secti
 }
 
 export function isBlockSearchDeprioritized(context: SearchFilterContext, block: VisualBlock): boolean {
-  return context.filtering && context.filterMode === 'deprioritize' && !context.visibleBlocks.has(block.id);
+  return context.filtering && context.filterMode === 'deprioritize' && (context.excludedBlocks.has(block.id) || !context.visibleBlocks.has(block.id));
 }
 
 export function orderSearchFilteredSections(

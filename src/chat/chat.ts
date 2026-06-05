@@ -520,7 +520,7 @@ export async function requestChatCompletion(params: {
 
 export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {
   const debugLabel = params.debugLabel?.trim() || 'chat';
-  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars);
+  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
@@ -601,7 +601,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
 
 export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise<ProxyToolTurn> {
   const debugLabel = params.debugLabel?.trim() || 'chat-tools';
-  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars);
+  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
   const requestPayload = buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
@@ -816,6 +816,7 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
     compactionModel: typeof settings?.compactionModel === 'string' && settings.compactionModel.trim().length > 0
       ? settings.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
+    maxContextChars: normalizeOptionalPositiveInteger(settings?.maxContextChars ?? defaults.maxContextChars),
     toolLoopCompaction: settings?.toolLoopCompaction ?? defaults.toolLoopCompaction,
   };
 }
@@ -829,8 +830,16 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
     compactionModel: sanitized.compactionModel?.trim()
       ? sanitized.compactionModel
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
+    ...(sanitized.maxContextChars ? { maxContextChars: sanitized.maxContextChars } : {}),
     ...(sanitized.toolLoopCompaction ? { toolLoopCompaction: sanitized.toolLoopCompaction } : {}),
   };
+}
+
+function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.floor(value);
 }
 
 function readEnvToolLoopCompaction(env: ImportMetaEnv): ChatSettings['toolLoopCompaction'] | undefined {

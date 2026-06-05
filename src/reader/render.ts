@@ -1,5 +1,6 @@
 import './reader.css';
 import './sidebar.css';
+import { stringify as stringifyYaml } from 'yaml';
 import { renderCodeReader } from '../editor/components/code/code';
 import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
@@ -13,14 +14,14 @@ import { renderPluginReader } from '../editor/components/plugin/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table/table';
 import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
-import type { ComponentRenderHelpers } from '../editor/component-helpers';
+import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../editor/component-helpers';
 import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
 import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
-import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
@@ -28,12 +29,14 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../heading-styles';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
-import { defaultBlockSchema } from '../document-factory';
+import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
+import { visitBlocks } from '../section-ops';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
+import { REUSABLE_SECTION_PREFIX } from '../state';
 import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
-import { filterTemplateVisibleSections, isSectionHiddenByTemplateMarker } from '../template-hide';
+import { filterTemplateVisibleSections, isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
 import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
@@ -56,7 +59,7 @@ interface ReaderRenderState {
   addComponentBySection: Record<string, string>;
   tempHighlights: Set<string>;
   aiEditTarget: { sectionKey: string | null; blockId: string | null };
-  contextMenu?: { kind: 'filter' | 'ai'; sectionKey: string; blockId?: string } | null;
+  contextMenu?: { kind: 'filter' | 'ai' | 'editor'; sectionKey: string; blockId?: string } | null;
   activeEditorBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey?: string | null;
@@ -66,6 +69,7 @@ interface ReaderRenderState {
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: import('../types').ReusableTemplateModalState | null;
+  reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
@@ -97,16 +101,12 @@ interface ReaderRenderDeps {
   ensureExpandableBlocks: (block: VisualBlock) => void;
   ensureGridItems: (schema: BlockSchema) => void;
   getComponentRenderHelpers: () => ComponentRenderHelpers;
-  renderEditorBlock: (sectionKey: string, block: VisualBlock) => string;
+  renderEditorBlock: (sectionKey: string, block: VisualBlock, rootSections?: VisualSection[]) => string;
   renderBlockContentEditor: (sectionKey: string, block: VisualBlock) => string;
   renderComponentOptions: (selected: string) => string;
   renderReusableSectionOptions: (selected: string) => string;
   getSectionDefs: () => unknown[];
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
-}
-
-export interface ReaderBlockRenderOptions {
-  suppressAiEditorDelegation?: boolean;
 }
 
 export interface ReaderRenderer {
@@ -437,7 +437,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const anchor = getReaderButtonAnchor(section, block);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
+    const blockStyle = sanitizeReaderBlockCss(block.schema.css, options);
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
@@ -526,6 +527,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return renderMaybeCollapsedBlockShell(renderCarouselReader(section, block, helpers));
     }
     return renderMaybeCollapsedBlockShell(renderTextReader(section, block, helpers));
+  }
+
+  function sanitizeReaderBlockCss(css: string, options: ReaderBlockRenderOptions): string {
+    const sanitized = sanitizeInlineCss(css);
+    if (!options.trimVerticalEdgeMargin) {
+      return sanitized;
+    }
+    return `${sanitized}${sanitized.trim().endsWith(';') || !sanitized.trim() ? '' : ';'} margin-top: 0; margin-bottom: 0;`;
   }
 
   function isAiEditorHostBlock(sectionKey: string, blockId: string): boolean {
@@ -665,7 +674,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function isViewerHiddenBlock(block: VisualBlock): boolean {
-    if (state.currentView === 'viewer' && block.schema.editorOnly) {
+    if (state.currentView === 'viewer' && (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block))) {
       return true;
     }
     return state.currentView === 'ai' && !state.showAdvancedEditor && isAdvancedOnlyScriptingBlock(block);
@@ -1495,6 +1504,83 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
+    const nestedTemplateMetaModal = renderNestedTemplateMetaModal();
+    if (nestedTemplateMetaModal) {
+      return nestedTemplateMetaModal;
+    }
+
+    if (state.reusableDefinitionEditModal) {
+      const modal = state.reusableDefinitionEditModal;
+      const componentDefinitions = getComponentDefsFromMeta(state.documentMeta);
+      const sectionDefinitions = getSectionDefsFromMeta(state.documentMeta);
+      const definition = modal.kind === 'component' ? componentDefinitions[modal.index] : sectionDefinitions[modal.index];
+      if (!definition) {
+        return '';
+      }
+      const title = modal.kind === 'component'
+        ? `Edit ${definition.name || 'Component Template'}`
+        : `Edit ${definition.name || 'Section Template'}`;
+      const rawDraft = modal.rawDraft || stringifyYaml(definition).trimEnd();
+      const componentTemplate = modal.kind === 'component' && componentDefinitions[modal.index]
+        ? getReusableTemplate(componentDefinitions[modal.index])
+        : null;
+      if (componentTemplate) {
+        componentTemplate.schema = schemaFromUnknown(
+          { ...(componentTemplate.schema as unknown as Record<string, unknown>), component: definition.name },
+          new WeakSet<object>(),
+          state.documentMeta
+        );
+      }
+      const sectionTemplate = modal.kind === 'section' ? sectionDefinitions[modal.index]?.template ?? null : null;
+      const componentTemplateSectionKey = `${REUSABLE_SECTION_PREFIX}${definition.name}`;
+      const sectionTemplateKey = sectionTemplate?.key || `section-def:${definition.name}`;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="save-reusable-definition-close"></div>
+          <section class="modal-panel reusable-definition-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(title)}</h3>
+              <div class="modal-head-actions">
+                <button type="button" class="ghost" data-modal-action="reusable-definition-mode">${modal.mode === 'raw' ? 'Edit' : 'HVY'}</button>
+                <button type="button" class="ghost remove-x" data-modal-action="save-reusable-definition-close" aria-label="Close ${deps.escapeAttr(title)}" title="Close">${closeIcon()}</button>
+              </div>
+            </div>
+            ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
+            ${modal.mode === 'raw'
+              ? `<label class="reusable-definition-raw-field">
+                  <span>Header Definition YAML</span>
+                  <textarea id="reusableDefinitionRawInput" rows="18" spellcheck="false">${deps.escapeHtml(rawDraft)}</textarea>
+                </label>`
+              : `<div class="reusable-definition-editor">
+                  ${componentTemplate
+                    ? `<div class="reusable-definition-hvy-surface">
+                        ${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}
+                        <details class="meta-expandable-field">
+                          <summary><span>Template Meta</span></summary>
+                          ${deps.renderBlockMetaFields(componentTemplateSectionKey, componentTemplate)}
+                        </details>
+                      </div>`
+                    : ''}
+                  ${sectionTemplate
+                    ? `<div class="reusable-definition-section-surface">
+                        <label>
+                          <span>Section Title</span>
+                          <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
+                        </label>
+                        <label class="checkbox-label">
+                          <span>Locked</span>
+                          <input type="checkbox" data-field="section-lock" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" ${sectionTemplate.lock ? 'checked' : ''} />
+                        </label>
+                        <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(sectionTemplateKey)}">Meta</button>
+                        ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
+                      </div>`
+                    : ''}
+                </div>`}
+          </section>
+        </div>
+      `;
+    }
+
     if (state.sectionTemplateFlavorModal) {
       const definition = getSectionDefsFromMeta(state.documentMeta).find((item) => item.name === state.sectionTemplateFlavorModal?.templateName);
       const flavors = (definition?.flavors ?? []).filter((flavor) => flavor.name.trim().length > 0 && !!flavor.template);
@@ -1531,35 +1617,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
 
     if (state.componentMetaModal) {
-      const block = deps.findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
-      if (!block) {
-        return '';
-      }
-      return `
-        <div id="modalRoot" class="modal-root">
-          <div class="modal-overlay" data-modal-action="close-overlay"></div>
-          <section class="modal-panel component-meta-modal">
-            <div class="modal-head">
-              <h3>Component Meta: ${deps.escapeHtml(block.schema.component)}</h3>
-              <div class="modal-head-actions">
-                <button
-                  type="button"
-                  class="ghost lock-toggle-button"
-                  data-modal-action="toggle-component-lock"
-                  data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
-                  data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
-                  aria-pressed="${block.schema.lock ? 'true' : 'false'}"
-                  title="${block.schema.lock ? 'Unlock' : 'Lock'}"
-                  aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
-                >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
-                <button type="button" class="hvy-button" data-modal-action="close">Close</button>
-              </div>
-            </div>
-            <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
-            ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
-          </section>
-        </div>
-      `;
+      return renderComponentMetaModal();
     }
 
     if (state.dbTableQueryModal) {
@@ -1730,6 +1788,58 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
+    return renderSectionMetaModal();
+  }
+
+  function renderNestedTemplateMetaModal(): string {
+    if (!state.reusableDefinitionEditModal) {
+      return '';
+    }
+    if (state.componentMetaModal) {
+      return renderComponentMetaModal();
+    }
+    if (state.modalSectionKey) {
+      return renderSectionMetaModal();
+    }
+    return '';
+  }
+
+  function renderComponentMetaModal(): string {
+    if (!state.componentMetaModal) {
+      return '';
+    }
+    const block = deps.findBlockByIds(state.componentMetaModal.sectionKey, state.componentMetaModal.blockId);
+    if (!block) {
+      return '';
+    }
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel component-meta-modal">
+          <div class="modal-head">
+            <h3>Component Meta: ${deps.escapeHtml(block.schema.component)}</h3>
+            <div class="modal-head-actions">
+              <button
+                type="button"
+                class="ghost lock-toggle-button"
+                data-modal-action="toggle-component-lock"
+                data-section-key="${deps.escapeAttr(state.componentMetaModal.sectionKey)}"
+                data-block-id="${deps.escapeAttr(state.componentMetaModal.blockId)}"
+                aria-pressed="${block.schema.lock ? 'true' : 'false'}"
+                title="${block.schema.lock ? 'Unlock' : 'Lock'}"
+                aria-label="${block.schema.lock ? 'Unlock' : 'Lock'}"
+              >${block.schema.lock ? '🔓 Unlock' : '🔒 Lock'}</button>
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
+            </div>
+          </div>
+          <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
+          ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderSectionMetaModal(): string {
     if (!state.modalSectionKey) {
       return '';
     }
@@ -1850,10 +1960,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderLinkInlineModal(): string {
-    const ids = deps
-      .flattenSections(state.documentSections)
-      .filter((section) => !section.isGhost)
-      .map((section) => `#${deps.getSectionId(section)}`);
+    const ids = getLinkInlineTargetIds();
     return `
       <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
         <div class="link-inline-overlay" data-link-modal-action="cancel"></div>
@@ -1873,6 +1980,26 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </section>
       </div>
     `;
+  }
+
+  function getLinkInlineTargetIds(): string[] {
+    const ids = new Set<string>();
+    const visibleSections = deps
+      .flattenSections(state.documentSections)
+      .filter((section) => !section.isGhost);
+    for (const section of visibleSections) {
+      const sectionId = deps.getSectionId(section).trim();
+      if (sectionId) {
+        ids.add(`#${sectionId}`);
+      }
+    }
+    visitBlocks(visibleSections, (block) => {
+      const blockId = getBlockDomId(block);
+      if (blockId) {
+        ids.add(`#${blockId}`);
+      }
+    });
+    return [...ids];
   }
 
   function renderWarnings(): string {

@@ -3,6 +3,7 @@ import { createTextFillInMarker } from './text-fill-in';
 import type { ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor } from './types';
 
 export type ReusableTemplateVariableType = 'text' | 'block';
+type ReusableTemplateFilter = ReusableTemplateVariableType | 'isempty';
 
 export interface ReusableTemplateVariable {
   name: string;
@@ -12,7 +13,7 @@ export interface ReusableTemplateVariable {
   generatorLabel?: string;
 }
 
-const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block)\s*)?%}/g;
+const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block|isempty)\s*)?%}/g;
 
 export function extractReusableTemplateVariablesFromDefinition(definition: ComponentDefinition | null | undefined): ReusableTemplateVariable[] {
   const source = definition?.template ?? definition?.schema;
@@ -45,23 +46,26 @@ export function extractReusableTemplateVariablesFromSectionFlavor(flavor: Sectio
 }
 
 export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
-  const variables = new Map<string, ReusableTemplateVariableType>();
+  const variables = new Map<string, { type: ReusableTemplateVariableType; explicit: boolean }>();
   visitTemplateStrings(value, (text) => {
     for (const match of text.matchAll(TEMPLATE_TOKEN_PATTERN)) {
       const name = match[1] ?? '';
-      const type = normalizeTemplateVariableType(match[2]);
+      const { type, explicit } = normalizeTemplateVariableType(match[2]);
       const existing = variables.get(name);
-      if (existing && existing !== type) {
-        throw new Error(`Template variable "${name}" uses conflicting types: ${existing} and ${type}.`);
+      if (existing && existing.explicit && explicit && existing.type !== type) {
+        throw new Error(`Template variable "${name}" uses conflicting types: ${existing.type} and ${type}.`);
       }
       if (!existing) {
-        variables.set(name, type);
+        variables.set(name, { type, explicit });
+      } else if (!existing.explicit && explicit) {
+        existing.type = type;
+        existing.explicit = true;
       }
     }
   });
-  return [...variables.entries()].map(([name, type]) => ({
+  return [...variables.entries()].map(([name, variable]) => ({
     name,
-    type,
+    type: variable.type,
     label: config[name]?.label || humanizeTemplateVariableName(name),
     ...(config[name]?.generator ? { generator: config[name]?.generator } : {}),
     ...(config[name]?.generatorLabel ? { generatorLabel: config[name]?.generatorLabel } : {}),
@@ -206,8 +210,14 @@ function getReusableTemplateVariableLabelMap(variables: ReusableTemplateVariable
   return labels;
 }
 
-function normalizeTemplateVariableType(raw: string | undefined): ReusableTemplateVariableType {
-  return raw === 'block' ? 'block' : 'text';
+function normalizeTemplateVariableType(raw: string | undefined): { type: ReusableTemplateVariableType; explicit: boolean } {
+  if (raw === 'block') {
+    return { type: 'block', explicit: true };
+  }
+  if (raw === 'text') {
+    return { type: 'text', explicit: true };
+  }
+  return { type: 'text', explicit: false };
 }
 
 function visitTemplateStrings(value: unknown, visit: (text: string) => void, seen = new WeakSet<object>()): void {
@@ -310,8 +320,11 @@ function replaceTemplateString(
   blankAsFillIn: boolean
 ): { text: string; fillIn: boolean } {
   let fillIn = false;
-  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string) => {
+  const replaced = text.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined) => {
     const value = values[name] ?? '';
+    if (rawFilter === 'isempty') {
+      return value.trim().length === 0 ? 'yes' : 'no';
+    }
     if (blankAsFillIn && value.length === 0) {
       fillIn = true;
       return createTextFillInMarker(Object.prototype.hasOwnProperty.call(labels, name) ? labels[name] || humanizeTemplateVariableName(name) : humanizeTemplateVariableName(name));
@@ -323,7 +336,13 @@ function replaceTemplateString(
 
 function replaceTemplateStrings(value: unknown, values: Record<string, string>, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') {
-    return value.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string) => values[name] ?? '');
+    return value.replace(TEMPLATE_TOKEN_PATTERN, (_token, name: string, rawFilter: ReusableTemplateFilter | undefined) => {
+      const templateValue = values[name] ?? '';
+      if (rawFilter === 'isempty') {
+        return templateValue.trim().length === 0 ? 'yes' : 'no';
+      }
+      return templateValue;
+    });
   }
   if (!value || typeof value !== 'object') {
     return value;

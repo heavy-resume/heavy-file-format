@@ -362,6 +362,71 @@ test('blank template value fill-ins preserve the labels shown to the user', () =
   expect(detailsBlock?.schema.placeholder).toBe('');
 });
 
+test('template isempty returns yes for blank values and no for provided values', () => {
+  const block = {
+    id: 'block-1',
+    text: '',
+    schema: {
+      ...defaultBlockSchema('expandable'),
+      expandableContentBlocks: {
+        lock: false,
+        children: [
+          {
+            id: 'description-block',
+            text: [
+              '^detail-heading^ #### Description',
+              '^detail-body^ {% description | block %}',
+            ].join('\n'),
+            schema: {
+              ...defaultBlockSchema('text'),
+              hideIfYes: '{% description | isempty %}',
+            },
+            schemaMode: false,
+          },
+          {
+            id: 'notes-block',
+            text: [
+              '^detail-heading^ #### Notes',
+              '^detail-body^ {% notes | block %}',
+            ].join('\n'),
+            schema: {
+              ...defaultBlockSchema('text'),
+              hideIfYes: '{% notes | isempty %}',
+            },
+            schemaMode: false,
+          },
+        ],
+      },
+    },
+    schemaMode: false,
+  };
+
+  applyReusableTemplateValues(
+    block,
+    { description: '', notes: 'Keep this note.' },
+    [
+      { name: 'description', type: 'block', label: 'Description' },
+      { name: 'notes', type: 'block', label: 'Notes' },
+    ]
+  );
+
+  const descriptionBlock = block.schema.expandableContentBlocks.children[0];
+  const notesBlock = block.schema.expandableContentBlocks.children[1];
+  expect(descriptionBlock?.schema.hideIfYes).toBe('yes');
+  expect(notesBlock?.schema.hideIfYes).toBe('no');
+  expect(descriptionBlock?.text).toContain('^detail-body^ <!-- value {"placeholder":"Description"} -->');
+  expect(notesBlock?.text).toContain('^detail-body^ Keep this note.');
+});
+
+test('template isempty does not conflict with block typed values', () => {
+  const variables = extractReusableTemplateVariables({
+    hideIfYes: '{% description | isempty %}',
+    text: '{% description | block %}',
+  });
+
+  expect(variables).toEqual([{ name: 'description', type: 'block', label: 'Description' }]);
+});
+
 test('validates exact template value keys and text newlines', () => {
   const variables = [
     { name: 'title', type: 'text' as const, label: 'Title' },

@@ -232,15 +232,19 @@ function saveReusableComponent(
   deps.recordHistory(`save-def:${blockId}`);
   const defs = getComponentDefs();
   const existing = defs.find((def) => def.name === name);
+  const baseType = resolveBaseComponent(block.schema.component);
+  const schema = cloneReusableSchema(block.schema, baseType);
+  const templateSchema = cloneReusableSchema(block.schema, baseType);
+  templateSchema.component = name;
   const nextDef = {
     name,
-    baseType: resolveBaseComponent(block.schema.component),
+    baseType,
     tags: block.schema.tags,
     description: block.schema.description,
-    schema: cloneReusableSchema(block.schema, name),
+    schema,
     template: cloneReusableBlock({
       ...block,
-      schema: cloneReusableSchema(block.schema, name),
+      schema: templateSchema,
     }),
   };
   if (existing) {

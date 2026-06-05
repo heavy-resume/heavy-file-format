@@ -20,6 +20,7 @@ const boundAppRoots = new WeakSet<HTMLElement>();
 
 export function bindAppEvents(app: HTMLElement): void {
   if (boundAppRoots.has(app)) {
+    bindShortcuts(app);
     return;
   }
 

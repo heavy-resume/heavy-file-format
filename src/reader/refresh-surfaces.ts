@@ -47,16 +47,24 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
   }
   if (sidebarSections) {
     const stepStartedAt = performance.now();
+    const scrollTop = sidebarSections.scrollTop;
+    const scrollLeft = sidebarSections.scrollLeft;
     options.capturePluginFocus?.();
     sidebarSections.innerHTML = options.readerRenderer.renderSidebarSections(options.sections);
+    sidebarSections.scrollTop = scrollTop;
+    sidebarSections.scrollLeft = scrollLeft;
     options.reconcilePluginMounts?.(sidebarSections);
     void options.runButtonVisibilityScripts?.(sidebarSections);
     readerMs += performance.now() - stepStartedAt;
   }
   if (reader) {
     const stepStartedAt = performance.now();
+    const scrollTop = reader.scrollTop;
+    const scrollLeft = reader.scrollLeft;
     options.capturePluginFocus?.();
     reader.innerHTML = options.readerRenderer.renderReaderSections(options.sections);
+    reader.scrollTop = scrollTop;
+    reader.scrollLeft = scrollLeft;
     options.reconcilePluginMounts?.(reader);
     void options.runButtonVisibilityScripts?.(reader);
     readerMs = performance.now() - stepStartedAt;

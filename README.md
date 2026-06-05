@@ -357,6 +357,11 @@ if (plan.status === 'ready') {
 }
 ```
 
+Set `newSectionsOnly: true` on both calls when import should append blank
+sections or instantiate reusable section templates without replacing existing
+body sections. Individual body sections can also set `protect_from_import: true`
+in section metadata to prevent import from modifying that section.
+
 Import calls can use different models for different pipeline stages. Any omitted
 stage falls back to `llm.settings`:
 

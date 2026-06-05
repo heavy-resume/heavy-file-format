@@ -469,6 +469,14 @@ function emptyExpandResult(): ExpandResult {
 }
 
 export function closeModal(): void {
+  if (state.reusableDefinitionEditModal && state.componentMetaModal) {
+    state.componentMetaModal = null;
+    return;
+  }
+  if (state.reusableDefinitionEditModal && state.modalSectionKey) {
+    state.modalSectionKey = null;
+    return;
+  }
   const sqliteRowComponentModal = state.sqliteRowComponentModal;
   if (
     sqliteRowComponentModal
@@ -486,6 +494,7 @@ export function closeModal(): void {
   state.pdfTemplateImportModal = null;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.themeModalOpen = false;
 }
@@ -535,6 +544,7 @@ export function resetTransientUiState(): void {
   state.newDocumentModalOpen = false;
   state.reusableSaveModal = null;
   state.reusableTemplateModal = null;
+  state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.componentMetaModal = null;
   state.sqliteRowComponentModal = null;
@@ -569,6 +579,7 @@ export function resetTransientUiState(): void {
     requestNonce: state.aiEdit.requestNonce + 1,
   };
   state.paneScroll = {
+    fullPaneTop: 0,
     editorTop: 0,
     editorSidebarTop: 0,
     viewerSidebarTop: 0,

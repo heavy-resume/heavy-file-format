@@ -91,6 +91,7 @@ function createParentListXrefBatch(
   const sectionSlice = createEmptySection(section.level, '', false);
   sectionSlice.key = section.key;
   sectionSlice.customId = section.customId;
+  sectionSlice.customIdGenerated = section.customIdGenerated;
   sectionSlice.title = section.title;
   sectionSlice.contained = section.contained;
   sectionSlice.css = section.css;

@@ -668,6 +668,34 @@ test('hvy insert -1 changes cwd to the newly created component', async () => {
   expect((await executeHvyCliCommand(document, session, 'ls')).output).toContain('file raw.hvy [w]');
 });
 
+test('hvy insert keeps generated component ids out of serialized HVY', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  // BEFORE
+  expect(serializeDocument(document)).not.toContain('text-1');
+
+  // TOOL CALL
+  const created = await executeHvyCliCommand(document, session, 'hvy insert -1 text /body/summary');
+  await executeHvyCliCommand(document, session, 'printf "Generated note" > text.txt');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 text /body/summary intentional-note');
+
+  // AFTER
+  expect(created.output).toContain('/body/summary/text-1: created');
+  expect(created.cwd).toBe('/body/summary/text-1');
+  const expectedResult = serializeDocument(document);
+  expect(expectedResult).toContain('Generated note');
+  expect(expectedResult).not.toContain('"id":"text-1"');
+  expect(expectedResult).not.toContain('idGenerated');
+  expect(expectedResult).toContain('"id":"intentional-note"');
+});
+
 test('aggregate body write errors explain how to fill nested component templates', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

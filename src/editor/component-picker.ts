@@ -34,8 +34,9 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
     items: group.items.map((item) => withPickerItemAvailability(options, item)),
   }));
   const paneStyle = `--component-picker-groups: ${visibleGroups.length};`;
+  const pasteTargetAttrs = renderPickerPasteTargetAttrs(options, deps);
   return `
-    <div class="component-picker" style="${paneStyle}" data-active-pane="root">
+    <div class="component-picker" style="${paneStyle}" data-active-pane="root"${pasteTargetAttrs}>
       <button
         type="button"
         class="component-picker-trigger"
@@ -56,6 +57,47 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
       </div>
     </div>
   `;
+}
+
+function renderPickerPasteTargetAttrs(options: AddComponentPickerOptions, deps: RenderDeps): string {
+  const attrs = getPickerPasteTargetAttrs(options);
+  return Object.entries(attrs)
+    .map(([key, value]) => ` ${deps.escapeAttr(key)}="${deps.escapeAttr(value)}"`)
+    .join('');
+}
+
+function getPickerPasteTargetAttrs(options: AddComponentPickerOptions): Record<string, string> {
+  if (!options.blockId) {
+    return options.action === 'add-block'
+      ? {
+          'data-paste-placement-container': 'section',
+          'data-paste-placement': options.extraAttrs?.['data-insert-placement'] ?? 'end',
+          ...(options.extraAttrs?.['data-target-block-id'] ? { 'data-paste-target-block-id': options.extraAttrs['data-target-block-id'] } : {}),
+        }
+      : {};
+  }
+  if (options.action === 'add-grid-item') {
+    return {
+      'data-paste-placement-container': 'grid',
+      'data-paste-placement': 'end',
+      'data-paste-parent-block-id': options.blockId,
+    };
+  }
+  if (options.action === 'add-container-block') {
+    return {
+      'data-paste-placement-container': 'container',
+      'data-paste-placement': 'end',
+      'data-paste-parent-block-id': options.blockId,
+    };
+  }
+  if (options.action === 'add-expandable-stub-block' || options.action === 'add-expandable-content-block') {
+    return {
+      'data-paste-placement-container': options.action === 'add-expandable-stub-block' ? 'expandable-stub' : 'expandable-content',
+      'data-paste-placement': 'end',
+      'data-paste-parent-block-id': options.blockId,
+    };
+  }
+  return {};
 }
 
 function renderGroupButton(options: AddComponentPickerOptions, group: PickerGroup, deps: RenderDeps): string {

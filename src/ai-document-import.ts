@@ -1,11 +1,11 @@
 import { requestProxyCompletion, type HostChatClient, type ProxyCompletionParams } from './chat/chat';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeDocumentHeaderYaml, serializeSectionFragment } from './serialization';
-import type { GridItem, VisualBlock, VisualSection } from './editor/types';
-import { cloneReusableBlock, cloneReusableSection, cloneReusableSchema, defaultBlockSchema } from './document-factory';
+import type { BlockSchema, GridItem, VisualBlock, VisualSection } from './editor/types';
+import { cloneReusableBlock, cloneReusableBlockFromMeta, defaultBlockSchema, schemaFromUnknown } from './document-factory';
 import { findSectionByKey, findSectionContainer, formatSectionTitle, getSectionId, visitBlocks } from './section-ops';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, ComponentDefinition, ComponentTemplateFlavor, SectionDefinition, SectionTemplateFlavor, VisualDocument } from './types';
 import { isAbortError, throwIfAborted } from './ai-document-loop-state';
-import { resolveBaseComponentFromMeta } from './component-defs';
+import { isBuiltinComponentName, resolveBaseComponentFromMeta } from './component-defs';
 import importHvyFormatReference from './ai-import-hvy-format-reference.hvy?raw';
 import { getTextLineStyleLabel, getTextLineStylesFromMeta } from './text-line-styles';
 import { getDocumentAiContext, getDocumentAiImportGuidance } from './document-ai-context';
@@ -19,9 +19,10 @@ import {
   extractReusableTemplateVariablesFromSectionFlavor,
   type ReusableTemplateVariable,
 } from './reusable-template-values';
-import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker } from './text-fill-in';
+import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 import { runImportXrefPass } from './ai-import-xrefs';
 import { validateLockedSectionStructure } from './locked-structure';
+import { makeId } from './utils';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
 type HvyLlmCallPhase = HvyImportProgressPhase | 'tool_call';
@@ -106,6 +107,7 @@ export interface BuildImportPlanOptions {
   sourceName?: string;
   sourceText: string;
   instructions?: string;
+  newSectionsOnly?: boolean;
   llm?: HvyImportLlmOptions;
   requestMode?: ProxyCompletionParams['mode'];
   maxContextChars?: number;
@@ -205,6 +207,13 @@ type ImportTemplateFillInTarget = {
   markerIndex?: number;
 };
 
+class ImportTemplateDefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ImportTemplateDefinitionError';
+  }
+}
+
 const IMPORT_TEMPLATE_FLAVOR_FIELD = '_flavor';
 const IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD = '_sectionFlavor';
 const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
@@ -239,6 +248,10 @@ interface ImportFillInTarget {
   markerIndex?: number;
 }
 
+interface ImportSectionCandidateOptions {
+  newSectionsOnly?: boolean;
+}
+
 export type ImportPlanStepInput = string | ImportPlanStep | {
   sectionTitle?: string;
   section?: string;
@@ -261,6 +274,7 @@ export interface ImportFromTextOptions {
   sourceName?: string;
   sourceText: string;
   instructions?: string;
+  newSectionsOnly?: boolean;
   steps: ImportPlanStepInput[];
   llm?: HvyImportLlmOptions;
   requestMode?: ProxyCompletionParams['mode'];
@@ -286,7 +300,7 @@ export async function buildImportPlanForDocument(
   const traceRecorder = createImportTraceRecorder(options);
   options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${formatImportSourceProgress(options.sourceName)}.` });
   try {
-    const preplanSteps = buildImportPlanStepsFromPreplan(document);
+    const preplanSteps = buildImportPlanStepsFromPreplan(document, options);
     if (preplanSteps.length > 0) {
       const llm = requireImportLlm(options.llm);
       throwIfAborted(options.signal);
@@ -294,7 +308,11 @@ export async function buildImportPlanForDocument(
       options.onProgress?.({ phase: 'thinking', message: 'Extracting preplanned section information.' });
       const extractedSteps = await preparePreplannedImportSteps(document, options, preplanSteps, llm, beforeLlmCall, traceRecorder);
       const requestMode = getImportRequestMode(options);
-      const filteredSteps = filterImportPlanStepsForRequestMode(extractedSteps, document, requestMode);
+      const filteredSteps = filterImportPlanStepsForRequestMode(extractedSteps, document, requestMode, options);
+      const templateDefinitionError = validateImportTemplateDefinitionTargets(filteredSteps, document, requestMode);
+      if (templateDefinitionError) {
+        return withImportTrace({ status: 'error', message: templateDefinitionError }, options, traceRecorder);
+      }
       if (filteredSteps.length === 0) {
         return withImportTrace({ status: 'error', message: 'The import preplan did not return usable source-backed sections.' }, options, traceRecorder);
       }
@@ -314,13 +332,13 @@ export async function buildImportPlanForDocument(
           id: 'ai-import-plan-task',
           role: 'user',
           content: buildImportTaskMessage(
-            buildImportPlanPrompt(options.sourceName, options.instructions, requestMode),
-            buildImportPlanResponseInstructions(requestMode)
+            buildImportPlanPrompt(options.sourceName, options.instructions, requestMode, options.newSectionsOnly === true),
+            buildImportPlanResponseInstructions(requestMode, options.newSectionsOnly === true)
           ),
         },
       ],
-      context: buildImportPlanContext(document, options.sourceName, options.sourceText),
-      responseInstructions: buildImportPlanResponseInstructions(requestMode),
+      context: buildImportPlanContext(document, options.sourceName, options.sourceText, options),
+      responseInstructions: buildImportPlanResponseInstructions(requestMode, options.newSectionsOnly === true),
       systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
       mode: requestMode,
       maxContextChars: options.maxContextChars,
@@ -329,12 +347,16 @@ export async function buildImportPlanForDocument(
       signal: options.signal,
     });
     throwIfAborted(options.signal);
-    const steps = filterImportPlanStepsForRequestMode(parseImportPlanSteps(response, document), document, requestMode);
+    const steps = filterImportPlanStepsForRequestMode(parseImportPlanSteps(response, document, options), document, requestMode, options);
+    const templateDefinitionError = validateImportTemplateDefinitionTargets(steps, document, requestMode);
+    if (templateDefinitionError) {
+      return withImportTrace({ status: 'error', message: templateDefinitionError }, options, traceRecorder);
+    }
     if (steps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan.' }, options, traceRecorder);
     }
     options.onProgress?.({ phase: 'thinking', message: 'Deduping planned import sections.' });
-    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, document, llm, beforeLlmCall, requestMode, options.maxContextChars, options.signal, traceRecorder);
+    const dedupedSteps = await dedupeImportPlanStepsWithModel(steps, document, llm, beforeLlmCall, requestMode, options.maxContextChars, options.signal, traceRecorder, options);
     if (dedupedSteps.length === 0) {
       return withImportTrace({ status: 'error', message: 'The import planner did not return a usable plan after deduping.' }, options, traceRecorder);
     }
@@ -361,31 +383,38 @@ export async function importTextIntoDocument(
   }
 ): Promise<ImportFromTextResult> {
   const traceRecorder = createImportTraceRecorder(options);
-  const steps = normalizeImportPlanSteps(options.steps, document);
+  const steps = normalizeImportPlanSteps(options.steps, document, options);
   if (steps.length === 0) {
     return withImportTrace({ status: 'error', message: 'Import requires at least one approved plan step.' }, options, traceRecorder);
   }
-  const pdfTemplateImportPlanError = validatePdfTemplateImportExecutablePlan(steps, document, getImportRequestMode(options));
+  const requestMode = getImportRequestMode(options);
+  const templateDefinitionError = validateImportTemplateDefinitionTargets(steps, document, requestMode);
+  if (templateDefinitionError) {
+    return withImportTrace({ status: 'error', message: templateDefinitionError }, options, traceRecorder);
+  }
+  const pdfTemplateImportPlanError = validatePdfTemplateImportExecutablePlan(steps, document, requestMode);
   if (pdfTemplateImportPlanError) {
     return withImportTrace({ status: 'error', message: pdfTemplateImportPlanError }, options, traceRecorder);
   }
+  const executablePlanSteps = forcePdfTemplateImportTemplateMode(steps, document, requestMode, options);
   options.onProgress?.({ phase: 'starting', message: `Importing ${formatImportSourceProgress(options.sourceName)}.` });
   try {
     const llm = requireImportLlm(options.llm);
     const beforeLlmCall = createImportLlmStepper(options.beforeLlmCall, options.signal);
     throwIfAborted(options.signal);
-    for (const step of steps) {
-      resolveImportStepApplication(document, step);
+    for (const step of executablePlanSteps) {
+      resolveImportStepApplication(document, step, options);
     }
-    const executableSteps = steps;
+    const executableSteps = executablePlanSteps;
     if (executableSteps.length === 0) {
       options.onProgress?.({ phase: 'complete', message: 'Imported 0 sections.' });
       return withImportTrace({ status: 'complete', message: 'Imported 0 sections.' }, options, traceRecorder);
     }
     const created: string[] = [];
     const appliedSections: AppliedImportSectionResult[] = [];
+    const rawGeneratedSectionKeys: string[] = [];
     for (const [index, step] of executableSteps.entries()) {
-      const application = resolveImportStepApplication(document, step);
+      const application = resolveImportStepApplication(document, step, options);
       throwIfAborted(options.signal);
       if (step.importMode === 'template') {
         const templateStructure = resolveImportTemplateStructureForStep(document, step);
@@ -552,11 +581,12 @@ export async function importTextIntoDocument(
       const result = applyGeneratedImportSection(document, application, generated.section, options.onMutation);
       created.push(result.message);
       appliedSections.push(result);
+      rawGeneratedSectionKeys.push(result.sectionKey);
       await options.onSectionApplied?.(result.message);
     }
     const importedSectionKeys = appliedSections.map((result) => result.sectionKey).filter(Boolean);
     let createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
-    const fillInTargets = collectImportFillInTargets(document, importedSectionKeys);
+    const fillInTargets = collectImportFillInTargets(document, rawGeneratedSectionKeys);
     if (fillInTargets.length > 0) {
       options.onProgress?.({ phase: 'thinking', message: 'Filling remaining imported placeholders.' });
       await fillImportedSectionPlaceholders(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets, fillInTargets);
@@ -585,7 +615,7 @@ export async function importTextIntoDocument(
   }
 }
 
-function buildImportPlanPrompt(sourceName: string | undefined, instructions: string | undefined, requestMode: ProxyCompletionParams['mode']): string {
+function buildImportPlanPrompt(sourceName: string | undefined, instructions: string | undefined, requestMode: ProxyCompletionParams['mode'], newSectionsOnly = false): string {
   if (isPdfTemplateImportMode(requestMode)) {
     return buildPdfTemplateImportPlanPrompt(sourceName, instructions);
   }
@@ -594,10 +624,14 @@ function buildImportPlanPrompt(sourceName: string | undefined, instructions: str
     '',
     'You have the current HVY template section outline and the incoming data in context. Do not use tools. Do not mutate anything.',
     'Treat the current document primarily as a starting template/scaffold for a new document.',
-    'The template section list is a target inventory, not an ordering requirement. Existing body sections are replaced in place during execution.',
+    newSectionsOnly
+      ? 'The template section list is a target inventory, not an ordering requirement. Existing body sections are not available as import targets; every step must create a new section.'
+      : 'The template section list is a target inventory, not an ordering requirement. Existing body sections are replaced in place during execution.',
     'Plan section-sized work only. Each approved step will later generate one complete raw HVY section in one shot.',
     'Use one step per final document section. Do not make separate component-level steps and do not bundle multiple sections into one step.',
-    'Each step must explicitly identify the matching existing body section by sectionId, the matching reusable template by templateName, or omit both when no listed section fits.',
+    newSectionsOnly
+      ? 'Each step must explicitly identify the matching reusable template by templateName, or omit it when no listed reusable template fits. Do not use sectionId.'
+      : 'Each step must explicitly identify the matching existing body section by sectionId, the matching reusable template by templateName, or omit both when no listed section fits.',
     'Each step should name the final section. Keep the plan short.',
     'Do not copy specific source facts into the plan. Names, dates, entity names, labels, links, bullets, metrics, and other exact facts will be extracted in a later step.',
     'Decide from the imported source text whether each section exists. If the source contains a distinct section, create a concrete step for it. If it does not, omit that section entirely.',
@@ -638,13 +672,13 @@ function buildImportTaskMessage(prompt: string, responseInstructions: string): s
   ].join('\n');
 }
 
-function buildImportPlanContext(document: VisualDocument, sourceName: string | undefined, sourceText: string): string {
+function buildImportPlanContext(document: VisualDocument, sourceName: string | undefined, sourceText: string, options: ImportSectionCandidateOptions = {}): string {
   return [
     buildImportGuidanceFrame(document),
     '',
     '=== BEGIN TEMPLATE SECTIONS ===',
     'Template section inventory for resolving section targets; this is not an ordering requirement:',
-    buildImportTemplateSectionOutline(document),
+    buildImportTemplateSectionOutline(document, options),
     '=== END TEMPLATE SECTIONS ===',
     '',
     '=== BEGIN SOURCE DOCUMENT ===',
@@ -656,10 +690,17 @@ function buildImportPlanContext(document: VisualDocument, sourceName: string | u
   ].join('\n');
 }
 
-function buildImportTemplateSectionOutline(document: VisualDocument): string {
+function buildImportTemplateSectionOutline(document: VisualDocument, options: ImportSectionCandidateOptions = {}): string {
   const lines: string[] = [];
   const appendSections = (sections: VisualDocument['sections'], depth: number): void => {
     for (const section of sections) {
+      if (section.protect_from_import === true) {
+        continue;
+      }
+      if (options.newSectionsOnly === true) {
+        appendSections(section.children, depth);
+        continue;
+      }
       const title = trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section';
       const id = trimImportString(section.customId);
       const details = [
@@ -719,7 +760,7 @@ function getImportSectionDefinitions(document: VisualDocument): SectionDefinitio
     : [];
 }
 
-function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams['mode'] = 'document-edit'): string {
+function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams['mode'] = 'document-edit', newSectionsOnly = false): string {
   if (isPdfTemplateImportMode(requestMode)) {
     return buildPdfTemplateImportPlanResponseInstructions();
   }
@@ -728,7 +769,9 @@ function buildImportPlanResponseInstructions(requestMode: ProxyCompletionParams[
     'Shape:',
     '{"steps":[{"section":"Blip Overview","sectionId":"blip-overview"},{"section":"Widget Records","templateName":"Widget Records"},{"section":"Extra Notes"}]}',
     '',
-    'Use `sectionId` only for an existing body section id from the template section outline.',
+    newSectionsOnly
+      ? 'Do not use `sectionId`; existing body sections are not import targets for this plan.'
+      : 'Use `sectionId` only for an existing body section id from the template section outline.',
     'Use `templateName` only for a reusable/template section name from the template section outline.',
     'When no listed section fits a distinct source-backed topic, include only `section` so execution may create a new blank section.',
     'Each step should be a section to create from the incoming data. Try to fit data to the template and only add sections if needed. Things outside the intent of the incoming data can be discarded.',
@@ -764,7 +807,7 @@ function buildPdfTemplateImportPlanResponseInstructions(): string {
   ].join('\n');
 }
 
-function parseImportPlanSteps(response: string, document: VisualDocument): ImportPlanStep[] {
+function parseImportPlanSteps(response: string, document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
   const trimmed = response.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1]?.trim();
   const jsonText = fenced ?? trimmed;
@@ -777,7 +820,7 @@ function parseImportPlanSteps(response: string, document: VisualDocument): Impor
     if (maybePlan.tool !== undefined && maybePlan.tool !== 'plan') {
       return [];
     }
-    return normalizeImportPlanSteps(Array.isArray(maybePlan.steps) ? maybePlan.steps : [], document);
+    return normalizeImportPlanSteps(Array.isArray(maybePlan.steps) ? maybePlan.steps : [], document, options);
   } catch {
     return [];
   }
@@ -791,9 +834,10 @@ async function dedupeImportPlanStepsWithModel(
   requestMode: ProxyCompletionParams['mode'],
   maxContextChars: number | undefined,
   signal?: AbortSignal,
-  traceRecorder?: HvyImportTraceRecorder
+  traceRecorder?: HvyImportTraceRecorder,
+  options: ImportSectionCandidateOptions = {}
 ): Promise<ImportPlanStep[]> {
-  const dedupeSteps = filterImportPlanStepsForRequestMode(steps, document, requestMode);
+  const dedupeSteps = filterImportPlanStepsForRequestMode(steps, document, requestMode, options);
   if (dedupeSteps.length <= 1) {
     return dedupeSteps;
   }
@@ -823,7 +867,7 @@ async function dedupeImportPlanStepsWithModel(
   throwIfAborted(signal);
   const keepIds = parseImportSectionDedupeResponse(response, candidates);
   const keepSet = new Set(keepIds);
-  return filterImportPlanStepsForRequestMode(candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step), document, requestMode);
+  return filterImportPlanStepsForRequestMode(candidates.filter((candidate) => keepSet.has(candidate.id)).map((candidate) => candidate.step), document, requestMode, options);
 }
 
 interface ImportSectionDedupeCandidate {
@@ -937,16 +981,16 @@ type ImportPreplanGroup = {
   steps: ImportPlanStep[];
 };
 
-function buildImportPlanStepsFromPreplan(document: VisualDocument): ImportPlanStep[] {
-  return getImportPreplanGroups(document).flatMap((group) => group.steps);
+function buildImportPlanStepsFromPreplan(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
+  return getImportPreplanGroups(document, options).flatMap((group) => group.steps);
 }
 
-function getImportPreplanGroups(document: VisualDocument): ImportPreplanGroup[] {
+function getImportPreplanGroups(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPreplanGroup[] {
   const raw = document.meta.importPreplan;
   if (!Array.isArray(raw)) {
     return [];
   }
-  const candidates = getImportTemplateSectionCandidates(document);
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const groups: ImportPreplanGroup[] = [];
   raw.forEach((entry) => {
     const ids = (Array.isArray(entry) ? entry : [entry])
@@ -991,7 +1035,7 @@ function resolveImportPreplanTarget(id: string, candidates: ImportTemplateSectio
 
 async function preparePreplannedImportSteps(
   document: VisualDocument,
-  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal' | 'requestMode' | 'maxContextChars'>,
+  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'onProgress' | 'signal' | 'requestMode' | 'maxContextChars' | 'newSectionsOnly'>,
   steps: ImportPlanStep[],
   llm: HvyImportLlmOptions,
   beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
@@ -1052,7 +1096,7 @@ async function preparePreplannedImportSteps(
         ),
       },
     ],
-    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted),
+    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted, options),
     responseInstructions: buildImportMissingSectionsResponseInstructions(),
     systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
     mode: getImportRequestMode(options),
@@ -1062,12 +1106,12 @@ async function preparePreplannedImportSteps(
     signal: options.signal,
   });
   throwIfAborted(options.signal);
-  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted);
+  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted, options);
   const candidates = [...extracted, ...missingSteps];
   if (candidates.length <= 1) {
     return candidates;
   }
-  return dedupeImportPlanStepsWithModel(candidates, document, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder);
+  return dedupeImportPlanStepsWithModel(candidates, document, llm, beforeLlmCall, getImportRequestMode(options), options.maxContextChars, options.signal, traceRecorder, options);
 }
 
 function groupImportPreplanSteps(steps: ImportPlanStep[]): ImportPlanStep[][] {
@@ -1223,10 +1267,11 @@ function buildImportMissingSectionsContext(
   sourceName: string | undefined,
   sourceText: string,
   allPreplanSteps: ImportPlanStep[],
-  extractedSteps: ImportPlanStep[]
+  extractedSteps: ImportPlanStep[],
+  options: ImportSectionCandidateOptions = {}
 ): string {
   const seenTargets = new Set(allPreplanSteps.map((step) => formatImportPlanTarget(step.target)));
-  const remaining = getImportTemplateSectionCandidates(document)
+  const remaining = getImportTemplateSectionCandidates(document, options)
     .filter((candidate) => candidate.sectionDefinition?.repeatable === true || !seenTargets.has(formatImportPlanTarget(candidateToImportPlanTarget(candidate))));
   return [
     buildImportGuidanceFrame(document),
@@ -1277,7 +1322,8 @@ function parseImportMissingSectionsResponse(
   response: string,
   document: VisualDocument,
   allPreplanSteps: ImportPlanStep[],
-  extractedSteps: ImportPlanStep[]
+  extractedSteps: ImportPlanStep[],
+  options: ImportSectionCandidateOptions = {}
 ): ImportPlanStep[] {
   const parsed = parseImportJsonObject(response);
   const sections = parsed?.sections;
@@ -1291,7 +1337,7 @@ function parseImportMissingSectionsResponse(
       .map(normalizeImportMissingSectionTitle)
       .filter(Boolean)
   );
-  const candidates = getImportTemplateSectionCandidates(document);
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const result: ImportPlanStep[] = [];
   for (const [sectionName, raw] of Object.entries(sections as Record<string, unknown>)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -1335,8 +1381,8 @@ function isConditionalImportPlanStep(step: string): boolean {
   return /\b(?:if|otherwise|unless|may|might)\b|\bonly\s+if\b|\bas\s+needed\b|\bwhen\s+needed\b|\bif\s+(?:present|available|applicable|needed)\b|\bleave\s+(?:the\s+)?(?:template'?s\s+)?[\s\S]{0,80}\bunmodified\b/i.test(step);
 }
 
-function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: VisualDocument): ImportPlanStep[] {
-  const candidates = getImportTemplateSectionCandidates(document);
+function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportPlanStep[] {
+  const candidates = getImportTemplateSectionCandidates(document, options);
   const normalized: ImportPlanStep[] = [];
   for (const rawStep of steps) {
     const step = normalizeImportPlanStep(rawStep, candidates);
@@ -1351,14 +1397,19 @@ function normalizeImportPlanSteps(steps: ImportPlanStepInput[], document: Visual
 function filterImportPlanStepsForRequestMode(
   steps: ImportPlanStep[],
   document: VisualDocument,
-  requestMode: ProxyCompletionParams['mode']
+  requestMode: ProxyCompletionParams['mode'],
+  options: ImportSectionCandidateOptions = {}
 ): ImportPlanStep[] {
+  const candidates = getImportTemplateSectionCandidates(document, options);
+  steps = steps.filter((step) => step.target.kind !== 'body' || findImportCandidateForTarget(candidates, step.target));
+  if (options.newSectionsOnly === true) {
+    steps = steps.filter((step) => step.target.kind !== 'body');
+  }
   if (!isPdfTemplateImportMode(requestMode)) {
     return steps;
   }
-  const candidates = getImportTemplateSectionCandidates(document);
   const usedTargets = new Set<string>();
-  return steps.filter((step) => {
+  const filtered = steps.filter((step) => {
     if (step.target.kind === 'blank') {
       return false;
     }
@@ -1372,6 +1423,27 @@ function filterImportPlanStepsForRequestMode(
     }
     usedTargets.add(key);
     return true;
+  });
+  return forcePdfTemplateImportTemplateMode(filtered, document, requestMode, options);
+}
+
+function forcePdfTemplateImportTemplateMode(
+  steps: ImportPlanStep[],
+  document: VisualDocument,
+  requestMode: ProxyCompletionParams['mode'],
+  options: ImportSectionCandidateOptions = {}
+): ImportPlanStep[] {
+  if (!isPdfTemplateImportMode(requestMode)) {
+    return steps;
+  }
+  const candidates = getImportTemplateSectionCandidates(document, options);
+  return steps.map((step) => {
+    const templateStructure = safeBuildImportTemplateStructureDescriptor(candidates, step.target);
+    return {
+      ...step,
+      importMode: 'template',
+      ...(templateStructure ? { templateStructure: toPublicImportTemplateStructure(templateStructure) } : {}),
+    };
   });
 }
 
@@ -1501,6 +1573,31 @@ function safeBuildImportTemplateStructureDescriptor(candidates: ImportTemplateSe
   }
 }
 
+function validateImportTemplateDefinitionTargets(
+  steps: ImportPlanStep[],
+  document: VisualDocument,
+  requestMode: ProxyCompletionParams['mode']
+): string | null {
+  const candidates = getImportTemplateSectionCandidates(document);
+  for (const [index, step] of steps.entries()) {
+    const shouldValidate = step.target.kind === 'definition'
+      || step.importMode === 'template'
+      || isPdfTemplateImportMode(requestMode);
+    if (!shouldValidate || step.target.kind === 'blank') {
+      continue;
+    }
+    try {
+      buildImportTemplateStructureDescriptor(candidates, step.target);
+    } catch (error) {
+      if (error instanceof ImportTemplateDefinitionError) {
+        return `Import section ${index + 1} has an invalid template definition. ${error.message}`;
+      }
+      throw error;
+    }
+  }
+  return null;
+}
+
 function buildImportPlanTargetFromStepShorthand(value: {
   sectionId?: unknown;
   bodyId?: unknown;
@@ -1612,14 +1709,15 @@ function buildImportTemplateStructureDescriptor(candidates: ImportTemplateSectio
 }
 
 function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSectionCandidate): ImportTemplateStructureInternal | null {
-  const lists = collectImportTemplateListStructures(candidate.section, candidate.componentDefs);
+  const includePlaceholderOnlyFields = true;
+  const lists = collectImportTemplateListStructures(candidate.section, candidate.componentDefs, includePlaceholderOnlyFields);
   const listVariableNames = new Set(lists.flatMap((list) => list.variables.map((variable) => variable.name)));
-  const sectionFlavors = getImportTemplateSectionFlavors(candidate.sectionDefinition).map((flavor) => {
+  const sectionFlavors = getImportTemplateSectionFlavors(candidate.sectionDefinition, candidate.componentDefs).map((flavor) => {
     const flavorListVariableNames = new Set(
-      collectImportTemplateListStructures(flavor.template, candidate.componentDefs)
+      collectImportTemplateListStructures(flavor.template, candidate.componentDefs, includePlaceholderOnlyFields)
         .flatMap((list) => list.variables.map((variable) => variable.name))
     );
-    const flavorFillInVariables = collectImportTemplateSectionFillInVariables(flavor.template)
+    const flavorFillInVariables = collectImportTemplateSectionFillInVariables(flavor.template, includePlaceholderOnlyFields)
       .filter((variable) => !flavor.variables.some((existing) => existing.name === variable.name));
     return {
       ...flavor,
@@ -1631,7 +1729,7 @@ function buildImportTemplateStructureForCandidate(candidate: ImportTemplateSecti
     ? extractReusableTemplateVariablesFromSectionDefinition(candidate.sectionDefinition)
     : extractReusableTemplateVariables(candidate.section))
     .filter((variable) => !listVariableNames.has(variable.name));
-  const sectionFillInVariables = collectImportTemplateSectionFillInVariables(candidate.section)
+  const sectionFillInVariables = collectImportTemplateSectionFillInVariables(candidate.section, includePlaceholderOnlyFields)
     .filter((variable) => !listVariableNames.has(variable.name) && !sectionVariables.some((existing) => existing.name === variable.name));
   const effectiveSectionVariables = mergeImportTemplateVariables([sectionVariables, sectionFillInVariables]);
   const allSectionVariables = mergeImportTemplateVariables([
@@ -1687,7 +1785,10 @@ function hasImportTemplateStructureFields(structure: ImportTemplateStructureInte
   return structure.sectionVariables.length > 0 || structure.sectionFlavors.length > 0 || structure.lists.length > 0;
 }
 
-function getImportTemplateSectionFlavors(definition: SectionDefinition | undefined): ImportTemplateSectionFlavor[] {
+function getImportTemplateSectionFlavors(
+  definition: SectionDefinition | undefined,
+  componentDefs: ComponentDefinition[]
+): ImportTemplateSectionFlavor[] {
   if (!definition || !Array.isArray(definition.flavors)) {
     return [];
   }
@@ -1697,9 +1798,39 @@ function getImportTemplateSectionFlavors(definition: SectionDefinition | undefin
       name: flavor.name.trim(),
       description: typeof flavor.description === 'string' ? flavor.description.trim() : '',
       variables: extractReusableTemplateVariablesFromSectionFlavor(flavor),
-      template: cloneReusableSection(flavor.template),
+      template: cloneImportTemplateReusableSection(flavor.template, { component_defs: componentDefs }),
     }));
   return flavors.length > 1 ? flavors : [];
+}
+
+function cloneImportTemplateReusableSection(
+  section: VisualSection,
+  documentMeta: VisualDocument['meta'],
+  targetLevel = section.level
+): VisualSection {
+  const levelDelta = targetLevel - section.level;
+  const cloneWithDelta = (item: VisualSection): VisualSection => ({
+    key: makeId('section'),
+    customId: '',
+    contained: item.contained !== false,
+    editorOnly: item.editorOnly === true,
+    idEditorOpen: false,
+    isGhost: false,
+    title: item.title,
+    level: Math.max(1, Math.min(6, item.level + levelDelta)),
+    lock: item.lock,
+    expanded: item.expanded,
+    highlight: item.highlight,
+    css: item.css,
+    tags: item.tags,
+    description: item.description,
+    location: item.location ?? 'main',
+    hideIfUnmodified: item.hideIfUnmodified === true,
+    templateKey: item.templateKey,
+    blocks: item.blocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta)),
+    children: item.children.map((child) => cloneWithDelta(child)),
+  });
+  return cloneWithDelta(section);
 }
 
 function getImportTemplateStructureId(candidate: ImportTemplateSectionCandidate): string {
@@ -1717,39 +1848,54 @@ function templateVariableToJsonSchemaProperty(variable: ReusableTemplateVariable
   };
 }
 
-function collectImportTemplateSectionFillInVariables(section: VisualSection): ReusableTemplateVariable[] {
+function collectImportTemplateSectionFillInVariables(section: VisualSection, includePlaceholderOnlyFields = false): ReusableTemplateVariable[] {
   const used = new Set<string>();
   const variables: ReusableTemplateVariable[] = [];
-  collectImportTemplateFillInVariablesFromSection(section, used, variables);
+  collectImportTemplateFillInVariablesFromSection(section, used, variables, includePlaceholderOnlyFields);
   return variables;
 }
 
-function collectImportTemplateFillInVariablesFromSection(section: VisualSection, used: Set<string>, variables: ReusableTemplateVariable[]): void {
-  collectImportTemplateFillInVariablesFromBlocks(section.blocks, used, variables);
+function collectImportTemplateFillInVariablesFromSection(
+  section: VisualSection,
+  used: Set<string>,
+  variables: ReusableTemplateVariable[],
+  includePlaceholderOnlyFields: boolean
+): void {
+  collectImportTemplateFillInVariablesFromBlocks(section.blocks, used, variables, includePlaceholderOnlyFields);
   for (const child of section.children) {
-    collectImportTemplateFillInVariablesFromSection(child, used, variables);
+    collectImportTemplateFillInVariablesFromSection(child, used, variables, includePlaceholderOnlyFields);
   }
 }
 
-function collectImportTemplateFillInVariablesFromBlock(block: VisualBlock): ReusableTemplateVariable[] {
+function collectImportTemplateFillInVariablesFromBlock(block: VisualBlock, includePlaceholderOnlyFields = false): ReusableTemplateVariable[] {
   const variables: ReusableTemplateVariable[] = [];
-  collectImportTemplateFillInVariablesFromBlocks([block], new Set(), variables);
+  collectImportTemplateFillInVariablesFromBlocks([block], new Set(), variables, includePlaceholderOnlyFields);
   return variables;
 }
 
-function collectImportTemplateFillInVariablesFromBlocks(blocks: VisualBlock[], used: Set<string>, variables: ReusableTemplateVariable[]): void {
+function collectImportTemplateFillInVariablesFromBlocks(
+  blocks: VisualBlock[],
+  used: Set<string>,
+  variables: ReusableTemplateVariable[],
+  includePlaceholderOnlyFields: boolean
+): void {
   for (const block of blocks) {
-    collectImportTemplateFillInVariablesForBlock(block, used, variables);
-    collectImportTemplateFillInVariablesFromBlocks(block.schema.containerBlocks ?? [], used, variables);
-    collectImportTemplateFillInVariablesFromBlocks(block.schema.componentListBlocks ?? [], used, variables);
-    collectImportTemplateFillInVariablesFromBlocks(block.schema.gridItems?.map((item) => item.block) ?? [], used, variables);
-    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableStubBlocks?.children ?? [], used, variables);
-    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableContentBlocks?.children ?? [], used, variables);
+    collectImportTemplateFillInVariablesForBlock(block, used, variables, includePlaceholderOnlyFields);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.containerBlocks ?? [], used, variables, includePlaceholderOnlyFields);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.componentListBlocks ?? [], used, variables, includePlaceholderOnlyFields);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.gridItems?.map((item) => item.block) ?? [], used, variables, includePlaceholderOnlyFields);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableStubBlocks?.children ?? [], used, variables, includePlaceholderOnlyFields);
+    collectImportTemplateFillInVariablesFromBlocks(block.schema.expandableContentBlocks?.children ?? [], used, variables, includePlaceholderOnlyFields);
   }
 }
 
-function collectImportTemplateFillInVariablesForBlock(block: VisualBlock, used: Set<string>, variables: ReusableTemplateVariable[]): void {
-  const targets = collectImportTemplateFillInTargetsForBlock(block, used);
+function collectImportTemplateFillInVariablesForBlock(
+  block: VisualBlock,
+  used: Set<string>,
+  variables: ReusableTemplateVariable[],
+  includePlaceholderOnlyFields: boolean
+): void {
+  const targets = collectImportTemplateFillInTargetsForBlock(block, used, includePlaceholderOnlyFields);
   for (const target of targets) {
     variables.push({ name: target.name, type: 'text', label: target.label });
   }
@@ -1766,13 +1912,17 @@ function uniqueImportTemplateVariableName(base: string, used: Set<string>): stri
   return name;
 }
 
-function collectImportTemplateListStructures(section: VisualSection, componentDefs: ComponentDefinition[]): ImportTemplateListStructure[] {
+function collectImportTemplateListStructures(
+  section: VisualSection,
+  componentDefs: ComponentDefinition[],
+  includePlaceholderOnlyFields = false
+): ImportTemplateListStructure[] {
   const lists: ImportTemplateListStructure[] = [];
   const usedKeys = new Set<string>();
   const collectFromBlocks = (blocks: VisualBlock[]): void => {
     for (const block of blocks) {
       if (block.schema.component === 'component-list') {
-        const list = buildImportTemplateListStructure(block, usedKeys, componentDefs);
+        const list = buildImportTemplateListStructure(block, usedKeys, componentDefs, includePlaceholderOnlyFields);
         if (list) {
           lists.push(list);
         }
@@ -1786,23 +1936,34 @@ function collectImportTemplateListStructures(section: VisualSection, componentDe
   };
   collectFromBlocks(section.blocks);
   for (const child of section.children) {
-    lists.push(...collectImportTemplateListStructures(child, componentDefs));
+    lists.push(...collectImportTemplateListStructures(child, componentDefs, includePlaceholderOnlyFields));
   }
   return lists;
 }
 
-function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<string>, componentDefs: ComponentDefinition[]): ImportTemplateListStructure | null {
+function buildImportTemplateListStructure(
+  block: VisualBlock,
+  usedKeys: Set<string>,
+  componentDefs: ComponentDefinition[],
+  includePlaceholderOnlyFields: boolean
+): ImportTemplateListStructure | null {
   const itemComponent = block.schema.componentListComponent.trim();
-  const itemTemplate = findImportTemplateListItemTemplate(block, itemComponent, componentDefs);
+  if (itemComponent && !isBuiltinComponentName(itemComponent) && !componentDefs.some((item) => item.name === itemComponent)) {
+    throw new ImportTemplateDefinitionError(`Component list references missing component definition "${itemComponent}".`);
+  }
+  const itemTemplate = findImportTemplateListItemTemplate(block, itemComponent, componentDefs, includePlaceholderOnlyFields);
   if (!itemTemplate) {
     return null;
   }
   const def = componentDefs.find((item) => item.name === itemComponent);
-  const flavors = getImportTemplateListFlavors(def, itemComponent);
-  const baseVariables = block.schema.componentListBlocks.length > 0
+  const flavors = getImportTemplateListFlavors(def, itemComponent, componentDefs, includePlaceholderOnlyFields);
+  const inlineVariables = block.schema.componentListBlocks.length > 0
     ? extractReusableTemplateVariables(itemTemplate)
+    : [];
+  const baseVariables = inlineVariables.length > 0
+    ? inlineVariables
     : getImportTemplateListItemVariables(itemTemplate, itemComponent, componentDefs);
-  const baseFillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate)
+  const baseFillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate, includePlaceholderOnlyFields)
     .filter((variable) => !baseVariables.some((existing) => existing.name === variable.name));
   const effectiveBaseVariables = mergeImportTemplateVariables([baseVariables, baseFillInVariables]);
   const variables = mergeImportTemplateVariables([
@@ -1850,16 +2011,21 @@ function buildImportTemplateListStructure(block: VisualBlock, usedKeys: Set<stri
   };
 }
 
-function getImportTemplateListFlavors(def: ComponentDefinition | undefined, itemComponent: string): ImportTemplateListFlavor[] {
+function getImportTemplateListFlavors(
+  def: ComponentDefinition | undefined,
+  itemComponent: string,
+  componentDefs: ComponentDefinition[],
+  includePlaceholderOnlyFields = false
+): ImportTemplateListFlavor[] {
   if (!def || !Array.isArray(def.flavors)) {
     return [];
   }
   const flavors = def.flavors
     .filter((flavor): flavor is ComponentTemplateFlavor & { name: string } => !!flavor && typeof flavor === 'object' && typeof flavor.name === 'string' && flavor.name.trim().length > 0)
     .map((flavor) => {
-      const itemTemplate = createImportTemplateFlavorBlock(flavor, itemComponent);
+      const itemTemplate = createImportTemplateFlavorBlock(flavor, itemComponent, def, componentDefs);
       const variables = extractReusableTemplateVariablesFromFlavor(flavor);
-      const fillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate)
+      const fillInVariables = collectImportTemplateFillInVariablesFromBlock(itemTemplate, includePlaceholderOnlyFields)
         .filter((variable) => !variables.some((existing) => existing.name === variable.name));
       return {
         name: flavor.name.trim(),
@@ -1872,17 +2038,31 @@ function getImportTemplateListFlavors(def: ComponentDefinition | undefined, item
   return flavors.length > 1 ? flavors : [];
 }
 
-function createImportTemplateFlavorBlock(flavor: ComponentTemplateFlavor, itemComponent: string): VisualBlock {
+function createImportTemplateFlavorBlock(
+  flavor: ComponentTemplateFlavor,
+  itemComponent: string,
+  def: ComponentDefinition | undefined,
+  componentDefs: ComponentDefinition[]
+): VisualBlock {
+  const documentMeta = { component_defs: componentDefs };
   if (flavor.template) {
-    const item = cloneReusableBlock(flavor.template);
+    const item = cloneReusableBlockFromMeta(flavor.template, documentMeta);
     item.schema.component = itemComponent;
+    normalizeImportTemplateSchemaCollections(item.schema, documentMeta);
     return item;
   }
   if (flavor.schema) {
-    return {
+    const schema = schemaFromUnknown(
+      { ...((flavor.schema as unknown) as Record<string, unknown>), component: def?.baseType?.trim() || itemComponent },
+      new WeakSet<object>(),
+      documentMeta
+    );
+    schema.component = itemComponent;
+    normalizeImportTemplateSchemaCollections(schema, documentMeta);
+  return {
       id: '',
       text: '',
-      schema: cloneReusableSchema(flavor.schema, itemComponent),
+      schema,
       schemaMode: false,
     };
   }
@@ -1906,27 +2086,68 @@ function mergeImportTemplateVariables(groups: ReusableTemplateVariable[][]): Reu
   return [...byName.values()];
 }
 
-function findImportTemplateListItemTemplate(block: VisualBlock, itemComponent: string, componentDefs: ComponentDefinition[]): VisualBlock | null {
+function findImportTemplateListItemTemplate(
+  block: VisualBlock,
+  itemComponent: string,
+  componentDefs: ComponentDefinition[],
+  includePlaceholderOnlyFields = false
+): VisualBlock | null {
   if (block.schema.componentListBlocks.length > 0) {
-    return cloneReusableBlock(block.schema.componentListBlocks[0]!);
+    const inlineTemplate = cloneImportTemplateInlineListItem(block.schema.componentListBlocks[0]!, itemComponent, componentDefs);
+    const inlineVariables = mergeImportTemplateVariables([
+      extractReusableTemplateVariables(inlineTemplate),
+      collectImportTemplateFillInVariablesFromBlock(inlineTemplate, includePlaceholderOnlyFields),
+    ]);
+    if (inlineVariables.length > 0) {
+      return inlineTemplate;
+    }
+    return findImportTemplateListDefinitionTemplate(itemComponent, componentDefs) ?? inlineTemplate;
   }
-  if (!itemComponent) {
-    return null;
-  }
+  return findImportTemplateListDefinitionTemplate(itemComponent, componentDefs);
+}
+
+function cloneImportTemplateInlineListItem(block: VisualBlock, itemComponent: string, componentDefs: ComponentDefinition[]): VisualBlock {
+  const def = componentDefs.find((candidate) => candidate.name === itemComponent);
+  const documentMeta = { component_defs: componentDefs };
+  const schema = schemaFromUnknown(
+    { ...(block.schema as unknown as Record<string, unknown>), component: def?.baseType?.trim() || block.schema.component },
+    new WeakSet<object>(),
+    documentMeta
+  );
+  schema.component = block.schema.component;
+  normalizeImportTemplateSchemaCollections(schema, documentMeta);
+  return {
+    id: '',
+    text: block.text,
+    schema,
+    schemaMode: false,
+  };
+}
+
+function findImportTemplateListDefinitionTemplate(itemComponent: string, componentDefs: ComponentDefinition[]): VisualBlock | null {
   const def = componentDefs.find((item) => item.name === itemComponent);
   if (!def) {
     return null;
   }
+  const documentMeta = { component_defs: componentDefs };
   if (def.template) {
-    const item = cloneReusableBlock(def.template);
+    const item = cloneReusableBlockFromMeta(def.template, documentMeta);
     item.schema.component = itemComponent;
+    normalizeImportTemplateSchemaCollections(item.schema, documentMeta);
     return item;
   }
   if (def.schema) {
+    const schema = schemaFromUnknown(
+      { ...((def.schema as unknown) as Record<string, unknown>), component: def.baseType?.trim() || itemComponent },
+      new WeakSet<object>(),
+      documentMeta
+    );
+    schema.component = itemComponent;
+    normalizeImportTemplateSchemaCollections(schema, documentMeta);
     return {
       id: '',
       text: '',
-      schema: cloneReusableSchema(def.schema, itemComponent),
+      schema,
       schemaMode: false,
     };
   }
@@ -2193,6 +2414,7 @@ type ImportTemplateSectionCandidate = {
   name: string;
   section: VisualSection;
   source: 'body' | 'definition';
+  documentExtension: VisualDocument['extension'];
   componentDefs: ComponentDefinition[];
   sectionDefinition?: SectionDefinition;
 };
@@ -2202,7 +2424,7 @@ type ImportStepApplication =
   | { kind: 'append-from-definition'; target: ImportTemplateSectionCandidate }
   | { kind: 'blank'; title: string };
 
-function getImportTemplateSectionCandidates(document: VisualDocument): ImportTemplateSectionCandidate[] {
+function getImportTemplateSectionCandidates(document: VisualDocument, options: ImportSectionCandidateOptions = {}): ImportTemplateSectionCandidate[] {
   const candidates: ImportTemplateSectionCandidate[] = [];
   const componentDefs = Array.isArray(document.meta.component_defs) ? document.meta.component_defs : [];
   const sectionDefinitions = getImportSectionDefinitions(document);
@@ -2211,17 +2433,23 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
       if (section.exclude_from_import === true) {
         continue;
       }
-      const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
-      candidates.push({
-        title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
-        id: trimImportString(section.customId),
-        definitionKey: '',
-        name: '',
-        section,
-        source: 'body',
-        componentDefs,
-        sectionDefinition,
-      });
+      if (section.protect_from_import === true) {
+        continue;
+      }
+      if (options.newSectionsOnly !== true) {
+        const sectionDefinition = findImportSectionDefinitionForBodySection(sectionDefinitions, section);
+        candidates.push({
+          title: trimImportString(section.title) || trimImportString(section.customId) || 'Untitled section',
+          id: trimImportString(section.customId),
+          definitionKey: '',
+          name: '',
+          section,
+          source: 'body',
+          documentExtension: document.extension,
+          componentDefs,
+          sectionDefinition,
+        });
+      }
       appendSections(section.children);
     }
   };
@@ -2237,6 +2465,7 @@ function getImportTemplateSectionCandidates(document: VisualDocument): ImportTem
       name: trimImportString(definition.name),
       section: definition.template,
       source: 'definition',
+      documentExtension: document.extension,
       componentDefs,
       sectionDefinition: definition,
     });
@@ -2262,8 +2491,8 @@ function getImportSectionDefinitionKey(definition: SectionDefinition): string {
   return trimImportString(definition.key) || trimImportString(definition.name);
 }
 
-function resolveImportStepApplication(document: VisualDocument, step: ImportPlanStep): ImportStepApplication {
-  const candidates = getImportTemplateSectionCandidates(document);
+function resolveImportStepApplication(document: VisualDocument, step: ImportPlanStep, options: ImportSectionCandidateOptions = {}): ImportStepApplication {
+  const candidates = getImportTemplateSectionCandidates(document, options);
   if (step.target.kind === 'blank') {
     return { kind: 'blank', title: step.sectionTitle || step.target.title || 'Imported Section' };
   }
@@ -2363,17 +2592,17 @@ function buildImportSectionApplicationFrame(document: VisualDocument, applicatio
 }
 
 function serializeImportMatchedSectionTemplate(section: VisualSection, documentMeta: VisualDocument['meta']): string {
-  const template = cloneImportPromptSection(section);
+  const template = cloneImportPromptSection(section, documentMeta);
   dedupeRedundantImportPromptBlocks(template.blocks, documentMeta);
   template.children.forEach((child) => dedupeRedundantImportPromptSection(child, documentMeta));
   return serializeSectionFragment(template, documentMeta);
 }
 
-function cloneImportPromptSection(section: VisualSection): VisualSection {
+function cloneImportPromptSection(section: VisualSection, documentMeta: VisualDocument['meta']): VisualSection {
   return {
     ...section,
-    blocks: section.blocks.map((block) => cloneReusableBlock(block)),
-    children: section.children.map(cloneImportPromptSection),
+    blocks: section.blocks.map((block) => cloneReusableBlockFromMeta(block, documentMeta)),
+    children: section.children.map((child) => cloneImportPromptSection(child, documentMeta)),
   };
 }
 
@@ -2439,7 +2668,7 @@ function buildImportReusableDefinitionFrame(document: VisualDocument, section: V
 }
 
 function formatImportReusableDefinitionExample(def: ComponentDefinition, documentMeta: VisualDocument['meta']): string {
-  const example = createImportReusableDefinitionExample(def);
+  const example = createImportReusableDefinitionExample(def, documentMeta);
   const details = [
     `Component: ${def.name}`,
     def.baseType ? `Base type: ${def.baseType}` : '',
@@ -2454,22 +2683,66 @@ function formatImportReusableDefinitionExample(def: ComponentDefinition, documen
   ].join('\n');
 }
 
-function createImportReusableDefinitionExample(def: ComponentDefinition): VisualBlock {
+function createImportReusableDefinitionExample(def: ComponentDefinition, documentMeta: VisualDocument['meta']): VisualBlock {
   const baseType = def.baseType ? resolveBaseComponentFromMeta(def.baseType, null) : '';
   const template = def.template
-    ? cloneReusableBlock(def.template)
-    : {
-        id: '',
-        text: '',
-        schema: def.schema ? cloneReusableSchema(def.schema, def.name) : defaultBlockSchema(def.name),
-        schemaMode: false,
-      };
+    ? cloneReusableBlockFromMeta(def.template, documentMeta)
+    : createImportDefinitionSchemaExampleBlock(def, documentMeta);
   template.schema.component = def.name;
+  normalizeImportTemplateSchemaCollections(template.schema, documentMeta);
   if (!def.template) {
     seedImportReusableDefinitionFallbackExample(template, baseType);
   }
   replaceImportTemplateVariablesInBlock(template, def.templateVariables ?? {});
   return template;
+}
+
+function createImportDefinitionSchemaExampleBlock(def: ComponentDefinition, documentMeta: VisualDocument['meta']): VisualBlock {
+  if (!def.schema) {
+    return {
+      id: '',
+      text: '',
+      schema: defaultBlockSchema(def.name),
+      schemaMode: false,
+    };
+  }
+  const schema = schemaFromUnknown(
+    { ...((def.schema as unknown) as Record<string, unknown>), component: def.baseType?.trim() || def.name },
+    new WeakSet<object>(),
+    documentMeta
+  );
+  schema.component = def.name;
+  normalizeImportTemplateSchemaCollections(schema, documentMeta);
+  return {
+    id: '',
+    text: '',
+    schema,
+    schemaMode: false,
+  };
+}
+
+function normalizeImportTemplateSchemaCollections(schema: BlockSchema, documentMeta: VisualDocument['meta'] | Record<string, unknown> | null = null): void {
+  const baseComponent = resolveBaseComponentFromMeta(schema.component, documentMeta);
+  if (schema.kind === 'container' || baseComponent === 'container') {
+    schema.containerBlocks = schema.containerBlocks ?? [];
+    schema.containerBlocks.forEach((block) => normalizeImportTemplateSchemaCollections(block.schema, documentMeta));
+  }
+  if (schema.kind === 'component-list' || baseComponent === 'component-list') {
+    schema.componentListBlocks = schema.componentListBlocks ?? [];
+    schema.componentListBlocks.forEach((block) => normalizeImportTemplateSchemaCollections(block.schema, documentMeta));
+  }
+  if (schema.kind === 'grid' || baseComponent === 'grid') {
+    schema.gridItems = schema.gridItems ?? [];
+    schema.gridItems.forEach((item) => normalizeImportTemplateSchemaCollections(item.block.schema, documentMeta));
+  }
+  if (schema.kind === 'expandable' || baseComponent === 'expandable') {
+    schema.expandableStubBlocks = schema.expandableStubBlocks ?? { lock: false, children: [] };
+    schema.expandableContentBlocks = schema.expandableContentBlocks ?? { lock: false, children: [] };
+    schema.expandableStubBlocks.children = schema.expandableStubBlocks.children ?? [];
+    schema.expandableContentBlocks.children = schema.expandableContentBlocks.children ?? [];
+    schema.expandableStubBlocks.children.forEach((block) => normalizeImportTemplateSchemaCollections(block.schema, documentMeta));
+    schema.expandableContentBlocks.children.forEach((block) => normalizeImportTemplateSchemaCollections(block.schema, documentMeta));
+  }
 }
 
 function seedImportReusableDefinitionFallbackExample(block: VisualBlock, baseType: string): void {
@@ -2766,7 +3039,15 @@ function applyGeneratedImportTemplateSection(
     }
     adjustImportSectionLevel(generated, target.level);
     generated.key = target.key;
-    generated.customId = trimImportString(target.customId) || application.target.id || generated.customId;
+    const targetId = trimImportString(target.customId);
+    const applicationTargetId = trimImportString(application.target.id);
+    if (targetId) {
+      generated.customId = targetId;
+      generated.customIdGenerated = target.customIdGenerated;
+    } else if (applicationTargetId) {
+      generated.customId = applicationTargetId;
+      generated.customIdGenerated = false;
+    }
     location.container.splice(location.index, 1, generated);
     return {
       message: `Replaced section "${target.title}" with "${generated.title}" (${getSectionId(generated)}).`,
@@ -2784,7 +3065,7 @@ function applyGeneratedImportTemplateSection(
 function instantiateImportTemplateSection(document: VisualDocument, template: VisualSection, templateStructure: ImportTemplateStructureInternal, values: ImportTemplateValues): VisualSection {
   const sectionFlavorName = typeof values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD] === 'string' ? values[IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD].trim() : '';
   const sectionFlavor = templateStructure.sectionFlavors.find((flavor) => flavor.name === sectionFlavorName);
-  const section = cloneReusableSection(sectionFlavor?.template ?? template);
+  const section = cloneImportTemplateReusableSection(sectionFlavor?.template ?? template, document.meta);
   markImportedSectionVisible(section);
   const sectionVariables = sectionFlavor?.variables ?? templateStructure.sectionVariables;
   const lists = getImportTemplateListsForSectionFlavor(templateStructure, sectionFlavor);
@@ -2818,7 +3099,7 @@ function getImportTemplateListsForSectionFlavor(
   }
   return mergeImportTemplateListStructures(
     templateStructure.lists,
-    collectImportTemplateListStructures(sectionFlavor.template, templateStructure.componentDefs)
+    collectImportTemplateListStructures(sectionFlavor.template, templateStructure.componentDefs, true)
   );
 }
 
@@ -2830,7 +3111,7 @@ function replaceImportTemplateListItems(document: VisualDocument, section: Visua
   block.schema.componentListBlocks = items.map((itemValues) => {
     const flavorName = itemValues[IMPORT_TEMPLATE_FLAVOR_FIELD]?.trim() ?? '';
     const flavor = list.flavors.find((candidate) => candidate.name === flavorName);
-    const item = cloneReusableBlock(flavor?.itemTemplate ?? list.itemTemplate);
+    const item = cloneReusableBlockFromMeta(flavor?.itemTemplate ?? list.itemTemplate, document.meta);
     if (list.itemComponent) {
       item.schema.component = list.itemComponent;
     }
@@ -2874,7 +3155,7 @@ function applyImportTemplateFillInValuesToBlocks(blocks: VisualBlock[], values: 
 }
 
 function applyImportTemplateFillInValuesForBlock(block: VisualBlock, values: Record<string, string>, used: Set<string>): void {
-  const targets = collectImportTemplateFillInTargetsForBlock(block, used);
+  const targets = collectImportTemplateFillInTargetsForBlock(block, used, true);
   if (targets.length === 0) {
     return;
   }
@@ -2887,7 +3168,7 @@ function applyImportTemplateFillInValuesForBlock(block: VisualBlock, values: Rec
   }
   const wholeBlockTarget = targets.find((target) => target.markerIndex === undefined);
   const wholeBlockValue = wholeBlockTarget ? values[wholeBlockTarget.name]?.trim() : '';
-  if (wholeBlockValue && block.schema.fillIn === true) {
+  if (wholeBlockValue && (block.schema.fillIn === true || (block.text.trim().length === 0 && trimImportString(block.schema.placeholder).length > 0))) {
     block.text = wholeBlockValue;
   }
   if (block.schema.fillIn === true && !hasTextFillInMarker(block.text) && block.text.trim().length > 0) {
@@ -2895,12 +3176,21 @@ function applyImportTemplateFillInValuesForBlock(block: VisualBlock, values: Rec
   }
 }
 
-function collectImportTemplateFillInTargetsForBlock(block: VisualBlock, used: Set<string>): ImportTemplateFillInTarget[] {
+function collectImportTemplateFillInTargetsForBlock(
+  block: VisualBlock,
+  used: Set<string>,
+  includePlaceholderOnlyFields = false
+): ImportTemplateFillInTarget[] {
   if (resolveBaseComponentFromMeta(block.schema.component, null) !== 'text') {
     return [];
   }
   const markers = findTextFillInMarkers(block.text);
-  if (markers.length === 0 && block.schema.fillIn !== true) {
+  const hasPlaceholderOnlyTarget = includePlaceholderOnlyFields
+    && markers.length === 0
+    && block.schema.fillIn !== true
+    && block.text.trim().length === 0
+    && trimImportString(block.schema.placeholder).length > 0;
+  if (markers.length === 0 && block.schema.fillIn !== true && !hasPlaceholderOnlyTarget) {
     return [];
   }
   if (markers.length === 0) {
@@ -3367,8 +3657,11 @@ function parseImportFillInResponse(response: string): Map<string, string> {
     return result;
   }
   for (const [key, value] of Object.entries(fills as Record<string, unknown>)) {
-    if (typeof value === 'string' && value.trim()) {
-      result.set(key, value.trim());
+    if (typeof value === 'string') {
+      const normalized = normalizeImportJsonStringValue(value).trim();
+      if (normalized) {
+        result.set(key, normalized);
+      }
     }
   }
   return result;
@@ -3654,7 +3947,7 @@ function validateImportTemplateValuesForStructure(
     if (typeof value !== 'string') {
       return { ok: false, message: `Template value "${variable.name}" must be a string.` };
     }
-    normalized[variable.name] = value;
+    normalized[variable.name] = normalizeImportJsonStringValue(value);
   }
   for (const list of lists) {
     const items = raw[list.key];
@@ -3711,9 +4004,31 @@ function validateImportTemplateListItemValues(
     if (typeof value !== 'string') {
       return { ok: false, message: `Template value "${label}" field "${variable.name}" must be a string.` };
     }
-    normalized[variable.name] = value;
+    normalized[variable.name] = normalizeImportJsonStringValue(value);
   }
   return { ok: true, value: normalized };
+}
+
+function normalizeImportJsonStringValue(value: string): string {
+  return importValueIsOnlyFillInMarker(value) ? '' : value;
+}
+
+function importValueIsOnlyFillInMarker(value: string): boolean {
+  if (!hasTextFillInMarker(value)) {
+    return false;
+  }
+  return removeTextFillInMarkers(value)
+    .split(/\r?\n/)
+    .every((line) => stripImportMarkdownScaffold(line).trim().length === 0);
+}
+
+function stripImportMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
 }
 
 function validateImportTemplateObjectKeys(raw: Record<string, unknown>, expected: string[], label: string): { ok: false; message: string } | null {

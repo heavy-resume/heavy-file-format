@@ -26,3 +26,7 @@ test('component list add labels preserve slashes from custom labels', () => {
 test('component list add labels infer tool / tech references from component names', () => {
   expect(getComponentListAddLabel(componentListBlock('tool-tech-xref-card'))).toBe('Add Tool / Tech Reference');
 });
+
+test('component list add labels preserve item in human-readable custom component names', () => {
+  expect(getComponentListAddLabel(componentListBlock('Resume Item'))).toBe('Add Resume Item');
+});

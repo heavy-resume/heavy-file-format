@@ -1178,7 +1178,7 @@ export const formPlugin: HvyPlugin = {
     'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
-    'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output.',
+    'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',
     '`scriptLibraries` enables checked sandbox libraries such as `random` for every form script.',
     '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',

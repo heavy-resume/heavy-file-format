@@ -1,7 +1,8 @@
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { VisualDocument } from './types';
 import { renderAltAnnotationsAsFullText } from './markdown';
-import { isSectionHiddenByTemplateMarker } from './template-hide';
+import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from './template-hide';
+import { hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 
 export function exportDocumentSourceMarkdown(document: VisualDocument): string {
   return document.sections
@@ -23,12 +24,12 @@ function renderSectionMarkdown(section: VisualSection): string[] {
 }
 
 function renderBlockMarkdown(block: VisualBlock): string[] {
-  if (block.schema.editorOnly) {
+  if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block)) {
     return [];
   }
   const component = block.schema.kind;
   if (component === 'text') {
-    return textPart(block.text);
+    return textBlockPart(block);
   }
   if (component === 'code') {
     return [];
@@ -69,9 +70,16 @@ function renderBlockMarkdown(block: VisualBlock): string[] {
   return textPart(block.text);
 }
 
+function textBlockPart(block: VisualBlock): string[] {
+  const text = block.schema.fillIn && hasTextFillInMarker(block.text)
+    ? removeTextFillInMarkers(block.text)
+    : block.text;
+  return textPart(text);
+}
+
 function textPart(value: string): string[] {
   const text = renderAltAnnotationsAsFullText(value).trim();
-  return text.length > 0 ? [text] : [];
+  return text.length > 0 && hasVisibleMarkdownText(text) ? [text] : [];
 }
 
 function imagePart(alt: string): string[] {
@@ -96,4 +104,20 @@ function formatTableCell(value: string): string {
 
 function escapeMarkdownTableCell(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\]/g, '\\]');
+}
+
+function hasVisibleMarkdownText(text: string): boolean {
+  return text
+    .split(/\r?\n/)
+    .some((line) => stripMarkdownScaffold(line).trim().length > 0);
+}
+
+function stripMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s*\^[a-z0-9_-]+\^\s?/i, '')
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
 }

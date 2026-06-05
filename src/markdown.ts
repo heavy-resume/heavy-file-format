@@ -5,6 +5,11 @@ import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } 
 import { createTextFillInMarker } from './text-fill-in';
 
 marked.setOptions({ gfm: true, breaks: false });
+marked.use({
+  renderer: {
+    image: () => '',
+  },
+});
 
 export const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -32,6 +37,11 @@ turndown.addRule('inline-code-literal-text', {
     const text = (node.textContent ?? '').replace(/`/g, '\\`');
     return text.length > 0 ? `\`${text}\`` : '';
   },
+});
+
+turndown.addRule('non-text-media', {
+  filter: (node) => isNonTextMediaElement(node),
+  replacement: () => '',
 });
 
 turndown.addRule('hvy-alt-annotation', {
@@ -213,6 +223,16 @@ function parseTextLineStyleFence(line: string): { marker: '`' | '~'; length: num
 
 function sanitizeHtml(html: string): string {
   return typeof DOMPurify.sanitize === 'function' ? DOMPurify.sanitize(html) : html;
+}
+
+export function removeNonTextContentFromRichEditor(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('img, picture, video, audio, source, iframe, object, embed, canvas, svg').forEach((element) => {
+    element.remove();
+  });
+}
+
+function isNonTextMediaElement(node: HTMLElement): boolean {
+  return ['IMG', 'PICTURE', 'VIDEO', 'AUDIO', 'SOURCE', 'IFRAME', 'OBJECT', 'EMBED', 'CANVAS', 'SVG'].includes(node.nodeName);
 }
 
 interface ResponsiveAnnotationToken {

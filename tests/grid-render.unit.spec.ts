@@ -96,37 +96,6 @@ test('grid editor renders a newly added blank text item without reading other co
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
-test('grid editor applies grid item alignment to the edit shell', () => {
-  const grid = state.document.sections[0]!.blocks[0]!;
-  grid.schema.gridItems.push({
-    id: 'right-item',
-    align: 'right',
-    block: createEmptyBlock('text'),
-  });
-
-  const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
-
-  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
-});
-
-test('right-aligned grid item text editor has no default-left child override', () => {
-  const grid = state.document.sections[0]!.blocks[0]!;
-  grid.schema.gridItems.push({
-    id: 'right-item',
-    align: 'right',
-    block: createEmptyBlock('text'),
-  });
-
-  const expectedResult = renderGridEditor('section-summary', grid, {
-    ...createHelpers(),
-    renderEditorBlock: (sectionKey, block) => renderTextEditor(sectionKey, block, createHelpers()),
-  });
-
-  expect(expectedResult).toContain('<div class="grid-item-editor-shell" style="text-align: right;">');
-  expect(expectedResult).toContain('<div\n      class="rich-editor"');
-  expect(expectedResult).not.toContain('style="text-align: left;"');
-});
-
 test('text editor omits inline style for default-left alignment', () => {
   const block = createEmptyBlock('text');
   block.text = 'Text';
@@ -159,7 +128,45 @@ test('grid blank item component switch creates a complete schema for the selecte
   expect(expectedResult.schema.imageFile).toBe('');
 });
 
-test('grid reader applies grid item alignment to the cell', () => {
+test('component-list component switch stores an inferred item label when label is automatic', () => {
+  const section = state.document.sections[0]!;
+  const list = createEmptyBlock('component-list');
+  list.id = 'component-list-block';
+  list.schema.componentListComponent = 'text';
+  list.schema.componentListItemLabel = '';
+  section.blocks = [list];
+  const select = new TestSelectElement() as unknown as HTMLSelectElement;
+  select.dataset.field = 'block-component-list-component';
+  select.dataset.sectionKey = 'section-summary';
+  select.dataset.blockId = 'component-list-block';
+  select.value = 'Resume Item';
+
+  handleBlockFieldInput(select);
+
+  expect(list.schema.componentListComponent).toBe('Resume Item');
+  expect(list.schema.componentListItemLabel).toBe('Resume Item');
+});
+
+test('component-list component switch preserves a manually edited item label', () => {
+  const section = state.document.sections[0]!;
+  const list = createEmptyBlock('component-list');
+  list.id = 'component-list-block';
+  list.schema.componentListComponent = 'text';
+  list.schema.componentListItemLabel = 'job';
+  section.blocks = [list];
+  const select = new TestSelectElement() as unknown as HTMLSelectElement;
+  select.dataset.field = 'block-component-list-component';
+  select.dataset.sectionKey = 'section-summary';
+  select.dataset.blockId = 'component-list-block';
+  select.value = 'Resume Item';
+
+  handleBlockFieldInput(select);
+
+  expect(list.schema.componentListComponent).toBe('Resume Item');
+  expect(list.schema.componentListItemLabel).toBe('job');
+});
+
+test('grid reader renders grid cells without slot alignment metadata', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
     id: 'left-item',
@@ -167,7 +174,6 @@ test('grid reader applies grid item alignment to the cell', () => {
   });
   grid.schema.gridItems.push({
     id: 'right-item',
-    align: 'right',
     block: createEmptyBlock('text'),
   });
 
@@ -176,5 +182,22 @@ test('grid reader applies grid item alignment to the cell', () => {
     renderReaderBlock: (_section, block) => `<p>${block.id}</p>`,
   });
 
-  expect(expectedResult).toContain('grid-column: 2 / span 1; text-align: right;');
+  expect(expectedResult).toContain('grid-column: 2 / span 1;');
+  expect(expectedResult).not.toContain('text-align: right;');
+});
+
+test('grid reader trims vertical edge margins from direct cell blocks', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'left-item',
+    block: createEmptyBlock('expandable'),
+  });
+  grid.schema.gridItems[0]!.block.schema.css = 'margin: 0.5rem 0;';
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: (_section, block, options) => `<div style="${block.schema.css}${options?.trimVerticalEdgeMargin ? ' margin-top: 0; margin-bottom: 0;' : ''}"></div>`,
+  });
+
+  expect(expectedResult).toContain('margin: 0.5rem 0; margin-top: 0; margin-bottom: 0;');
 });

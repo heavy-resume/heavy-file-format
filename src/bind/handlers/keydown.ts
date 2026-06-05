@@ -1,7 +1,7 @@
-import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, getRenderApp, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
-import { selectAdjacentSearchResult } from '../../search/actions';
+import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
 import { handleEscapeKey } from './escape';
 
 export function bindKeydown(app: HTMLElement): void {
@@ -9,6 +9,7 @@ export function bindKeydown(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     const richTarget = getRichTarget(target);
     if (richTarget) {
+      handleRichEditorKeyup(richTarget);
       refreshRichToolbarState(richTarget);
     }
   });
@@ -83,6 +84,9 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
     if (target instanceof HTMLInputElement && handleTagEditorKeydown(event, target, tagStateHelpers)) {
+      if (target.dataset.field === 'search-exclude-tags-input') {
+        refreshSearchFilterButton(app);
+      }
       return;
     }
     if (target instanceof HTMLInputElement && target.dataset.field === 'section-title' && event.key === 'Enter') {

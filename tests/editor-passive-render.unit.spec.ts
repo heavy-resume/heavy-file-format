@@ -2,9 +2,8 @@ import { expect, test } from 'vitest';
 
 import { createEditorRenderer } from '../src/editor/render';
 import { defaultBlockSchema } from '../src/document-factory';
-import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
+import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../src/editor/component-helpers';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
-import type { ReaderBlockRenderOptions } from '../src/reader/render';
 
 function createSection(blocks: VisualBlock[]): VisualSection {
   return {
@@ -58,6 +57,7 @@ test('passive editor fallback renders plain reader content without re-entering A
     currentView: 'ai',
     responsivePreview: 'full',
     mobileAdjustmentMode: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
   }, {

@@ -5,6 +5,7 @@ import type { PaneScrollState } from '../src/types';
 
 test('capturePaneScroll preserves viewer sidebar scroll position', () => {
   const previous: PaneScrollState = {
+    fullPaneTop: 7,
     editorTop: 1,
     editorSidebarTop: 2,
     viewerSidebarTop: 3,
@@ -13,6 +14,7 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
     windowTop: 5,
   };
   const elementsBySelector = new Map<string, { scrollTop: number }>([
+    ['.full-pane', { scrollTop: 123 }],
     ['.viewer-sidebar-panel', { scrollTop: 321 }],
     ['.viewer-shell .reader-document', { scrollTop: 654 }],
   ]);
@@ -24,6 +26,7 @@ test('capturePaneScroll preserves viewer sidebar scroll position', () => {
   const result = capturePaneScroll(previous, app);
 
   expect(result).toEqual({
+    fullPaneTop: 123,
     editorTop: 1,
     editorSidebarTop: 2,
     viewerSidebarTop: 321,

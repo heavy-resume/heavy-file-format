@@ -4,6 +4,7 @@ import { deserializeDocument } from '../src/serialization';
 import {
   clearHideIfUnmodifiedForSectionPath,
   filterTemplateVisibleSections,
+  isBlockHiddenByTemplateMarker,
   isSectionHiddenByTemplateMarker,
 } from '../src/template-hide';
 import { builtInSearchProvider } from '../src/search/search-provider';
@@ -42,6 +43,28 @@ test('viewer filtering hides marked scaffold sections until the marker is cleare
   expect(section.hideIfUnmodified).toBe(false);
   expect(section.expanded).toBe(true);
   expect(filterTemplateVisibleSections(document.sections)).toHaveLength(1);
+});
+
+test('viewer filtering hides blocks marked hideIfYes', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+ <!--hvy:text {"id":"description","hideIfYes":"YES"}-->
+  Description
+
+ <!--hvy:text {"id":"notes","hideIfYes":"no"}-->
+  Notes
+`, '.hvy');
+
+  const hiddenBlock = document.sections[0]!.blocks[0]!;
+  expect(isBlockHiddenByTemplateMarker(hiddenBlock)).toBe(true);
+
+  const expectedResult = filterTemplateVisibleSections(document.sections);
+  expect(expectedResult[0]!.blocks.map((block) => block.schema.id)).toEqual(['notes']);
 });
 
 test('clearing a child section also clears hidden template ancestors', () => {

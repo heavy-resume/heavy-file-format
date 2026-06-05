@@ -1,8 +1,8 @@
 import { beforeEach, expect, test } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { initCallbacks, initState, state } from '../src/state';
-import { syncReusableTemplateForBlock } from '../src/reusable';
+import { saveReusableFromModal, syncReusableTemplateForBlock } from '../src/reusable';
 import { createTestState } from './serialization-test-helpers';
 
 beforeEach(() => {
@@ -77,4 +77,67 @@ component_defs:
 
   expect(firstName.text).toBe('TypeScripts');
   expect(secondName.text).toBe('Python');
+});
+
+test('saving a new container component template preserves copied child blocks', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"history"}-->
+#! History
+
+ <!--hvy:container {"css":"margin: 0;"}-->
+
+  <!--hvy:text {"css":"margin: 0 0 0.35rem;","fillIn":true}-->
+   <!-- value {"placeholder":"Organization"} -->
+
+  <!--hvy:grid {"css":"margin: 0.35rem 0;"}-->
+
+   <!--hvy:grid:0 {}-->
+
+    <!--hvy:text {"css":"margin: 0;","fillIn":true}-->
+     <!-- value {"placeholder":"Location"} -->
+
+   <!--hvy:grid:1 {}-->
+
+    <!--hvy:text {"css":"margin: 0; text-align: right;","fillIn":true}-->
+     <!-- value {"placeholder":"Dates"} -->
+`, '.hvy');
+  initState(createTestState(document));
+  const block = document.sections[0]!.blocks[0]!;
+  state.reusableSaveModal = {
+    kind: 'component',
+    sectionKey: document.sections[0]!.key,
+    blockId: block.id,
+    draftName: 'Job History Item',
+  };
+
+  saveReusableFromModal(
+    {
+      querySelector: () => ({ value: 'Job History Item', focus: () => {} }),
+    } as unknown as HTMLElement,
+    {
+      findBlockByIds: () => block,
+      recordHistory: () => {},
+      closeModal: () => {
+        state.reusableSaveModal = null;
+      },
+    }
+  );
+
+  expect(document.meta.component_defs?.[0]?.schema).toMatchObject({
+    component: 'container',
+    containerBlocks: [
+      { text: '<!-- value {"placeholder":"Organization"} -->' },
+      { schema: { component: 'grid' } },
+    ],
+  });
+  const expectedResult = serializeDocument(document);
+  expect(expectedResult).toContain('name: Job History Item');
+  expect(expectedResult).toContain('baseType: container');
+  expect(expectedResult).toContain('containerBlocks:');
+  expect(expectedResult).toContain('placeholder":"Organization');
+  expect(expectedResult).toContain('placeholder":"Location');
+  expect(expectedResult).toContain('placeholder":"Dates');
 });

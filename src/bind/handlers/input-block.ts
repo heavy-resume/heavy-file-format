@@ -21,11 +21,13 @@ import {
   getHeadingStylesFromMeta,
   renderHeadingStyleElement,
   sanitizeHeadingStyleCss,
+  syncHeadingStyleAfterContentMarginTop,
   updateHeadingStyleSpacingCss,
   writeHeadingStylesToMeta,
   type HeadingStyleName,
 } from '../../heading-styles';
-import { visitBlocks } from '../../section-ops';
+import { visitBlocks, visitBlocksInList } from '../../section-ops';
+import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -210,9 +212,10 @@ export function bindInputBlock(app: HTMLElement): void {
       if (!name) return;
       recordHistory(`meta:heading-style:css:${name}`);
       const styles = getHeadingStylesFromMeta(state.document.meta);
-      styles[name] = { ...styles[name], css: sanitizeHeadingStyleCss(target.value) };
+      styles[name] = syncHeadingStyleAfterContentMarginTop({ ...styles[name], css: sanitizeHeadingStyleCss(target.value) }, styles[name].css);
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleEditingUi(app, name, styles[name].css);
+      refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
       getRefreshReaderPanels()();
       return;
@@ -225,9 +228,10 @@ export function bindInputBlock(app: HTMLElement): void {
       recordHistory(`meta:heading-style:spacing:${name}:${property}`);
       const styles = getHeadingStylesFromMeta(state.document.meta);
       const nextCss = updateHeadingStyleSpacingCss(styles[name].css, property, target.value);
-      styles[name] = { ...styles[name], css: nextCss };
+      styles[name] = syncHeadingStyleAfterContentMarginTop({ ...styles[name], css: nextCss }, styles[name].css);
       writeHeadingStylesToMeta(state.document.meta, styles);
       refreshHeadingStyleEditingUi(app, name, nextCss);
+      refreshHeadingStyleAfterMarginUi(app, name, styles[name].afterContentMarginTop);
       refreshHeadingStyleSurfaces(app);
       getRefreshReaderPanels()();
       return;
@@ -329,8 +333,11 @@ export function bindInputBlock(app: HTMLElement): void {
       const idx = Number.parseInt(target.dataset.defIndex ?? '', 10);
       const defs = getComponentDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        const oldName = defs[idx].name;
+        const newName = target.value;
         recordHistory(`def:${idx}:name`);
-        defs[idx].name = target.value;
+        defs[idx].name = newName;
+        renameComponentTemplateReferences(oldName, newName);
         state.document.meta.component_defs = defs;
       }
       return;
@@ -406,9 +413,24 @@ export function bindInputBlock(app: HTMLElement): void {
       const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
       const defs = getSectionDefs();
       if (!Number.isNaN(idx) && defs[idx]) {
+        const oldName = defs[idx].name;
+        const newName = target.value;
         recordHistory(`section-def:${idx}:name`);
-        defs[idx].name = target.value;
+        defs[idx].name = newName;
+        renameSectionTemplateReferences(oldName, newName, defs[idx].key);
         state.document.meta.section_defs = defs;
+      }
+      return;
+    }
+
+    if (field === 'section-def-repeatable' && target instanceof HTMLInputElement) {
+      const idx = Number.parseInt(target.dataset.sectionDefIndex ?? '', 10);
+      const defs = getSectionDefs();
+      if (!Number.isNaN(idx) && defs[idx]) {
+        recordHistory(`section-def:${idx}:repeatable`);
+        defs[idx].repeatable = target.checked;
+        state.document.meta.section_defs = defs;
+        getRenderApp()();
       }
       return;
     }
@@ -612,7 +634,7 @@ function refreshTextLineStyleLabelUi(app: HTMLElement, name: string, label: stri
 
 function getHeadingStyleName(target: HTMLElement): HeadingStyleName | null {
   const name = target.dataset.headingStyleName ?? '';
-  return /^(h[1-6])$/.test(name) ? name as HeadingStyleName : null;
+  return /^(h[1-4])$/.test(name) ? name as HeadingStyleName : null;
 }
 
 function refreshHeadingStyleEditingUi(app: HTMLElement, name: HeadingStyleName, css: string): void {
@@ -631,6 +653,14 @@ function refreshHeadingStyleEditingUi(app: HTMLElement, name: HeadingStyleName, 
         input.value = value;
       }
     });
+  });
+}
+
+function refreshHeadingStyleAfterMarginUi(app: HTMLElement, name: HeadingStyleName, value: string): void {
+  app.querySelectorAll<HTMLInputElement>(`input[data-field="heading-style-after-margin-top"][data-heading-style-name="${cssEscape(name)}"]`).forEach((input) => {
+    if (document.activeElement !== input) {
+      input.value = value;
+    }
   });
 }
 
@@ -657,6 +687,91 @@ function refreshHeadingStyleSurfaces(app: HTMLElement): void {
     } else {
       surface.prepend(next);
     }
+  });
+}
+
+function renameComponentTemplateReferences(oldName: string, newName: string): void {
+  if (!oldName || !newName || oldName === newName) {
+    return;
+  }
+  const renameBlock = (block: VisualBlock): void => {
+    renameComponentSchemaReferences(block.schema, oldName, newName);
+  };
+  visitBlocks(state.document.sections, renameBlock);
+  getComponentDefs().forEach((def) => {
+    if (def.schema) {
+      renameComponentSchemaTree(def.schema, oldName, newName, renameBlock);
+    }
+    if (def.template) {
+      visitBlocksInList([def.template], renameBlock);
+    }
+    (def.flavors ?? []).forEach((flavor) => {
+      if (flavor.schema) {
+        renameComponentSchemaTree(flavor.schema, oldName, newName, renameBlock);
+      }
+      if (flavor.template) {
+        visitBlocksInList([flavor.template], renameBlock);
+      }
+    });
+  });
+  getSectionDefs().forEach((def) => {
+    visitBlocksInList(def.template.blocks, renameBlock);
+    def.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
+    (def.flavors ?? []).forEach((flavor) => {
+      if (flavor.template) {
+        visitBlocksInList(flavor.template.blocks, renameBlock);
+        flavor.template.children.forEach((child) => visitSectionTemplateBlocks(child, renameBlock));
+      }
+    });
+  });
+}
+
+function renameComponentSchemaReferences(schema: BlockSchema, oldName: string, newName: string): void {
+  if (schema.component === oldName) {
+    schema.component = newName;
+  }
+  if (schema.componentListComponent === oldName) {
+    schema.componentListComponent = newName;
+  }
+}
+
+function renameComponentSchemaTree(
+  schema: BlockSchema,
+  oldName: string,
+  newName: string,
+  renameBlock: (block: VisualBlock) => void
+): void {
+  renameComponentSchemaReferences(schema, oldName, newName);
+  visitBlocksInList(schema.containerBlocks ?? [], renameBlock);
+  visitBlocksInList(schema.componentListBlocks ?? [], renameBlock);
+  visitBlocksInList((schema.gridItems ?? []).map((item) => item.block), renameBlock);
+  visitBlocksInList(schema.expandableStubBlocks?.children ?? [], renameBlock);
+  visitBlocksInList(schema.expandableContentBlocks?.children ?? [], renameBlock);
+}
+
+function visitSectionTemplateBlocks(section: VisualSection, visitor: (block: VisualBlock) => void): void {
+  visitBlocksInList(section.blocks, visitor);
+  section.children.forEach((child) => visitSectionTemplateBlocks(child, visitor));
+}
+
+function renameSectionTemplateReferences(oldName: string, newName: string, stableKey?: string): void {
+  if (!oldName || !newName || oldName === newName || stableKey?.trim()) {
+    return;
+  }
+  const renameSection = (section: VisualSection): void => {
+    if (section.templateKey === oldName) {
+      section.templateKey = newName;
+    }
+    section.children.forEach(renameSection);
+  };
+  state.document.sections.forEach(renameSection);
+  getSectionDefs().forEach((def) => {
+    renameSection(def.template);
+    (def.flavors ?? []).forEach((flavor) => {
+      if (flavor.template) {
+        renameSection(flavor.template);
+      }
+    });
   });
 }
 

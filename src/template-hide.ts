@@ -1,7 +1,11 @@
-import type { VisualSection } from './editor/types';
+import type { VisualBlock, VisualSection } from './editor/types';
 
 export function isSectionHiddenByTemplateMarker(section: VisualSection): boolean {
   return section.hideIfUnmodified === true;
+}
+
+export function isBlockHiddenByTemplateMarker(block: VisualBlock): boolean {
+  return block.schema.hideIfYes.trim().toLowerCase() === 'yes';
 }
 
 export function filterTemplateVisibleSections(sections: VisualSection[]): VisualSection[] {
@@ -9,8 +13,46 @@ export function filterTemplateVisibleSections(sections: VisualSection[]): Visual
     .filter((section) => !isSectionHiddenByTemplateMarker(section))
     .map((section) => ({
       ...section,
+      blocks: filterTemplateVisibleBlocks(section.blocks),
       children: filterTemplateVisibleSections(section.children),
     }));
+}
+
+function filterTemplateVisibleBlocks(blocks: VisualBlock[]): VisualBlock[] {
+  return blocks
+    .filter((block) => !isBlockHiddenByTemplateMarker(block))
+    .map((block) => ({
+      ...block,
+      schema: filterTemplateVisibleBlockSchema(block),
+    }));
+}
+
+function filterTemplateVisibleBlockSchema(block: VisualBlock): VisualBlock['schema'] {
+  const schema = { ...block.schema };
+  if (schema.containerBlocks) {
+    schema.containerBlocks = filterTemplateVisibleBlocks(schema.containerBlocks);
+  }
+  if (schema.componentListBlocks) {
+    schema.componentListBlocks = filterTemplateVisibleBlocks(schema.componentListBlocks);
+  }
+  if (schema.gridItems) {
+    schema.gridItems = schema.gridItems
+      .filter((item) => !isBlockHiddenByTemplateMarker(item.block))
+      .map((item) => ({ ...item, block: { ...item.block, schema: filterTemplateVisibleBlockSchema(item.block) } }));
+  }
+  if (schema.expandableStubBlocks) {
+    schema.expandableStubBlocks = {
+      ...schema.expandableStubBlocks,
+      children: filterTemplateVisibleBlocks(schema.expandableStubBlocks.children),
+    };
+  }
+  if (schema.expandableContentBlocks) {
+    schema.expandableContentBlocks = {
+      ...schema.expandableContentBlocks,
+      children: filterTemplateVisibleBlocks(schema.expandableContentBlocks.children),
+    };
+  }
+  return schema;
 }
 
 export function clearHideIfUnmodifiedForSectionPath(sections: VisualSection[], sectionKey: string): boolean {

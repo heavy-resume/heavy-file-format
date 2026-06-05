@@ -2,10 +2,37 @@ import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation,
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
+import { templateDefinitionDetailsKey } from '../../editor/render';
 
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
 export function bindClickMisc(app: HTMLElement): void {
+  document.addEventListener('selectionchange', () => {
+    refreshSelectionDrivenRichToolbarState(app);
+  });
+
+  app.addEventListener('toggle', (event) => {
+    const details = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLDetailsElement>('details.template-def-details[data-template-kind]')
+      : null;
+    if (!details || !app.contains(details)) {
+      return;
+    }
+    const kind = details.dataset.templateKind === 'section' ? 'section' : details.dataset.templateKind === 'component' ? 'component' : null;
+    const index = Number.parseInt(details.dataset.defIndex ?? details.dataset.sectionDefIndex ?? '', 10);
+    if (!kind || Number.isNaN(index)) {
+      return;
+    }
+    const key = templateDefinitionDetailsKey(kind, index);
+    const openKeys = new Set(state.openTemplateDefinitionKeys);
+    if (details.open) {
+      openKeys.add(key);
+    } else {
+      openKeys.delete(key);
+    }
+    state.openTemplateDefinitionKeys = [...openKeys];
+  }, true);
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
@@ -151,6 +178,38 @@ function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): vo
   picker.dataset.activePane = 'root';
   placeComponentPicker(picker);
   revealComponentPicker(picker);
+}
+
+function refreshSelectionDrivenRichToolbarState(app: HTMLElement): void {
+  const richTarget = getRichTargetFromSelection(app);
+  app.querySelectorAll<HTMLElement>('.text-editor-shell.has-fill-in-selection').forEach((shell) => {
+    if (!richTarget || !shell.contains(richTarget)) {
+      shell.classList.remove('has-fill-in-selection');
+    }
+  });
+  if (richTarget && hasNonEmptySelection()) {
+    refreshRichToolbarState(richTarget);
+  }
+}
+
+function hasNonEmptySelection(): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || selection.isCollapsed) {
+    return false;
+  }
+  return selection.getRangeAt(0).toString().trim().length > 0;
+}
+
+function getRichTargetFromSelection(app: HTMLElement): HTMLElement | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const target = element ? getRichTarget(element) : null;
+  return target && app.contains(target) ? target : null;
 }
 
 function getRichTarget(target: HTMLElement): HTMLElement | null {

@@ -699,7 +699,7 @@ function insertBlock(blocks: VisualBlock[], block: VisualBlock, index: number): 
 }
 
 function insertGridItem(gridItems: GridItem[], block: VisualBlock, index: number): void {
-  const item = { id: makeId('griditem'), block };
+  const item = { id: makeId('griditem'), idGenerated: true, block };
   gridItems.splice(resolveInsertIndex(index, gridItems.length), 0, item);
 }
 
@@ -758,7 +758,10 @@ function formatSectionAbout(section: VisualSection): string {
 }
 
 function applySectionJson(section: VisualSection, value: JsonObject): void {
-  if (typeof value.id === 'string') section.customId = value.id;
+  if (typeof value.id === 'string') {
+    section.customId = value.id;
+    section.customIdGenerated = false;
+  }
   if (typeof value.title === 'string') section.title = value.title;
   if (typeof value.level === 'number') section.level = Math.max(1, Math.min(6, Math.floor(value.level)));
   if (typeof value.lock === 'boolean') section.lock = value.lock;
@@ -789,6 +792,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
+    hideIfYes: schema.hideIfYes,
     placeholder: schema.placeholder,
     fillIn: schema.fillIn,
   };
@@ -919,6 +923,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (value.slot === 'left' || value.slot === 'center' || value.slot === 'right') schema.slot = value.slot;
   if (typeof value.tags === 'string') schema.tags = validateTags(value.tags, `${component}.json tags`);
   if (typeof value.description === 'string') schema.description = value.description;
+  if (typeof value.hideIfYes === 'string') schema.hideIfYes = value.hideIfYes;
   if (typeof value.placeholder === 'string') schema.placeholder = value.placeholder;
   if (typeof value.fillIn === 'boolean') schema.fillIn = value.fillIn;
   if (typeof value.containerTitle === 'string') schema.containerTitle = value.containerTitle;

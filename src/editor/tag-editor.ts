@@ -1,6 +1,6 @@
 import { closeIcon } from '../icons';
 
-export type TagField = 'block-tags' | 'def-tags' | 'section-tags';
+export type TagField = 'block-tags' | 'def-tags' | 'section-tags' | 'search-exclude-tags';
 
 export interface TagRenderOptions {
   sectionKey?: string;
@@ -159,7 +159,7 @@ export function commitTagEditorDraft(target: HTMLInputElement, helpers: TagState
 export function handleRemoveTag(actionButton: HTMLElement, helpers: TagStateHelpers): void {
   const field = actionButton.dataset.tagField;
   const tagIndex = Number.parseInt(actionButton.dataset.tagIndex ?? '', 10);
-  if ((field !== 'block-tags' && field !== 'def-tags' && field !== 'section-tags') || Number.isNaN(tagIndex)) {
+  if ((field !== 'block-tags' && field !== 'def-tags' && field !== 'section-tags' && field !== 'search-exclude-tags') || Number.isNaN(tagIndex)) {
     return;
   }
 
@@ -203,15 +203,21 @@ function syncTagEditorUi(
     return;
   }
 
-  const field = target.dataset.field === 'block-tags-input' ? 'block-tags' : target.dataset.field === 'section-tags-input' ? 'section-tags' : 'def-tags';
+  const field = target.dataset.field === 'block-tags-input'
+    ? 'block-tags'
+    : target.dataset.field === 'section-tags-input'
+    ? 'section-tags'
+    : target.dataset.field === 'search-exclude-tags-input'
+    ? 'search-exclude-tags'
+    : 'def-tags';
   pillList.innerHTML = renderTagPills(tags, field, helpers.getRenderOptions(target), {
     escapeAttr: escapeAttrFallback,
     escapeHtml: escapeHtmlFallback,
   });
 }
 
-function isTagInputField(field: string | undefined): field is 'block-tags-input' | 'def-tags-input' | 'section-tags-input' {
-  return field === 'block-tags-input' || field === 'def-tags-input' || field === 'section-tags-input';
+function isTagInputField(field: string | undefined): field is 'block-tags-input' | 'def-tags-input' | 'section-tags-input' | 'search-exclude-tags-input' {
+  return field === 'block-tags-input' || field === 'def-tags-input' || field === 'section-tags-input' || field === 'search-exclude-tags-input';
 }
 
 function escapeAttrFallback(value: string): string {

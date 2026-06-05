@@ -9,6 +9,33 @@ import {
 
 registerSerializationTestState();
 
+test('does not serialize generated section ids into directives', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {}-->
+#! AI Features
+`, '.hvy');
+
+  expect(document.sections[0]?.customId).toBe('ai-features');
+  expect(serializeDocument(document)).toContain('<!--hvy: {"lock":false,"expanded":true,"highlight":false}-->');
+  expect(serializeDocument(document)).not.toContain('"id":"ai-features"');
+  expect(serializeDocument(document)).not.toContain('"id":"section-');
+});
+
+test('serializes authored section ids into directives', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"ai-features"}-->
+#! AI Features
+`, '.hvy');
+
+  expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
+});
+
 test('serializes a single block fragment without document wrappers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -51,6 +78,7 @@ section_defs:
       title: Projects
       level: 1
       exclude_from_import: true
+      protect_from_import: true
       tags: reciprocal-xref-source
       blocks:
         - text: "# Projects"
@@ -68,7 +96,7 @@ section_defs:
       children: []
 ---
 
-<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true}-->
+<!--hvy: {"id":"projects","templateKey":"resume-projects","exclude_from_import":true,"protect_from_import":true}-->
 #! Projects
 `, '.hvy');
 
@@ -76,8 +104,9 @@ section_defs:
 
   expect(expectedResult).toContain('key: resume-projects');
   expect(expectedResult).toContain('exclude_from_import: true');
+  expect(expectedResult).toContain('protect_from_import: true');
   expect(expectedResult).toContain('repeatable: true');
-  expect(expectedResult).toContain('"exclude_from_import":true,"templateKey":"resume-projects"');
+  expect(expectedResult).toContain('"exclude_from_import":true,"protect_from_import":true,"templateKey":"resume-projects"');
   expect(expectedResult).not.toContain('idEditorOpen');
 });
 
@@ -96,7 +125,7 @@ hvy_version: 0.1
    <!--hvy:component-list {"componentListComponent":"text"}-->
     ## Skills
 
-  <!--hvy:grid:1 {"id":"details","align":"right"}-->
+  <!--hvy:grid:1 {"id":"details"}-->
 
    <!--hvy:container {}-->
 
@@ -108,7 +137,7 @@ hvy_version: 0.1
   const output = serializeWithState(document);
 
   expect(output).toMatch(/<!--hvy:grid:0 {"id":"skills"}-->/);
-  expect(output).toMatch(/<!--hvy:grid:1 {"id":"details","align":"right"}-->/);
+  expect(output).toMatch(/<!--hvy:grid:1 {"id":"details"}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:component-list \{\}-->/);
   expect(output).toMatch(/\n\s*<!--hvy:container \{\}-->/);
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"component"/);
@@ -569,6 +598,25 @@ Dependent text
   expect(expectedResult).toContain('"visibleScript":"return not doc.component.is_empty');
 });
 
+test('round-trips block hide-if-yes markers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+<!--hvy:text {"id":"optional-detail","hideIfYes":"yes"}-->
+Optional detail
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.hideIfYes).toBe('yes');
+
+  const expectedResult = serializeWithState(document);
+  expect(expectedResult).toContain('"hideIfYes":"yes"');
+});
+
 test('section priority round-trips as section metadata', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -809,6 +857,41 @@ component_defs:
   expect(output).toMatch(/<!--hvy:grid:1 {"id":"history-tools-technologies"}-->/);
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"column"/);
   expect(output).not.toMatch(/<!--hvy:skills-and-tools-tech-list \{[^]*?<!--hvy:grid \{\}-->/);
+});
+
+test('inline grid items without authored ids do not gain serialized random ids', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: resume-header
+    baseType: grid
+    schema:
+      gridColumns: 2
+      gridItems:
+        - block:
+            text: <!-- value {"placeholder":"Location"} -->
+            schema:
+              component: text
+              css: "margin: 0;"
+              fillIn: true
+        - id: dates
+          block:
+            text: <!-- value {"placeholder":"Dates"} -->
+            schema:
+              component: text
+              css: "margin: 0; text-align: right;"
+              fillIn: true
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('gridItems:\n        - block:');
+  expect(output).not.toMatch(/id: griditem-[a-z0-9]+/);
+  expect(output).toContain('id: dates');
 });
 
 test('component def expandable slot css survives header serialization', () => {

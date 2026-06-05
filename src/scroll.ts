@@ -2,6 +2,7 @@ import { state } from './state';
 import type { PaneScrollState } from './types';
 
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
+  const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
   const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
   const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
   const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
@@ -9,6 +10,7 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
     app.querySelector<HTMLDivElement>('.viewer-shell .reader-document') ??
     app.querySelector<HTMLDivElement>('.reader-pane');
   return {
+    fullPaneTop: fullPane?.scrollTop ?? previous.fullPaneTop,
     editorTop: editorTree?.scrollTop ?? previous.editorTop,
     editorSidebarTop: editorSidebarPanel?.scrollTop ?? previous.editorSidebarTop,
     viewerSidebarTop: viewerSidebarPanel?.scrollTop ?? previous.viewerSidebarTop,
@@ -19,16 +21,20 @@ export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): 
 }
 
 export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLElement): void {
-  if (!scroll || state.pendingEditorCenterSectionKey) {
+  if (!scroll) {
     return;
   }
   const restore = (): void => {
     const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
     const editorSidebarPanel = app.querySelector<HTMLDivElement>('.editor-sidebar-panel');
     const viewerSidebarPanel = app.querySelector<HTMLDivElement>('.viewer-sidebar-panel');
+    const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
     const readerPane =
       app.querySelector<HTMLDivElement>('.viewer-shell .reader-document') ??
       app.querySelector<HTMLDivElement>('.reader-pane');
+    if (fullPane) {
+      fullPane.scrollTop = scroll.fullPaneTop;
+    }
     if (editorTree) {
       editorTree.scrollTop = scroll.editorTop;
     }

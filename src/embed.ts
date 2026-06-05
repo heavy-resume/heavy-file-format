@@ -3,6 +3,8 @@ import './host-overrides.css';
 import './style.css';
 
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
+import { isPdfDocument } from './pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import {
   activateStateRuntime,
   createStateRuntime,
@@ -13,7 +15,7 @@ import {
   runWithStateRuntimeAsync,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
@@ -76,6 +78,7 @@ import type {
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
+import { setEditorClipboardHost } from './editor-clipboard';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -93,6 +96,7 @@ export interface HvyMountOptions {
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
+  editorClipboard?: HvyEditorClipboardHost | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -200,7 +204,7 @@ function createEmbedState(
       popupY: 0,
       requestNonce: 0,
     },
-    paneScroll: { editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
+    paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
@@ -227,10 +231,12 @@ function createEmbedState(
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    reusableDefinitionEditModal: null,
     sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
@@ -261,6 +267,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -312,6 +319,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get pdfTemplateImportModal() { return null; },
       get reusableSaveModal() { return null; },
       get reusableTemplateModal() { return null; },
+      get reusableDefinitionEditModal() { return null; },
       get sectionTemplateFlavorModal() { return null; },
       get componentMetaModal() { return null; },
       get themeModalOpen() { return false; },
@@ -360,6 +368,14 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
+}
+
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   void options;
   if (!currentRoot) return;
@@ -372,12 +388,14 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const readerWarningsHtml = renderer.renderWarnings();
   const readerSidebarSectionsHtml = renderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
+  const pdfDocument = isPdfDocument(state.document);
   capturePluginFocus();
   root.innerHTML = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
-          <div class="viewer-shell ${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}">
+          <div class="viewer-shell ${pdfDocument ? 'phvy-viewer-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}"${pdfDocument ? ` style="${renderPdfDocumentViewerThemeStyle(state.document, escapeAttr)}"` : ''}>
+            ${renderTransientNotice()}
             ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
               <aside class="viewer-sidebar">
                 <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -682,6 +700,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
+  setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
@@ -702,6 +721,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       runWithStateRuntime(runtime, () => {
         options.root.innerHTML = '';
         setHostPlugins([]);
+        setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
         if (currentRoot === options.root) {

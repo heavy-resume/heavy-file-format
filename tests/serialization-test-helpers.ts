@@ -35,6 +35,7 @@ export function createTestState(document: VisualDocument): AppState {
       requestNonce: 0,
     },
     paneScroll: {
+      fullPaneTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -72,6 +73,7 @@ export function createTestState(document: VisualDocument): AppState {
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     selectedReusableComponentName: null,
@@ -101,6 +103,7 @@ export function createTestState(document: VisualDocument): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 

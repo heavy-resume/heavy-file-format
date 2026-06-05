@@ -77,6 +77,7 @@ export interface ChatSettings {
   model: string;
   compactionProvider?: ChatProvider;
   compactionModel?: string;
+  maxContextChars?: number;
   toolLoopCompaction?: ToolLoopCompactionOptions;
 }
 
@@ -148,6 +149,7 @@ export interface AiEditState {
 }
 
 export interface PaneScrollState {
+  fullPaneTop: number;
   editorTop: number;
   editorSidebarTop: number;
   viewerSidebarTop: number;
@@ -179,6 +181,14 @@ export interface SectionTemplateFlavorModalState {
   location?: 'main' | 'sidebar';
 }
 
+export interface ReusableDefinitionEditModalState {
+  kind: 'component' | 'section';
+  index: number;
+  mode: 'edit' | 'raw';
+  rawDraft: string;
+  error: string | null;
+}
+
 export interface SqliteRowComponentModalState {
   sectionKey: string;
   blockId: string;
@@ -206,6 +216,25 @@ export interface ComponentPlacementState {
   mode: 'move' | 'copy';
   sectionKey: string;
   blockId: string;
+  source?: 'block' | 'clipboard';
+  sourcePane?: 'stub' | 'content';
+}
+
+export type HvyEditorClipboardPayload =
+  | {
+      kind: 'component';
+      block: VisualBlock;
+      attachments?: DocumentAttachment[];
+      componentDefs?: ComponentDefinition[];
+      pasteBehavior?: {
+        unwrapIntoEmptyContainer?: boolean;
+      };
+    }
+  | { kind: 'section'; section: VisualSection; attachments?: DocumentAttachment[]; componentDefs?: ComponentDefinition[] };
+
+export interface HvyEditorClipboardHost {
+  read(): HvyEditorClipboardPayload | null;
+  write(payload: HvyEditorClipboardPayload): void;
 }
 
 export interface RawEditorDiagnostic {
@@ -352,10 +381,12 @@ export interface AppState {
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
+  reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   tempHighlights: Set<string>;
   addComponentBySection: Record<string, string>;
   metaPanelOpen: boolean;
+  openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
   descriptionPopulate?: {
@@ -394,14 +425,17 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+  transientNotice: { id: number; message: string } | null;
 }
 
 export interface ContextMenuState {
-  kind: 'filter' | 'ai';
+  kind: 'filter' | 'ai' | 'editor';
   sectionKey: string;
   blockId?: string;
+  pasteComponentAttrs?: Record<string, string>;
   x: number;
   y: number;
+  surface?: 'modal';
   targetRect?: {
     left: number;
     top: number;

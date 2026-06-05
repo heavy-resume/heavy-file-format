@@ -3,6 +3,7 @@ import type { VisualBlock, VisualSection } from '../editor/types';
 import { renderAltAnnotationsAsFullText } from '../markdown';
 import type { VisualDocument } from '../types';
 import type { HvyDescriptionParentContext, HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
+import { loadChatSettings, requestProxyCompletion } from '../chat/chat';
 
 const DEFAULT_DESCRIPTION_MODEL = 'gpt-5.4-nano';
 const MAX_CONTENT_CHARS = 600;
@@ -12,35 +13,23 @@ export const localDescriptionProvider: HvyDescriptionProvider = (request) => ({
 });
 
 export const openAiDescriptionProvider: HvyDescriptionProvider = async (request) => {
-  if (typeof fetch !== 'function') {
-    throw new Error('Description generation requires the local chat proxy.');
-  }
-  const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      provider: 'openai',
+  const output = await requestProxyCompletion({
+    settings: {
+      ...loadChatSettings(),
       model: DEFAULT_DESCRIPTION_MODEL,
-      mode: 'qa',
-      openAiReasoningEffort: 'none',
-      context: buildDescriptionPrompt(request),
-      messages: [{
-        role: 'user',
-        content: 'Write the description now.',
-      }],
-    }),
+    },
+    mode: 'qa',
+    debugLabel: 'description-generation',
+    context: buildDescriptionPrompt(request),
+    responseInstructions: 'Return only the description text.',
+    messages: [{
+      id: 'description-request',
+      role: 'user',
+      content: 'Write the description now.',
+    }],
     signal: request.signal,
   });
-  const payload = await response.json().catch(() => null) as { output?: unknown; error?: unknown } | null;
-  if (!response.ok || typeof payload?.output !== 'string') {
-    const message = typeof payload?.error === 'string' && payload.error.trim()
-      ? payload.error.trim()
-      : 'Description generation failed.';
-    throw new Error(message);
-  }
-  const description = cleanDescription(payload.output);
+  const description = cleanDescription(output);
   if (!description) {
     throw new Error('Description generation returned no text.');
   }
@@ -178,26 +167,26 @@ function summarizeTargetContent(kind: HvyDescriptionTargetKind, section: VisualS
     return '';
   }
   if (kind === 'expandable-stub') {
-    return truncate(block.schema.expandableStubBlocks.children.map(summarizeBlock).join('\n'));
+    return truncate((block.schema.expandableStubBlocks?.children ?? []).map(summarizeBlock).join('\n'));
   }
   if (kind === 'expandable-content') {
-    return truncate(block.schema.expandableContentBlocks.children.map(summarizeBlock).join('\n'));
+    return truncate((block.schema.expandableContentBlocks?.children ?? []).map(summarizeBlock).join('\n'));
   }
   return truncate(summarizeBlock(block));
 }
 
 function summarizeBlock(block: VisualBlock): string {
   const values = [
-    block.schema.xrefTitle,
-    block.schema.xrefDetail,
-    block.schema.containerTitle,
-    block.schema.imageAlt,
+    block.schema.xrefTitle ?? '',
+    block.schema.xrefDetail ?? '',
+    block.schema.containerTitle ?? '',
+    block.schema.imageAlt ?? '',
     block.text,
-    block.schema.component === 'table' ? renderAltAnnotationsAsFullText(block.schema.tableColumns.join(' ')) : '',
-    block.schema.component === 'table' ? block.schema.tableRows.flatMap((row) => row.cells).join(' ') : '',
-    block.schema.containerBlocks.map(summarizeBlock).join('\n'),
-    block.schema.componentListBlocks.map(summarizeBlock).join('\n'),
-    block.schema.gridItems.map((item) => summarizeBlock(item.block)).join('\n'),
+    block.schema.component === 'table' ? renderAltAnnotationsAsFullText((block.schema.tableColumns ?? []).join(' ')) : '',
+    block.schema.component === 'table' ? (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') : '',
+    (block.schema.containerBlocks ?? []).map(summarizeBlock).join('\n'),
+    (block.schema.componentListBlocks ?? []).map(summarizeBlock).join('\n'),
+    (block.schema.gridItems ?? []).map((item) => summarizeBlock(item.block)).join('\n'),
   ];
   return values.filter(Boolean).join('\n').replace(/\s+/g, ' ').trim();
 }
@@ -208,11 +197,11 @@ function findBlockParentPath(blocks: VisualBlock[], targetBlockId: string): Visu
       return [];
     }
     const childLists = [
-      block.schema.containerBlocks,
-      block.schema.componentListBlocks,
-      block.schema.expandableStubBlocks.children,
-      block.schema.expandableContentBlocks.children,
-      block.schema.gridItems.map((item) => item.block),
+      block.schema.containerBlocks ?? [],
+      block.schema.componentListBlocks ?? [],
+      block.schema.expandableStubBlocks?.children ?? [],
+      block.schema.expandableContentBlocks?.children ?? [],
+      (block.schema.gridItems ?? []).map((item) => item.block),
     ];
     for (const children of childLists) {
       const childPath = findBlockParentPath(children, targetBlockId);
@@ -227,8 +216,8 @@ function findBlockParentPath(blocks: VisualBlock[], targetBlockId: string): Visu
 function getParentContextForBlock(block: VisualBlock): HvyDescriptionParentContext | null {
   const label = getBlockLabel(block)
     || block.schema.description.trim()
-    || block.schema.componentListItemLabel.trim()
-    || block.schema.componentListComponent.trim()
+    || (block.schema.componentListItemLabel ?? '').trim()
+    || (block.schema.componentListComponent ?? '').trim()
     || block.schema.component.trim();
   const description = block.schema.description.trim();
   if (!label && !description) {
@@ -242,9 +231,9 @@ function getParentContextForBlock(block: VisualBlock): HvyDescriptionParentConte
 
 function getBlockLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
-    || block.schema.containerTitle.trim()
+    || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || block.schema.imageAlt.trim()
+    || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]))
     || '';
@@ -254,13 +243,13 @@ function getTableRowLabel(block: VisualBlock): string {
   if (block.schema.component !== 'table') {
     return '';
   }
-  return firstLine(block.schema.tableRows[0]?.cells.join(' ') ?? '');
+  return firstLine(block.schema.tableRows?.[0]?.cells.join(' ') ?? '');
 }
 
 function getNestedHeadingLabel(block: VisualBlock, seen = new Set<VisualBlock>()): string {
   const nestedBlocks = [
-    ...(block.schema.expandableContentBlocks.children ?? []),
-    ...(block.schema.expandableStubBlocks.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
     ...(block.schema.containerBlocks ?? []),
     ...(block.schema.componentListBlocks ?? []),
     ...(block.schema.gridItems ?? []).map((item) => item.block),

@@ -29,6 +29,13 @@ function writeFileCommand(path: string, content: string): string {
   return `echo ${JSON.stringify(content.trimEnd().replace(/\n/g, '\\n'))} > ${path}`;
 }
 
+async function countDocumentText(page: Page, text: string): Promise<number> {
+  return page.evaluate(async (needle) => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return JSON.stringify(state.document).split(needle).length - 1;
+  }, text);
+}
+
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
 
@@ -1282,6 +1289,60 @@ text_line_styles:
   }).toBeLessThan(2);
 });
 
+test('ai context clone preserves heading section spacing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"sectioned-text"}-->
+  ## Alpha
+  First paragraph.
+
+  ## Beta
+  Second paragraph.
+
+  ## Gamma
+  Third paragraph.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const block = page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Gamma' });
+  const before = await block.evaluate((element) => {
+    const headings = Array.from(element.querySelectorAll('h2'));
+    const blockBox = element.getBoundingClientRect();
+    const betaBox = headings[1]?.getBoundingClientRect();
+    return {
+      height: Math.round(blockBox.height),
+      betaOffset: betaBox ? Math.round(betaBox.top - blockBox.top) : -1,
+      betaMarginTop: headings[1] ? getComputedStyle(headings[1]).marginTop : '',
+    };
+  });
+
+  await block.click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover-clone')).toBeVisible();
+
+  const after = await page.locator('.hvy-context-popover-clone .reader-block-text').evaluate((element) => {
+    const headings = Array.from(element.querySelectorAll('h2'));
+    const blockBox = element.getBoundingClientRect();
+    const betaBox = headings[1]?.getBoundingClientRect();
+    return {
+      height: Math.round(blockBox.height),
+      betaOffset: betaBox ? Math.round(betaBox.top - blockBox.top) : -1,
+      betaMarginTop: headings[1] ? getComputedStyle(headings[1]).marginTop : '',
+    };
+  });
+
+  expect(after).toEqual(before);
+  expect(after.betaMarginTop).toBe('24px');
+});
+
 test('ai context clone preserves target position above preview top', async ({ page }) => {
   await page.goto('/');
 
@@ -1773,6 +1834,7 @@ hvy_version: 0.1
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
   await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
@@ -1818,6 +1880,7 @@ hvy_version: 0.1
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
   await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
@@ -1827,6 +1890,162 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('"placeholder":"FILL ME IN"');
   await expect(page.locator('#rawEditor')).not.toContainText('"placeholder":"pronunciation"');
+});
+
+test('text toolbar fill-in button follows the active selection', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await page.locator('.section-title-passive', { hasText: 'Header' }).click();
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+});
+
+test('text toolbar fill-in button clears after the selection collapses in the same editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name Title
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const textNode = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.indexOf('Name');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Name'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await richEditor.locator('h1').evaluate((heading) => {
+    const textNode = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const offset = textNode.textContent.indexOf('Title');
+    const range = document.createRange();
+    range.setStart(textNode, offset);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('mouseup');
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+
+  await richEditor.pressSequentially('New ');
+  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+});
+
+test('text toolbar fill-in preserves heading syntax when the whole heading is selected', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  const richEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await richEditor.locator('h1').evaluate((heading) => {
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await richEditor.dispatchEvent('keyup');
+  await page.locator('.text-fill-in-selection-button').evaluate((button: HTMLButtonElement) => button.click());
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# <!-- value {"placeholder":"Name"} -->');
+  await expect(page.locator('#rawEditor')).not.toContainText('<!-- value {"placeholder":"# Name"} -->');
+});
+
+test('text fill-in editor keeps rich text toolbar available for heading changes', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"role","placeholder":"Role","fillIn":true}-->
+  <!-- value {"placeholder":"Role"} -->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="role"] .text-fill-in-box').click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.getByRole('button', { name: 'H3' })).toBeVisible();
+  await activeBlock.locator('[data-field="text-fill-in-value"]').evaluate((fillIn) => {
+    const range = document.createRange();
+    range.selectNode(fillIn);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await activeBlock.getByRole('button', { name: 'H3' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('### <!-- value {"placeholder":"Role"} -->');
 });
 
 test('text fill-in preserves multiple slots while typing', async ({ page }) => {
@@ -3232,6 +3451,210 @@ hvy_version: 0.1
   expect(raw.match(/Alpha/g)).toHaveLength(2);
 });
 
+test('canceling a pasted component removes the pasted copy', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
+  await page.locator('[data-action="place-component"][data-placement="after"]').last().click();
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Alpha');
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Cancel' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Alpha');
+  expect((await page.locator('#rawEditor').inputValue()).match(/Alpha/g)).toHaveLength(1);
+});
+
+test('undo restores a deleted component', async ({ page }) => {
+  await page.goto('/');
+
+  const fillerBlocks = Array.from({ length: 18 }, (_, index) => ` <!--hvy:text {"id":"filler-${index}"}-->
+  Filler ${index}
+`).join('\n');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+${fillerBlocks}
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const editorTree = page.locator('#editorTree');
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).scrollIntoViewIfNeeded();
+  const scrolledTop = await editorTree.evaluate((node) => node.scrollTop);
+  expect(scrolledTop).toBeGreaterThan(0);
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="remove-block"]').click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('#editorTree')).not.toContainText('Beta');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('#editorTree')).toContainText('Beta');
+  await expect.poll(() => editorTree.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+});
+
+test('undo restores a deleted nested component', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:container {"id":"box","containerTitle":"Box"}-->
+  <!--hvy:text {"id":"alpha"}-->
+   Alpha
+
+  <!--hvy:text {"id":"beta"}-->
+   Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Beta' }).last().click();
+  await page.getByRole('button', { name: 'Remove text' }).click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('#editorTree')).not.toContainText('Beta');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('#editorTree')).toContainText('Beta');
+});
+
+test('undo restores an expandable content pane pasted into a container above its grid', async ({ page }) => {
+  await page.goto('/');
+
+  const fillerBlocks = Array.from({ length: 14 }, (_, index) => ` <!--hvy:text {"id":"filler-${index}"}-->
+  Filler ${index}
+`).join('\n');
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+${fillerBlocks}
+ <!--hvy:container {"id":"destination","containerTitle":"Destination"}-->
+  <!--hvy:text {"id":"destination-existing"}-->
+   Destination starter
+
+ <!--hvy:grid {"id":"cards","gridColumns":1}-->
+  <!--hvy:grid:0 {"id":"card-slot"}-->
+   <!--hvy:expandable {"id":"card","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {"id":"card-title"}-->
+      Card title
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"id":"card-detail"}-->
+      Card detail
+`;
+  await page.evaluate(async (rawSource) => {
+    const [{ state, getRenderApp }, { deserializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    state.document = deserializeDocument(rawSource, '.hvy');
+    state.rawEditorText = rawSource;
+    state.currentView = 'editor';
+    state.editorMode = 'basic';
+    state.metaPanelOpen = false;
+    state.activeEditorBlock = null;
+    state.activeEditorBlockPath = [];
+    state.componentPlacement = null;
+    state.history = [];
+    state.future = [];
+    getRenderApp()();
+  }, source);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditor.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(page.locator('[data-action="place-component"]')).not.toHaveCount(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'Destination starter' }).first().click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+
+  const editorTree = page.locator('#editorTree');
+  const beforeUndoScrollTop = await editorTree.evaluate((node) => {
+    node.scrollTop = 120;
+    return node.scrollTop;
+  });
+  expect(beforeUndoScrollTop).toBeGreaterThan(0);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(0);
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
+  await expect.poll(() => editorTree.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditorAfterUndo = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditorAfterUndo.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditorAfterUndo.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(page.locator('[data-action="place-component"]')).not.toHaveCount(0);
+
+  await page.locator('[data-placement-container="section"][data-placement="before"]').first().click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(0);
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
+
+  await page.locator('.editor-block-passive', { hasText: 'Card title' }).nth(1).click();
+  const cardEditorForContextPaste = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await cardEditorForContextPaste.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await cardEditorForContextPaste.locator('.expandable-part-expanded').getByRole('button', { name: 'Copy', exact: true }).click();
+  await cardEditorForContextPaste.locator('.expandable-part-expanded').getByRole('button', { name: 'Cancel place', exact: true }).click();
+  await page.locator('#editorTree [data-paste-placement-container="section"]').first().dispatchEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 260,
+    clientY: 260,
+  });
+  await page.getByRole('button', { name: 'Paste component' }).click();
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(2);
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect.poll(() => countDocumentText(page, 'Card detail')).toBe(1);
+});
+
 test('component move and copy work between main and sidebar sections', async ({ page }) => {
   await page.goto('/');
 
@@ -3307,6 +3730,17 @@ hvy_version: 0.1
   await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
 
   await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(3);
+  await expect.poll(async () => {
+    return page.locator('.grid-fields > .grid-field-row, .editor-grid-passive-preview > .reader-grid-cell').evaluateAll((cells) => {
+      const [first, second] = cells as HTMLElement[];
+      if (!first || !second) {
+        return false;
+      }
+      const firstRect = first.getBoundingClientRect();
+      const secondRect = second.getBoundingClientRect();
+      return Math.abs(firstRect.top - secondRect.top) < 8 && secondRect.left > firstRect.left;
+    });
+  }).toBe(true);
   await expect(page.locator('.grid-add-ghost')).toHaveCount(0);
   await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
 
@@ -3314,6 +3748,56 @@ hvy_version: 0.1
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/One/g)).toHaveLength(2);
   expect(raw.indexOf('One')).toBeLessThan(raw.indexOf('Two'));
+});
+
+test('context menu paste on a grid add ghost pastes into the grid', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:grid {"id":"layout","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"one"}-->
+    One
+
+ <!--hvy:text {"id":"beta"}-->
+  Beta
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'Alpha' }).dispatchEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 240,
+    clientY: 240,
+  });
+  await page.getByRole('button', { name: 'Copy component' }).click();
+  await page.locator('#editorTree .editor-block-passive', { has: page.locator('.editor-grid-passive-preview') }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] .grid-add-ghost .component-picker-trigger').dispatchEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 320,
+    clientY: 320,
+  });
+  await page.getByRole('button', { name: 'Paste component' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/Alpha/g)).toHaveLength(2);
+  expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('<!--hvy:grid'));
+  expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('One'));
+  expect(raw.lastIndexOf('Alpha')).toBeLessThan(raw.indexOf('Beta'));
 });
 
 test('component move and copy can place section blocks into a passive grid', async ({ page }) => {
@@ -3474,6 +3958,164 @@ hvy_version: 0.1
   expect(raw.indexOf('Skill details')).toBeLessThan(raw.indexOf('Skill notes'));
 });
 
+test('component placement persists while activating and opening an expandable destination', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"alpha"}-->
+  Alpha
+
+ <!--hvy:expandable {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
+  await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(2);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="before"]').first().click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw.match(/Alpha/g)).toHaveLength(2);
+  expect(raw.lastIndexOf('Alpha')).toBeGreaterThan(raw.indexOf('<!--hvy:expandable:content'));
+  expect(raw.lastIndexOf('Alpha')).toBeLessThan(raw.indexOf('Skill details'));
+});
+
+test('copying an expandable pane pastes as a container unless the destination pane is empty', async ({ page }) => {
+  await page.goto('/');
+
+  const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:expandable {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+
+ <!--hvy:expandable {"id":"empty-skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"empty-name"}-->
+    Empty skill
+`;
+  await page.evaluate(async (rawSource) => {
+    const [{ state, getRenderApp }, { deserializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    state.document = deserializeDocument(rawSource, '.hvy');
+    state.rawEditorText = rawSource;
+    state.currentView = 'editor';
+    state.editorMode = 'basic';
+    state.metaPanelOpen = false;
+    state.activeEditorBlock = null;
+    state.activeEditorBlockPath = [];
+    state.componentPlacement = null;
+    getRenderApp()();
+  }, source);
+  await expect(page.locator('#editorTree')).toContainText('Skill name');
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  const skillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(2);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="after"]').first().click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Empty skill' }).first().click();
+  const emptySkillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await emptySkillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await emptySkillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
+  await emptySkillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(1);
+  await page.locator('[data-placement-container="expandable-content"][data-placement="end"]').click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const raw = await page.locator('#rawEditor').inputValue();
+  expect(raw).toMatch(/<!--hvy:expandable:content \{\}-->\n\n   <!--hvy:text \{"id":"details"\}-->\n    Skill details\n\n   <!--hvy:container/);
+  expect(raw).toMatch(/<!--hvy:container [\s\S]*?Skill name/);
+  expect(raw).toMatch(/<!--hvy:expandable \{"id":"empty-skill"[\s\S]*?<!--hvy:expandable:content \{\}-->[\s\S]*?<!--hvy:text \{\}-->[\s\S]*?Empty skill/);
+  expect(raw).not.toMatch(/<!--hvy:expandable \{"id":"empty-skill"[\s\S]*?<!--hvy:expandable:content \{\}-->[\s\S]*?<!--hvy:container/);
+});
+
+test('copying a custom expandable component pane enters placement mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-card
+    baseType: expandable
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:skill-card {"id":"skill","expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {"id":"name"}-->
+    Skill name
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"details"}-->
+    Skill details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  const skillEditor = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.expand-chooser-grid') });
+  await skillEditor.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
+
+  await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
+  await expect(page.locator('[data-action="place-component"]')).toHaveCount(2);
+});
+
 test('component placement works inside expandable children of a locked section', async ({ page }) => {
   await page.goto('/');
 
@@ -3506,7 +4148,7 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
   await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
   await page.locator('.editor-block-passive', { hasText: 'Skill notes' }).click();
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
 
   await expect(page.locator('[data-placement-container="expandable-content"]')).toHaveCount(3);
   await expect(page.locator('[data-placement-container="section"]')).toHaveCount(0);

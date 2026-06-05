@@ -3,10 +3,11 @@ import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
 import { addDefaultContainerBorderCss, removeDefaultContainerBorderCss } from '../../editor/components/container/container-css';
-import { isSearchFilterApplied, submitSearch } from '../../search/actions';
+import { refreshSearchFilterButton, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -58,23 +59,16 @@ export function bindInputMisc(app: HTMLElement): void {
         semanticStatus.textContent = '';
         semanticStatus.classList.remove('is-error', 'is-empty');
       }
-      const filterButton = app.querySelector<HTMLButtonElement>('[data-action="apply-search-filter"], [data-action="stop-search-request"]');
-      if (filterButton) {
-        const applied = isSearchFilterApplied();
-        filterButton.dataset.action = 'apply-search-filter';
-        filterButton.classList.remove('danger');
-        filterButton.classList.add('secondary');
-        filterButton.classList.toggle('is-active', applied);
-        filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
-        filterButton.disabled = false;
-        filterButton.textContent = applied ? 'Turn off filter' : 'Filter';
-      }
+      refreshSearchFilterButton(app);
       if (hadFocus && document.activeElement !== target) {
         target.focus({ preventScroll: true });
       }
       return;
     }
     if (handleTagEditorInput(target, tagStateHelpers)) {
+      if (target.dataset.field === 'search-exclude-tags-input') {
+        refreshSearchFilterButton(app);
+      }
       return;
     }
     const sectionKey = target.dataset.sectionKey;
@@ -146,6 +140,7 @@ export function bindInputMisc(app: HTMLElement): void {
         return;
       }
       section.customId = sanitizeOptionalId(target.value);
+      section.customIdGenerated = false;
       getRefreshReaderPanels()();
       return;
     }
@@ -278,6 +273,18 @@ export function bindInputMisc(app: HTMLElement): void {
       context.block.schema.showCopy = target.checked;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'block-lock' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.lock = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      getRenderApp()();
       return;
     }
 
@@ -532,6 +539,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-hide-if-yes' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.hideIfYes = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-editor-only' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -639,8 +657,9 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
+      clearNextUndoTargetsDocument();
       saveSessionState(state);
-      if (field === 'block-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
+      if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
       void runButtonVisibilityScripts(app);

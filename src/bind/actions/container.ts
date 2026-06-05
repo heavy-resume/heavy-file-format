@@ -10,9 +10,6 @@ import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document
 import type { ActionHandler } from './types';
 
 const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
-  if (isPdfDocument(state.document)) {
-    return;
-  }
   if (!blockId) {
     return;
   }

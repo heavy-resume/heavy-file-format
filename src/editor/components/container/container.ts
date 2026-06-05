@@ -5,6 +5,7 @@ import { hasContainerBorderCss } from './container-css';
 
 export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   helpers.ensureContainerBlocks(block);
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const addKey = `container:${sectionKey}:${block.id}`;
   const bordered = hasContainerBorderCss(block.schema.css);
   const innerBlocks = renderContainerPlacementBlockList(sectionKey, block, helpers);
@@ -50,7 +51,7 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
       ${innerBlocks}
     </div>
     ${
-      block.schema.lock || placementMode
+      locked || placementMode
         ? ''
         : `<div class="ghost-section-card add-ghost container-add-ghost">
             ${helpers.renderAddComponentPicker({
@@ -71,8 +72,9 @@ function renderContainerPlacementBlockList(
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const blocks = block.schema.containerBlocks;
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const output: string[] = [];
-  if (!block.schema.lock && blocks.length > 0) {
+  if (!locked && blocks.length > 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'container',
       sectionKey,
@@ -82,8 +84,8 @@ function renderContainerPlacementBlockList(
     }));
   }
   for (const innerBlock of blocks) {
-    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, block.schema.lock));
-    if (!block.schema.lock) {
+    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
+    if (!locked) {
       output.push(helpers.renderComponentPlacementTarget({
         container: 'container',
         sectionKey,
@@ -93,7 +95,7 @@ function renderContainerPlacementBlockList(
       }));
     }
   }
-  if (!block.schema.lock && blocks.length === 0) {
+  if (!locked && blocks.length === 0) {
     output.push(helpers.renderComponentPlacementTarget({
       container: 'container',
       sectionKey,

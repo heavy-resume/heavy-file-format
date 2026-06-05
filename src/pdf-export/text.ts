@@ -1,3 +1,4 @@
+import { marked } from 'marked';
 import type { Align } from '../editor/types';
 import type { HvyPdfExportDecision, HvyPdfMakeNode, HvyPdfMakeNodeObject } from './types';
 
@@ -6,15 +7,27 @@ interface PdfTextLine {
   text: string;
 }
 
+export interface PdfTextBlockStyle {
+  bold?: boolean;
+  color?: string;
+  fillColor?: string;
+}
+
+type PdfInlineText = string | Array<string | HvyPdfMakeNodeObject>;
+
 export function renderPdfTextBlock(
   text: string,
-  placeholder: string,
+  _placeholder: string,
   decision: HvyPdfExportDecision,
-  align?: Align
+  align?: Align,
+  textStyle: PdfTextBlockStyle = {}
 ): HvyPdfMakeNodeObject {
-  const lines = splitPdfTextLines(stripFillInMarkers(normalizePdfTextInline(text || placeholder || '')));
+  const lines = splitPdfTextLines(getPdfTextBlockSource(text));
   if (!lines.length) {
-    return applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align);
+    return applyTextStyle(
+      applyTextAlignment({ text: '', style: decision.role === 'metadata' ? 'metadata' : 'paragraph' }, align),
+      textStyle
+    );
   }
   const stack: HvyPdfMakeNode[] = [];
   let listItems: HvyPdfMakeNode[] = [];
@@ -32,27 +45,45 @@ export function renderPdfTextBlock(
     const style = getPdfTextLineStyle(line.styleName, decision);
     if (heading) {
       flushList();
-      stack.push(applyTextAlignment({
-        text: heading[2],
-        style: getHeadingStyle(heading[1].length, style),
-        headlineLevel: heading[1].length,
-        hvyKeepWithNext: true,
-      }, align));
+      stack.push(
+        applyTextStyle(
+          applyTextAlignment({
+            text: renderPdfInlineMarkdown(heading[2] ?? ''),
+            style: getHeadingStyle(heading[1].length, style),
+            headlineLevel: heading[1].length,
+            hvyKeepWithNext: true,
+          }, align),
+          textStyle
+        )
+      );
     } else if (bullet) {
       activeListStyle = style;
-      listItems.push(applyTextAlignment({ text: bullet[1], style }, align));
+      listItems.push(applyTextStyle(applyTextAlignment({ text: renderPdfInlineMarkdown(bullet[1] ?? ''), style }, align), textStyle));
     } else {
       flushList();
-      stack.push(applyTextAlignment({
-        text: line.text,
-        style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
-        headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
-        hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
-      }, align));
+      stack.push(
+        applyTextStyle(
+          applyTextAlignment({
+            text: renderPdfInlineMarkdown(line.text),
+            style: line.styleName?.includes('heading') ? getHeadingStyle(4, style) : style,
+            headlineLevel: line.styleName?.includes('heading') ? 4 : undefined,
+            hvyKeepWithNext: line.styleName?.includes('heading') ? true : undefined,
+          }, align),
+          textStyle
+        )
+      );
     }
   }
   flushList();
   return applyTextAlignment(stack.length === 1 && typeof stack[0] !== 'string' ? stack[0] : { stack }, align);
+}
+
+export function hasRenderablePdfTextBlock(text: string): boolean {
+  return splitPdfTextLines(getPdfTextBlockSource(text)).length > 0;
+}
+
+function getPdfTextBlockSource(text: string): string {
+  return stripFillInMarkers(normalizePdfTextInline(text || ''));
 }
 
 export function normalizePdfTextInline(text: string): string {
@@ -79,7 +110,7 @@ function splitPdfTextLines(text: string): PdfTextLine[] {
       continue;
     }
     const parsed = parsePdfTextLine(line);
-    if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text)) {
+    if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text) || !hasVisiblePdfLineText(parsed.text)) {
       flushParagraph();
       continue;
     }
@@ -94,6 +125,19 @@ function splitPdfTextLines(text: string): PdfTextLine[] {
   return lines;
 }
 
+function hasVisiblePdfLineText(text: string): boolean {
+  return stripMarkdownScaffold(text).trim().length > 0;
+}
+
+function stripMarkdownScaffold(line: string): string {
+  return line
+    .replace(/^\s{0,3}#{1,6}\s*/, '')
+    .replace(/^\s{0,3}>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/^\s*[-*_]{3,}\s*$/, '')
+    .replace(/[\\`*_~#[\]()!>-]/g, '');
+}
+
 function parsePdfTextLine(line: string): PdfTextLine | null {
   const escaped = /^(\\\^)([a-z0-9_-]+)\^\s?(.*)$/i.exec(line);
   if (escaped) {
@@ -104,6 +148,54 @@ function parsePdfTextLine(line: string): PdfTextLine | null {
     return { styleName: styled[1], text: styled[2].trim() };
   }
   return { styleName: null, text: line };
+}
+
+function renderPdfInlineMarkdown(text: string): PdfInlineText {
+  const inlineTokens = getMarkedInlineTokens(text);
+  if (!inlineTokens.length) {
+    return text;
+  }
+  const rendered = renderMarkedInlineTokens(inlineTokens);
+  if (rendered.length === 0) {
+    return text;
+  }
+  return rendered.length === 1 && typeof rendered[0] === 'string' ? rendered[0] : rendered;
+}
+
+function getMarkedInlineTokens(text: string): unknown[] {
+  const tokens = marked.lexer(text, { gfm: true, breaks: false });
+  const first = tokens[0] as { type?: string; tokens?: unknown[] } | undefined;
+  return first?.type === 'paragraph' && Array.isArray(first.tokens) ? first.tokens : [];
+}
+
+function renderMarkedInlineTokens(tokens: unknown[]): Array<string | HvyPdfMakeNodeObject> {
+  return tokens.flatMap((token) => renderMarkedInlineToken(token));
+}
+
+function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeObject> {
+  if (!token || typeof token !== 'object') {
+    return [];
+  }
+  const typed = token as { type?: string; text?: string; tokens?: unknown[] };
+  if (typed.type === 'strong') {
+    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), bold: true }];
+  }
+  if (typed.type === 'em') {
+    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), italics: true }];
+  }
+  if (typed.type === 'codespan') {
+    return [{ text: typed.text ?? '', font: 'Roboto' }];
+  }
+  if (typed.type === 'del') {
+    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), decoration: 'lineThrough' }];
+  }
+  if (typed.type === 'link') {
+    return renderMarkedInlineTokens(typed.tokens ?? []);
+  }
+  if (Array.isArray(typed.tokens)) {
+    return renderMarkedInlineTokens(typed.tokens);
+  }
+  return typed.text ? [typed.text] : [];
 }
 
 function stripFillInMarkers(text: string): string {
@@ -129,4 +221,13 @@ function getHeadingStyle(level: number, lineStyle: string): string[] {
 
 function applyTextAlignment<T extends HvyPdfMakeNodeObject>(node: T, align: Align | undefined): T {
   return align && align !== 'left' ? { ...node, alignment: align } : node;
+}
+
+function applyTextStyle<T extends HvyPdfMakeNodeObject>(node: T, textStyle: PdfTextBlockStyle): T {
+  return {
+    ...node,
+    ...(textStyle.bold === undefined ? {} : { bold: textStyle.bold }),
+    ...(textStyle.color ? { color: textStyle.color } : {}),
+    ...(textStyle.fillColor ? { fillColor: textStyle.fillColor } : {}),
+  };
 }

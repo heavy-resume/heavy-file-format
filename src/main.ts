@@ -34,6 +34,7 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
+import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
 import { createDefaultSearchState } from './search/state';
@@ -114,6 +115,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
       requestNonce: 0,
     },
     paneScroll: {
+      fullPaneTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -147,10 +149,12 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
+    reusableDefinitionEditModal: null,
     sectionTemplateFlavorModal: null,
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     descriptionPopulate: { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' },
@@ -181,6 +185,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -282,10 +287,7 @@ function renderContextMenu(): string {
 
 function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<NonNullable<typeof state.contextMenu>['targetRect']>): string {
   const clone = target.cloneNode(true) as HTMLElement;
-  clone.classList.add('hvy-context-popover-clone');
-  clone.classList.add('hvy-surface');
   clone.classList.remove('is-context-menu-target');
-  clone.setAttribute('aria-hidden', 'true');
   clone.removeAttribute('id');
   clone.querySelectorAll('[id]').forEach((element) => {
     element.removeAttribute('id');
@@ -293,11 +295,27 @@ function renderContextMenuTargetClone(target: HTMLElement, rect: NonNullable<Non
   clone.querySelectorAll('input, textarea, select, button, a, [tabindex]').forEach((element) => {
     element.setAttribute('tabindex', '-1');
   });
-  clone.style.left = `${rect.left}px`;
-  clone.style.top = `${rect.top}px`;
-  clone.style.width = `${rect.width}px`;
   clone.style.margin = '0';
-  return clone.outerHTML;
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('hvy-context-popover-clone');
+  getContextMenuSurfaceClasses(target).forEach((className) => {
+    wrapper.classList.add(className);
+  });
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.style.left = `${rect.left}px`;
+  wrapper.style.top = `${rect.top}px`;
+  wrapper.style.width = `${rect.width}px`;
+  wrapper.append(clone);
+  return wrapper.outerHTML;
+}
+
+function getContextMenuSurfaceClasses(target: HTMLElement): string[] {
+  const surface = target.closest<HTMLElement>('.hvy-surface');
+  const classes = surface ? Array.from(surface.classList) : [];
+  if (!classes.includes('hvy-surface')) {
+    classes.unshift('hvy-surface');
+  }
+  return classes;
 }
 
 function cssEscape(value: string): string {
@@ -430,6 +448,12 @@ editorRenderer = createEditorRenderer(
     get mobileAdjustmentMode() {
       return state.editorMode === 'mobile-adjustment';
     },
+    get editingReusableDefinition() {
+      return state.reusableDefinitionEditModal?.mode === 'edit';
+    },
+    get openTemplateDefinitionKeys() {
+      return state.openTemplateDefinitionKeys;
+    },
     get descriptionPopulate() {
       return state.descriptionPopulate;
     },
@@ -519,6 +543,9 @@ readerRenderer = createReaderRenderer(
     get reusableTemplateModal() {
       return state.reusableTemplateModal;
     },
+    get reusableDefinitionEditModal() {
+      return state.reusableDefinitionEditModal;
+    },
     get sectionTemplateFlavorModal() {
       return state.sectionTemplateFlavorModal;
     },
@@ -581,7 +608,7 @@ readerRenderer = createReaderRenderer(
     ensureExpandableBlocks,
     ensureGridItems,
     getComponentRenderHelpers: localGetComponentRenderHelpers,
-    renderEditorBlock: (sectionKey, block) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections),
+    renderEditorBlock: (sectionKey, block, rootSections) => editorRenderer.renderEditorBlock(sectionKey, block, rootSections ?? state.document.sections),
     renderBlockContentEditor: (sectionKey, block) => editorRenderer.renderBlockContentEditor(sectionKey, block),
     renderComponentOptions: renderDocumentComponentOptions,
     renderReusableSectionOptions,
@@ -703,6 +730,7 @@ function renderApp(): void {
                   ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
                   : `${isAdvancedEditor ? renderTemplatePanel(templateFields, state.templateValues, { escapeAttr, escapeHtml }) : ''}
                 <div${renderResponsivePreviewFrameAttrs(`editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}`)}>
+                  ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>
                     <aside class="editor-sidebar">
                       <button type="button" class="editor-sidebar-tab" data-action="toggle-editor-sidebar" aria-expanded="${state.editorSidebarOpen ? 'true' : 'false'}" aria-label="Toggle sidebar"><span class="sidebar-tab-hamburger" aria-hidden="true"></span></button>
@@ -713,7 +741,11 @@ function renderApp(): void {
                     </aside>`}
                   <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
                 </div>`}`
-              : `<div${renderResponsivePreviewFrameAttrs(`viewer-shell ${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`)}>
+              : `<div${renderResponsivePreviewFrameAttrs(
+                  `viewer-shell ${pdfDocument && !isAiView ? 'phvy-viewer-shell ' : ''}${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`,
+                  pdfDocument && !isAiView ? renderPdfDocumentViewerThemeStyle(state.document, escapeAttr) : ''
+                )}>
+                   ${renderTransientNotice()}
                    ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
                      <aside class="viewer-sidebar">
                        <button type="button" class="viewer-sidebar-tab" data-action="toggle-viewer-sidebar" aria-expanded="${state.viewerSidebarOpen ? 'true' : 'false'}" aria-label="Toggle navigation">${renderSidebarTabLabel()}</button>
@@ -881,6 +913,14 @@ function renderResponsivePreviewControls(): string {
   </div>`;
 }
 
+function renderTransientNotice(): string {
+  const notice = state.transientNotice;
+  if (!notice) {
+    return '';
+  }
+  return `<div class="transient-notice" role="status">${escapeHtml(notice.message)}</div>`;
+}
+
 function renderPreviewControlStack(): string {
   return `<div class="preview-control-stack">
     ${renderResponsivePreviewControls()}
@@ -1009,7 +1049,7 @@ function isSameReaderView(left: ReaderViewFilter, right: ReaderViewFilter): bool
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function renderResponsivePreviewFrameAttrs(baseClass: string): string {
+function renderResponsivePreviewFrameAttrs(baseClass: string, inlineStyle = ''): string {
   const maxWidth = typeof state.document.meta.reader_max_width === 'string' ? state.document.meta.reader_max_width.trim() : '';
   const width =
     state.responsivePreview === 'phone'
@@ -1020,7 +1060,8 @@ function renderResponsivePreviewFrameAttrs(baseClass: string): string {
       ? maxWidth || '960px'
       : '';
   const className = `${baseClass} hvy-preview-frame hvy-preview-frame-${state.responsivePreview}`;
-  const style = width ? ` style="width: ${escapeAttr(width)};"` : '';
+  const styleValues = [width ? `width: ${escapeAttr(width)};` : '', inlineStyle].filter(Boolean).join(' ');
+  const style = styleValues ? ` style="${styleValues}"` : '';
   return ` class="${escapeAttr(className)}"${style}`;
 }
 

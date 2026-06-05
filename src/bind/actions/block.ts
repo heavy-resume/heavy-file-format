@@ -1,7 +1,7 @@
-import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshReaderPanels, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
 import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
-import { createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
+import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
 import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
@@ -10,6 +10,19 @@ import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { prepareTextFillIn, removeTextFillInMarkers } from '../../text-fill-in';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
+import { capturePaneScroll } from '../../scroll';
+import {
+  cloneComponentClipboardEntry,
+  collectBlockAttachments,
+  copyComponentToEditorClipboard,
+  installEditorClipboardAttachments,
+  installEditorClipboardComponentDefinitions,
+  prepareBlockForDocumentPasteWithResult,
+} from '../../editor-clipboard';
+import { showTransientNotice } from '../../transient-notice';
+import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
+import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
+import { routeNextUndoToDocument } from '../../edit-command-routing';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -202,11 +215,12 @@ const removeBlockDisplayKey: ActionHandler = ({ actionButton, sectionKey }) => {
   getRenderApp()();
 };
 
-const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName }) => {
+const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusableName }) => {
   if (!blockId) {
     return;
   }
   recordHistory();
+  const scrollBeforeDelete = capturePaneScroll(state.paneScroll, app);
   const sqliteRowModal = state.sqliteRowComponentModal;
   if (sqliteRowModal?.sectionKey === sectionKey) {
     const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
@@ -226,12 +240,15 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
     }
     if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
       setActiveEditorBlock(sectionKey, parentId);
+      state.pendingEditorActivation = null;
     }
     state.sqliteRowComponentModal = {
       ...sqliteRowModal,
       blocks: [...sqliteRowModal.blocks],
       error: null,
     };
+    state.pendingPaneScrollRestore = scrollBeforeDelete;
+    routeNextUndoToDocument();
     getRenderApp()();
     return;
   }
@@ -261,7 +278,10 @@ const removeBlock: ActionHandler = ({ section, sectionKey, blockId, reusableName
   }
   if (parentId && isActiveEditorPathStillOpen(sectionKey, parentId)) {
     setActiveEditorBlock(sectionKey, parentId);
+    state.pendingEditorActivation = null;
   }
+  state.pendingPaneScrollRestore = scrollBeforeDelete;
+  routeNextUndoToDocument();
   getRenderApp()();
 };
 
@@ -314,10 +334,54 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const copyComponent: ActionHandler = ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return;
+  }
+  copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block), { sourceDocument: state.document });
+  state.contextMenu = null;
+  getRenderApp()();
+};
+
+const copyExpandablePane = (pane: 'stub' | 'content'): ActionHandler => ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || resolveBaseComponent(block.schema.component) !== 'expandable') {
+    return;
+  }
+  const children = pane === 'stub'
+    ? block.schema.expandableStubBlocks.children
+    : block.schema.expandableContentBlocks.children;
+  const wrapper = createEmptyBlock('container');
+  wrapper.schema.containerBlocks = children.map((child) => cloneReusableBlock(child));
+  copyComponentToEditorClipboard(wrapper, collectBlockAttachments(state.document, wrapper), {
+    unwrapIntoEmptyContainer: true,
+    sourceDocument: state.document,
+  });
+  state.contextMenu = null;
+  state.componentPlacement = { mode: 'copy', sectionKey, blockId, source: 'clipboard', sourcePane: pane };
+  setActiveEditorBlock(sectionKey, blockId);
+  getRenderApp()();
+  centerPlacementSourceAfterRender();
+};
+
 const startComponentPlacement = (mode: 'move' | 'copy'): ActionHandler => ({ sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
+  if (mode === 'copy') {
+    const block = findBlockByIds(sectionKey, blockId);
+    if (block) {
+      copyComponentToEditorClipboard(block, collectBlockAttachments(state.document, block), { sourceDocument: state.document });
+    }
+  }
+  state.contextMenu = null;
   state.componentPlacement = { mode, sectionKey, blockId };
   setActiveEditorBlock(sectionKey, blockId);
   getRenderApp()();
@@ -329,16 +393,25 @@ const cancelComponentPlacement: ActionHandler = () => {
   getRenderApp()();
 };
 
-const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
+const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   const placement = state.componentPlacement;
-  if (!placement || !sectionKey) {
+  state.contextMenu = null;
+  if (!sectionKey) {
     return;
   }
   const targetSection = findSectionByKey(state.document.sections, sectionKey);
   if (!targetSection) {
     return;
   }
-  const sourceBlock = findBlockByIds(placement.sectionKey, placement.blockId);
+  const clipboardEntry = !placement || placement.source === 'clipboard'
+    ? cloneComponentClipboardEntry()
+    : null;
+  const sourceBlock = placement?.source === 'clipboard'
+    ? clipboardEntry?.block ?? null
+    : placement
+      ? findBlockByIds(placement.sectionKey, placement.blockId)
+      : clipboardEntry?.block ?? null;
+  const unwrapIntoEmptyContainer = clipboardEntry?.unwrapIntoEmptyContainer === true;
   if (!sourceBlock) {
     state.componentPlacement = null;
     getRenderApp()();
@@ -372,12 +445,13 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
   }
 
   if (
+    placement &&
     placement.mode === 'move' &&
     placement.sectionKey === sectionKey &&
     (
       targetBlockId === placement.blockId ||
       parentBlockId === placement.blockId ||
-      getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId ||
+      (placementContainer === 'grid' && getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId) ||
       (parentBlockId.length > 0 && blockContainsBlockId(sourceBlock, parentBlockId))
     )
   ) {
@@ -386,18 +460,76 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
     return;
   }
 
-  const placedBlock = placement.mode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  const placementMode = placement?.mode ?? 'copy';
+  let placedBlock = placementMode === 'copy' ? cloneBlockForPlacement(sourceBlock) : sourceBlock;
+  let canUnwrapPlacedBlock = placementMode === 'copy'
+    && unwrapIntoEmptyContainer
+    && placedBlock.schema.component === 'container'
+    && Array.isArray(placedBlock.schema.containerBlocks)
+    && placedBlock.schema.containerBlocks.length > 0;
+  let activePlacedBlockId = placedBlock.id;
+  let syncBlockId = placedBlock.id;
+  let placementHistoryRecorded = false;
+  const recordPlacementHistory = (): void => {
+    if (placementHistoryRecorded) {
+      return;
+    }
+    placementHistoryRecorded = true;
+    recordComponentPlacementHistory();
+  };
+  if (placementMode === 'copy') {
+    const prepared = prepareBlockForDocumentPasteWithResult(state.document, placedBlock);
+    if (
+      prepared.removedCount > 0
+      && shouldConfirmReusableDefinitionPhvyPaste(sectionKey, actionButton)
+    ) {
+      openPhvyPasteConfirmationPopover(
+        () => {
+          actionButton.dataset.phvyIncompatiblePasteConfirmed = 'true';
+          placeComponent({ app, actionButton, sectionKey, blockId, section: targetSection, reusableName: null });
+          delete actionButton.dataset.phvyIncompatiblePasteConfirmed;
+        },
+        () => {
+          state.componentPlacement = null;
+          getRenderApp()();
+        },
+        app
+      );
+      return;
+    }
+    if (!prepared.block) {
+      state.componentPlacement = null;
+      if (prepared.removedCount > 0) {
+        showTransientNotice('Some components were altered for PHVY compatibility.');
+      }
+      getRenderApp()();
+      return;
+    }
+    recordPlacementHistory();
+    installEditorClipboardComponentDefinitions(state.document);
+    installEditorClipboardAttachments(state.document);
+    if (prepared.removedCount > 0) {
+      showTransientNotice('Some components were altered for PHVY compatibility.');
+    }
+    placedBlock = prepared.block;
+    activePlacedBlockId = placedBlock.id;
+    syncBlockId = placedBlock.id;
+    canUnwrapPlacedBlock = unwrapIntoEmptyContainer
+      && placedBlock.schema.component === 'container'
+      && Array.isArray(placedBlock.schema.containerBlocks)
+      && placedBlock.schema.containerBlocks.length > 0;
+  }
 
-  if (placement.mode === 'move') {
-    recordHistory(`component-${placement.mode}`);
-    if (!removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
+  if (placementMode === 'move') {
+    recordPlacementHistory();
+    if (!placement || !removeBlockForPlacement(placement.sectionKey, placement.blockId)) {
       state.componentPlacement = null;
       getRenderApp()();
       return;
     }
     syncReusableTemplateForBlock(placement.sectionKey, placement.blockId);
   } else {
-    recordHistory(`component-${placement.mode}`);
+    recordPlacementHistory();
   }
 
   if (placementContainer === 'grid') {
@@ -405,16 +537,56 @@ const placeComponent: ActionHandler = ({ actionButton, sectionKey }) => {
       return;
     }
     const insertIndex = getGridPlacementInsertIndex(gridBlock.schema.gridItems, targetPlacement, targetGridItemId);
-    gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), block: placedBlock });
+    gridBlock.schema.gridItems.splice(insertIndex, 0, { id: makeId('griditem'), idGenerated: true, block: placedBlock });
   } else if (targetBlockList) {
     const insertIndex = getPlacementInsertIndex(targetBlockList, targetPlacement, targetBlockId);
-    targetBlockList.splice(insertIndex, 0, placedBlock);
+    if (
+      canUnwrapPlacedBlock
+      && targetBlockList.length === 0
+      && (placementContainer === 'container' || placementContainer === 'expandable-stub' || placementContainer === 'expandable-content')
+    ) {
+      targetBlockList.splice(insertIndex, 0, ...placedBlock.schema.containerBlocks);
+      activePlacedBlockId = targetBlockList[insertIndex]?.id ?? placedBlock.id;
+      syncBlockId = parentBlockId || activePlacedBlockId;
+    } else {
+      targetBlockList.splice(insertIndex, 0, placedBlock);
+    }
   }
-  syncReusableTemplateForBlock(sectionKey, placedBlock.id);
+  syncReusableTemplateForBlock(sectionKey, syncBlockId);
   state.componentPlacement = null;
-  setActiveEditorBlock(sectionKey, placedBlock.id);
+  setActiveEditorBlock(sectionKey, activePlacedBlockId);
+  state.pendingEditorActivation = null;
+  if (placementMode === 'copy') {
+    markActiveEditorBlockAsNew(activePlacedBlockId);
+  }
+  routeNextUndoToDocument();
   getRenderApp()();
 };
+
+function recordComponentPlacementHistory(): void {
+  const placement = state.componentPlacement;
+  state.componentPlacement = null;
+  recordHistory();
+  state.componentPlacement = placement;
+}
+
+function shouldConfirmReusableDefinitionPhvyPaste(sectionKey: string, actionButton: HTMLElement): boolean {
+  if (
+    !isPdfDocument(state.document)
+    || !state.reusableDefinitionEditModal
+    || actionButton.dataset.phvyIncompatiblePasteConfirmed === 'true'
+  ) {
+    return false;
+  }
+  if (sectionKey.startsWith(REUSABLE_SECTION_PREFIX) || sectionKey.startsWith(REUSABLE_SECTION_DEF_PREFIX)) {
+    return true;
+  }
+  if (state.reusableDefinitionEditModal.kind !== 'section') {
+    return false;
+  }
+  const definition = getSectionDefsFromMeta(state.document.meta)[state.reusableDefinitionEditModal.index];
+  return Boolean(definition?.template?.key && definition.template.key === sectionKey);
+}
 
 export const blockActions: Record<string, ActionHandler> = {
   'add-block': addBlock,
@@ -435,6 +607,9 @@ export const blockActions: Record<string, ActionHandler> = {
   'move-block-down': moveBlock(1),
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
+  'copy-component': copyComponent,
+  'copy-expandable-stub-pane': copyExpandablePane('stub'),
+  'copy-expandable-content-pane': copyExpandablePane('content'),
   'start-component-move': startComponentPlacement('move'),
   'start-component-copy': startComponentPlacement('copy'),
   'cancel-component-placement': cancelComponentPlacement,
@@ -546,6 +721,7 @@ function insertBlockRelativeToTarget(
       }
       gridItems.splice(placement === 'before' ? targetGridIndex : targetGridIndex + 1, 0, {
         id: makeId('griditem'),
+        idGenerated: true,
         block: newBlock,
       });
       return true;
@@ -587,7 +763,7 @@ function insertBlockInsideBlock(
 
 function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId: string): string | null {
   const gridBlock = gridBlockId ? findBlockByIds(sectionKey, gridBlockId) : null;
-  const item = gridBlock?.schema.gridItems.find((candidate) => candidate.id === gridItemId);
+  const item = gridBlock?.schema.gridItems?.find((candidate) => candidate.id === gridItemId);
   return item?.block.id ?? null;
 }
 
@@ -603,24 +779,25 @@ function removeBlockForPlacementFromList(blocks: VisualBlock[], blockId: string)
     return true;
   }
   for (const block of blocks) {
-    if (removeBlockForPlacementFromList(block.schema.containerBlocks, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.containerBlocks ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.componentListBlocks, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.componentListBlocks ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.expandableStubBlocks.children, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.expandableStubBlocks?.children ?? [], blockId)) {
       return true;
     }
-    if (removeBlockForPlacementFromList(block.schema.expandableContentBlocks.children, blockId)) {
+    if (removeBlockForPlacementFromList(block.schema.expandableContentBlocks?.children ?? [], blockId)) {
       return true;
     }
-    const gridItemIndex = block.schema.gridItems.findIndex((item) => item.block.id === blockId);
+    const gridItems = block.schema.gridItems ?? [];
+    const gridItemIndex = gridItems.findIndex((item) => item.block.id === blockId);
     if (gridItemIndex >= 0) {
-      block.schema.gridItems.splice(gridItemIndex, 1);
+      gridItems.splice(gridItemIndex, 1);
       return true;
     }
-    for (const item of block.schema.gridItems) {
+    for (const item of gridItems) {
       if (removeBlockForPlacementFromList([item.block], blockId)) {
         return true;
       }
@@ -638,12 +815,13 @@ function cloneBlockForPlacement(block: VisualBlock): VisualBlock {
 function reassignBlockIds(block: VisualBlock): void {
   block.id = makeId('block');
   block.schema.id = '';
-  block.schema.containerBlocks.forEach(reassignBlockIds);
-  block.schema.componentListBlocks.forEach(reassignBlockIds);
-  block.schema.expandableStubBlocks.children.forEach(reassignBlockIds);
-  block.schema.expandableContentBlocks.children.forEach(reassignBlockIds);
-  block.schema.gridItems.forEach((item) => {
+  (block.schema.containerBlocks ?? []).forEach(reassignBlockIds);
+  (block.schema.componentListBlocks ?? []).forEach(reassignBlockIds);
+  (block.schema.expandableStubBlocks?.children ?? []).forEach(reassignBlockIds);
+  (block.schema.expandableContentBlocks?.children ?? []).forEach(reassignBlockIds);
+  (block.schema.gridItems ?? []).forEach((item) => {
     item.id = makeId('griditem');
+    item.idGenerated = true;
     reassignBlockIds(item.block);
   });
 }

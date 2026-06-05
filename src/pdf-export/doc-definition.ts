@@ -1,8 +1,11 @@
-import type { CarouselImage, GridItem, VisualBlock, VisualSection } from '../editor/types';
+import type { Align, CarouselImage, VisualBlock, VisualSection } from '../editor/types';
 import type { VisualDocument } from '../types';
 import { getImageAttachment } from '../attachments';
 import { resolveBaseComponentFromMeta } from '../component-defs';
-import { isSectionHiddenByTemplateMarker } from '../template-hide';
+import { getPdfDocumentViewerThemeVariables } from '../pdf-document-theme';
+import { cssFragmentTriggersNetwork } from '../css-sanitizer';
+import { isExternalCssAllowed } from '../reference-config';
+import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportOptions,
@@ -13,7 +16,7 @@ import type {
   HvyPdfMakeNodeObject,
 } from './types';
 import { resolvePdfExportStrategy } from './strategy';
-import { normalizePdfTextInline, renderPdfTextBlock } from './text';
+import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock, type PdfTextBlockStyle } from './text';
 
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
@@ -132,14 +135,16 @@ function renderBlock(
   block: VisualBlock
 ): HvyPdfMakeNodeObject | null {
   const decision = resolved.getBlockDecision(block.id);
-  if (block.schema.editorOnly || decision.visibility === 'hide') {
+  if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block) || decision.visibility === 'hide') {
     return null;
   }
   const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
   let node: HvyPdfMakeNodeObject | null;
   switch (baseComponent) {
     case 'text':
-      node = renderPdfTextBlock(block.text, block.schema.placeholder, decision, block.schema.align);
+      node = hasRenderablePdfTextBlock(block.text)
+        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, getPdfTextAlignment(block), getPdfTextBlockStyle(document, block))
+        : null;
       break;
     case 'code':
       node = { text: block.text || block.schema.placeholder || '', style: 'codeBlock' };
@@ -197,37 +202,87 @@ function renderGridBlock(
     const stack = renderBlocks(document, resolved, [item.block]);
     return {
       width: '*',
-      ...(item.align ? { alignment: item.align } : {}),
-      stack: applyGridItemAlignment(stack, item.align),
+      stack,
     };
   });
   return columns.length ? { columns, columnGap: 12 } : placeholderNode('Empty grid.');
 }
 
-function applyGridItemAlignment(nodes: HvyPdfMakeNode[], align: GridItem['align']): HvyPdfMakeNode[] {
-  if (!align) {
-    return nodes;
-  }
-  return nodes.map((node) => applyAlignmentToPdfNode(node, align));
+function getPdfTextAlignment(block: VisualBlock): Align | undefined {
+  return getTextAlignFromCss(block.schema.css) ?? block.schema.align;
 }
 
-function applyAlignmentToPdfNode(node: HvyPdfMakeNode, align: NonNullable<GridItem['align']>): HvyPdfMakeNode {
-  if (typeof node === 'string') {
-    return { text: node, alignment: align };
+function getPdfTextBlockStyle(document: VisualDocument, block: VisualBlock): PdfTextBlockStyle {
+  const style: PdfTextBlockStyle = {};
+  const fontWeight = getCssDeclarationValue(block.schema.css, 'font-weight')?.toLowerCase();
+  const numericWeight = fontWeight ? Number.parseInt(fontWeight, 10) : NaN;
+  if (fontWeight === 'bold' || numericWeight >= 600) {
+    style.bold = true;
+  } else if (fontWeight === 'normal' || numericWeight <= 500) {
+    style.bold = false;
   }
-  if (node.alignment) {
-    return node;
+  const textColor = getCssColorDeclarationValue(document, block.schema.css, 'color');
+  if (textColor) {
+    style.color = textColor;
   }
-  if (node.stack) {
-    return { ...node, alignment: align, stack: node.stack.map((child) => applyAlignmentToPdfNode(child, align)) };
+  const fillColor =
+    getCssColorDeclarationValue(document, block.schema.css, 'background-color') ??
+    getCssColorDeclarationValue(document, block.schema.css, 'background');
+  if (fillColor) {
+    style.fillColor = fillColor;
   }
-  if (node.ul) {
-    return { ...node, alignment: align, ul: node.ul.map((child) => applyAlignmentToPdfNode(child, align)) };
+  return style;
+}
+
+function getTextAlignFromCss(css: string): Align | undefined {
+  const align = getCssDeclarationValue(css, 'text-align')?.toLowerCase();
+  return align === 'left' || align === 'center' || align === 'right' ? align : undefined;
+}
+
+function getCssDeclarationValue(css: string, propertyName: string): string | null {
+  const property = propertyName.toLowerCase();
+  const declaration = css
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const separator = part.indexOf(':');
+      if (separator === -1) {
+        return null;
+      }
+      return {
+        property: part.slice(0, separator).trim().toLowerCase(),
+        value: part.slice(separator + 1).trim(),
+      };
+    })
+    .filter((entry): entry is { property: string; value: string } => Boolean(entry))
+    .find((entry) => entry.property === property);
+  return declaration?.value ?? null;
+}
+
+function getCssColorDeclarationValue(document: VisualDocument, css: string, propertyName: string): string | null {
+  const value = getCssDeclarationValue(css, propertyName);
+  if (!value || (!isExternalCssAllowed() && cssFragmentTriggersNetwork(value))) {
+    return null;
   }
-  if (node.ol) {
-    return { ...node, alignment: align, ol: node.ol.map((child) => applyAlignmentToPdfNode(child, align)) };
+  const resolvedValue = resolveCssColorValue(document, value);
+  return resolvedValue && isPdfColorValue(resolvedValue) ? resolvedValue : null;
+}
+
+function resolveCssColorValue(document: VisualDocument, value: string): string {
+  const trimmed = value.trim();
+  const variable = /^var\(\s*(--[a-z0-9_-]+)\s*\)$/i.exec(trimmed);
+  if (!variable) {
+    return trimmed;
   }
-  return { ...node, alignment: align };
+  return getPdfDocumentViewerThemeVariables(document)[variable[1]] ?? '';
+}
+
+function isPdfColorValue(value: string): boolean {
+  if (/^#[0-9a-f]{3,8}$/i.test(value)) return true;
+  if (/^(?:rgb|rgba|hsl|hsla)\([^)]*\)$/i.test(value)) return true;
+  if (/^[a-z]+$/i.test(value)) return true;
+  return false;
 }
 
 function renderExpandableBlock(

@@ -3059,6 +3059,168 @@ test('resume section templates hide already used non-repeatable sections', async
   expect(options).toEqual(['Blank', 'Awards', 'Resume Section']);
 });
 
+test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      blocks: []
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await expect(sectionTemplate).toContainText('one per document');
+  const repeatable = sectionTemplate.getByLabel('Allow Multiple Per Document');
+  await expect(repeatable).not.toBeChecked();
+
+  await repeatable.check();
+  await expect(sectionTemplate).toContainText('multiple allowed');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/repeatable: true/);
+});
+
+test('section template heading edits do not render block cancel or done controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      blocks:
+        - id: feature-heading
+          text: "# Feature Role"
+          schema:
+            component: text
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await sectionTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('.editor-block-passive').click();
+  const activeBlock = modal.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.locator('.rich-editor h1').click();
+  await activeBlock.getByRole('button', { name: 'H3' }).click();
+
+  await expect(activeBlock.locator('.rich-editor h3')).toContainText('Feature Role');
+  await expect(activeBlock.locator('.rich-editor h3 h1')).toHaveCount(0);
+  await expect(activeBlock.locator('.editor-block-done-row')).toHaveCount(0);
+  await expect(activeBlock.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  await expect(activeBlock.getByRole('button', { name: 'Done' })).toHaveCount(0);
+
+  await modal.getByRole('button', { name: 'HVY' }).click();
+  await expect(page.locator('#reusableDefinitionRawInput')).toContainText('text: "### Feature Role"');
+  await expect(page.locator('#reusableDefinitionRawInput')).not.toContainText('text: "# Feature Role"');
+});
+
+test('template component editor opens nested component meta and returns to template editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: Feature Card
+    baseType: container
+    template:
+      id: feature-card
+      schema:
+        component: container
+        containerBlocks:
+          - id: feature-title
+            text: "### Feature Title"
+            schema:
+              component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const componentTemplate = page.locator('.component-def', { hasText: 'Feature Card' });
+  await componentTemplate.locator('summary').click();
+  await componentTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const templateEditor = page.locator('.reusable-definition-modal');
+  await templateEditor.locator('.editor-block-passive', { hasText: 'Feature Title' }).click();
+  await expect(templateEditor.getByRole('button', { name: 'Make Template' })).toHaveCount(0);
+  await templateEditor.locator('[data-action="open-component-meta"]').click();
+
+  const componentMeta = page.locator('.component-meta-modal', { hasText: 'Component Meta: text' });
+  await expect(componentMeta).toBeVisible();
+  await componentMeta.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.reusable-definition-modal', { hasText: 'Edit Feature Card' })).toBeVisible();
+});
+
+test('section template editor opens section meta and returns to template editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+section_defs:
+  - name: Feature
+    template:
+      title: Feature
+      customId: feature-template
+      blocks:
+        - id: feature-heading
+          text: "# Feature"
+          schema:
+            component: text
+      children: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const sectionTemplate = page.locator('.component-def', { hasText: 'Feature' });
+  await sectionTemplate.locator('summary').click();
+  await sectionTemplate.getByRole('button', { name: 'Edit Template' }).click();
+
+  const templateEditor = page.locator('.reusable-definition-modal', { hasText: 'Edit Feature' });
+  await templateEditor.getByRole('button', { name: 'Meta' }).click();
+
+  const sectionMeta = page.locator('.section-meta-modal', { hasText: 'Section Meta: Feature' });
+  await expect(sectionMeta).toBeVisible();
+  await sectionMeta.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.reusable-definition-modal', { hasText: 'Edit Feature' })).toBeVisible();
+});
+
 test('adding a section template with multiple flavors asks which flavor to use', async ({ page }) => {
   await page.goto('/');
 
@@ -3314,6 +3476,7 @@ test('document ai context is editable metadata and keeps focus while typing', as
   await page.getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
+  await page.locator('.meta-expandable-field', { hasText: 'AI Context' }).locator('summary').click();
   const aiContext = page.locator('[data-field="meta-ai-context"]');
   await aiContext.fill('');
   await aiContext.type('Use top skills as featured skills.');
@@ -3331,6 +3494,7 @@ test('document ai import guidance is editable metadata and keeps focus while typ
   await page.getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
+  await page.locator('.meta-expandable-field', { hasText: 'AI Import Guidance' }).locator('summary').click();
   const importGuidance = page.locator('[data-field="meta-ai-import-guidance"]');
   await importGuidance.fill('');
   await importGuidance.type('Route scattered awards into the Awards template.');
@@ -3494,6 +3658,54 @@ component_defs:
   const inserted = page.locator('.editor-block', { hasText: 'card-record' });
   await expect(inserted.locator('.editor-block-passive', { hasText: 'Launch Notes' })).toBeVisible();
   await expect(inserted.locator('.editor-block-passive [data-placeholder="Details"]')).toBeVisible();
+});
+
+test('component template remove confirmation deletes the template', async ({ page }) => {
+  await page.goto('/');
+
+  const componentDefs = [
+    ...Array.from({ length: 14 }, (_, index) => `  - name: filler-card-${index + 1}
+    baseType: text
+    description: Filler template ${index + 1}
+    schema:
+      placeholder: Filler ${index + 1}`),
+    `  - name: card-record
+    baseType: text
+    description: Disposable card template
+    schema:
+      placeholder: Card`,
+  ].join('\n');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+${componentDefs}
+---
+
+<!--hvy: {"id":"cards"}-->
+#! Cards
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const pane = page.locator('.full-pane');
+  await pane.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  const template = page.locator('.component-def', { hasText: 'card-record' });
+  await expect(template).toBeVisible();
+  await template.locator('summary').click();
+  const expectedResultScrollTop = await pane.evaluate((node) => node.scrollTop);
+  expect(expectedResultScrollTop).toBeGreaterThan(0);
+
+  await template.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.remove-confirmation-modal')).toBeVisible();
+  await page.locator('.remove-confirmation-modal').getByRole('button', { name: 'Delete' }).click();
+
+  await expect(page.locator('.component-def', { hasText: 'card-record' })).toHaveCount(0);
+  await expect(page.locator('.component-def', { hasText: 'filler-card-14' })).toBeVisible();
+  await expect.poll(async () => pane.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
 });
 
 test('custom component template output generator fills a field from provided variables', async ({ page }) => {
@@ -3687,6 +3899,12 @@ hvy_version: 0.1
   await expect(page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' })).toBeVisible();
   await expect(page.locator('#aiReaderDocument .ghost-label', { hasText: 'Add Todo' })).toBeVisible();
   await expect(page.locator('#aiReaderDocument')).toContainText('Existing todo');
+
+  await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click({ button: 'right' });
+  await expect(page.locator('.hvy-context-popover')).toContainText('Edit component');
+  await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+  await page.locator('.hvy-context-popover-backdrop').click();
+  await expect(page.locator('.hvy-context-popover')).toHaveCount(0);
 
   await page.locator('#aiReaderDocument .editor-passive-empty-text', { hasText: 'Draft summary' }).click();
   await expect(page.locator('#aiReaderDocument .rich-editor')).toBeVisible();

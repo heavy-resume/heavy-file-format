@@ -5,7 +5,6 @@ import { parseHvy } from './hvy/parser';
 import { convertMarkdownToHvyDocument } from './markdown-import';
 import type { DocumentAttachment, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
-import { getSectionId } from './section-ops';
 import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
@@ -17,7 +16,6 @@ import {
   normalizeReusableSectionDefinitions,
 } from './document-factory';
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
-import { coerceGridItemAlign } from './grid-ops';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -173,6 +171,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
   return {
     key: makeId('section'),
     customId,
+    customIdGenerated: section.idGenerated === true && typeof sectionMeta.id !== 'string',
     contained: sectionMeta.contained !== false,
     editorOnly: sectionMeta.editorOnly === true,
     lock: sectionMeta.lock === true,
@@ -189,6 +188,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     location: sectionMeta.location === 'sidebar' ? 'sidebar' : 'main',
     hideIfUnmodified: sectionMeta.hideIfUnmodified === true,
     exclude_from_import: sectionMeta.exclude_from_import === true,
+    protect_from_import: sectionMeta.protect_from_import === true,
     templateKey: typeof sectionMeta.templateKey === 'string' ? sectionMeta.templateKey : undefined,
     blocks,
     children: section.children.map((child) => mapParsedSection(child, documentMeta, diagnostics)),
@@ -367,10 +367,10 @@ function parseBlocks(
       return;
     }
     if (attach.kind === 'grid') {
-      const align = coerceGridItemAlign(attach.meta.align);
+      const authoredId = typeof attach.meta.id === 'string' && attach.meta.id.trim().length > 0 ? attach.meta.id : '';
       attach.parent.schema.gridItems.push({
-        id: typeof attach.meta.id === 'string' ? attach.meta.id : makeId('griditem'),
-        ...(align ? { align } : {}),
+        id: authoredId || makeId('griditem'),
+        idGenerated: !authoredId,
         block,
       });
       return;
@@ -921,8 +921,7 @@ function concatAttachmentBytes(attachments: DocumentAttachment[]): Uint8Array {
 }
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
-  const rawMeta = stripEditorStateFromSerializedValue(document.meta) as JsonObject;
-  const serializedMeta: JsonObject = { ...rawMeta };
+  const serializedMeta: JsonObject = { ...document.meta };
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -933,10 +932,10 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
       .map((def) => serializeSectionDef(def));
   }
-  const headerMeta = {
+  const headerMeta = stripEditorStateFromSerializedValue({
     ...serializedMeta,
     hvy_version: document.meta.hvy_version ?? 0.1,
-  };
+  }) as JsonObject;
   return stringifyYaml(headerMeta).trim();
 }
 
@@ -1025,6 +1024,9 @@ function cleanSectionTemplate(section: Partial<VisualSection> & JsonObject): Jso
   if (section.exclude_from_import === true) {
     result.exclude_from_import = true;
   }
+  if (section.protect_from_import === true) {
+    result.protect_from_import = true;
+  }
   result.blocks = Array.isArray(section.blocks) ? section.blocks.map((block) => cleanComponentDefBlock(block as unknown as JsonObject)) : [];
   result.children = Array.isArray(section.children)
     ? section.children.map((child) => cleanSectionTemplate(child as Partial<VisualSection> & JsonObject))
@@ -1045,7 +1047,7 @@ function stripEditorStateFromSerializedValue(value: unknown): unknown {
   }
   const cleaned: JsonObject = {};
   Object.entries(value as JsonObject).forEach(([key, item]) => {
-    if (key === 'schemaMode') {
+    if (key === 'schemaMode' || key === 'idGenerated') {
       return;
     }
     cleaned[key] = stripEditorStateFromSerializedValue(item) as JsonObject[keyof JsonObject];
@@ -1225,8 +1227,9 @@ function splitSerializedTailBytes(bytes: Uint8Array): { text: string; attachment
 
 function serializeSection(section: VisualSection, level: number, documentMeta: JsonObject | null): string {
   const heading = `#! ${section.title}`;
+  const authoredId = section.customIdGenerated === true ? '' : section.customId.trim();
   const meta: JsonObject = {
-    id: getSectionId(section),
+    ...(authoredId.length > 0 ? { id: authoredId } : {}),
     lock: section.lock,
     expanded: section.expanded,
     highlight: section.highlight,
@@ -1258,6 +1261,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
   if (section.exclude_from_import === true) {
     meta.exclude_from_import = true;
   }
+  if (section.protect_from_import === true) {
+    meta.protect_from_import = true;
+  }
   if (section.templateKey && section.templateKey.trim().length > 0) {
     meta.templateKey = section.templateKey;
   }
@@ -1279,6 +1285,7 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
 function serializeBlockSchema(
   schema: BlockSchema,
   options: {
+    omitId?: boolean;
     omitComponent?: boolean;
     omitContainerBlocks?: boolean;
     omitComponentListBlocks?: boolean;
@@ -1291,7 +1298,9 @@ function serializeBlockSchema(
   const defaults = getSerializationSchemaDefaults(schema.component, component, documentMeta);
   const payload: JsonObject = {};
 
-  addIfChanged(payload, 'id', schema.id, defaults.id);
+  if (!options.omitId) {
+    addIfChanged(payload, 'id', schema.id, defaults.id);
+  }
   if (!options.omitComponent) {
     payload.component = schema.component;
   }
@@ -1308,6 +1317,7 @@ function serializeBlockSchema(
   }
   addIfChanged(payload, 'tags', schema.tags, defaults.tags);
   addIfChanged(payload, 'description', schema.description, defaults.description);
+  addIfChanged(payload, 'hideIfYes', schema.hideIfYes, defaults.hideIfYes);
   addIfChanged(payload, 'visibleScript', schema.visibleScript, defaults.visibleScript);
   addIfChanged(payload, 'placeholder', schema.placeholder, defaults.placeholder);
   addIfChanged(payload, 'fillIn', schema.fillIn, defaults.fillIn);
@@ -1348,8 +1358,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'gridColumns', schema.gridColumns, defaults.gridColumns);
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
-        id: item.id,
-        ...(item.align ? { align: item.align } : {}),
+        ...(item.idGenerated ? {} : { id: item.id }),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1418,24 +1427,26 @@ function serializeBlock(
   documentMeta: JsonObject | null,
   override?: { name: string; schema?: JsonObject }
 ): string {
-  const blockDirective = override ?? serializeBlockDirective(block.schema, documentMeta);
+  const blockDirective = override ?? serializeBlockDirective(block, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
   const text = serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
-function serializeBlockDirective(schema: BlockSchema, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
+function serializeBlockDirective(block: VisualBlock, documentMeta: JsonObject | null): { name: string; schema: JsonObject } {
+  const schema = block.schema;
   const component = schema.component.trim();
+  const omitId = block.idGenerated === true;
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, nestedBlockOmitOptions(schema, documentMeta), documentMeta),
+    schema: serializeBlockSchema(schema, { omitId, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
   };
 }
 
@@ -1599,10 +1610,7 @@ function serializeExpandablePart(
 function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
-    {
-      id: item.id,
-      ...(item.align ? { align: item.align } : {}),
-    },
+    item.idGenerated ? {} : { id: item.id },
     item.block,
     indent,
     documentMeta
@@ -1649,7 +1657,7 @@ function nestedBlockOmitOptions(schema: BlockSchema, documentMeta: JsonObject | 
 function serializeVisualBlock(block: VisualBlock, documentMeta: JsonObject | null = null): JsonObject {
   return {
     text: block.text,
-    schema: serializeBlockSchema(block.schema, {}, documentMeta),
+    schema: serializeBlockSchema(block.schema, { omitId: block.idGenerated === true }, documentMeta),
   };
 }
 

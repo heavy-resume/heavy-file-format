@@ -1,9 +1,8 @@
 import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
-import type { ComponentRenderHelpers } from './component-helpers';
+import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
 import type { ComponentPlacementState } from '../types';
-import type { ReaderBlockRenderOptions } from '../reader/render';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -95,6 +94,7 @@ interface ComponentDef {
 
 interface SectionDef {
   name: string;
+  repeatable?: boolean;
   flavors?: Array<{
     name: string;
     description?: string;
@@ -132,6 +132,8 @@ interface EditorRenderState {
   currentView: 'editor' | 'viewer' | 'ai';
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
+  editingReusableDefinition?: boolean;
+  openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
   descriptionPopulate?: {
@@ -431,7 +433,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (!pending) {
       return '';
     }
-    const label = `${capitalizePlacementMode(pending.mode)} (in ${formatPlacementContainerLabel(options.container)})`;
+    const mode = pending.mode;
+    const label = `${capitalizePlacementMode(mode)} (in ${formatPlacementContainerLabel(options.container)})`;
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
     )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
@@ -517,24 +520,29 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
-    const structurallyLocked = parentLocked || (isDirectSectionBlock && owningSection?.lock === true);
+    const editingReusableDefinition = state.editingReusableDefinition === true;
+    const structurallyLocked = !editingReusableDefinition && (parentLocked || (isDirectSectionBlock && owningSection?.lock === true));
     const blockMove = isActiveFrame
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
       : { canMoveUp: false, canMoveDown: false };
     const canRemove = isActive && !structurallyLocked;
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
+    const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
     const placementActions = canRemove
       ? isPlacementSource
         ? `<button type="button" class="secondary" data-action="cancel-component-placement" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Cancel place</button>`
         : `<button type="button" class="ghost" data-action="start-component-move" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Move</button>
            <button type="button" class="ghost" data-action="start-component-copy" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Copy</button>`
       : '';
+    const makeTemplateAction = editingReusableDefinition
+      ? ''
+      : `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
+        sectionKey
+      )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>`;
     const componentMetaActions = state.showAdvancedEditor && isActive
       ? `<div class="editor-block-context-actions" aria-label="Component options">
-          <button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>
+          ${makeTemplateAction}
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}">Meta</button>
@@ -555,7 +563,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}"${activationStyle}${activationAttrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">
@@ -576,7 +584,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${anchorAttrs.overlay}
         </div>
         ${
-          isActiveFrame
+          showActiveBlockDoneRow
             ? `<div class="editor-block-done-row">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
                   sectionKey
@@ -894,8 +902,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
           const cellStyle = [
             `grid-column: ${gridColumn};`,
-            item.align ? `text-align: ${item.align};` : '',
           ].filter(Boolean).join(' ');
+          const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
                 container: 'grid',
@@ -905,14 +913,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                 targetGridItemId: item.id,
               })
             : '';
-          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${renderPassiveEditorBlock(
+          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections
-          )}</div>${trailingPlacementTarget}`;
+          )}${trailingPlacementTarget}</div>`;
         })
         .join('');
-      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${leadingPlacementTarget}${cells}</div>`;
+      return `<div class="reader-grid-layout editor-grid-passive-preview" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr));">${cells}</div>`;
     }
 
     if (base === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -1167,22 +1175,34 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
-        <label>
-          <span>AI Context</span>
-          <textarea
-            rows="4"
-            data-field="meta-ai-context"
-            placeholder="Tell the AI how this document is organized and what intent to preserve."
-          >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
-        </label>
-        <label>
-          <span>AI Import Guidance</span>
-          <textarea
-            rows="5"
-            data-field="meta-ai-import-guidance"
-            placeholder="Tell import how source facts should map to sections, templates, and template records."
-          >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
-        </label>
+        <details class="meta-expandable-field">
+          <summary>
+            <span>AI Context</span>
+            ${String(state.documentMeta['ai-context'] ?? '').trim() ? '<span class="muted">Configured</span>' : ''}
+          </summary>
+          <label>
+            <span>Instructions</span>
+            <textarea
+              rows="4"
+              data-field="meta-ai-context"
+              placeholder="Tell the AI how this document is organized and what intent to preserve."
+            >${deps.escapeHtml(String(state.documentMeta['ai-context'] ?? ''))}</textarea>
+          </label>
+        </details>
+        <details class="meta-expandable-field">
+          <summary>
+            <span>AI Import Guidance</span>
+            ${String(state.documentMeta['ai-import-guidance'] ?? '').trim() ? '<span class="muted">Configured</span>' : ''}
+          </summary>
+          <label>
+            <span>Instructions</span>
+            <textarea
+              rows="5"
+              data-field="meta-ai-import-guidance"
+              placeholder="Tell import how source facts should map to sections, templates, and template records."
+            >${deps.escapeHtml(String(state.documentMeta['ai-import-guidance'] ?? ''))}</textarea>
+          </label>
+        </details>
         <div class="editor-grid">
           <label>
             <span>Empty Descriptions</span>
@@ -1197,11 +1217,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         ${descriptionPopulate.status ? `<div class="muted">${deps.escapeHtml(descriptionPopulate.status)}</div>` : ''}
         ${descriptionPopulate.skippedLeaves > 0 ? `<div class="muted">${deps.escapeHtml(`${descriptionPopulate.skippedLeaves} component${descriptionPopulate.skippedLeaves === 1 ? '' : 's'} skipped.`)}</div>` : ''}
-        <label class="checkbox-label">
-          <span>Tables Enabled</span>
-          <input type="checkbox" ${areTablesEnabled() ? 'checked' : ''} disabled />
-        </label>
-        <div class="muted">Reference app feature flag. This is not stored in the HVY file.</div>
         <div class="editor-grid">
           <label>
             <span>Theme Colors</span>
@@ -1228,17 +1243,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <button type="button" class="ghost" data-action="add-component-def">Add Template</button>
         </div>
         <div class="component-defs">
-          ${defs
+          ${defs.length === 0
+        ? '<div class="muted template-def-empty">No component templates</div>'
+        : defs
         .map(
           (def, index) => {
             const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-            return `<details class="component-def template-def-details">
+            const detailsKey = templateDefinitionDetailsKey('component', index);
+            return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                 <summary class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
                     <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                   </span>
-                  <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                  <span class="template-def-summary-actions">
+                    <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
+                    <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                  </span>
                 </summary>
                 <div class="template-def-body">
                   <label>
@@ -1288,7 +1309,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                         <span>Flavor Description</span>
                         <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
                       </label>
-                      <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
+                  <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                     </div>`).join('')}`}
                   <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
@@ -1307,18 +1328,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .map(
             (def, index) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-              return `<details class="component-def template-def-details">
+              const detailsKey = templateDefinitionDetailsKey('section', index);
+              return `<details class="component-def template-def-details" data-template-kind="section" data-section-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                       <summary class="template-def-summary">
                         <span class="template-def-summary-text">
                           <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
-                          <span>Section template${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
+                          <span>Section template · ${def.repeatable === true ? 'multiple allowed' : 'one per document'}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                         </span>
-                        <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                        <span class="template-def-summary-actions">
+                          <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="section" data-section-def-index="${index}">Edit Template</button>
+                          <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                        </span>
                       </summary>
                       <div class="template-def-body">
                         <label>
                           <span>Name</span>
                           <input data-field="section-def-name" data-section-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
+                        </label>
+                        <label class="checkbox-label">
+                          <span>Allow Multiple Per Document</span>
+                          <input type="checkbox" data-field="section-def-repeatable" data-section-def-index="${index}" ${def.repeatable === true ? 'checked' : ''} />
                         </label>
                         <div class="meta-panel-head">
                           <strong>Flavors</strong>
@@ -1337,9 +1366,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                             </label>
                             <button type="button" class="danger" data-action="remove-section-def-flavor" data-section-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
                           </div>`).join('')}`}
-                        <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
-                      </div>
-                    </details>`;
+                          <button type="button" class="danger" data-action="remove-section-def" data-section-def-index="${index}">Remove</button>
+                        </div>
+                      </details>`;
             }
           )
           .join('')
@@ -1618,7 +1647,27 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
+        <label class="checkbox-label">
+          <span>Locked</span>
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-lock"
+            ${block.schema.lock ? 'checked' : ''}
+          />
+        </label>
         ${textMetaFields}
+        <label>
+          <span>Hide If Yes</span>
+          <input
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="block-hide-if-yes"
+            placeholder="yes"
+            value="${deps.escapeAttr(block.schema.hideIfYes)}"
+          />
+        </label>
         <label>
           <div>Visible When Function Body</div>
           <div>Controls when this block is visible. Returns boolean.</div>
@@ -2124,6 +2173,10 @@ function findSectionLocation(
     }
   }
   return null;
+}
+
+export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
+  return `${kind}:${index}`;
 }
 
 function normalizeEmptySectionHeadingLevel(value: string | undefined): 'h1' | 'h2' | 'h3' {

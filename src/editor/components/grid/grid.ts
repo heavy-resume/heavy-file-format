@@ -4,6 +4,7 @@ import type { GridItem, VisualBlock } from '../../types';
 import { closeIcon } from '../../../icons';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
+  const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const firstPlacementTarget = helpers.renderComponentPlacementTarget({
     container: 'grid',
     sectionKey,
@@ -12,7 +13,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     targetGridItemId: block.schema.gridItems[0]?.id,
   });
   const placementMode = firstPlacementTarget.length > 0;
-  const addGridGhost = block.schema.lock || placementMode
+  const addGridGhost = locked || placementMode
     ? ''
     : `<div class="ghost-section-card add-ghost grid-add-ghost">
         ${helpers.renderAddComponentPicker({
@@ -36,12 +37,20 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   </div>
   <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[
-      firstPlacementTarget,
+      block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(
-        (item) => {
+        (item, index) => {
           const canChangeComponent = isBlankDefaultGridItem(item.block);
-          const shellStyle = item.align ? ` style="text-align: ${helpers.escapeAttr(item.align)};"` : '';
+          const beforePlacementTarget = index === 0 ? firstPlacementTarget : '';
+          const afterPlacementTarget = helpers.renderComponentPlacementTarget({
+            container: 'grid',
+            sectionKey,
+            parentBlockId: block.id,
+            placement: 'after',
+            targetGridItemId: item.id,
+          });
           return `<div class="grid-field-row">
+          ${beforePlacementTarget}
           <div class="grid-field-head">
             <div class="section-drag-title">
               <div class="editor-order-controls">
@@ -70,17 +79,12 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
             }
           </div>
-          <div class="grid-item-editor-shell"${shellStyle}>
-            ${helpers.renderEditorBlock(sectionKey, item.block, block.schema.lock)}
+          <div class="grid-item-editor-shell">
+            ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
           </div>
+          ${afterPlacementTarget}
         </div>
-        ${helpers.renderComponentPlacementTarget({
-          container: 'grid',
-          sectionKey,
-          parentBlockId: block.id,
-          placement: 'after',
-          targetGridItemId: item.id,
-        })}`;
+        `;
         }
       ),
       addGridGhost,
@@ -108,7 +112,7 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
     .map((orderedBlock) => {
       const item = itemsByBlock.get(orderedBlock);
-      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock) } : null;
+      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock, { trimVerticalEdgeMargin: true }) } : null;
     })
     .filter((item): item is { item: GridItem; html: string } => item !== null)
     .filter((item) => item.html.trim().length > 0);
@@ -118,7 +122,6 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
       const cellStyle = [
         `grid-column: ${gridColumn};`,
-        item.item.align ? `text-align: ${item.item.align};` : '',
       ].filter(Boolean).join(' ');
       return `<div class="reader-grid-cell" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
     })

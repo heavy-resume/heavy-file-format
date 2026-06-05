@@ -67,7 +67,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     if (richButton) {
       const editable = getRichEditableForButton(app, richButton);
       if (editable) {
-        storeCurrentRichSelection(editable);
+        storeCurrentRichSelection(editable, { preserveExistingSelection: true });
       }
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
@@ -391,7 +391,10 @@ function openParagraphStyleEditor(toolbar: HTMLElement | null, styleName: string
 function isPlacementModeAction(action: string): boolean {
   return action === 'place-component'
     || action === 'cancel-component-placement'
-    || action === 'toggle-editor-sidebar';
+    || action === 'toggle-editor-sidebar'
+    || action === 'activate-block'
+    || action === 'toggle-editor-expandable'
+    || action === 'toggle-expandable-editor-panel';
 }
 
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {
@@ -399,12 +402,6 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
   if (!action) {
     logActionExecution(event, 'click-dispatch:execute-action:skip', { skipReason: 'missing-action' });
     return false;
-  }
-
-  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
-    logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
-    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
-    return true;
   }
 
   const handler = actionRegistry[action];
@@ -416,10 +413,16 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
     return false;
   }
 
+  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
+    logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
+    openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
+    return true;
+  }
+
   const sectionKey = getActionSectionKey(actionButton);
   const blockId = actionButton.dataset.blockId ?? '';
 
-  if (action === 'add-top-level-section') {
+  if (action === 'add-top-level-section' || action === 'paste-section') {
     logActionExecution(event, 'click-dispatch:execute-action:handled', {
       action,
       sectionKey,
@@ -514,7 +517,7 @@ function isRangeInside(editable: HTMLElement, range: Range): boolean {
   return editable.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editable;
 }
 
-function storeCurrentRichSelection(editable: HTMLElement): RichToolbarSelection | null {
+function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExistingSelection?: boolean } = {}): RichToolbarSelection | null {
   const selection = window.getSelection();
   if (!selection?.rangeCount) {
     return null;
@@ -522,6 +525,16 @@ function storeCurrentRichSelection(editable: HTMLElement): RichToolbarSelection 
   const range = selection.getRangeAt(0);
   if (!isRangeInside(editable, range)) {
     return null;
+  }
+  const existing = richToolbarSelections.get(editable);
+  if (
+    options.preserveExistingSelection &&
+    range.collapsed &&
+    existing &&
+    !existing.range.collapsed &&
+    isRangeInside(editable, existing.range)
+  ) {
+    return existing;
   }
   const clone = range.cloneRange();
   const stored = {

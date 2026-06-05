@@ -7,7 +7,7 @@ export function getComponentListItemLabel(block: VisualBlock): string {
   if (customLabel.length > 0) {
     return customLabel;
   }
-  return humanizeComponentListComponent(block.schema.componentListComponent || 'item');
+  return inferComponentListItemLabel(block.schema.componentListComponent || 'item');
 }
 
 export function getComponentListAddLabel(block: VisualBlock): string {
@@ -22,10 +22,12 @@ export function hasComponentListItems(block: VisualBlock): boolean {
   return block.schema.componentListBlocks.some((child) => child.schema.component === block.schema.componentListComponent);
 }
 
-function humanizeComponentListComponent(componentName: string): string {
+export function inferComponentListItemLabel(componentName: string): string {
+  const trimmed = componentName.trim();
+  const stripGenericSuffix = /[-_]/.test(trimmed);
   const normalized = componentName
     .trim()
-    .replace(TRAILING_ITEM_WORDS, '')
+    .replace(stripGenericSuffix ? TRAILING_ITEM_WORDS : /$^/, '')
     .replace(/[-_]+/g, ' ')
     .replace(/\bxref\b/gi, 'reference')
     .replace(/\btool tech\b/gi, 'tool / tech')

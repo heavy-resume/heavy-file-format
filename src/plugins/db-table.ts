@@ -9,6 +9,7 @@ import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
 import type { ScriptingDbApi } from './scripting/runtime';
 import { closeIcon, plusIcon } from '../icons';
+import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../history';
 import {
   clampDbTableOffset,
   clearDbTableViewState,
@@ -662,6 +663,7 @@ async function persistRuntimeDatabase(): Promise<void> {
 
   const databaseBytes = runtime.db.export();
   const document = state.document;
+  recordDatabaseAttachmentHistory();
   runtime.persistPromise = (async () => {
     const encoded = await encodeAttachmentBytes(databaseBytes);
     const previous = getAttachment(document, DB_ATTACHMENT_ID);
@@ -676,6 +678,7 @@ async function persistRuntimeDatabase(): Promise<void> {
       },
       encoded.bytes
     );
+    markDatabaseAttachmentChanged();
   })();
 
   await runtime.persistPromise;
@@ -1273,7 +1276,11 @@ function normalizeScriptingSqlValue(value: unknown): SqliteBindValue {
   throw new Error('SQL params may only contain strings, numbers, booleans, bytes, or null.');
 }
 
-function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): void {
+function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase, recordHistoryCheckpoint = true): void {
+  const isLiveDocument = document === state?.document;
+  if (isLiveDocument && recordHistoryCheckpoint) {
+    recordDatabaseAttachmentHistory();
+  }
   const previous = getAttachment(document, DB_ATTACHMENT_ID);
   setAttachment(
     document,
@@ -1285,6 +1292,9 @@ function persistScriptingDatabase(document: VisualDocument, db: SqlJsDatabase): 
     },
     db.export()
   );
+  if (isLiveDocument) {
+    markDatabaseAttachmentChanged();
+  }
   const runtime = getSqliteRuntime();
   if (runtime.documentRef === document) {
     resetRuntime();
@@ -1331,6 +1341,7 @@ export async function createScriptingDbRuntime(
   onMutation?: () => void
 ): Promise<ScriptingDbRuntime> {
   const db = await openDocumentDatabase(document);
+  let databaseHistoryCheckpointRecorded = false;
   const api: ScriptingDbApi = {
     query: (sql, params) => {
       const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
@@ -1364,7 +1375,8 @@ export async function createScriptingDbRuntime(
       }
       db.run(trimmed, normalizeScriptingSqlParams(params));
       const rowsAffected = db.getRowsModified();
-      persistScriptingDatabase(document, db);
+      persistScriptingDatabase(document, db, !databaseHistoryCheckpointRecorded);
+      databaseHistoryCheckpointRecorded = true;
       onMutation?.();
       return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
     },
@@ -1388,6 +1400,10 @@ async function openDocumentDatabase(document: VisualDocument): Promise<SqlJsData
 }
 
 async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDatabase): Promise<void> {
+  const isLiveDocument = document === state?.document;
+  if (isLiveDocument) {
+    recordDatabaseAttachmentHistory();
+  }
   const encoded = await encodeAttachmentBytes(db.export());
   const previous = getAttachment(document, DB_ATTACHMENT_ID);
   setAttachment(
@@ -1401,6 +1417,9 @@ async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDataba
     },
     encoded.bytes
   );
+  if (isLiveDocument) {
+    markDatabaseAttachmentChanged();
+  }
 }
 
 export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {

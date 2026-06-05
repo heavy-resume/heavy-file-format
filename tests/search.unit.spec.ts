@@ -571,6 +571,103 @@ hvy_version: 0.1
   expect(expectedResult.map((section) => section.customId)).toEqual(['alpha', 'beta']);
 });
 
+test('search filter excludes matching component tags from keyword matches', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"keep"}-->
+ needle kept
+
+<!--hvy:text {"id":"draft","tags":"draft"}-->
+ needle draft
+`, '.hvy');
+  const expectedResults = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+  const keep = document.sections[0]!.blocks[0]!;
+  const draft = document.sections[0]!.blocks[1]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: 'needle',
+    submittedQuery: 'needle',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
+    submittedExcludeTags: 'draft',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: expectedResults,
+    navigationResultIds: expectedResults.map((result) => result.id),
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.matchedBlocks.has(keep.id)).toBe(true);
+  expect(expectedContext.matchedBlocks.has(draft.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(keep.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(draft.id)).toBe(false);
+  expect(expectedContext.excludedBlocks.has(draft.id)).toBe(true);
+});
+
+test('search filter can exclude component tags without a search query', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"keep"}-->
+ kept
+
+<!--hvy:text {"id":"draft","tags":"draft, internal"}-->
+ draft
+`, '.hvy');
+  const keep = document.sections[0]!.blocks[0]!;
+  const draft = document.sections[0]!.blocks[1]!;
+
+  const expectedContext = createSearchFilterContext(document.sections, {
+    open: false,
+    queryDraft: '',
+    submittedQuery: '',
+    caseSensitive: false,
+    categories: { tags: true, contents: true, description: true },
+    activeTab: 'filter',
+    filterEnabled: true,
+    filterMode: 'hide',
+    filterQueryMode: 'keyword',
+    submittedFilterQueryMode: 'keyword',
+    submittedExcludeTags: 'internal',
+    resultsCollapsed: false,
+    activeResultId: null,
+    isLoading: false,
+    error: null,
+    results: [],
+    navigationResultIds: [],
+    requestNonce: 1,
+    abortController: null,
+  });
+
+  expect(expectedContext.filtering).toBe(true);
+  expect(expectedContext.visibleSections.has(document.sections[0]!.key)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(keep.id)).toBe(true);
+  expect(expectedContext.visibleBlocks.has(draft.id)).toBe(false);
+});
+
 test('search filter context keeps expandable stub context for expanded-content matches', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -55,6 +55,11 @@
   width: min(34rem, calc(100% - 2rem));
 }
 
+.reusable-definition-modal,
+.hvy-document .reusable-definition-modal {
+  width: min(58rem, calc(100% - 2rem));
+}
+
 .remove-confirmation-modal-root {
   display: grid;
   place-items: center;
@@ -345,6 +350,50 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.reusable-definition-editor,
+.hvy-document .reusable-definition-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.reusable-definition-raw-field,
+.reusable-definition-section-surface > label,
+.hvy-document .reusable-definition-raw-field,
+.hvy-document .reusable-definition-section-surface > label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.reusable-definition-raw-field textarea,
+.reusable-definition-section-surface input,
+.hvy-document .reusable-definition-raw-field textarea,
+.hvy-document .reusable-definition-section-surface input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  background: var(--hvy-input-bg);
+  color: var(--hvy-text);
+  font: inherit;
+  padding: 0.5rem;
+}
+
+.reusable-definition-raw-field textarea,
+.hvy-document .reusable-definition-raw-field textarea {
+  min-height: 28rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.reusable-definition-hvy-surface,
+.reusable-definition-section-surface,
+.hvy-document .reusable-definition-hvy-surface,
+.hvy-document .reusable-definition-section-surface {
+  display: grid;
+  gap: 0.65rem;
 }
 
 .template-picker-empty {

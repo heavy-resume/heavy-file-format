@@ -2,10 +2,13 @@ import './expandable.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { VisualBlock } from '../../types';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
+import { state } from '../../../state';
 
 export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
   const pdfDocument = helpers.isPdfDocument?.() === true;
+  const definitionEditor = helpers.isReusableDefinitionEditor?.() === true;
+  const blockLocked = block.schema.lock && !definitionEditor;
   const advanced = helpers.isAdvancedEditorMode();
   const stubAddKey = `expandable-stub:${sectionKey}:${block.id}`;
   const contentAddKey = `expandable-content:${sectionKey}:${block.id}`;
@@ -17,10 +20,24 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
   const contentCount = contentBlocks.length;
   const stubOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'stub', false);
   const expandedOpen = helpers.isExpandableEditorPanelOpen(sectionKey, block.id, 'expanded', false);
-  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, block.schema.lock || stub.lock || pdfDocument);
-  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, block.schema.lock || content.lock || pdfDocument);
+  const stubLocked = blockLocked || (stub.lock && !definitionEditor) || pdfDocument;
+  const contentLocked = blockLocked || (content.lock && !definitionEditor) || pdfDocument;
+  const stubPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-stub', stubBlocks, helpers, stubLocked);
+  const contentPlacementTargets = renderExpandablePlacementBlockList(sectionKey, block.id, 'expandable-content', contentBlocks, helpers, contentLocked);
   const stubPlacementMode = stubPlacementTargets.includes('component-placement-target');
   const contentPlacementMode = contentPlacementTargets.includes('component-placement-target');
+  const copiedStubPane = isCopiedExpandablePane(sectionKey, block.id, 'stub');
+  const copiedContentPane = isCopiedExpandablePane(sectionKey, block.id, 'content');
+  const stubCopyAction = mobileAdjustment || stubLocked
+    ? ''
+    : copiedStubPane
+      ? `<button type="button" class="secondary expandable-pane-copy-button" data-action="cancel-component-placement" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Cancel place</button>`
+      : `<button type="button" class="ghost expandable-pane-copy-button" data-action="copy-expandable-stub-pane" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Copy</button>`;
+  const contentCopyAction = mobileAdjustment || contentLocked
+    ? ''
+    : copiedContentPane
+      ? `<button type="button" class="secondary expandable-pane-copy-button" data-action="cancel-component-placement" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Cancel place</button>`
+      : `<button type="button" class="ghost expandable-pane-copy-button" data-action="copy-expandable-content-pane" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">Copy</button>`;
   const stubPreview = stubBlocks
     .slice(0, 2)
     .map((innerBlock) => helpers.renderPassiveEditorBlock(sectionKey, innerBlock))
@@ -108,6 +125,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             <span class="expandable-label">Stub</span>
           </button>
           ${stubMeta}
+          ${stubCopyAction}
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="${stubOpen ? 'true' : 'false'}">
@@ -145,6 +163,7 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
             <span class="expandable-label">Expanded</span>
           </button>
           ${contentMeta}
+          ${contentCopyAction}
           <button type="button" class="expandable-summary expandable-summary-meta-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
             sectionKey
           )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="${expandedOpen ? 'true' : 'false'}">
@@ -177,6 +196,14 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
     </div>
   `;
 };
+
+function isCopiedExpandablePane(sectionKey: string, blockId: string, pane: 'stub' | 'content'): boolean {
+  return state.componentPlacement?.mode === 'copy'
+    && state.componentPlacement.source === 'clipboard'
+    && state.componentPlacement.sectionKey === sectionKey
+    && state.componentPlacement.blockId === blockId
+    && state.componentPlacement.sourcePane === pane;
+}
 
 function renderExpandablePlacementBlockList(
   sectionKey: string,

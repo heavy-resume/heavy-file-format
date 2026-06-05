@@ -123,8 +123,8 @@ text_line_styles:
      <!--hvy:grid:0 {"id":"blip-left"}-->
       <!--hvy:text {}-->
        Left column content.
-     <!--hvy:grid:1 {"id":"blip-right","css":"text-align:right;"}-->
-      <!--hvy:text {}-->
+     <!--hvy:grid:1 {"id":"blip-right"}-->
+      <!--hvy:text {"css":"text-align: right;"}-->
        Right column content, also right justified.
     ```
 

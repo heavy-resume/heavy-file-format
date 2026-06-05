@@ -3,7 +3,10 @@ import { expect, test } from 'vitest';
 import { initCallbacks, initState, state } from '../src/state';
 import { createDefaultChatState } from '../src/chat/chat';
 import { createDefaultSearchState } from '../src/search/state';
-import { undoState, redoState } from '../src/history';
+import { createEmptyBlock } from '../src/document-factory';
+import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory, recordHistory, undoState, redoState } from '../src/history';
+import { DB_ATTACHMENT_ID, setAttachment } from '../src/attachments';
+import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import type { AppState } from '../src/types';
 
 function createHistoryTestState(): AppState {
@@ -40,6 +43,7 @@ function createHistoryTestState(): AppState {
       requestNonce: 0,
     },
     paneScroll: {
+      fullPaneTop: 0,
       editorTop: 0,
       editorSidebarTop: 0,
       viewerSidebarTop: 0,
@@ -76,6 +80,7 @@ function createHistoryTestState(): AppState {
     tempHighlights: new Set<string>(),
     addComponentBySection: {},
     metaPanelOpen: false,
+    openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
     selectedReusableComponentName: null,
@@ -105,6 +110,7 @@ function createHistoryTestState(): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    transientNotice: null,
   };
 }
 
@@ -174,4 +180,123 @@ test('undo and redo restore document theme snapshots', () => {
   redoState();
   expect(state.document.meta.theme).toEqual({ colors: { '--hvy-button-bg': '#222222' } });
   expect(state.paletteOverrideId).toBe('ufo');
+});
+
+test('undo and redo keep image attachment bytes outside history snapshots', () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  const imageBlock = createEmptyBlock('image');
+  imageBlock.id = 'photo';
+  imageBlock.schema.imageFile = 'photo.png';
+  imageBlock.schema.imageAlt = 'Photo';
+  state.document.sections = [{
+    key: 'main',
+    customId: '',
+    contained: false,
+    editorOnly: false,
+    lock: false,
+    idEditorOpen: false,
+    isGhost: false,
+    title: 'Main',
+    level: 1,
+    expanded: true,
+    highlight: false,
+    css: '',
+    tags: '',
+    description: '',
+    location: 'main',
+    blocks: [imageBlock],
+    children: [],
+  }];
+  state.document.attachments = [
+    { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([10, 20, 30]) },
+  ];
+
+  recordHistory('before-image-edit');
+  expect(state.history[0]).toContain('"attachments": []');
+  expect(state.history[0]).not.toContain('image:photo.png');
+  expect(state.history[0]).not.toContain('10');
+  state.rawEditorText = '#! Changed';
+  state.document.sections[0]!.blocks[0]!.schema.imageAlt = 'Changed photo';
+  state.document.attachments = [
+    { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([40, 50]) },
+  ];
+
+  undoState();
+  expect(state.document.sections[0]?.blocks[0]?.schema.imageAlt).toBe('Photo');
+  expect(state.document.attachments[0]?.bytes).toBeInstanceOf(Uint8Array);
+  expect(Array.from(state.document.attachments[0]?.bytes ?? [])).toEqual([40, 50]);
+
+  redoState();
+  expect(state.document.sections[0]?.blocks[0]?.schema.imageAlt).toBe('Changed photo');
+  expect(state.document.attachments[0]?.bytes).toBeInstanceOf(Uint8Array);
+  expect(Array.from(state.document.attachments[0]?.bytes ?? [])).toEqual([40, 50]);
+});
+
+test('undo and redo restore database attachment checkpoints without snapshotting other attachments', () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  state.document.attachments = [
+    { id: DB_ATTACHMENT_ID, meta: { mediaType: 'application/vnd.sqlite3' }, bytes: new Uint8Array([1, 2]) },
+    { id: 'image:photo.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([10, 20]) },
+  ];
+
+  recordDatabaseAttachmentHistory();
+  expect(state.history[state.history.length - 1]).toContain('"databaseAttachment"');
+  expect(state.history[state.history.length - 1]).toContain('"bytes": [\n      1,\n      2\n    ]');
+  expect(state.history[state.history.length - 1]).not.toContain('image:photo.png');
+  setAttachment(
+    state.document,
+    DB_ATTACHMENT_ID,
+    { mediaType: 'application/vnd.sqlite3' },
+    new Uint8Array([3, 4])
+  );
+  markDatabaseAttachmentChanged();
+
+  undoState();
+  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)?.bytes ?? [])).toEqual([1, 2]);
+  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
+
+  redoState();
+  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)?.bytes ?? [])).toEqual([3, 4]);
+  expect(Array.from(state.document.attachments.find((attachment) => attachment.id === 'image:photo.png')?.bytes ?? [])).toEqual([10, 20]);
+});
+
+test('script database writes share one undo checkpoint per runtime', async () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  const runtime = await createScriptingDbRuntime(state.document);
+
+  try {
+    runtime.api.execute('CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)');
+    runtime.api.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep']);
+  } finally {
+    runtime.dispose();
+  }
+
+  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
+
+  undoState();
+  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).toBeUndefined();
+
+  redoState();
+  expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
 });

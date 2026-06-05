@@ -25,6 +25,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
+const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -2086,6 +2087,29 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromPasteAsQuotation') {
+    const dataTransfer = event.dataTransfer;
+    if (!dataTransfer) {
+      return false;
+    }
+    const html = dataTransfer.getData(HVY_RICH_CLIPBOARD_TYPE) ||
+      (event.inputType === 'insertFromPasteAsQuotation' ? '' : sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html')));
+    if (html) {
+      insertHtmlAtEditableSelection(editable, html);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+    const text = dataTransfer.getData('text/plain');
+    if (text) {
+      insertPlainTextAtEditableSelection(editable, text);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+    return false;
+  }
+
   if (event.inputType === 'deleteByCut' && isSelectionInsideEditableList(editable)) {
     scheduleEmptyListItemPruneAfterDeletion(editable, { pruneActiveItem: true });
     return false;
@@ -2161,6 +2185,114 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;
+}
+
+export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElement): boolean {
+  const clipboard = event.clipboardData;
+  const selection = window.getSelection();
+  if (!clipboard || !selection?.rangeCount) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  if (range.collapsed || !isRangeInsideElement(editable, range)) {
+    return false;
+  }
+  const container = document.createElement('div');
+  container.appendChild(range.cloneContents());
+  const html = container.innerHTML;
+  if (!html) {
+    return false;
+  }
+  clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
+  clipboard.setData('text/html', html);
+  clipboard.setData('text/plain', range.toString());
+  event.preventDefault();
+  return true;
+}
+
+export async function pastePlainTextIntoRichEditor(editable: HTMLElement): Promise<boolean> {
+  if (!navigator.clipboard?.readText) {
+    return false;
+  }
+  const text = await navigator.clipboard.readText();
+  if (!text) {
+    return false;
+  }
+  insertPlainTextAtEditableSelection(editable, text);
+  editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  updateRichToolbarState(editable);
+  return true;
+}
+
+function sanitizeExternalRichPasteHtml(html: string): string {
+  if (!html) {
+    return '';
+  }
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    stripColorPresentation(element);
+  });
+  return template.innerHTML;
+}
+
+function stripColorPresentation(element: HTMLElement): void {
+  element.removeAttribute('color');
+  element.removeAttribute('bgcolor');
+  if (!element.hasAttribute('style')) {
+    return;
+  }
+  const preservedDeclarations = (element.getAttribute('style') ?? '')
+    .split(';')
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => declaration && !isColorPresentationDeclaration(declaration));
+  if (preservedDeclarations.length > 0) {
+    element.setAttribute('style', preservedDeclarations.join('; '));
+  } else {
+    element.removeAttribute('style');
+  }
+}
+
+function isColorPresentationDeclaration(declaration: string): boolean {
+  const propertyName = declaration.split(':', 1)[0]?.trim().toLowerCase() ?? '';
+  return propertyName === 'color' ||
+    propertyName === 'background' ||
+    propertyName === 'background-color' ||
+    propertyName === 'text-decoration-color' ||
+    propertyName === 'border-color' ||
+    propertyName.endsWith('-color');
+}
+
+function insertHtmlAtEditableSelection(editable: HTMLElement, html: string): void {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    editable.insertAdjacentHTML('beforeend', html);
+    placeCaretAtEnd(editable);
+    return;
+  }
+  range.deleteContents();
+  const fragment = range.createContextualFragment(html);
+  placeCaretAfterInsertedFragment(range, fragment);
+}
+
+function insertPlainTextAtEditableSelection(editable: HTMLElement, text: string): void {
+  const html = escapeHtml(text).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
+  insertHtmlAtEditableSelection(editable, html || '<br>');
+}
+
+function placeCaretAfterInsertedFragment(range: Range, fragment: DocumentFragment): void {
+  const lastChild = fragment.lastChild;
+  range.insertNode(fragment);
+  const nextRange = document.createRange();
+  if (lastChild) {
+    nextRange.setStartAfter(lastChild);
+  } else {
+    nextRange.setStart(range.startContainer, range.startOffset);
+  }
+  nextRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
 }
 
 function isSelectionInsideEditableList(editable: HTMLElement): boolean {

@@ -593,6 +593,140 @@ test('link modal apply with an empty value removes the selected link', async ({ 
   });
 });
 
+test('external rich paste strips text and background color presentation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<p><span style="color: rgb(255, 0, 0); background-color: yellow; font-weight: 700;">External</span> <mark style="background: lime;">Mark</mark></p>'
+    );
+    transfer.setData('text/plain', 'External Mark');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult.prevented).toBe(true);
+  expect(expectedResult.text).toContain('Before External Mark');
+  expect(expectedResult.html).toContain('font-weight: 700');
+  expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
+  expect(expectedResult.html).not.toContain('background-color');
+  expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('rich copy inside the document preserves HVY-origin color presentation on paste', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p><span style="color: rgb(10, 20, 30); background-color: rgb(240, 240, 0);">Internal</span></p><p>Target </p>';
+    const source = node.querySelector('span')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNode(source);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    const target = node.querySelectorAll('p')[1]!;
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(target);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      copyPrevented: copyEvent.defaultPrevented,
+      hasHvyClipboardType: transfer.types.includes('application/x-hvy-rich-html'),
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+    };
+  });
+
+  expect(expectedResult.copyPrevented).toBe(true);
+  expect(expectedResult.hasHvyClipboardType).toBe(true);
+  expect(expectedResult.pastePrevented).toBe(true);
+  expect(expectedResult.html).toContain('color: rgb(10, 20, 30)');
+  expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
+});
+
+test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => 'Plain <not bold>',
+      },
+    });
+  });
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    html: node.innerHTML,
+    text: node.textContent,
+  }));
+  expect(expectedResult.text).toContain('Before Plain <not bold>');
+  expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
+  expect(expectedResult.html).not.toContain('<strong>');
+});
+
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {
   await page.goto('/');
 

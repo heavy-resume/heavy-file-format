@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, createDefaultTableRow, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, pastePlainTextIntoRichEditor, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, createDefaultTableRow, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, syncReusableTemplateForBlock } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
@@ -154,6 +154,15 @@ export function bindKeydown(app: HTMLElement): void {
     }
 
     const key = event.key.toLowerCase();
+    if (key === 'v' && event.shiftKey) {
+      if (!navigator.clipboard?.readText) {
+        return;
+      }
+      event.preventDefault();
+      void pastePlainTextIntoRichEditor(richTarget);
+      return;
+    }
+
     if (key === 'b') {
       event.preventDefault();
       applyRichAction('bold', richTarget);

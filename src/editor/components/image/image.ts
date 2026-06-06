@@ -1,7 +1,7 @@
 import './image.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
-import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setImageAttachment, inferImageMediaType } from '../../../attachments';
+import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -9,6 +9,7 @@ import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 import { cameraIcon, closeIcon } from '../../../icons';
+import type { JsonObject } from '../../../hvy/types';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
@@ -29,6 +30,11 @@ type LegacyCameraNavigator = Navigator & {
 export function getImageBlobUrl(filename: string): string | null {
   if (!filename) {
     return null;
+  }
+  const attachmentId = getImageAttachmentId(filename);
+  const hostUrl = state.attachmentHost?.resolveUrl?.(attachmentId);
+  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+    return hostUrl;
   }
   const attachment = getImageAttachment(state.document, filename);
   if (!attachment || attachment.bytes.length === 0) {
@@ -431,7 +437,9 @@ export function deleteUnusedImageAttachment(filename: string): void {
   if (!filename || !listImageFilenames(state.document).includes(filename)) return;
   if (!isImageAttachmentUnused(filename)) return;
   recordHistory(`image-attachment-delete:${filename}`);
-  removeAttachment(state.document, getImageAttachmentId(filename));
+  const id = getImageAttachmentId(filename);
+  removeAttachment(state.document, id);
+  void state.attachmentHost?.remove(id);
   clearImageBlobUrlCache();
   getRenderApp()();
 }
@@ -448,7 +456,9 @@ export function getImageAttachmentReferenceCount(filename: string): number {
 
 export function removeImageAttachmentIfLastReference(filename: string): boolean {
   if (!filename || getImageAttachmentReferenceCount(filename) !== 1) return false;
-  removeAttachment(state.document, getImageAttachmentId(filename));
+  const id = getImageAttachmentId(filename);
+  removeAttachment(state.document, id);
+  void state.attachmentHost?.remove(id);
   clearImageBlobUrlCache();
   return true;
 }
@@ -493,7 +503,7 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   if (!isAllowedImageAttachmentMediaType(mediaType)) return;
   const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
   recordHistory(`image-upload:${blockId}`);
-  setImageAttachment(state.document, filename, prepared.mediaType, prepared.bytes);
+  await storeImageAttachment(filename, prepared.mediaType, prepared.bytes);
   block.schema.imageFile = filename;
   if (!block.schema.imageAlt) {
     block.schema.imageAlt = filename;
@@ -501,6 +511,15 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   clearImageBlobUrlCache();
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRenderApp()();
+}
+
+export async function storeImageAttachment(filename: string, mediaType: string, bytes: Uint8Array): Promise<void> {
+  const id = getImageAttachmentId(filename);
+  const meta: JsonObject = { mediaType };
+  const descriptor = await state.attachmentHost?.store(id, bytes, meta);
+  const nextMeta = descriptor && typeof descriptor === 'object' ? descriptor.meta : meta;
+  setAttachment(state.document, id, nextMeta, bytes);
+  clearImageBlobUrlCache();
 }
 
 export function bindImageDragAndDrop(app: HTMLElement): void {

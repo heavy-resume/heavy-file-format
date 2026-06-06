@@ -189,6 +189,49 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor' });
 const bytes = mount.serializeDocumentBytes();
 ```
 
+Hosts that keep attachments outside the in-memory HVY document can provide an
+attachment adapter. For example, a static site can resolve image attachments to
+pre-published files without loading the image bytes into the client:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  attachmentStore: {
+    list() {
+      return [
+        { id: 'image:hero.png', meta: { mediaType: 'image/png' }, length: 48192 },
+      ];
+    },
+    recall(id) {
+      return fetch(`/assets/hvy/${encodeURIComponent(id)}`).then((response) => response.arrayBuffer());
+    },
+    store() {},
+    remove() {},
+    resolveUrl(id) {
+      return id === 'image:hero.png' ? '/assets/hvy/hero.png' : null;
+    },
+  },
+});
+```
+
+Hosts can also use async serialization when attachment recall or final byte
+assembly belongs to another runtime, such as a local/native serializer:
+
+```js
+const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, serializer: {
+  serializeDocumentBytes(request) {
+    return nativeHvySerializer.save({
+      textBody: request.textBody,
+      tail: request.tail,
+      readAttachment: request.recallAttachment,
+    });
+  },
+} });
+
+const bytes = await mount.serializeDocumentBytesAsync();
+```
+
 Editor, AI, and import mutations can also notify hosts when the mounted
 document changes relative to the last saved baseline:
 

@@ -2,13 +2,13 @@ import './carousel.css';
 
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { CarouselImage, VisualBlock } from '../../types';
-import { getImageAttachmentId, inferImageMediaType, listImageFilenames, setAttachment } from '../../../attachments';
+import { inferImageMediaType, listImageFilenames } from '../../../attachments';
 import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
-import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker } from '../image/image';
+import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, storeImageAttachment } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 
 interface CarouselRuntimeState {
@@ -297,7 +297,7 @@ async function appendCarouselImageFiles(block: VisualBlock, sectionKey: string, 
   const images = await Promise.all(files.map(async (file) => {
     const mediaType = file.type || inferImageMediaType(file.name);
     const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
-    setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: prepared.mediaType }, prepared.bytes);
+    await storeImageAttachment(file.name, prepared.mediaType, prepared.bytes);
     return { imageFile: file.name, imageAlt: file.name, caption: '' };
   }));
   block.schema.carouselImages.push(...images);

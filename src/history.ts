@@ -73,6 +73,12 @@ export function commitHistorySnapshot(): void {
 }
 
 export function ensureHistoryInitialized(): void {
+  if (!Array.isArray(state.history)) {
+    state.history = [];
+  }
+  if (!Array.isArray(state.future)) {
+    state.future = [];
+  }
   if (state.history.length === 0) {
     commitHistorySnapshot();
   }

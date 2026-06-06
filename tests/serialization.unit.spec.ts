@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -1328,4 +1329,76 @@ hvy_version: 0.1
   ]);
   expect(expectedResult.attachments.map((attachment) => attachment.id)).toEqual(['image:a.png', 'image:b.png']);
   expect(Array.from(expectedResult.attachments[1]?.bytes ?? [])).toEqual([3, 4]);
+});
+
+test('expected result: byte deserialization indexes lazy tail attachments before materializing bytes', () => {
+  const prefix = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:image {"imageFile":"photo.png"}-->
+<!--hvy:tail {"id":"image:photo.png","mediaType":"image/png","length":4}-->
+${HVY_TAIL_SENTINEL}
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const bytes = new Uint8Array(prefixBytes.length + 4);
+  bytes.set(prefixBytes, 0);
+  bytes.set([8, 9, 10, 11], prefixBytes.length);
+
+  const document = deserializeDocumentBytes(bytes, '.hvy');
+  const store = ensureDocumentAttachmentStore(document);
+
+  expect(getAttachmentDescriptors(document)).toEqual([
+    { id: 'image:photo.png', meta: { mediaType: 'image/png' }, length: 4 },
+  ]);
+  expect(store.getDescriptor('image:photo.png')?.length).toBe(4);
+  expect(Array.from(store.get('image:photo.png')?.bytes ?? [])).toEqual([8, 9, 10, 11]);
+});
+
+test('expected result: attachment store overwrites ids and preserves declaration order', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`, '.hvy');
+  const store = ensureDocumentAttachmentStore(document);
+
+  store.set('image:first.png', { mediaType: 'image/png' }, new Uint8Array([1]));
+  store.set('db', { mediaType: 'application/octet-stream' }, new Uint8Array([2]));
+  store.set('image:first.png', { mediaType: 'image/png', updated: true }, new Uint8Array([3, 4]));
+
+  expect(store.listDescriptors()).toEqual([
+    { id: 'image:first.png', meta: { mediaType: 'image/png', updated: true }, length: 2 },
+    { id: 'db', meta: { mediaType: 'application/octet-stream' }, length: 1 },
+  ]);
+  expect(Array.from(store.get('image:first.png')?.bytes ?? [])).toEqual([3, 4]);
+});
+
+test('expected result: async serializer receives text body, descriptors, and recall API', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`, '.hvy');
+  document.attachments = [
+    { id: 'db', meta: { mediaType: 'application/octet-stream' }, bytes: new Uint8Array([1, 2]) },
+  ];
+
+  const expectedResult = await serializeDocumentBytesAsync(document, {
+    async serializeDocumentBytes(request) {
+      expect(request.textBody).toContain(HVY_TAIL_SENTINEL);
+      expect(request.tail).toEqual([{ id: 'db', meta: { mediaType: 'application/octet-stream' }, length: 2 }]);
+      expect(Array.from(await request.recallAttachment('db') ?? [])).toEqual([1, 2]);
+      return new TextEncoder().encode('native-result');
+    },
+  });
+
+  expect(new TextDecoder().decode(expectedResult)).toBe('native-result');
 });

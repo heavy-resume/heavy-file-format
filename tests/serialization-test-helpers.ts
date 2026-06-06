@@ -13,6 +13,7 @@ export function createTestState(document: VisualDocument): AppState {
     currentView: 'editor',
     editorMode: 'basic',
     responsivePreview: 'full',
+    attachmentHost: null,
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
     metaFilter: {

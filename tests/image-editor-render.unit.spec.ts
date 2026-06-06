@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { renderCarouselEditor } from '../src/editor/components/carousel/carousel';
+import { getCarouselSlideScrollLeft, renderCarouselEditor } from '../src/editor/components/carousel/carousel';
 import { renderImageEditor } from '../src/editor/components/image/image';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
@@ -97,5 +97,21 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('data-image-filename="slide.jpg"');
     expect(expectedResult).toContain('download="slide.jpg"');
     expect(expectedResult).toContain('data-action="carousel-delete-image"');
+  });
+
+  test('expected result: carousel navigation targets the actual slide position', () => {
+    const track = {
+      scrollLeft: 0,
+      clientWidth: 600,
+      getBoundingClientRect: () => ({ left: 0 }),
+    } as HTMLElement;
+    const slideTwentyFour = {
+      getBoundingClientRect: () => ({ left: 14_421 }),
+    } as HTMLElement;
+
+    const expectedResult = getCarouselSlideScrollLeft(track, slideTwentyFour);
+
+    expect(expectedResult).toBe(14_421);
+    expect(expectedResult).not.toBe(23 * track.clientWidth);
   });
 });

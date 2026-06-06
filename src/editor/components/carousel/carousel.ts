@@ -331,13 +331,21 @@ function handleCarouselHoverResume(event: Event): void {
 function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boolean): void {
   const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
   if (!track) return;
-  const count = track.querySelectorAll('.hvy-carousel-slide').length;
+  const slides = Array.from(track.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const count = slides.length;
   if (count === 0) return;
   const index = ((rawIndex % count) + count) % count;
   const stateForFrame = runtimeState.get(frame);
   if (stateForFrame) stateForFrame.index = index;
-  track.scrollTo({ left: index * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  const slide = slides[index];
+  track.scrollTo({ left: slide ? getCarouselSlideScrollLeft(track, slide) : 0, behavior: smooth ? 'smooth' : 'auto' });
   updateActiveIndicator(frame, index);
+}
+
+export function getCarouselSlideScrollLeft(track: HTMLElement, slide: HTMLElement): number {
+  const trackRect = track.getBoundingClientRect();
+  const slideRect = slide.getBoundingClientRect();
+  return track.scrollLeft + slideRect.left - trackRect.left;
 }
 
 function updateActiveIndicator(frame: HTMLElement, index: number): void {

@@ -33,6 +33,7 @@
 }
 
 .hvy-carousel-slide {
+  box-sizing: border-box;
   flex: 0 0 100%;
   width: 100%;
   max-width: 100%;

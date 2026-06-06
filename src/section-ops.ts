@@ -1,5 +1,5 @@
 import type { VisualBlock, VisualSection } from './editor/types';
-import { createEmptySection } from './document-factory';
+import { createEmptySectionWithMeta } from './document-factory';
 import type { JsonObject } from './hvy/types';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import { SCRIPTING_PLUGIN_ID } from './plugins/registry';
@@ -354,7 +354,8 @@ export function findBlockContainerInList(
 export function makeBlockSubsection(
   sections: VisualSection[],
   sectionKey: string,
-  blockId: string
+  blockId: string,
+  documentMeta?: JsonObject | null
 ): VisualSection | null {
   const section = findSectionByKey(sections, sectionKey);
   if (!section) {
@@ -372,14 +373,14 @@ export function makeBlockSubsection(
   const subLevel = Math.min(section.level + 1, 6);
   const anchor = blockIndex > 0 ? section.blocks[blockIndex - 1].id : '';
 
-  const newSub = createEmptySection(subLevel, '', false);
+  const newSub = createEmptySectionWithMeta(subLevel, '', false, documentMeta);
   newSub.blocks = [moved];
   newSub.location = section.location;
   newSub.renderAfterBlockId = anchor;
 
   const inserts: VisualSection[] = [newSub];
   if (blocksAfter.length > 0) {
-    const tailSub = createEmptySection(subLevel, '', false);
+    const tailSub = createEmptySectionWithMeta(subLevel, '', false, documentMeta);
     tailSub.blocks = blocksAfter;
     tailSub.location = section.location;
     tailSub.autoTail = true;

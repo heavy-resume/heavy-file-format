@@ -2,12 +2,13 @@ import { requestAiComponentEdit } from './ai-component-edit';
 import { parseAiBlockEditResponse } from './ai-component-edit-common';
 import { getPluginAiHelp } from './ai-plugin-hints';
 import { getHvyComponentHelp } from './component-help';
-import { createEmptySection } from './document-factory';
+import { createEmptySectionWithMeta } from './document-factory';
 import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSectionFragment } from './serialization';
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
 import { formatQueryResultTable } from './plugins/db-table-format';
 import { renderAltAnnotationsAsFullText } from './markdown';
 import type { VisualBlock, VisualSection } from './editor/types';
+import type { JsonObject } from './hvy/types';
 import type { HostChatClient } from './chat/chat';
 import type { ChatSettings, VisualDocument } from './types';
 import { buildDocumentEditToolHelp } from './ai-document-edit-instructions';
@@ -639,7 +640,7 @@ export function executeCreateSectionTool(
   onMutation?: (group?: string) => void
 ): string {
   const targetLevel = resolveNewSectionLevel(request, snapshot, document);
-  const newSection = buildCreatedSection(request, targetLevel);
+  const newSection = buildCreatedSection(request, targetLevel, document.meta);
   const title = newSection.title;
 
   if (request.position === 'append-root') {
@@ -695,11 +696,11 @@ function insertSectionAtOptionalIndex(container: VisualSection[], section: Visua
   container.splice(index, 0, section);
 }
 
-function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>, targetLevel: number): VisualSection {
+function buildCreatedSection(request: Extract<DocumentEditToolRequest, { tool: 'create_section' }>, targetLevel: number, documentMeta: JsonObject): VisualSection {
   const hvy = request.hvy?.trim();
   if (!hvy) {
     const title = request.title?.trim() || 'Untitled Section';
-    const section = createEmptySection(targetLevel, '', false);
+    const section = createEmptySectionWithMeta(targetLevel, '', false, documentMeta);
     section.title = title;
     return section;
   }

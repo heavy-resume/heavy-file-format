@@ -56,6 +56,8 @@ import {
 } from '../heading-styles';
 import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
 import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '../section-ops';
+import { getDefaultSectionContained } from '../document-factory';
+import type { JsonObject } from '../hvy/types';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -101,6 +103,10 @@ interface SectionDef {
     name: string;
     description?: string;
   }>;
+}
+
+function getDocumentSectionContainedDefault(documentMeta: JsonObject): boolean {
+  return getDefaultSectionContained(documentMeta);
 }
 
 interface ComponentListDisplayContext {
@@ -1155,6 +1161,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
+        </label>
+        <label class="checkbox-label">
+          <span>New Sections Contained</span>
+          <input
+            type="checkbox"
+            data-field="meta-section-contained-default"
+            ${getDocumentSectionContainedDefault(state.documentMeta) ? 'checked' : ''}
+          />
         </label>
         <details class="meta-expandable-field">
           <summary>

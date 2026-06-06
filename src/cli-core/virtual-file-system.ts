@@ -109,6 +109,12 @@ function validateHeaderCssValues(meta: JsonObject): void {
   if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults) && typeof (sectionDefaults as JsonObject).css === 'string') {
     assertCssValueIsDeclarationString((sectionDefaults as JsonObject).css as string, 'section_defaults.css');
   }
+  if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults)) {
+    const contained = (sectionDefaults as JsonObject).contained;
+    if (typeof contained !== 'undefined' && typeof contained !== 'boolean') {
+      throw new Error('section_defaults.contained must be a boolean.');
+    }
+  }
   const componentDefaults = meta.component_defaults;
   if (componentDefaults && typeof componentDefaults === 'object' && !Array.isArray(componentDefaults)) {
     for (const [componentName, defaults] of Object.entries(componentDefaults)) {

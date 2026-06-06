@@ -29,6 +29,7 @@ import {
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
+import type { JsonObject } from '../../hvy/types';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -113,6 +114,20 @@ export function bindInputBlock(app: HTMLElement): void {
       if (editorTreeBody) {
         editorTreeBody.style.maxWidth = target.value.trim();
       }
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-section-contained-default' && target instanceof HTMLInputElement) {
+      recordHistory('meta:section-contained-default');
+      const existingDefaults = state.document.meta.section_defaults;
+      const sectionDefaults = existingDefaults && typeof existingDefaults === 'object' && !Array.isArray(existingDefaults)
+        ? existingDefaults as JsonObject
+        : {};
+      state.document.meta.section_defaults = {
+        ...sectionDefaults,
+        contained: target.checked,
+      };
       getRefreshReaderPanels()();
       return;
     }

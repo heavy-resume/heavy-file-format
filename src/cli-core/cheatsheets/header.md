@@ -43,6 +43,7 @@ hvy_version: 0.1
 title: Fake Widget Catalog
 section_defaults:
   css: "margin: 0.5rem 0;"
+  contained: true
 theme:
   colors:
     --hvy-bg: "#ffffff"
@@ -50,7 +51,7 @@ theme:
 EOF
 ```
 
-`section_defaults` currently supports `css`. Do not invent fields such as `wrapper_style`; put declaration-only CSS in `css`.
+`section_defaults` currently supports `css` and `contained`. Do not invent fields such as `wrapper_style`; put declaration-only CSS in `css` and use a boolean for `contained`.
 
 Validate after editing:
 

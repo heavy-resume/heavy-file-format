@@ -1106,6 +1106,28 @@ hvy_version: 0.1
   expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
+test('serializes contained section override when document default is uncontained', () => {
+  const input = `---
+hvy_version: 0.1
+section_defaults:
+  contained: false
+---
+
+<!--hvy: {"id":"summary","contained":true}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  Summary body
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":true}-->');
+  expect(roundTripped.sections[0]?.contained).toBe(true);
+});
+
 test('round-trips text showCopy metadata', () => {
   const input = `---
 hvy_version: 0.1

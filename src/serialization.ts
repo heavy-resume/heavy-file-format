@@ -12,6 +12,7 @@ import {
   defaultBlockSchema,
   schemaFromUnknown,
   createEmptyBlock,
+  getDefaultSectionContained,
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
 } from './document-factory';
@@ -172,7 +173,7 @@ function mapParsedSection(section: HvySection, documentMeta: JsonObject, diagnos
     key: makeId('section'),
     customId,
     customIdGenerated: section.idGenerated === true && typeof sectionMeta.id !== 'string',
-    contained: sectionMeta.contained !== false,
+    contained: typeof sectionMeta.contained === 'boolean' ? sectionMeta.contained : getDefaultSectionContained(documentMeta),
     editorOnly: sectionMeta.editorOnly === true,
     lock: sectionMeta.lock === true,
     idEditorOpen: false,
@@ -1234,8 +1235,9 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
     expanded: section.expanded,
     highlight: section.highlight,
   };
-  if (!section.contained) {
-    meta.contained = false;
+  const defaultContained = getDefaultSectionContained(documentMeta);
+  if (section.contained !== defaultContained) {
+    meta.contained = section.contained;
   }
   if (section.editorOnly) {
     meta.editorOnly = true;

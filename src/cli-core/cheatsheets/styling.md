@@ -39,6 +39,7 @@ Use `section_defaults` for document-wide section wrapper styling:
 ```yaml
 section_defaults:
   css: "margin: 0.5rem 0;"
+  contained: true
 ```
 
 Use a component or section `css` field for a local adjustment:

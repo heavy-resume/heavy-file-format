@@ -10,6 +10,7 @@ import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
+export const DEFAULT_SECTION_CONTAINED = true;
 export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
 export const DEFAULT_IMAGE_BLOCK_CSS = 'margin: 0.5rem auto; display: block;';
 
@@ -207,7 +208,7 @@ export function parseVisualSection(candidate: unknown, level = 1, seen = new Wea
     key: makeId('section'),
     customId: sanitizeOptionalId(typeof raw.customId === 'string' ? raw.customId : typeof raw.id === 'string' ? raw.id : ''),
     customIdGenerated: raw.customIdGenerated === true,
-    contained: raw.contained !== false,
+    contained: typeof raw.contained === 'boolean' ? raw.contained : getDefaultSectionContained(documentMeta),
     editorOnly: raw.editorOnly === true,
     lock: raw.lock === true,
     idEditorOpen: false,
@@ -547,11 +548,15 @@ export function createEmptyBlock(component = 'text', skipComponentDefaults = fal
 }
 
 export function createEmptySection(level: number, component = 'container', isGhost = false): VisualSection {
+  return createEmptySectionWithMeta(level, component, isGhost, null);
+}
+
+export function createEmptySectionWithMeta(level: number, component = 'container', isGhost = false, documentMeta?: JsonObject | null): VisualSection {
   return {
     key: makeId('section'),
     customId: '',
     customIdGenerated: false,
-    contained: true,
+    contained: getDefaultSectionContained(documentMeta),
     editorOnly: false,
     lock: false,
     idEditorOpen: false,
@@ -568,9 +573,17 @@ export function createEmptySection(level: number, component = 'container', isGho
     exclude_from_import: false,
     protect_from_import: false,
     templateKey: undefined,
-    blocks: component ? [createEmptyBlock(component)] : [],
+    blocks: component ? [createEmptyBlock(component, false, documentMeta)] : [],
     children: [],
   };
+}
+
+export function getDefaultSectionContained(documentMeta?: JsonObject | null): boolean {
+  const sectionDefaults = documentMeta?.section_defaults;
+  if (!sectionDefaults || typeof sectionDefaults !== 'object' || Array.isArray(sectionDefaults)) {
+    return DEFAULT_SECTION_CONTAINED;
+  }
+  return (sectionDefaults as JsonObject).contained === false ? false : DEFAULT_SECTION_CONTAINED;
 }
 
 export function createDefaultTableRow(columnCount: number): TableRow {
@@ -586,6 +599,7 @@ export function createBlankDocument(extension: VisualDocument['extension'] = '.h
       reader_max_width: DEFAULT_READER_MAX_WIDTH,
       section_defaults: {
         css: DEFAULT_SECTION_CSS,
+        contained: DEFAULT_SECTION_CONTAINED,
       },
     },
     extension,

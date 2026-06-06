@@ -129,6 +129,7 @@ tags: [guide, onboarding]
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
@@ -268,7 +269,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `priority` is an optional boolean for sections that should remain prominent in reader-oriented ordering. Readers SHOULD keep priority sections before non-priority sections when applying search/filter ordering or other relevance-based reordering. `priority` does not imply `highlight`; use `highlight` for visual emphasis.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
-`contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
+`contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
 `protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
@@ -820,18 +821,21 @@ Rules:
 
 A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
 
-This is intended for document-wide section wrapper styling without repeating the same `css` on every section.
+This is intended for document-wide section wrapper styling and authoring defaults without repeating the same metadata on every section.
 
 #### Front matter shape
 
 ```yaml
 section_defaults:
   css: "margin: 0.5rem 0;"
+  contained: true
 ```
 
 Rules:
 - `css` is an optional inline CSS style string applied to each rendered section wrapper.
+- `contained` is an optional boolean used by authoring tools as the default `contained` value for newly created manual sections. It defaults to `true`.
 - Explicit section-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Explicit section-level `contained` remains valid and overrides the document-level default for that section.
 - Unknown fields under `section_defaults` MUST be ignored.
 
 ### 5.15 Document-level text line styles

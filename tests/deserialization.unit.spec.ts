@@ -355,6 +355,23 @@ hvy_version: 0.1
   });
 });
 
+test('uses document section contained default when section metadata omits contained', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+section_defaults:
+  contained: false
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.sections[0]?.contained).toBe(false);
+});
+
 test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -181,7 +181,7 @@ export function buildHeaderEditFormatInstructions(options?: { planActive?: boole
       : 'For larger or ambiguous header edit requests, first use `plan` with explicit steps. Create at most one plan, then execute it and mark steps done instead of replacing it.',
     'The header is YAML front matter only. It contains document metadata, component template definitions, and section template definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, text line styles, heading styles, template schema, plugins, and component template/section definitions.',
-    'Do not invent metadata fields. For `section_defaults`, the only supported field is `css`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"`.',
+    'Do not invent metadata fields. For `section_defaults`, the only supported fields are `css` and `contained`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"\\n  contained: true`.',
     'For `component_defaults`, each component name may contain only `css`, for example `component_defaults:\\n  xref-card:\\n    css: "margin: 0.5rem 0;"`.',
     'For `text_line_styles`, each style may contain `label` and declaration-only `css`, for example `text_line_styles:\\n  role:\\n    label: Role heading\\n    css: "font-weight: 700;"`.',
     'For `heading_styles`, each `h1` through `h4` entry may contain `label`, declaration-only `css`, and `afterContentMarginTop`, for example `heading_styles:\\n  h3:\\n    label: Heading 3\\n    css: "margin: 1rem 0 0.2rem; font-weight: 700;"\\n    afterContentMarginTop: "1rem"`.',
@@ -205,7 +205,7 @@ export function buildHeaderEditFormatInstructions(options?: { planActive?: boole
     '{"tool":"grep_header","query":"component_defs|skill-card","flags":"i","before":2,"after":8,"max_count":3,"reason":"optional"}',
     '{"tool":"view_header","start_line":1,"end_line":120,"reason":"optional"}',
     '{"tool":"patch_header","edits":[{"op":"replace","start_line":2,"end_line":2,"text":"title: New title"}],"reason":"optional"}',
-    '{"tool":"patch_header","edits":[{"op":"insert_after","line":2,"text":"section_defaults:\\n  css: \\"margin: 0.5rem 0;\\""}],"reason":"optional"}',
+    '{"tool":"patch_header","edits":[{"op":"insert_after","line":2,"text":"section_defaults:\\n  css: \\"margin: 0.5rem 0;\\"\\n  contained: true"}],"reason":"optional"}',
     '{"tool":"patch_header","edits":[{"op":"insert_after","line":10,"text":"component_defs:\\n  - name: card-list\\n    baseType: component-list\\n    description: Reusable card list"}],"reason":"optional"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');

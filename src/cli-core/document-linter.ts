@@ -288,6 +288,15 @@ function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
   const sectionDefaults = document.meta.section_defaults;
   if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults)) {
     pushHeaderCssJsonIssue(issues, 'section_defaults.css', (sectionDefaults as JsonObject).css);
+    const contained = (sectionDefaults as JsonObject).contained;
+    if (typeof contained !== 'undefined' && typeof contained !== 'boolean') {
+      issues.push({
+        key: '/header.yaml:section_defaults.contained:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'section_defaults.contained must be a boolean.',
+      });
+    }
   }
   const componentDefaults = document.meta.component_defaults;
   if (componentDefaults && typeof componentDefaults === 'object' && !Array.isArray(componentDefaults)) {

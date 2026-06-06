@@ -5,7 +5,7 @@ import { findBlockByIds, setActiveEditorBlock, getTagState, setTagState, getTagR
 import { handleRemoveTag } from '../../editor/tag-editor';
 import { parseTags } from '../../editor/tag-editor';
 import { refreshSearchFilterButton, setSearchExcludeTags } from '../../search/actions';
-import { createEmptySection } from '../../document-factory';
+import { createEmptySectionWithMeta } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
 import { templateDefinitionDetailsKey } from '../../editor/render';
@@ -204,7 +204,7 @@ const addTemplateField: AppActionHandler = ({ actionButton }) => {
   if (!field) {
     return;
   }
-  const newSection = createEmptySection(1, 'text');
+  const newSection = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
   newSection.title = field;
   if (newSection.blocks[0]) {
     newSection.blocks[0].text = `{{${field}}}`;

@@ -232,6 +232,11 @@ test('serializes editor text line style wrappers back to markers', () => {
       '<div class="hvy-text-line-style" data-hvy-text-line-style="role"><span class="hvy-text-line-style-marker">^role^</span><h4>Foo</h4></div>'
     )
   ).toBe('^role^ #### Foo');
+  expect(
+    turndown.turndown(
+      '<div class="hvy-text-line-style" data-hvy-text-line-style="role"><span class="hvy-text-line-style-marker">^role^</span><p></p></div>'
+    )
+  ).toBe('^role^');
 });
 
 test('serializes rich editor fill-in markers back to value comments', () => {

@@ -998,6 +998,11 @@
   padding-top: 0.05rem;
 }
 
+.rich-editor .hvy-text-line-style > :is(p, div, blockquote, h1, h2, h3, h4, h5, h6):empty {
+  margin: 0;
+  min-height: 1lh;
+}
+
 .rich-editor .hvy-text-line-style > .hvy-text-line-style-marker {
   display: none;
 }

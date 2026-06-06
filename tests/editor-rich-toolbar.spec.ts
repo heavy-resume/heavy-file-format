@@ -464,29 +464,102 @@ test('paragraph style after enter keeps caret on the empty new line', async ({ p
     const parent = range?.startContainer instanceof Element
       ? range.startContainer
       : range?.startContainer.parentElement;
+    const styled = parent?.closest('[data-hvy-text-line-style]');
+    const styledBlock = styled?.querySelector(':scope > :not(.hvy-text-line-style-marker)') as HTMLElement | null;
     return {
-      selectedStyle: parent?.closest('[data-hvy-text-line-style]')?.getAttribute('data-hvy-text-line-style') ?? '',
-      selectedText: parent?.closest('[data-hvy-text-line-style]')?.textContent?.replace(/\^role\^/g, '').replace(/\u200b/g, '') ?? '',
+      selectedStyle: styled?.getAttribute('data-hvy-text-line-style') ?? '',
+      selectedText: styled?.textContent?.replace(/\^role\^/g, '').replace(/\u200b/g, '') ?? '',
+      styledBlockBreakCount: styledBlock?.querySelectorAll('br').length ?? -1,
+      styledBlockChildNodes: styledBlock?.childNodes.length ?? -1,
+      styledBlockHeight: styledBlock?.getBoundingClientRect().height ?? 0,
       previousText: node.querySelector('p')?.textContent ?? '',
     };
   });
-  expect(caretAfterStyle).toEqual({
+  expect(caretAfterStyle).toMatchObject({
     selectedStyle: 'role',
     selectedText: '',
+    styledBlockBreakCount: 0,
+    styledBlockChildNodes: 0,
     previousText: 'Plain line',
   });
+  expect(caretAfterStyle.styledBlockHeight).toBeGreaterThan(0);
   await page.keyboard.type('Styled line');
 
   const expectedResult = await editor.evaluate((node) => ({
     plainText: node.querySelector('p')?.textContent ?? '',
-    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
-      (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, '')
-    ),
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) => ({
+      text: (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, ''),
+      breakCount: line.querySelectorAll('br').length,
+      hasCaretAnchor: (line.textContent ?? '').includes('\u200b'),
+    })),
   }));
 
   expect(expectedResult).toEqual({
     plainText: 'Plain line',
-    styledLines: ['Styled line'],
+    styledLines: [{
+      text: 'Styled line',
+      breakCount: 0,
+      hasCaretAnchor: false,
+    }],
+  });
+});
+
+test('arrowing back to a continued paragraph style line keeps caret after typed text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('indented');
+  await page.locator('[data-field="text-line-style-label"]').fill('Indented');
+  await page.locator('[data-field="text-line-style-css"]').fill('padding-left: 1rem;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Seatac Disc Golf');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Indented' }).first().click();
+  await page.keyboard.type('20 - ');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.type('3');
+
+  const expectedResult = await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    return {
+      lines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="indented"]')).map((line) => ({
+        text: (line.textContent ?? '').replace(/\^indented\^/g, '').replace(/\u200b/g, ''),
+        breakCount: line.querySelectorAll('br').length,
+        hasCaretAnchor: (line.textContent ?? '').includes('\u200b'),
+      })),
+      selectionTextOffset: range?.startContainer instanceof Text
+        ? range.startOffset
+        : null,
+      selectionText: range?.startContainer.textContent?.replace(/\u200b/g, '') ?? '',
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    lines: [
+      { text: '20 - 3', breakCount: 0, hasCaretAnchor: false },
+      { text: '', breakCount: 0, hasCaretAnchor: false },
+    ],
+    selectionTextOffset: '20 - 3'.length,
+    selectionText: '20 - 3',
   });
 });
 

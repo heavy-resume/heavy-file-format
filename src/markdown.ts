@@ -86,7 +86,10 @@ turndown.addRule('hvy-text-line-style', {
   replacement: (content, node) => {
     const name = (node as Element).getAttribute('data-hvy-text-line-style') ?? '';
     const trimmed = content.replace(/\n{3,}/g, '\n\n').trim();
-    return name && trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n${trimmed}\n\n`;
+    if (!name) {
+      return `\n\n${trimmed}\n\n`;
+    }
+    return trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n^${name}^\n\n`;
   },
 });
 

@@ -1161,7 +1161,12 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
     : null;
   if (!styleName) {
     if (current) {
+      const emptyStyledBlock = getTextLineStyleContentBlock(current);
       unwrapTextLineStyleBlock(current);
+      if (emptyStyledBlock && isEffectivelyEmptyBlock(emptyStyledBlock)) {
+        emptyStyledBlock.replaceChildren(editable.ownerDocument.createElement('br'));
+        placeCaretAtStart(emptyStyledBlock);
+      }
     }
     return;
   }
@@ -1180,14 +1185,17 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
   }
   const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
   const shouldPlaceCaretInEmptyStyledBlock = Boolean(range?.collapsed && isEffectivelyEmptyBlock(block));
+  if (shouldPlaceCaretInEmptyStyledBlock) {
+    block.replaceChildren();
+  }
   block.replaceWith(wrapper);
   wrapper.appendChild(block);
   if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
     if (!restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end) && shouldPlaceCaretInEmptyStyledBlock) {
-      placeCaretInside(block);
+      placeCaretAtStart(block);
     }
   } else if (shouldPlaceCaretInEmptyStyledBlock) {
-    placeCaretInside(block);
+    placeCaretAtStart(block);
   }
 }
 
@@ -1222,6 +1230,12 @@ function unwrapTextLineStyleBlock(wrapper: HTMLElement): void {
     parent.insertBefore(wrapper.firstChild, wrapper);
   }
   wrapper.remove();
+}
+
+function getTextLineStyleContentBlock(wrapper: HTMLElement): HTMLElement | null {
+  return Array.from(wrapper.children).find((child): child is HTMLElement =>
+    child instanceof HTMLElement && !child.matches('.hvy-text-line-style-marker')
+  ) ?? null;
 }
 
 function getDirectEditableChild(element: HTMLElement, editable: HTMLElement): HTMLElement | null {
@@ -1941,8 +1955,40 @@ function getSelectedRichBlockStyle(editable: HTMLElement): string {
   return 'paragraph';
 }
 
+function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable || !isEffectivelyEmptyBlock(block)) {
+    return false;
+  }
+  const styled = block.closest<HTMLElement>('[data-hvy-text-line-style]');
+  if (!styled || !editable.contains(styled)) {
+    return false;
+  }
+  const previous = styled.previousElementSibling;
+  const previousBlock = previous instanceof HTMLElement && previous.matches('[data-hvy-text-line-style]')
+    ? getTextLineStyleContentBlock(previous)
+    : previous instanceof HTMLElement
+      ? previous
+      : null;
+  if (!previousBlock || isEffectivelyEmptyBlock(previousBlock)) {
+    return false;
+  }
+  placeCaretAtEnd(previousBlock);
+  return true;
+}
+
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
   if (event.key === 'ArrowRight' && exitInlineCodeAtEnd(editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (event.key === 'ArrowUp' && moveCaretFromEmptyTextLineStyleToPreviousLine(editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
     return true;
@@ -3200,13 +3246,24 @@ function continueTextLineStyleAtSelection(editable: HTMLElement): boolean {
       nextBlock.appendChild(sibling);
       sibling = nextSibling;
     }
-    ensureEditableBlockHasCaretContent(currentBlock);
+    ensureTextLineStyleBlockHasCaretContent(currentBlock);
   }
-  ensureEditableBlockHasCaretContent(nextBlock);
+  ensureTextLineStyleBlockHasCaretContent(nextBlock);
   wrapper.appendChild(nextBlock);
   styled.parentNode?.insertBefore(wrapper, styled.nextSibling);
-  placeCaretInside(nextBlock);
+  if (isEffectivelyEmptyBlock(nextBlock)) {
+    placeCaretAtStart(nextBlock);
+  } else {
+    placeCaretInside(nextBlock);
+  }
   return true;
+}
+
+function ensureTextLineStyleBlockHasCaretContent(block: HTMLElement): void {
+  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
+    return;
+  }
+  block.replaceChildren();
 }
 
 function ensureEditableBlockHasCaretContent(block: HTMLElement): void {

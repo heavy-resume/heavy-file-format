@@ -626,7 +626,7 @@ test('link modal removes empty anchors', async ({ page }) => {
   });
 });
 
-test('external rich paste strips text and background color presentation', async ({ page }) => {
+test('external rich paste strips text background and font presentation', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
@@ -646,7 +646,7 @@ test('external rich paste strips text and background color presentation', async 
     const transfer = new DataTransfer();
     transfer.setData(
       'text/html',
-      '<p><span style="color: rgb(255, 0, 0); background-color: yellow; font-weight: 700;">External</span> <mark style="background: lime;">Mark</mark></p>'
+      '<p><font face="Courier New" size="4"><span style="color: rgb(255, 0, 0); background-color: yellow; font-family: monospace; font-size: 18px; font-weight: 700;">External</span></font> <mark style="background: lime;">Mark</mark></p>'
     );
     transfer.setData('text/plain', 'External Mark');
     const pasteEvent = new InputEvent('beforeinput', {
@@ -668,9 +668,61 @@ test('external rich paste strips text and background color presentation', async 
   expect(expectedResult.prevented).toBe(true);
   expect(expectedResult.text).toContain('Before External Mark');
   expect(expectedResult.html).toContain('font-weight: 700');
+  expect(expectedResult.html).not.toContain('font-family');
+  expect(expectedResult.html).not.toContain('font-size');
+  expect(expectedResult.html).not.toContain('face=');
   expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
   expect(expectedResult.html).not.toContain('background-color');
   expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('undo after external rich paste restores text without duplicating pasted content', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const editor = activeBlock.locator('.rich-editor').first();
+
+  await editor.evaluate(async (node) => {
+    node.innerHTML = '<p>Reach out to </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const modulePath = '/src/history.ts';
+    const { commitHistorySnapshot } = await import(/* @vite-ignore */ modulePath);
+    commitHistorySnapshot();
+  });
+
+  await editor.evaluate((node) => {
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<span style="font-family: Courier New, monospace;">chohlbein@kingcounty.gov</span>'
+    );
+    transfer.setData('text/plain', 'chohlbein@kingcounty.gov');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+  });
+
+  await expect(editor).toContainText('Reach out to chohlbein@kingcounty.gov');
+  await expect(editor.locator('[style*="font-family"]')).toHaveCount(0);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  await expect(activeBlock).toHaveCount(1);
+  await expect(editor).toContainText('Reach out to');
+  await expect(editor).not.toContainText('chohlbein@kingcounty.gov');
 });
 
 test('rich copy inside the document preserves HVY-origin color presentation on paste', async ({ page }) => {

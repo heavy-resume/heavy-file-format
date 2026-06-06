@@ -16,6 +16,7 @@ import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
+import { routeNextUndoToDocument } from './edit-command-routing';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
@@ -2097,6 +2098,7 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (html) {
       insertHtmlAtEditableSelection(editable, html);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
       updateRichToolbarState(editable);
       return true;
     }
@@ -2104,6 +2106,7 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (text) {
       insertPlainTextAtEditableSelection(editable, text);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
       updateRichToolbarState(editable);
       return true;
     }
@@ -2231,21 +2234,23 @@ function sanitizeExternalRichPasteHtml(html: string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
-    stripColorPresentation(element);
+    stripExternalPastePresentation(element);
   });
   return template.innerHTML;
 }
 
-function stripColorPresentation(element: HTMLElement): void {
+function stripExternalPastePresentation(element: HTMLElement): void {
   element.removeAttribute('color');
   element.removeAttribute('bgcolor');
+  element.removeAttribute('face');
+  element.removeAttribute('size');
   if (!element.hasAttribute('style')) {
     return;
   }
   const preservedDeclarations = (element.getAttribute('style') ?? '')
     .split(';')
     .map((declaration) => declaration.trim())
-    .filter((declaration) => declaration && !isColorPresentationDeclaration(declaration));
+    .filter((declaration) => declaration && !isExternalPastePresentationDeclaration(declaration));
   if (preservedDeclarations.length > 0) {
     element.setAttribute('style', preservedDeclarations.join('; '));
   } else {
@@ -2253,11 +2258,14 @@ function stripColorPresentation(element: HTMLElement): void {
   }
 }
 
-function isColorPresentationDeclaration(declaration: string): boolean {
+function isExternalPastePresentationDeclaration(declaration: string): boolean {
   const propertyName = declaration.split(':', 1)[0]?.trim().toLowerCase() ?? '';
   return propertyName === 'color' ||
     propertyName === 'background' ||
     propertyName === 'background-color' ||
+    propertyName === 'font' ||
+    propertyName === 'font-family' ||
+    propertyName === 'font-size' ||
     propertyName === 'text-decoration-color' ||
     propertyName === 'border-color' ||
     propertyName.endsWith('-color');

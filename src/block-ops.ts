@@ -2329,9 +2329,57 @@ function insertHtmlAtEditableSelection(editable: HTMLElement, html: string): voi
     placeCaretAtEnd(editable);
     return;
   }
-  range.deleteContents();
   const fragment = range.createContextualFragment(html);
+  if (insertListItemFragmentAtEditableListSelection(editable, range, fragment)) {
+    return;
+  }
+  range.deleteContents();
   placeCaretAfterInsertedFragment(range, fragment);
+}
+
+function insertListItemFragmentAtEditableListSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
+  const selectedItem = getSelectionListItem(editable);
+  if (!selectedItem || !isNodeInsideElement(selectedItem, range.commonAncestorContainer)) {
+    return false;
+  }
+  const items = getTopLevelPastedListItems(fragment);
+  if (!items || items.length === 0) {
+    return false;
+  }
+  range.deleteContents();
+  let insertedItem: HTMLLIElement | null = null;
+  let referenceItem = selectedItem;
+  items.forEach((item) => {
+    referenceItem.after(item);
+    referenceItem = item;
+    insertedItem = item;
+  });
+  normalizeEditableListDom(editable);
+  if (insertedItem) {
+    placeCaretAtEnd(insertedItem);
+  }
+  return true;
+}
+
+function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[] | null {
+  const items: HTMLLIElement[] = [];
+  const removableNodes: Node[] = [];
+  for (const child of Array.from(fragment.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE && (child.textContent ?? '').trim().length === 0) {
+      removableNodes.push(child);
+      continue;
+    }
+    if (!(child instanceof HTMLLIElement)) {
+      return null;
+    }
+    if (isEffectivelyEmptyContinuationListItem(child)) {
+      removableNodes.push(child);
+      continue;
+    }
+    items.push(child);
+  }
+  removableNodes.forEach((node) => node.remove());
+  return items;
 }
 
 function insertPlainTextAtEditableSelection(editable: HTMLElement, text: string): void {

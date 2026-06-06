@@ -275,6 +275,71 @@ test('list action converts bare first-line editor text into a bullet', async ({ 
   });
 });
 
+test('pasting a list item selected from the previous bullet boundary keeps it as a sibling bullet', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<ul><li>Alpha bullet</li><li>Bravo bullet</li><li>Charlie bullet</li></ul>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    node.focus();
+
+    const first = node.querySelectorAll('li')[0].firstChild!;
+    const second = node.querySelectorAll('li')[1].firstChild!;
+    const selectedRange = document.createRange();
+    selectedRange.setStart(first, first.textContent!.length);
+    selectedRange.setEnd(second, second.textContent!.length);
+    const selectedContainer = document.createElement('div');
+    selectedContainer.appendChild(selectedRange.cloneContents());
+    const selectedText = selectedRange.toString();
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    selectedRange.deleteContents();
+    node.querySelectorAll('li').forEach((item) => {
+      if ((item.textContent ?? '').trim().length === 0) {
+        item.remove();
+      }
+    });
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(node.querySelectorAll('li')[0]);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const transfer = new DataTransfer();
+    transfer.setData('text/html', selectedContainer.innerHTML);
+    transfer.setData('text/plain', selectedText);
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      pastedHtml: selectedContainer.innerHTML,
+      html: node.innerHTML,
+      items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent),
+      nestedItemCount: node.querySelectorAll('li li').length,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    pastedHtml: '<li></li><li>Bravo bullet</li>',
+    html: '<ul><li>Alpha bullet</li><li>Bravo bullet</li><li>Charlie bullet</li></ul>',
+    items: ['Alpha bullet', 'Bravo bullet', 'Charlie bullet'],
+    nestedItemCount: 0,
+  });
+});
+
 test('list action converts every selected paragraph into bullets', async ({ page }) => {
   await openDefaultDocument(page);
 

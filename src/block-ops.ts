@@ -1179,10 +1179,15 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
     return;
   }
   const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
+  const shouldPlaceCaretInEmptyStyledBlock = Boolean(range?.collapsed && isEffectivelyEmptyBlock(block));
   block.replaceWith(wrapper);
   wrapper.appendChild(block);
   if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
-    restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end);
+    if (!restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end) && shouldPlaceCaretInEmptyStyledBlock) {
+      placeCaretInside(block);
+    }
+  } else if (shouldPlaceCaretInEmptyStyledBlock) {
+    placeCaretInside(block);
   }
 }
 

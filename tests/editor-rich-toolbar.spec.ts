@@ -430,6 +430,66 @@ test('normal after enter from paragraph style keeps the previous line styled', a
   await expect(editor.locator('p').last()).toContainText('Normal');
 });
 
+test('paragraph style after enter keeps caret on the empty new line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Plain line');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  const caretAfterStyle = await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const parent = range?.startContainer instanceof Element
+      ? range.startContainer
+      : range?.startContainer.parentElement;
+    return {
+      selectedStyle: parent?.closest('[data-hvy-text-line-style]')?.getAttribute('data-hvy-text-line-style') ?? '',
+      selectedText: parent?.closest('[data-hvy-text-line-style]')?.textContent?.replace(/\^role\^/g, '').replace(/\u200b/g, '') ?? '',
+      previousText: node.querySelector('p')?.textContent ?? '',
+    };
+  });
+  expect(caretAfterStyle).toEqual({
+    selectedStyle: 'role',
+    selectedText: '',
+    previousText: 'Plain line',
+  });
+  await page.keyboard.type('Styled line');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    plainText: node.querySelector('p')?.textContent ?? '',
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
+      (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, '')
+    ),
+  }));
+
+  expect(expectedResult).toEqual({
+    plainText: 'Plain line',
+    styledLines: ['Styled line'],
+  });
+});
+
 test('enter keeps paragraph style active on the new line', async ({ page }) => {
   await page.goto('/');
 

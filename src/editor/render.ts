@@ -55,6 +55,7 @@ import {
   renderHeadingStyleElement,
 } from '../heading-styles';
 import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
+import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '../section-ops';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -258,7 +259,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderSectionEditorTree(sections: VisualSection[]): string {
-    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s));
+    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s, state.documentMeta, state.showAdvancedEditor));
     const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
@@ -416,7 +417,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
         }
       } else {
-        if (isHiddenEditorOnlySection(item.child)) {
+        if (isHiddenEditorOnlySection(item.child, state.documentMeta, state.showAdvancedEditor)) {
           continue;
         }
         output.push(renderEditorSection(item.child, rootSections, true));
@@ -687,26 +688,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && block.schema.plugin === SCRIPTING_PLUGIN_ID;
   }
 
-  function isHiddenEditorOnlySection(section: VisualSection): boolean {
-    return !state.showAdvancedEditor
-      && section.editorOnly
-      && sectionContainsHiddenEditorOnlyScriptingBlock(section);
-  }
-
-  function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || section.children.some(sectionContainsHiddenEditorOnlyScriptingBlock);
-  }
-
-  function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock): boolean {
-    return isHiddenEditorOnlyScriptingBlock(block)
-      || (block.schema.containerBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.componentListBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.gridItems ?? []).some((item) => blockContainsHiddenEditorOnlyScriptingBlock(item.block))
-      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock);
-  }
-
   function renderButtonAnchorAttrs(
     sectionKey: string,
     block: VisualBlock,
@@ -749,14 +730,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     sectionKey: string,
     sections: VisualSection[]
   ): { canMoveUp: boolean; canMoveDown: boolean } {
-    const location = findSectionLocation(sections, sectionKey);
-    if (!location) {
-      return { canMoveUp: false, canMoveDown: false };
+    return getSectionFilteredMoveAvailability(sections, sectionKey, isEditorOrderSibling);
+  }
+
+  function isEditorOrderSibling(candidate: VisualSection, target: VisualSection, parent: VisualSection | null): boolean {
+    if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.documentMeta, state.showAdvancedEditor)) {
+      return false;
     }
-    return {
-      canMoveUp: location.index > 0,
-      canMoveDown: location.index < location.container.length - 1,
-    };
+    return parent !== null || candidate.location === target.location;
   }
 
   function getBlockMoveAvailability(
@@ -2151,23 +2132,6 @@ function findBlockLocation(
       ?? findBlockLocation((block.schema.gridItems ?? []).map((item) => item.block), targetBlockId)
       ?? findBlockLocation(block.schema.expandableStubBlocks?.children ?? [], targetBlockId)
       ?? findBlockLocation(block.schema.expandableContentBlocks?.children ?? [], targetBlockId);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
-}
-
-function findSectionLocation(
-  sections: VisualSection[],
-  targetSectionKey: string
-): { container: VisualSection[]; index: number } | null {
-  const index = sections.findIndex((section) => section.key === targetSectionKey);
-  if (index >= 0) {
-    return { container: sections, index };
-  }
-  for (const section of sections) {
-    const nested = findSectionLocation(section.children, targetSectionKey);
     if (nested) {
       return nested;
     }

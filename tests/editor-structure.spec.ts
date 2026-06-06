@@ -4185,6 +4185,41 @@ test('move arrows only render when there is an adjacent target', async ({ page }
 
 });
 
+test('section up arrow skips sidebar siblings in the main section order', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"top-main"}-->
+#! Top Main
+
+ Top main body.
+
+<!--hvy: {"id":"fake-sidebar","location":"sidebar"}-->
+#! Fake Sidebar
+
+ Fake sidebar body.
+
+<!--hvy: {"id":"bottom-main"}-->
+#! Bottom Main
+
+ Bottom main body.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect.poll(() => getTopLevelEditorSectionTitles(page)).toEqual(['Top Main', 'Bottom Main']);
+  const bottomMain = page.locator('#editorTree > .hvy-surface > .editor-tree-body > .editor-section-card', { hasText: 'Bottom Main' });
+  await expect(bottomMain.locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
+  await expect(bottomMain.locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
+
+  await bottomMain.locator(':scope > .editor-section-head [data-action="move-section-up"]').click();
+
+  await expect.poll(() => getTopLevelEditorSectionTitles(page)).toEqual(['Bottom Main', 'Top Main']);
+});
+
 test('section drag handle uses grab cursor', async ({ page }) => {
   await page.goto('/');
 

@@ -150,6 +150,36 @@ function isScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): 
     && block.schema.plugin === SCRIPTING_PLUGIN_ID;
 }
 
+export function isHiddenEditorOnlySection(
+  section: VisualSection,
+  documentMeta: JsonObject | null,
+  showAdvancedEditor: boolean
+): boolean {
+  return !showAdvancedEditor
+    && section.editorOnly
+    && sectionContainsHiddenEditorOnlyScriptingBlock(section, documentMeta);
+}
+
+function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection, documentMeta: JsonObject | null): boolean {
+  return section.blocks.some((block) => blockContainsHiddenEditorOnlyScriptingBlock(block, documentMeta))
+    || section.children.some((child) => sectionContainsHiddenEditorOnlyScriptingBlock(child, documentMeta));
+}
+
+function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  return isHiddenEditorOnlyScriptingBlock(block, documentMeta)
+    || (block.schema.containerBlocks ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
+    || (block.schema.componentListBlocks ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
+    || (block.schema.gridItems ?? []).some((item) => blockContainsHiddenEditorOnlyScriptingBlock(item.block, documentMeta))
+    || (block.schema.expandableStubBlocks?.children ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta))
+    || (block.schema.expandableContentBlocks?.children ?? []).some((child) => blockContainsHiddenEditorOnlyScriptingBlock(child, documentMeta));
+}
+
+function isHiddenEditorOnlyScriptingBlock(block: VisualBlock, documentMeta: JsonObject | null): boolean {
+  return block.schema.editorOnly
+    && resolveBaseComponentFromMeta(block.schema.component, documentMeta) === 'plugin'
+    && block.schema.plugin === SCRIPTING_PLUGIN_ID;
+}
+
 export function sectionContainsKey(section: VisualSection, sectionKey: string): boolean {
   if (section.key === sectionKey) {
     return true;
@@ -206,6 +236,57 @@ export function moveSectionByOffset(sections: VisualSection[], sectionKey: strin
   }
   location.container.splice(targetIndex, 0, movedSection);
   return true;
+}
+
+export function getSectionFilteredMoveAvailability(
+  sections: VisualSection[],
+  sectionKey: string,
+  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+): { canMoveUp: boolean; canMoveDown: boolean } {
+  const location = findSectionContainer(sections, sectionKey);
+  const target = location?.container[location.index] ?? null;
+  if (!location || !target) {
+    return { canMoveUp: false, canMoveDown: false };
+  }
+  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, location.parent, siblingFilter);
+  const visualSiblingIndex = siblingIndexes.indexOf(location.index);
+  return {
+    canMoveUp: visualSiblingIndex > 0,
+    canMoveDown: visualSiblingIndex >= 0 && visualSiblingIndex < siblingIndexes.length - 1,
+  };
+}
+
+export function moveSectionByFilteredOffset(
+  sections: VisualSection[],
+  sectionKey: string,
+  offset: -1 | 1,
+  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+): boolean {
+  const location = findSectionContainer(sections, sectionKey);
+  const target = location?.container[location.index] ?? null;
+  if (!location || !target) {
+    return false;
+  }
+  const siblingIndexes = getFilteredSectionSiblingIndexes(location.container, target, location.parent, siblingFilter);
+  const visualSiblingIndex = siblingIndexes.indexOf(location.index);
+  const targetContainerIndex = siblingIndexes[visualSiblingIndex + offset];
+  if (visualSiblingIndex < 0 || targetContainerIndex === undefined) {
+    return false;
+  }
+  const targetSection = location.container[targetContainerIndex];
+  if (!targetSection) {
+    return false;
+  }
+  return moveSectionRelative(sections, sectionKey, targetSection.key, offset < 0 ? 'before' : 'after');
+}
+
+function getFilteredSectionSiblingIndexes(
+  container: VisualSection[],
+  target: VisualSection,
+  parent: VisualSection | null,
+  siblingFilter: (section: VisualSection, target: VisualSection, parent: VisualSection | null) => boolean
+): number[] {
+  return container.flatMap((section, index) => siblingFilter(section, target, parent) ? [index] : []);
 }
 
 export function moveSectionToSiblingIndex(sections: VisualSection[], sectionKey: string, newPositionIndexFrom0: number): boolean {

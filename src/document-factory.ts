@@ -3,7 +3,7 @@ import type { JsonObject } from './hvy/types';
 import type { ComponentDefinition, VisualDocument } from './types';
 import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
-import { coerceGridColumns, parseGridItems as _parseGridItems } from './grid-ops';
+import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
@@ -64,7 +64,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         componentListGroupCollapsedPreviewRem: 5,
       } as unknown as BlockSchema;
     case 'grid':
-      return { ...base, kind: 'grid', gridColumns: 2, gridItems: [] } as unknown as BlockSchema;
+      return { ...base, kind: 'grid', gridColumns: 2, gridStackWidth: DEFAULT_GRID_STACK_WIDTH, gridItems: [] } as unknown as BlockSchema;
     case 'expandable':
       return {
         ...base,
@@ -374,6 +374,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   }
   if (schema.kind === 'grid') {
     schema.gridColumns = coerceGridColumns(candidate.gridColumns ?? candidate.gridTemplateColumns);
+    schema.gridStackWidth = coerceGridStackWidth(candidate.gridStackWidth);
     schema.gridItems = _parseGridItems(candidate, schema.gridColumns, component, _createBlockSkip, parseNestedVisualBlock);
   }
   if (schema.kind === 'plugin') {

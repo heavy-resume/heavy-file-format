@@ -323,7 +323,7 @@ Expandable blocks can be emitted with specialized directives so their stub and e
 Grid blocks can be emitted with specialized directives so grid item content remains normal block content:
 
 ```markdown
-<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
+<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"gridStackWidth":"50rem"}-->
 
  <!--hvy:grid:0 {"id":"skills"}-->
 
@@ -339,6 +339,8 @@ Grid item `id` metadata is optional. Authoring clients MAY generate transient it
 Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
+
+`gridStackWidth` is an optional string controlling when the grid switches to a single-column stack in responsive renderers. It defaults to `50rem`. It MUST be either `"never"` or a simple CSS length token such as `"30rem"`, `"640px"`, or `"42em"`. `"never"` disables automatic stacking. This field controls only the final stack-to-one-column behavior; authors who need multi-step layouts such as three columns to two columns to one column SHOULD use fenced `hvy:css` container-query rules.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
@@ -475,7 +477,7 @@ Component-owned fields are:
 - `code`: `codeLanguage`
 - `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
 - `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`
-- `grid`: `gridColumns`, `gridItems`
+- `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`

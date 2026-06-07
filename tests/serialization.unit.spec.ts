@@ -147,6 +147,49 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
 });
 
+test('serializes grid stack width when it differs from the default', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2,"gridStackWidth":"30rem"}-->
+
+  <!--hvy:grid:0 {"id":"skills"}-->
+
+   <!--hvy:text {}-->
+    Skills
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:grid {"gridStackWidth":"30rem"}-->');
+});
+
+test('does not serialize default grid stack width', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2,"gridStackWidth":"50rem"}-->
+
+  <!--hvy:grid:0 {"id":"skills"}-->
+
+   <!--hvy:text {}-->
+    Skills
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:grid {}-->');
+  expect(output).not.toContain('gridStackWidth');
+});
+
 test('round-trips component-list display defaults, sort keys, and container collapse fields', () => {
   const input = `---
 hvy_version: 0.1

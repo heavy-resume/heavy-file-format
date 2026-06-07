@@ -1400,6 +1400,7 @@ function serializeBlockSchema(
   }
   if (component === 'grid') {
     addIfChanged(payload, 'gridColumns', schema.gridColumns, defaults.gridColumns);
+    addIfChanged(payload, 'gridStackWidth', schema.gridStackWidth, defaults.gridStackWidth);
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         ...(item.idGenerated ? {} : { id: item.id }),

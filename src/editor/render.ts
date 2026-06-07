@@ -37,6 +37,7 @@ import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
+import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -1545,6 +1546,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
     const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
+    const gridStackWidth = component === 'grid' ? coerceGridStackWidth(block.schema.gridStackWidth) : DEFAULT_GRID_STACK_WIDTH;
     const textMetaFields = component === 'text'
       ? `<label class="schema-meta-checkbox">
           <input
@@ -1556,6 +1558,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
           <span>Show Copy Button</span>
         </label>`
+      : '';
+    const gridMetaFields = component === 'grid'
+      ? `<div class="grid-stack-width-field block-meta-field">
+          <label>
+            <span>Stack Width</span>
+            <input
+              class="grid-stack-width-input"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-grid-stack-width"
+              placeholder="${DEFAULT_GRID_STACK_WIDTH}"
+              value="${deps.escapeAttr(gridStackWidth === DEFAULT_GRID_STACK_WIDTH || gridStackWidth === 'never' ? '' : gridStackWidth)}"
+              ${gridStackWidth === 'never' ? 'disabled' : ''}
+            />
+          </label>
+          <label class="checkbox-label grid-stack-never-toggle">
+            <span>Never</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-grid-stack-never"
+              ${gridStackWidth === 'never' ? 'checked' : ''}
+            />
+          </label>
+        </div>`
       : '';
     const scriptingVersionField =
       isScriptingPlugin
@@ -1653,6 +1681,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${textMetaFields}
+        ${gridMetaFields}
         <label>
           <span>Hide If Yes</span>
           <input

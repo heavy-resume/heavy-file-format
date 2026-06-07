@@ -49,14 +49,41 @@
   line-height: 1;
 }
 
-.grid-columns-input {
+.grid-columns-input,
+.grid-stack-width-input {
   width: 5rem;
-  max-width: 5rem;
   border: 1px solid var(--hvy-border-input);
   border-radius: 8px;
   padding: 0.35rem 0.5rem;
   background: var(--hvy-surface);
   color: var(--hvy-text);
+}
+
+.grid-columns-input {
+  max-width: 5rem;
+}
+
+.grid-stack-width-field {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 0.9rem;
+  align-items: end;
+  min-width: 0;
+}
+
+.grid-stack-width-field > label:not(.checkbox-label) {
+  min-width: 0;
+}
+
+.grid-stack-width-field input.grid-stack-width-input {
+  width: 4.25rem;
+  max-width: 4.25rem;
+}
+
+.grid-stack-never-toggle {
+  min-height: 2.25rem;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .grid-item-ghost {
@@ -111,12 +138,12 @@
 }
 
 @container hvy-surface (inline-size <= 50rem) {
-  .reader-grid-layout,
-  .grid-fields {
+  .reader-grid-layout:not(.has-custom-grid-stack):not(.grid-stack-never),
+  .grid-fields:not(.has-custom-grid-stack):not(.grid-stack-never) {
     grid-template-columns: 1fr !important;
   }
 
-  .reader-grid-cell {
+  .reader-grid-layout:not(.has-custom-grid-stack):not(.grid-stack-never) > .reader-grid-cell {
     grid-column: 1 / -1 !important;
   }
 }

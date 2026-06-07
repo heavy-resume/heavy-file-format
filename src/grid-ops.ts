@@ -2,6 +2,8 @@ import type { GridItem, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import { makeId } from './utils';
 
+export const DEFAULT_GRID_STACK_WIDTH = '50rem';
+
 export function coerceGridColumns(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.max(1, Math.min(6, Math.round(value)));
@@ -20,6 +22,20 @@ export function coerceGridColumns(value: unknown): number {
     }
   }
   return 2;
+}
+
+export function coerceGridStackWidth(value: unknown): string {
+  if (typeof value !== 'string') {
+    return DEFAULT_GRID_STACK_WIDTH;
+  }
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase() === 'never') {
+    return 'never';
+  }
+  if (/^(?:\d+|\d*\.\d+)(?:px|rem|em|ch|vw|vh|vmin|vmax|cqw|cqi|%)$/.test(trimmed)) {
+    return trimmed;
+  }
+  return DEFAULT_GRID_STACK_WIDTH;
 }
 
 export function createGridItem(

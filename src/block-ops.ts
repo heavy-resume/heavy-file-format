@@ -10,7 +10,7 @@ import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBl
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
-import { coerceGridColumns } from './grid-ops';
+import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
@@ -344,6 +344,23 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     ensureGridItems(block.schema);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-grid-stack-width' && target instanceof HTMLInputElement) {
+    block.schema.gridStackWidth = target.value.trim().length === 0
+      ? DEFAULT_GRID_STACK_WIDTH
+      : coerceGridStackWidth(target.value);
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-grid-stack-never' && target instanceof HTMLInputElement) {
+    block.schema.gridStackWidth = target.checked ? 'never' : DEFAULT_GRID_STACK_WIDTH;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    getRenderApp()();
     return true;
   }
 

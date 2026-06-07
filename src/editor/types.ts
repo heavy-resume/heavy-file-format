@@ -94,6 +94,7 @@ export interface ComponentListBlockSchema extends BaseBlockSchema {
 export interface GridBlockSchema extends BaseBlockSchema {
   kind: 'grid';
   gridColumns: number;
+  gridStackWidth: string;
   gridItems: GridItem[];
 }
 
@@ -188,6 +189,7 @@ interface RuntimeSchemaFieldAccess {
   componentListDefaultGroupKey: string;
   componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
+  gridStackWidth: string;
   gridItems: GridItem[];
   xrefTarget: string;
   xrefTargetTagFilter: string;

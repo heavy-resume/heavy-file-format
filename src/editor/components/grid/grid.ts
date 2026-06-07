@@ -2,9 +2,21 @@ import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import type { GridItem, VisualBlock } from '../../types';
 import { closeIcon } from '../../../icons';
+import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../../../grid-ops';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
+  const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
+  const stackWidthInputValue = getGridStackWidthInputValue(stackWidth);
+  const stackNever = stackWidth === 'never';
+  const stackClass = getGridStackClass(block.id, stackWidth);
+  const layoutClasses = [
+    'grid-fields',
+    stackWidth === DEFAULT_GRID_STACK_WIDTH ? '' : 'has-custom-grid-stack',
+    stackWidth === 'never' ? 'grid-stack-never' : '',
+    stackClass,
+  ].filter(Boolean).join(' ');
+  const stackCss = renderGridStackCss(stackClass, stackWidth, helpers);
   const firstPlacementTarget = helpers.renderComponentPlacementTarget({
     container: 'grid',
     sectionKey,
@@ -34,8 +46,25 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
         String(block.schema.gridColumns)
       )}" />
     </label>
+    <div class="grid-stack-width-field">
+      <label>
+        <span>Stack Width</span>
+        <input class="grid-stack-width-input" type="text" inputmode="text" spellcheck="false" placeholder="${DEFAULT_GRID_STACK_WIDTH}" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-stack-width" value="${helpers.escapeAttr(
+          stackWidthInputValue
+        )}" ${stackNever ? 'disabled' : ''} />
+      </label>
+      <label class="checkbox-label grid-stack-never-toggle">
+        <span>Never</span>
+        <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          block.id
+        )}" data-field="block-grid-stack-never" ${stackNever ? 'checked' : ''} />
+      </label>
+    </div>
   </div>
-  <div class="grid-fields" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
+  ${stackCss}
+  <div class="${helpers.escapeAttr(layoutClasses)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[
       block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(
@@ -108,6 +137,15 @@ function isBlankDefaultGridItem(block: VisualBlock): boolean {
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
+  const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
+  const stackClass = getGridStackClass(block.id, stackWidth);
+  const layoutClasses = [
+    'reader-grid-layout',
+    stackWidth === DEFAULT_GRID_STACK_WIDTH ? '' : 'has-custom-grid-stack',
+    stackWidth === 'never' ? 'grid-stack-never' : '',
+    stackClass,
+  ].filter(Boolean).join(' ');
+  const stackCss = renderGridStackCss(stackClass, stackWidth, helpers);
   const itemsByBlock = new Map(block.schema.gridItems.map((item) => [item.block, item]));
   const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
     .map((orderedBlock) => {
@@ -129,5 +167,29 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   if (!cells.trim()) {
     return '';
   }
-  return `<div class="reader-grid-layout" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
+  return `${stackCss}<div class="${helpers.escapeAttr(layoutClasses)}" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
 };
+
+function renderGridStackCss(className: string, stackWidth: string, helpers: Parameters<ComponentReaderRenderer>[2]): string {
+  if (stackWidth === DEFAULT_GRID_STACK_WIDTH || stackWidth === 'never') {
+    return '';
+  }
+  return `<style>@container hvy-surface (inline-size <= ${helpers.escapeHtml(stackWidth)}) { .${className} { grid-template-columns: 1fr !important; } .${className} > .reader-grid-cell { grid-column: 1 / -1 !important; } }</style>`;
+}
+
+function getGridStackClass(blockId: string, stackWidth: string): string {
+  return `grid-stack-${hashGridStackKey(`${blockId}:${stackWidth}`)}`;
+}
+
+function getGridStackWidthInputValue(stackWidth: string): string {
+  return stackWidth === DEFAULT_GRID_STACK_WIDTH || stackWidth === 'never' ? '' : stackWidth;
+}
+
+function hashGridStackKey(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}

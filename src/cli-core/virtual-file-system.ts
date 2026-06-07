@@ -12,6 +12,7 @@ import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../compo
 import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
 import { serializeComponentDefinition } from '../serialization';
+import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -815,6 +816,10 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
     value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
+  if (baseComponent === 'grid') {
+    value.gridColumns = schema.gridColumns;
+    value.gridStackWidth = schema.gridStackWidth;
+  }
   if (baseComponent === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
     value.xrefDetail = schema.xrefDetail;
@@ -946,6 +951,12 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.componentListDefaultGroupKey === 'string') schema.componentListDefaultGroupKey = value.componentListDefaultGroupKey;
   if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
     schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
+  }
+  if (typeof value.gridColumns === 'number' || typeof value.gridColumns === 'string') {
+    schema.gridColumns = coerceGridColumns(value.gridColumns);
+  }
+  if (typeof value.gridStackWidth === 'string') {
+    schema.gridStackWidth = coerceGridStackWidth(value.gridStackWidth);
   }
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;

@@ -98,7 +98,8 @@
 
 .reader-grid-layout {
   display: grid;
-  gap: 0.2rem 0.9rem;
+  row-gap: 0.5rem;
+  column-gap: 0.9rem;
   align-items: stretch;
 }
 

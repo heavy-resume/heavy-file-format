@@ -8,6 +8,7 @@ import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory, recordH
 import { DB_ATTACHMENT_ID, setAttachment } from '../src/attachments';
 import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import type { AppState } from '../src/types';
+import { attachStoreToDocument, createLazyAttachmentStore, ensureDocumentAttachmentStore } from '../src/attachment-store';
 
 function createHistoryTestState(): AppState {
   return {
@@ -237,6 +238,40 @@ test('undo and redo keep image attachment bytes outside history snapshots', () =
   expect(state.document.sections[0]?.blocks[0]?.schema.imageAlt).toBe('Changed photo');
   expect(state.document.attachments[0]?.bytes).toBeInstanceOf(Uint8Array);
   expect(Array.from(state.document.attachments[0]?.bytes ?? [])).toEqual([40, 50]);
+});
+
+test('history snapshots do not materialize lazy image attachment bytes', () => {
+  const store = createLazyAttachmentStore([
+    {
+      id: 'image:large-photo.jpg',
+      meta: { mediaType: 'image/jpeg' },
+      length: 4,
+      source: {
+        bytes: new Uint8Array([10, 20, 30, 40]),
+        offset: 0,
+        length: 4,
+      },
+    },
+  ]);
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+  attachStoreToDocument(state.document, store);
+
+  recordHistory('before-text-edit');
+  state.rawEditorText = '#! Edited';
+  recordHistory('after-text-edit');
+  undoState();
+  redoState();
+
+  expect(ensureDocumentAttachmentStore(state.document).isMaterialized('image:large-photo.jpg')).toBe(false);
+  expect(state.history.join('\n')).not.toContain('10');
+  expect(state.history.join('\n')).not.toContain('large-photo.jpg');
 });
 
 test('undo and redo restore database attachment checkpoints without snapshotting other attachments', () => {

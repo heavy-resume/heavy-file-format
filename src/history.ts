@@ -8,6 +8,7 @@ import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './docum
 import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
+import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -333,7 +334,7 @@ function restoreModalScroll(scroll: { selector: string; scrollTop: number } | nu
 
 function restoreFromSnapshot(snapshot: string): void {
   try {
-    const liveAttachments = state.document.attachments;
+    const liveAttachmentStore = ensureDocumentAttachmentStore(state.document);
     const parsed = JSON.parse(snapshot) as {
       document: VisualDocument;
       databaseAttachment?: SerializedHistoryAttachment | null;
@@ -346,10 +347,8 @@ function restoreFromSnapshot(snapshot: string): void {
       rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
       paletteOverrideId?: string | null;
     };
-    state.document = {
-      ...parsed.document,
-      attachments: liveAttachments,
-    };
+    state.document = parsed.document;
+    attachStoreToDocument(state.document, liveAttachmentStore);
     if (Object.prototype.hasOwnProperty.call(parsed, 'databaseAttachment')) {
       restoreDatabaseAttachment(parsed.databaseAttachment ?? null);
     }
@@ -386,7 +385,9 @@ function restoreFromSnapshot(snapshot: string): void {
 
 function documentToHistorySnapshot(document: VisualDocument): VisualDocument {
   return {
-    ...document,
+    meta: document.meta,
+    extension: document.extension,
+    sections: document.sections,
     attachments: [],
   };
 }

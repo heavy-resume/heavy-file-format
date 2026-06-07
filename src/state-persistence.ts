@@ -1,8 +1,9 @@
-import { deserializeDocumentBytes, serializeDocumentBytes } from './serialization';
+import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 import { detectExtension } from './utils';
+import { ensureDocumentAttachmentStore } from './attachment-store';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const LEGACY_SESSION_STORAGE_KEYS = [
@@ -39,6 +40,7 @@ interface SessionStatePayload {
     history: HvyCliHistoryEntry[];
   };
   documentBase64?: string;
+  documentTextBase64?: string;
   activeEditor?: SavedActiveEditorState;
 }
 
@@ -82,9 +84,7 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
       return null;
     }
     const filename = typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy';
-    const document = typeof parsed.documentBase64 === 'string'
-      ? deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename))
-      : undefined;
+    const document = loadSavedDocument(parsed, filename, storageKey);
     return {
       document,
       filename,
@@ -150,7 +150,7 @@ export function saveSessionState(state: AppState): void {
       },
     };
     if (state.persistDocumentState !== false) {
-      payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
+      persistDocumentPayload(payload, state);
     }
     const activeEditor = createActiveEditorStatePayload(state);
     if (activeEditor) {
@@ -274,7 +274,9 @@ export function clearSessionState(storageKey?: string | null): void {
     return;
   }
   try {
+    attachmentTailSessionCache.delete(getAttachmentTailStorageKey(storageKey));
     window.sessionStorage?.removeItem(getSessionStorageKey(storageKey));
+    window.sessionStorage?.removeItem(getAttachmentTailStorageKey(storageKey));
     removeLegacySessionState();
   } catch {
     // Ignore storage failures.
@@ -294,6 +296,64 @@ function getSessionStorageKey(storageKey?: string | null): string {
     return SESSION_STORAGE_KEY;
   }
   return `${SESSION_STORAGE_KEY}:${suffix}`;
+}
+
+function getAttachmentTailStorageKey(storageKey?: string | null): string {
+  return `${getSessionStorageKey(storageKey)}:attachments`;
+}
+
+const attachmentTailSessionCache = new Map<string, { signature: string; base64: string }>();
+
+function loadSavedDocument(
+  parsed: Partial<SessionStatePayload>,
+  filename: string,
+  storageKey?: string | null
+): VisualDocument | undefined {
+  if (typeof parsed.documentBase64 === 'string') {
+    return deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename));
+  }
+  if (typeof parsed.documentTextBase64 !== 'string') {
+    return undefined;
+  }
+  const textBytes = base64ToBytes(parsed.documentTextBase64);
+  const attachmentTailBase64 = window.sessionStorage?.getItem(getAttachmentTailStorageKey(storageKey));
+  if (!attachmentTailBase64) {
+    return deserializeDocumentBytes(textBytes, detectExtension(filename));
+  }
+  const attachmentTailBytes = base64ToBytes(attachmentTailBase64);
+  const bytes = new Uint8Array(textBytes.length + attachmentTailBytes.length);
+  bytes.set(textBytes, 0);
+  bytes.set(attachmentTailBytes, textBytes.length);
+  return deserializeDocumentBytes(bytes, detectExtension(filename));
+}
+
+function persistDocumentPayload(payload: SessionStatePayload, state: AppState): void {
+  const store = ensureDocumentAttachmentStore(state.document);
+  const descriptors = store.listDescriptors();
+  if (descriptors.length === 0) {
+    payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
+    window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));
+    return;
+  }
+
+  payload.documentTextBase64 = bytesToBase64(new TextEncoder().encode(serializeDocument(state.document)));
+  const storageKey = getAttachmentTailStorageKey(state.sessionStorageKey);
+  const signature = `${store.getVersion()}:${JSON.stringify(descriptors)}`;
+  const cached = attachmentTailSessionCache.get(storageKey);
+  if (cached?.signature === signature && window.sessionStorage?.getItem(storageKey) !== null) {
+    return;
+  }
+  const attachments = store.list();
+  const tailLength = attachments.reduce((sum, attachment) => sum + attachment.bytes.length, 0);
+  const tailBytes = new Uint8Array(tailLength);
+  let offset = 0;
+  for (const attachment of attachments) {
+    tailBytes.set(attachment.bytes, offset);
+    offset += attachment.bytes.length;
+  }
+  const base64 = bytesToBase64(tailBytes);
+  attachmentTailSessionCache.set(storageKey, { signature, base64 });
+  window.sessionStorage?.setItem(storageKey, base64);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

@@ -3,6 +3,7 @@ import { deserializeDocument } from '../src/serialization';
 import { createDefaultSearchState } from '../src/search/state';
 import { loadSessionState, saveSessionState } from '../src/state-persistence';
 import type { AppState } from '../src/types';
+import { setAttachment } from '../src/attachments';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -419,4 +420,36 @@ test('saveSessionState can persist keyed viewer UI state without storing documen
   expect(payload.documentBase64).toBeUndefined();
   expect(loaded?.document).toBeUndefined();
   expect(loaded?.chat.panelOpen).toBe(true);
+});
+
+test('saveSessionState does not rewrite attachment tail bytes for text-only document changes', () => {
+  const storage = new Map<string, string>();
+  const writes: string[] = [];
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        writes.push(key);
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+  const state = createPersistenceTestState('Attached Document', 'attached');
+  setAttachment(state.document, 'image:photo.jpg', { mediaType: 'image/jpeg' }, new Uint8Array([1, 2, 3, 4]));
+
+  saveSessionState(state);
+  const firstAttachmentPayload = storage.get('hvy-editor-session-state-v1:attached:attachments');
+  state.document.sections[0]!.blocks[0]!.text = 'Edited body only';
+  saveSessionState(state);
+  const loaded = loadSessionState('attached');
+
+  expect(storage.get('hvy-editor-session-state-v1:attached:attachments')).toBe(firstAttachmentPayload);
+  expect(writes.filter((key) => key === 'hvy-editor-session-state-v1:attached:attachments')).toHaveLength(1);
+  expect(writes.filter((key) => key === 'hvy-editor-session-state-v1:attached')).toHaveLength(2);
+  expect(loaded?.document?.sections[0]?.blocks[0]?.text).toBe('Edited body only');
+  expect(Array.from(loaded?.document?.attachments[0]?.bytes ?? [])).toEqual([1, 2, 3, 4]);
 });

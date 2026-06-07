@@ -59,6 +59,10 @@ export class AttachmentStore {
     return entry ? descriptorFromEntry(entry) : null;
   }
 
+  isMaterialized(id: string): boolean {
+    return Boolean(this.index.get(id)?.bytes);
+  }
+
   list(): DocumentAttachment[] {
     return this.entries.map((entry) => ({
       id: entry.id,

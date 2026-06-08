@@ -1094,7 +1094,7 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   } else if (action === 'quote') {
     clearInlineTypingState(editable);
     const currentBlock = getSelectionBlockElement(editable);
-    formatSelectionBlock(editable, currentBlock?.tagName.toLowerCase() === 'blockquote' ? 'p' : 'blockquote');
+    formatSelectionBlock(editable, isSelectionInsideQuoteBlock(editable) || currentBlock?.tagName.toLowerCase() === 'blockquote' ? 'p' : 'blockquote');
   } else if (action === 'code-block') {
     clearInlineTypingState(editable);
     if (shouldApplyInlineCodeFromCodeButton(editable)) {
@@ -1115,6 +1115,14 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function isSelectionInsideQuoteBlock(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return false;
+  }
+  return Boolean(getAncestorElement(range.startContainer, editable, 'blockquote'));
 }
 
 function applyTextLineStyleToSelection(editable: HTMLElement, styleName: string): void {
@@ -1486,6 +1494,10 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
     unwrapInlineElement(existing);
     return;
   }
+  if (wrapSelectedEditableBlocksInline(editable, range, tagName, href)) {
+    setPendingInlineAction(editable, action, false);
+    return;
+  }
   const wrapper = document.createElement(tagName);
   if (tagName === 'a' && href) {
     wrapper.setAttribute('href', href);
@@ -1498,6 +1510,61 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
   nextRange.selectNodeContents(wrapper);
   selection?.addRange(nextRange);
   setPendingInlineAction(editable, action, false);
+}
+
+function wrapSelectedEditableBlocksInline(editable: HTMLElement, range: Range, tagName: InlineRichTag, href?: string): boolean {
+  const startBlock = getBlockElementContaining(editable, range.startContainer);
+  const endBlock = getBlockElementContaining(editable, range.endContainer);
+  if (!startBlock || !endBlock || startBlock === editable || endBlock === editable || startBlock === endBlock) {
+    return false;
+  }
+  const targets = getSelectedInlineFormattingBlocks(editable, range);
+  if (targets.length < 2) {
+    return false;
+  }
+  const wrappers: HTMLElement[] = [];
+  for (const target of targets) {
+    const targetRange = createRangeForSelectedBlock(target, range);
+    if (!targetRange || targetRange.toString().length === 0) {
+      continue;
+    }
+    const wrapper = document.createElement(tagName);
+    if (tagName === 'a' && href) {
+      wrapper.setAttribute('href', href);
+    }
+    wrapper.appendChild(targetRange.extractContents());
+    targetRange.insertNode(wrapper);
+    wrappers.push(wrapper);
+  }
+  if (wrappers.length === 0) {
+    return false;
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.setStartBefore(wrappers[0]);
+  nextRange.setEndAfter(wrappers[wrappers.length - 1]);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function getSelectedInlineFormattingBlocks(editable: HTMLElement, range: Range): HTMLElement[] {
+  const candidates = Array.from(editable.querySelectorAll<HTMLElement>('p, div, h1, h2, h3, h4, h5, h6, blockquote, li'))
+    .filter((element) => !element.closest('pre') && range.intersectsNode(element));
+  return candidates.filter((element) => !candidates.some((candidate) => candidate !== element && element.contains(candidate)));
+}
+
+function createRangeForSelectedBlock(block: HTMLElement, selectionRange: Range): Range | null {
+  const range = document.createRange();
+  range.selectNodeContents(block);
+  if (block.contains(selectionRange.startContainer)) {
+    range.setStart(selectionRange.startContainer, selectionRange.startOffset);
+  }
+  if (block.contains(selectionRange.endContainer)) {
+    range.setEnd(selectionRange.endContainer, selectionRange.endOffset);
+  }
+  return range.collapsed ? null : range;
 }
 
 type InlineRichAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'link' | 'code';
@@ -1660,6 +1727,9 @@ function moveCollapsedCaretOutsideInline(element: HTMLElement, range: Range): vo
 }
 
 function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
+  if (formatSelectedEditableBlocks(editable, tagName)) {
+    return;
+  }
   const block = getSelectionBlockElement(editable);
   if (!block || block.tagName === 'LI' || block.tagName === 'PRE') {
     return;
@@ -1717,6 +1787,108 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
     placeCaretInside(replacement);
     refocusEditablePreservingSelection(editable);
   }
+}
+
+function formatSelectedEditableBlocks(editable: HTMLElement, tagName: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed) {
+    return false;
+  }
+  const targets = getSelectedEditableFormatBlocks(editable, range);
+  if (targets.length < 2) {
+    return false;
+  }
+  const shouldUnquote = tagName === 'blockquote' && targets.every((target) => target.tagName === 'BLOCKQUOTE');
+  const formatted: HTMLElement[] = [];
+  for (const target of targets) {
+    if (target.tagName === 'PRE') {
+      continue;
+    }
+    if (shouldUnquote || tagName === 'p') {
+      formatted.push(replaceFormattedBlockWithParagraph(target));
+      continue;
+    }
+    if (target.tagName.toLowerCase() === tagName) {
+      formatted.push(target);
+      continue;
+    }
+    const replacement = document.createElement(tagName);
+    while (target.firstChild) {
+      replacement.appendChild(target.firstChild);
+    }
+    if (!replacement.firstChild) {
+      replacement.appendChild(document.createTextNode(tagName === 'p' ? '' : '\u200b'));
+    }
+    target.replaceWith(replacement);
+    formatted.push(replacement);
+  }
+  if (formatted.length === 0) {
+    return false;
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.setStartBefore(formatted[0]);
+  nextRange.setEndAfter(formatted[formatted.length - 1]);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function getSelectedEditableFormatBlocks(editable: HTMLElement, range: Range): HTMLElement[] {
+  const startChild = getEditableDirectChildForNode(editable, range.startContainer);
+  const endChild = getEditableDirectChildForNode(editable, range.endContainer);
+  if (startChild && endChild) {
+    const children = Array.from(editable.children).filter((child): child is HTMLElement =>
+      child instanceof HTMLElement && !child.matches('pre')
+    );
+    const startIndex = children.indexOf(startChild);
+    const endIndex = children.indexOf(endChild);
+    if (startIndex >= 0 && endIndex >= 0) {
+      return children.slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1);
+    }
+  }
+  return Array.from(editable.children).filter((child): child is HTMLElement =>
+    child instanceof HTMLElement && range.intersectsNode(child) && !child.matches('pre')
+  );
+}
+
+function getEditableDirectChildForNode(editable: HTMLElement, node: Node): HTMLElement | null {
+  let current: Node | null = node;
+  while (current && current.parentNode !== editable) {
+    current = current.parentNode;
+  }
+  return current instanceof HTMLElement && current.parentNode === editable ? current : null;
+}
+
+function replaceFormattedBlockWithParagraph(block: HTMLElement): HTMLElement {
+  if (block.tagName === 'BLOCKQUOTE') {
+    const parent = block.parentNode;
+    const inserted: HTMLElement[] = [];
+    while (block.firstChild && parent) {
+      const child = block.firstChild;
+      if (child instanceof HTMLElement && /^(P|DIV|UL|OL|H[1-6])$/.test(child.tagName)) {
+        parent.insertBefore(child, block);
+        inserted.push(child);
+      } else {
+        const paragraph = document.createElement('p');
+        paragraph.appendChild(child);
+        parent.insertBefore(paragraph, block);
+        inserted.push(paragraph);
+      }
+    }
+    block.remove();
+    return inserted[0] ?? document.createElement('p');
+  }
+  const paragraph = document.createElement('p');
+  while (block.firstChild) {
+    paragraph.appendChild(block.firstChild);
+  }
+  if (!paragraph.firstChild) {
+    paragraph.appendChild(document.createElement('br'));
+  }
+  block.replaceWith(paragraph);
+  return paragraph;
 }
 
 function unwrapBlockInsideListItem(block: HTMLElement, editable: HTMLElement): void {
@@ -3515,9 +3687,11 @@ function clearFullEditableSelection(editable: HTMLElement): boolean {
     return false;
   }
   const range = selection.getRangeAt(0);
+  const coversContents = doesRangeCoverElementContents(editable, range);
+  const coversOnlyText = editable.children.length <= 1 && doesRangeCoverElementText(editable, range);
   if (
     !isRangeInsideElement(editable, range) ||
-    (!doesRangeCoverElementContents(editable, range) && !doesRangeCoverElementText(editable, range))
+    (!coversContents && !coversOnlyText)
   ) {
     return false;
   }

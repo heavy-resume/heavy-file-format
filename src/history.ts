@@ -198,7 +198,7 @@ export function undoState(): void {
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'));
+  notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'), { authoritative: true });
 }
 
 export function redoState(): void {
@@ -218,7 +218,7 @@ export function redoState(): void {
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'));
+  notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'), { authoritative: true });
 }
 
 function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {

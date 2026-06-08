@@ -2,7 +2,7 @@ import './carousel.css';
 
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { CarouselImage, VisualBlock } from '../../types';
-import { inferImageMediaType, listImageFilenames } from '../../../attachments';
+import { getImageAttachment, inferImageMediaType, listImageFilenames } from '../../../attachments';
 import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
@@ -10,6 +10,7 @@ import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
 import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, storeImageAttachment } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
+import { downloadBlob } from '../../../utils';
 
 interface CarouselRuntimeState {
   index: number;
@@ -113,7 +114,7 @@ function renderEditorImageRow(
     ? `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
     : `<span>Missing</span>`;
   const download = url
-    ? `<a class="hvy-carousel-download" href="${helpers.escapeAttr(url)}" download="${helpers.escapeAttr(image.imageFile)}">Download</a>`
+    ? `<button type="button" class="hvy-carousel-download" data-action="carousel-download" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">Download</button>`
     : '';
   const deleteImage = getImageAttachmentReferenceCount(image.imageFile) === 1;
   return `<div class="hvy-carousel-image-row">
@@ -244,7 +245,7 @@ function handleCarouselChange(event: Event): void {
 
 function handleCarouselClick(event: Event): void {
   const target = event.target as HTMLElement | null;
-  const readerButton = target?.closest<HTMLElement>('.hvy-carousel [data-carousel-action], .hvy-carousel [data-carousel-index]');
+  const readerButton = target?.closest<HTMLElement>('.hvy-carousel-arrow[data-carousel-action], .hvy-carousel-indicator[data-carousel-index]');
   if (readerButton) {
     const frame = readerButton.closest('.hvy-carousel')?.querySelector<HTMLElement>('[data-carousel-reader="true"]');
     if (frame) {
@@ -285,6 +286,24 @@ function handleCarouselClick(event: Event): void {
     block.schema.carouselImages.splice(index, 1);
     syncReusableTemplateForBlock(button.dataset.sectionKey ?? '', block.id);
     getRenderApp()();
+    return;
+  }
+  if (button.dataset.action === 'carousel-download') {
+    const image = block.schema.carouselImages[index];
+    if (!image) return;
+    const attachment = getImageAttachment(state.document, image.imageFile);
+    if (!attachment || attachment.bytes.length === 0) return;
+    const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : 'application/octet-stream';
+    const bytes = Uint8Array.from(attachment.bytes);
+    const downloadEvent = new CustomEvent('hvy:download-attachment', {
+      bubbles: true,
+      cancelable: true,
+      detail: { filename: image.imageFile, mediaType, bytes },
+    });
+    button.dispatchEvent(downloadEvent);
+    if (!downloadEvent.defaultPrevented) {
+      downloadBlob(image.imageFile, new Blob([bytes], { type: mediaType }));
+    }
     return;
   }
   const nextImages = [...block.schema.carouselImages];

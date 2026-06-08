@@ -99,7 +99,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('data-action="carousel-add-existing"');
     expect(expectedResult).toContain('data-field="carousel-show-frame"');
     expect(expectedResult).toContain('data-image-filename="slide.jpg"');
-    expect(expectedResult).toContain('download="slide.jpg"');
+    expect(expectedResult).toContain('data-action="carousel-download"');
+    expect(expectedResult).toContain('data-action="carousel-remove"');
     expect(expectedResult).toContain('data-action="carousel-delete-image"');
   });
 

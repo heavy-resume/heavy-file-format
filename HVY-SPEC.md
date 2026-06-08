@@ -427,8 +427,11 @@ Carousel block fields:
 - Each carousel image entry MAY include `imageAlt` and `caption` strings.
 - `carouselDurationMs` is optional and defaults to `3000`. Clients SHOULD clamp
   very small or very large values to preserve usability.
-- `carouselPauseOnHover`, `carouselShowControls`, and
-  `carouselShowIndicators` are optional booleans and default to `true`.
+- `carouselPauseOnHover`, `carouselShowControls`,
+  `carouselShowIndicators`, and `carouselShowFrame` are optional booleans and
+  default to `true`. When `carouselShowFrame` is `false`, clients SHOULD keep
+  the carousel frame layout and behavior but hide its visible background and
+  border treatment.
 - Clients SHOULD only start automatic movement once the carousel is visible.
 - Missing image attachments SHOULD be rendered as an inline missing-asset
   warning while preserving the carousel configuration on save.
@@ -484,7 +487,7 @@ Component-owned fields are:
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableShowHeader`, `tableRows`
 - `image`: `imageFile`, `imageAlt`, `caption`
-- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`
+- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
 
 Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.

@@ -505,6 +505,7 @@ component_defs:
   expect(output).not.toContain('expandableStubComponent: container');
   expect(output).not.toContain('buttonLabel: Generate');
   expect(output).not.toContain('carouselDurationMs: 3000');
+  expect(output).not.toContain('carouselShowFrame: true');
 });
 
 test('serializes plugin blocks with plugin identity and config', () => {
@@ -1355,7 +1356,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"gallery"}-->
 #! Gallery
 
-<!--hvy:carousel {"carouselDurationMs":2500,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
+<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
 `, '.hvy');
   document.attachments = [
     { id: 'image:a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2]) },
@@ -1368,6 +1369,7 @@ hvy_version: 0.1
 
   expect(block?.schema.component).toBe('carousel');
   expect(block?.schema.carouselDurationMs).toBe(2500);
+  expect(block?.schema.carouselShowFrame).toBe(false);
   expect(block?.schema.carouselImages).toMatchObject([
       { imageFile: 'a.png', caption: 'A' },
       { imageFile: 'b.png', imageAlt: 'B alt' },

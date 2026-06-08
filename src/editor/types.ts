@@ -134,6 +134,7 @@ export interface CarouselBlockSchema extends BaseBlockSchema {
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
   carouselShowIndicators: boolean;
+  carouselShowFrame: boolean;
 }
 
 export interface ButtonBlockSchema extends BaseBlockSchema {
@@ -218,6 +219,7 @@ interface RuntimeSchemaFieldAccess {
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
   carouselShowIndicators: boolean;
+  carouselShowFrame: boolean;
   buttonLabel: string;
   buttonAction: 'ai-generate';
   buttonVisibleScript: string;

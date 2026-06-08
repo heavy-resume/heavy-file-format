@@ -94,6 +94,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         carouselPauseOnHover: true,
         carouselShowControls: true,
         carouselShowIndicators: true,
+        carouselShowFrame: true,
       } as unknown as BlockSchema;
     case 'button':
       return {
@@ -433,6 +434,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.carouselPauseOnHover = candidate.carouselPauseOnHover !== false;
     schema.carouselShowControls = candidate.carouselShowControls !== false;
     schema.carouselShowIndicators = candidate.carouselShowIndicators !== false;
+    schema.carouselShowFrame = candidate.carouselShowFrame !== false;
   }
   if (schema.kind === 'button') {
     schema.buttonLabel = typeof candidate.buttonLabel === 'string' ? candidate.buttonLabel : schema.buttonLabel;

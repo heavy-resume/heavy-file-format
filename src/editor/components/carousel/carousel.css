@@ -13,6 +13,9 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
+}
+
+.hvy-carousel-reader-frame-chrome {
   border: 1px solid color-mix(in srgb, var(--hvy-border) 78%, transparent);
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
 }
@@ -146,11 +149,18 @@
 }
 
 .hvy-carousel-editor-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(3, max-content);
-  gap: 0.75rem;
-  align-items: end;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 0.9rem;
   padding: 0.75rem;
+}
+
+.hvy-carousel-editor .hvy-carousel-duration-field {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
 }
 
 .hvy-carousel-editor label {
@@ -171,14 +181,23 @@
   font: inherit;
 }
 
-.hvy-carousel-toggle {
-  grid-template-columns: auto auto;
-  align-items: center;
-  color: var(--hvy-text);
+.hvy-carousel-editor input[type="number"] {
+  box-sizing: border-box;
+  width: 6.5rem;
 }
 
-.hvy-carousel-toggle input {
+.hvy-carousel-editor .hvy-carousel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--hvy-text);
+  white-space: nowrap;
+}
+
+.hvy-carousel-editor .hvy-carousel-toggle input {
+  flex: 0 0 auto;
   accent-color: var(--hvy-accent-1);
+  margin: 0;
 }
 
 .hvy-carousel-upload-panel {
@@ -300,7 +319,10 @@
 }
 
 @container (max-width: 34rem) {
-  .hvy-carousel-editor-controls,
+  .hvy-carousel-editor-controls {
+    align-items: flex-start;
+  }
+
   .hvy-carousel-image-row {
     grid-template-columns: 1fr;
   }

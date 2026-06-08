@@ -840,6 +840,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.carouselPauseOnHover = schema.carouselPauseOnHover;
     value.carouselShowControls = schema.carouselShowControls;
     value.carouselShowIndicators = schema.carouselShowIndicators;
+    value.carouselShowFrame = schema.carouselShowFrame;
   }
   if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
@@ -988,6 +989,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.carouselPauseOnHover === 'boolean') schema.carouselPauseOnHover = value.carouselPauseOnHover;
   if (typeof value.carouselShowControls === 'boolean') schema.carouselShowControls = value.carouselShowControls;
   if (typeof value.carouselShowIndicators === 'boolean') schema.carouselShowIndicators = value.carouselShowIndicators;
+  if (typeof value.carouselShowFrame === 'boolean') schema.carouselShowFrame = value.carouselShowFrame;
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;

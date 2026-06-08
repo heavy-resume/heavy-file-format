@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { getCarouselSlideScrollLeft, renderCarouselEditor } from '../src/editor/components/carousel/carousel';
+import { getCarouselSlideScrollLeft, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
 import { bindImageDragAndDrop, renderImageEditor } from '../src/editor/components/image/image';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
@@ -97,9 +97,29 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('data-action="carousel-take-photo"');
     expect(expectedResult).toContain('data-action="carousel-add-existing"');
+    expect(expectedResult).toContain('data-field="carousel-show-frame"');
     expect(expectedResult).toContain('data-image-filename="slide.jpg"');
     expect(expectedResult).toContain('download="slide.jpg"');
     expect(expectedResult).toContain('data-action="carousel-delete-image"');
+  });
+
+  test('expected result: carousel frame chrome can be hidden without removing the frame', () => {
+    const block: VisualBlock = createEmptyBlock('carousel');
+    block.schema.carouselImages = [{ imageFile: 'slide.jpg', imageAlt: 'Slide', caption: '' }];
+    block.schema.carouselShowFrame = false;
+    initState(createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [
+        { id: 'image:slide.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1, 2, 3]) },
+      ],
+    }));
+
+    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+
+    expect(expectedResult).toContain('class="hvy-carousel-reader-frame"');
+    expect(expectedResult).not.toContain('hvy-carousel-reader-frame-chrome');
   });
 
   test('expected result: carousel navigation targets the actual slide position', () => {

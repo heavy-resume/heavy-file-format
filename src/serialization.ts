@@ -1437,6 +1437,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'carouselPauseOnHover', schema.carouselPauseOnHover, defaults.carouselPauseOnHover);
     addIfChanged(payload, 'carouselShowControls', schema.carouselShowControls, defaults.carouselShowControls);
     addIfChanged(payload, 'carouselShowIndicators', schema.carouselShowIndicators, defaults.carouselShowIndicators);
+    addIfChanged(payload, 'carouselShowFrame', schema.carouselShowFrame, defaults.carouselShowFrame);
   }
   if (component === 'button') {
     addIfChanged(payload, 'buttonLabel', schema.buttonLabel, defaults.buttonLabel);

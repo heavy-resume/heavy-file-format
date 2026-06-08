@@ -37,6 +37,9 @@ function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers):
   if (block.schema.carouselImages.length === 0) {
     return '<div class="hvy-carousel-empty">No carousel images.</div>';
   }
+  const frameClass = block.schema.carouselShowFrame
+    ? 'hvy-carousel-reader-frame hvy-carousel-reader-frame-chrome'
+    : 'hvy-carousel-reader-frame';
   const slides = block.schema.carouselImages
     .map((image, index) => {
       const caption = image.caption
@@ -54,7 +57,7 @@ function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers):
         .map((_image, index) => `<button type="button" class="hvy-carousel-indicator" data-carousel-index="${index}" aria-label="Show image ${index + 1}" aria-pressed="false"></button>`)
         .join('')}</div>`
     : '';
-  return `<div class="hvy-carousel-reader-frame" data-carousel-reader="true" data-carousel-duration-ms="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}" data-carousel-pause-on-hover="${block.schema.carouselPauseOnHover ? 'true' : 'false'}">
+  return `<div class="${frameClass}" data-carousel-reader="true" data-carousel-duration-ms="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}" data-carousel-pause-on-hover="${block.schema.carouselPauseOnHover ? 'true' : 'false'}">
     <div class="hvy-carousel-track">${slides}</div>${controls}
   </div>${indicators}`;
 }
@@ -67,10 +70,11 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
   return `<div class="hvy-carousel hvy-carousel-editor" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
     ${renderReaderFrame(block, helpers)}
     <div class="hvy-carousel-editor-controls">
-      <label><span>Duration</span><input type="number" min="800" max="60000" step="100" data-field="carousel-duration-ms" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" value="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}"></label>
+      <label class="hvy-carousel-duration-field"><span>Duration</span><input type="number" min="800" max="60000" step="100" data-field="carousel-duration-ms" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" value="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}"></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-pause-on-hover" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselPauseOnHover ? ' checked' : ''}><span>Pause on hover</span></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-controls" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowControls ? ' checked' : ''}><span>Controls</span></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-indicators" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowIndicators ? ' checked' : ''}><span>Indicators</span></label>
+      <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-frame" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowFrame ? ' checked' : ''}><span>Frame</span></label>
     </div>
     <div class="hvy-carousel-upload-panel">
       <label class="hvy-carousel-pick-label">
@@ -230,6 +234,7 @@ function handleCarouselChange(event: Event): void {
   if (field === 'carousel-pause-on-hover') block.schema.carouselPauseOnHover = target.checked;
   else if (field === 'carousel-show-controls') block.schema.carouselShowControls = target.checked;
   else if (field === 'carousel-show-indicators') block.schema.carouselShowIndicators = target.checked;
+  else if (field === 'carousel-show-frame') block.schema.carouselShowFrame = target.checked;
   else return;
   recordHistory(`carousel:${block.id}:${field}`);
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);

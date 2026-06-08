@@ -181,7 +181,8 @@ function inferLinkValueFromRange(range: Range | null): string {
   if (!range || range.collapsed) {
     return '';
   }
-  return normalizeLinkInputValue(range.toString());
+  const linkValue = normalizeLinkInputValue(range.toString());
+  return isLinkInputValue(linkValue) ? linkValue : '';
 }
 
 function normalizeLinkInputValue(value: string): string {
@@ -193,6 +194,18 @@ function normalizeLinkInputValue(value: string): string {
     return `mailto:${trimmed}`;
   }
   return trimmed;
+}
+
+function isLinkInputValue(value: string): boolean {
+  if (/^mailto:/i.test(value) || /^#/i.test(value)) {
+    return true;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function isEmailAddress(value: string): boolean {

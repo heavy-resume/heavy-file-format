@@ -251,6 +251,78 @@ test('quote toolbar action formats every selected paragraph and list block', asy
   await expect(passiveBlock).not.toContainText('> Alpha');
 });
 
+test('link toolbar only defaults selected text that looks like a link target', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Foo bar https://example.test/path person@example.com');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const linkButton = page.getByRole('button', { name: 'Link' }).first();
+  const linkInput = page.locator('#linkInlineInput');
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.setEnd(textNode!, 'Foo bar'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+
+  await editor.evaluate((node) => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent?.includes('https://example.test/path')) {
+        textNode = walker.currentNode;
+        break;
+      }
+    }
+    const text = textNode!.textContent!;
+    const start = text.indexOf('https://example.test/path');
+    const range = document.createRange();
+    range.setStart(textNode!, start);
+    range.setEnd(textNode!, start + 'https://example.test/path'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('https://example.test/path');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+
+  await editor.evaluate((node) => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent?.includes('person@example.com')) {
+        textNode = walker.currentNode;
+        break;
+      }
+    }
+    const text = textNode!.textContent!;
+    const start = text.indexOf('person@example.com');
+    const range = document.createRange();
+    range.setStart(textNode!, start);
+    range.setEnd(textNode!, start + 'person@example.com'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('mailto:person@example.com');
+});
+
 async function loadToolbarSelectionDocument(page: Page): Promise<void> {
   await loadRichTextDocument(page, `Alpha
 

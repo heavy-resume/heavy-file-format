@@ -84,6 +84,18 @@ test('keeps markdown task list markers as task lists', () => {
   expect(html).not.toContain('hvy-inline-checkbox');
 });
 
+test('renders markdown quote markers as blockquotes', () => {
+  const html = markdownToReaderHtml('> Alpha\n>\n> - Bravo\n> - Charlie\n>\n> Delta');
+
+  expect(html).toContain('<blockquote>');
+  expect(html).toContain('<p>Alpha</p>');
+  expect(html).toContain('<ul>');
+  expect(html).toContain('<li>Bravo</li>');
+  expect(html).toContain('<li>Charlie</li>');
+  expect(html).toContain('<p>Delta</p>');
+  expect(html).not.toContain('&gt; Alpha');
+});
+
 test('escapes raw html before applying underline syntax', () => {
   expect(applyUnderlineSyntax(escapeRawHtml('___safe___ <u>unsafe</u> <script>bad()</script>'))).toBe(
     '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'

@@ -1799,6 +1799,9 @@ function formatSelectedEditableBlocks(editable: HTMLElement, tagName: string): b
     return false;
   }
   const shouldUnquote = tagName === 'blockquote' && targets.every((target) => target.tagName === 'BLOCKQUOTE');
+  if (tagName === 'blockquote' && !shouldUnquote) {
+    return wrapSelectedEditableBlocksInQuote(targets, editable);
+  }
   const formatted: HTMLElement[] = [];
   for (const target of targets) {
     if (target.tagName === 'PRE') {
@@ -1835,9 +1838,34 @@ function formatSelectedEditableBlocks(editable: HTMLElement, tagName: string): b
   return true;
 }
 
+function wrapSelectedEditableBlocksInQuote(blocks: HTMLElement[], editable: HTMLElement): boolean {
+  const firstBlock = blocks[0];
+  if (!firstBlock?.parentNode) {
+    return false;
+  }
+  const quote = document.createElement('blockquote');
+  firstBlock.parentNode.insertBefore(quote, firstBlock);
+  for (const block of blocks) {
+    quote.appendChild(block);
+  }
+  if (!quote.firstChild) {
+    quote.appendChild(document.createTextNode('\u200b'));
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(quote);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
 function getSelectedEditableFormatBlocks(editable: HTMLElement, range: Range): HTMLElement[] {
-  const startChild = getEditableDirectChildForNode(editable, range.startContainer);
-  const endChild = getEditableDirectChildForNode(editable, range.endContainer);
+  const selection = window.getSelection();
+  const anchorChild = selection?.anchorNode ? getEditableDirectChildForNode(editable, selection.anchorNode) : null;
+  const focusChild = selection?.focusNode ? getEditableDirectChildForNode(editable, selection.focusNode) : null;
+  const startChild = anchorChild ?? getEditableDirectChildForNode(editable, range.startContainer);
+  const endChild = focusChild ?? getEditableDirectChildForNode(editable, range.endContainer);
   if (startChild && endChild) {
     const children = Array.from(editable.children).filter((child): child is HTMLElement =>
       child instanceof HTMLElement && !child.matches('pre')

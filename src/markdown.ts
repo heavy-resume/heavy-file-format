@@ -545,7 +545,8 @@ export function escapeRawHtml(markdown: string): string {
       index = nextLineIndex;
       continue;
     }
-    output += escapeRawHtmlOutsideInlineCode(line);
+    const quotePrefix = line.match(/^( {0,3}(?:>[ \t]?)+)/)?.[0] ?? '';
+    output += quotePrefix + escapeRawHtmlOutsideInlineCode(line.slice(quotePrefix.length));
     index = nextLineIndex;
   }
   return output;

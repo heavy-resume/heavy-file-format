@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const defaultDocumentText = 'This default HVY document is a lightweight workspace';
 
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 
 test('toolbar exposes quote and code block actions', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
+  await loadRichTextDocument(page, 'Quoted');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -19,8 +19,6 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   const codeBlockButton = page.locator('[data-rich-action="code-block"]').first();
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Quoted</p>';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -163,14 +161,12 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
 test('italic toolbar action serializes multi-paragraph and list selections', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
+  await loadToolbarSelectionDocument(page);
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Alpha</p><ul><li>Bravo</li><li>Charlie</li></ul><p>Delta</p>';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const firstText = node.querySelector('p')?.firstChild;
     const lastText = node.querySelector('p:last-child')?.firstChild;
     const selection = window.getSelection();
@@ -204,14 +200,12 @@ test('italic toolbar action serializes multi-paragraph and list selections', asy
 
 test('quote toolbar action formats every selected paragraph and list block', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
+  await loadToolbarSelectionDocument(page);
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Alpha</p><ul><li>Bravo</li><li>Charlie</li></ul><p>Delta</p>';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const firstText = node.querySelector('p')?.firstChild;
     const lastText = node.querySelector('p:last-child')?.firstChild;
     const selection = window.getSelection();
@@ -228,19 +222,61 @@ test('quote toolbar action formats every selected paragraph and list block', asy
 
   const expectedResult = await editor.evaluate((node) => ({
     topLevelTags: Array.from(node.children).map((child) => child.tagName),
-    quotes: Array.from(node.querySelectorAll('blockquote')).map((element) => element.textContent),
+    quotes: Array.from(node.querySelectorAll('blockquote')).map((element) => (element.textContent ?? '').replace(/\s+/g, ' ').trim()),
+    quoteChildren: Array.from(node.querySelector('blockquote')?.children ?? []).map((child) => child.tagName),
   }));
   expect(expectedResult).toEqual({
-    topLevelTags: ['BLOCKQUOTE', 'BLOCKQUOTE', 'BLOCKQUOTE'],
-    quotes: ['Alpha', 'BravoCharlie', 'Delta'],
+    topLevelTags: ['BLOCKQUOTE'],
+    quotes: ['Alpha Bravo Charlie Delta'],
+    quoteChildren: ['P', 'UL', 'P'],
   });
+
+  const quoteBox = await editor.locator('blockquote').boundingBox();
+  const bulletBox = await editor.locator('blockquote li').first().boundingBox();
+  expect(quoteBox).not.toBeNull();
+  expect(bulletBox).not.toBeNull();
+  expect(bulletBox!.x).toBeGreaterThan(quoteBox!.x + 12);
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('> Alpha');
   await expect(page.locator('#rawEditor')).toContainText('> - Bravo');
   await expect(page.locator('#rawEditor')).toContainText('> - Charlie');
   await expect(page.locator('#rawEditor')).toContainText('> Delta');
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+  const passiveBlock = page.locator('.editor-block-passive').first();
+  await expect(passiveBlock.locator('blockquote')).toHaveCount(1);
+  await expect(passiveBlock.locator('blockquote')).toContainText('Alpha');
+  await expect(passiveBlock.locator('blockquote li')).toHaveText(['Bravo', 'Charlie']);
+  await expect(passiveBlock).not.toContainText('> Alpha');
 });
+
+async function loadToolbarSelectionDocument(page: Page): Promise<void> {
+  await loadRichTextDocument(page, `Alpha
+
+- Bravo
+- Charlie
+
+Delta`);
+  await expect(page.locator('.editor-block-passive li')).toHaveText(['Bravo', 'Charlie']);
+}
+
+async function loadRichTextDocument(page: Page, markdown: string): Promise<void> {
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"quote-target"}-->
+${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.editor-block-passive').first()).toContainText(markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '');
+}
 
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');

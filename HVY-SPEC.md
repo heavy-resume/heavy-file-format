@@ -404,12 +404,13 @@ component_defs:
 Image blocks reference a binary attachment stored in the document tail:
 
 ```markdown
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Product overview"}-->
 ```
 
 Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
+- `caption`: optional caption text. Readers SHOULD render it centered below the image when present.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -482,7 +483,7 @@ Component-owned fields are:
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableShowHeader`, `tableRows`
-- `image`: `imageFile`, `imageAlt`
+- `image`: `imageFile`, `imageAlt`, `caption`
 - `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
 

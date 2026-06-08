@@ -1249,7 +1249,7 @@ test('serialize -> deserialize -> serialize stays stable for migrated examples',
   }
 });
 
-test('image component round-trips imageFile and imageAlt schema fields', () => {
+test('image component round-trips imageFile, imageAlt, and caption schema fields', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -1257,18 +1257,20 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption","css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
   expect(block?.schema.component).toBe('image');
   expect(block?.schema.imageFile).toBe('hero.png');
   expect(block?.schema.imageAlt).toBe('Cover photo');
+  expect(block?.schema.caption).toBe('Hero caption');
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
+  expect(output).toContain('"caption":"Hero caption"');
 });
 
 test('serializes and parses multiple tail attachments with byte slicing', () => {

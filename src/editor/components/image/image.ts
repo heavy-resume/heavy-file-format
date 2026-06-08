@@ -12,6 +12,7 @@ import { cameraIcon, closeIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
+const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
 
 type LegacyCameraNavigator = Navigator & {
@@ -251,6 +252,7 @@ function escapeModalAttr(value: string): string {
 function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const filename = block.schema.imageFile.trim();
   const alt = block.schema.imageAlt || filename || 'Image';
+  const caption = block.schema.caption.trim();
   if (!filename) {
     return '<div class="image-empty muted">No image attached.</div>';
   }
@@ -259,7 +261,10 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
     return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
   }
   const styleAttr = ` style="${helpers.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
-  return `<img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}"${styleAttr} />`;
+  const captionHtml = caption
+    ? `<figcaption class="image-caption">${helpers.escapeHtml(caption)}</figcaption>`
+    : '';
+  return `<figure class="image-figure"><img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}"${styleAttr} />${captionHtml}</figure>`;
 }
 
 export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -309,17 +314,6 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </div>
         <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
       </div>
-      <div class="image-attachment-panel">
-        <div class="image-attachment-panel-title">Attached images</div>
-        ${renderImageAttachmentPicker({
-          helpers,
-          action: 'image-use-existing',
-          sectionKey,
-          blockId: block.id,
-          selectedFilename: filename,
-          emptyText: 'No attached images yet.',
-        })}
-      </div>
       <div class="image-alt-label-container">
         <label class="image-alt-label">
           <span>Alt text</span>
@@ -331,6 +325,27 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             placeholder="Describe the image"
           >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
         </label>
+        <label class="image-alt-label">
+          <span>Caption</span>
+          <textarea
+            rows="2"
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            data-field="image-caption"
+            placeholder="Add a caption"
+          >${helpers.escapeHtml(block.schema.caption)}</textarea>
+        </label>
+      </div>
+      <div class="image-attachment-panel">
+        <div class="image-attachment-panel-title">Attached images</div>
+        ${renderImageAttachmentPicker({
+          helpers,
+          action: 'image-use-existing',
+          sectionKey,
+          blockId: block.id,
+          selectedFilename: filename,
+          emptyText: 'No attached images yet.',
+        })}
       </div>
     </div>
   `;
@@ -470,6 +485,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
   recordHistory(`image-current-delete:${blockId}`);
   block.schema.imageFile = '';
   block.schema.imageAlt = '';
+  block.schema.caption = '';
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   getRenderApp()();
@@ -523,6 +539,10 @@ export async function storeImageAttachment(filename: string, mediaType: string, 
 }
 
 export function bindImageDragAndDrop(app: HTMLElement): void {
+  if (imageDragDropBoundRoots.has(app)) {
+    return;
+  }
+  imageDragDropBoundRoots.add(app);
   const overClass = 'image-dropzone-active';
   app.addEventListener('dragenter', (event) => {
     const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');

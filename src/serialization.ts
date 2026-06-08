@@ -1429,6 +1429,7 @@ function serializeBlockSchema(
   if (component === 'image') {
     addIfChanged(payload, 'imageFile', schema.imageFile, defaults.imageFile);
     addIfChanged(payload, 'imageAlt', schema.imageAlt, defaults.imageAlt);
+    addIfChanged(payload, 'caption', schema.caption, defaults.caption);
   }
   if (component === 'carousel') {
     addArrayIfChanged(payload, 'carouselImages', schema.carouselImages, defaults.carouselImages);

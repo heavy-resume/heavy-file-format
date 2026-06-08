@@ -124,6 +124,7 @@ export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
   imageFile: string;
   imageAlt: string;
+  caption: string;
 }
 
 export interface CarouselBlockSchema extends BaseBlockSchema {
@@ -211,6 +212,7 @@ interface RuntimeSchemaFieldAccess {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
+  caption: string;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;

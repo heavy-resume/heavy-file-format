@@ -84,7 +84,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     case 'table':
       return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
     case 'image':
-      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '' } as unknown as BlockSchema;
+      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: '' } as unknown as BlockSchema;
     case 'carousel':
       return {
         ...base,
@@ -424,6 +424,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   if (schema.kind === 'image') {
     schema.imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile : schema.imageFile;
     schema.imageAlt = typeof candidate.imageAlt === 'string' ? candidate.imageAlt : schema.imageAlt;
+    schema.caption = typeof candidate.caption === 'string' ? candidate.caption : schema.caption;
     schema.css = typeof candidate.css === 'string' ? candidate.css : schema.css;
   }
   if (schema.kind === 'carousel') {

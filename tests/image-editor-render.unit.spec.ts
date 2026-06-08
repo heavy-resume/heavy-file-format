@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { getCarouselSlideScrollLeft, renderCarouselEditor } from '../src/editor/components/carousel/carousel';
-import { renderImageEditor } from '../src/editor/components/image/image';
+import { bindImageDragAndDrop, renderImageEditor } from '../src/editor/components/image/image';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { initState } from '../src/state';
@@ -47,6 +47,7 @@ describe('image editor render controls', () => {
     block.id = 'photo';
     block.schema.imageFile = 'avatar.jpg';
     block.schema.imageAlt = 'Avatar';
+    block.schema.caption = 'Team photo';
     const section = createEmptySection(1);
     section.key = 'profile';
     section.title = 'Profile';
@@ -69,6 +70,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('data-action="image-delete-current"');
     expect(expectedResult).toContain('data-action="image-delete-unused"');
     expect(expectedResult).toContain('data-image-filename="unused.jpg"');
+    expect(expectedResult).toContain('data-field="image-caption"');
+    expect(expectedResult).toContain('<figcaption class="image-caption">Team photo</figcaption>');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');
   });
@@ -113,5 +116,21 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toBe(14_421);
     expect(expectedResult).not.toBe(23 * track.clientWidth);
+  });
+
+  test('before, repeated bind, after: image drag/drop listeners are registered once per app root', () => {
+    const addEventListener = vi.fn();
+    const app = { addEventListener } as unknown as HTMLElement;
+
+    bindImageDragAndDrop(app);
+    bindImageDragAndDrop(app);
+
+    expect(addEventListener).toHaveBeenCalledTimes(4);
+    expect(addEventListener.mock.calls.map(([eventName]) => eventName)).toEqual([
+      'dragenter',
+      'dragover',
+      'dragleave',
+      'drop',
+    ]);
   });
 });

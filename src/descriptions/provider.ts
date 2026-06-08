@@ -181,6 +181,7 @@ function summarizeBlock(block: VisualBlock): string {
     block.schema.xrefDetail ?? '',
     block.schema.containerTitle ?? '',
     block.schema.imageAlt ?? '',
+    block.schema.caption ?? '',
     block.text,
     block.schema.component === 'table' ? renderAltAnnotationsAsFullText((block.schema.tableColumns ?? []).join(' ')) : '',
     block.schema.component === 'table' ? (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') : '',
@@ -233,6 +234,7 @@ function getBlockLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
+    || (block.schema.caption ?? '').trim()
     || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]))

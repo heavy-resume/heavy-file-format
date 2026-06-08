@@ -277,6 +277,7 @@ function getBlockLocationLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
+    || (block.schema.caption ?? '').trim()
     || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]));

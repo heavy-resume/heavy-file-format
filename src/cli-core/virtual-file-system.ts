@@ -832,6 +832,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
   if (baseComponent === 'image') {
     value.imageFile = schema.imageFile;
     value.imageAlt = schema.imageAlt;
+    value.caption = schema.caption;
   }
   if (baseComponent === 'carousel') {
     value.carouselImages = schema.carouselImages;
@@ -967,6 +968,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
+  if (typeof value.caption === 'string') schema.caption = value.caption;
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null;

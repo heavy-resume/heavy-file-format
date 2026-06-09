@@ -26,7 +26,8 @@ const mimeTypes = new Map([
 const activeSockets = new Set();
 
 const server = createServer(async (request, response) => {
-  const pathname = new URL(request.url || '/', 'http://localhost').pathname;
+  const requestUrl = new URL(request.url || '/', 'http://localhost');
+  const pathname = requestUrl.pathname;
   const filePath = pathname === '/'
     ? join(publicRoot, 'index.html')
     : pathname.startsWith('/document.hvy') || pathname.startsWith('/attachments.json') || pathname.startsWith('/image/') || pathname.startsWith('/attachment/')
@@ -45,7 +46,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, {
       'content-type': mimeTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream',
       'content-length': info.size,
-      'cache-control': getCacheControl(pathname),
+      'cache-control': getCacheControl(requestUrl),
     });
     createReadStream(filePath).pipe(response);
   } catch {
@@ -91,13 +92,18 @@ function safeJoin(root, pathname) {
   return target === root || target.startsWith(`${root}/`) ? target : null;
 }
 
-function getCacheControl(pathname) {
+function getCacheControl(requestUrl) {
+  const pathname = requestUrl.pathname;
+  if (pathname === '/hvy-embed.js' && requestUrl.searchParams.has('v')) {
+    return 'public, max-age=31536000, immutable';
+  }
   if (
     pathname === '/' ||
     pathname === '/document.hvy' ||
     pathname === '/attachments.json' ||
     pathname === '/viewer.css' ||
     pathname === '/viewer.js' ||
+    pathname === '/hvy-embed.js' ||
     pathname === '/hvy-embed.css'
   ) {
     return 'no-cache';

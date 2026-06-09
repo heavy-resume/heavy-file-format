@@ -91,15 +91,7 @@ mkdir -p "$site_dir" "$public_dir"
 cd "$repo_root"
 npm run build:embed
 node scripts/extract-hvy-assets.mjs "$hvy_file" --out "$site_dir"
-
-cp hosted-viewer/index.html hosted-viewer/viewer.css hosted-viewer/viewer.js "$public_dir/"
-cp -R dist-embed/. "$public_dir/"
-embed_css="$(find dist-embed/assets -maxdepth 1 -name '*.css' -print -quit)"
-if [[ -z "$embed_css" ]]; then
-  echo "Could not find built HVY embed CSS in dist-embed/assets" >&2
-  exit 1
-fi
-cp "$embed_css" "$public_dir/hvy-embed.css"
+node hosted-viewer/prepare-hosted-viewer-public.mjs "$public_dir" dist-embed
 cp hosted-viewer/server.mjs "$build_root/server.mjs"
 cp hosted-viewer/Dockerfile.baked "$build_root/Dockerfile"
 

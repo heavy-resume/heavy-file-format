@@ -3,7 +3,7 @@ import {
   createHostedAttachmentAdapter,
   deserializeDocumentBytes,
   mountHvyViewer,
-} from './hvy-embed.js';
+} from './hvy-embed.js?v=__HVY_EMBED_CACHE_BUST__';
 
 const root = document.querySelector('#hvyRoot');
 const status = document.querySelector('#status');

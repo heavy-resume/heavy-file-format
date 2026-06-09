@@ -3,6 +3,7 @@ import { bindChangeControls } from './bind/handlers/change-controls';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { bindInputMisc } from './bind/handlers/input-misc';
 import { bindKeydown } from './bind/handlers/keydown';
+import { bindScrollHandler } from './bind/handlers/scroll';
 import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
@@ -25,6 +26,7 @@ function bindReaderAppControls(app: HTMLElement): void {
   bindChangeControls(app);
   bindSubmit(app);
   bindKeydown(app);
+  bindScrollHandler(app);
 
   app.addEventListener('click', (event) => {
     if (!app.querySelector('#readerDocument')) {

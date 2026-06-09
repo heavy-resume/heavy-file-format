@@ -122,9 +122,15 @@ Top-of-file YAML front matter is optional and maps to `document.meta`.
 ---
 hvy_version: 0.1
 title: Example
+description: A short summary for document previews.
 tags: [guide, onboarding]
 ---
 ```
+
+Document identity metadata includes:
+- `title`: optional string naming the document.
+- `description`: optional string summarizing the document for metadata surfaces such as hosted link previews.
+- `tags`: optional comma-separated string or string array for document-level classification.
 
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.

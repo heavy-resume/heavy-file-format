@@ -3614,6 +3614,31 @@ test('document ai context is editable metadata and keeps focus while typing', as
   await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
 });
 
+test('document description and tags are editable metadata and keep focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const description = page.locator('[data-field="meta-description"]');
+  await description.fill('');
+  await description.type('Hosted preview summary.');
+
+  await expect(description).toBeFocused();
+  await expect(description).toHaveValue('Hosted preview summary.');
+
+  const tags = page.locator('[data-field="meta-tags"]');
+  await tags.fill('');
+  await tags.type('preview, hosted');
+
+  await expect(tags).toBeFocused();
+  await expect(tags).toHaveValue('preview, hosted');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('description: Hosted preview summary.');
+  await expect(page.locator('#rawEditor')).toContainText('tags: preview, hosted');
+});
+
 test('document ai import guidance is editable metadata and keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

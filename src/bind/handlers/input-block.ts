@@ -56,6 +56,26 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-description' && target instanceof HTMLTextAreaElement) {
+      recordHistory('meta:description');
+      if (target.value.trim().length > 0) {
+        state.document.meta.description = target.value;
+      } else {
+        delete state.document.meta.description;
+      }
+      return;
+    }
+
+    if (field === 'meta-tags' && target instanceof HTMLInputElement) {
+      recordHistory('meta:tags');
+      if (target.value.trim().length > 0) {
+        state.document.meta.tags = target.value;
+      } else {
+        delete state.document.meta.tags;
+      }
+      return;
+    }
+
     if (field === 'chat-model' && target instanceof HTMLInputElement) {
       state.chat.settings.model = target.value;
       persistChatSettings(state.chat.settings);

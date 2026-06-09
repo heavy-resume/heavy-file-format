@@ -111,6 +111,13 @@ function getDocumentSectionContainedDefault(documentMeta: JsonObject): boolean {
   return getDefaultSectionContained(documentMeta);
 }
 
+function formatDocumentMetaTags(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((tag) => (typeof tag === 'string' ? tag.trim() : '')).filter(Boolean).join(', ');
+  }
+  return typeof value === 'string' ? value : '';
+}
+
 interface ComponentListDisplayContext {
   sortKeys: string[];
   groupKeys: string[];
@@ -254,8 +261,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       <div class="editor-sidebar-help-title">Contains</div>
       <ul>
         ${sidebarSections
-          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
-          .join('')}
+        .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+        .join('')}
       </ul>
     </div>`;
   }
@@ -280,9 +287,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${renderSurfaceHeadingStyles()}
         <div class="editor-tree-body"${bodyStyle}>
           ${state.showAdvancedEditor
-            ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-            : ''
-          }
+        ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+        : ''
+      }
           ${sectionCards}
           ${renderTopLevelSectionAddGhost('main')}
         </div>
@@ -344,12 +351,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? ''
       : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
-                    id: `section:${section.key}`,
-                    action: 'add-block',
-                    sectionKey: section.key,
-                    label: 'Section component type',
-                    ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
-                  })}
+        id: `section:${section.key}`,
+        action: 'add-block',
+        sectionKey: section.key,
+        label: 'Section component type',
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+      })}
               </div>`;
     return `
       <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
@@ -373,8 +380,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
             ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
-              section.key
-            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
+        section.key
+      )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
           </div>
         </div>
 
@@ -448,11 +455,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const label = `${capitalizePlacementMode(mode)} (in ${formatPlacementContainerLabel(options.container)})`;
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
-    )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
-      options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
-    }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${
-      options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
-    }>
+    )}" data-placement-container="${options.container}" data-placement="${options.placement}"${options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
+      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
+      }>
       <span>${deps.escapeHtml(label)}</span>
     </button>`;
   }
@@ -594,18 +599,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${contentEditor}
           ${anchorAttrs.overlay}
         </div>
-        ${
-          showActiveBlockDoneRow
-            ? `<div class="editor-block-done-row">
+        ${showActiveBlockDoneRow
+        ? `<div class="editor-block-done-row">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
                 <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
               </div>`
-            : ''
-        }
+        : ''
+      }
       </div>
       ${insertBelowGhost}
     `;
@@ -642,16 +646,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
       <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
       ${renderComponentPicker({
-        id: `block:${block.id}:${placement}`,
-        action: 'add-block',
-        sectionKey,
-        label: `Insert component ${placement === 'before' ? 'above' : 'below'}`,
-        extraAttrs: {
-          'data-insert-placement': placement,
-          'data-target-block-id': block.id,
-        },
-        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
-      })}
+      id: `block:${block.id}:${placement}`,
+      action: 'add-block',
+      sectionKey,
+      label: `Insert component ${placement === 'before' ? 'above' : 'below'}`,
+      extraAttrs: {
+        'data-insert-placement': placement,
+        'data-target-block-id': block.id,
+      },
+      ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+    })}
     </div>`;
   }
 
@@ -707,9 +711,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const section = deps.findSectionByKey(rootSections, sectionKey);
     const buttons = componentId && section
       ? section.blocks.filter((candidate) =>
-          deps.resolveBaseComponent(candidate.schema.component) === 'button'
-          && candidate.schema.buttonPositionTargetId.trim() === componentId
-        )
+        deps.resolveBaseComponent(candidate.schema.component) === 'button'
+        && candidate.schema.buttonPositionTargetId.trim() === componentId
+      )
       : [];
     const componentAttr = componentId ? ` data-component-id="${deps.escapeAttr(componentId)}"` : '';
     if (buttons.length === 0) {
@@ -821,14 +825,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const body = !hasStubContent && !hasExpandedContent
         ? `${stubToggle}${expandedPanel}`
         : expanded
-        ? alwaysShowStub && hasStubContent
-          ? `${stubToggle}${expandedPanel}`
-          : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
-            sectionKey
-          )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
-        : hasStubContent
-          ? stubToggle
-          : collapsedContentPreview;
+          ? alwaysShowStub && hasStubContent
+            ? `${stubToggle}${expandedPanel}`
+            : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+              sectionKey
+            )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
+          : hasStubContent
+            ? stubToggle
+            : collapsedContentPreview;
       const className = [
         'expandable-reader',
         'is-interactive',
@@ -860,8 +864,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         const existingContent = block.schema.componentListBlocks.length > 0
           ? state.currentView === 'ai'
             ? `<div class="reader-component-list">${block.schema.componentListBlocks
-                .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-                .join('')}</div>`
+              .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+              .join('')}</div>`
             : deps.renderReaderBlock(section, block)
           : '';
         return `${existingContent}<div class="ghost-section-card add-ghost component-list-add-ghost passive-empty-list-ghost"${actionAttr}>
@@ -880,12 +884,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
       const leadingPlacementTarget = state.componentPlacement && !block.schema.lock && block.schema.gridItems[0]
         ? renderComponentPlacementTarget({
-            container: 'grid',
-            sectionKey,
-            parentBlockId: block.id,
-            placement: 'before',
-            targetGridItemId: block.schema.gridItems[0].id,
-          })
+          container: 'grid',
+          sectionKey,
+          parentBlockId: block.id,
+          placement: 'before',
+          targetGridItemId: block.schema.gridItems[0].id,
+        })
         : '';
       const cells = block.schema.gridItems
         .map((item, index) => {
@@ -897,12 +901,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
-                container: 'grid',
-                sectionKey,
-                parentBlockId: block.id,
-                placement: 'after',
-                targetGridItemId: item.id,
-              })
+              container: 'grid',
+              sectionKey,
+              parentBlockId: block.id,
+              placement: 'after',
+              targetGridItemId: item.id,
+            })
             : '';
           return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
@@ -1172,6 +1176,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <input data-field="meta-title" value="${deps.escapeAttr(String(state.documentMeta.title ?? ''))}" />
         </label>
         <label>
+          <span>Description</span>
+          <textarea
+            rows="3"
+            data-field="meta-description"
+            placeholder="Describe this document"
+          >${deps.escapeHtml(String(state.documentMeta.description ?? ''))}</textarea>
+        </label>
+        <label>
+          <span>Tags</span>
+          <input data-field="meta-tags" placeholder="Enter comma separated tags for this document" value="${deps.escapeAttr(formatDocumentMetaTags(state.documentMeta.tags))}" />
+        </label>
+        <label>
           <span>Sidebar Label</span>
           <input data-field="meta-sidebar-label" placeholder="☰" value="${deps.escapeAttr(String(state.documentMeta.sidebar_label ?? ''))}" />
         </label>
@@ -1267,11 +1283,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${defs.length === 0
         ? '<div class="muted template-def-empty">No component templates</div>'
         : defs
-        .map(
-          (def, index) => {
-            const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-            const detailsKey = templateDefinitionDetailsKey('component', index);
-            return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
+          .map(
+            (def, index) => {
+              const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+              const detailsKey = templateDefinitionDetailsKey('component', index);
+              return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                 <summary class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
@@ -1294,33 +1310,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <label>
                     <span>Default Tags</span>
                     ${renderTagEditor(
-            'def-tags',
-            def.tags ?? '',
-            {
-              defIndex: index,
-              placeholder: 'Add a default tag',
-            },
-            { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-          )}
+                'def-tags',
+                def.tags ?? '',
+                {
+                  defIndex: index,
+                  placeholder: 'Add a default tag',
+                },
+                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+              )}
                   </label>
                   <label>
                     <span>Description</span>
                     <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
                   </label>
-                  ${
-                    deps.resolveBaseComponent(def.baseType) === 'xref-card'
-                      ? `<label>
+                  ${deps.resolveBaseComponent(def.baseType) === 'xref-card'
+                  ? `<label>
                     <span>Target Tag Filter</span>
                     <input data-field="def-xref-target-tag-filter" data-def-index="${index}" placeholder="tag-name" value="${deps.escapeAttr(def.template?.schema.xrefTargetTagFilter ?? def.schema?.xrefTargetTagFilter ?? '')}" />
                   </label>`
-                      : ''
-                  }
+                  : ''
+                }
                   <div class="meta-panel-head">
                     <strong>Flavors</strong>
                   </div>
                   ${flavors.length === 0
-                    ? '<div class="muted">No flavors. Import uses the main component template.</div>'
-                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
                     ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
                       <label>
                         <span>Flavor Name</span>
@@ -1335,9 +1350,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
               </details>`;
-          }
-        )
-        .join('')}
+            }
+          )
+          .join('')}
         </div>
         <div class="meta-panel-head">
           <strong>Section Templates</strong>
@@ -1374,8 +1389,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                           <strong>Flavors</strong>
                         </div>
                         ${flavors.length === 0
-                    ? '<div class="muted">No flavors. Import uses the main section template.</div>'
-                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                  ? '<div class="muted">No flavors. Import uses the main section template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
                         ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
                             <label>
                               <span>Flavor Name</span>
@@ -1729,9 +1744,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           >${deps.escapeHtml(block.schema.visibleScript)}</textarea>
         </label>
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
-        ${
-          component === 'container'
-            ? `<label>
+        ${component === 'container'
+        ? `<label>
           <span>Preview Height (CSS units)</span>
           <input
             type="number"
@@ -1743,11 +1757,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
           />
         </label>`
-            : ''
-        }
-        ${
-          component === 'component-list'
-            ? `<label>
+        : ''
+      }
+        ${component === 'component-list'
+        ? `<label>
           <span>List Item Label</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1769,11 +1782,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(String(block.schema.componentListGroupCollapsedPreviewRem))}"
           />
         </label>`
-            : ''
-        }
-        ${
-          deps.resolveBaseComponent(component) === 'xref-card'
-            ? `<label>
+        : ''
+      }
+        ${deps.resolveBaseComponent(component) === 'xref-card'
+        ? `<label>
           <span>Target Tag Filter</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1783,14 +1795,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.xrefTargetTagFilter)}"
           />
         </label>`
-            : ''
-        }
+        : ''
+      }
         <label>
-          <span class="description-label-with-action">Description${
-            block.schema.description.trim()
-              ? ''
-              : ` <button type="button" class="ghost inline-generate-description" data-action="generate-block-description" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Generate</button>`
-          }</span>
+          <span class="description-label-with-action">Description${block.schema.description.trim()
+        ? ''
+        : ` <button type="button" class="ghost inline-generate-description" data-action="generate-block-description" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Generate</button>`
+      }</span>
           <textarea
             rows="3"
             data-section-key="${deps.escapeAttr(sectionKey)}"

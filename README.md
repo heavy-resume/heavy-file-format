@@ -175,6 +175,7 @@ The output is static-server friendly:
 dist-hvy-viewer/
   document.hvy
   attachments.json
+  preview.json
   image/<encoded image filename>
 ```
 

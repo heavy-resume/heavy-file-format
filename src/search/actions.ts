@@ -521,11 +521,11 @@ function findBlockPath(block: VisualBlock, blockId: string): VisualBlock[] | nul
     return [block];
   }
   const children = [
-    ...block.schema.containerBlocks,
-    ...block.schema.componentListBlocks,
-    ...block.schema.expandableStubBlocks.children,
-    ...block.schema.expandableContentBlocks.children,
-    ...block.schema.gridItems.map((item) => item.block),
+    ...(block.schema.containerBlocks ?? []),
+    ...(block.schema.componentListBlocks ?? []),
+    ...(block.schema.expandableStubBlocks?.children ?? []),
+    ...(block.schema.expandableContentBlocks?.children ?? []),
+    ...(block.schema.gridItems ?? []).map((item) => item.block),
   ];
   for (const child of children) {
     const path = findBlockPath(child, blockId);
@@ -550,9 +550,9 @@ function isLayoutOnlyBlock(block: VisualBlock): boolean {
   return block.schema.component === 'grid'
     || block.schema.component === 'container'
     || block.schema.component === 'component-list'
-    || block.schema.gridItems.length > 0
-    || block.schema.containerBlocks.length > 0
-    || block.schema.componentListBlocks.length > 0;
+    || (block.schema.gridItems ?? []).length > 0
+    || (block.schema.containerBlocks ?? []).length > 0
+    || (block.schema.componentListBlocks ?? []).length > 0;
 }
 
 export function getEnabledSearchCategories(): SearchCategory[] {

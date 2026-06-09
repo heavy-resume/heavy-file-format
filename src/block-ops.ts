@@ -10,12 +10,13 @@ import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBl
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
-import { coerceGridColumns } from './grid-ops';
+import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
 import { recordHistory } from './history';
+import { routeNextUndoToDocument } from './edit-command-routing';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
@@ -25,6 +26,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
+const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -345,6 +347,23 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return true;
   }
 
+  if (field === 'block-grid-stack-width' && target instanceof HTMLInputElement) {
+    block.schema.gridStackWidth = target.value.trim().length === 0
+      ? DEFAULT_GRID_STACK_WIDTH
+      : coerceGridStackWidth(target.value);
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    return true;
+  }
+
+  if (field === 'block-grid-stack-never' && target instanceof HTMLInputElement) {
+    block.schema.gridStackWidth = target.checked ? 'never' : DEFAULT_GRID_STACK_WIDTH;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRefreshReaderPanels()();
+    getRenderApp()();
+    return true;
+  }
+
   if (field === 'block-grid-item-component' && target instanceof HTMLSelectElement) {
     if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
       return true;
@@ -461,7 +480,8 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const cellIndex = Number.parseInt(target.dataset.cellIndex ?? '', 10);
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
-      row.cells[cellIndex] = getInlineEditableMarkdown(target);
+      row.cells[cellIndex] = getInlineEditableMarkdown(target, { preserveLineBreaks: true });
+      syncTableRowEmptyClass(target);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -598,8 +618,20 @@ function getTextFillInRichEditorHtml(editor: HTMLElement): string {
   return clone.innerHTML;
 }
 
-function getInlineEditableMarkdown(target: HTMLElement): string {
-  return normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replace(/\s*\n+\s*/g, ' ').trim();
+function getInlineEditableMarkdown(target: HTMLElement, options: { preserveLineBreaks?: boolean } = {}): string {
+  const markdown = normalizeEditorMarkdownWhitespace(turndown.turndown(target)).replaceAll('\u200b', '');
+  return options.preserveLineBreaks
+    ? markdown.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').trim()
+    : markdown.replace(/\s*\n+\s*/g, ' ').trim();
+}
+
+function syncTableRowEmptyClass(target: HTMLElement): void {
+  const row = target.closest<HTMLElement>('.table-row-editor');
+  if (!row) {
+    return;
+  }
+  const cells = Array.from(row.querySelectorAll<HTMLElement>('[data-field="table-cell"]'));
+  row.classList.toggle('table-row-editor-empty', cells.every((cell) => getInlineEditableMarkdown(cell).trim().length === 0));
 }
 
 export function commitInlineTableEdit(target: HTMLElement): void {
@@ -1062,7 +1094,7 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   } else if (action === 'quote') {
     clearInlineTypingState(editable);
     const currentBlock = getSelectionBlockElement(editable);
-    formatSelectionBlock(editable, currentBlock?.tagName.toLowerCase() === 'blockquote' ? 'p' : 'blockquote');
+    formatSelectionBlock(editable, isSelectionInsideQuoteBlock(editable) || currentBlock?.tagName.toLowerCase() === 'blockquote' ? 'p' : 'blockquote');
   } else if (action === 'code-block') {
     clearInlineTypingState(editable);
     if (shouldApplyInlineCodeFromCodeButton(editable)) {
@@ -1083,6 +1115,14 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function isSelectionInsideQuoteBlock(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return false;
+  }
+  return Boolean(getAncestorElement(range.startContainer, editable, 'blockquote'));
 }
 
 function applyTextLineStyleToSelection(editable: HTMLElement, styleName: string): void {
@@ -1146,7 +1186,12 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
     : null;
   if (!styleName) {
     if (current) {
+      const emptyStyledBlock = getTextLineStyleContentBlock(current);
       unwrapTextLineStyleBlock(current);
+      if (emptyStyledBlock && isEffectivelyEmptyBlock(emptyStyledBlock)) {
+        emptyStyledBlock.replaceChildren(editable.ownerDocument.createElement('br'));
+        placeCaretAtStart(emptyStyledBlock);
+      }
     }
     return;
   }
@@ -1164,10 +1209,18 @@ function setTextLineStyleBlock(block: HTMLElement, editable: HTMLElement, styleN
     return;
   }
   const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
+  const shouldPlaceCaretInEmptyStyledBlock = Boolean(range?.collapsed && isEffectivelyEmptyBlock(block));
+  if (shouldPlaceCaretInEmptyStyledBlock) {
+    block.replaceChildren();
+  }
   block.replaceWith(wrapper);
   wrapper.appendChild(block);
   if (selectionOffsets && selectionOffsets.start !== null && selectionOffsets.end !== null) {
-    restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end);
+    if (!restoreSelectionByTextOffsets(block, selectionOffsets.start, selectionOffsets.end) && shouldPlaceCaretInEmptyStyledBlock) {
+      placeCaretAtStart(block);
+    }
+  } else if (shouldPlaceCaretInEmptyStyledBlock) {
+    placeCaretAtStart(block);
   }
 }
 
@@ -1202,6 +1255,12 @@ function unwrapTextLineStyleBlock(wrapper: HTMLElement): void {
     parent.insertBefore(wrapper.firstChild, wrapper);
   }
   wrapper.remove();
+}
+
+function getTextLineStyleContentBlock(wrapper: HTMLElement): HTMLElement | null {
+  return Array.from(wrapper.children).find((child): child is HTMLElement =>
+    child instanceof HTMLElement && !child.matches('.hvy-text-line-style-marker')
+  ) ?? null;
 }
 
 function getDirectEditableChild(element: HTMLElement, editable: HTMLElement): HTMLElement | null {
@@ -1435,6 +1494,10 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
     unwrapInlineElement(existing);
     return;
   }
+  if (wrapSelectedEditableBlocksInline(editable, range, tagName, href)) {
+    setPendingInlineAction(editable, action, false);
+    return;
+  }
   const wrapper = document.createElement(tagName);
   if (tagName === 'a' && href) {
     wrapper.setAttribute('href', href);
@@ -1447,6 +1510,61 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
   nextRange.selectNodeContents(wrapper);
   selection?.addRange(nextRange);
   setPendingInlineAction(editable, action, false);
+}
+
+function wrapSelectedEditableBlocksInline(editable: HTMLElement, range: Range, tagName: InlineRichTag, href?: string): boolean {
+  const startBlock = getBlockElementContaining(editable, range.startContainer);
+  const endBlock = getBlockElementContaining(editable, range.endContainer);
+  if (!startBlock || !endBlock || startBlock === editable || endBlock === editable || startBlock === endBlock) {
+    return false;
+  }
+  const targets = getSelectedInlineFormattingBlocks(editable, range);
+  if (targets.length < 2) {
+    return false;
+  }
+  const wrappers: HTMLElement[] = [];
+  for (const target of targets) {
+    const targetRange = createRangeForSelectedBlock(target, range);
+    if (!targetRange || targetRange.toString().length === 0) {
+      continue;
+    }
+    const wrapper = document.createElement(tagName);
+    if (tagName === 'a' && href) {
+      wrapper.setAttribute('href', href);
+    }
+    wrapper.appendChild(targetRange.extractContents());
+    targetRange.insertNode(wrapper);
+    wrappers.push(wrapper);
+  }
+  if (wrappers.length === 0) {
+    return false;
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.setStartBefore(wrappers[0]);
+  nextRange.setEndAfter(wrappers[wrappers.length - 1]);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function getSelectedInlineFormattingBlocks(editable: HTMLElement, range: Range): HTMLElement[] {
+  const candidates = Array.from(editable.querySelectorAll<HTMLElement>('p, div, h1, h2, h3, h4, h5, h6, blockquote, li'))
+    .filter((element) => !element.closest('pre') && range.intersectsNode(element));
+  return candidates.filter((element) => !candidates.some((candidate) => candidate !== element && element.contains(candidate)));
+}
+
+function createRangeForSelectedBlock(block: HTMLElement, selectionRange: Range): Range | null {
+  const range = document.createRange();
+  range.selectNodeContents(block);
+  if (block.contains(selectionRange.startContainer)) {
+    range.setStart(selectionRange.startContainer, selectionRange.startOffset);
+  }
+  if (block.contains(selectionRange.endContainer)) {
+    range.setEnd(selectionRange.endContainer, selectionRange.endOffset);
+  }
+  return range.collapsed ? null : range;
 }
 
 type InlineRichAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'link' | 'code';
@@ -1609,6 +1727,9 @@ function moveCollapsedCaretOutsideInline(element: HTMLElement, range: Range): vo
 }
 
 function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
+  if (formatSelectedEditableBlocks(editable, tagName)) {
+    return;
+  }
   const block = getSelectionBlockElement(editable);
   if (!block || block.tagName === 'LI' || block.tagName === 'PRE') {
     return;
@@ -1666,6 +1787,136 @@ function formatSelectionBlock(editable: HTMLElement, tagName: string): void {
     placeCaretInside(replacement);
     refocusEditablePreservingSelection(editable);
   }
+}
+
+function formatSelectedEditableBlocks(editable: HTMLElement, tagName: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed) {
+    return false;
+  }
+  const targets = getSelectedEditableFormatBlocks(editable, range);
+  if (targets.length < 2) {
+    return false;
+  }
+  const shouldUnquote = tagName === 'blockquote' && targets.every((target) => target.tagName === 'BLOCKQUOTE');
+  if (tagName === 'blockquote' && !shouldUnquote) {
+    return wrapSelectedEditableBlocksInQuote(targets, editable);
+  }
+  const formatted: HTMLElement[] = [];
+  for (const target of targets) {
+    if (target.tagName === 'PRE') {
+      continue;
+    }
+    if (shouldUnquote || tagName === 'p') {
+      formatted.push(replaceFormattedBlockWithParagraph(target));
+      continue;
+    }
+    if (target.tagName.toLowerCase() === tagName) {
+      formatted.push(target);
+      continue;
+    }
+    const replacement = document.createElement(tagName);
+    while (target.firstChild) {
+      replacement.appendChild(target.firstChild);
+    }
+    if (!replacement.firstChild) {
+      replacement.appendChild(document.createTextNode(tagName === 'p' ? '' : '\u200b'));
+    }
+    target.replaceWith(replacement);
+    formatted.push(replacement);
+  }
+  if (formatted.length === 0) {
+    return false;
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.setStartBefore(formatted[0]);
+  nextRange.setEndAfter(formatted[formatted.length - 1]);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function wrapSelectedEditableBlocksInQuote(blocks: HTMLElement[], editable: HTMLElement): boolean {
+  const firstBlock = blocks[0];
+  if (!firstBlock?.parentNode) {
+    return false;
+  }
+  const quote = document.createElement('blockquote');
+  firstBlock.parentNode.insertBefore(quote, firstBlock);
+  for (const block of blocks) {
+    quote.appendChild(block);
+  }
+  if (!quote.firstChild) {
+    quote.appendChild(document.createTextNode('\u200b'));
+  }
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(quote);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  refocusEditablePreservingSelection(editable);
+  return true;
+}
+
+function getSelectedEditableFormatBlocks(editable: HTMLElement, range: Range): HTMLElement[] {
+  const selection = window.getSelection();
+  const anchorChild = selection?.anchorNode ? getEditableDirectChildForNode(editable, selection.anchorNode) : null;
+  const focusChild = selection?.focusNode ? getEditableDirectChildForNode(editable, selection.focusNode) : null;
+  const startChild = anchorChild ?? getEditableDirectChildForNode(editable, range.startContainer);
+  const endChild = focusChild ?? getEditableDirectChildForNode(editable, range.endContainer);
+  if (startChild && endChild) {
+    const children = Array.from(editable.children).filter((child): child is HTMLElement =>
+      child instanceof HTMLElement && !child.matches('pre')
+    );
+    const startIndex = children.indexOf(startChild);
+    const endIndex = children.indexOf(endChild);
+    if (startIndex >= 0 && endIndex >= 0) {
+      return children.slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1);
+    }
+  }
+  return Array.from(editable.children).filter((child): child is HTMLElement =>
+    child instanceof HTMLElement && range.intersectsNode(child) && !child.matches('pre')
+  );
+}
+
+function getEditableDirectChildForNode(editable: HTMLElement, node: Node): HTMLElement | null {
+  let current: Node | null = node;
+  while (current && current.parentNode !== editable) {
+    current = current.parentNode;
+  }
+  return current instanceof HTMLElement && current.parentNode === editable ? current : null;
+}
+
+function replaceFormattedBlockWithParagraph(block: HTMLElement): HTMLElement {
+  if (block.tagName === 'BLOCKQUOTE') {
+    const parent = block.parentNode;
+    const inserted: HTMLElement[] = [];
+    while (block.firstChild && parent) {
+      const child = block.firstChild;
+      if (child instanceof HTMLElement && /^(P|DIV|UL|OL|H[1-6])$/.test(child.tagName)) {
+        parent.insertBefore(child, block);
+        inserted.push(child);
+      } else {
+        const paragraph = document.createElement('p');
+        paragraph.appendChild(child);
+        parent.insertBefore(paragraph, block);
+        inserted.push(paragraph);
+      }
+    }
+    block.remove();
+    return inserted[0] ?? document.createElement('p');
+  }
+  const paragraph = document.createElement('p');
+  while (block.firstChild) {
+    paragraph.appendChild(block.firstChild);
+  }
+  if (!paragraph.firstChild) {
+    paragraph.appendChild(document.createElement('br'));
+  }
+  block.replaceWith(paragraph);
+  return paragraph;
 }
 
 function unwrapBlockInsideListItem(block: HTMLElement, editable: HTMLElement): void {
@@ -1921,8 +2172,40 @@ function getSelectedRichBlockStyle(editable: HTMLElement): string {
   return 'paragraph';
 }
 
+function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable || !isEffectivelyEmptyBlock(block)) {
+    return false;
+  }
+  const styled = block.closest<HTMLElement>('[data-hvy-text-line-style]');
+  if (!styled || !editable.contains(styled)) {
+    return false;
+  }
+  const previous = styled.previousElementSibling;
+  const previousBlock = previous instanceof HTMLElement && previous.matches('[data-hvy-text-line-style]')
+    ? getTextLineStyleContentBlock(previous)
+    : previous instanceof HTMLElement
+      ? previous
+      : null;
+  if (!previousBlock || isEffectivelyEmptyBlock(previousBlock)) {
+    return false;
+  }
+  placeCaretAtEnd(previousBlock);
+  return true;
+}
+
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
   if (event.key === 'ArrowRight' && exitInlineCodeAtEnd(editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (event.key === 'ArrowUp' && moveCaretFromEmptyTextLineStyleToPreviousLine(editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
     return true;
@@ -2033,7 +2316,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
       return true;
     }
 
-    if (exitTextLineStyleAtSelection(editable)) {
+    if (continueTextLineStyleAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
       updateRichToolbarState(editable);
@@ -2073,6 +2356,31 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromPasteAsQuotation') {
+    const dataTransfer = event.dataTransfer;
+    if (!dataTransfer) {
+      return false;
+    }
+    const html = dataTransfer.getData(HVY_RICH_CLIPBOARD_TYPE) ||
+      (event.inputType === 'insertFromPasteAsQuotation' ? '' : sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html')));
+    if (html) {
+      insertHtmlAtEditableSelection(editable, html);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+      updateRichToolbarState(editable);
+      return true;
+    }
+    const text = dataTransfer.getData('text/plain');
+    if (text) {
+      insertPlainTextAtEditableSelection(editable, text);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+      updateRichToolbarState(editable);
+      return true;
+    }
+    return false;
+  }
+
   if (event.inputType === 'deleteByCut' && isSelectionInsideEditableList(editable)) {
     scheduleEmptyListItemPruneAfterDeletion(editable, { pruneActiveItem: true });
     return false;
@@ -2148,6 +2456,167 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;
+}
+
+export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElement): boolean {
+  const clipboard = event.clipboardData;
+  const selection = window.getSelection();
+  if (!clipboard || !selection?.rangeCount) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  if (range.collapsed || !isRangeInsideElement(editable, range)) {
+    return false;
+  }
+  const container = document.createElement('div');
+  container.appendChild(range.cloneContents());
+  const html = container.innerHTML;
+  if (!html) {
+    return false;
+  }
+  clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
+  clipboard.setData('text/html', html);
+  clipboard.setData('text/plain', range.toString());
+  event.preventDefault();
+  return true;
+}
+
+export async function pastePlainTextIntoRichEditor(editable: HTMLElement): Promise<boolean> {
+  if (!navigator.clipboard?.readText) {
+    return false;
+  }
+  const text = await navigator.clipboard.readText();
+  if (!text) {
+    return false;
+  }
+  insertPlainTextAtEditableSelection(editable, text);
+  editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  updateRichToolbarState(editable);
+  return true;
+}
+
+function sanitizeExternalRichPasteHtml(html: string): string {
+  if (!html) {
+    return '';
+  }
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    stripExternalPastePresentation(element);
+  });
+  return template.innerHTML;
+}
+
+function stripExternalPastePresentation(element: HTMLElement): void {
+  element.removeAttribute('color');
+  element.removeAttribute('bgcolor');
+  element.removeAttribute('face');
+  element.removeAttribute('size');
+  if (!element.hasAttribute('style')) {
+    return;
+  }
+  const preservedDeclarations = (element.getAttribute('style') ?? '')
+    .split(';')
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => declaration && !isExternalPastePresentationDeclaration(declaration));
+  if (preservedDeclarations.length > 0) {
+    element.setAttribute('style', preservedDeclarations.join('; '));
+  } else {
+    element.removeAttribute('style');
+  }
+}
+
+function isExternalPastePresentationDeclaration(declaration: string): boolean {
+  const propertyName = declaration.split(':', 1)[0]?.trim().toLowerCase() ?? '';
+  return propertyName === 'color' ||
+    propertyName === 'background' ||
+    propertyName === 'background-color' ||
+    propertyName === 'font' ||
+    propertyName === 'font-family' ||
+    propertyName === 'font-size' ||
+    propertyName === 'text-decoration-color' ||
+    propertyName === 'border-color' ||
+    propertyName.endsWith('-color');
+}
+
+function insertHtmlAtEditableSelection(editable: HTMLElement, html: string): void {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    editable.insertAdjacentHTML('beforeend', html);
+    placeCaretAtEnd(editable);
+    return;
+  }
+  const fragment = range.createContextualFragment(html);
+  if (insertListItemFragmentAtEditableListSelection(editable, range, fragment)) {
+    return;
+  }
+  range.deleteContents();
+  placeCaretAfterInsertedFragment(range, fragment);
+}
+
+function insertListItemFragmentAtEditableListSelection(editable: HTMLElement, range: Range, fragment: DocumentFragment): boolean {
+  const selectedItem = getSelectionListItem(editable);
+  if (!selectedItem || !isNodeInsideElement(selectedItem, range.commonAncestorContainer)) {
+    return false;
+  }
+  const items = getTopLevelPastedListItems(fragment);
+  if (!items || items.length === 0) {
+    return false;
+  }
+  range.deleteContents();
+  let insertedItem: HTMLLIElement | null = null;
+  let referenceItem = selectedItem;
+  items.forEach((item) => {
+    referenceItem.after(item);
+    referenceItem = item;
+    insertedItem = item;
+  });
+  normalizeEditableListDom(editable);
+  if (insertedItem) {
+    placeCaretAtEnd(insertedItem);
+  }
+  return true;
+}
+
+function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[] | null {
+  const items: HTMLLIElement[] = [];
+  const removableNodes: Node[] = [];
+  for (const child of Array.from(fragment.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE && (child.textContent ?? '').trim().length === 0) {
+      removableNodes.push(child);
+      continue;
+    }
+    if (!(child instanceof HTMLLIElement)) {
+      return null;
+    }
+    if (isEffectivelyEmptyContinuationListItem(child)) {
+      removableNodes.push(child);
+      continue;
+    }
+    items.push(child);
+  }
+  removableNodes.forEach((node) => node.parentNode?.removeChild(node));
+  return items;
+}
+
+function insertPlainTextAtEditableSelection(editable: HTMLElement, text: string): void {
+  const html = escapeHtml(text).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
+  insertHtmlAtEditableSelection(editable, html || '<br>');
+}
+
+function placeCaretAfterInsertedFragment(range: Range, fragment: DocumentFragment): void {
+  const lastChild = fragment.lastChild;
+  range.insertNode(fragment);
+  const nextRange = document.createRange();
+  if (lastChild) {
+    nextRange.setStartAfter(lastChild);
+  } else {
+    nextRange.setStart(range.startContainer, range.startOffset);
+  }
+  nextRange.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
 }
 
 function isSelectionInsideEditableList(editable: HTMLElement): boolean {
@@ -2230,7 +2699,13 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
 
   const block = getSelectionBlockElement(editable);
   const rootInlineNodes = block === editable ? getSelectedEditableRootInlineRun(editable) : [];
-  if (!block || (block === editable && rootInlineNodes.length === 0) || block.tagName === 'PRE') {
+  if (!block || block.tagName === 'PRE') {
+    return;
+  }
+  if (block === editable && rootInlineNodes.length === 0) {
+    if (isEffectivelyEmptyBlock(editable)) {
+      replaceEmptyEditableWithList(editable, tagName);
+    }
     return;
   }
   if (rootInlineNodes.length > 0) {
@@ -2269,6 +2744,16 @@ function toggleSelectionList(editable: HTMLElement, tagName: EditableListTagName
     return;
   }
   placeCaretAtEnd(listItem);
+}
+
+function replaceEmptyEditableWithList(editable: HTMLElement, tagName: EditableListTagName): void {
+  const list = document.createElement(tagName);
+  const listItem = document.createElement('li');
+  listItem.appendChild(document.createTextNode('\u200b'));
+  list.appendChild(listItem);
+  editable.replaceChildren(list);
+  placeCaretAtEnd(listItem);
+  refocusEditablePreservingSelection(editable);
 }
 
 function getSelectedEditableRootInlineRun(editable: HTMLElement): Node[] {
@@ -2994,13 +3479,13 @@ function exitInlineFormattingAtParagraphEnd(editable: HTMLElement): boolean {
   return true;
 }
 
-function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
+function continueTextLineStyleAtSelection(editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range?.collapsed) {
     return false;
   }
   const styled = getAncestorElement(range.startContainer, editable, '[data-hvy-text-line-style]');
-  if (!styled || styled === editable || !isCollapsedSelectionAtEndOf(styled)) {
+  if (!styled || styled === editable) {
     return false;
   }
   const styleName = styled.dataset.hvyTextLineStyle ?? '';
@@ -3008,12 +3493,42 @@ function exitTextLineStyleAtSelection(editable: HTMLElement): boolean {
     return false;
   }
   const wrapper = createTextLineStyleWrapper(styleName, editable.ownerDocument);
-  const paragraph = document.createElement('p');
-  paragraph.appendChild(document.createTextNode('\u200b'));
-  wrapper.appendChild(paragraph);
+  const block = getSelectionBlockElement(editable);
+  const currentBlock = block && block !== editable && styled.contains(block) && !block.matches('.hvy-text-line-style-marker')
+    ? block
+    : null;
+  const nextBlock = currentBlock
+    ? currentBlock.cloneNode(false) as HTMLElement
+    : document.createElement('p');
+  if (currentBlock) {
+    const tailRange = document.createRange();
+    tailRange.selectNodeContents(currentBlock);
+    tailRange.setStart(range.startContainer, range.startOffset);
+    nextBlock.appendChild(tailRange.extractContents());
+    let sibling = currentBlock.nextSibling;
+    while (sibling) {
+      const nextSibling = sibling.nextSibling;
+      nextBlock.appendChild(sibling);
+      sibling = nextSibling;
+    }
+    ensureTextLineStyleBlockHasCaretContent(currentBlock);
+  }
+  ensureTextLineStyleBlockHasCaretContent(nextBlock);
+  wrapper.appendChild(nextBlock);
   styled.parentNode?.insertBefore(wrapper, styled.nextSibling);
-  placeCaretAtEnd(paragraph);
+  if (isEffectivelyEmptyBlock(nextBlock)) {
+    placeCaretAtStart(nextBlock);
+  } else {
+    placeCaretInside(nextBlock);
+  }
   return true;
+}
+
+function ensureTextLineStyleBlockHasCaretContent(block: HTMLElement): void {
+  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
+    return;
+  }
+  block.replaceChildren();
 }
 
 function exitEmptyQuoteAtSelection(editable: HTMLElement): boolean {
@@ -3193,9 +3708,11 @@ function clearFullEditableSelection(editable: HTMLElement): boolean {
     return false;
   }
   const range = selection.getRangeAt(0);
+  const coversContents = doesRangeCoverElementContents(editable, range);
+  const coversOnlyText = editable.children.length <= 1 && doesRangeCoverElementText(editable, range);
   if (
     !isRangeInsideElement(editable, range) ||
-    (!doesRangeCoverElementContents(editable, range) && !doesRangeCoverElementText(editable, range))
+    (!coversContents && !coversOnlyText)
   ) {
     return false;
   }

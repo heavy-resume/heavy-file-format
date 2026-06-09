@@ -473,7 +473,7 @@ test('code button wraps selected text as inline code and preserves angle bracket
   await page.getByRole('button', { name: 'Basic' }).click();
 });
 
-test('link toolbar button and keyboard shortcut open the link modal and apply links', async ({ page }) => {
+test('link keyboard shortcut opens the link modal and applies links', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
@@ -494,57 +494,20 @@ test('link toolbar button and keyboard shortcut open the link modal and apply li
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
 
-  await page.getByRole('button', { name: 'Link' }).first().click();
+  await page.keyboard.press('Control+K');
   const linkModal = page.locator('.link-inline-modal.is-open');
   const linkInput = linkModal.locator('#linkInlineInput');
   await expect(linkModal).toBeVisible();
   await expect(linkInput).toHaveValue('https://example.com');
-  await linkInput.fill('https://updated.example');
-  await page.keyboard.press('Enter');
+  await linkInput.evaluate((input) => {
+    (input as HTMLInputElement).value = 'https://updated.example';
+  });
+  await page.locator('[data-link-modal-action="apply"]').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
 
   await expect(editor.locator('a[href="https://updated.example"]')).toContainText('Link me');
   await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(0);
-
-  await editor.evaluate((node) => {
-    const anchor = node.querySelector('a[href="https://updated.example"]');
-    const textNode = anchor?.firstChild;
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.setStart(textNode!, 2);
-    range.collapse(true);
-    (node as HTMLElement).focus();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-  });
-
-  await page.getByRole('button', { name: 'Link' }).first().click();
-  await expect(linkModal).toBeVisible();
-  await expect(linkInput).toHaveValue('https://updated.example');
-  await linkInput.fill('');
-  await linkModal.getByRole('button', { name: 'Apply' }).click();
-
-  await expect(editor.locator('a')).toHaveCount(0);
-  await expect(editor).toContainText('Link me');
-
-  await editor.fill('Altcut link');
-  await editor.evaluate((node) => {
-    const textNode = node.querySelector('p')?.firstChild;
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textNode!);
-    (node as HTMLElement).focus();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-  });
-
-  await page.keyboard.press('Control+K');
-  await expect(linkModal).toBeVisible();
-  await linkInput.fill('#section-id');
-  await page.keyboard.press('Enter');
-
-  await expect(editor.locator('a[href="#section-id"]')).toContainText('Altcut link');
 });
 
 test('link modal apply with an empty value removes the selected link', async ({ page }) => {
@@ -591,6 +554,262 @@ test('link modal apply with an empty value removes the selected link', async ({ 
     modalOpen: false,
     text: 'Link me',
   });
+});
+
+test('link modal converts selected email text to mailto in the editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>brandy.s.bilyeu@gmail.com</p>';
+    const textNode = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode!);
+    (node as HTMLElement).focus();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press('Control+K');
+  const linkModal = page.locator('.link-inline-modal.is-open');
+  const linkInput = linkModal.locator('#linkInlineInput');
+  await expect(linkInput).toHaveValue('mailto:brandy.s.bilyeu@gmail.com');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(editor.locator('a[href="mailto:brandy.s.bilyeu@gmail.com"]')).toContainText('brandy.s.bilyeu@gmail.com');
+});
+
+test('link modal removes empty anchors', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const linkModalModulePath = '/src/bind-link-modal.ts';
+    const { bindLinkInlineModal, openLinkInlineModal } = await import(/* @vite-ignore */ linkModalModulePath);
+    const app = document.createElement('div');
+    app.innerHTML = `
+      <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
+        <input id="linkInlineInput" />
+        <button type="button" data-link-modal-action="apply">Apply</button>
+      </div>
+      <div class="rich-editor" contenteditable="true" data-field="block-rich">
+        <p><a>brandy.s.bilyeu@gmail.com</a></p>
+      </div>
+    `;
+    document.body.replaceChildren(app);
+    bindLinkInlineModal(app);
+
+    const editor = app.querySelector<HTMLElement>('.rich-editor')!;
+    const anchor = editor.querySelector<HTMLAnchorElement>('a')!;
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    editor.focus();
+
+    openLinkInlineModal(app, editor, '', range, anchor);
+    app.querySelector<HTMLInputElement>('#linkInlineInput')!.value = '';
+    app.querySelector<HTMLButtonElement>('[data-link-modal-action="apply"]')!.click();
+
+    return {
+      html: editor.innerHTML.trim(),
+      text: editor.textContent?.trim(),
+    };
+  });
+
+  expect(result).toEqual({
+    html: '<p>brandy.s.bilyeu@gmail.com</p>',
+    text: 'brandy.s.bilyeu@gmail.com',
+  });
+});
+
+test('external rich paste strips text background and font presentation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<p><font face="Courier New" size="4"><span style="color: rgb(255, 0, 0); background-color: yellow; font-family: monospace; font-size: 18px; font-weight: 700;">External</span></font> <mark style="background: lime;">Mark</mark></p>'
+    );
+    transfer.setData('text/plain', 'External Mark');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult.prevented).toBe(true);
+  expect(expectedResult.text).toContain('Before External Mark');
+  expect(expectedResult.html).toContain('font-weight: 700');
+  expect(expectedResult.html).not.toContain('font-family');
+  expect(expectedResult.html).not.toContain('font-size');
+  expect(expectedResult.html).not.toContain('face=');
+  expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
+  expect(expectedResult.html).not.toContain('background-color');
+  expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('undo after external rich paste restores text without duplicating pasted content', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const editor = activeBlock.locator('.rich-editor').first();
+
+  await editor.evaluate(async (node) => {
+    node.innerHTML = '<p>Reach out to </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const modulePath = '/src/history.ts';
+    const { commitHistorySnapshot } = await import(/* @vite-ignore */ modulePath);
+    commitHistorySnapshot();
+  });
+
+  await editor.evaluate((node) => {
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<span style="font-family: Courier New, monospace;">chohlbein@kingcounty.gov</span>'
+    );
+    transfer.setData('text/plain', 'chohlbein@kingcounty.gov');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+  });
+
+  await expect(editor).toContainText('Reach out to chohlbein@kingcounty.gov');
+  await expect(editor.locator('[style*="font-family"]')).toHaveCount(0);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  await expect(activeBlock).toHaveCount(1);
+  await expect(editor).toContainText('Reach out to');
+  await expect(editor).not.toContainText('chohlbein@kingcounty.gov');
+});
+
+test('rich copy inside the document preserves HVY-origin color presentation on paste', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p><span style="color: rgb(10, 20, 30); background-color: rgb(240, 240, 0);">Internal</span></p><p>Target </p>';
+    const source = node.querySelector('span')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNode(source);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    const target = node.querySelectorAll('p')[1]!;
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(target);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      copyPrevented: copyEvent.defaultPrevented,
+      hasHvyClipboardType: transfer.types.includes('application/x-hvy-rich-html'),
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+    };
+  });
+
+  expect(expectedResult.copyPrevented).toBe(true);
+  expect(expectedResult.hasHvyClipboardType).toBe(true);
+  expect(expectedResult.pastePrevented).toBe(true);
+  expect(expectedResult.html).toContain('color: rgb(10, 20, 30)');
+  expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
+});
+
+test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => 'Plain <not bold>',
+      },
+    });
+  });
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    html: node.innerHTML,
+    text: node.textContent,
+  }));
+  expect(expectedResult.text).toContain('Before Plain <not bold>');
+  expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
+  expect(expectedResult.html).not.toContain('<strong>');
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

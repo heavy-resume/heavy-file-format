@@ -35,6 +35,18 @@ export function arrowDownIcon(): string {
   </svg>`;
 }
 
+export function arrowLeftIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-arrow-left" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M19 12H5M12 5l-7 7 7 7" />
+  </svg>`;
+}
+
+export function arrowRightIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-arrow-right" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </svg>`;
+}
+
 export function cameraIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-camera" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M9 5l1.5-2h3L15 5h3.5A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5H9Z" />

@@ -26,8 +26,10 @@ import {
   writeHeadingStylesToMeta,
   type HeadingStyleName,
 } from '../../heading-styles';
+import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
+import type { JsonObject } from '../../hvy/types';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -112,6 +114,42 @@ export function bindInputBlock(app: HTMLElement): void {
       if (editorTreeBody) {
         editorTreeBody.style.maxWidth = target.value.trim();
       }
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if ((field === 'meta-image-attachment-max-width' || field === 'meta-image-attachment-max-height') && target instanceof HTMLInputElement) {
+      recordHistory('meta:image-attachment-max-dimensions');
+      state.imageAttachmentReductionStatus = null;
+      const existing = state.document.meta.image_attachment_max_dimensions;
+      const dimensions = existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...existing } as JsonObject
+        : {};
+      const key = field === 'meta-image-attachment-max-width' ? 'width' : 'height';
+      const value = Number(target.value);
+      if (Number.isFinite(value) && value > 0) {
+        dimensions[key] = Math.floor(value);
+      } else {
+        delete dimensions[key];
+      }
+      if (typeof dimensions.width === 'number' || typeof dimensions.height === 'number') {
+        state.document.meta.image_attachment_max_dimensions = dimensions;
+      } else {
+        delete state.document.meta.image_attachment_max_dimensions;
+      }
+      return;
+    }
+
+    if (field === 'meta-section-contained-default' && target instanceof HTMLInputElement) {
+      recordHistory('meta:section-contained-default');
+      const existingDefaults = state.document.meta.section_defaults;
+      const sectionDefaults = existingDefaults && typeof existingDefaults === 'object' && !Array.isArray(existingDefaults)
+        ? existingDefaults as JsonObject
+        : {};
+      state.document.meta.section_defaults = {
+        ...sectionDefaults,
+        contained: target.checked,
+      };
       getRefreshReaderPanels()();
       return;
     }
@@ -516,7 +554,7 @@ export function bindInputBlock(app: HTMLElement): void {
     if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
       const key = target.dataset.sectionKey;
       if (key) {
-        state.addComponentBySection[`empty-heading:${key}`] = target.value;
+        rememberEmptySectionHeadingLevel(key, target.value);
       }
       return;
     }
@@ -539,6 +577,15 @@ export function bindInputBlock(app: HTMLElement): void {
       if (!block) return;
       recordHistory(`image-alt:${block.id}`);
       block.schema.imageAlt = target.value;
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'image-caption' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      const block = resolveBlockContext(target)?.block ?? null;
+      if (!block) return;
+      recordHistory(`image-caption:${block.id}`);
+      block.schema.caption = target.value;
       getRefreshReaderPanels()();
       return;
     }

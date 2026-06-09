@@ -2,14 +2,15 @@ import './carousel.css';
 
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { CarouselImage, VisualBlock } from '../../types';
-import { getImageAttachmentId, inferImageMediaType, listImageFilenames, setAttachment } from '../../../attachments';
+import { getImageAttachment, inferImageMediaType, listImageFilenames } from '../../../attachments';
 import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
-import { arrowDownIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
-import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker } from '../image/image';
-import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
+import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
+import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, storeImageAttachment } from '../image/image';
+import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
+import { downloadBlob } from '../../../utils';
 
 interface CarouselRuntimeState {
   index: number;
@@ -25,18 +26,27 @@ function normalizeDuration(value: number): number {
 }
 
 function renderSlideImage(image: CarouselImage, helpers: ComponentRenderHelpers): string {
-  const url = getImageBlobUrl(image.imageFile);
-  if (!url) {
+  const alt = image.imageAlt || image.caption || image.imageFile;
+  const rendered = renderImageElement({
+    filename: image.imageFile,
+    alt,
+    helpers,
+    lazy: true,
+    lazyCarousel: true,
+  });
+  if (!rendered) {
     return `<div class="hvy-carousel-missing">Missing attachment: ${helpers.escapeHtml(image.imageFile)}</div>`;
   }
-  const alt = image.imageAlt || image.caption || image.imageFile;
-  return `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}">`;
+  return rendered;
 }
 
 function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers): string {
   if (block.schema.carouselImages.length === 0) {
     return '<div class="hvy-carousel-empty">No carousel images.</div>';
   }
+  const frameClass = block.schema.carouselShowFrame
+    ? 'hvy-carousel-reader-frame hvy-carousel-reader-frame-chrome'
+    : 'hvy-carousel-reader-frame';
   const slides = block.schema.carouselImages
     .map((image, index) => {
       const caption = image.caption
@@ -46,15 +56,15 @@ function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers):
     })
     .join('');
   const controls = block.schema.carouselShowControls
-    ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">‹</button>
-       <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">›</button>`
+    ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">${arrowLeftIcon()}</button>
+       <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">${arrowRightIcon()}</button>`
     : '';
   const indicators = block.schema.carouselShowIndicators
     ? `<div class="hvy-carousel-indicators">${block.schema.carouselImages
         .map((_image, index) => `<button type="button" class="hvy-carousel-indicator" data-carousel-index="${index}" aria-label="Show image ${index + 1}" aria-pressed="false"></button>`)
         .join('')}</div>`
     : '';
-  return `<div class="hvy-carousel-reader-frame" data-carousel-reader="true" data-carousel-duration-ms="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}" data-carousel-pause-on-hover="${block.schema.carouselPauseOnHover ? 'true' : 'false'}">
+  return `<div class="${frameClass}" data-carousel-reader="true" data-carousel-duration-ms="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}" data-carousel-pause-on-hover="${block.schema.carouselPauseOnHover ? 'true' : 'false'}">
     <div class="hvy-carousel-track">${slides}</div>${controls}
   </div>${indicators}`;
 }
@@ -67,10 +77,11 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
   return `<div class="hvy-carousel hvy-carousel-editor" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">
     ${renderReaderFrame(block, helpers)}
     <div class="hvy-carousel-editor-controls">
-      <label><span>Duration</span><input type="number" min="800" max="60000" step="100" data-field="carousel-duration-ms" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" value="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}"></label>
+      <label class="hvy-carousel-duration-field"><span>Duration</span><input type="number" min="800" max="60000" step="100" data-field="carousel-duration-ms" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" value="${helpers.escapeAttr(String(block.schema.carouselDurationMs))}"></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-pause-on-hover" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselPauseOnHover ? ' checked' : ''}><span>Pause on hover</span></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-controls" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowControls ? ' checked' : ''}><span>Controls</span></label>
       <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-indicators" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowIndicators ? ' checked' : ''}><span>Indicators</span></label>
+      <label class="hvy-carousel-toggle"><input type="checkbox" data-field="carousel-show-frame" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}"${block.schema.carouselShowFrame ? ' checked' : ''}><span>Frame</span></label>
     </div>
     <div class="hvy-carousel-upload-panel">
       <label class="hvy-carousel-pick-label">
@@ -109,7 +120,7 @@ function renderEditorImageRow(
     ? `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
     : `<span>Missing</span>`;
   const download = url
-    ? `<a class="hvy-carousel-download" href="${helpers.escapeAttr(url)}" download="${helpers.escapeAttr(image.imageFile)}">Download</a>`
+    ? `<button type="button" class="hvy-carousel-download" data-action="carousel-download" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">Download</button>`
     : '';
   const deleteImage = getImageAttachmentReferenceCount(image.imageFile) === 1;
   return `<div class="hvy-carousel-image-row">
@@ -151,6 +162,7 @@ export function initializeCarouselReaders(root: ParentNode): void {
     }
     const stateForFrame: CarouselRuntimeState = { index: 0, pausedUntil: 0, timer: null, observer: null };
     runtimeState.set(frame, stateForFrame);
+    hydrateCarouselImagesAround(frame, 0);
     updateActiveIndicator(frame, 0);
     const start = () => {
       if (stateForFrame.timer !== null) {
@@ -205,9 +217,41 @@ function handleCarouselInput(event: Event): void {
     if (!image) return;
     if (field === 'carousel-caption') image.caption = target.value;
     if (field === 'carousel-alt') image.imageAlt = target.value;
+    syncCarouselEditorTextInput(target, image, index, field);
   }
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+  if (target.closest('.hvy-ai-reader-surface')) {
+    return;
+  }
   getRefreshReaderPanels()();
+}
+
+function syncCarouselEditorTextInput(target: HTMLInputElement, image: CarouselImage, index: number, field: string): void {
+  const editor = target.closest<HTMLElement>('.hvy-carousel-editor');
+  const slide = editor?.querySelector<HTMLElement>(`.hvy-carousel-slide[data-carousel-slide="${index}"]`);
+  if (!slide) {
+    return;
+  }
+  if (field === 'carousel-caption') {
+    let caption = slide.querySelector<HTMLElement>('.hvy-carousel-caption');
+    if (image.caption.trim().length === 0) {
+      caption?.remove();
+    } else {
+      if (!caption) {
+        caption = document.createElement('div');
+        caption.className = 'hvy-carousel-caption';
+        slide.append(caption);
+      }
+      caption.textContent = image.caption;
+    }
+  }
+  if (field === 'carousel-alt' || field === 'carousel-caption') {
+    const alt = image.imageAlt || image.caption || image.imageFile;
+    slide.querySelector<HTMLImageElement>('img')?.setAttribute('alt', alt);
+    target.closest<HTMLElement>('.hvy-carousel-image-row')
+      ?.querySelector<HTMLImageElement>('.hvy-carousel-thumb img')
+      ?.setAttribute('alt', image.imageAlt || image.imageFile);
+  }
 }
 
 function handleCarouselChange(event: Event): void {
@@ -230,6 +274,7 @@ function handleCarouselChange(event: Event): void {
   if (field === 'carousel-pause-on-hover') block.schema.carouselPauseOnHover = target.checked;
   else if (field === 'carousel-show-controls') block.schema.carouselShowControls = target.checked;
   else if (field === 'carousel-show-indicators') block.schema.carouselShowIndicators = target.checked;
+  else if (field === 'carousel-show-frame') block.schema.carouselShowFrame = target.checked;
   else return;
   recordHistory(`carousel:${block.id}:${field}`);
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
@@ -239,7 +284,7 @@ function handleCarouselChange(event: Event): void {
 
 function handleCarouselClick(event: Event): void {
   const target = event.target as HTMLElement | null;
-  const readerButton = target?.closest<HTMLElement>('.hvy-carousel [data-carousel-action], .hvy-carousel [data-carousel-index]');
+  const readerButton = target?.closest<HTMLElement>('.hvy-carousel-arrow[data-carousel-action], .hvy-carousel-indicator[data-carousel-index]');
   if (readerButton) {
     const frame = readerButton.closest('.hvy-carousel')?.querySelector<HTMLElement>('[data-carousel-reader="true"]');
     if (frame) {
@@ -282,6 +327,24 @@ function handleCarouselClick(event: Event): void {
     getRenderApp()();
     return;
   }
+  if (button.dataset.action === 'carousel-download') {
+    const image = block.schema.carouselImages[index];
+    if (!image) return;
+    const attachment = getImageAttachment(state.document, image.imageFile);
+    if (!attachment || attachment.bytes.length === 0) return;
+    const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : 'application/octet-stream';
+    const bytes = Uint8Array.from(attachment.bytes);
+    const downloadEvent = new CustomEvent('hvy:download-attachment', {
+      bubbles: true,
+      cancelable: true,
+      detail: { filename: image.imageFile, mediaType, bytes },
+    });
+    button.dispatchEvent(downloadEvent);
+    if (!downloadEvent.defaultPrevented) {
+      downloadBlob(image.imageFile, new Blob([bytes], { type: mediaType }));
+    }
+    return;
+  }
   const nextImages = [...block.schema.carouselImages];
   if (button.dataset.action === 'carousel-remove') nextImages.splice(index, 1);
   if (button.dataset.action === 'carousel-move-up' && index > 0) [nextImages[index - 1], nextImages[index]] = [nextImages[index]!, nextImages[index - 1]!];
@@ -296,8 +359,12 @@ async function appendCarouselImageFiles(block: VisualBlock, sectionKey: string, 
   recordHistory(historyGroup);
   const images = await Promise.all(files.map(async (file) => {
     const mediaType = file.type || inferImageMediaType(file.name);
-    const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
-    setAttachment(state.document, getImageAttachmentId(file.name), { mediaType: prepared.mediaType }, prepared.bytes);
+    const prepared = await prepareImageAttachmentBytes(
+      file,
+      mediaType,
+      resolveDocumentImageAttachmentMaxDimensions(state.document.meta, state.imageAttachmentMaxDimensions)
+    );
+    await storeImageAttachment(file.name, prepared.mediaType, prepared.bytes);
     return { imageFile: file.name, imageAlt: file.name, caption: '' };
   }));
   block.schema.carouselImages.push(...images);
@@ -331,13 +398,51 @@ function handleCarouselHoverResume(event: Event): void {
 function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boolean): void {
   const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
   if (!track) return;
-  const count = track.querySelectorAll('.hvy-carousel-slide').length;
+  const slides = Array.from(track.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const count = slides.length;
   if (count === 0) return;
   const index = ((rawIndex % count) + count) % count;
   const stateForFrame = runtimeState.get(frame);
   if (stateForFrame) stateForFrame.index = index;
-  track.scrollTo({ left: index * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  hydrateCarouselImagesAround(frame, index);
+  const slide = slides[index];
+  track.scrollTo({ left: slide ? getCarouselSlideScrollLeft(track, slide) : 0, behavior: smooth ? 'smooth' : 'auto' });
   updateActiveIndicator(frame, index);
+}
+
+function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
+  const slides = Array.from(frame.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const count = slides.length;
+  if (count === 0) {
+    return;
+  }
+  [index - 1, index, index + 1].forEach((rawIndex) => {
+    const normalized = ((rawIndex % count) + count) % count;
+    hydrateCarouselSlideImage(slides[normalized]);
+  });
+}
+
+function hydrateCarouselSlideImage(slide: HTMLElement | undefined): void {
+  const image = slide?.querySelector<HTMLImageElement>('img[data-hvy-carousel-lazy-image="true"]');
+  if (!image || image.getAttribute('src')) {
+    return;
+  }
+  const filename = image.dataset.imageFilename ?? '';
+  const url = getImageBlobUrl(filename);
+  if (url) {
+    image.src = url;
+    return;
+  }
+  const missing = image.ownerDocument.createElement('div');
+  missing.className = 'hvy-carousel-missing';
+  missing.textContent = `Missing attachment: ${filename}`;
+  image.replaceWith(missing);
+}
+
+export function getCarouselSlideScrollLeft(track: HTMLElement, slide: HTMLElement): number {
+  const trackRect = track.getBoundingClientRect();
+  const slideRect = slide.getBoundingClientRect();
+  return track.scrollLeft + slideRect.left - trackRect.left;
 }
 
 function updateActiveIndicator(frame: HTMLElement, index: number): void {

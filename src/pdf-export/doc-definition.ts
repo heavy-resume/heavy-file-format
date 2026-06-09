@@ -165,7 +165,7 @@ function renderBlock(
       node = renderTableBlock(block);
       break;
     case 'image':
-      node = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved);
+      node = renderImageBlock(document, resolved, block);
       break;
     case 'carousel':
       node = renderCarouselBlock(document, resolved, block.schema.carouselImages);
@@ -358,6 +358,18 @@ function renderCarouselBlock(
     return [node, ...caption];
   });
   return stack.length ? { stack } : placeholderNode('Empty carousel.');
+}
+
+function renderImageBlock(
+  document: VisualDocument,
+  resolved: HvyPdfExportResolvedStrategy,
+  block: VisualBlock
+): HvyPdfMakeNodeObject {
+  const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved);
+  const caption = block.schema.caption.trim()
+    ? [{ text: block.schema.caption, style: 'metadata', alignment: 'center' as const }]
+    : [];
+  return { stack: [image, ...caption] };
 }
 
 function renderImageNode(

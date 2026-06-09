@@ -39,6 +39,14 @@ turndown.addRule('inline-code-literal-text', {
   },
 });
 
+turndown.addRule('hvy-link', {
+  filter: (node) => node.nodeName === 'A',
+  replacement: (content, node) => {
+    const href = (node as HTMLAnchorElement).getAttribute('href')?.trim() ?? '';
+    return href.length > 0 ? `[${content}](${href})` : content;
+  },
+});
+
 turndown.addRule('non-text-media', {
   filter: (node) => isNonTextMediaElement(node),
   replacement: () => '',
@@ -78,7 +86,10 @@ turndown.addRule('hvy-text-line-style', {
   replacement: (content, node) => {
     const name = (node as Element).getAttribute('data-hvy-text-line-style') ?? '';
     const trimmed = content.replace(/\n{3,}/g, '\n\n').trim();
-    return name && trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n${trimmed}\n\n`;
+    if (!name) {
+      return `\n\n${trimmed}\n\n`;
+    }
+    return trimmed ? `\n\n^${name}^ ${trimmed}\n\n` : `\n\n^${name}^\n\n`;
   },
 });
 
@@ -534,7 +545,8 @@ export function escapeRawHtml(markdown: string): string {
       index = nextLineIndex;
       continue;
     }
-    output += escapeRawHtmlOutsideInlineCode(line);
+    const quotePrefix = line.match(/^( {0,3}(?:>[ \t]?)+)/)?.[0] ?? '';
+    output += quotePrefix + escapeRawHtmlOutsideInlineCode(line.slice(quotePrefix.length));
     index = nextLineIndex;
   }
   return output;

@@ -6,6 +6,7 @@ import { editorStateActions } from './editor-state';
 import { reusableActions } from './reusable';
 import { searchActions } from './search';
 import { buttonActions } from './button';
+import { imageAttachmentActions } from './image-attachments';
 import { textLineStyleActions } from './text-line-style';
 import { textActions } from './text';
 import type { AppActionHandler } from './types';
@@ -19,6 +20,7 @@ export const appActionRegistry: Record<string, AppActionHandler> = {
   ...reusableActions,
   ...searchActions,
   ...buttonActions,
+  ...imageAttachmentActions,
   ...textLineStyleActions,
   ...textActions,
 };

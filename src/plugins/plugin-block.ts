@@ -14,7 +14,7 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
     : nextId === SCRIPTING_PLUGIN_ID
       ? { version: SCRIPTING_PLUGIN_VERSION }
     : nextId === GRAPH_PLUGIN_ID
-      ? { type: 'bar', title: '', xAxisLabel: '', yAxisLabel: '', legend: true, colorScheme: 'auto' }
+      ? { type: 'bar', title: '', xAxisLabel: '', yAxisLabel: '', legend: true }
     : nextId === DIAGRAM_PLUGIN_ID
       ? { syntax: DEFAULT_DIAGRAM_SYNTAX }
       : {};

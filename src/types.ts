@@ -3,6 +3,7 @@ import type { JsonObject } from './hvy/types';
 import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat';
+import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
 
 export interface DocumentAttachment {
   id: string;
@@ -15,6 +16,7 @@ export interface VisualDocument {
   extension: '.hvy' | '.thvy' | '.phvy' | '.md';
   sections: VisualSection[];
   attachments: DocumentAttachment[];
+  attachmentStore?: AttachmentStore;
 }
 
 export interface ImageAttachmentMaxDimensions {
@@ -326,6 +328,7 @@ export interface AppState {
   sessionStorageKey?: string | null;
   persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  attachmentHost?: HvyAttachmentHostAdapter | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;
@@ -425,6 +428,7 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+  imageAttachmentReductionStatus: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   transientNotice: { id: number; message: string } | null;
 }
 

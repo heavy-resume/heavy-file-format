@@ -97,7 +97,7 @@
 
 .hvy-graph-controls {
   display: grid;
-  grid-template-columns: minmax(7rem, 0.7fr) minmax(7rem, 0.7fr) repeat(3, minmax(8rem, 1fr)) max-content;
+  grid-template-columns: minmax(7rem, 0.7fr) repeat(3, minmax(8rem, 1fr)) max-content;
   gap: 0.65rem;
   align-items: end;
 }

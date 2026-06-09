@@ -30,6 +30,9 @@ Rule: Any valid `.md` file is valid `.hvy`.
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
+
+Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, or internal fragment (`#id`) targets. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
 When an authoring client imports a `.md` or `.markdown` file and converts it into an editable `.hvy` document, it SHOULD coerce Markdown into reusable HVY structure rather than a single opaque text blob:
@@ -126,6 +129,7 @@ tags: [guide, onboarding]
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
 AI-facing document metadata includes:
 - `ai-context`: optional string with general document organization and preservation guidance for AI-assisted authoring tools.
@@ -265,7 +269,7 @@ Inline section `css` follows the same declaration-only rule as block `css`. Use 
 `priority` is an optional boolean for sections that should remain prominent in reader-oriented ordering. Readers SHOULD keep priority sections before non-priority sections when applying search/filter ordering or other relevance-based reordering. `priority` does not imply `highlight`; use `highlight` for visual emphasis.
 `lock` is an optional boolean. Use it to prevent adding new blocks or child sections inside that section.
 `editorOnly` follows the same visibility rule as block `editorOnly`.
-`contained` is an optional boolean. When `true` (default), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
+`contained` is an optional boolean. When `true` (default, unless overridden by `document.meta.section_defaults.contained` for newly created manual sections), render the section as the normal bordered card/container and allow collapse/expand UI. When `false`, render the section edge-to-edge without the section border/background wrapper and without the section expander/collapser.
 `hideIfUnmodified` is an optional boolean for template-authored scaffold sections. When `true`, viewer-oriented renderers MUST hide the entire section subtree, including sidebar/navigation entries, search results, and reader-view targets. Editor surfaces and document AI editing mode MUST still render the section so users and agents can change it. Authoring tools SHOULD remove this flag from the section and any flagged ancestor section when structured editing changes that section subtree.
 `exclude_from_import` is an optional boolean for sections or section templates that AI import tools MUST ignore when selecting import targets. It does not affect normal editor, AI editing, or viewer rendering.
 `protect_from_import` is an optional boolean for body sections that AI import tools MUST NOT modify during import. Protected sections remain normal editor, AI editing, and viewer content, but import planners and executors MUST NOT use them or their descendant sections as existing body-section replacement targets. Import tools MAY still create unrelated new sections and MAY instantiate reusable section templates. If both `exclude_from_import` and `protect_from_import` are present, `exclude_from_import` controls target discovery.
@@ -319,7 +323,7 @@ Expandable blocks can be emitted with specialized directives so their stub and e
 Grid blocks can be emitted with specialized directives so grid item content remains normal block content:
 
 ```markdown
-<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2}-->
+<!--hvy:grid {"css":"margin: 0.5rem 0; gap: 0.75rem;","gridColumns":2,"gridStackWidth":"50rem"}-->
 
  <!--hvy:grid:0 {"id":"skills"}-->
 
@@ -335,6 +339,8 @@ Grid item `id` metadata is optional. Authoring clients MAY generate transient it
 Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
+
+`gridStackWidth` is an optional string controlling when the grid switches to a single-column stack in responsive renderers. It defaults to `50rem`. It MUST be either `"never"` or a simple CSS length token such as `"30rem"`, `"640px"`, or `"42em"`. `"never"` disables automatic stacking. This field controls only the final stack-to-one-column behavior; authors who need multi-step layouts such as three columns to two columns to one column SHOULD use fenced `hvy:css` container-query rules.
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 
@@ -398,12 +404,13 @@ component_defs:
 Image blocks reference a binary attachment stored in the document tail:
 
 ```markdown
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Product overview"}-->
 ```
 
 Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
+- `caption`: optional caption text. Readers SHOULD render it centered below the image when present.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -420,8 +427,11 @@ Carousel block fields:
 - Each carousel image entry MAY include `imageAlt` and `caption` strings.
 - `carouselDurationMs` is optional and defaults to `3000`. Clients SHOULD clamp
   very small or very large values to preserve usability.
-- `carouselPauseOnHover`, `carouselShowControls`, and
-  `carouselShowIndicators` are optional booleans and default to `true`.
+- `carouselPauseOnHover`, `carouselShowControls`,
+  `carouselShowIndicators`, and `carouselShowFrame` are optional booleans and
+  default to `true`. When `carouselShowFrame` is `false`, clients SHOULD keep
+  the carousel frame layout and behavior but hide its visible background and
+  border treatment.
 - Clients SHOULD only start automatic movement once the carousel is visible.
 - Missing image attachments SHOULD be rendered as an inline missing-asset
   warning while preserving the carousel configuration on save.
@@ -471,13 +481,13 @@ Component-owned fields are:
 - `code`: `codeLanguage`
 - `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
 - `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`
-- `grid`: `gridColumns`, `gridItems`
+- `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableShowHeader`, `tableRows`
-- `image`: `imageFile`, `imageAlt`
-- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`
+- `image`: `imageFile`, `imageAlt`, `caption`
+- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
 
 Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.
@@ -704,6 +714,8 @@ Color themes are implemented intrinsically by the viewer application. A `.hvy` o
 
 A theme exposes CSS custom properties that document and component CSS refer to with `var(...)`. This keeps color choices centralized and makes light/dark variants a data change rather than a content change.
 
+Theme variables describe shared document roles. Plugins MUST NOT add plugin-specific global theme variables such as `--hvy-<plugin>-text` or `--hvy-<plugin>-series-1` for their internal rendering. A plugin SHOULD derive its colors from existing shared roles such as text, surface, border, accent, status, highlight, and link variables, or expose plugin-local styling through `pluginConfig` / plugin content when that styling is part of the plugin contract.
+
 #### Naming
 
 Each entry under `theme.colors` is a CSS custom property name mapped directly to a value. The key **is** the CSS variable name — no transformation is applied:
@@ -815,18 +827,21 @@ Rules:
 
 A `.hvy` or `.thvy` file MAY declare default presentation values for sections in front matter under `section_defaults`.
 
-This is intended for document-wide section wrapper styling without repeating the same `css` on every section.
+This is intended for document-wide section wrapper styling and authoring defaults without repeating the same metadata on every section.
 
 #### Front matter shape
 
 ```yaml
 section_defaults:
   css: "margin: 0.5rem 0;"
+  contained: true
 ```
 
 Rules:
 - `css` is an optional inline CSS style string applied to each rendered section wrapper.
+- `contained` is an optional boolean used by authoring tools as the default `contained` value for newly created manual sections. It defaults to `true`.
 - Explicit section-level `css` remains valid and MAY be combined with or override document-level defaults in a viewer-specific way.
+- Explicit section-level `contained` remains valid and overrides the document-level default for that section.
 - Unknown fields under `section_defaults` MUST be ignored.
 
 ### 5.15 Document-level text line styles
@@ -1296,7 +1311,7 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true,"colorScheme":"auto"}}-->
+<!--hvy:plugin {"plugin":"hvy.graph","pluginConfig":{"type":"bar","title":"Example","xAxisLabel":"Label","yAxisLabel":"Value","legend":true}}-->
 Label,Value
 Example A,10
 Example B,20
@@ -1309,15 +1324,11 @@ Plugin-specific rules:
 - `pluginConfig.title`, `pluginConfig.xAxisLabel`, and
   `pluginConfig.yAxisLabel` are optional strings.
 - `pluginConfig.legend` is optional and defaults to `true`.
-- `pluginConfig.colorScheme` is optional and defaults to `"auto"`. Supported
-  values are `"auto"`, `"light"`, and `"dark"`. `"auto"` uses active HVY theme
-  graph colors; `"light"` and `"dark"` force built-in graph schemes.
 - The plugin text body MUST be interpreted as CSV with the first row as column
   headers.
-- Theme colors for graph rendering are configurable under `theme.colors` with
-  `--hvy-graph-text`, `--hvy-graph-grid`, `--hvy-graph-axis`,
-  `--hvy-graph-outline`, and `--hvy-graph-series-1` through
-  `--hvy-graph-series-8`.
+- Graph renderers MUST use existing shared theme color variables for chart text,
+  grid lines, outlines, and series colors. The graph plugin MUST NOT define
+  graph-specific document theme color variables.
 - For `"bar"`, `"line"`, and `"radar"` charts, the first CSV column is labels
   and all following columns are numeric datasets.
 - For `"pie"`, `"doughnut"`, and `"polarArea"` charts, the first CSV column is

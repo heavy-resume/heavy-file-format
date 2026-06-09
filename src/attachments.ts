@@ -1,28 +1,20 @@
 import type { JsonObject } from './hvy/types';
 import type { DocumentAttachment, VisualDocument } from './types';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from './attachment-store';
 
 export const DB_ATTACHMENT_ID = 'db';
 export const IMAGE_ATTACHMENT_PREFIX = 'image:';
 
 export function getAttachment(document: VisualDocument, id: string): DocumentAttachment | null {
-  return document.attachments.find((entry) => entry.id === id) ?? null;
+  return ensureDocumentAttachmentStore(document).get(id);
 }
 
 export function setAttachment(document: VisualDocument, id: string, meta: JsonObject, bytes: Uint8Array): void {
-  const next: DocumentAttachment = { id, meta, bytes };
-  const index = document.attachments.findIndex((entry) => entry.id === id);
-  if (index >= 0) {
-    document.attachments[index] = next;
-  } else {
-    document.attachments.push(next);
-  }
+  ensureDocumentAttachmentStore(document).set(id, meta, bytes);
 }
 
 export function removeAttachment(document: VisualDocument, id: string): void {
-  const index = document.attachments.findIndex((entry) => entry.id === id);
-  if (index >= 0) {
-    document.attachments.splice(index, 1);
-  }
+  ensureDocumentAttachmentStore(document).remove(id);
 }
 
 export function getImageAttachmentId(filename: string): string {
@@ -43,7 +35,7 @@ export function setImageAttachment(
 }
 
 export function listImageFilenames(document: VisualDocument): string[] {
-  return document.attachments
+  return getAttachmentDescriptors(document)
     .filter((entry) => entry.id.startsWith(IMAGE_ATTACHMENT_PREFIX))
     .map((entry) => entry.id.slice(IMAGE_ATTACHMENT_PREFIX.length));
 }

@@ -14,6 +14,7 @@ const FIELD_LABELS: Record<string, string> = {
   xrefDetail: 'Detail',
   containerTitle: 'Title',
   imageAlt: 'Alt text',
+  caption: 'Caption',
   tableColumns: 'Table',
   tableCells: 'Table',
   pluginConfig: 'Plugin',
@@ -244,6 +245,7 @@ function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array
     { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail ?? '' },
     { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle ?? '' },
     { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt ?? '' },
+    { field: 'caption', label: FIELD_LABELS.caption, value: block.schema.caption ?? '' },
     { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
     { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },
@@ -254,6 +256,7 @@ function getBlockLabel(block: VisualBlock, section: VisualSection): string {
   return (block.schema.xrefTitle ?? '').trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
+    || (block.schema.caption ?? '').trim()
     || (block.schema.imageAlt ?? '').trim()
     || (block.schema.id ?? '').trim()
     || getSectionLabel(section);
@@ -263,6 +266,7 @@ function getBlockContextLabel(block: VisualBlock): string {
   return (block.schema.xrefTitle ?? '').trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
+    || (block.schema.caption ?? '').trim()
     || (block.schema.imageAlt ?? '').trim();
 }
 

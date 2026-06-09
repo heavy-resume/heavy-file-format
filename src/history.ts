@@ -6,6 +6,9 @@ import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
+import type { AppState } from './types';
+import type { VisualBlock } from './editor/types';
+import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -18,6 +21,19 @@ interface SerializedHistoryAttachment {
 }
 
 let databaseAttachmentChangedSinceHistory = false;
+
+type ActiveEditorRestoreState = Pick<AppState,
+  | 'activeEditorBlock'
+  | 'activeTextEditorMode'
+  | 'activeEditorBlockPath'
+  | 'activeEditorBlockSnapshot'
+  | 'activeEditorBlockSnapshots'
+  | 'activeEditorBlockReturnScroll'
+  | 'aiEditorHostBlock'
+  | 'aiEditorHostSectionKey'
+> & {
+  activeEditorNewBlockIds: Set<string>;
+};
 
 export function snapshotState(options: HistorySnapshotOptions = {}): string {
   return JSON.stringify(
@@ -58,6 +74,12 @@ export function commitHistorySnapshot(): void {
 }
 
 export function ensureHistoryInitialized(): void {
+  if (!Array.isArray(state.history)) {
+    state.history = [];
+  }
+  if (!Array.isArray(state.future)) {
+    state.future = [];
+  }
   if (state.history.length === 0) {
     commitHistorySnapshot();
   }
@@ -151,6 +173,7 @@ export function markDatabaseAttachmentChanged(): void {
 export function undoState(): void {
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
+  const activeEditor = captureActiveEditorRestoreState();
   const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
   const last = state.history[state.history.length - 1];
   if (last !== current) {
@@ -168,18 +191,20 @@ export function undoState(): void {
   const prev = state.history[state.history.length - 1];
   if (prev) {
     restoreFromSnapshot(prev);
+    restoreActiveEditorState(activeEditor);
   }
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'));
+  notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'), { authoritative: true });
 }
 
 export function redoState(): void {
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
+  const activeEditor = captureActiveEditorRestoreState();
   const next = state.future.pop();
   if (!next) {
     return;
@@ -187,12 +212,94 @@ export function redoState(): void {
   state.isRestoring = true;
   state.history.push(next);
   restoreFromSnapshot(next);
+  restoreActiveEditorState(activeEditor);
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'));
+  notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'), { authoritative: true });
+}
+
+function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {
+  if (!state.activeEditorBlock) {
+    return null;
+  }
+  return {
+    activeEditorBlock: { ...state.activeEditorBlock },
+    activeTextEditorMode: state.activeTextEditorMode ? { ...state.activeTextEditorMode } : null,
+    activeEditorBlockPath: state.activeEditorBlockPath.map((active) => ({ ...active })),
+    activeEditorBlockSnapshot: state.activeEditorBlockSnapshot
+      ? JSON.parse(JSON.stringify(state.activeEditorBlockSnapshot)) as AppState['activeEditorBlockSnapshot']
+      : null,
+    activeEditorBlockSnapshots: state.activeEditorBlockSnapshots.map((snapshot) =>
+      JSON.parse(JSON.stringify(snapshot)) as AppState['activeEditorBlockSnapshots'][number]
+    ),
+    activeEditorNewBlockIds: new Set(state.activeEditorNewBlockIds),
+    activeEditorBlockReturnScroll: state.activeEditorBlockReturnScroll ? { ...state.activeEditorBlockReturnScroll } : null,
+    aiEditorHostBlock: state.aiEditorHostBlock ? { ...state.aiEditorHostBlock } : null,
+    aiEditorHostSectionKey: state.aiEditorHostSectionKey,
+  };
+}
+
+function restoreActiveEditorState(activeEditor: ActiveEditorRestoreState | null): void {
+  if (!activeEditor?.activeEditorBlock) {
+    return;
+  }
+  const { sectionKey, blockId } = activeEditor.activeEditorBlock;
+  if (!findSnapshotBlockByIds(sectionKey, blockId)) {
+    return;
+  }
+  const existingPath = activeEditor.activeEditorBlockPath.filter((active) =>
+    findSnapshotBlockByIds(active.sectionKey, active.blockId)
+  );
+  state.activeEditorBlockPath = existingPath.length > 0 ? existingPath : [{ sectionKey, blockId }];
+  state.activeEditorBlock = { sectionKey, blockId };
+  state.activeTextEditorMode = activeEditor.activeTextEditorMode ? { ...activeEditor.activeTextEditorMode } : null;
+  state.activeEditorBlockSnapshots = activeEditor.activeEditorBlockSnapshots.filter((snapshot) =>
+    state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
+  );
+  state.activeEditorBlockSnapshot =
+    state.activeEditorBlockSnapshots.find((snapshot) => snapshot.sectionKey === sectionKey && snapshot.blockId === blockId)
+    ?? null;
+  state.activeEditorNewBlockIds = new Set([...activeEditor.activeEditorNewBlockIds].filter((id) =>
+    state.activeEditorBlockPath.some((active) => active.blockId === id)
+  ));
+  state.activeEditorBlockReturnScroll = activeEditor.activeEditorBlockReturnScroll;
+  state.aiEditorHostBlock = activeEditor.aiEditorHostBlock;
+  state.aiEditorHostSectionKey = activeEditor.aiEditorHostSectionKey;
+  state.pendingEditorActivation = {
+    sectionKey,
+    blockId,
+    revealPath: false,
+    immediateFocus: true,
+  };
+}
+
+function findSnapshotBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
+  const section = state.document.sections.find((candidate) => candidate.key === sectionKey);
+  return section ? findSnapshotBlockInList(section.blocks, blockId) : null;
+}
+
+function findSnapshotBlockInList(blocks: VisualBlock[], blockId: string, seen = new Set<VisualBlock>()): VisualBlock | null {
+  for (const block of blocks) {
+    if (seen.has(block)) {
+      continue;
+    }
+    seen.add(block);
+    if (block.id === blockId) {
+      return block;
+    }
+    const child = findSnapshotBlockInList(block.schema.containerBlocks ?? [], blockId, seen)
+      ?? findSnapshotBlockInList(block.schema.componentListBlocks ?? [], blockId, seen)
+      ?? findSnapshotBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId, seen)
+      ?? findSnapshotBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId, seen)
+      ?? findSnapshotBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, seen);
+    if (child) {
+      return child;
+    }
+  }
+  return null;
 }
 
 function captureModalScroll(): { selector: string; scrollTop: number } | null {
@@ -227,7 +334,7 @@ function restoreModalScroll(scroll: { selector: string; scrollTop: number } | nu
 
 function restoreFromSnapshot(snapshot: string): void {
   try {
-    const liveAttachments = state.document.attachments;
+    const liveAttachmentStore = ensureDocumentAttachmentStore(state.document);
     const parsed = JSON.parse(snapshot) as {
       document: VisualDocument;
       databaseAttachment?: SerializedHistoryAttachment | null;
@@ -240,10 +347,8 @@ function restoreFromSnapshot(snapshot: string): void {
       rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
       paletteOverrideId?: string | null;
     };
-    state.document = {
-      ...parsed.document,
-      attachments: liveAttachments,
-    };
+    state.document = parsed.document;
+    attachStoreToDocument(state.document, liveAttachmentStore);
     if (Object.prototype.hasOwnProperty.call(parsed, 'databaseAttachment')) {
       restoreDatabaseAttachment(parsed.databaseAttachment ?? null);
     }
@@ -280,7 +385,9 @@ function restoreFromSnapshot(snapshot: string): void {
 
 function documentToHistorySnapshot(document: VisualDocument): VisualDocument {
   return {
-    ...document,
+    meta: document.meta,
+    extension: document.extension,
+    sections: document.sections,
     attachments: [],
   };
 }

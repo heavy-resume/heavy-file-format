@@ -16,7 +16,7 @@ import {
   type StateRuntime,
 } from './state';
 import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
+import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
@@ -79,6 +79,10 @@ import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLi
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
+import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { serializeMountedDocumentBytesAsync } from './embed-serialization';
+import { createHostedAttachmentAdapter } from './hosted-attachments';
+import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -95,6 +99,8 @@ export interface HvyMountOptions {
   paletteId?: string | null;
   storageKey?: string | null;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  attachmentStore?: HvyAttachmentHostAdapter | null;
+  serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
   onDocumentChange?: HvyDocumentChangeCallback;
@@ -104,6 +110,7 @@ export interface HvyMount {
   destroy(): void;
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
+  serializeDocumentBytesAsync(): Promise<Uint8Array>;
   getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
@@ -177,7 +184,8 @@ function createEmbedState(
   document: VisualDocument,
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
-  sessionStorageKey?: string | null
+  sessionStorageKey?: string | null,
+  attachmentHost?: HvyAttachmentHostAdapter | null
 ): AppState {
   return {
     document,
@@ -189,6 +197,7 @@ function createEmbedState(
     sessionStorageKey,
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
+    attachmentHost: attachmentHost ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -267,6 +276,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    imageAttachmentReductionStatus: null,
     transientNotice: null,
   };
 }
@@ -411,6 +421,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       </section>
     </main>`;
   bindReaderUi(root);
+  bindCarouselInteractions(root);
   reconcilePluginMounts(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
@@ -449,6 +460,7 @@ function refreshReaderPanels(): void {
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
+  bindCarouselInteractions(currentRoot);
 }
 
 function refreshModalPreview(): void {}
@@ -583,6 +595,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytes() {
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
+    serializeDocumentBytesAsync() {
+      return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null);
+    },
     getPdfBlob(pdfOptions) {
       return ready.then((mount) => mount.getPdfBlob(pdfOptions));
     },
@@ -687,13 +702,16 @@ async function importFromText(options: ImportFromTextOptions): Promise<ImportFro
 
 export function mountHvy(options: HvyMountOptions): HvyMount {
   if ((options.mode ?? 'viewer') !== 'viewer') {
+    hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
     return mountFullHvyProxy(options);
   }
+  hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
   const runtime = createStateRuntime(createEmbedState(
     options.document,
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
-    options.storageKey ?? null
+    options.storageKey ?? null,
+    options.attachmentStore ?? null
   ));
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
@@ -705,8 +723,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
-  if (options.paletteId && getPaletteById(options.paletteId)) {
-    state.paletteOverrideId = options.paletteId;
+  if ('paletteId' in options) {
+    state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
   }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
@@ -736,6 +754,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     serializeDocumentBytes() {
       return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+    },
+    serializeDocumentBytesAsync() {
+      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null));
     },
     getPdfBlob(pdfOptions) {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -801,6 +822,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           document: state.document,
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+          attachmentStore: state.attachmentHost,
+          serializer: options.serializer ?? null,
           storageKey: state.sessionStorageKey,
           onDocumentChange: options.onDocumentChange,
         });
@@ -814,6 +837,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           document: state.document,
           mode: 'editor',
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
+          attachmentStore: state.attachmentHost,
+          serializer: options.serializer ?? null,
           storageKey: state.sessionStorageKey,
           onDocumentChange: options.onDocumentChange,
         });
@@ -832,6 +857,7 @@ export {
   builtInPlugins,
   createDocumentFilterSnapshot,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
@@ -840,7 +866,11 @@ export {
   searchDocuments,
   serializeDocument,
   serializeDocumentBytes,
+  serializeDocumentBytesAsync,
 };
+export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
+export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
+export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -898,11 +928,13 @@ declare global {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
+      serializeDocumentBytesAsync: typeof serializeDocumentBytesAsync;
       createDocumentFilterSnapshot: typeof createDocumentFilterSnapshot;
       createPdfExportPlan: typeof createPdfExportPlan;
       createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
+      createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
       renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
@@ -918,11 +950,13 @@ window.HVY = {
   deserializeDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
+  serializeDocumentBytesAsync,
   createDocumentFilterSnapshot,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   searchDocuments,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   mountHvy,

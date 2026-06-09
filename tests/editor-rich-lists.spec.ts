@@ -172,6 +172,43 @@ test('list action converts the first paragraph when the caret is on the first li
   });
 });
 
+test('list action creates a bullet on an empty first line', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    (node as HTMLElement).focus();
+    node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await storeRichSelection(editor);
+
+  await activeEditorBlock.locator('[data-rich-action="list"]').click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    listCount: node.querySelectorAll('ul').length,
+    itemCount: node.querySelectorAll('li').length,
+    paragraphCount: node.querySelectorAll('p').length,
+    text: (node.querySelector('li')?.textContent ?? '').replace(/\u200b/g, ''),
+  }));
+  expect(expectedResult).toEqual({
+    listCount: 1,
+    itemCount: 1,
+    paragraphCount: 0,
+    text: '',
+  });
+});
+
 test('list action works after clicking into the first visible line', async ({ page }) => {
   await openDefaultDocument(page);
 
@@ -235,6 +272,71 @@ test('list action converts bare first-line editor text into a bullet', async ({ 
     listCount: 1,
     items: ['First item'],
     directText: [],
+  });
+});
+
+test('pasting a list item selected from the previous bullet boundary keeps it as a sibling bullet', async ({ page }) => {
+  await openDefaultDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeEditorBlock = page.locator(activeEditorBlockSelector).first();
+  const editor = activeEditorBlock.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<ul><li>Alpha bullet</li><li>Bravo bullet</li><li>Charlie bullet</li></ul>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    node.focus();
+
+    const first = node.querySelectorAll('li')[0].firstChild!;
+    const second = node.querySelectorAll('li')[1].firstChild!;
+    const selectedRange = document.createRange();
+    selectedRange.setStart(first, first.textContent!.length);
+    selectedRange.setEnd(second, second.textContent!.length);
+    const selectedContainer = document.createElement('div');
+    selectedContainer.appendChild(selectedRange.cloneContents());
+    const selectedText = selectedRange.toString();
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    selectedRange.deleteContents();
+    node.querySelectorAll('li').forEach((item) => {
+      if ((item.textContent ?? '').trim().length === 0) {
+        item.remove();
+      }
+    });
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(node.querySelectorAll('li')[0]);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const transfer = new DataTransfer();
+    transfer.setData('text/html', selectedContainer.innerHTML);
+    transfer.setData('text/plain', selectedText);
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      pastedHtml: selectedContainer.innerHTML,
+      html: node.innerHTML,
+      items: Array.from(node.querySelectorAll('li')).map((item) => item.textContent),
+      nestedItemCount: node.querySelectorAll('li li').length,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    pastedHtml: '<li></li><li>Bravo bullet</li>',
+    html: '<ul><li>Alpha bullet</li><li>Bravo bullet</li><li>Charlie bullet</li></ul>',
+    items: ['Alpha bullet', 'Bravo bullet', 'Charlie bullet'],
+    nestedItemCount: 0,
   });
 });
 

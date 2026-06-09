@@ -83,7 +83,7 @@ export function executePatchHeaderTool(
 }
 
 function validateHeaderDefaults(meta: JsonObject): void {
-  assertOnlyCssDefaultFields(meta.section_defaults, 'section_defaults');
+  assertOnlySectionDefaultFields(meta.section_defaults);
 
   const componentDefaults = meta.component_defaults;
   if (!componentDefaults || typeof componentDefaults !== 'object' || Array.isArray(componentDefaults)) {
@@ -92,6 +92,25 @@ function validateHeaderDefaults(meta: JsonObject): void {
 
   for (const [componentName, defaults] of Object.entries(componentDefaults)) {
     assertOnlyCssDefaultFields(defaults, `component_defaults.${componentName}`);
+  }
+}
+
+function assertOnlySectionDefaultFields(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return;
+  }
+
+  const unsupportedKeys = Object.keys(value).filter((key) => key !== 'css' && key !== 'contained');
+  if (unsupportedKeys.length > 0) {
+    throw new Error(`section_defaults only supports the "css" and "contained" fields. Unsupported field${unsupportedKeys.length === 1 ? '' : 's'}: ${unsupportedKeys.join(', ')}.`);
+  }
+  const css = (value as JsonObject).css;
+  if (typeof css === 'string') {
+    assertCssValueIsDeclarationString(css, 'section_defaults.css');
+  }
+  const contained = (value as JsonObject).contained;
+  if (typeof contained !== 'undefined' && typeof contained !== 'boolean') {
+    throw new Error('section_defaults.contained must be a boolean.');
   }
 }
 

@@ -52,19 +52,6 @@
   --hvy-table-row-bg-1: #ffffff;
   --hvy-table-row-bg-2: #f9fafb;
 
-  --hvy-graph-text: #1a2530;
-  --hvy-graph-grid: rgba(26, 37, 48, 0.14);
-  --hvy-graph-axis: rgba(26, 37, 48, 0.52);
-  --hvy-graph-outline: #ffffff;
-  --hvy-graph-series-1: #2563eb;
-  --hvy-graph-series-2: #dc2626;
-  --hvy-graph-series-3: #16a34a;
-  --hvy-graph-series-4: #9333ea;
-  --hvy-graph-series-5: #f59e0b;
-  --hvy-graph-series-6: #0891b2;
-  --hvy-graph-series-7: #db2777;
-  --hvy-graph-series-8: #64748b;
-
   --hvy-shadow: rgba(39, 70, 91, 0.08);
   --hvy-shadow-md: rgba(39, 70, 91, 0.12);
   --hvy-shadow-lg: rgba(39, 70, 91, 0.14);
@@ -148,19 +135,6 @@
   --hvy-table-header: #1f2a37;
   --hvy-table-row-bg-1: #17222d;
   --hvy-table-row-bg-2: #1b2632;
-
-  --hvy-graph-text: #e7eef5;
-  --hvy-graph-grid: rgba(231, 238, 245, 0.16);
-  --hvy-graph-axis: rgba(231, 238, 245, 0.55);
-  --hvy-graph-outline: #0f1720;
-  --hvy-graph-series-1: #60a5fa;
-  --hvy-graph-series-2: #fb7185;
-  --hvy-graph-series-3: #4ade80;
-  --hvy-graph-series-4: #c084fc;
-  --hvy-graph-series-5: #fbbf24;
-  --hvy-graph-series-6: #22d3ee;
-  --hvy-graph-series-7: #f472b6;
-  --hvy-graph-series-8: #94a3b8;
 
   --hvy-shadow: rgba(0, 0, 0, 0.20);
   --hvy-shadow-md: rgba(0, 0, 0, 0.30);

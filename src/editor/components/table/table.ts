@@ -55,8 +55,9 @@ function renderTableRowEditor(
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
+  const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
   return `
-    <tr class="table-row-editor table-row-editor-main" data-table-row-drop="true" data-row-index="${rowIndex}">
+    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}">
       <td class="table-row-utility">
         <button
           type="button"
@@ -211,20 +212,28 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     <tbody>
       ${block.schema.tableRows
         .map(
-          (row) => `
-            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}">
-              ${columns.map((column, cellIndex) => {
-                const value = helpers.escapeHtml(row.cells[cellIndex] ?? '');
+          (row) => {
+            const isEmptyRow = columns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
+            return `
+            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}${isEmptyRow ? ' table-main-row-empty' : ''}">
+              ${columns.map((_column, cellIndex) => {
+                const rawValue = row.cells[cellIndex] ?? '';
+                const value = helpers.escapeHtml(rawValue);
                 const title = helpers.escapeAttr(row.cells[cellIndex] ?? '');
-                const rawPlaceholder = column || 'Cell value';
+                if (value) {
+                  return `<td title="${title}">${renderTableInlineReaderHtml(rawValue, block, helpers)}</td>`;
+                }
+                if (!isEmptyRow) {
+                  return '<td></td>';
+                }
+                const rawPlaceholder = columns[cellIndex] || 'Cell value';
                 const placeholder = helpers.escapeAttr(renderAltAnnotationsAsFullText(rawPlaceholder));
                 const compactPlaceholder = helpers.escapeAttr(renderAltAnnotationsAsMobileText(rawPlaceholder));
-                return value
-                  ? `<td title="${title}">${renderTableInlineReaderHtml(row.cells[cellIndex] ?? '', block, helpers)}</td>`
-                  : `<td data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
+                return `<td data-placeholder="${placeholder}" data-placeholder-compact="${compactPlaceholder}"></td>`;
               }).join('')}
             </tr>
-            `
+            `;
+          }
         )
         .join('')}
     </tbody>

@@ -10,7 +10,7 @@ import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
-import { applySearchFilter, stopSearchRequest } from '../src/search/actions';
+import { applySearchFilter, clearFilteringForTarget, stopSearchRequest } from '../src/search/actions';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
@@ -384,6 +384,44 @@ hvy_version: 0.1
   expect(state.search.queryDraft).toBe('Anything Carta');
   expect(state.search.isLoading).toBe(false);
   expect(state.search.semanticProgress).toBe(null);
+});
+
+test('block search traversal tolerates blocks without child collections', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"summary"}-->
+ Summary
+
+<!--hvy:text {"id":"needle"}-->
+ Needle
+`, '.hvy');
+  const section = document.sections[0]!;
+  const firstBlock = section.blocks[0]!;
+  const targetBlock = section.blocks[1]!;
+  delete (firstBlock.schema as Partial<typeof firstBlock.schema>).containerBlocks;
+  delete (firstBlock.schema as Partial<typeof firstBlock.schema>).componentListBlocks;
+  delete (firstBlock.schema as Partial<typeof firstBlock.schema>).expandableStubBlocks;
+  delete (firstBlock.schema as Partial<typeof firstBlock.schema>).expandableContentBlocks;
+  delete (firstBlock.schema as Partial<typeof firstBlock.schema>).gridItems;
+  initState(createTestState(document));
+  state.search.filterEnabled = true;
+  state.search.submittedQuery = 'Needle';
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+
+  expect(() => clearFilteringForTarget(section.key, targetBlock.id)).not.toThrow();
+
+  expect(state.search.clearedBlockIds).toEqual([targetBlock.id]);
 });
 
 test('turning off an applied filter clears semantic progress', async () => {

@@ -136,6 +136,59 @@ npm run build
 npm run preview
 ```
 
+### Hosted Viewer With Static Image Assets
+
+For web hosting, extract a `.hvy` into a small document body plus static
+attachment files. This avoids downloading large image tails during the initial
+page load:
+
+```bash
+npm run docker:hosted -- examples/example.hvy my-hvy-viewer:latest
+docker run --rm -p 8080:8080 my-hvy-viewer:latest
+```
+
+When iterating on a document and reusing the same image tag, pass `--no-cache`
+through the script to force Docker to rebuild every layer:
+
+```bash
+npm run docker:hosted -- --no-cache examples/example.hvy my-hvy-viewer:latest
+```
+
+For Cloud Run or other `linux/amd64` hosts, build and push with the registry
+tag in one command:
+
+```bash
+npm run docker:hosted -- --no-cache --push examples/example.hvy REGISTRY_HOST/PROJECT/REPOSITORY/my-hvy-viewer:latest
+```
+
+The image serves the viewer at `http://localhost:8080`.
+
+To inspect or host the extracted static files directly:
+
+```bash
+npm run extract:hosted -- examples/example.hvy --out dist-hvy-viewer
+```
+
+The output is static-server friendly:
+
+```text
+dist-hvy-viewer/
+  document.hvy
+  attachments.json
+  image/<encoded image filename>
+```
+
+The reusable viewer image can also mount an extracted directory at `/site`:
+
+```bash
+docker build -t hvy-hosted-viewer .
+docker run --rm -p 8080:8080 -v "$PWD/dist-hvy-viewer:/site:ro" hvy-hosted-viewer
+```
+
+The viewer loads `document.hvy` and `attachments.json` first, then resolves
+regular image and carousel attachments through the manifest so images are fetched
+from `./image/...` only when the browser/component needs them.
+
 Built-in plugin objects are selected at build time from `hvy.build.json`. The
 default config includes every bundled plugin in the output file, but plugins are
 not enabled automatically:
@@ -187,6 +240,49 @@ byte stream, including attachments, through the mount handle:
 ```js
 const mount = HVY.mountHvy({ root, document, mode: 'editor' });
 const bytes = mount.serializeDocumentBytes();
+```
+
+Hosts that keep attachments outside the in-memory HVY document can provide an
+attachment adapter. For example, a static site can resolve image attachments to
+pre-published files without loading the image bytes into the client:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  attachmentStore: {
+    list() {
+      return [
+        { id: 'image:hero.png', meta: { mediaType: 'image/png' }, length: 48192 },
+      ];
+    },
+    recall(id) {
+      return fetch(`/assets/hvy/${encodeURIComponent(id)}`).then((response) => response.arrayBuffer());
+    },
+    store() {},
+    remove() {},
+    resolveUrl(id) {
+      return id === 'image:hero.png' ? '/assets/hvy/hero.png' : null;
+    },
+  },
+});
+```
+
+Hosts can also use async serialization when attachment recall or final byte
+assembly belongs to another runtime, such as a local/native serializer:
+
+```js
+const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, serializer: {
+  serializeDocumentBytes(request) {
+    return nativeHvySerializer.save({
+      textBody: request.textBody,
+      tail: request.tail,
+      readAttachment: request.recallAttachment,
+    });
+  },
+} });
+
+const bytes = await mount.serializeDocumentBytesAsync();
 ```
 
 Editor, AI, and import mutations can also notify hosts when the mounted

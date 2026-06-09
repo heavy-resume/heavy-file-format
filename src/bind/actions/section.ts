@@ -1,7 +1,7 @@
 import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
-import { isDefaultUntitledSectionTitle, getSectionId, moveSectionByOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
+import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
 import { setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
-import { createEmptySection, instantiateReusableSection } from '../../document-factory';
+import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
 import { getSectionDefs, getSectionTemplateKey } from '../../component-defs';
@@ -38,7 +38,7 @@ export function insertTopLevelSection(starter: string, flavorName?: string, loca
   }
   recordHistory();
   const section = starter === 'blank'
-    ? createEmptySection(1, state.currentView === 'ai' ? 'text' : '', false)
+    ? createEmptySectionWithMeta(1, state.currentView === 'ai' ? 'text' : '', false, state.document.meta)
     : instantiateReusableSection(starter, 1, flavorName);
   if (!section) {
     return;
@@ -92,7 +92,7 @@ const spawnGhostChild: ActionHandler = ({ section }) => {
     return;
   }
   recordHistory();
-  const child = createEmptySection(Math.min(section.level + 1, 6), component, false);
+  const child = createEmptySectionWithMeta(Math.min(section.level + 1, 6), component, false, state.document.meta);
   section.children.push(child);
   state.pendingEditorCenterSectionKey = child.key;
   getRenderApp()();
@@ -166,10 +166,17 @@ const moveSection = (offset: -1 | 1): ActionHandler => ({ section, sectionKey })
     return;
   }
   recordHistory();
-  if (moveSectionByOffset(state.document.sections, sectionKey, offset)) {
+  if (moveSectionByFilteredOffset(state.document.sections, sectionKey, offset, isEditorOrderSibling)) {
     getRenderApp()();
   }
 };
+
+function isEditorOrderSibling(candidate: VisualSection, target: VisualSection, parent: VisualSection | null): boolean {
+  if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.document.meta, state.showAdvancedEditor)) {
+    return false;
+  }
+  return parent !== null || candidate.location === target.location;
+}
 
 const addChild: ActionHandler = ({ section }) => {
   if (!section || section.lock) {
@@ -180,7 +187,7 @@ const addChild: ActionHandler = ({ section }) => {
     return;
   }
   recordHistory();
-  const child = createEmptySection(Math.min(section.level + 1, 6), component, true);
+  const child = createEmptySectionWithMeta(Math.min(section.level + 1, 6), component, true, state.document.meta);
   section.children.push(child);
   if (child.blocks[0]) {
     setActiveEditorBlock(child.key, child.blocks[0].id);
@@ -193,7 +200,7 @@ const makeBlockSubsectionAction: ActionHandler = ({ section, sectionKey, blockId
     return;
   }
   recordHistory();
-  const newSub = makeBlockSubsection(state.document.sections, sectionKey, blockId);
+  const newSub = makeBlockSubsection(state.document.sections, sectionKey, blockId, state.document.meta);
   if (!newSub) {
     return;
   }

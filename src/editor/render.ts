@@ -2,7 +2,7 @@ import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
-import type { ComponentPlacementState } from '../types';
+import type { ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -36,6 +36,8 @@ import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon } from '../icons';
+import { getEmptySectionHeadingLevel } from '../section-heading-memory';
+import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -54,6 +56,10 @@ import {
   renderHeadingStyleElement,
 } from '../heading-styles';
 import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
+import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '../section-ops';
+import { getDefaultSectionContained } from '../document-factory';
+import type { JsonObject } from '../hvy/types';
+import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -101,6 +107,10 @@ interface SectionDef {
   }>;
 }
 
+function getDocumentSectionContainedDefault(documentMeta: JsonObject): boolean {
+  return getDefaultSectionContained(documentMeta);
+}
+
 interface ComponentListDisplayContext {
   sortKeys: string[];
   groupKeys: string[];
@@ -109,6 +119,8 @@ interface ComponentListDisplayContext {
 interface EditorRenderState {
   documentExtension: '.hvy' | '.thvy' | '.phvy' | '.md';
   documentMeta: Record<string, unknown>;
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  imageAttachmentReductionStatus?: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   documentSections: VisualSection[];
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
@@ -257,7 +269,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderSectionEditorTree(sections: VisualSection[]): string {
-    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s));
+    const mainSections = sections.filter((s) => s.location !== 'sidebar' && !isHiddenEditorOnlySection(s, state.documentMeta, state.showAdvancedEditor));
     const sectionCards = mainSections.map((section) => renderEditorSection(section, sections)).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
@@ -313,8 +325,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && section.title.trim().length > 0
       && section.blocks.length === 0
       && section.children.length === 0;
-    const emptyHeadingKey = `empty-heading:${section.key}`;
-    const emptyHeadingLevel = normalizeEmptySectionHeadingLevel(state.addComponentBySection[emptyHeadingKey]);
+    const emptyHeadingLevel = getEmptySectionHeadingLevel(section.key);
     const titleEditor = deps.isActiveEditorSectionTitle(section.key)
       ? `<input autofocus class="section-title-input" data-section-key="${deps.escapeAttr(section.key)}" data-field="section-title" value="${deps.escapeAttr(
         deps.isDefaultUntitledSectionTitle(section.title) ? '' : section.title
@@ -416,7 +427,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
         }
       } else {
-        if (isHiddenEditorOnlySection(item.child)) {
+        if (isHiddenEditorOnlySection(item.child, state.documentMeta, state.showAdvancedEditor)) {
           continue;
         }
         output.push(renderEditorSection(item.child, rootSections, true));
@@ -687,26 +698,6 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && block.schema.plugin === SCRIPTING_PLUGIN_ID;
   }
 
-  function isHiddenEditorOnlySection(section: VisualSection): boolean {
-    return !state.showAdvancedEditor
-      && section.editorOnly
-      && sectionContainsHiddenEditorOnlyScriptingBlock(section);
-  }
-
-  function sectionContainsHiddenEditorOnlyScriptingBlock(section: VisualSection): boolean {
-    return section.blocks.some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || section.children.some(sectionContainsHiddenEditorOnlyScriptingBlock);
-  }
-
-  function blockContainsHiddenEditorOnlyScriptingBlock(block: VisualBlock): boolean {
-    return isHiddenEditorOnlyScriptingBlock(block)
-      || (block.schema.containerBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.componentListBlocks ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.gridItems ?? []).some((item) => blockContainsHiddenEditorOnlyScriptingBlock(item.block))
-      || (block.schema.expandableStubBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock)
-      || (block.schema.expandableContentBlocks?.children ?? []).some(blockContainsHiddenEditorOnlyScriptingBlock);
-  }
-
   function renderButtonAnchorAttrs(
     sectionKey: string,
     block: VisualBlock,
@@ -749,14 +740,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     sectionKey: string,
     sections: VisualSection[]
   ): { canMoveUp: boolean; canMoveDown: boolean } {
-    const location = findSectionLocation(sections, sectionKey);
-    if (!location) {
-      return { canMoveUp: false, canMoveDown: false };
+    return getSectionFilteredMoveAvailability(sections, sectionKey, isEditorOrderSibling);
+  }
+
+  function isEditorOrderSibling(candidate: VisualSection, target: VisualSection, parent: VisualSection | null): boolean {
+    if (candidate.isGhost || isHiddenEditorOnlySection(candidate, state.documentMeta, state.showAdvancedEditor)) {
+      return false;
     }
-    return {
-      canMoveUp: location.index > 0,
-      canMoveDown: location.index < location.container.length - 1,
-    };
+    return parent !== null || candidate.location === target.location;
   }
 
   function getBlockMoveAvailability(
@@ -1157,6 +1148,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
     const headingStyles = getHeadingStylesFromMeta(state.documentMeta);
+    const imageAttachmentMaxDimensions = state.documentMeta.image_attachment_max_dimensions && typeof state.documentMeta.image_attachment_max_dimensions === 'object' && !Array.isArray(state.documentMeta.image_attachment_max_dimensions)
+      ? state.documentMeta.image_attachment_max_dimensions as { width?: unknown; height?: unknown }
+      : {};
+    const globalImageAttachmentMaxDimensions = resolveImageAttachmentMaxDimensions(state.imageAttachmentMaxDimensions);
+    const imageAttachmentReductionStatus = state.imageAttachmentReductionStatus ?? null;
+    const imageAttachmentReductionComplete = imageAttachmentReductionStatus?.state === 'reduced' || imageAttachmentReductionStatus?.state === 'unchanged';
+    const imageAttachmentReductionButtonLabel = imageAttachmentReductionStatus?.message ?? 'Apply to Existing Images';
+    const imageAttachmentReductionButtonClass = [
+      'ghost',
+      'meta-image-reduction-button',
+      imageAttachmentReductionStatus ? `is-${imageAttachmentReductionStatus.state}` : '',
+    ].filter(Boolean).join(' ');
+    const imageAttachmentReductionButtonDisabled = imageAttachmentReductionStatus?.state === 'reducing' || imageAttachmentReductionComplete;
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
       <section class="meta-panel">
@@ -1174,6 +1178,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
+        </label>
+        <div class="meta-image-reduction-row">
+          <span>Reduce new image sizes to fit:</span>
+          <input aria-label="Image reduce width" data-field="meta-image-attachment-max-width" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.width) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.width ?? ''))}" />
+          <span aria-hidden="true">w</span>
+          <span aria-hidden="true">x</span>
+          <input aria-label="Image reduce height" data-field="meta-image-attachment-max-height" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.height) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.height ?? ''))}" />
+          <span aria-hidden="true">h</span>
+          <button type="button" class="${deps.escapeAttr(imageAttachmentReductionButtonClass)}" data-action="reduce-existing-image-attachments"${imageAttachmentReductionButtonDisabled ? ' disabled' : ''}>${deps.escapeHtml(imageAttachmentReductionButtonLabel)}</button>
+        </div>
+        <label class="checkbox-label">
+          <span>New Sections Contained</span>
+          <input
+            type="checkbox"
+            data-field="meta-section-contained-default"
+            ${getDocumentSectionContainedDefault(state.documentMeta) ? 'checked' : ''}
+          />
         </label>
         <details class="meta-expandable-field">
           <summary>
@@ -1550,6 +1571,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
     const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
+    const gridStackWidth = component === 'grid' ? coerceGridStackWidth(block.schema.gridStackWidth) : DEFAULT_GRID_STACK_WIDTH;
     const textMetaFields = component === 'text'
       ? `<label class="schema-meta-checkbox">
           <input
@@ -1561,6 +1583,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
           <span>Show Copy Button</span>
         </label>`
+      : '';
+    const gridMetaFields = component === 'grid'
+      ? `<div class="grid-stack-width-field block-meta-field">
+          <label>
+            <span>Stack Width</span>
+            <input
+              class="grid-stack-width-input"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-grid-stack-width"
+              placeholder="${DEFAULT_GRID_STACK_WIDTH}"
+              value="${deps.escapeAttr(gridStackWidth === DEFAULT_GRID_STACK_WIDTH || gridStackWidth === 'never' ? '' : gridStackWidth)}"
+              ${gridStackWidth === 'never' ? 'disabled' : ''}
+            />
+          </label>
+          <label class="checkbox-label grid-stack-never-toggle">
+            <span>Never</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-grid-stack-never"
+              ${gridStackWidth === 'never' ? 'checked' : ''}
+            />
+          </label>
+        </div>`
       : '';
     const scriptingVersionField =
       isScriptingPlugin
@@ -1658,6 +1706,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           />
         </label>
         ${textMetaFields}
+        ${gridMetaFields}
         <label>
           <span>Hide If Yes</span>
           <input
@@ -2158,32 +2207,8 @@ function findBlockLocation(
   return null;
 }
 
-function findSectionLocation(
-  sections: VisualSection[],
-  targetSectionKey: string
-): { container: VisualSection[]; index: number } | null {
-  const index = sections.findIndex((section) => section.key === targetSectionKey);
-  if (index >= 0) {
-    return { container: sections, index };
-  }
-  for (const section of sections) {
-    const nested = findSectionLocation(section.children, targetSectionKey);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
-}
-
 export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
   return `${kind}:${index}`;
-}
-
-function normalizeEmptySectionHeadingLevel(value: string | undefined): 'h1' | 'h2' | 'h3' {
-  if (value === 'h2' || value === 'h3') {
-    return value;
-  }
-  return 'h1';
 }
 
 function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -144,6 +145,49 @@ hvy_version: 0.1
   expect(output).not.toMatch(/<!--hvy:grid:\d+\s+\{[^\n>]*"column"/);
   expect(output).not.toMatch(/<!--hvy:container:\d+\s+\{[^\n>]*"component"/);
   expect(output).not.toMatch(/<!--hvy:component-list:\d+\s+\{[^\n>]*"component"/);
+});
+
+test('serializes grid stack width when it differs from the default', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2,"gridStackWidth":"30rem"}-->
+
+  <!--hvy:grid:0 {"id":"skills"}-->
+
+   <!--hvy:text {}-->
+    Skills
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:grid {"gridStackWidth":"30rem"}-->');
+});
+
+test('does not serialize default grid stack width', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+ <!--hvy:grid {"gridColumns":2,"gridStackWidth":"50rem"}-->
+
+  <!--hvy:grid:0 {"id":"skills"}-->
+
+   <!--hvy:text {}-->
+    Skills
+`, '.hvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('<!--hvy:grid {}-->');
+  expect(output).not.toContain('gridStackWidth');
 });
 
 test('round-trips component-list display defaults, sort keys, and container collapse fields', () => {
@@ -461,6 +505,7 @@ component_defs:
   expect(output).not.toContain('expandableStubComponent: container');
   expect(output).not.toContain('buttonLabel: Generate');
   expect(output).not.toContain('carouselDurationMs: 3000');
+  expect(output).not.toContain('carouselShowFrame: true');
 });
 
 test('serializes plugin blocks with plugin identity and config', () => {
@@ -1106,6 +1151,28 @@ hvy_version: 0.1
   expect(roundTripped.sections[0]?.css).toBe('padding: 0 0.35rem;');
 });
 
+test('serializes contained section override when document default is uncontained', () => {
+  const input = `---
+hvy_version: 0.1
+section_defaults:
+  contained: false
+---
+
+<!--hvy: {"id":"summary","contained":true}-->
+#! Summary
+
+ <!--hvy:text {}-->
+  Summary body
+`;
+
+  const document = deserializeDocument(input, '.hvy');
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+
+  expect(output).toContain('<!--hvy: {"id":"summary","lock":false,"expanded":true,"highlight":false,"contained":true}-->');
+  expect(roundTripped.sections[0]?.contained).toBe(true);
+});
+
 test('round-trips text showCopy metadata', () => {
   const input = `---
 hvy_version: 0.1
@@ -1183,7 +1250,7 @@ test('serialize -> deserialize -> serialize stays stable for migrated examples',
   }
 });
 
-test('image component round-trips imageFile and imageAlt schema fields', () => {
+test('image component round-trips imageFile, imageAlt, and caption schema fields', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -1191,18 +1258,20 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption","css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
   expect(block?.schema.component).toBe('image');
   expect(block?.schema.imageFile).toBe('hero.png');
   expect(block?.schema.imageAlt).toBe('Cover photo');
+  expect(block?.schema.caption).toBe('Hero caption');
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
+  expect(output).toContain('"caption":"Hero caption"');
 });
 
 test('serializes and parses multiple tail attachments with byte slicing', () => {
@@ -1287,7 +1356,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"gallery"}-->
 #! Gallery
 
-<!--hvy:carousel {"carouselDurationMs":2500,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
+<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
 `, '.hvy');
   document.attachments = [
     { id: 'image:a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2]) },
@@ -1300,10 +1369,83 @@ hvy_version: 0.1
 
   expect(block?.schema.component).toBe('carousel');
   expect(block?.schema.carouselDurationMs).toBe(2500);
+  expect(block?.schema.carouselShowFrame).toBe(false);
   expect(block?.schema.carouselImages).toMatchObject([
       { imageFile: 'a.png', caption: 'A' },
       { imageFile: 'b.png', imageAlt: 'B alt' },
   ]);
   expect(expectedResult.attachments.map((attachment) => attachment.id)).toEqual(['image:a.png', 'image:b.png']);
   expect(Array.from(expectedResult.attachments[1]?.bytes ?? [])).toEqual([3, 4]);
+});
+
+test('expected result: byte deserialization indexes lazy tail attachments before materializing bytes', () => {
+  const prefix = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:image {"imageFile":"photo.png"}-->
+<!--hvy:tail {"id":"image:photo.png","mediaType":"image/png","length":4}-->
+${HVY_TAIL_SENTINEL}
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const bytes = new Uint8Array(prefixBytes.length + 4);
+  bytes.set(prefixBytes, 0);
+  bytes.set([8, 9, 10, 11], prefixBytes.length);
+
+  const document = deserializeDocumentBytes(bytes, '.hvy');
+  const store = ensureDocumentAttachmentStore(document);
+
+  expect(getAttachmentDescriptors(document)).toEqual([
+    { id: 'image:photo.png', meta: { mediaType: 'image/png' }, length: 4 },
+  ]);
+  expect(store.getDescriptor('image:photo.png')?.length).toBe(4);
+  expect(Array.from(store.get('image:photo.png')?.bytes ?? [])).toEqual([8, 9, 10, 11]);
+});
+
+test('expected result: attachment store overwrites ids and preserves declaration order', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`, '.hvy');
+  const store = ensureDocumentAttachmentStore(document);
+
+  store.set('image:first.png', { mediaType: 'image/png' }, new Uint8Array([1]));
+  store.set('db', { mediaType: 'application/octet-stream' }, new Uint8Array([2]));
+  store.set('image:first.png', { mediaType: 'image/png', updated: true }, new Uint8Array([3, 4]));
+
+  expect(store.listDescriptors()).toEqual([
+    { id: 'image:first.png', meta: { mediaType: 'image/png', updated: true }, length: 2 },
+    { id: 'db', meta: { mediaType: 'application/octet-stream' }, length: 1 },
+  ]);
+  expect(Array.from(store.get('image:first.png')?.bytes ?? [])).toEqual([3, 4]);
+});
+
+test('expected result: async serializer receives text body, descriptors, and recall API', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`, '.hvy');
+  document.attachments = [
+    { id: 'db', meta: { mediaType: 'application/octet-stream' }, bytes: new Uint8Array([1, 2]) },
+  ];
+
+  const expectedResult = await serializeDocumentBytesAsync(document, {
+    async serializeDocumentBytes(request) {
+      expect(request.textBody).toContain(HVY_TAIL_SENTINEL);
+      expect(request.tail).toEqual([{ id: 'db', meta: { mediaType: 'application/octet-stream' }, length: 2 }]);
+      expect(Array.from(await request.recallAttachment('db') ?? [])).toEqual([1, 2]);
+      return new TextEncoder().encode('native-result');
+    },
+  });
+
+  expect(new TextDecoder().decode(expectedResult)).toBe('native-result');
 });

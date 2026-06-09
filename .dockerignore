@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-embed
+test-results
+playwright-report
+dev-traces
+scratch
+.git
+.env
+*.tsbuildinfo

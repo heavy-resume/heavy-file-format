@@ -18,6 +18,8 @@ import { logClickTrace } from '../click-trace';
 interface RichToolbarSelection {
   range: Range;
   anchor: HTMLAnchorElement | null;
+  linkHref: string | null;
+  linkText: string | null;
 }
 
 const richToolbarSelections = new WeakMap<HTMLElement, RichToolbarSelection>();
@@ -90,6 +92,9 @@ export function bindClickDispatch(app: HTMLElement): void {
     if (actionButton?.dataset.action === 'set-block-align') {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
+    }
+    if (actionButton && isTableEditorActionButton(actionButton)) {
+      event.preventDefault();
     }
     if (actionButton?.dataset.action === 'set-editor-mode' || actionButton?.dataset.action === 'switch-view') {
       event.preventDefault();
@@ -397,6 +402,15 @@ function isPlacementModeAction(action: string): boolean {
     || action === 'toggle-expandable-editor-panel';
 }
 
+function isTableEditorActionButton(actionButton: HTMLElement): boolean {
+  const action = actionButton.dataset.action ?? '';
+  return (action === 'remove-table-row'
+    || action === 'remove-table-column'
+    || action === 'add-table-row'
+    || action === 'add-table-column')
+    && Boolean(actionButton.closest('.table-editor'));
+}
+
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {
   const action = actionButton.dataset.action;
   if (!action) {
@@ -413,7 +427,7 @@ function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event:
     return false;
   }
 
-  if (requiresRemoveConfirmation(action) && !confirmedRemoveReady) {
+  if (requiresRemoveConfirmation(action, actionButton) && !confirmedRemoveReady) {
     logActionExecution(event, 'click-dispatch:execute-action:confirm-required', { action });
     openRemoveConfirmationModal(() => executeActionButton(app, actionButton, null, true), app);
     return true;
@@ -537,9 +551,12 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
     return existing;
   }
   const clone = range.cloneRange();
+  const anchor = findLinkAnchorForRange(editable, clone);
   const stored = {
     range: clone,
-    anchor: findLinkAnchorForRange(editable, clone),
+    anchor,
+    linkHref: anchor?.getAttribute('href') ?? null,
+    linkText: anchor?.textContent ?? null,
   };
   richToolbarSelections.set(editable, stored);
   return stored;
@@ -547,8 +564,11 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
 
 function restoreRichToolbarSelection(editable: HTMLElement): RichToolbarSelection | null {
   const stored = richToolbarSelections.get(editable);
-  if (!stored || !isRangeInside(editable, stored.range)) {
+  if (!stored) {
     return null;
+  }
+  if (!isRangeInside(editable, stored.range)) {
+    return recoverRichToolbarLinkSelection(editable, stored);
   }
   const selection = window.getSelection();
   selection?.removeAllRanges();
@@ -556,10 +576,37 @@ function restoreRichToolbarSelection(editable: HTMLElement): RichToolbarSelectio
   return stored;
 }
 
+function recoverRichToolbarLinkSelection(editable: HTMLElement, stored: RichToolbarSelection): RichToolbarSelection | null {
+  if (!stored.linkHref) {
+    return null;
+  }
+  const hrefMatches = Array.from(editable.querySelectorAll<HTMLAnchorElement>('a')).filter((anchor) =>
+    anchor.getAttribute('href') === stored.linkHref
+  );
+  const textMatches = hrefMatches.filter((anchor) => (anchor.textContent ?? '') === stored.linkText);
+  const anchor = textMatches.length === 1 ? textMatches[0] : hrefMatches.length === 1 ? hrefMatches[0] : null;
+  if (!anchor) {
+    return null;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(anchor);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const recovered = {
+    range,
+    anchor,
+    linkHref: anchor.getAttribute('href') ?? null,
+    linkText: anchor.textContent ?? null,
+  };
+  richToolbarSelections.set(editable, recovered);
+  return recovered;
+}
+
 function findLinkAnchorForRange(editable: HTMLElement, range: Range): HTMLAnchorElement | null {
   for (const node of [range.startContainer, range.endContainer, range.commonAncestorContainer]) {
     const element = node instanceof Element ? node : node.parentNode instanceof Element ? node.parentNode : null;
-    const anchor = element?.closest<HTMLAnchorElement>('a[href]') ?? null;
+    const anchor = element?.closest<HTMLAnchorElement>('a') ?? null;
     if (anchor && editable.contains(anchor)) {
       return anchor;
     }
@@ -596,7 +643,10 @@ function getRichEditableForButton(app: HTMLElement, richButton: HTMLElement): HT
   return app.querySelector<HTMLElement>(selector);
 }
 
-function requiresRemoveConfirmation(action: string): boolean {
+function requiresRemoveConfirmation(action: string, actionButton: HTMLElement): boolean {
+  if (action === 'remove-table-row' && isEmptyTableRowRemoval(actionButton)) {
+    return false;
+  }
   return new Set([
     'remove-block',
     'remove-section',
@@ -611,4 +661,20 @@ function requiresRemoveConfirmation(action: string): boolean {
     'remove-component-def',
     'remove-section-def',
   ]).has(action);
+}
+
+function isEmptyTableRowRemoval(actionButton: HTMLElement): boolean {
+  const sectionKey = getActionSectionKey(actionButton);
+  const blockId = actionButton.dataset.blockId ?? '';
+  const rowIndex = Number.parseInt(actionButton.dataset.rowIndex ?? '', 10);
+  if (!sectionKey || !blockId || Number.isNaN(rowIndex)) {
+    return false;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  const row = block?.schema.tableRows[rowIndex];
+  if (!row) {
+    return false;
+  }
+  const cellCount = Math.max(block.schema.tableColumns.length, row.cells.length);
+  return Array.from({ length: cellCount }).every((_item, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
 }

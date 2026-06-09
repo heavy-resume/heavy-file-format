@@ -1,4 +1,4 @@
-import { cloneReusableSection, defaultBlockSchema, schemaFromUnknown } from '../document-factory';
+import { cloneReusableSection, defaultBlockSchema, getDefaultSectionContained, schemaFromUnknown } from '../document-factory';
 import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import { getComponentDefsFromMeta, isBuiltinComponentName, resolveBaseComponentFromMeta } from '../component-defs';
 import type { JsonObject } from '../hvy/types';
@@ -379,7 +379,7 @@ function addSection(ctx: HvyDocumentCommandContext, args: string[], index: HvyIn
     throw new Error('hvy insert section: expected PARENT_PATH ID TITLE or PARENT_PATH --from-template TEMPLATE_KEY');
   }
   const parent = findSectionParent(ctx, parentPath);
-  const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1);
+  const section = createSection(id, decodeCliText(title), parent ? parent.level + 1 : 1, ctx.document.meta);
   if (parent) {
     insertChild(parent.children, section, index);
   } else {
@@ -819,11 +819,11 @@ function findNearestComponentPath(ctx: HvyDocumentCommandContext, resolvedPath: 
   return '';
 }
 
-function createSection(id: string, title: string, level: number): VisualSection {
+function createSection(id: string, title: string, level: number, documentMeta: JsonObject): VisualSection {
   return {
     key: makeId('section'),
     customId: id,
-    contained: true,
+    contained: getDefaultSectionContained(documentMeta),
     lock: false,
     idEditorOpen: false,
     isGhost: false,

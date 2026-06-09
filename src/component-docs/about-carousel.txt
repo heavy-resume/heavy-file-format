@@ -2,3 +2,4 @@
 
 Displays multiple binary image attachments from carouselImages.
 Each carouselImages entry names a tail attachment with id image:<filename>.
+Set carouselShowFrame to false to keep the carousel behavior while hiding the visible frame background and border.

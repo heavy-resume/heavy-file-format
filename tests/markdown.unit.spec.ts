@@ -84,6 +84,18 @@ test('keeps markdown task list markers as task lists', () => {
   expect(html).not.toContain('hvy-inline-checkbox');
 });
 
+test('renders markdown quote markers as blockquotes', () => {
+  const html = markdownToReaderHtml('> Alpha\n>\n> - Bravo\n> - Charlie\n>\n> Delta');
+
+  expect(html).toContain('<blockquote>');
+  expect(html).toContain('<p>Alpha</p>');
+  expect(html).toContain('<ul>');
+  expect(html).toContain('<li>Bravo</li>');
+  expect(html).toContain('<li>Charlie</li>');
+  expect(html).toContain('<p>Delta</p>');
+  expect(html).not.toContain('&gt; Alpha');
+});
+
 test('escapes raw html before applying underline syntax', () => {
   expect(applyUnderlineSyntax(escapeRawHtml('___safe___ <u>unsafe</u> <script>bad()</script>'))).toBe(
     '<u>safe</u> &lt;u&gt;unsafe&lt;/u&gt; &lt;script&gt;bad()&lt;/script&gt;'
@@ -118,6 +130,20 @@ test('serializes editor inline code with markdown backticks', () => {
 
 test('serializes editor inline code with literal angle brackets', () => {
   expect(turndown.turndown('<p>Use <code>&lt;tag&gt;</code> now</p>')).toBe('Use `<tag>` now');
+});
+
+test('serializes mailto links and drops empty editor links to plain text', () => {
+  expect(turndown.turndown('<p><a href="mailto:person@example.com">person@example.com</a></p>')).toBe(
+    '[person@example.com](mailto:person@example.com)'
+  );
+  expect(turndown.turndown('<p><a href="">person@example.com</a></p>')).toBe('person@example.com');
+  expect(turndown.turndown('<p><a>person@example.com</a></p>')).toBe('person@example.com');
+});
+
+test('renders mailto links from text markdown', () => {
+  expect(markdownToReaderHtml('[person@example.com](mailto:person@example.com)')).toContain(
+    '<a href="mailto:person@example.com">person@example.com</a>'
+  );
 });
 
 test('does not render markdown image syntax in text components', () => {
@@ -218,6 +244,11 @@ test('serializes editor text line style wrappers back to markers', () => {
       '<div class="hvy-text-line-style" data-hvy-text-line-style="role"><span class="hvy-text-line-style-marker">^role^</span><h4>Foo</h4></div>'
     )
   ).toBe('^role^ #### Foo');
+  expect(
+    turndown.turndown(
+      '<div class="hvy-text-line-style" data-hvy-text-line-style="role"><span class="hvy-text-line-style-marker">^role^</span><p></p></div>'
+    )
+  ).toBe('^role^');
 });
 
 test('serializes rich editor fill-in markers back to value comments', () => {

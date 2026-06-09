@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
 import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
+import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { SearchCategory } from '../../search/types';
 
 const loadDbTableRuntime = () => import('../../plugins/db-table');
@@ -135,7 +136,7 @@ export function bindChangeControls(app: HTMLElement): void {
     if (field === 'empty-section-heading-level' && target instanceof HTMLSelectElement) {
       const sectionKey = target.dataset.sectionKey;
       if (sectionKey) {
-        state.addComponentBySection[`empty-heading:${sectionKey}`] = target.value;
+        rememberEmptySectionHeadingLevel(sectionKey, target.value);
       }
       return;
     }

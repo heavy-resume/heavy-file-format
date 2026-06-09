@@ -988,6 +988,105 @@ hvy_version: 0.1
   expect(result.editorText).toContain('Host download serialization test.');
 });
 
+test('embedded viewer resolves static image attachments through host adapter urls', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:image {"imageFile":"static-photo.png","imageAlt":"Static Photo"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#viewerMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      attachmentStore: {
+        list: () => [{ id: 'image:static-photo.png', meta: { mediaType: 'image/png' }, length: 12 }],
+        recall: () => null,
+        store: () => {},
+        remove: () => {},
+        resolveUrl: (id: string) => id === 'image:static-photo.png' ? '/assets/static-photo.png' : null,
+      },
+    });
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const image = root.querySelector<HTMLImageElement>('img[data-image-filename="static-photo.png"]');
+    return {
+      src: image?.getAttribute('src') ?? '',
+      alt: image?.getAttribute('alt') ?? '',
+      missing: root.textContent?.includes('Missing attachment') ?? false,
+    };
+  });
+
+  expect(result.src).toBe('/assets/static-photo.png');
+  expect(result.alt).toBe('Static Photo');
+  expect(result.missing).toBe(false);
+});
+
+test('embedded async serializer delegates to host serializer and recall api', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="editorMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+`;
+    const root = document.querySelector<HTMLElement>('#editorMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => [{ id: 'image:host.png', meta: { mediaType: 'image/png' }, length: 3 }],
+        recall: (id: string) => id === 'image:host.png' ? new Uint8Array([7, 8, 9]) : null,
+        store: () => {},
+        remove: () => {},
+      },
+      serializer: {
+        async serializeDocumentBytes(request: {
+          textBody: string;
+          tail: Array<{ id: string; length: number }>;
+          recallAttachment(id: string): Promise<Uint8Array | null>;
+        }) {
+          const bytes = await request.recallAttachment('image:host.png');
+          return new TextEncoder().encode(JSON.stringify({
+            hasTail: request.textBody.includes('--HVY-TAIL--'),
+            tail: request.tail.map((entry) => ({ id: entry.id, length: entry.length })),
+            bytes: Array.from(bytes ?? []),
+          }));
+        },
+      },
+    });
+    const serialized = await mount.serializeDocumentBytesAsync();
+    return JSON.parse(new TextDecoder().decode(serialized));
+  });
+
+  expect(result).toEqual({
+    hasTail: true,
+    tail: [{ id: 'image:host.png', length: 3 }],
+    bytes: [7, 8, 9],
+  });
+});
+
 test('embedded viewers can hydrate and update search snapshots from headless search', async ({ page }) => {
   await page.goto('/');
 
@@ -2545,6 +2644,33 @@ test('new section title creates a matching section id', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"launch-plan"');
+});
+
+test('empty section heading level defaults to last used across ghost and title shortcuts', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  let section = page.locator('.editor-section-card').last();
+  let titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory One');
+  await titleInput.press('Enter');
+  await section.locator('[data-field="empty-section-heading-level"]').selectOption('h2');
+  await section.locator('.empty-section-heading-ghost .ghost-label').click();
+  await expect(section.locator('.rich-editor h2')).toContainText('Memory One');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  section = page.locator('.editor-section-card').last();
+  titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory Two');
+  await titleInput.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  await expect(section.locator('.rich-editor h2')).toContainText('Memory Two');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  section = page.locator('.editor-section-card').last();
+  titleInput = section.locator('[data-field="section-title"]');
+  await titleInput.fill('Memory Three');
+  await titleInput.press('Enter');
+  await expect(section.locator('[data-field="empty-section-heading-level"]')).toHaveValue('h2');
 });
 
 test('edit sidebar add section creates a sidebar section', async ({ page }) => {

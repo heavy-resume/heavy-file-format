@@ -94,6 +94,73 @@ test('passive editor fallback renders plain reader content without re-entering A
   expect(expectedOptions).toEqual({ suppressAiEditorDelegation: true });
 });
 
+test('block meta fields include grid stack width for grid components', () => {
+  const block = {
+    id: 'block-grid',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('grid'),
+      id: 'layout-grid',
+      gridStackWidth: '30rem',
+    },
+  } satisfies VisualBlock;
+  const section = createSection([block]);
+  const helpers = {} as ComponentRenderHelpers;
+  const renderer = createEditorRenderer({
+    documentExtension: '.hvy',
+    documentMeta: {},
+    documentSections: [section],
+    showAdvancedEditor: false,
+    addComponentBySection: {},
+    activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
+    componentPlacement: null,
+    pendingEditorActivation: null,
+    expandableEditorPanels: {},
+    readerExpandableState: {},
+    editorSidebarHelpDismissed: true,
+    currentView: 'editor',
+    responsivePreview: 'full',
+    mobileAdjustmentMode: false,
+    openTemplateDefinitionKeys: [],
+    openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    renderReaderBlock: () => '',
+    renderReusableSectionOptions: () => '',
+    renderOption: () => '',
+    resolveBaseComponent: (componentName) => componentName,
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    isActiveEditorSectionTitle: () => false,
+    isActiveEditorBlock: () => false,
+    isDefaultUntitledSectionTitle: () => false,
+    formatSectionTitle: (title) => title,
+    findSectionByKey: () => section,
+    buildSectionRenderSequence: (targetSection) => targetSection.blocks.map((targetBlock) => ({ kind: 'block' as const, block: targetBlock })),
+    getComponentDefs: () => [],
+    getSectionDefs: () => [],
+    getThemeConfig: () => ({ colors: {} }),
+    getComponentRenderHelpers: () => helpers,
+    isBuiltinComponent: () => false,
+  });
+
+  const expectedResult = renderer.renderBlockMetaFields(section.key, block);
+
+  expect(expectedResult).toContain('Stack Width');
+  expect(expectedResult).toContain('data-field="block-grid-stack-width"');
+  expect(expectedResult).toContain('value="30rem"');
+  expect(expectedResult).toContain('<span>Never</span>');
+  expect(expectedResult).not.toContain('Never Stack');
+});
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

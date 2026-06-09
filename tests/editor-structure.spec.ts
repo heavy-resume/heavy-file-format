@@ -290,6 +290,42 @@ hvy_version: 0.1
   await expect(title).toHaveText('Heavy Stack');
 });
 
+test('typing a carousel caption in ai mode preserves focus', async ({ page }) => {
+  const perfMessages: string[] = [];
+  page.on('console', (message) => {
+    const text = message.text();
+    if (text.includes('[hvy:perf] refreshReaderPanels')) {
+      perfMessages.push(text);
+    }
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:carousel {"carouselImages":[{"imageFile":"missing-slide.png","caption":""}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-carousel').dblclick();
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const caption = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] [data-field="carousel-caption"]');
+  await caption.click();
+  perfMessages.length = 0;
+  await page.keyboard.type('Expected result caption');
+
+  await expect(caption).toBeFocused();
+  await expect(caption).toHaveValue('Expected result caption');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .hvy-carousel-caption')).toContainText('Expected result caption');
+  expect(perfMessages).toHaveLength(0);
+});
+
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {
   await page.goto('/');
 
@@ -4183,6 +4219,41 @@ test('move arrows only render when there is an adjacent target', async ({ page }
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
   await expect(sections.last().locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
 
+});
+
+test('section up arrow skips sidebar siblings in the main section order', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"top-main"}-->
+#! Top Main
+
+ Top main body.
+
+<!--hvy: {"id":"fake-sidebar","location":"sidebar"}-->
+#! Fake Sidebar
+
+ Fake sidebar body.
+
+<!--hvy: {"id":"bottom-main"}-->
+#! Bottom Main
+
+ Bottom main body.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect.poll(() => getTopLevelEditorSectionTitles(page)).toEqual(['Top Main', 'Bottom Main']);
+  const bottomMain = page.locator('#editorTree > .hvy-surface > .editor-tree-body > .editor-section-card', { hasText: 'Bottom Main' });
+  await expect(bottomMain.locator(':scope > .editor-section-head [data-action="move-section-up"]')).toHaveCount(1);
+  await expect(bottomMain.locator(':scope > .editor-section-head [data-action="move-section-down"]')).toHaveCount(0);
+
+  await bottomMain.locator(':scope > .editor-section-head [data-action="move-section-up"]').click();
+
+  await expect.poll(() => getTopLevelEditorSectionTitles(page)).toEqual(['Bottom Main', 'Top Main']);
 });
 
 test('section drag handle uses grab cursor', async ({ page }) => {

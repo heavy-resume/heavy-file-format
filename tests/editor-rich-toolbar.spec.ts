@@ -1,7 +1,17 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const defaultDocumentText = 'This default HVY document is a lightweight workspace';
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+});
 
 test('toolbar exposes quote and code block actions', async ({ page }) => {
   await page.goto('/');
+  await loadRichTextDocument(page, 'Quoted');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -9,13 +19,14 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   const codeBlockButton = page.locator('[data-rich-action="code-block"]').first();
 
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Quoted</p>';
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode!);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await quoteButton.click();
   await expect(editor.locator('blockquote')).toContainText('Quoted');
@@ -28,6 +39,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const paragraph = node.querySelector('p');
     const selection = window.getSelection();
     const range = document.createRange();
@@ -36,6 +48,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await quoteButton.click();
   await expect(editor).toBeFocused();
@@ -45,6 +58,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>plain</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -53,6 +67,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await quoteButton.click();
   await expect(editor).toBeFocused();
@@ -61,6 +76,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<blockquote></blockquote>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const quote = node.querySelector('blockquote');
     const selection = window.getSelection();
     const range = document.createRange();
@@ -69,6 +85,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await page.keyboard.press('Backspace');
   await expect(editor.locator('blockquote')).toHaveCount(0);
@@ -76,12 +93,15 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Removed</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode!);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await page.getByRole('button', { name: 'Strikethrough' }).first().click();
   await expect(editor.locator('s, strike, del')).toContainText('Removed');
@@ -89,18 +109,22 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Underlined</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('p')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(textNode!);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await page.getByRole('button', { name: 'Underline' }).first().click();
   await expect(editor.locator('u')).toContainText('Underlined');
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const paragraph = node.querySelector('p');
     const selection = window.getSelection();
     const range = document.createRange();
@@ -108,6 +132,8 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     range.collapse(true);
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await codeBlockButton.click();
   await expect(editor.locator('pre code')).toHaveCount(1);
@@ -116,6 +142,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await editor.evaluate((node) => {
     node.innerHTML = '<pre data-code-language="js"><code class="language-js" contenteditable="true">const value = 1;</code></pre>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
     const textNode = node.querySelector('code')?.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -124,6 +151,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   await codeBlockButton.click();
   await expect(editor.locator('pre')).toHaveCount(0);
@@ -131,8 +159,200 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(codeBlockButton).not.toHaveClass(/secondary/);
 });
 
+test('italic toolbar action serializes multi-paragraph and list selections', async ({ page }) => {
+  await page.goto('/');
+  await loadToolbarSelectionDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    const firstText = node.querySelector('p')?.firstChild;
+    const lastText = node.querySelector('p:last-child')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(firstText!, 0);
+    range.setEnd(lastText!, lastText!.textContent!.length);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Italic' }).first().click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    emphasized: Array.from(node.querySelectorAll('em')).map((element) => element.textContent),
+    emptyEmphasis: Array.from(node.querySelectorAll('em')).filter((element) => (element.textContent ?? '').trim().length === 0).length,
+  }));
+  expect(expectedResult).toEqual({
+    emphasized: ['Alpha', 'Bravo', 'Charlie', 'Delta'],
+    emptyEmphasis: 0,
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('_Alpha_');
+  await expect(page.locator('#rawEditor')).toContainText('- _Bravo_');
+  await expect(page.locator('#rawEditor')).toContainText('- _Charlie_');
+  await expect(page.locator('#rawEditor')).toContainText('_Delta_');
+  await expect(page.locator('#rawEditor')).not.toContainText('__');
+});
+
+test('quote toolbar action formats every selected paragraph and list block', async ({ page }) => {
+  await page.goto('/');
+  await loadToolbarSelectionDocument(page);
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    const firstText = node.querySelector('p')?.firstChild;
+    const lastText = node.querySelector('p:last-child')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(firstText!, 0);
+    range.setEnd(lastText!, lastText!.textContent!.length);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Quote' }).first().click();
+
+  const expectedResult = await editor.evaluate((node) => ({
+    topLevelTags: Array.from(node.children).map((child) => child.tagName),
+    quotes: Array.from(node.querySelectorAll('blockquote')).map((element) => (element.textContent ?? '').replace(/\s+/g, ' ').trim()),
+    quoteChildren: Array.from(node.querySelector('blockquote')?.children ?? []).map((child) => child.tagName),
+  }));
+  expect(expectedResult).toEqual({
+    topLevelTags: ['BLOCKQUOTE'],
+    quotes: ['Alpha Bravo Charlie Delta'],
+    quoteChildren: ['P', 'UL', 'P'],
+  });
+
+  const quoteBox = await editor.locator('blockquote').boundingBox();
+  const bulletBox = await editor.locator('blockquote li').first().boundingBox();
+  expect(quoteBox).not.toBeNull();
+  expect(bulletBox).not.toBeNull();
+  expect(bulletBox!.x).toBeGreaterThan(quoteBox!.x + 12);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('> Alpha');
+  await expect(page.locator('#rawEditor')).toContainText('> - Bravo');
+  await expect(page.locator('#rawEditor')).toContainText('> - Charlie');
+  await expect(page.locator('#rawEditor')).toContainText('> Delta');
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+  const passiveBlock = page.locator('.editor-block-passive').first();
+  await expect(passiveBlock.locator('blockquote')).toHaveCount(1);
+  await expect(passiveBlock.locator('blockquote')).toContainText('Alpha');
+  await expect(passiveBlock.locator('blockquote li')).toHaveText(['Bravo', 'Charlie']);
+  await expect(passiveBlock).not.toContainText('> Alpha');
+});
+
+test('link toolbar only defaults selected text that looks like a link target', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Foo bar https://example.test/path person@example.com');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  const linkButton = page.getByRole('button', { name: 'Link' }).first();
+  const linkInput = page.locator('#linkInlineInput');
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.setEnd(textNode!, 'Foo bar'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+
+  await editor.evaluate((node) => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent?.includes('https://example.test/path')) {
+        textNode = walker.currentNode;
+        break;
+      }
+    }
+    const text = textNode!.textContent!;
+    const start = text.indexOf('https://example.test/path');
+    const range = document.createRange();
+    range.setStart(textNode!, start);
+    range.setEnd(textNode!, start + 'https://example.test/path'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('https://example.test/path');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+
+  await editor.evaluate((node) => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent?.includes('person@example.com')) {
+        textNode = walker.currentNode;
+        break;
+      }
+    }
+    const text = textNode!.textContent!;
+    const start = text.indexOf('person@example.com');
+    const range = document.createRange();
+    range.setStart(textNode!, start);
+    range.setEnd(textNode!, start + 'person@example.com'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('mailto:person@example.com');
+});
+
+async function loadToolbarSelectionDocument(page: Page): Promise<void> {
+  await loadRichTextDocument(page, `Alpha
+
+- Bravo
+- Charlie
+
+Delta`);
+  await expect(page.locator('.editor-block-passive li')).toHaveText(['Bravo', 'Charlie']);
+}
+
+async function loadRichTextDocument(page: Page, markdown: string): Promise<void> {
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"quote-target"}-->
+${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(page.locator('.editor-block-passive').first()).toContainText(markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '');
+}
+
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -147,6 +367,7 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
     const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
     await editor.evaluate((node) => {
       node.innerHTML = '<p>Heading text</p>';
+      node.dispatchEvent(new InputEvent('input', { bubbles: true }));
       const paragraph = node.querySelector('p');
       const selection = window.getSelection();
       const range = document.createRange();
@@ -154,6 +375,7 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
       selection?.removeAllRanges();
       selection?.addRange(range);
       (node as HTMLElement).focus();
+      node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     });
 
     await headingButton.click();
@@ -168,6 +390,7 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
 
     await editor.evaluate((node) => {
       node.innerHTML = '<p>ab</p>';
+      node.dispatchEvent(new InputEvent('input', { bubbles: true }));
       const textNode = node.querySelector('p')?.firstChild;
       const selection = window.getSelection();
       const range = document.createRange();
@@ -176,6 +399,7 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
       selection?.removeAllRanges();
       selection?.addRange(range);
       (node as HTMLElement).focus();
+      node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     });
 
     await headingButton.click();
@@ -207,6 +431,7 @@ test('text line style editor feeds the rich text toolbar', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
 
   await expect(page.locator('.text-line-style-toolbar-label').filter({ hasText: 'Paragraph Style' }).first()).toBeVisible();
@@ -430,6 +655,140 @@ test('normal after enter from paragraph style keeps the previous line styled', a
   await expect(editor.locator('p').last()).toContainText('Normal');
 });
 
+test('paragraph style after enter keeps caret on the empty new line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Plain line');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  const caretAfterStyle = await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const parent = range?.startContainer instanceof Element
+      ? range.startContainer
+      : range?.startContainer.parentElement;
+    const styled = parent?.closest('[data-hvy-text-line-style]');
+    const styledBlock = styled?.querySelector(':scope > :not(.hvy-text-line-style-marker)') as HTMLElement | null;
+    return {
+      selectedStyle: styled?.getAttribute('data-hvy-text-line-style') ?? '',
+      selectedText: styled?.textContent?.replace(/\^role\^/g, '').replace(/\u200b/g, '') ?? '',
+      styledBlockBreakCount: styledBlock?.querySelectorAll('br').length ?? -1,
+      styledBlockChildNodes: styledBlock?.childNodes.length ?? -1,
+      styledBlockHeight: styledBlock?.getBoundingClientRect().height ?? 0,
+      previousText: node.querySelector('p')?.textContent ?? '',
+    };
+  });
+  expect(caretAfterStyle).toMatchObject({
+    selectedStyle: 'role',
+    selectedText: '',
+    styledBlockBreakCount: 0,
+    styledBlockChildNodes: 0,
+    previousText: 'Plain line',
+  });
+  expect(caretAfterStyle.styledBlockHeight).toBeGreaterThan(0);
+  await page.keyboard.type('Styled line');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    plainText: node.querySelector('p')?.textContent ?? '',
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) => ({
+      text: (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, ''),
+      breakCount: line.querySelectorAll('br').length,
+      hasCaretAnchor: (line.textContent ?? '').includes('\u200b'),
+    })),
+  }));
+
+  expect(expectedResult).toEqual({
+    plainText: 'Plain line',
+    styledLines: [{
+      text: 'Styled line',
+      breakCount: 0,
+      hasCaretAnchor: false,
+    }],
+  });
+});
+
+test('arrowing back to a continued paragraph style line keeps caret after typed text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('indented');
+  await page.locator('[data-field="text-line-style-label"]').fill('Indented');
+  await page.locator('[data-field="text-line-style-css"]').fill('padding-left: 1rem;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Seatac Disc Golf');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Indented' }).first().click();
+  await page.keyboard.type('20 - ');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.type('3');
+
+  const expectedResult = await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    return {
+      lines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="indented"]')).map((line) => ({
+        text: (line.textContent ?? '').replace(/\^indented\^/g, '').replace(/\u200b/g, ''),
+        breakCount: line.querySelectorAll('br').length,
+        hasCaretAnchor: (line.textContent ?? '').includes('\u200b'),
+      })),
+      selectionTextOffset: range?.startContainer instanceof Text
+        ? range.startOffset
+        : null,
+      selectionText: range?.startContainer.textContent?.replace(/\u200b/g, '') ?? '',
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    lines: [
+      { text: '20 - 3', breakCount: 0, hasCaretAnchor: false },
+      { text: '', breakCount: 0, hasCaretAnchor: false },
+    ],
+    selectionTextOffset: '20 - 3'.length,
+    selectionText: '20 - 3',
+  });
+});
+
 test('enter keeps paragraph style active on the new line', async ({ page }) => {
   await page.goto('/');
 
@@ -464,8 +823,93 @@ test('enter keeps paragraph style active on the new line', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Role heading' }).first()).toHaveClass(/is-selected/);
 });
 
+test('enter on a styled continuation line inserts one styled line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, text!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
+      (line.textContent ?? '').replace(/\u200b/g, '').trim()
+    ),
+  }));
+
+  expect(expectedResult).toEqual({
+    styledLines: ['^role^Styled line', '^role^', '^role^'],
+  });
+});
+
+test('enter in the middle of a paragraph style splits into two styled lines', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'Add Style' }).click();
+  await page.locator('[data-field="text-line-style-name"]').fill('role');
+  await page.locator('[data-field="text-line-style-label"]').fill('Role heading');
+  await page.locator('[data-field="text-line-style-css"]').fill('font-weight: 700;');
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Styled line</p>';
+    const text = node.querySelector('p')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(text!, 'Styled'.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.getByRole('button', { name: 'Role heading' }).first().click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('continued ');
+
+  const expectedResult = await editor.evaluate((node) => ({
+    childTags: Array.from(node.children).map((child) => child.tagName),
+    nestedBlocks: node.querySelectorAll('[data-hvy-text-line-style] [data-hvy-text-line-style], [data-hvy-text-line-style] div').length,
+    styledLines: Array.from(node.querySelectorAll('[data-hvy-text-line-style="role"]')).map((line) =>
+      (line.textContent ?? '').replace(/\^role\^/g, '').replace(/\u200b/g, '')
+    ),
+  }));
+
+  expect(expectedResult).toEqual({
+    childTags: ['DIV', 'DIV'],
+    nestedBlocks: 0,
+    styledLines: ['Styled', 'continued line'],
+  });
+});
+
 test('heading enter exits to normal text and updates toolbar state', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -498,6 +942,7 @@ test('heading enter exits to normal text and updates toolbar state', async ({ pa
 
 test('empty heading buttons keep the caret available for typing', async ({ page }) => {
   await page.goto('/');
+  await expect(page.locator('.editor-block-passive').first()).toContainText(defaultDocumentText);
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -510,6 +955,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
   ]) {
     await editor.evaluate((node) => {
       node.innerHTML = '<p><br></p>';
+      node.dispatchEvent(new InputEvent('input', { bubbles: true }));
       const paragraph = node.querySelector('p');
       const selection = window.getSelection();
       const range = document.createRange();
@@ -518,6 +964,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
       selection?.removeAllRanges();
       selection?.addRange(range);
       (node as HTMLElement).focus();
+      node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     });
 
     const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();

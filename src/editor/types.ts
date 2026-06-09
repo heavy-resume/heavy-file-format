@@ -94,6 +94,7 @@ export interface ComponentListBlockSchema extends BaseBlockSchema {
 export interface GridBlockSchema extends BaseBlockSchema {
   kind: 'grid';
   gridColumns: number;
+  gridStackWidth: string;
   gridItems: GridItem[];
 }
 
@@ -123,6 +124,7 @@ export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
   imageFile: string;
   imageAlt: string;
+  caption: string;
 }
 
 export interface CarouselBlockSchema extends BaseBlockSchema {
@@ -132,6 +134,7 @@ export interface CarouselBlockSchema extends BaseBlockSchema {
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
   carouselShowIndicators: boolean;
+  carouselShowFrame: boolean;
 }
 
 export interface ButtonBlockSchema extends BaseBlockSchema {
@@ -188,6 +191,7 @@ interface RuntimeSchemaFieldAccess {
   componentListDefaultGroupKey: string;
   componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
+  gridStackWidth: string;
   gridItems: GridItem[];
   xrefTarget: string;
   xrefTargetTagFilter: string;
@@ -209,11 +213,13 @@ interface RuntimeSchemaFieldAccess {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
+  caption: string;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
   carouselShowIndicators: boolean;
+  carouselShowFrame: boolean;
   buttonLabel: string;
   buttonAction: 'ai-generate';
   buttonVisibleScript: string;

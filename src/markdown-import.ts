@@ -74,7 +74,7 @@ export function convertMarkdownToHvyDocument(sourceText: string): VisualDocument
       ...source.meta,
       hvy_version: source.meta.hvy_version ?? 0.1,
       reader_max_width: source.meta.reader_max_width ?? DEFAULT_READER_MAX_WIDTH,
-      section_defaults: source.meta.section_defaults ?? { css: DEFAULT_SECTION_CSS },
+      section_defaults: source.meta.section_defaults ?? { css: DEFAULT_SECTION_CSS, contained: true },
       ...(title ? { title } : {}),
     },
     sections: rootSections,

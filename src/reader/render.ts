@@ -1968,7 +1968,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           <h4>Insert Link</h4>
           <label>
             <span>URL or #ID</span>
-            <input id="linkInlineInput" list="linkInlineIds" placeholder="https://... or #section-id" />
+            <input id="linkInlineInput" list="linkInlineIds" placeholder="https://..., mailto:..., or #section-id" />
             <datalist id="linkInlineIds">
               ${ids.map((id) => `<option value="${deps.escapeAttr(id)}"></option>`).join('')}
             </datalist>

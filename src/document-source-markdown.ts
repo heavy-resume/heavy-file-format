@@ -41,7 +41,10 @@ function renderBlockMarkdown(block: VisualBlock): string[] {
     return tablePart(block);
   }
   if (component === 'image') {
-    return imagePart(block.schema.imageAlt);
+    return [
+      ...imagePart(block.schema.imageAlt),
+      ...textPart(block.schema.caption),
+    ];
   }
   if (component === 'carousel') {
     return block.schema.carouselImages.flatMap((image) => [

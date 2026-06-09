@@ -12,6 +12,7 @@ import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../compo
 import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
 import { serializeComponentDefinition } from '../serialization';
+import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -108,6 +109,12 @@ function validateHeaderCssValues(meta: JsonObject): void {
   const sectionDefaults = meta.section_defaults;
   if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults) && typeof (sectionDefaults as JsonObject).css === 'string') {
     assertCssValueIsDeclarationString((sectionDefaults as JsonObject).css as string, 'section_defaults.css');
+  }
+  if (sectionDefaults && typeof sectionDefaults === 'object' && !Array.isArray(sectionDefaults)) {
+    const contained = (sectionDefaults as JsonObject).contained;
+    if (typeof contained !== 'undefined' && typeof contained !== 'boolean') {
+      throw new Error('section_defaults.contained must be a boolean.');
+    }
   }
   const componentDefaults = meta.component_defaults;
   if (componentDefaults && typeof componentDefaults === 'object' && !Array.isArray(componentDefaults)) {
@@ -809,6 +816,10 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
     value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
+  if (baseComponent === 'grid') {
+    value.gridColumns = schema.gridColumns;
+    value.gridStackWidth = schema.gridStackWidth;
+  }
   if (baseComponent === 'xref-card') {
     value.xrefTitle = schema.xrefTitle;
     value.xrefDetail = schema.xrefDetail;
@@ -821,6 +832,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
   if (baseComponent === 'image') {
     value.imageFile = schema.imageFile;
     value.imageAlt = schema.imageAlt;
+    value.caption = schema.caption;
   }
   if (baseComponent === 'carousel') {
     value.carouselImages = schema.carouselImages;
@@ -828,6 +840,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.carouselPauseOnHover = schema.carouselPauseOnHover;
     value.carouselShowControls = schema.carouselShowControls;
     value.carouselShowIndicators = schema.carouselShowIndicators;
+    value.carouselShowFrame = schema.carouselShowFrame;
   }
   if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
@@ -941,6 +954,12 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
     schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
   }
+  if (typeof value.gridColumns === 'number' || typeof value.gridColumns === 'string') {
+    schema.gridColumns = coerceGridColumns(value.gridColumns);
+  }
+  if (typeof value.gridStackWidth === 'string') {
+    schema.gridStackWidth = coerceGridStackWidth(value.gridStackWidth);
+  }
   if (typeof value.xrefTitle === 'string') schema.xrefTitle = value.xrefTitle;
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
@@ -950,6 +969,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
+  if (typeof value.caption === 'string') schema.caption = value.caption;
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
@@ -969,6 +989,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.carouselPauseOnHover === 'boolean') schema.carouselPauseOnHover = value.carouselPauseOnHover;
   if (typeof value.carouselShowControls === 'boolean') schema.carouselShowControls = value.carouselShowControls;
   if (typeof value.carouselShowIndicators === 'boolean') schema.carouselShowIndicators = value.carouselShowIndicators;
+  if (typeof value.carouselShowFrame === 'boolean') schema.carouselShowFrame = value.carouselShowFrame;
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;

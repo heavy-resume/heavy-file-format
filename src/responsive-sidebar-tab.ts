@@ -3,14 +3,57 @@ import { shouldAutoDismissSidebarHelp } from './sidebar-help';
 
 type SidebarKind = 'editor' | 'viewer';
 
+const COMPACT_SIDEBAR_SHELL_MAX_WIDTH = 768;
+const responsiveShellResizeObservers = new WeakMap<HTMLElement, ResizeObserver>();
+
 const sidebarTabTimers: Record<SidebarKind, { reveal: number | null; hide: number | null; lastTop: number }> = {
   editor: { reveal: null, hide: null, lastTop: 0 },
   viewer: { reveal: null, hide: null, lastTop: 0 },
 };
 
+export function bindResponsiveSidebarShells(app: HTMLElement): void {
+  responsiveShellResizeObservers.get(app)?.disconnect();
+  const observer = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.target instanceof HTMLElement) {
+            updateResponsiveSidebarShellState(entry.target, entry.contentRect.width);
+          }
+        });
+      })
+    : null;
+
+  app.querySelectorAll<HTMLElement>('.editor-shell, .viewer-shell').forEach((shell) => {
+    updateResponsiveSidebarShellState(shell);
+    observer?.observe(shell);
+  });
+
+  if (observer) {
+    responsiveShellResizeObservers.set(app, observer);
+  } else {
+    responsiveShellResizeObservers.delete(app);
+  }
+}
+
+export function updateResponsiveSidebarShellState(shell: HTMLElement, measuredWidth = shell.getBoundingClientRect().width): void {
+  const compact = isResponsiveSidebarShellCompact(shell, measuredWidth);
+  shell.classList.toggle('hvy-compact-sidebar-shell', compact);
+  if (!compact) {
+    shell.classList.remove('is-sidebar-tab-visible');
+    shell.classList.remove('is-sidebar-tab-hidden');
+    shell.classList.remove('is-sidebar-tab-peeking');
+  }
+}
+
+export function isResponsiveSidebarShellCompact(shell: HTMLElement, measuredWidth = shell.getBoundingClientRect().width): boolean {
+  return shell.classList.contains('hvy-preview-frame-phone')
+    || shell.classList.contains('hvy-preview-frame-tablet')
+    || measuredWidth <= COMPACT_SIDEBAR_SHELL_MAX_WIDTH;
+}
+
 export function revealHiddenSidebarTabFromCorner(target: HTMLElement | null, event: PointerEvent): void {
   const shell = getCompactSidebarShell(target, event);
-  if (!shell || !isCompactPreviewShell(shell) || shell.classList.contains('is-sidebar-open')) {
+  if (!shell || !isResponsiveSidebarShellCompact(shell) || shell.classList.contains('is-sidebar-open')) {
     return;
   }
   const box = shell.getBoundingClientRect();
@@ -30,7 +73,7 @@ export function peekHiddenSidebarTabFromCorner(target: HTMLElement | null, event
     return;
   }
   const shell = getCompactSidebarShell(target, event);
-  if (!shell || !isCompactPreviewShell(shell) || shell.classList.contains('is-sidebar-open')) {
+  if (!shell || !isResponsiveSidebarShellCompact(shell) || shell.classList.contains('is-sidebar-open')) {
     return;
   }
   const kind = shell.classList.contains('editor-shell') ? 'editor' : 'viewer';
@@ -62,7 +105,7 @@ export function handleResponsiveSidebarTabScroll(target: HTMLElement | null): vo
 }
 
 function handleSidebarScrollable(kind: SidebarKind, scrollable: HTMLElement, shell: HTMLElement | null): void {
-  if (!shell || !isCompactPreviewShell(shell) || shell.classList.contains('is-sidebar-open')) {
+  if (!shell || !isResponsiveSidebarShellCompact(shell) || shell.classList.contains('is-sidebar-open')) {
     return;
   }
   const timerState = sidebarTabTimers[kind];
@@ -84,10 +127,6 @@ function handleSidebarScrollable(kind: SidebarKind, scrollable: HTMLElement, she
   }
 
   scheduleSidebarTabReveal(kind, shell);
-}
-
-function isCompactPreviewShell(shell: HTMLElement): boolean {
-  return shell.classList.contains('hvy-preview-frame-phone') || shell.classList.contains('hvy-preview-frame-tablet');
 }
 
 function getCompactSidebarShell(target: HTMLElement | null, event: PointerEvent): HTMLElement | null {

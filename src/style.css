@@ -682,22 +682,29 @@ body {
   --hvy-document-edge-gutter: 0.55rem;
 }
 
+.hvy-compact-sidebar-shell {
+  --hvy-document-edge-gutter: 0.55rem;
+}
+
 .hvy-preview-frame-tablet {
   --hvy-sidebar-footprint: 2.8rem;
   --hvy-document-edge-gutter: 0.75rem;
 }
 
 .hvy-preview-frame-phone,
-.hvy-preview-frame-tablet {
+.hvy-preview-frame-tablet,
+.hvy-compact-sidebar-shell {
   --hvy-sidebar-footprint: 0rem;
 }
 
 .hvy-preview-frame-phone:not(.is-sidebar-open),
-.hvy-preview-frame-tablet:not(.is-sidebar-open) {
+.hvy-preview-frame-tablet:not(.is-sidebar-open),
+.hvy-compact-sidebar-shell:not(.is-sidebar-open) {
   --hvy-sidebar-footprint: var(--hvy-document-edge-gutter);
 }
 
-.hvy-preview-frame-phone.is-sidebar-open {
+.hvy-preview-frame-phone.is-sidebar-open,
+.hvy-compact-sidebar-shell.is-sidebar-open {
   --hvy-sidebar-footprint: 2.35rem;
 }
 
@@ -808,12 +815,14 @@ body {
 
 .hvy-preview-frame-phone.viewer-shell .reader-document,
 .hvy-preview-frame-tablet.viewer-shell .reader-document,
+.hvy-compact-sidebar-shell.viewer-shell .reader-document,
 .hvy-preview-frame-desktop.viewer-shell .reader-document {
   padding-top: 0.8rem;
 }
 
 .hvy-preview-frame-phone.viewer-shell .reader-document,
-.hvy-preview-frame-tablet.viewer-shell .reader-document {
+.hvy-preview-frame-tablet.viewer-shell .reader-document,
+.hvy-compact-sidebar-shell.viewer-shell .reader-document {
   scrollbar-gutter: stable;
 }
 

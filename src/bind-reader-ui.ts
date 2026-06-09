@@ -8,6 +8,7 @@ import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '.
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { getActiveStateRuntime, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
@@ -57,6 +58,7 @@ export function bindReaderUi(app: HTMLElement): void {
   const readerDocuments = app.querySelectorAll<HTMLDivElement>('#readerDocument, #aiReaderDocument');
   const readerSidebarSections = app.querySelectorAll<HTMLDivElement>('#readerSidebarSections, #aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
+  bindResponsiveSidebarShells(app);
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
 

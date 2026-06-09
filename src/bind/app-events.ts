@@ -15,10 +15,12 @@ import { bindFocus } from './handlers/focus';
 import { bindDnd } from './handlers/dnd';
 import { bindClickMisc } from './handlers/click-misc';
 import { bindResize } from './handlers/resize';
+import { bindResponsiveSidebarShells } from '../responsive-sidebar-tab';
 
 const boundAppRoots = new WeakSet<HTMLElement>();
 
 export function bindAppEvents(app: HTMLElement): void {
+  bindResponsiveSidebarShells(app);
   if (boundAppRoots.has(app)) {
     bindShortcuts(app);
     return;

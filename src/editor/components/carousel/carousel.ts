@@ -9,7 +9,7 @@ import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
 import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, storeImageAttachment } from '../image/image';
-import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
+import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { downloadBlob } from '../../../utils';
 
 interface CarouselRuntimeState {
@@ -327,7 +327,11 @@ async function appendCarouselImageFiles(block: VisualBlock, sectionKey: string, 
   recordHistory(historyGroup);
   const images = await Promise.all(files.map(async (file) => {
     const mediaType = file.type || inferImageMediaType(file.name);
-    const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
+    const prepared = await prepareImageAttachmentBytes(
+      file,
+      mediaType,
+      resolveDocumentImageAttachmentMaxDimensions(state.document.meta, state.imageAttachmentMaxDimensions)
+    );
     await storeImageAttachment(file.name, prepared.mediaType, prepared.bytes);
     return { imageFile: file.name, imageAlt: file.name, caption: '' };
   }));

@@ -4,6 +4,7 @@ export type { ImageAttachmentMaxDimensions } from './types';
 export interface PreparedImageAttachment {
   bytes: Uint8Array;
   mediaType: string;
+  resized: boolean;
 }
 
 export interface ImageAttachmentResizeAdapter {
@@ -74,6 +75,16 @@ export function isAllowedImageAttachmentMediaType(mediaType: string): boolean {
   return ALLOWED_IMAGE_ATTACHMENT_TYPES.has(mediaType);
 }
 
+export function resolveDocumentImageAttachmentMaxDimensions(
+  meta: Record<string, unknown>,
+  fallback: ImageAttachmentMaxDimensions | null | undefined
+): ImageAttachmentMaxDimensions | null | undefined {
+  const value = meta.image_attachment_max_dimensions;
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? normalizeImageAttachmentMaxDimensions(value as ImageAttachmentMaxDimensions)
+    : fallback;
+}
+
 export async function prepareImageAttachmentBytes(
   file: File,
   mediaType: string,
@@ -86,20 +97,21 @@ export async function prepareImageAttachmentBytes(
   const originalBytes = new Uint8Array(await file.arrayBuffer());
   const normalizedMax = resolveImageAttachmentMaxDimensions(maxDimensions);
   if (!normalizedMax || !RESIZABLE_IMAGE_TYPES.has(mediaType)) {
-    return { bytes: originalBytes, mediaType };
+    return { bytes: originalBytes, mediaType, resized: false };
   }
   try {
     const dimensions = await adapter.getDimensions(file);
     const target = calculateContainedImageDimensions(dimensions, normalizedMax);
     if (!target.resized) {
-      return { bytes: originalBytes, mediaType };
+      return { bytes: originalBytes, mediaType, resized: false };
     }
     return {
       bytes: await adapter.resize(file, { width: target.width, height: target.height, mediaType }),
       mediaType,
+      resized: true,
     };
   } catch {
-    return { bytes: originalBytes, mediaType };
+    return { bytes: originalBytes, mediaType, resized: false };
   }
 }
 

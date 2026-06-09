@@ -428,6 +428,7 @@ export interface AppState {
   lastHistoryGroup: string | null;
   lastHistoryAt: number;
   pendingEditorCenterSectionKey: string | null;
+  imageAttachmentReductionStatus: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   transientNotice: { id: number; message: string } | null;
 }
 

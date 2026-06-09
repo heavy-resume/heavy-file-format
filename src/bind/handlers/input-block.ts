@@ -118,6 +118,28 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if ((field === 'meta-image-attachment-max-width' || field === 'meta-image-attachment-max-height') && target instanceof HTMLInputElement) {
+      recordHistory('meta:image-attachment-max-dimensions');
+      state.imageAttachmentReductionStatus = null;
+      const existing = state.document.meta.image_attachment_max_dimensions;
+      const dimensions = existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...existing } as JsonObject
+        : {};
+      const key = field === 'meta-image-attachment-max-width' ? 'width' : 'height';
+      const value = Number(target.value);
+      if (Number.isFinite(value) && value > 0) {
+        dimensions[key] = Math.floor(value);
+      } else {
+        delete dimensions[key];
+      }
+      if (typeof dimensions.width === 'number' || typeof dimensions.height === 'number') {
+        state.document.meta.image_attachment_max_dimensions = dimensions;
+      } else {
+        delete state.document.meta.image_attachment_max_dimensions;
+      }
+      return;
+    }
+
     if (field === 'meta-section-contained-default' && target instanceof HTMLInputElement) {
       recordHistory('meta:section-contained-default');
       const existingDefaults = state.document.meta.section_defaults;

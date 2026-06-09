@@ -2,7 +2,7 @@ import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
-import type { ComponentPlacementState } from '../types';
+import type { ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -59,6 +59,7 @@ import { isPdfAllowedComponentInstance } from '../pdf-document-capabilities';
 import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '../section-ops';
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
+import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -118,6 +119,8 @@ interface ComponentListDisplayContext {
 interface EditorRenderState {
   documentExtension: '.hvy' | '.thvy' | '.phvy' | '.md';
   documentMeta: Record<string, unknown>;
+  imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
+  imageAttachmentReductionStatus?: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   documentSections: VisualSection[];
   showAdvancedEditor: boolean;
   addComponentBySection: Record<string, string>;
@@ -1145,6 +1148,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const colorCount = Object.keys(theme.colors).length;
     const textLineStyles = getTextLineStylesFromMeta(state.documentMeta);
     const headingStyles = getHeadingStylesFromMeta(state.documentMeta);
+    const imageAttachmentMaxDimensions = state.documentMeta.image_attachment_max_dimensions && typeof state.documentMeta.image_attachment_max_dimensions === 'object' && !Array.isArray(state.documentMeta.image_attachment_max_dimensions)
+      ? state.documentMeta.image_attachment_max_dimensions as { width?: unknown; height?: unknown }
+      : {};
+    const globalImageAttachmentMaxDimensions = resolveImageAttachmentMaxDimensions(state.imageAttachmentMaxDimensions);
+    const imageAttachmentReductionStatus = state.imageAttachmentReductionStatus ?? null;
+    const imageAttachmentReductionComplete = imageAttachmentReductionStatus?.state === 'reduced' || imageAttachmentReductionStatus?.state === 'unchanged';
+    const imageAttachmentReductionButtonLabel = imageAttachmentReductionStatus?.message ?? 'Apply to Existing Images';
+    const imageAttachmentReductionButtonClass = [
+      'ghost',
+      'meta-image-reduction-button',
+      imageAttachmentReductionStatus ? `is-${imageAttachmentReductionStatus.state}` : '',
+    ].filter(Boolean).join(' ');
+    const imageAttachmentReductionButtonDisabled = imageAttachmentReductionStatus?.state === 'reducing' || imageAttachmentReductionComplete;
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     return `
       <section class="meta-panel">
@@ -1163,6 +1179,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        <div class="meta-image-reduction-row">
+          <span>Reduce new image sizes to fit:</span>
+          <input aria-label="Image reduce width" data-field="meta-image-attachment-max-width" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.width) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.width ?? ''))}" />
+          <span aria-hidden="true">w</span>
+          <span aria-hidden="true">x</span>
+          <input aria-label="Image reduce height" data-field="meta-image-attachment-max-height" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.height) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.height ?? ''))}" />
+          <span aria-hidden="true">h</span>
+          <button type="button" class="${deps.escapeAttr(imageAttachmentReductionButtonClass)}" data-action="reduce-existing-image-attachments"${imageAttachmentReductionButtonDisabled ? ' disabled' : ''}>${deps.escapeHtml(imageAttachmentReductionButtonLabel)}</button>
+        </div>
         <label class="checkbox-label">
           <span>New Sections Contained</span>
           <input

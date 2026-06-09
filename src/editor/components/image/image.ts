@@ -8,7 +8,7 @@ import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
-import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
+import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { cameraIcon, closeIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 
@@ -557,7 +557,11 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   if (!filename) return;
   const mediaType = file.type || inferImageMediaType(filename);
   if (!isAllowedImageAttachmentMediaType(mediaType)) return;
-  const prepared = await prepareImageAttachmentBytes(file, mediaType, state.imageAttachmentMaxDimensions);
+  const prepared = await prepareImageAttachmentBytes(
+    file,
+    mediaType,
+    resolveDocumentImageAttachmentMaxDimensions(state.document.meta, state.imageAttachmentMaxDimensions)
+  );
   recordHistory(`image-upload:${blockId}`);
   await storeImageAttachment(filename, prepared.mediaType, prepared.bytes);
   block.schema.imageFile = filename;
@@ -576,6 +580,50 @@ export async function storeImageAttachment(filename: string, mediaType: string, 
   const nextMeta = descriptor && typeof descriptor === 'object' ? descriptor.meta : meta;
   setAttachment(state.document, id, nextMeta, bytes);
   clearImageBlobUrlCache();
+}
+
+export async function reduceExistingImageAttachments(): Promise<{ reduced: number; skipped: number }> {
+  const filenames = listImageFilenames(state.document);
+  const maxDimensions = resolveDocumentImageAttachmentMaxDimensions(state.document.meta, state.imageAttachmentMaxDimensions);
+  const reduced: Array<{ id: string; meta: JsonObject; bytes: Uint8Array }> = [];
+  let skipped = 0;
+  for (const filename of filenames) {
+    const attachment = getImageAttachment(state.document, filename);
+    if (!attachment || attachment.bytes.length === 0) {
+      skipped += 1;
+      continue;
+    }
+    const mediaType = typeof attachment.meta.mediaType === 'string'
+      ? attachment.meta.mediaType
+      : inferImageMediaType(filename);
+    if (!isAllowedImageAttachmentMediaType(mediaType)) {
+      skipped += 1;
+      continue;
+    }
+    const file = new File([Uint8Array.from(attachment.bytes)], filename, { type: mediaType });
+    const prepared = await prepareImageAttachmentBytes(file, mediaType, maxDimensions);
+    if (!prepared.resized) {
+      skipped += 1;
+      continue;
+    }
+    reduced.push({
+      id: getImageAttachmentId(filename),
+      meta: { ...attachment.meta, mediaType: prepared.mediaType },
+      bytes: prepared.bytes,
+    });
+  }
+  if (reduced.length === 0) {
+    return { reduced: 0, skipped };
+  }
+  recordHistory('image-attachments:reduce-existing');
+  for (const entry of reduced) {
+    const descriptor = await state.attachmentHost?.store(entry.id, entry.bytes, entry.meta);
+    const nextMeta = descriptor && typeof descriptor === 'object' ? descriptor.meta : entry.meta;
+    setAttachment(state.document, entry.id, nextMeta, entry.bytes);
+  }
+  clearImageBlobUrlCache();
+  getRenderApp()();
+  return { reduced: reduced.length, skipped };
 }
 
 export function bindImageDragAndDrop(app: HTMLElement): void {

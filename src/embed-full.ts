@@ -260,6 +260,7 @@ function createEmbedState(
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    imageAttachmentReductionStatus: null,
     transientNotice: null,
   };
 }
@@ -343,6 +344,8 @@ function ensureRenderers(): void {
     {
       get documentMeta() { return state.document.meta as Record<string, unknown>; },
       get documentExtension() { return state.document.extension; },
+      get imageAttachmentMaxDimensions() { return state.imageAttachmentMaxDimensions; },
+      get imageAttachmentReductionStatus() { return state.imageAttachmentReductionStatus; },
       get documentSections() { return state.document.sections; },
       get showAdvancedEditor() { return state.showAdvancedEditor; },
       get addComponentBySection() { return state.addComponentBySection; },
@@ -477,7 +480,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
           ${
             isEditor
               ? isDocumentMetaView
-                ? `<div class="document-meta-view">${editorRenderer.renderMetaPanel()}</div>`
+                ? `<div class="document-meta-view">${renderTransientNotice()}${editorRenderer.renderMetaPanel()}</div>`
                 : `<div class="editor-shell ${isPdfDocument(state.document) ? 'has-no-sidebar' : state.editorSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed'}">
                   ${renderTransientNotice()}
                   ${isPdfDocument(state.document) ? '' : `<div class="editor-sidebar-backdrop" data-action="toggle-editor-sidebar"></div>

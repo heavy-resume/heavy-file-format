@@ -29,6 +29,7 @@ try {
     document: documentModel,
     attachmentStore: createHostedAttachmentAdapter(manifest, { baseUrl: '.' }),
     plugins: builtInPlugins,
+    paletteId: null,
   });
   if (status) {
     status.hidden = true;

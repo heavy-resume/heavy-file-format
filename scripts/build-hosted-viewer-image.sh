@@ -4,10 +4,11 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/build-hosted-viewer-image.sh PATH_TO_FILE.hvy IMAGE[:TAG]
+  scripts/build-hosted-viewer-image.sh [--no-cache] PATH_TO_FILE.hvy IMAGE[:TAG]
 
 Example:
   scripts/build-hosted-viewer-image.sh examples/example.hvy my-hvy-viewer:latest
+  scripts/build-hosted-viewer-image.sh --no-cache examples/example.hvy my-hvy-viewer:latest
 
 The built image serves the extracted HVY viewer on port 8080.
 Run it with:
@@ -15,9 +16,16 @@ Run it with:
 USAGE
 }
 
+docker_no_cache=false
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
+fi
+
+if [[ "${1:-}" == "--no-cache" ]]; then
+  docker_no_cache=true
+  shift
 fi
 
 if [[ $# -ne 2 ]]; then
@@ -64,7 +72,11 @@ cp "$embed_css" "$public_dir/hvy-embed.css"
 cp hosted-viewer/server.mjs "$build_root/server.mjs"
 cp hosted-viewer/Dockerfile.baked "$build_root/Dockerfile"
 
-docker build -t "$image_tag" "$build_root"
+if [[ "$docker_no_cache" == "true" ]]; then
+  docker build --no-cache -t "$image_tag" "$build_root"
+else
+  docker build -t "$image_tag" "$build_root"
+fi
 
 cat <<EOF
 

@@ -23,7 +23,9 @@ const mimeTypes = new Map([
   ['.ico', 'image/x-icon'],
 ]);
 
-createServer(async (request, response) => {
+const activeSockets = new Set();
+
+const server = createServer(async (request, response) => {
   const pathname = new URL(request.url || '/', 'http://localhost').pathname;
   const filePath = pathname === '/'
     ? join(publicRoot, 'index.html')
@@ -43,20 +45,64 @@ createServer(async (request, response) => {
     response.writeHead(200, {
       'content-type': mimeTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream',
       'content-length': info.size,
-      'cache-control': pathname === '/' ? 'no-cache' : 'public, max-age=3600',
+      'cache-control': getCacheControl(pathname),
     });
     createReadStream(filePath).pipe(response);
   } catch {
     respond(response, 404, 'Not found');
   }
-}).listen(port, () => {
+});
+
+server.on('connection', (socket) => {
+  activeSockets.add(socket);
+  socket.on('close', () => {
+    activeSockets.delete(socket);
+  });
+});
+
+server.listen(port, () => {
   console.log(`HVY hosted viewer listening on :${port}`);
 });
+
+process.once('SIGINT', () => {
+  shutdown('SIGINT');
+});
+
+process.once('SIGTERM', () => {
+  shutdown('SIGTERM');
+});
+
+function shutdown(signal) {
+  console.log(`HVY hosted viewer shutting down (${signal})`);
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => {
+    for (const socket of activeSockets) {
+      socket.destroy();
+    }
+    process.exit(0);
+  }, 1000).unref();
+}
 
 function safeJoin(root, pathname) {
   const relative = normalize(pathname).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '');
   const target = resolve(root, relative);
   return target === root || target.startsWith(`${root}/`) ? target : null;
+}
+
+function getCacheControl(pathname) {
+  if (
+    pathname === '/' ||
+    pathname === '/document.hvy' ||
+    pathname === '/attachments.json' ||
+    pathname === '/viewer.css' ||
+    pathname === '/viewer.js' ||
+    pathname === '/hvy-embed.css'
+  ) {
+    return 'no-cache';
+  }
+  return 'public, max-age=31536000, immutable';
 }
 
 function respond(response, status, message) {

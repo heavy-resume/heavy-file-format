@@ -147,6 +147,13 @@ npm run docker:hosted -- examples/example.hvy my-hvy-viewer:latest
 docker run --rm -p 8080:8080 my-hvy-viewer:latest
 ```
 
+When iterating on a document and reusing the same image tag, pass `--no-cache`
+through the script to force Docker to rebuild every layer:
+
+```bash
+npm run docker:hosted -- --no-cache examples/example.hvy my-hvy-viewer:latest
+```
+
 The image serves the viewer at `http://localhost:8080`.
 
 To inspect or host the extracted static files directly:

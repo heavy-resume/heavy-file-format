@@ -722,8 +722,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
-  if (options.paletteId && getPaletteById(options.paletteId)) {
-    state.paletteOverrideId = options.paletteId;
+  if ('paletteId' in options) {
+    state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
   }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });

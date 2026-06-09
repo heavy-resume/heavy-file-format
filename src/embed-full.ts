@@ -109,6 +109,7 @@ import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pd
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
+import { createHostedAttachmentAdapter } from './hosted-attachments';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -951,6 +952,7 @@ export {
   builtInPlugins,
   createDocumentFilterSnapshot,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
@@ -962,6 +964,7 @@ export {
   serializeDocumentBytesAsync,
 };
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
+export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
@@ -1023,6 +1026,7 @@ window.HVY = {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,

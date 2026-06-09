@@ -7,8 +7,8 @@ import { findBlockByIds, resolveBlockContext } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
-import { arrowDownIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
-import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, storeImageAttachment } from '../image/image';
+import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
+import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, storeImageAttachment } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes } from '../../../image-attachments';
 import { downloadBlob } from '../../../utils';
 
@@ -26,12 +26,18 @@ function normalizeDuration(value: number): number {
 }
 
 function renderSlideImage(image: CarouselImage, helpers: ComponentRenderHelpers): string {
-  const url = getImageBlobUrl(image.imageFile);
-  if (!url) {
+  const alt = image.imageAlt || image.caption || image.imageFile;
+  const rendered = renderImageElement({
+    filename: image.imageFile,
+    alt,
+    helpers,
+    lazy: true,
+    lazyCarousel: true,
+  });
+  if (!rendered) {
     return `<div class="hvy-carousel-missing">Missing attachment: ${helpers.escapeHtml(image.imageFile)}</div>`;
   }
-  const alt = image.imageAlt || image.caption || image.imageFile;
-  return `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}">`;
+  return rendered;
 }
 
 function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers): string {
@@ -50,8 +56,8 @@ function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers):
     })
     .join('');
   const controls = block.schema.carouselShowControls
-    ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">‹</button>
-       <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">›</button>`
+    ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">${arrowLeftIcon()}</button>
+       <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">${arrowRightIcon()}</button>`
     : '';
   const indicators = block.schema.carouselShowIndicators
     ? `<div class="hvy-carousel-indicators">${block.schema.carouselImages
@@ -156,6 +162,7 @@ export function initializeCarouselReaders(root: ParentNode): void {
     }
     const stateForFrame: CarouselRuntimeState = { index: 0, pausedUntil: 0, timer: null, observer: null };
     runtimeState.set(frame, stateForFrame);
+    hydrateCarouselImagesAround(frame, 0);
     updateActiveIndicator(frame, 0);
     const start = () => {
       if (stateForFrame.timer !== null) {
@@ -361,9 +368,39 @@ function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boo
   const index = ((rawIndex % count) + count) % count;
   const stateForFrame = runtimeState.get(frame);
   if (stateForFrame) stateForFrame.index = index;
+  hydrateCarouselImagesAround(frame, index);
   const slide = slides[index];
   track.scrollTo({ left: slide ? getCarouselSlideScrollLeft(track, slide) : 0, behavior: smooth ? 'smooth' : 'auto' });
   updateActiveIndicator(frame, index);
+}
+
+function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
+  const slides = Array.from(frame.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const count = slides.length;
+  if (count === 0) {
+    return;
+  }
+  [index - 1, index, index + 1].forEach((rawIndex) => {
+    const normalized = ((rawIndex % count) + count) % count;
+    hydrateCarouselSlideImage(slides[normalized]);
+  });
+}
+
+function hydrateCarouselSlideImage(slide: HTMLElement | undefined): void {
+  const image = slide?.querySelector<HTMLImageElement>('img[data-hvy-carousel-lazy-image="true"]');
+  if (!image || image.getAttribute('src')) {
+    return;
+  }
+  const filename = image.dataset.imageFilename ?? '';
+  const url = getImageBlobUrl(filename);
+  if (url) {
+    image.src = url;
+    return;
+  }
+  const missing = image.ownerDocument.createElement('div');
+  missing.className = 'hvy-carousel-missing';
+  missing.textContent = `Missing attachment: ${filename}`;
+  image.replaceWith(missing);
 }
 
 export function getCarouselSlideScrollLeft(track: HTMLElement, slide: HTMLElement): number {

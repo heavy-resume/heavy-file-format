@@ -2595,7 +2595,7 @@ function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[]
     }
     items.push(child);
   }
-  removableNodes.forEach((node) => node.remove());
+  removableNodes.forEach((node) => node.parentNode?.removeChild(node));
   return items;
 }
 
@@ -3529,13 +3529,6 @@ function ensureTextLineStyleBlockHasCaretContent(block: HTMLElement): void {
     return;
   }
   block.replaceChildren();
-}
-
-function ensureEditableBlockHasCaretContent(block: HTMLElement): void {
-  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
-    return;
-  }
-  block.replaceChildren(document.createTextNode('\u200b'));
 }
 
 function exitEmptyQuoteAtSelection(editable: HTMLElement): boolean {

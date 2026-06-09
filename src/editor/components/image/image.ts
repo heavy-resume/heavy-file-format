@@ -2,6 +2,7 @@ import './image.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
+import { getAttachmentDescriptors } from '../../../attachment-store';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -53,6 +54,39 @@ export function getImageBlobUrl(filename: string): string | null {
   const url = URL.createObjectURL(blob);
   blobUrlCache.set(filename, { url, bytes: attachment.bytes });
   return url;
+}
+
+export function hasImageAttachmentSource(filename: string): boolean {
+  if (!filename) {
+    return false;
+  }
+  const id = getImageAttachmentId(filename);
+  const hostUrl = state.attachmentHost?.resolveUrl?.(id);
+  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+    return true;
+  }
+  return getAttachmentDescriptors(state.document).some((descriptor) => descriptor.id === id);
+}
+
+export function renderImageElement(options: {
+  filename: string;
+  alt: string;
+  helpers: ComponentRenderHelpers;
+  className?: string;
+  style?: string;
+  lazy?: boolean;
+  lazyCarousel?: boolean;
+}): string | null {
+  const url = options.lazyCarousel ? null : getImageBlobUrl(options.filename);
+  if (!url && !hasImageAttachmentSource(options.filename)) {
+    return null;
+  }
+  const classAttr = options.className ? ` class="${options.helpers.escapeAttr(options.className)}"` : '';
+  const srcAttr = url ? ` src="${options.helpers.escapeAttr(url)}"` : '';
+  const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
+  const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
+  const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
+  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
@@ -256,15 +290,21 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
   if (!filename) {
     return '<div class="image-empty muted">No image attached.</div>';
   }
-  const url = getImageBlobUrl(filename);
-  if (!url) {
-    return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
-  }
-  const styleAttr = ` style="${helpers.escapeAttr(sanitizeInlineCss(block.schema.css))}"`;
   const captionHtml = caption
     ? `<figcaption class="image-caption">${helpers.escapeHtml(caption)}</figcaption>`
     : '';
-  return `<figure class="image-figure"><img class="image-block-img" src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(alt)}" data-image-filename="${helpers.escapeAttr(filename)}"${styleAttr} />${captionHtml}</figure>`;
+  const image = renderImageElement({
+    filename,
+    alt,
+    helpers,
+    className: 'image-block-img',
+    style: sanitizeInlineCss(block.schema.css),
+    lazy: true,
+  });
+  if (!image) {
+    return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
+  }
+  return `<figure class="image-figure">${image}${captionHtml}</figure>`;
 }
 
 export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {

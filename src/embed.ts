@@ -81,6 +81,8 @@ import { setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
+import { createHostedAttachmentAdapter } from './hosted-attachments';
+import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -418,6 +420,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       </section>
     </main>`;
   bindReaderUi(root);
+  bindCarouselInteractions(root);
   reconcilePluginMounts(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
@@ -456,6 +459,7 @@ function refreshReaderPanels(): void {
     },
   });
   observeRenderedLinks(currentRoot, currentLinkObserver);
+  bindCarouselInteractions(currentRoot);
 }
 
 function refreshModalPreview(): void {}
@@ -852,6 +856,7 @@ export {
   builtInPlugins,
   createDocumentFilterSnapshot,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
@@ -863,6 +868,7 @@ export {
   serializeDocumentBytesAsync,
 };
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
+export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
@@ -927,6 +933,7 @@ declare global {
       createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
+      createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
       renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
@@ -948,6 +955,7 @@ window.HVY = {
   createPdfExportPlanFromPrompt,
   searchDocuments,
   createDocumentSearchSnapshot,
+  createHostedAttachmentAdapter,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   mountHvy,

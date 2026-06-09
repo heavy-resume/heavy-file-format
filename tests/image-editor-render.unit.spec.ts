@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { getCarouselSlideScrollLeft, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
-import { bindImageDragAndDrop, renderImageEditor } from '../src/editor/components/image/image';
+import { bindImageDragAndDrop, renderImageEditor, renderImageReader } from '../src/editor/components/image/image';
+import { ensureDocumentAttachmentStore } from '../src/attachment-store';
+import { createHostedAttachmentAdapter } from '../src/hosted-attachments';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { initState } from '../src/state';
@@ -121,6 +123,65 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('class="hvy-carousel-reader-frame"');
     expect(expectedResult).not.toContain('hvy-carousel-reader-frame-chrome');
+  });
+
+  test('expected result: hosted image component uses static url without materializing bytes', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.schema.imageFile = 'static-photo.png';
+    block.schema.imageAlt = 'Static Photo';
+    const document = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    });
+    const attachmentStore = createHostedAttachmentAdapter({
+      attachments: [
+        {
+          id: 'image:static-photo.png',
+          meta: { mediaType: 'image/png' },
+          length: 45 * 1024 * 1024,
+          url: 'image/static-photo.png',
+        },
+      ],
+    });
+    initState({ ...document, attachmentHost: attachmentStore });
+    ensureDocumentAttachmentStore(document.document).setDescriptor({
+      id: 'image:static-photo.png',
+      meta: { mediaType: 'image/png' },
+      length: 45 * 1024 * 1024,
+    });
+
+    const expectedResult = renderImageReader(createEmptySection(1), block, helpers);
+
+    expect(expectedResult).toContain('src="./image/static-photo.png"');
+    expect(expectedResult).toContain('loading="lazy"');
+    expect(ensureDocumentAttachmentStore(document.document).isMaterialized('image:static-photo.png')).toBe(false);
+  });
+
+  test('expected result: carousel reader defers slide src assignment until runtime hydration', () => {
+    const block: VisualBlock = createEmptyBlock('carousel');
+    block.schema.carouselImages = [
+      { imageFile: 'slide-a.png', imageAlt: 'Slide A', caption: '' },
+      { imageFile: 'slide-b.png', imageAlt: 'Slide B', caption: '' },
+    ];
+    const document = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [
+        { id: 'image:slide-a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1]) },
+        { id: 'image:slide-b.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([2]) },
+      ],
+    });
+    initState(document);
+
+    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+
+    expect(expectedResult).toContain('data-hvy-carousel-lazy-image="true"');
+    expect(expectedResult).toContain('data-image-filename="slide-a.png"');
+    expect(expectedResult).toContain('data-image-filename="slide-b.png"');
+    expect(expectedResult).not.toContain('src="blob:');
   });
 
   test('expected result: carousel navigation targets the actual slide position', () => {

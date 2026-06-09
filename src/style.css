@@ -271,23 +271,40 @@ body {
 @media (max-width: 720px) {
   .toolbar {
     justify-content: stretch;
+    width: 100%;
   }
 
   .toolbar-section,
-  .toolbar-section-files,
+  .document-menu {
+    width: 100%;
+  }
+
+  .toolbar-section-documents .toolbar-primary-button,
   .document-menu,
   .document-menu summary,
-  .toolbar input[type='text'],
-  .toolbar :where(.hvy-button, .toolbar-primary-button, .secondary, .ghost, .danger, .tiny),
-  .file-picker {
+  .toolbar-section-documents :where(.secondary, .ghost, .danger, .tiny) {
     width: 100%;
   }
 
   .toolbar-section-files {
+    width: 100%;
     padding-left: 0;
     border-left: 0;
     border-top: 1px solid var(--hvy-border-translucent);
     padding-top: 0.55rem;
+  }
+
+  .toolbar-section-files :where(.hvy-button),
+  .toolbar-section-files .file-picker {
+    flex: 0 0 auto;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .toolbar-section-files input[type='text'] {
+    flex: 1 1 10rem;
+    min-width: min(100%, 9rem);
+    width: auto;
   }
 
   .document-menu-panel {

@@ -290,6 +290,42 @@ hvy_version: 0.1
   await expect(title).toHaveText('Heavy Stack');
 });
 
+test('typing a carousel caption in ai mode preserves focus', async ({ page }) => {
+  const perfMessages: string[] = [];
+  page.on('console', (message) => {
+    const text = message.text();
+    if (text.includes('[hvy:perf] refreshReaderPanels')) {
+      perfMessages.push(text);
+    }
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:carousel {"carouselImages":[{"imageFile":"missing-slide.png","caption":""}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  await page.locator('#aiReaderDocument .reader-block-carousel').dblclick();
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const caption = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] [data-field="carousel-caption"]');
+  await caption.click();
+  perfMessages.length = 0;
+  await page.keyboard.type('Expected result caption');
+
+  await expect(caption).toBeFocused();
+  await expect(caption).toHaveValue('Expected result caption');
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .hvy-carousel-caption')).toContainText('Expected result caption');
+  expect(perfMessages).toHaveLength(0);
+});
+
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {
   await page.goto('/');
 

@@ -217,9 +217,41 @@ function handleCarouselInput(event: Event): void {
     if (!image) return;
     if (field === 'carousel-caption') image.caption = target.value;
     if (field === 'carousel-alt') image.imageAlt = target.value;
+    syncCarouselEditorTextInput(target, image, index, field);
   }
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+  if (target.closest('.hvy-ai-reader-surface')) {
+    return;
+  }
   getRefreshReaderPanels()();
+}
+
+function syncCarouselEditorTextInput(target: HTMLInputElement, image: CarouselImage, index: number, field: string): void {
+  const editor = target.closest<HTMLElement>('.hvy-carousel-editor');
+  const slide = editor?.querySelector<HTMLElement>(`.hvy-carousel-slide[data-carousel-slide="${index}"]`);
+  if (!slide) {
+    return;
+  }
+  if (field === 'carousel-caption') {
+    let caption = slide.querySelector<HTMLElement>('.hvy-carousel-caption');
+    if (image.caption.trim().length === 0) {
+      caption?.remove();
+    } else {
+      if (!caption) {
+        caption = document.createElement('div');
+        caption.className = 'hvy-carousel-caption';
+        slide.append(caption);
+      }
+      caption.textContent = image.caption;
+    }
+  }
+  if (field === 'carousel-alt' || field === 'carousel-caption') {
+    const alt = image.imageAlt || image.caption || image.imageFile;
+    slide.querySelector<HTMLImageElement>('img')?.setAttribute('alt', alt);
+    target.closest<HTMLElement>('.hvy-carousel-image-row')
+      ?.querySelector<HTMLImageElement>('.hvy-carousel-thumb img')
+      ?.setAttribute('alt', image.imageAlt || image.imageFile);
+  }
 }
 
 function handleCarouselChange(event: Event): void {

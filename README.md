@@ -154,6 +154,13 @@ through the script to force Docker to rebuild every layer:
 npm run docker:hosted -- --no-cache examples/example.hvy my-hvy-viewer:latest
 ```
 
+For Cloud Run or other `linux/amd64` hosts, build and push with the registry
+tag in one command:
+
+```bash
+npm run docker:hosted -- --no-cache --push examples/example.hvy REGISTRY_HOST/PROJECT/REPOSITORY/my-hvy-viewer:latest
+```
+
 The image serves the viewer at `http://localhost:8080`.
 
 To inspect or host the extracted static files directly:

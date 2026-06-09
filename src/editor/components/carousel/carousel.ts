@@ -17,6 +17,9 @@ interface CarouselRuntimeState {
   pausedUntil: number;
   timer: number | null;
   observer: IntersectionObserver | null;
+  scrollFrame: number | null;
+  scrollSettleTimer: number | null;
+  isJumping: boolean;
 }
 
 const runtimeState = new WeakMap<HTMLElement, CarouselRuntimeState>();
@@ -40,6 +43,15 @@ function renderSlideImage(image: CarouselImage, helpers: ComponentRenderHelpers)
   return rendered;
 }
 
+function renderCarouselSlide(image: CarouselImage, index: number, helpers: ComponentRenderHelpers, clonePosition: 'first' | 'last' | null = null): string {
+  const caption = image.caption
+    ? `<div class="hvy-carousel-caption">${helpers.escapeHtml(image.caption)}</div>`
+    : '';
+  const slideAttr = clonePosition === null ? ` data-carousel-slide="${index}"` : '';
+  const cloneAttr = clonePosition === null ? '' : ` data-carousel-clone="${clonePosition}" aria-hidden="true"`;
+  return `<figure class="hvy-carousel-slide"${slideAttr} data-carousel-real-index="${index}"${cloneAttr}>${renderSlideImage(image, helpers)}${caption}</figure>`;
+}
+
 function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers): string {
   if (block.schema.carouselImages.length === 0) {
     return '<div class="hvy-carousel-empty">No carousel images.</div>';
@@ -47,14 +59,14 @@ function renderReaderFrame(block: VisualBlock, helpers: ComponentRenderHelpers):
   const frameClass = block.schema.carouselShowFrame
     ? 'hvy-carousel-reader-frame hvy-carousel-reader-frame-chrome'
     : 'hvy-carousel-reader-frame';
-  const slides = block.schema.carouselImages
-    .map((image, index) => {
-      const caption = image.caption
-        ? `<div class="hvy-carousel-caption">${helpers.escapeHtml(image.caption)}</div>`
-        : '';
-      return `<figure class="hvy-carousel-slide" data-carousel-slide="${index}">${renderSlideImage(image, helpers)}${caption}</figure>`;
-    })
-    .join('');
+  const realSlides = block.schema.carouselImages.map((image, index) => renderCarouselSlide(image, index, helpers));
+  const slides = block.schema.carouselImages.length > 1
+    ? [
+        renderCarouselSlide(block.schema.carouselImages[block.schema.carouselImages.length - 1]!, block.schema.carouselImages.length - 1, helpers, 'last'),
+        ...realSlides,
+        renderCarouselSlide(block.schema.carouselImages[0]!, 0, helpers, 'first'),
+      ].join('')
+    : realSlides.join('');
   const controls = block.schema.carouselShowControls
     ? `<button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-left" data-carousel-action="prev" aria-label="Previous image">${arrowLeftIcon()}</button>
        <button type="button" class="hvy-carousel-arrow hvy-carousel-arrow-right" data-carousel-action="next" aria-label="Next image">${arrowRightIcon()}</button>`
@@ -160,8 +172,19 @@ export function initializeCarouselReaders(root: ParentNode): void {
     if (runtimeState.has(frame)) {
       return;
     }
-    const stateForFrame: CarouselRuntimeState = { index: 0, pausedUntil: 0, timer: null, observer: null };
+    const stateForFrame: CarouselRuntimeState = {
+      index: 0,
+      pausedUntil: 0,
+      timer: null,
+      observer: null,
+      scrollFrame: null,
+      scrollSettleTimer: null,
+      isJumping: false,
+    };
     runtimeState.set(frame, stateForFrame);
+    const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+    track?.addEventListener('scroll', () => handleCarouselTrackScroll(frame), { passive: true });
+    jumpToCarouselIndex(frame, 0);
     hydrateCarouselImagesAround(frame, 0);
     updateActiveIndicator(frame, 0);
     const start = () => {
@@ -172,6 +195,10 @@ export function initializeCarouselReaders(root: ParentNode): void {
         if (!frame.isConnected) {
           if (stateForFrame.timer !== null) window.clearInterval(stateForFrame.timer);
           stateForFrame.timer = null;
+          if (stateForFrame.scrollFrame !== null) window.cancelAnimationFrame(stateForFrame.scrollFrame);
+          if (stateForFrame.scrollSettleTimer !== null) window.clearTimeout(stateForFrame.scrollSettleTimer);
+          stateForFrame.scrollFrame = null;
+          stateForFrame.scrollSettleTimer = null;
           stateForFrame.observer?.disconnect();
           stateForFrame.observer = null;
           return;
@@ -228,7 +255,7 @@ function handleCarouselInput(event: Event): void {
 
 function syncCarouselEditorTextInput(target: HTMLInputElement, image: CarouselImage, index: number, field: string): void {
   const editor = target.closest<HTMLElement>('.hvy-carousel-editor');
-  const slide = editor?.querySelector<HTMLElement>(`.hvy-carousel-slide[data-carousel-slide="${index}"]`);
+  const slide = editor?.querySelector<HTMLElement>(`.hvy-carousel-slide[data-carousel-real-index="${index}"]:not([data-carousel-clone])`);
   if (!slide) {
     return;
   }
@@ -398,7 +425,7 @@ function handleCarouselHoverResume(event: Event): void {
 function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boolean): void {
   const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
   if (!track) return;
-  const slides = Array.from(track.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const slides = getRealCarouselSlides(track);
   const count = slides.length;
   if (count === 0) return;
   const index = ((rawIndex % count) + count) % count;
@@ -406,12 +433,80 @@ function scrollToCarouselIndex(frame: HTMLElement, rawIndex: number, smooth: boo
   if (stateForFrame) stateForFrame.index = index;
   hydrateCarouselImagesAround(frame, index);
   const slide = slides[index];
-  track.scrollTo({ left: slide ? getCarouselSlideScrollLeft(track, slide) : 0, behavior: smooth ? 'smooth' : 'auto' });
+  scrollCarouselTrackTo(track, slide ? getCarouselSlideScrollLeft(track, slide) : 0, smooth);
   updateActiveIndicator(frame, index);
 }
 
+function handleCarouselTrackScroll(frame: HTMLElement): void {
+  const stateForFrame = runtimeState.get(frame);
+  if (!stateForFrame || stateForFrame.isJumping) return;
+  stateForFrame.pausedUntil = Date.now() + Number(frame.dataset.carouselDurationMs || 3000);
+  if (stateForFrame.scrollFrame !== null) return;
+  stateForFrame.scrollFrame = window.requestAnimationFrame(() => {
+    stateForFrame.scrollFrame = null;
+    syncCarouselIndexFromScroll(frame);
+    if (stateForFrame.scrollSettleTimer !== null) window.clearTimeout(stateForFrame.scrollSettleTimer);
+    stateForFrame.scrollSettleTimer = window.setTimeout(() => {
+      stateForFrame.scrollSettleTimer = null;
+      settleCarouselLoop(frame);
+    }, 120);
+  });
+}
+
+function syncCarouselIndexFromScroll(frame: HTMLElement): void {
+  const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+  if (!track) return;
+  const slide = getNearestCarouselSlide(track);
+  const index = getCarouselSlideRealIndex(slide);
+  if (index === null) return;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame) stateForFrame.index = index;
+  hydrateCarouselImagesAround(frame, index);
+  updateActiveIndicator(frame, index);
+}
+
+function settleCarouselLoop(frame: HTMLElement): void {
+  const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+  if (!track) return;
+  const slide = getNearestCarouselSlide(track);
+  const clonePosition = slide?.dataset.carouselClone;
+  if (clonePosition !== 'first' && clonePosition !== 'last') return;
+  const index = getCarouselSlideRealIndex(slide);
+  if (index === null) return;
+  jumpToCarouselIndex(frame, index);
+}
+
+function jumpToCarouselIndex(frame: HTMLElement, index: number): void {
+  const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+  const slide = track?.querySelector<HTMLElement>(`.hvy-carousel-slide[data-carousel-real-index="${index}"]:not([data-carousel-clone])`);
+  if (!track || !slide) return;
+  const stateForFrame = runtimeState.get(frame);
+  if (stateForFrame) stateForFrame.isJumping = true;
+  scrollCarouselTrackTo(track, getCarouselSlideScrollLeft(track, slide), false);
+  if (stateForFrame) {
+    window.requestAnimationFrame(() => {
+      stateForFrame.isJumping = false;
+    });
+  }
+}
+
+function scrollCarouselTrackTo(track: HTMLElement, left: number, smooth: boolean): void {
+  if (smooth) {
+    track.scrollTo({ left, behavior: 'smooth' });
+    return;
+  }
+  const previousScrollBehavior = track.style.scrollBehavior;
+  track.style.scrollBehavior = 'auto';
+  track.scrollTo({ left, behavior: 'auto' });
+  window.requestAnimationFrame(() => {
+    track.style.scrollBehavior = previousScrollBehavior;
+  });
+}
+
 function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
-  const slides = Array.from(frame.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
+  if (!track) return;
+  const slides = getRealCarouselSlides(track);
   const count = slides.length;
   if (count === 0) {
     return;
@@ -419,6 +514,7 @@ function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
   [index - 1, index, index + 1].forEach((rawIndex) => {
     const normalized = ((rawIndex % count) + count) % count;
     hydrateCarouselSlideImage(slides[normalized]);
+    track.querySelectorAll<HTMLElement>(`.hvy-carousel-slide[data-carousel-real-index="${normalized}"][data-carousel-clone]`).forEach(hydrateCarouselSlideImage);
   });
 }
 
@@ -443,6 +539,26 @@ export function getCarouselSlideScrollLeft(track: HTMLElement, slide: HTMLElemen
   const trackRect = track.getBoundingClientRect();
   const slideRect = slide.getBoundingClientRect();
   return track.scrollLeft + slideRect.left - trackRect.left;
+}
+
+function getRealCarouselSlides(track: HTMLElement): HTMLElement[] {
+  return Array.from(track.querySelectorAll<HTMLElement>('.hvy-carousel-slide:not([data-carousel-clone])'));
+}
+
+export function getNearestCarouselSlide(track: HTMLElement): HTMLElement | null {
+  const slides = Array.from(track.querySelectorAll<HTMLElement>('.hvy-carousel-slide'));
+  return slides.reduce<HTMLElement | null>((nearest, slide) => {
+    if (!nearest) return slide;
+    const nearestDistance = Math.abs(getCarouselSlideScrollLeft(track, nearest) - track.scrollLeft);
+    const slideDistance = Math.abs(getCarouselSlideScrollLeft(track, slide) - track.scrollLeft);
+    return slideDistance < nearestDistance ? slide : nearest;
+  }, null);
+}
+
+function getCarouselSlideRealIndex(slide: HTMLElement | null): number | null {
+  if (!slide) return null;
+  const index = Number(slide.dataset.carouselRealIndex);
+  return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
 function updateActiveIndicator(frame: HTMLElement, index: number): void {

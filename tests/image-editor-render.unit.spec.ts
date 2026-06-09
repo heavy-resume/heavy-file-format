@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { getCarouselSlideScrollLeft, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
+import { getCarouselSlideScrollLeft, getNearestCarouselSlide, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
 import { bindImageDragAndDrop, renderImageEditor, renderImageReader } from '../src/editor/components/image/image';
 import { ensureDocumentAttachmentStore } from '../src/attachment-store';
 import { createHostedAttachmentAdapter } from '../src/hosted-attachments';
@@ -184,6 +184,21 @@ describe('image editor render controls', () => {
     expect(expectedResult).not.toContain('src="blob:');
   });
 
+  test('expected result: carousel reader renders edge clones for circular touch scrolling', () => {
+    const block: VisualBlock = createEmptyBlock('carousel');
+    block.schema.carouselImages = [
+      { imageFile: 'slide-a.png', imageAlt: 'Slide A', caption: '' },
+      { imageFile: 'slide-b.png', imageAlt: 'Slide B', caption: '' },
+    ];
+
+    const expectedResult = renderCarouselReader(createEmptySection(1), block, helpers);
+
+    expect(expectedResult).toContain('data-carousel-clone="last" aria-hidden="true"');
+    expect(expectedResult).toContain('data-carousel-clone="first" aria-hidden="true"');
+    expect(expectedResult.match(/data-carousel-slide="/g)).toHaveLength(2);
+    expect(expectedResult.match(/data-carousel-real-index="/g)).toHaveLength(4);
+  });
+
   test('expected result: carousel navigation targets the actual slide position', () => {
     const track = {
       scrollLeft: 0,
@@ -198,6 +213,22 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toBe(14_421);
     expect(expectedResult).not.toBe(23 * track.clientWidth);
+  });
+
+  test('expected result: carousel scroll state follows the nearest visible slide', () => {
+    const slides = [0, 400, 800].map((scrollLeft, index) => ({
+      dataset: { carouselRealIndex: String(index) },
+      getBoundingClientRect: () => ({ left: scrollLeft - 790 }),
+    })) as unknown as HTMLElement[];
+    const track = {
+      scrollLeft: 790,
+      querySelectorAll: () => slides,
+      getBoundingClientRect: () => ({ left: 0 }),
+    } as unknown as HTMLElement;
+
+    const expectedResult = getNearestCarouselSlide(track);
+
+    expect(expectedResult?.dataset.carouselRealIndex).toBe('2');
   });
 
   test('before, repeated bind, after: image drag/drop listeners are registered once per app root', () => {

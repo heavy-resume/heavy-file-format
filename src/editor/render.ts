@@ -1722,14 +1722,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </label>
         ${textMetaFields}
         ${gridMetaFields}
-        <label>
-          <span>Hide If Yes</span>
+        <label class="checkbox-label">
+          <span>Hidden</span>
           <input
+            type="checkbox"
             data-section-key="${deps.escapeAttr(sectionKey)}"
             data-block-id="${deps.escapeAttr(block.id)}"
             data-field="block-hide-if-yes"
-            placeholder="yes"
-            value="${deps.escapeAttr(block.schema.hideIfYes)}"
+            ${block.schema.hideIfYes.trim().toLowerCase() === 'yes' ? 'checked' : ''}
           />
         </label>
         <label>

@@ -545,7 +545,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (!context) {
         return;
       }
-      context.block.schema.hideIfYes = target.value;
+      context.block.schema.hideIfYes = target.checked ? 'yes' : '';
       syncReusableTemplateForBlock(sectionKey, context.block.id);
       getRefreshReaderPanels()();
       return;

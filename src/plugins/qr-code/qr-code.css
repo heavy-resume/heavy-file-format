@@ -144,6 +144,19 @@
   text-align: center;
 }
 
+.hvy-qr-code-figure > div {
+  display: block;
+  line-height: 0;
+}
+
+.hvy-qr-code-figure .image-caption {
+  margin-top: 0.4rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .hvy-qr-code-preview svg,
 .hvy-qr-code-reader svg {
   display: block;

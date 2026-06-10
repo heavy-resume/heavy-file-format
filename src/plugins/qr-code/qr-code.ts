@@ -286,7 +286,7 @@ export async function renderQrCodeStaticBlock(ctx: HvyPluginPdfStaticRenderConte
   if (!text) {
     throw new Error('QR code plugin cannot be exported without QR text.');
   }
-  const svgBytes = await renderQrCodeSvgBytes(text, config);
+  const svgBytes = await renderQrCodeSvgBytes(text, config, 0);
   const sourceId = ctx.block.schema.id || ctx.block.id || 'qr-code';
   const imageFile = createQrCodeStaticImageFilename(sourceId);
   ctx.attachments.set(`image:${imageFile}`, { mediaType: 'image/svg+xml' }, svgBytes);
@@ -328,8 +328,8 @@ function createStaticImageSchema(id: string, imageFile: string, caption: string,
   } as unknown as VisualBlock['schema'];
 }
 
-export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig): Promise<Uint8Array> {
-  const { qr } = createQrCodeStylingForPayload(text, config);
+export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig, margin = 24): Promise<Uint8Array> {
+  const { qr } = createQrCodeStylingForPayload(text, config, margin);
   const data = await qr.getRawData('svg');
   if (!data) {
     throw new Error('QR code renderer did not return SVG data.');
@@ -346,10 +346,10 @@ export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig): 
   return new TextEncoder().encode(String(data));
 }
 
-function createQrCodeStylingForPayload(text: string, config: QrCodeConfig): { qr: QRCodeStyling; errorCorrectionLevel: QrCodeManualErrorCorrectionLevel } {
+function createQrCodeStylingForPayload(text: string, config: QrCodeConfig, margin = 24): { qr: QRCodeStyling; errorCorrectionLevel: QrCodeManualErrorCorrectionLevel } {
   if (config.errorCorrectionLevel !== 'auto') {
     return {
-      qr: new QRCodeStyling(createQrCodeStylingOptions(text, config)),
+      qr: new QRCodeStyling(createQrCodeStylingOptions(text, config, 640, config.errorCorrectionLevel, margin)),
       errorCorrectionLevel: config.errorCorrectionLevel,
     };
   }
@@ -357,7 +357,7 @@ function createQrCodeStylingForPayload(text: string, config: QrCodeConfig): { qr
   for (const errorCorrectionLevel of [...QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS].reverse()) {
     try {
       return {
-        qr: new QRCodeStyling(createQrCodeStylingOptions(text, config, 640, errorCorrectionLevel)),
+        qr: new QRCodeStyling(createQrCodeStylingOptions(text, config, 640, errorCorrectionLevel, margin)),
         errorCorrectionLevel,
       };
     } catch (error) {

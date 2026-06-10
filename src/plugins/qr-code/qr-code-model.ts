@@ -62,13 +62,14 @@ export function createQrCodeStylingOptions(
   text: string,
   config: QrCodeConfig,
   size = 640,
-  errorCorrectionLevel: QrCodeManualErrorCorrectionLevel = resolveQrCodeErrorCorrectionLevel(config)
+  errorCorrectionLevel: QrCodeManualErrorCorrectionLevel = resolveQrCodeErrorCorrectionLevel(config),
+  margin = 24
 ): Partial<Options> {
   return {
     type: 'svg',
     width: size,
     height: size,
-    margin: 24,
+    margin,
     data: text,
     qrOptions: {
       errorCorrectionLevel: errorCorrectionLevel as ErrorCorrectionLevel,

@@ -48,6 +48,7 @@ test('createQrCodeStylingOptions maps plugin config to styled SVG options', () =
     type: 'svg',
     width: 512,
     height: 512,
+    margin: 24,
     data: 'https://example.invalid/qr',
     qrOptions: { errorCorrectionLevel: 'H' },
     dotsOptions: { type: 'classy-rounded', color: '#0f172a' },
@@ -55,6 +56,12 @@ test('createQrCodeStylingOptions maps plugin config to styled SVG options', () =
     cornersDotOptions: { type: 'dot', color: '#0f172a' },
     backgroundOptions: { color: '#ffffff' },
   });
+});
+
+test('createQrCodeStylingOptions allows static PDF export to remove internal margin', () => {
+  const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', DEFAULT_QR_CODE_CONFIG, 640, 'H', 0);
+
+  expect(expectedResult.margin).toBe(0);
 });
 
 test('auto error correction starts with highest quality level', () => {

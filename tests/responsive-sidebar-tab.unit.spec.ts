@@ -97,6 +97,9 @@ test('responsive sidebar tab can reveal after an idle scroll event', () => {
 
   handleResponsiveSidebarTabScroll(editorTree);
   vi.advanceTimersByTime(750);
+  expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(false);
+
+  vi.advanceTimersByTime(750);
 
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
 
@@ -112,6 +115,9 @@ test('responsive sidebar tab can reveal after scrolling down', () => {
   expect(shell.classList.contains('is-sidebar-tab-hidden')).toBe(true);
 
   vi.advanceTimersByTime(750);
+  expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(false);
+
+  vi.advanceTimersByTime(750);
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
 
   vi.advanceTimersByTime(5000);
@@ -123,7 +129,7 @@ test('responsive sidebar tab hides on the next downward scroll after idle reveal
   const editorTree = createEditorTree(shell, 20);
 
   handleResponsiveSidebarTabScroll(editorTree);
-  vi.advanceTimersByTime(750);
+  vi.advanceTimersByTime(1500);
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
 
   editorTree.scrollTop = 40;
@@ -159,6 +165,6 @@ test('responsive sidebar tab does not reappear after its auto-hide timer', () =>
   vi.advanceTimersByTime(500);
   expect(shell.classList.contains('is-sidebar-tab-hidden')).toBe(true);
 
-  vi.advanceTimersByTime(750);
+  vi.advanceTimersByTime(1500);
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(false);
 });

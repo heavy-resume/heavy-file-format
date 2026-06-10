@@ -4,6 +4,7 @@ import { shouldAutoDismissSidebarHelp } from './sidebar-help';
 type SidebarKind = 'editor' | 'viewer';
 
 const COMPACT_SIDEBAR_SHELL_MAX_WIDTH = 768;
+const SIDEBAR_TAB_REVEAL_DELAY_MS = 1500;
 const responsiveShellResizeObservers = new WeakMap<HTMLElement, ResizeObserver>();
 
 const sidebarTabTimers: Record<SidebarKind, { reveal: number | null; hide: number | null; lastTop: number }> = {
@@ -194,7 +195,7 @@ function scheduleSidebarTabReveal(kind: SidebarKind, shell: HTMLElement): void {
       return;
     }
     revealSidebarTab(kind, shell);
-  }, 750);
+  }, SIDEBAR_TAB_REVEAL_DELAY_MS);
 }
 
 function scheduleSidebarTabHide(kind: SidebarKind, shell: HTMLElement, delay: number): void {

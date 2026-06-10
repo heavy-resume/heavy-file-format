@@ -156,3 +156,38 @@ test('PDF doc definition wraps grid items by gridColumns', () => {
   expect(JSON.stringify(gridNode.stack?.[0])).toContain('Second');
   expect(JSON.stringify(gridNode.stack?.[1])).toContain('Third');
 });
+
+test('PDF doc definition applies document heading font size styles', () => {
+  const block = createEmptyBlock('text');
+  block.text = '# Larger Heading';
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Heading Styles',
+      heading_styles: {
+        h1: {
+          label: 'Heading 1',
+          css: 'margin: 0; font-size: 3rem; font-weight: 700; line-height: 1.1;',
+          afterContentMarginTop: '0',
+        },
+      },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const headingNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+
+  expect(headingNode).toEqual(expect.objectContaining({
+    text: 'Larger Heading',
+    fontSize: 36,
+    bold: true,
+    lineHeight: 1.1,
+  }));
+});

@@ -11,7 +11,11 @@ export interface PdfTextBlockStyle {
   bold?: boolean;
   color?: string;
   fillColor?: string;
+  fontSize?: number;
+  lineHeight?: number;
 }
+
+export type PdfHeadingTextStyles = Partial<Record<1 | 2 | 3 | 4, PdfTextBlockStyle>>;
 
 type PdfInlineText = string | Array<string | HvyPdfMakeNodeObject>;
 
@@ -20,7 +24,8 @@ export function renderPdfTextBlock(
   _placeholder: string,
   decision: HvyPdfExportDecision,
   align?: Align,
-  textStyle: PdfTextBlockStyle = {}
+  textStyle: PdfTextBlockStyle = {},
+  headingStyles: PdfHeadingTextStyles = {}
 ): HvyPdfMakeNodeObject {
   const lines = splitPdfTextLines(getPdfTextBlockSource(text));
   if (!lines.length) {
@@ -45,6 +50,7 @@ export function renderPdfTextBlock(
     const style = getPdfTextLineStyle(line.styleName, decision);
     if (heading) {
       flushList();
+      const headingLevel = Math.min(4, heading[1].length) as 1 | 2 | 3 | 4;
       stack.push(
         applyTextStyle(
           applyTextAlignment({
@@ -53,7 +59,7 @@ export function renderPdfTextBlock(
             headlineLevel: heading[1].length,
             hvyKeepWithNext: true,
           }, align),
-          textStyle
+          { ...headingStyles[headingLevel], ...textStyle }
         )
       );
     } else if (bullet) {
@@ -229,5 +235,7 @@ function applyTextStyle<T extends HvyPdfMakeNodeObject>(node: T, textStyle: PdfT
     ...(textStyle.bold === undefined ? {} : { bold: textStyle.bold }),
     ...(textStyle.color ? { color: textStyle.color } : {}),
     ...(textStyle.fillColor ? { fillColor: textStyle.fillColor } : {}),
+    ...(typeof textStyle.fontSize === 'number' ? { fontSize: textStyle.fontSize } : {}),
+    ...(typeof textStyle.lineHeight === 'number' ? { lineHeight: textStyle.lineHeight } : {}),
   };
 }

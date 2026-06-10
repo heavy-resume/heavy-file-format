@@ -6,6 +6,7 @@ import { getPdfDocumentViewerThemeVariables } from '../pdf-document-theme';
 import { cssFragmentTriggersNetwork } from '../css-sanitizer';
 import { isExternalCssAllowed } from '../reference-config';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
+import { getHeadingStylesFromMeta } from '../heading-styles';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportOptions,
@@ -16,12 +17,19 @@ import type {
   HvyPdfMakeNodeObject,
 } from './types';
 import { resolvePdfExportStrategy } from './strategy';
-import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock, type PdfTextBlockStyle } from './text';
+import {
+  hasRenderablePdfTextBlock,
+  normalizePdfTextInline,
+  renderPdfTextBlock,
+  type PdfHeadingTextStyles,
+  type PdfTextBlockStyle,
+} from './text';
 
 const PDF_DEFAULT_IMAGE_FIT: [number, number] = [360, 240];
 const PDF_DEFAULT_GRID_COLUMN_GAP = 12;
 const PDF_SIDEBAR_WIDTH = 180;
 const PDF_SIDEBAR_COLUMN_GAP = 24;
+const PDF_CSS_REM_IN_POINTS = 12;
 
 interface PdfLayoutContext {
   availableWidth: number;
@@ -171,7 +179,14 @@ function renderBlock(
   switch (baseComponent) {
     case 'text':
       node = hasRenderablePdfTextBlock(block.text)
-        ? renderPdfTextBlock(block.text, block.schema.placeholder, decision, getPdfTextAlignment(block), getPdfTextBlockStyle(document, block))
+        ? renderPdfTextBlock(
+            block.text,
+            block.schema.placeholder,
+            decision,
+            getPdfTextAlignment(block),
+            getPdfTextBlockStyle(document, block),
+            getPdfHeadingTextStyles(document)
+          )
         : null;
       break;
     case 'code':
@@ -250,21 +265,47 @@ function getPdfTextAlignment(block: VisualBlock): Align | undefined {
 }
 
 function getPdfTextBlockStyle(document: VisualDocument, block: VisualBlock): PdfTextBlockStyle {
+  return getPdfCssTextStyle(document, block.schema.css);
+}
+
+function getPdfHeadingTextStyles(document: VisualDocument): PdfHeadingTextStyles {
+  const raw = document.meta.heading_styles;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const styles = getHeadingStylesFromMeta(document.meta);
+  return {
+    1: getPdfCssTextStyle(document, styles.h1.css),
+    2: getPdfCssTextStyle(document, styles.h2.css),
+    3: getPdfCssTextStyle(document, styles.h3.css),
+    4: getPdfCssTextStyle(document, styles.h4.css),
+  };
+}
+
+function getPdfCssTextStyle(document: VisualDocument, css: string): PdfTextBlockStyle {
   const style: PdfTextBlockStyle = {};
-  const fontWeight = getCssDeclarationValue(block.schema.css, 'font-weight')?.toLowerCase();
+  const fontWeight = getCssDeclarationValue(css, 'font-weight')?.toLowerCase();
   const numericWeight = fontWeight ? Number.parseInt(fontWeight, 10) : NaN;
   if (fontWeight === 'bold' || numericWeight >= 600) {
     style.bold = true;
   } else if (fontWeight === 'normal' || numericWeight <= 500) {
     style.bold = false;
   }
-  const textColor = getCssColorDeclarationValue(document, block.schema.css, 'color');
+  const fontSize = getCssPdfFontSize(css);
+  if (fontSize !== null) {
+    style.fontSize = fontSize;
+  }
+  const lineHeight = getCssPdfLineHeight(css);
+  if (lineHeight !== null) {
+    style.lineHeight = lineHeight;
+  }
+  const textColor = getCssColorDeclarationValue(document, css, 'color');
   if (textColor) {
     style.color = textColor;
   }
   const fillColor =
-    getCssColorDeclarationValue(document, block.schema.css, 'background-color') ??
-    getCssColorDeclarationValue(document, block.schema.css, 'background');
+    getCssColorDeclarationValue(document, css, 'background-color') ??
+    getCssColorDeclarationValue(document, css, 'background');
   if (fillColor) {
     style.fillColor = fillColor;
   }
@@ -304,6 +345,43 @@ function getCssColorDeclarationValue(document: VisualDocument, css: string, prop
   }
   const resolvedValue = resolveCssColorValue(document, value);
   return resolvedValue && isPdfColorValue(resolvedValue) ? resolvedValue : null;
+}
+
+function getCssPdfFontSize(css: string): number | null {
+  const value = getCssDeclarationValue(css, 'font-size');
+  return value ? cssLengthToPdfPoints(value) : null;
+}
+
+function getCssPdfLineHeight(css: string): number | null {
+  const value = getCssDeclarationValue(css, 'line-height')?.trim().toLowerCase();
+  if (!value || value === 'normal' || (!isExternalCssAllowed() && cssFragmentTriggersNetwork(value))) {
+    return null;
+  }
+  if (/^\d*\.?\d+$/.test(value)) {
+    const lineHeight = Number.parseFloat(value);
+    return lineHeight > 0 ? lineHeight : null;
+  }
+  return null;
+}
+
+function cssLengthToPdfPoints(value: string): number | null {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed || (!isExternalCssAllowed() && cssFragmentTriggersNetwork(trimmed))) {
+    return null;
+  }
+  const match = /^(\d*\.?\d+)(px|pt|rem|em)?$/.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+  const amount = Number.parseFloat(match[1] ?? '');
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  const unit = match[2] ?? 'pt';
+  if (unit === 'pt') return amount;
+  if (unit === 'px') return amount * 0.75;
+  if (unit === 'rem' || unit === 'em') return amount * PDF_CSS_REM_IN_POINTS;
+  return null;
 }
 
 function resolveCssColorValue(document: VisualDocument, value: string): string {

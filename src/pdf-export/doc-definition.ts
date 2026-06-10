@@ -8,7 +8,7 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { isExternalCssAllowed } from '../reference-config';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { getHeadingStylesFromMeta } from '../heading-styles';
-import { getTextCaptionMarkdown } from '../caption';
+import { getTextCaptionMarkdown, normalizeTextCaption } from '../caption';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportOptions,
@@ -579,8 +579,24 @@ function renderImageBlock(
   const captionText = getTextCaptionMarkdown(block.schema.caption).trim();
   const hasCaption = Boolean(captionText);
   const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout, block.schema.css, hasCaption);
-  const caption = hasCaption ? [{ text: captionText, style: 'metadata', alignment: block.schema.caption?.schema.align ?? 'center' as const }] : [];
+  const captionPayload = normalizeTextCaption(block.schema.caption);
+  const caption = hasCaption && captionPayload
+    ? [renderPdfTextBlock(captionPayload.text, '', createCaptionPdfDecision(), captionPayload.schema.align)]
+    : [];
   return { stack: [image, ...caption], unbreakable: true };
+}
+
+function createCaptionPdfDecision(): HvyPdfExportDecision {
+  return {
+    visibility: 'include',
+    keepTogether: false,
+    keepWithNext: false,
+    allowSplit: true,
+    role: 'body',
+    pageBreakBefore: false,
+    pageBreakAfter: false,
+    pdfStyle: {},
+  };
 }
 
 function renderImageNode(

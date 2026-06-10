@@ -184,16 +184,16 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
   }
   const typed = token as { type?: string; text?: string; tokens?: unknown[] };
   if (typed.type === 'strong') {
-    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), bold: true }];
+    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), bold: true }];
   }
   if (typed.type === 'em') {
-    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), italics: true }];
+    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), italics: true }];
   }
   if (typed.type === 'codespan') {
     return [{ text: typed.text ?? '', font: 'Roboto' }];
   }
   if (typed.type === 'del') {
-    return [{ text: renderMarkedInlineTokens(typed.tokens ?? []), decoration: 'lineThrough' }];
+    return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough' }];
   }
   if (typed.type === 'link') {
     return renderMarkedInlineTokens(typed.tokens ?? []);
@@ -202,6 +202,10 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
     return renderMarkedInlineTokens(typed.tokens);
   }
   return typed.text ? [typed.text] : [];
+}
+
+function coercePdfInlineText(parts: Array<string | HvyPdfMakeNodeObject>): PdfInlineText {
+  return parts.length === 1 && typeof parts[0] === 'string' ? parts[0] : parts;
 }
 
 function stripFillInMarkers(text: string): string {

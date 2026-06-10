@@ -186,7 +186,7 @@ test('PDF doc definition keeps image captions with CSS-sized images', () => {
   const image = createEmptyBlock('image');
   image.schema.imageFile = 'qr-code.svg';
   image.schema.imageAlt = 'QR code';
-  image.schema.caption = createDefaultTextCaption('Scan to open');
+  image.schema.caption = createDefaultTextCaption('**AI Generated** - expectations from disc golf course');
   image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
   const section = createEmptySection(1, '');
   section.blocks = [image];
@@ -214,7 +214,50 @@ test('PDF doc definition keeps image captions with CSS-sized images', () => {
   expect(imageStack?.unbreakable).toBe(true);
   expect(imageNode?.fit).toEqual([96, 96]);
   expect(imageNode?.margin).toEqual([0, 0, 0, 3]);
-  expect(captionNode).toEqual(expect.objectContaining({ text: 'Scan to open', alignment: 'center' }));
+  expect(captionNode).toEqual(expect.objectContaining({
+    text: [
+      { text: 'AI Generated', bold: true },
+      ' - expectations from disc golf course',
+    ],
+    alignment: 'center',
+    style: 'paragraph',
+  }));
+});
+
+test('PDF doc definition renders image caption headings as text headings', () => {
+  const image = createEmptyBlock('image');
+  image.schema.imageFile = 'qr-code.svg';
+  image.schema.imageAlt = 'QR code';
+  image.schema.caption = createDefaultTextCaption('## Caption Heading');
+  image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
+  const section = createEmptySection(1, '');
+  section.blocks = [image];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Caption Heading' },
+    extension: '.phvy',
+    attachments: [
+      {
+        id: 'image:qr-code.svg',
+        meta: { mediaType: 'image/svg+xml' },
+        bytes: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100"/></svg>'),
+      },
+    ],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const imageStack = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const captionNode = imageStack?.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+
+  expect(captionNode).toEqual(expect.objectContaining({
+    text: 'Caption Heading',
+    style: ['sectionTitle2'],
+    headlineLevel: 2,
+    alignment: 'center',
+  }));
 });
 
 test('PDF doc definition maps medium image preset to a moderate page size', () => {

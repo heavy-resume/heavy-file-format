@@ -4,6 +4,7 @@ import { getImageAttachment } from '../attachments';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getPdfDocumentViewerThemeVariables } from '../pdf-document-theme';
 import { cssFragmentTriggersNetwork } from '../css-sanitizer';
+import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { isExternalCssAllowed } from '../reference-config';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { getHeadingStylesFromMeta } from '../heading-styles';
@@ -149,7 +150,7 @@ function renderSection(
     id: section.customId || section.key,
     stack,
     hvyRole: decision.role ?? (childSidebar ? 'sidebar' : 'body'),
-    margin: childSidebar ? [0, 0, 0, 8] : [0, 0, 0, 6],
+    margin: getPdfCssMargin(mergeDocumentCss(getDocumentSectionDefaultCss(document.meta), section.css), childSidebar ? [0, 0, 0, 8] : [0, 0, 0, 6]),
   });
 }
 
@@ -221,7 +222,12 @@ function renderBlock(
       node = renderUnsupportedBlock(block, resolved);
       break;
   }
-  return node ? applyDecisionToNode(decision, { id: block.schema.id || block.id, ...node }) : null;
+  return node ? applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css)) : null;
+}
+
+function applyBlockCssMargin(node: HvyPdfMakeNodeObject, css: string): HvyPdfMakeNodeObject {
+  const margin = getPdfCssMargin(css, normalizePdfNodeMargin(node.margin));
+  return margin ? { ...node, margin } : node;
 }
 
 function renderContainerBlock(
@@ -383,6 +389,90 @@ function cssLengthToPdfPoints(value: string): number | null {
   if (unit === 'px') return amount * 0.75;
   if (unit === 'rem' || unit === 'em') return amount * PDF_CSS_REM_IN_POINTS;
   return null;
+}
+
+function getPdfCssMargin(css: string, fallback?: [number, number, number, number]): [number, number, number, number] | undefined {
+  const margin = [...(fallback ?? [0, 0, 0, 0])] as [number, number, number, number];
+  let changed = false;
+  const shorthand = getCssDeclarationValue(css, 'margin');
+  if (shorthand) {
+    const values = parseCssBoxLengthValues(shorthand);
+    if (values) {
+      margin[0] = values[0];
+      margin[1] = values[1];
+      margin[2] = values[2];
+      margin[3] = values[3];
+      changed = true;
+    }
+  }
+  const longhands: Array<[property: string, index: number]> = [
+    ['margin-top', 1],
+    ['margin-right', 2],
+    ['margin-bottom', 3],
+    ['margin-left', 0],
+  ];
+  for (const [property, index] of longhands) {
+    const value = cssLengthOrAutoToPdfPoints(getCssDeclarationValue(css, property));
+    if (value !== null) {
+      margin[index] = value;
+      changed = true;
+    }
+  }
+  return changed ? margin : fallback;
+}
+
+function parseCssBoxLengthValues(value: string): [number, number, number, number] | null {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 4) {
+    return null;
+  }
+  const parsed = parts.map((part) => cssLengthOrAutoToPdfPoints(part));
+  if (parsed.some((part) => part === null)) {
+    return null;
+  }
+  const [top, right = top, bottom = top, left = right] = parsed as number[];
+  return [left ?? 0, top ?? 0, right ?? 0, bottom ?? 0];
+}
+
+function cssLengthOrAutoToPdfPoints(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'auto') {
+    return 0;
+  }
+  if (normalized === '0') {
+    return 0;
+  }
+  const match = /^(\d*\.?\d+)(px|pt|rem|em)?$/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const amount = Number.parseFloat(match[1] ?? '');
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null;
+  }
+  const unit = match[2] ?? 'pt';
+  if (unit === 'pt') return amount;
+  if (unit === 'px') return amount * 0.75;
+  if (unit === 'rem' || unit === 'em') return amount * PDF_CSS_REM_IN_POINTS;
+  return null;
+}
+
+function normalizePdfNodeMargin(margin: HvyPdfMakeNodeObject['margin']): [number, number, number, number] | undefined {
+  if (typeof margin === 'number') {
+    return [margin, margin, margin, margin];
+  }
+  if (Array.isArray(margin)) {
+    if (margin.length === 2) {
+      return [margin[0] ?? 0, margin[1] ?? 0, margin[0] ?? 0, margin[1] ?? 0];
+    }
+    if (margin.length === 4) {
+      return [margin[0] ?? 0, margin[1] ?? 0, margin[2] ?? 0, margin[3] ?? 0];
+    }
+  }
+  return undefined;
 }
 
 function resolveCssColorValue(document: VisualDocument, value: string): string {

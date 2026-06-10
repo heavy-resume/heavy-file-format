@@ -80,6 +80,64 @@ test('PDF doc definition omits unfilled placeholder-only text blocks', () => {
   expect(serialized).not.toContain('<!-- value');
 });
 
+test('PDF doc definition applies component CSS margins to block wrappers', () => {
+  const firstBlock = createEmptyBlock('text');
+  firstBlock.schema.id = 'first';
+  firstBlock.schema.css = 'margin: 0.5rem 0 1rem 0.25rem;';
+  firstBlock.text = 'First block';
+  const secondBlock = createEmptyBlock('table');
+  secondBlock.schema.id = 'second';
+  secondBlock.schema.css = 'margin-bottom: 2rem;';
+  secondBlock.schema.tableColumns = ['Column'];
+  secondBlock.schema.tableRows = [{ cells: ['Cell'] }];
+  const section = createEmptySection(1, '');
+  section.blocks = [firstBlock, secondBlock];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Component Margins' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const firstNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const secondNode = firstSection.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+
+  expect(firstNode?.margin).toEqual([3, 6, 0, 12]);
+  expect(secondNode?.margin).toEqual([0, 0, 0, 24]);
+});
+
+test('PDF doc definition applies section default and explicit CSS margins', () => {
+  const defaultSection = createEmptySection(1, '');
+  defaultSection.customId = 'default-section';
+  defaultSection.blocks = [createEmptyBlock('text')];
+  defaultSection.blocks[0].text = 'Default section';
+  const explicitSection = createEmptySection(1, '');
+  explicitSection.customId = 'explicit-section';
+  explicitSection.css = 'margin-top: 1rem; margin-bottom: 2rem;';
+  explicitSection.blocks = [createEmptyBlock('text')];
+  explicitSection.blocks[0].text = 'Explicit section';
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Section Margins',
+      section_defaults: { css: 'margin: 0 0 0.5rem;' },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [defaultSection, explicitSection],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const defaultNode = expectedResult.content[0] as HvyPdfMakeNodeObject;
+  const explicitNode = expectedResult.content[1] as HvyPdfMakeNodeObject;
+
+  expect(defaultNode.margin).toEqual([0, 0, 0, 6]);
+  expect(explicitNode.margin).toEqual([0, 12, 0, 24]);
+});
+
 test('PDF doc definition constrains grid images to their column width', () => {
   const leftImage = createEmptyBlock('image');
   leftImage.schema.imageFile = 'left.png';

@@ -30,6 +30,7 @@ const PDF_DEFAULT_GRID_COLUMN_GAP = 12;
 const PDF_SIDEBAR_WIDTH = 180;
 const PDF_SIDEBAR_COLUMN_GAP = 24;
 const PDF_CSS_REM_IN_POINTS = 12;
+const PDF_IMAGE_CSS_REM_IN_POINTS = 8;
 
 interface PdfLayoutContext {
   availableWidth: number;
@@ -610,6 +611,11 @@ function cssImageLengthToPdfPoints(value: string | null, percentageBase: number)
   if (percentage) {
     const amount = Number.parseFloat(percentage[1] ?? '');
     return Number.isFinite(amount) && amount > 0 ? (percentageBase * amount) / 100 : null;
+  }
+  const rem = /^(\d*\.?\d+)(rem|em)$/.exec(normalized);
+  if (rem) {
+    const amount = Number.parseFloat(rem[1] ?? '');
+    return Number.isFinite(amount) && amount > 0 ? amount * PDF_IMAGE_CSS_REM_IN_POINTS : null;
   }
   return cssLengthToPdfPoints(normalized);
 }

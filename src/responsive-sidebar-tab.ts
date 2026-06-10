@@ -194,7 +194,6 @@ function scheduleSidebarTabReveal(kind: SidebarKind, shell: HTMLElement): void {
       return;
     }
     revealSidebarTab(kind, shell);
-    scheduleSidebarTabHide(kind, shell, 5000);
   }, 750);
 }
 

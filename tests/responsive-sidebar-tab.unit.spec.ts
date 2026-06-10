@@ -99,6 +99,9 @@ test('responsive sidebar tab can reveal after an idle scroll event', () => {
   vi.advanceTimersByTime(750);
 
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
+
+  vi.advanceTimersByTime(5000);
+  expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
 });
 
 test('responsive sidebar tab can reveal after scrolling down', () => {
@@ -110,6 +113,23 @@ test('responsive sidebar tab can reveal after scrolling down', () => {
 
   vi.advanceTimersByTime(750);
   expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
+
+  vi.advanceTimersByTime(5000);
+  expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
+});
+
+test('responsive sidebar tab hides on the next downward scroll after idle reveal', () => {
+  const shell = createShell(['editor-shell', 'is-sidebar-closed', 'hvy-preview-frame-phone']);
+  const editorTree = createEditorTree(shell, 20);
+
+  handleResponsiveSidebarTabScroll(editorTree);
+  vi.advanceTimersByTime(750);
+  expect(shell.classList.contains('is-sidebar-tab-visible')).toBe(true);
+
+  editorTree.scrollTop = 40;
+  handleResponsiveSidebarTabScroll(editorTree);
+
+  expect(shell.classList.contains('is-sidebar-tab-hidden')).toBe(true);
 });
 
 test('responsive sidebar tab can still reveal briefly after scrolling up', () => {

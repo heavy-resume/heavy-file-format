@@ -124,6 +124,8 @@ function handleSidebarScrollable(kind: SidebarKind, scrollable: HTMLElement, she
       dismissSidebarHelp(kind, shell);
     }
     hideSidebarTab(kind, shell);
+    scheduleSidebarTabReveal(kind, shell);
+    return;
   }
 
   scheduleSidebarTabReveal(kind, shell);
@@ -183,6 +185,9 @@ function dismissSidebarHelp(kind: SidebarKind, shell: HTMLElement): void {
 function scheduleSidebarTabReveal(kind: SidebarKind, shell: HTMLElement): void {
   const timerState = sidebarTabTimers[kind];
   clearSidebarTabTimer(timerState, 'reveal');
+  if (shell.classList.contains('is-sidebar-tab-visible') || shell.classList.contains('is-sidebar-tab-peeking')) {
+    return;
+  }
   timerState.reveal = window.setTimeout(() => {
     timerState.reveal = null;
     if (!shell.isConnected || shell.classList.contains('is-sidebar-open')) {
@@ -210,4 +215,12 @@ function clearSidebarTabTimer(timerState: { reveal: number | null; hide: number 
     window.clearTimeout(timerState[key]!);
     timerState[key] = null;
   }
+}
+
+export function resetResponsiveSidebarTabTimersForTests(): void {
+  (['editor', 'viewer'] as SidebarKind[]).forEach((kind) => {
+    clearSidebarTabTimer(sidebarTabTimers[kind], 'reveal');
+    clearSidebarTabTimer(sidebarTabTimers[kind], 'hide');
+    sidebarTabTimers[kind].lastTop = 0;
+  });
 }

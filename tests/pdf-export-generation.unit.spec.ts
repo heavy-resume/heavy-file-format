@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob } from '../src/pdf-export/export';
+import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import type { VisualDocument } from '../src/types';
 
 test('pdfmake backend produces a PDF blob for a strategy-filtered document', async () => {
@@ -77,4 +78,81 @@ test('PDF doc definition omits unfilled placeholder-only text blocks', () => {
   expect(serialized).not.toContain('####');
   expect(serialized).not.toContain('classes');
   expect(serialized).not.toContain('<!-- value');
+});
+
+test('PDF doc definition constrains grid images to their column width', () => {
+  const leftImage = createEmptyBlock('image');
+  leftImage.schema.imageFile = 'left.png';
+  leftImage.schema.imageAlt = 'Left image';
+  const rightImage = createEmptyBlock('image');
+  rightImage.schema.imageFile = 'right.png';
+  rightImage.schema.imageAlt = 'Right image';
+  const grid = createEmptyBlock('grid');
+  grid.schema.gridColumns = 2;
+  grid.schema.gridItems = [
+    { id: 'left-image', block: leftImage },
+    { id: 'right-image', block: rightImage },
+  ];
+  const section = createEmptySection(1, '');
+  section.blocks = [grid];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Grid Images' },
+    extension: '.phvy',
+    attachments: [
+      { id: 'image:left.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2, 3]) },
+      { id: 'image:right.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([4, 5, 6]) },
+    ],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const gridNode = firstSection.stack?.[0];
+  expect(typeof gridNode).not.toBe('string');
+  if (typeof gridNode === 'string') return;
+  const leftColumn = gridNode.columns?.[0];
+  expect(typeof leftColumn).not.toBe('string');
+  if (typeof leftColumn === 'string') return;
+  const imageStack = leftColumn?.stack?.[0];
+  expect(typeof imageStack).not.toBe('string');
+  if (typeof imageStack === 'string') return;
+  const imageNode = imageStack.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+
+  expect(imageNode?.fit).toEqual([246, 240]);
+});
+
+test('PDF doc definition wraps grid items by gridColumns', () => {
+  const grid = createEmptyBlock('grid');
+  grid.schema.gridColumns = 2;
+  grid.schema.gridItems = [
+    { id: 'first', block: createEmptyBlock('text') },
+    { id: 'second', block: createEmptyBlock('text') },
+    { id: 'third', block: createEmptyBlock('text') },
+  ];
+  grid.schema.gridItems[0].block.text = 'First';
+  grid.schema.gridItems[1].block.text = 'Second';
+  grid.schema.gridItems[2].block.text = 'Third';
+  const section = createEmptySection(1, '');
+  section.blocks = [grid];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Grid Rows' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const gridNode = firstSection.stack?.[0];
+  expect(typeof gridNode).not.toBe('string');
+  if (typeof gridNode === 'string') return;
+
+  expect(gridNode.stack).toHaveLength(2);
+  expect(JSON.stringify(gridNode.stack?.[0])).toContain('First');
+  expect(JSON.stringify(gridNode.stack?.[0])).toContain('Second');
+  expect(JSON.stringify(gridNode.stack?.[1])).toContain('Third');
 });

@@ -18,18 +18,42 @@ import type {
 import { resolvePdfExportStrategy } from './strategy';
 import { hasRenderablePdfTextBlock, normalizePdfTextInline, renderPdfTextBlock, type PdfTextBlockStyle } from './text';
 
+const PDF_DEFAULT_IMAGE_FIT: [number, number] = [360, 240];
+const PDF_DEFAULT_GRID_COLUMN_GAP = 12;
+const PDF_SIDEBAR_WIDTH = 180;
+const PDF_SIDEBAR_COLUMN_GAP = 24;
+
+interface PdfLayoutContext {
+  availableWidth: number;
+}
+
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
   options: Pick<HvyPdfExportOptions, 'contentView' | 'strategy'> = {}
 ): HvyPdfMakeDocumentDefinition {
   const resolved = resolvePdfExportStrategy(document, options.strategy, options.contentView);
-  const mainContent = renderSections(document, resolved, document.sections.filter((section) => section.location !== 'sidebar'));
+  const pageContentWidth = getPdfPageContentWidth(resolved.defaults.pageSize, resolved.defaults.pageMargins);
   const sidebarSections = document.sections.filter((section) => section.location === 'sidebar');
+  const mainContentWidth =
+    resolved.defaults.includeSidebar === 'include' && sidebarSections.length
+      ? Math.max(1, pageContentWidth - PDF_SIDEBAR_WIDTH - PDF_SIDEBAR_COLUMN_GAP)
+      : pageContentWidth;
+  const mainContent = renderSections(
+    document,
+    resolved,
+    document.sections.filter((section) => section.location !== 'sidebar'),
+    false,
+    { availableWidth: mainContentWidth }
+  );
   const sidebarContent =
-    resolved.defaults.includeSidebar === 'exclude' ? [] : renderSections(document, resolved, sidebarSections, true);
+    resolved.defaults.includeSidebar === 'exclude'
+      ? []
+      : renderSections(document, resolved, sidebarSections, true, {
+          availableWidth: resolved.defaults.includeSidebar === 'include' ? PDF_SIDEBAR_WIDTH : pageContentWidth,
+        });
   const content =
     resolved.defaults.includeSidebar === 'include' && sidebarContent.length
-      ? [{ columns: [{ width: '*', stack: mainContent }, { width: 180, stack: sidebarContent }], columnGap: 24 }]
+      ? [{ columns: [{ width: '*', stack: mainContent }, { width: PDF_SIDEBAR_WIDTH, stack: sidebarContent }], columnGap: PDF_SIDEBAR_COLUMN_GAP }]
       : mainContent.concat(sidebarContent);
 
   return {
@@ -81,11 +105,12 @@ function renderSections(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
   sections: VisualSection[],
-  sidebar = false
+  sidebar: boolean,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNode[] {
   const nodes: HvyPdfMakeNode[] = [];
   for (const section of sections) {
-    const rendered = renderSection(document, resolved, section, sidebar);
+    const rendered = renderSection(document, resolved, section, sidebar, layout);
     if (rendered) {
       nodes.push(rendered);
     }
@@ -97,7 +122,8 @@ function renderSection(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
   section: VisualSection,
-  sidebar: boolean
+  sidebar: boolean,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject | null {
   const decision = resolved.getSectionDecision(section.key);
   if (section.editorOnly || isSectionHiddenByTemplateMarker(section) || decision.visibility === 'hide') {
@@ -105,8 +131,8 @@ function renderSection(
   }
   const childSidebar = sidebar || decision.role === 'sidebar' || section.location === 'sidebar';
   const stack: HvyPdfMakeNode[] = [];
-  stack.push(...renderBlocks(document, resolved, section.blocks));
-  stack.push(...renderSections(document, resolved, section.children, childSidebar));
+  stack.push(...renderBlocks(document, resolved, section.blocks, layout));
+  stack.push(...renderSections(document, resolved, section.children, childSidebar, layout));
   if (stack.length === 0) {
     return null;
   }
@@ -121,10 +147,11 @@ function renderSection(
 function renderBlocks(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  blocks: VisualBlock[]
+  blocks: VisualBlock[],
+  layout: PdfLayoutContext
 ): HvyPdfMakeNode[] {
   return blocks.flatMap((block) => {
-    const rendered = renderBlock(document, resolved, block);
+    const rendered = renderBlock(document, resolved, block, layout);
     return rendered ? [rendered] : [];
   });
 }
@@ -132,7 +159,8 @@ function renderBlocks(
 function renderBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  block: VisualBlock
+  block: VisualBlock,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject | null {
   const decision = resolved.getBlockDecision(block.id);
   if (block.schema.editorOnly || isBlockHiddenByTemplateMarker(block) || decision.visibility === 'hide') {
@@ -150,25 +178,25 @@ function renderBlock(
       node = { text: block.text || block.schema.placeholder || '', style: 'codeBlock' };
       break;
     case 'container':
-      node = renderContainerBlock(document, resolved, block);
+      node = renderContainerBlock(document, resolved, block, layout);
       break;
     case 'component-list':
-      node = { stack: renderBlocks(document, resolved, block.schema.componentListBlocks), style: 'container' };
+      node = { stack: renderBlocks(document, resolved, block.schema.componentListBlocks, layout), style: 'container' };
       break;
     case 'grid':
-      node = renderGridBlock(document, resolved, block);
+      node = renderGridBlock(document, resolved, block, layout);
       break;
     case 'expandable':
-      node = renderExpandableBlock(document, resolved, block, decision);
+      node = renderExpandableBlock(document, resolved, block, decision, layout);
       break;
     case 'table':
       node = renderTableBlock(block);
       break;
     case 'image':
-      node = renderImageBlock(document, resolved, block);
+      node = renderImageBlock(document, resolved, block, layout);
       break;
     case 'carousel':
-      node = renderCarouselBlock(document, resolved, block.schema.carouselImages);
+      node = renderCarouselBlock(document, resolved, block.schema.carouselImages, layout);
       break;
     case 'xref-card':
       node = renderXrefCardBlock(block);
@@ -183,29 +211,38 @@ function renderBlock(
 function renderContainerBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  block: VisualBlock
+  block: VisualBlock,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
   const stack: HvyPdfMakeNode[] = [];
   if (block.schema.containerTitle.trim()) {
     stack.push({ text: block.schema.containerTitle, bold: true, margin: [0, 0, 0, 3], hvyKeepWithNext: true });
   }
-  stack.push(...renderBlocks(document, resolved, block.schema.containerBlocks));
+  stack.push(...renderBlocks(document, resolved, block.schema.containerBlocks, layout));
   return { stack, style: 'container' };
 }
 
 function renderGridBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  block: VisualBlock
+  block: VisualBlock,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
-  const columns = block.schema.gridItems.map((item) => {
-    const stack = renderBlocks(document, resolved, [item.block]);
-    return {
+  const columnCount = Math.max(1, Math.min(6, block.schema.gridColumns));
+  const columnWidth = Math.max(1, (layout.availableWidth - PDF_DEFAULT_GRID_COLUMN_GAP * (columnCount - 1)) / columnCount);
+  const rows: HvyPdfMakeNodeObject[] = [];
+  for (let index = 0; index < block.schema.gridItems.length; index += columnCount) {
+    const rowItems = block.schema.gridItems.slice(index, index + columnCount);
+    const columns = rowItems.map((item) => ({
       width: '*',
-      stack,
-    };
-  });
-  return columns.length ? { columns, columnGap: 12 } : placeholderNode('Empty grid.');
+      stack: renderBlocks(document, resolved, [item.block], { availableWidth: columnWidth }),
+    }));
+    rows.push({ columns, columnGap: PDF_DEFAULT_GRID_COLUMN_GAP, margin: [0, 0, 0, 6] });
+  }
+  if (rows.length === 0) {
+    return placeholderNode('Empty grid.');
+  }
+  return rows.length === 1 ? rows[0] : { stack: rows };
 }
 
 function getPdfTextAlignment(block: VisualBlock): Align | undefined {
@@ -289,7 +326,8 @@ function renderExpandableBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
   block: VisualBlock,
-  decision: HvyPdfExportDecision
+  decision: HvyPdfExportDecision,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
   const pane = resolveExpandablePane(resolved, block, decision);
   const stack: HvyPdfMakeNode[] = [];
@@ -297,10 +335,10 @@ function renderExpandableBlock(
     stack.push({ text: block.schema.expandableStub, style: 'paragraph' });
   }
   if (pane === 'stubOnly' || pane === 'stubThenContent') {
-    stack.push(...renderBlocks(document, resolved, block.schema.expandableStubBlocks.children));
+    stack.push(...renderBlocks(document, resolved, block.schema.expandableStubBlocks.children, layout));
   }
   if (pane === 'contentOnly' || pane === 'stubThenContent') {
-    stack.push(...renderBlocks(document, resolved, block.schema.expandableContentBlocks.children));
+    stack.push(...renderBlocks(document, resolved, block.schema.expandableContentBlocks.children, layout));
   }
   return stack.length ? { stack } : placeholderNode('Empty expandable component.');
 }
@@ -350,10 +388,11 @@ function renderTableBlock(block: VisualBlock): HvyPdfMakeNodeObject {
 function renderCarouselBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  images: CarouselImage[]
+  images: CarouselImage[],
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
   const stack = images.flatMap((entry) => {
-    const node = renderImageNode(document, entry.imageFile, entry.imageAlt, resolved);
+    const node = renderImageNode(document, entry.imageFile, entry.imageAlt, resolved, layout);
     const caption = entry.caption.trim() ? [{ text: entry.caption, style: 'metadata', alignment: 'center' as const }] : [];
     return [node, ...caption];
   });
@@ -363,9 +402,10 @@ function renderCarouselBlock(
 function renderImageBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
-  block: VisualBlock
+  block: VisualBlock,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
-  const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved);
+  const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout);
   const caption = block.schema.caption.trim()
     ? [{ text: block.schema.caption, style: 'metadata', alignment: 'center' as const }]
     : [];
@@ -376,7 +416,8 @@ function renderImageNode(
   document: VisualDocument,
   filename: string,
   alt: string,
-  resolved: HvyPdfExportResolvedStrategy
+  resolved: HvyPdfExportResolvedStrategy,
+  layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
   const attachment = filename ? getImageAttachment(document, filename) : null;
   if (!attachment) {
@@ -385,13 +426,14 @@ function renderImageNode(
       : placeholderNode(alt.trim() ? `Missing image: ${alt}` : 'Missing image.');
   }
   const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : '';
+  const fit = getImageFitForLayout(layout);
   if (mediaType === 'image/svg+xml') {
-    return { svg: decodeText(attachment.bytes), fit: [360, 240], alignment: 'center', margin: [0, 0, 0, 8] };
+    return { svg: decodeText(attachment.bytes), fit, alignment: 'center', margin: [0, 0, 0, 8] };
   }
   if (mediaType === 'image/png' || mediaType === 'image/jpeg') {
     return {
       image: `data:${mediaType};base64,${toBase64(attachment.bytes)}`,
-      fit: [360, 240],
+      fit,
       alignment: 'center',
       margin: [0, 0, 0, 8],
     };
@@ -446,6 +488,45 @@ function normalizeStyleList(style: HvyPdfMakeNodeObject['style']): string[] {
 
 function placeholderNode(text: string): HvyPdfMakeNodeObject {
   return { text, style: 'placeholder' };
+}
+
+function getImageFitForLayout(layout: PdfLayoutContext): [number, number] {
+  const width = Number.isFinite(layout.availableWidth)
+    ? Math.max(1, Math.min(PDF_DEFAULT_IMAGE_FIT[0], layout.availableWidth))
+    : PDF_DEFAULT_IMAGE_FIT[0];
+  return [width, PDF_DEFAULT_IMAGE_FIT[1]];
+}
+
+function getPdfPageContentWidth(
+  pageSize: HvyPdfExportResolvedStrategy['defaults']['pageSize'],
+  pageMargins: HvyPdfExportResolvedStrategy['defaults']['pageMargins']
+): number {
+  const size = getPdfPageSize(pageSize);
+  const margins = normalizePdfPageMargins(pageMargins);
+  return Math.max(1, size.width - margins[0] - margins[2]);
+}
+
+function getPdfPageSize(pageSize: HvyPdfExportResolvedStrategy['defaults']['pageSize']): { width: number; height: number } {
+  if (typeof pageSize !== 'string') {
+    return pageSize;
+  }
+  const normalized = pageSize.trim().toUpperCase();
+  if (normalized === 'A4') return { width: 595.28, height: 841.89 };
+  if (normalized === 'LEGAL') return { width: 612, height: 1008 };
+  if (normalized === 'TABLOID' || normalized === 'LEDGER') return { width: 792, height: 1224 };
+  return { width: 612, height: 792 };
+}
+
+function normalizePdfPageMargins(
+  pageMargins: HvyPdfExportResolvedStrategy['defaults']['pageMargins']
+): [number, number, number, number] {
+  if (typeof pageMargins === 'number') {
+    return [pageMargins, pageMargins, pageMargins, pageMargins];
+  }
+  if (pageMargins.length === 2) {
+    return [pageMargins[0], pageMargins[1], pageMargins[0], pageMargins[1]];
+  }
+  return pageMargins;
 }
 
 function toBase64(bytes: Uint8Array): string {

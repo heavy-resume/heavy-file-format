@@ -3,6 +3,7 @@ import type { VisualDocument } from './types';
 import { renderAltAnnotationsAsFullText } from './markdown';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from './template-hide';
 import { hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
+import { getTextCaptionMarkdown } from './caption';
 
 export function exportDocumentSourceMarkdown(document: VisualDocument): string {
   return document.sections
@@ -43,7 +44,7 @@ function renderBlockMarkdown(block: VisualBlock): string[] {
   if (component === 'image') {
     return [
       ...imagePart(block.schema.imageAlt),
-      ...textPart(block.schema.caption),
+      ...textPart(getTextCaptionMarkdown(block.schema.caption)),
     ];
   }
   if (component === 'carousel') {

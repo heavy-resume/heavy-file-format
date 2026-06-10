@@ -1258,20 +1258,41 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption","css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
   expect(block?.schema.component).toBe('image');
   expect(block?.schema.imageFile).toBe('hero.png');
   expect(block?.schema.imageAlt).toBe('Cover photo');
-  expect(block?.schema.caption).toBe('Hero caption');
+  expect(block?.schema.caption?.text).toBe('Hero caption');
+  expect(block?.schema.caption?.schema.align).toBe('center');
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
-  expect(output).toContain('"caption":"Hero caption"');
+  expect(output).toContain('"caption":{"text":"Hero caption"');
+});
+
+test('image component migrates string captions to styled caption payloads', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"cover"}-->
+#! Cover
+
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption"}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.caption?.text).toBe('Hero caption');
+  expect(block?.schema.caption?.schema.align).toBe('center');
+
+  const output = serializeWithState(document);
+  expect(output).toContain('"caption":{"text":"Hero caption"');
+  expect(output).not.toContain('"caption":"Hero caption"');
 });
 
 test('serializes and parses multiple tail attachments with byte slicing', () => {

@@ -12,10 +12,12 @@ import {
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
 } from '../src/plugins/qr-code/qr-code-model';
+import { createDefaultTextCaption } from '../src/caption';
 
 test('readQrCodeConfig defaults invalid style options', () => {
+  const caption = createDefaultTextCaption('Scan me');
   const expectedResult = readQrCodeConfig({
-    caption: 'Scan me',
+    caption,
     foregroundColor: 'red',
     backgroundColor: '#f8fafc',
     dotsType: 'unknown',
@@ -25,10 +27,19 @@ test('readQrCodeConfig defaults invalid style options', () => {
 
   expect(expectedResult).toEqual({
     ...DEFAULT_QR_CODE_CONFIG,
-    caption: 'Scan me',
+    caption,
     backgroundColor: '#f8fafc',
     cornersSquareType: 'rounded',
   });
+});
+
+test('readQrCodeConfig migrates string captions to styled caption payloads', () => {
+  const expectedResult = readQrCodeConfig({
+    caption: 'Scan me',
+  });
+
+  expect(expectedResult.caption?.text).toBe('Scan me');
+  expect(expectedResult.caption?.schema.align).toBe('center');
 });
 
 test('createQrCodeStylingOptions maps plugin config to styled SVG options', () => {

@@ -1,5 +1,6 @@
 import type { JsonObject } from '../hvy/types';
 import type { VisualBlock } from '../editor/types';
+import type { TextCaptionPayload } from '../editor/types';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
 
@@ -56,6 +57,11 @@ export interface HvyPluginContext {
   // Persist block-level presentation CSS for plugin-owned controls such as
   // size/alignment presets, refreshing this plugin instance and reader panels.
   setCss(css: string): void;
+  caption: {
+    createDefaultTextCaption(text?: string): TextCaptionPayload;
+    openTextCaptionModal(options: { title?: string; configKey?: string; value?: TextCaptionPayload | null; onChange?: (next: TextCaptionPayload | null) => void }): void;
+    renderTextCaption(value: TextCaptionPayload | null): HTMLElement | null;
+  };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;

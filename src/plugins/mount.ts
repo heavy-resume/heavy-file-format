@@ -1,10 +1,11 @@
-import { state, getRenderApp, getRefreshReaderPanels, getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../state';
+import { state, getRenderApp, getRefreshReaderPanels, getActiveStateRuntime, getCachedComponentRenderHelpers, runWithStateRuntime, type StateRuntime } from '../state';
 import { findBlockByIds } from '../block-ops';
 import { recordHistory } from '../history';
 import { syncReusableTemplateForBlock } from '../reusable';
 import { serializeDocument } from '../serialization';
 import { getAttachment, setAttachment, removeAttachment } from '../attachments';
 import { getHostPlugin } from './registry';
+import { createDefaultTextCaption, renderTextCaptionElement } from '../caption';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
@@ -161,6 +162,19 @@ function buildContext(
     setConfig,
     setText,
     setCss,
+    caption: {
+      createDefaultTextCaption,
+      openTextCaptionModal: (options) => runWithStateRuntime(runtime, () => {
+        const configKey = options.configKey ?? 'caption';
+        state.captionTextModal = {
+          target: { kind: 'plugin-config', pluginId: plugin.id, sectionKey, blockId, configKey, title: options.title },
+          title: options.title ?? 'Caption',
+          onChange: options.onChange ?? ((next) => setConfig({ [configKey]: next })),
+        };
+        getRenderApp()();
+      }),
+      renderTextCaption: (value) => runWithStateRuntime(runtime, () => renderTextCaptionElement(value, getCachedComponentRenderHelpers())),
+    },
     requestRerender,
   };
 }

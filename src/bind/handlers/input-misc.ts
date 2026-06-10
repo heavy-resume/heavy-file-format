@@ -660,7 +660,7 @@ export function bindInputMisc(app: HTMLElement): void {
     if (handleBlockFieldInput(target)) {
       clearNextUndoTargetsDocument();
       saveSessionState(state);
-      if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'table-cell' || field === 'table-column') {
+      if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'caption-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);
       }
       void runButtonVisibilityScripts(app);

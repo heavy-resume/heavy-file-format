@@ -13,6 +13,7 @@ import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
 import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
+import { normalizeTextCaption } from '../caption';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -969,7 +970,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
-  if (typeof value.caption === 'string') schema.caption = value.caption;
+  if ('caption' in value) schema.caption = normalizeTextCaption(value.caption);
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null;

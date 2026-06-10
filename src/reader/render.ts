@@ -22,6 +22,8 @@ import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThe
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
 import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { CaptionTextModalState } from '../caption';
+import { createDefaultTextCaption, normalizeTextCaption, renderTextCaptionHtml } from '../caption';
 import type { SearchState } from '../search/types';
 import { createSearchFilterContext, isBlockSearchDeprioritized, isBlockSearchMatch, isBlockSearchVisible, isSectionSearchDeprioritized, isSectionSearchMatch, isSectionSearchVisible, orderSearchFilteredSections, type SearchFilterContext } from '../search/filter';
 import { highlightSearchHtml } from '../search/highlight';
@@ -64,6 +66,7 @@ interface ReaderRenderState {
   aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
   aiEditorHostSectionKey?: string | null;
   modalSectionKey: string | null;
+  captionTextModal: CaptionTextModalState | null;
   sqliteRowComponentModal: SqliteRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
@@ -1325,6 +1328,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     if (state.themeModalOpen) {
       return renderThemeModal();
     }
+    if (state.captionTextModal) {
+      return renderCaptionTextModal();
+    }
     if (state.pdfTemplateImportModal) {
       const modal = state.pdfTemplateImportModal;
       return `
@@ -1834,6 +1840,59 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           </div>
           <p class="muted">Meta is optional and can be used by readers, indexing, and plugins.</p>
           ${deps.renderBlockMetaFields(state.componentMetaModal.sectionKey, block)}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderCaptionTextModal(): string {
+    const modal = state.captionTextModal;
+    if (!modal) {
+      return '';
+    }
+    const block = deps.findBlockByIds(modal.target.sectionKey, modal.target.blockId);
+    if (!block) {
+      return '';
+    }
+    const caption = modal.target.kind === 'image'
+      ? block.schema.kind === 'image' ? normalizeTextCaption(block.schema.caption) : null
+      : normalizeTextCaption(block.schema.pluginConfig[modal.target.configKey]);
+    const draft = caption ?? createDefaultTextCaption();
+    const helpers = deps.getComponentRenderHelpers();
+    const align = draft.schema.align;
+    const alignStyle = align === 'left' ? '' : ` style="text-align: ${deps.escapeAttr(align)};"`;
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="close-overlay"></div>
+        <section class="modal-panel component-meta-modal caption-text-modal">
+          <div class="modal-head">
+            <h3>${deps.escapeHtml(modal.title)}</h3>
+            <div class="modal-head-actions">
+              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
+            </div>
+          </div>
+          <div class="caption-text-modal-editor">
+            ${helpers.renderRichToolbar(modal.target.sectionKey, modal.target.blockId, {
+              field: 'caption-rich',
+              includeAlign: true,
+              align,
+              currentMarkdown: draft.text,
+              textLineStyles: helpers.getTextLineStyles?.() ?? {},
+            })}
+            <div
+              class="rich-editor caption-rich-editor"
+              contenteditable="true"
+              spellcheck="true"
+              data-section-key="${deps.escapeAttr(modal.target.sectionKey)}"
+              data-block-id="${deps.escapeAttr(modal.target.blockId)}"
+              data-field="caption-rich"
+              ${alignStyle}
+            >${helpers.markdownToEditorHtml(draft.text)}</div>
+          </div>
+          <div class="caption-text-modal-preview">
+            <div class="caption-text-modal-preview-label">Preview</div>
+            <figcaption class="image-caption"${alignStyle}>${renderTextCaptionHtml(draft, helpers)}</figcaption>
+          </div>
         </section>
       </div>
     `;

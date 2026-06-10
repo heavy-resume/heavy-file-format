@@ -10,13 +10,14 @@ import { initState } from '../src/state';
 import { escapeAttr, escapeHtml } from '../src/utils';
 import type { VisualBlock } from '../src/editor/types';
 import { createTestState } from './serialization-test-helpers';
+import { createDefaultTextCaption } from '../src/caption';
 
 const helpers: ComponentRenderHelpers = {
   escapeAttr,
   escapeHtml,
   markdownToEditorHtml: (markdown) => markdown,
   renderRichToolbar: () => '',
-  renderComponentFragment: () => '',
+  renderComponentFragment: (_componentName, content) => content,
   renderEditorBlock: () => '',
   renderPassiveEditorBlock: () => '',
   renderReaderBlock: () => '',
@@ -49,7 +50,7 @@ describe('image editor render controls', () => {
     block.id = 'photo';
     block.schema.imageFile = 'avatar.jpg';
     block.schema.imageAlt = 'Avatar';
-    block.schema.caption = 'Team photo';
+    block.schema.caption = createDefaultTextCaption('Team photo');
     const section = createEmptySection(1);
     section.key = 'profile';
     section.title = 'Profile';
@@ -72,8 +73,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('data-action="image-delete-current"');
     expect(expectedResult).toContain('data-action="image-delete-unused"');
     expect(expectedResult).toContain('data-image-filename="unused.jpg"');
-    expect(expectedResult).toContain('data-field="image-caption"');
-    expect(expectedResult).toContain('<figcaption class="image-caption">Team photo</figcaption>');
+    expect(expectedResult).toContain('data-action="open-image-caption-modal"');
+    expect(expectedResult).toContain('<figcaption class="image-caption" style="text-align: center;">Team photo</figcaption>');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');
   });

@@ -12,6 +12,7 @@ import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolve
 import { cameraIcon, closeIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
+import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
 
 export { mergeImagePresetCss } from './image-preset-css';
 
@@ -290,12 +291,13 @@ function escapeModalAttr(value: string): string {
 function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const filename = block.schema.imageFile.trim();
   const alt = block.schema.imageAlt || filename || 'Image';
-  const caption = block.schema.caption.trim();
   if (!filename) {
     return '<div class="image-empty muted">No image attached.</div>';
   }
-  const captionHtml = caption
-    ? `<figcaption class="image-caption">${helpers.escapeHtml(caption)}</figcaption>`
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  const captionHtml = captionContent
+    ? `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`
     : '';
   const image = renderImageElement({
     filename,
@@ -373,13 +375,13 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </label>
         <label class="image-alt-label">
           <span>Caption</span>
-          <textarea
-            rows="2"
+          <button
+            type="button"
+            class="image-pick-button image-caption-edit-button"
+            data-action="open-image-caption-modal"
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="image-caption"
-            placeholder="Add a caption"
-          >${helpers.escapeHtml(block.schema.caption)}</textarea>
+          >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
         </label>
       </div>
       <div class="image-attachment-panel">
@@ -476,7 +478,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
   recordHistory(`image-current-delete:${blockId}`);
   block.schema.imageFile = '';
   block.schema.imageAlt = '';
-  block.schema.caption = '';
+  block.schema.caption = null;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   getRenderApp()();

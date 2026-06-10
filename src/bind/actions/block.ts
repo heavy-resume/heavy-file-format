@@ -24,6 +24,7 @@ import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-de
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
 import { routeNextUndoToDocument } from '../../edit-command-routing';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
+import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -133,6 +134,21 @@ const imageTakePhoto: ActionHandler = ({ app, actionButton, blockId }) => {
   });
 };
 
+const openImageCaptionModal: ActionHandler = ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'image') {
+    return;
+  }
+  state.captionTextModal = {
+    target: { kind: 'image', sectionKey, blockId },
+    title: 'Image Caption',
+  };
+  getRenderApp()();
+};
+
 const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
@@ -142,20 +158,39 @@ const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }
   if (!block) {
     return;
   }
-  block.schema.align = coerceAlign(actionButton.dataset.alignValue ?? 'left');
-  syncReusableTemplateForBlock(sectionKey, block.id);
-  getRefreshReaderPanels()();
-  const selector = `[data-section-key="${sectionKey}"][data-block-id="${block.id}"][data-field="block-rich"]`;
+  const align = coerceAlign(actionButton.dataset.alignValue ?? 'left');
+  const richField = actionButton.dataset.richField ?? 'block-rich';
+  if (richField === 'caption-rich') {
+    if (block.schema.kind === 'image') {
+      block.schema.caption = updateTextCaptionAlign(block.schema.caption, align);
+    } else if (state.captionTextModal?.target.kind === 'plugin-config') {
+      const key = state.captionTextModal.target.configKey;
+      state.captionTextModal.onChange?.(updateTextCaptionAlign(normalizeTextCaption(block.schema.pluginConfig[key]), align));
+    } else {
+      return;
+    }
+  } else {
+    block.schema.align = align;
+  }
+  if (richField !== 'caption-rich' || block.schema.kind === 'image') {
+    syncReusableTemplateForBlock(sectionKey, block.id);
+    getRefreshReaderPanels()();
+  }
+  const selector = `[data-section-key="${sectionKey}"][data-block-id="${block.id}"][data-field="${richField}"]`;
   const editable = app.querySelector<HTMLElement>(selector);
   if (editable) {
-    editable.style.textAlign = block.schema.align;
+    editable.style.textAlign = align;
     editable.focus();
+    const captionPreview = editable.closest('.caption-text-modal')?.querySelector<HTMLElement>('.caption-text-modal-preview .image-caption');
+    if (captionPreview) {
+      captionPreview.style.textAlign = align;
+    }
   }
   actionButton
     .closest('.align-buttons')
     ?.querySelectorAll<HTMLButtonElement>('[data-align-value]')
     .forEach((button) => {
-      const selected = button.dataset.alignValue === block.schema.align;
+      const selected = button.dataset.alignValue === align;
       button.classList.toggle('secondary', selected);
       button.classList.toggle('is-selected', selected);
       button.classList.toggle('ghost', !selected);
@@ -598,6 +633,7 @@ export const blockActions: Record<string, ActionHandler> = {
   'image-delete-unused': imageDeleteUnused,
   'image-delete-current': imageDeleteCurrent,
   'image-take-photo': imageTakePhoto,
+  'open-image-caption-modal': openImageCaptionModal,
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,

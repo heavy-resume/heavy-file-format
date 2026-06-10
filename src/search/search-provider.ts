@@ -2,6 +2,7 @@ import type { VisualBlock } from '../editor/types';
 import type { VisualSection } from '../editor/types';
 import { findVirtualDirectoryForBlock } from '../cli-core/virtual-file-system';
 import { getSectionId } from '../section-ops';
+import { getTextCaptionMarkdown } from '../caption';
 import type { HvySearchMatch, HvySearchProvider, HvySearchRequest, HvySearchResult, SearchCategory } from './types';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -245,7 +246,7 @@ function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array
     { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail ?? '' },
     { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle ?? '' },
     { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt ?? '' },
-    { field: 'caption', label: FIELD_LABELS.caption, value: block.schema.caption ?? '' },
+    { field: 'caption', label: FIELD_LABELS.caption, value: getTextCaptionMarkdown(block.schema.caption) },
     { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
     { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },
@@ -256,7 +257,7 @@ function getBlockLabel(block: VisualBlock, section: VisualSection): string {
   return (block.schema.xrefTitle ?? '').trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || (block.schema.caption ?? '').trim()
+    || getTextCaptionMarkdown(block.schema.caption).trim()
     || (block.schema.imageAlt ?? '').trim()
     || (block.schema.id ?? '').trim()
     || getSectionLabel(section);
@@ -266,7 +267,7 @@ function getBlockContextLabel(block: VisualBlock): string {
   return (block.schema.xrefTitle ?? '').trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || (block.schema.caption ?? '').trim()
+    || getTextCaptionMarkdown(block.schema.caption).trim()
     || (block.schema.imageAlt ?? '').trim();
 }
 

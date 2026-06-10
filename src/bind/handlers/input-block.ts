@@ -601,14 +601,6 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'image-caption' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-      const block = resolveBlockContext(target)?.block ?? null;
-      if (!block) return;
-      recordHistory(`image-caption:${block.id}`);
-      block.schema.caption = target.value;
-      getRefreshReaderPanels()();
-      return;
-    }
   });
 }
 

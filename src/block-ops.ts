@@ -3,7 +3,7 @@ import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
-import { state, getRefreshReaderPanels, getRenderApp } from './state';
+import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
@@ -24,6 +24,8 @@ import { createTextFillInMarker, hasTextFillInMarker, prepareTextFillIn } from '
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
+import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
+import type { TextCaptionPayload } from './editor/types';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -195,6 +197,32 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return false;
   }
   const block = context.block;
+
+  if (field === 'caption-rich') {
+    removeNonTextContentFromRichEditor(target);
+    normalizeEditableListDom(target);
+    convertInlineCodeInsertedShortcut(target);
+    normalizeInlineCodeTextNodes(target);
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    let nextCaption: TextCaptionPayload | null = null;
+    if (block.schema.kind === 'image') {
+      nextCaption = updateTextCaptionText(block.schema.caption, editedMarkdown);
+      block.schema.caption = nextCaption;
+    } else if (state.captionTextModal?.target.kind === 'plugin-config') {
+      const key = state.captionTextModal.target.configKey;
+      const current = normalizeTextCaption(block.schema.pluginConfig[key]);
+      nextCaption = updateTextCaptionText(current, editedMarkdown);
+      state.captionTextModal.onChange?.(nextCaption);
+    } else {
+      return false;
+    }
+    refreshCaptionModalPreview(target, nextCaption);
+    if (block.schema.kind === 'image') {
+      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+      getRefreshReaderPanels()();
+    }
+    return true;
+  }
 
   if (field === 'block-rich' || field === 'text-fill-in-rich') {
     let turndownMs = 0;
@@ -535,6 +563,17 @@ function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock)
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
   return !target.closest('.editor-tree, .hvy-ai-reader-surface');
+}
+
+function refreshCaptionModalPreview(target: HTMLElement, caption: TextCaptionPayload | null): void {
+  const modal = target.closest<HTMLElement>('.caption-text-modal');
+  const preview = modal?.querySelector<HTMLElement>('.caption-text-modal-preview .image-caption');
+  if (!preview) {
+    return;
+  }
+  const helpers = getCachedComponentRenderHelpers();
+  preview.innerHTML = renderTextCaptionHtml(caption, helpers);
+  preview.style.textAlign = caption?.schema.align ?? 'center';
 }
 
 function buildTextFromFillInEditor(target: HTMLElement, block: VisualBlock, migrateFillInPlaceholders: boolean): string {

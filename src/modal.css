@@ -109,6 +109,42 @@
   width: min(34rem, calc(100vw - 2rem));
 }
 
+.caption-text-modal,
+.hvy-document .caption-text-modal {
+  width: min(48rem, calc(100vw - 2rem));
+}
+
+.caption-text-modal-editor,
+.hvy-document .caption-text-modal-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.caption-rich-editor,
+.hvy-document .caption-rich-editor {
+  min-height: 7rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  padding: 0.85rem 1rem;
+}
+
+.caption-text-modal-preview,
+.hvy-document .caption-text-modal-preview {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hvy-border-input);
+}
+
+.caption-text-modal-preview-label,
+.hvy-document .caption-text-modal-preview-label {
+  color: var(--hvy-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .pdf-template-import-picker,
 .hvy-document .pdf-template-import-picker {
   display: grid;

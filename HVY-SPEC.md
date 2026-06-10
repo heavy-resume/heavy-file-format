@@ -410,13 +410,13 @@ component_defs:
 Image blocks reference a binary attachment stored in the document tail:
 
 ```markdown
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Product overview"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Product overview","schema":{"kind":"text","component":"text","align":"center"}}}-->
 ```
 
 Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
-- `caption`: optional caption text. Readers SHOULD render it centered below the image when present.
+- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -1396,13 +1396,13 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
+<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":{"text":"Scan code","schema":{"kind":"text","component":"text","align":"center"}},"foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
 https://example.invalid/qr-code
 ```
 
 Plugin-specific rules:
 - The plugin text body MUST be interpreted as the QR code payload string.
-- `pluginConfig.caption` is an optional caption rendered below the QR code.
+- `pluginConfig.caption` is an optional text caption payload rendered below the QR code. It has the same shape and centered default as image `caption`.
 - Renderers SHOULD use the highest QR error correction level that can encode the
   current payload, trying `"H"`, then `"Q"`, then `"M"`, then `"L"`.
 - `pluginConfig.foregroundColor` and `pluginConfig.backgroundColor` are

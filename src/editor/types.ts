@@ -124,7 +124,12 @@ export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
   imageFile: string;
   imageAlt: string;
-  caption: string;
+  caption: TextCaptionPayload | null;
+}
+
+export interface TextCaptionPayload {
+  text: string;
+  schema: TextBlockSchema;
 }
 
 export interface CarouselBlockSchema extends BaseBlockSchema {

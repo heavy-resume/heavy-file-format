@@ -5,6 +5,7 @@ import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob } from '../src/pdf-export/export';
 import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import type { VisualDocument } from '../src/types';
+import { createDefaultTextCaption } from '../src/caption';
 
 test('pdfmake backend produces a PDF blob for a strategy-filtered document', async () => {
   const block = createEmptyBlock('text');
@@ -185,7 +186,7 @@ test('PDF doc definition keeps image captions with CSS-sized images', () => {
   const image = createEmptyBlock('image');
   image.schema.imageFile = 'qr-code.svg';
   image.schema.imageAlt = 'QR code';
-  image.schema.caption = 'Scan to open';
+  image.schema.caption = createDefaultTextCaption('Scan to open');
   image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
   const section = createEmptySection(1, '');
   section.blocks = [image];

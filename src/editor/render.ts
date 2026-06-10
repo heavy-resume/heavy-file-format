@@ -970,15 +970,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const alignControls =
       options?.includeAlign && options.align
         ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
-            <button type="button" class="icon-button${selectedClass(options.align === 'left')}" data-action="set-block-align" data-align-value="left" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align left" title="Align left"><span class="toolbar-icon align-left-icon" aria-hidden="true"></span></button>
-            <button type="button" class="icon-button${selectedClass(options.align === 'center')}" data-action="set-block-align" data-align-value="center" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align center" title="Align center"><span class="toolbar-icon align-center-icon" aria-hidden="true"></span></button>
-            <button type="button" class="icon-button${selectedClass(options.align === 'right')}" data-action="set-block-align" data-align-value="right" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'left')}" data-action="set-block-align" data-align-value="left" ${richButtonAttrs} aria-label="Align left" title="Align left"><span class="toolbar-icon align-left-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'center')}" data-action="set-block-align" data-align-value="center" ${richButtonAttrs} aria-label="Align center" title="Align center"><span class="toolbar-icon align-center-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'right')}" data-action="set-block-align" data-align-value="right" ${richButtonAttrs} aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
     const textLineStyles = options?.textLineStyles ?? {};

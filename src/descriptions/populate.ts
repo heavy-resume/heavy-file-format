@@ -1,6 +1,7 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { hasContainerBorderCss } from '../editor/components/container/container-css';
 import type { VisualDocument } from '../types';
+import { getTextCaptionMarkdown } from '../caption';
 import { buildDescriptionRequest, generateDescription } from './provider';
 import type { HvyDescriptionParentContext } from './types';
 
@@ -277,7 +278,7 @@ function getBlockLocationLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || (block.schema.caption ?? '').trim()
+    || getTextCaptionMarkdown(block.schema.caption).trim()
     || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]));

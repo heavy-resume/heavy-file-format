@@ -27,9 +27,10 @@ export function bindBeforeinput(app: HTMLElement): void {
 function getRichEditable(target: HTMLElement): HTMLElement | null {
   return target.dataset.field === 'block-rich' ||
     target.dataset.field === 'block-grid-rich' ||
-    target.dataset.field === 'table-details-rich'
+    target.dataset.field === 'table-details-rich' ||
+    target.dataset.field === 'caption-rich'
     ? target
     : target.closest<HTMLElement>(
-        '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"]'
+        '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="caption-rich"]'
       );
 }

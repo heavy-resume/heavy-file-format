@@ -1,5 +1,7 @@
 import type { Options, DotType, CornerDotType, CornerSquareType, ErrorCorrectionLevel } from 'qr-code-styling';
 import type { JsonObject } from '../../hvy/types';
+import type { TextCaptionPayload } from '../../editor/types';
+import { normalizeTextCaption, serializeTextCaption } from '../../caption';
 
 export const QR_CODE_PLUGIN_DEFAULT_TEXT = 'https://example.invalid/qr-code';
 
@@ -14,7 +16,7 @@ export type QrCodeCornerDotType = (typeof QR_CODE_CORNER_DOT_TYPES)[number];
 export type QrCodeManualErrorCorrectionLevel = (typeof QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS)[number];
 
 export interface QrCodeConfig {
-  caption: string;
+  caption: TextCaptionPayload | null;
   foregroundColor: string;
   backgroundColor: string;
   dotsType: QrCodeDotType;
@@ -23,7 +25,7 @@ export interface QrCodeConfig {
 }
 
 export const DEFAULT_QR_CODE_CONFIG: QrCodeConfig = {
-  caption: '',
+  caption: null,
   foregroundColor: '#111827',
   backgroundColor: '#ffffff',
   dotsType: 'square',
@@ -35,7 +37,7 @@ const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 export function readQrCodeConfig(raw: Record<string, unknown> | null | undefined): QrCodeConfig {
   return {
-    caption: typeof raw?.caption === 'string' ? raw.caption : DEFAULT_QR_CODE_CONFIG.caption,
+    caption: normalizeTextCaption(raw?.caption),
     foregroundColor: readColor(raw?.foregroundColor, DEFAULT_QR_CODE_CONFIG.foregroundColor),
     backgroundColor: readColor(raw?.backgroundColor, DEFAULT_QR_CODE_CONFIG.backgroundColor),
     dotsType: readOption(raw?.dotsType, QR_CODE_DOT_TYPES, DEFAULT_QR_CODE_CONFIG.dotsType),
@@ -89,7 +91,7 @@ export function createQrCodeStylingOptions(
 
 export function createQrCodePluginConfig(config: QrCodeConfig = DEFAULT_QR_CODE_CONFIG): JsonObject {
   return {
-    caption: config.caption,
+    caption: serializeTextCaption(config.caption),
     foregroundColor: config.foregroundColor,
     backgroundColor: config.backgroundColor,
     dotsType: config.dotsType,

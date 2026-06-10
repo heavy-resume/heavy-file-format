@@ -25,7 +25,6 @@ import {
 
 interface EditorHandles {
   text: HTMLTextAreaElement;
-  caption: HTMLTextAreaElement;
   foregroundColor: HTMLInputElement;
   backgroundColor: HTMLInputElement;
   dotsType: HTMLSelectElement;
@@ -61,7 +60,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (editorHandles) {
       syncEditorInputs(editorHandles, text, config, ctx.block.schema.css);
     }
-    void renderQrCodePreview(previewHost, text, config, ++renderVersion);
+    void renderQrCodePreview(previewHost, text, config, ++renderVersion, ctx.caption.renderTextCaption);
   };
 
   const onInput = (event: Event) => {
@@ -78,6 +77,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const onClick = (event: Event) => {
     const target = event.target as HTMLElement | null;
+    const actionButton = target?.closest<HTMLButtonElement>('[data-qr-action]');
+    if (actionButton?.dataset.qrAction === 'caption') {
+      ctx.caption.openTextCaptionModal({ title: 'QR Caption', configKey: 'caption' });
+      return;
+    }
     const button = target?.closest<HTMLButtonElement>('[data-qr-preset]');
     if (!button) return;
     const preset = button.dataset.qrPreset ?? '';
@@ -133,10 +137,10 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
           <span>QR text</span>
           <textarea rows="5" data-qr-field="text" spellcheck="false"></textarea>
         </label>
-        <label class="hvy-qr-code-field">
+        <div class="hvy-qr-code-field">
           <span>Caption</span>
-          <textarea rows="2" data-qr-field="caption"></textarea>
-        </label>
+          <button type="button" class="ghost hvy-qr-code-caption-button" data-qr-action="caption">Edit caption</button>
+        </div>
         <div class="hvy-qr-code-style-grid">
           ${renderColorField('foregroundColor', 'Foreground')}
           ${renderColorField('backgroundColor', 'Background')}
@@ -152,7 +156,6 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   `;
   const handles = {
     text: requireElement(root, '[data-qr-field="text"]', HTMLTextAreaElement),
-    caption: requireElement(root, '[data-qr-field="caption"]', HTMLTextAreaElement),
     foregroundColor: requireElement(root, '[data-qr-field="foregroundColor"]', HTMLInputElement),
     backgroundColor: requireElement(root, '[data-qr-field="backgroundColor"]', HTMLInputElement),
     dotsType: requireElement(root, '[data-qr-field="dotsType"]', HTMLSelectElement),
@@ -189,7 +192,6 @@ function renderSelectField(field: keyof QrCodeConfig, label: string, options: re
 function syncEditorInputs(handles: EditorHandles, text: string, config: QrCodeConfig, css: string): void {
   const active = document.activeElement;
   setValueIfNotFocused(handles.text, text, active);
-  setValueIfNotFocused(handles.caption, config.caption, active);
   setValueIfNotFocused(handles.foregroundColor, config.foregroundColor, active);
   setValueIfNotFocused(handles.backgroundColor, config.backgroundColor, active);
   setValueIfNotFocused(handles.dotsType, config.dotsType, active);
@@ -213,7 +215,13 @@ function syncSizePresetButtons(buttons: HTMLButtonElement[], css: string): void 
   }
 }
 
-async function renderQrCodePreview(host: HTMLElement | null, text: string, config: QrCodeConfig, version: number): Promise<void> {
+async function renderQrCodePreview(
+  host: HTMLElement | null,
+  text: string,
+  config: QrCodeConfig,
+  version: number,
+  renderCaption: HvyPluginContext['caption']['renderTextCaption']
+): Promise<void> {
   if (!host) return;
   const trimmed = text.trim();
   if (!trimmed) {
@@ -229,10 +237,12 @@ async function renderQrCodePreview(host: HTMLElement | null, text: string, confi
     const imageWrap = document.createElement('div');
     qr.append(imageWrap);
     figure.appendChild(imageWrap);
-    if (config.caption.trim()) {
+    const captionContent = config.caption ? renderCaption(config.caption) : null;
+    if (captionContent) {
       const caption = document.createElement('figcaption');
       caption.className = 'image-caption';
-      caption.textContent = config.caption;
+      caption.style.textAlign = config.caption?.schema.align ?? 'center';
+      caption.append(captionContent);
       figure.appendChild(caption);
     }
     if (version > 0) {
@@ -292,7 +302,7 @@ export async function renderQrCodeStaticBlock(ctx: HvyPluginPdfStaticRenderConte
   return block;
 }
 
-function createStaticImageSchema(id: string, imageFile: string, caption: string, css: string): VisualBlock['schema'] {
+function createStaticImageSchema(id: string, imageFile: string, caption: QrCodeConfig['caption'], css: string): VisualBlock['schema'] {
   return {
     kind: 'image',
     id,
@@ -319,6 +329,7 @@ function createStaticImageSchema(id: string, imageFile: string, caption: string,
     caption,
   } as unknown as VisualBlock['schema'];
 }
+
 
 export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig, margin = 24): Promise<Uint8Array> {
   const { qr } = createQrCodeStylingForPayload(text, config, margin);
@@ -362,11 +373,11 @@ export const qrCodePlugin: HvyPlugin = {
     filename: 'about-qr-code.txt',
     text: qrCodeDocumentation,
   },
-  aiHint: 'QR code plugin. Encoded QR text lives in plugin.txt; caption and visual style live in pluginConfig; size/alignment live in block css.',
+  aiHint: 'QR code plugin. Encoded QR text lives in plugin.txt; styled text caption and visual style live in pluginConfig; size/alignment live in block css.',
   aiHelp: [
     `Use \`<!--hvy:plugin {"plugin":"${QR_CODE_PLUGIN_ID}","pluginConfig":${JSON.stringify(createQrCodePluginConfig(DEFAULT_QR_CODE_CONFIG))}}-->\`.`,
     'Store the QR payload text in the plugin body.',
-    'Use pluginConfig.caption for the visible caption and pluginConfig style fields for QR appearance.',
+    'Use pluginConfig.caption as a text caption payload for the visible caption and pluginConfig style fields for QR appearance.',
   ].join(' '),
   create: qrCodePluginFactory,
   pdf: {

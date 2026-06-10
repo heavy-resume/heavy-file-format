@@ -4,6 +4,7 @@ import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
+import type { CaptionTextModalState } from './caption';
 
 export interface DocumentAttachment {
   id: string;
@@ -381,6 +382,7 @@ export interface AppState {
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
+  captionTextModal: CaptionTextModalState | null;
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;

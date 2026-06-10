@@ -485,6 +485,7 @@ export function closeModal(): void {
   ) {
     state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
   }
+  state.captionTextModal = null;
   state.modalSectionKey = null;
   state.newDocumentModalOpen = false;
   state.componentMetaModal = null;
@@ -505,6 +506,9 @@ export function closeModalIfTarget(sectionKey: string): void {
   }
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
+  }
+  if (state.captionTextModal?.target.sectionKey === sectionKey) {
+    state.captionTextModal = null;
   }
   if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
     closeModal();

@@ -1,4 +1,5 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
+import { getTextCaptionMarkdown } from '../caption';
 import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, findVirtualDirectoryForSection } from '../cli-core/virtual-file-system';
 import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
 import { resolveBaseComponentFromMeta } from '../component-defs';
@@ -487,7 +488,7 @@ function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
     block.schema.xrefDetail ?? '',
     block.schema.containerTitle ?? '',
     block.schema.imageAlt ?? '',
-    block.schema.caption ?? '',
+    getTextCaptionMarkdown(block.schema.caption),
     (block.schema.tableColumns ?? []).join(' '),
     (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' '),
     block.text,
@@ -516,7 +517,7 @@ function getBlockSummaryText(block: VisualBlock): string {
     block.schema.containerTitle ?? '',
     block.text,
     block.schema.imageAlt ?? '',
-    block.schema.caption ?? '',
+    getTextCaptionMarkdown(block.schema.caption),
     ...(block.schema.containerBlocks ?? []).map(getBlockSummaryText),
     ...(block.schema.componentListBlocks ?? []).map(getBlockSummaryText),
     ...(block.schema.expandableStubBlocks?.children ?? []).map(getBlockSummaryText),
@@ -529,7 +530,7 @@ function getBlockLabel(block: VisualBlock): string {
   return cleanText(block.schema.xrefTitle ?? '')
     || cleanText(block.schema.containerTitle ?? '')
     || firstLine(block.text)
-    || cleanText(block.schema.caption ?? '')
+    || cleanText(getTextCaptionMarkdown(block.schema.caption))
     || cleanText(block.schema.imageAlt ?? '')
     || cleanText(block.schema.id ?? '');
 }
@@ -538,7 +539,7 @@ function getBlockContextLabel(block: VisualBlock): string {
   return cleanText(block.schema.xrefTitle ?? '')
     || cleanText(block.schema.containerTitle ?? '')
     || firstLine(block.text)
-    || cleanText(block.schema.caption ?? '')
+    || cleanText(getTextCaptionMarkdown(block.schema.caption))
     || cleanText(block.schema.imageAlt ?? '');
 }
 

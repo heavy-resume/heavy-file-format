@@ -8,6 +8,7 @@ import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-sect
 import { isExternalCssAllowed } from '../reference-config';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { getHeadingStylesFromMeta } from '../heading-styles';
+import { getTextCaptionMarkdown } from '../caption';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportOptions,
@@ -575,9 +576,10 @@ function renderImageBlock(
   block: VisualBlock,
   layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
-  const hasCaption = Boolean(block.schema.caption.trim());
+  const captionText = getTextCaptionMarkdown(block.schema.caption).trim();
+  const hasCaption = Boolean(captionText);
   const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout, block.schema.css, hasCaption);
-  const caption = hasCaption ? [{ text: block.schema.caption, style: 'metadata', alignment: 'center' as const }] : [];
+  const caption = hasCaption ? [{ text: captionText, style: 'metadata', alignment: block.schema.caption?.schema.align ?? 'center' as const }] : [];
   return { stack: [image, ...caption], unbreakable: true };
 }
 

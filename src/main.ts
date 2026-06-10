@@ -146,6 +146,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    captionTextModal: null,
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
@@ -534,6 +535,9 @@ readerRenderer = createReaderRenderer(
     },
     get modalSectionKey() {
       return state.modalSectionKey;
+    },
+    get captionTextModal() {
+      return state.captionTextModal;
     },
     get sqliteRowComponentModal() {
       return state.sqliteRowComponentModal;

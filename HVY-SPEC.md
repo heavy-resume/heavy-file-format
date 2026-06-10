@@ -961,7 +961,7 @@ pdf_page:
 
 - `size` is optional and defaults to `LETTER`. Renderers SHOULD support `LETTER`, `A4`, `LEGAL`, `TABLOID`, and `LEDGER`; renderers MAY also accept `{width, height}` point objects.
 - `margins` is optional and defaults to `[0.75in, 0.75in, 0.75in, 0.75in]`. It MAY be a single length for all sides, `[horizontal, vertical]`, or `[left, top, right, bottom]`. Supported units are `in`, `cm`, `mm`, and `pt`.
-- `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters MUST NOT render debug guides into the PDF.
+- `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters SHOULD render diagnostic page and printable-area bounds into generated PDFs when `debug` is `true`; authors SHOULD disable it for final PDFs.
 - Explicit PDF export strategy defaults override `pdf_page` for that export operation.
 
 With optional schema:

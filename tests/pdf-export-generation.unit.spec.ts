@@ -261,14 +261,17 @@ test('PDF export keeps QR static SVG captions visible with debug bounds enabled'
   expect(typeof firstSection).not.toBe('string');
   if (typeof firstSection === 'string') return;
   const qrNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const qrInner = qrNode?.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+  const qrImageBounds = qrInner?.stack?.[0] as HvyPdfMakeNodeObject | undefined;
   const blob = await getHvyPdfBlob(document);
 
   expect(serialized).toContain('Scan code');
   expect(serialized).toContain('"svg"');
-  expect(qrNode?.table?.body).toHaveLength(1);
-  expect(qrNode?.layout).toEqual(expect.objectContaining({
-    hLineColor: expect.any(Function),
-    vLineColor: expect.any(Function),
+  expect(qrNode?.table).toBeUndefined();
+  expect(qrNode?.stack?.[0]).toEqual(expect.objectContaining({ relativePosition: { x: 0, y: 0 } }));
+  expect(qrImageBounds).toEqual(expect.objectContaining({
+    relativePosition: expect.objectContaining({ y: 0 }),
+    canvas: [expect.objectContaining({ type: 'rect', w: 120, h: 140, lineColor: '#f59e0b' })],
   }));
   expect(countPdfPages(await blob.arrayBuffer())).toBe(1);
 });

@@ -97,7 +97,7 @@ export function createTextCaptionBlock(caption: TextCaptionPayload): VisualBlock
       ...caption.schema,
       kind: 'text',
       component: 'text',
-    },
+    } as VisualBlock['schema'],
     schemaMode: false,
   };
 }

@@ -218,7 +218,7 @@ interface RuntimeSchemaFieldAccess {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
-  caption: string;
+  caption: TextCaptionPayload | null;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;

@@ -34,17 +34,6 @@ const PDF_SIDEBAR_WIDTH = 180;
 const PDF_SIDEBAR_COLUMN_GAP = 24;
 const PDF_CSS_REM_IN_POINTS = 12;
 const PDF_IMAGE_CSS_REM_IN_POINTS = 8;
-const PDF_DEBUG_BLOCK_LAYOUT = {
-  hLineWidth: () => 0.5,
-  vLineWidth: () => 0.5,
-  hLineColor: () => '#f59e0b',
-  vLineColor: () => '#f59e0b',
-  paddingLeft: () => 0,
-  paddingRight: () => 0,
-  paddingTop: () => 0,
-  paddingBottom: () => 0,
-};
-
 interface PdfLayoutContext {
   availableWidth: number;
 }
@@ -240,7 +229,7 @@ function renderBlock(
     return null;
   }
   const rendered = applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css));
-  return applyPdfDebugBlockBounds(rendered, resolved);
+  return applyPdfDebugBlockBounds(rendered, resolved, layout);
 }
 
 function applyBlockCssMargin(node: HvyPdfMakeNodeObject, css: string): HvyPdfMakeNodeObject {
@@ -600,7 +589,8 @@ function renderImageBlock(
   const caption = hasCaption && captionPayload
     ? [renderPdfTextBlock(captionPayload.text, '', createCaptionPdfDecision(), captionPayload.schema.align)]
     : [];
-  return { stack: [image, ...caption], unbreakable: true };
+  const bounds = resolved.defaults.debugPageBounds ? [renderPdfDebugImageBounds(image, layout, hasCaption)] : [];
+  return { stack: [...bounds, image, ...caption], unbreakable: true };
 }
 
 function createCaptionPdfDecision(): HvyPdfExportDecision {
@@ -786,25 +776,64 @@ function renderPdfDebugPageBounds(pageMargins: HvyPdfExportResolvedStrategy['def
   };
 }
 
-function applyPdfDebugBlockBounds(node: HvyPdfMakeNodeObject, resolved: HvyPdfExportResolvedStrategy): HvyPdfMakeNodeObject {
+function applyPdfDebugBlockBounds(
+  node: HvyPdfMakeNodeObject,
+  resolved: HvyPdfExportResolvedStrategy,
+  layout: PdfLayoutContext
+): HvyPdfMakeNodeObject {
   if (!resolved.defaults.debugPageBounds) {
     return node;
   }
-  const { margin, pageBreak, unbreakable, headlineLevel, hvyKeepWithNext, hvyKeepTogether, hvyRole, id, ...inner } = node;
+  const { margin, pageBreak, headlineLevel, hvyKeepWithNext, hvyKeepTogether, hvyRole, id, ...inner } = node;
   return {
     ...(typeof id === 'string' ? { id } : {}),
     ...(pageBreak ? { pageBreak } : {}),
-    ...(unbreakable ? { unbreakable } : {}),
     ...(typeof headlineLevel === 'number' ? { headlineLevel } : {}),
     ...(hvyKeepWithNext ? { hvyKeepWithNext } : {}),
     ...(hvyKeepTogether ? { hvyKeepTogether } : {}),
     ...(typeof hvyRole === 'string' ? { hvyRole } : {}),
     ...(margin !== undefined ? { margin } : {}),
-    table: {
-      widths: ['*'],
-      body: [[inner]],
-    },
-    layout: PDF_DEBUG_BLOCK_LAYOUT,
+    stack: [renderPdfDebugBlockMarker(layout.availableWidth), inner],
+  };
+}
+
+function renderPdfDebugBlockMarker(availableWidth: number): HvyPdfMakeNodeObject {
+  const width = Number.isFinite(availableWidth) ? Math.max(1, availableWidth) : PDF_DEFAULT_IMAGE_FIT[0];
+  return {
+    relativePosition: { x: 0, y: 0 },
+    canvas: [
+      {
+        type: 'rect',
+        x: 0,
+        y: 0,
+        w: width,
+        h: 1,
+        lineColor: '#f59e0b',
+        lineWidth: 0.5,
+      },
+    ],
+  };
+}
+
+function renderPdfDebugImageBounds(image: HvyPdfMakeNodeObject, layout: PdfLayoutContext, hasCaption: boolean): HvyPdfMakeNodeObject {
+  const [fitWidth, fitHeight] = image.fit ?? getImageFitForLayout(layout);
+  const boxWidth = Math.max(1, fitWidth);
+  const boxHeight = Math.max(1, fitHeight + (hasCaption ? 20 : 0));
+  const availableWidth = Number.isFinite(layout.availableWidth) ? Math.max(1, layout.availableWidth) : boxWidth;
+  const x = image.alignment === 'center' ? Math.max(0, (availableWidth - boxWidth) / 2) : 0;
+  return {
+    relativePosition: { x, y: 0 },
+    canvas: [
+      {
+        type: 'rect',
+        x: 0,
+        y: 0,
+        w: boxWidth,
+        h: boxHeight,
+        lineColor: '#f59e0b',
+        lineWidth: 0.5,
+      },
+    ],
   };
 }
 

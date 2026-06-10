@@ -6,19 +6,15 @@ export const QR_CODE_PLUGIN_DEFAULT_TEXT = 'https://example.invalid/qr-code';
 export const QR_CODE_DOT_TYPES = ['square', 'dots', 'rounded', 'classy', 'classy-rounded', 'extra-rounded'] as const;
 export const QR_CODE_CORNER_SQUARE_TYPES = ['square', 'dot', 'extra-rounded', 'dots', 'rounded', 'classy', 'classy-rounded'] as const;
 export const QR_CODE_CORNER_DOT_TYPES = ['square', 'dot', 'dots', 'rounded', 'classy', 'classy-rounded', 'extra-rounded'] as const;
-export const QR_CODE_AUTO_ERROR_CORRECTION_LEVEL = 'auto';
 export const QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS = ['L', 'M', 'Q', 'H'] as const;
-export const QR_CODE_ERROR_CORRECTION_LEVELS = [QR_CODE_AUTO_ERROR_CORRECTION_LEVEL, ...QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS] as const;
 
 export type QrCodeDotType = (typeof QR_CODE_DOT_TYPES)[number];
 export type QrCodeCornerSquareType = (typeof QR_CODE_CORNER_SQUARE_TYPES)[number];
 export type QrCodeCornerDotType = (typeof QR_CODE_CORNER_DOT_TYPES)[number];
-export type QrCodeErrorCorrectionLevel = (typeof QR_CODE_ERROR_CORRECTION_LEVELS)[number];
 export type QrCodeManualErrorCorrectionLevel = (typeof QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS)[number];
 
 export interface QrCodeConfig {
   caption: string;
-  errorCorrectionLevel: QrCodeErrorCorrectionLevel;
   foregroundColor: string;
   backgroundColor: string;
   dotsType: QrCodeDotType;
@@ -28,7 +24,6 @@ export interface QrCodeConfig {
 
 export const DEFAULT_QR_CODE_CONFIG: QrCodeConfig = {
   caption: '',
-  errorCorrectionLevel: QR_CODE_AUTO_ERROR_CORRECTION_LEVEL,
   foregroundColor: '#111827',
   backgroundColor: '#ffffff',
   dotsType: 'square',
@@ -41,7 +36,6 @@ const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 export function readQrCodeConfig(raw: Record<string, unknown> | null | undefined): QrCodeConfig {
   return {
     caption: typeof raw?.caption === 'string' ? raw.caption : DEFAULT_QR_CODE_CONFIG.caption,
-    errorCorrectionLevel: readOption(raw?.errorCorrectionLevel, QR_CODE_ERROR_CORRECTION_LEVELS, DEFAULT_QR_CODE_CONFIG.errorCorrectionLevel),
     foregroundColor: readColor(raw?.foregroundColor, DEFAULT_QR_CODE_CONFIG.foregroundColor),
     backgroundColor: readColor(raw?.backgroundColor, DEFAULT_QR_CODE_CONFIG.backgroundColor),
     dotsType: readOption(raw?.dotsType, QR_CODE_DOT_TYPES, DEFAULT_QR_CODE_CONFIG.dotsType),
@@ -62,7 +56,7 @@ export function createQrCodeStylingOptions(
   text: string,
   config: QrCodeConfig,
   size = 640,
-  errorCorrectionLevel: QrCodeManualErrorCorrectionLevel = resolveQrCodeErrorCorrectionLevel(config),
+  errorCorrectionLevel: QrCodeManualErrorCorrectionLevel = 'H',
   margin = 24
 ): Partial<Options> {
   return {
@@ -93,16 +87,9 @@ export function createQrCodeStylingOptions(
   };
 }
 
-export function resolveQrCodeErrorCorrectionLevel(config: QrCodeConfig): QrCodeManualErrorCorrectionLevel {
-  return config.errorCorrectionLevel === QR_CODE_AUTO_ERROR_CORRECTION_LEVEL
-    ? 'H'
-    : config.errorCorrectionLevel;
-}
-
 export function createQrCodePluginConfig(config: QrCodeConfig = DEFAULT_QR_CODE_CONFIG): JsonObject {
   return {
     caption: config.caption,
-    errorCorrectionLevel: config.errorCorrectionLevel,
     foregroundColor: config.foregroundColor,
     backgroundColor: config.backgroundColor,
     dotsType: config.dotsType,

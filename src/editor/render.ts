@@ -1710,28 +1710,30 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
-        <label class="checkbox-label">
-          <span>Locked</span>
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-lock"
-            ${block.schema.lock ? 'checked' : ''}
-          />
-        </label>
+        <div class="block-meta-checkbox-row">
+          <label class="checkbox-label">
+            <span>Locked</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-lock"
+              ${block.schema.lock ? 'checked' : ''}
+            />
+          </label>
+          <label class="checkbox-label">
+            <span>Hidden</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-hide-if-yes"
+              ${block.schema.hideIfYes.trim().toLowerCase() === 'yes' ? 'checked' : ''}
+            />
+          </label>
+        </div>
         ${textMetaFields}
         ${gridMetaFields}
-        <label class="checkbox-label">
-          <span>Hidden</span>
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-hide-if-yes"
-            ${block.schema.hideIfYes.trim().toLowerCase() === 'yes' ? 'checked' : ''}
-          />
-        </label>
         <label>
           <div>Visible When Function Body</div>
           <div>Controls when this block is visible. Returns boolean.</div>

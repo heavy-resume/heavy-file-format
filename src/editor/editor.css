@@ -1394,6 +1394,17 @@
   margin-top: 0.2rem;
 }
 
+.block-meta-checkbox-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+.block-meta-checkbox-row .checkbox-label {
+  margin-top: 0;
+}
+
 .checkbox-label input[type='checkbox'],
 .table-header-toggle input[type='checkbox'],
 .expandable-inline-toggle input[type='checkbox'] {

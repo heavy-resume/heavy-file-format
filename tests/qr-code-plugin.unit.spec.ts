@@ -11,13 +11,11 @@ import {
   DEFAULT_QR_CODE_CONFIG,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
-  resolveQrCodeErrorCorrectionLevel,
 } from '../src/plugins/qr-code/qr-code-model';
 
 test('readQrCodeConfig defaults invalid style options', () => {
   const expectedResult = readQrCodeConfig({
     caption: 'Scan me',
-    errorCorrectionLevel: 'bad',
     foregroundColor: 'red',
     backgroundColor: '#f8fafc',
     dotsType: 'unknown',
@@ -36,7 +34,6 @@ test('readQrCodeConfig defaults invalid style options', () => {
 test('createQrCodeStylingOptions maps plugin config to styled SVG options', () => {
   const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', {
     ...DEFAULT_QR_CODE_CONFIG,
-    errorCorrectionLevel: 'H',
     foregroundColor: '#0f172a',
     backgroundColor: '#ffffff',
     dotsType: 'classy-rounded',
@@ -64,9 +61,7 @@ test('createQrCodeStylingOptions allows static PDF export to remove internal mar
   expect(expectedResult.margin).toBe(0);
 });
 
-test('auto error correction starts with highest quality level', () => {
-  expect(resolveQrCodeErrorCorrectionLevel(DEFAULT_QR_CODE_CONFIG)).toBe('H');
-
+test('error correction defaults to highest quality level', () => {
   const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', DEFAULT_QR_CODE_CONFIG);
 
   expect(expectedResult.qrOptions).toEqual({ errorCorrectionLevel: 'H' });

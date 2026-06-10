@@ -1396,17 +1396,15 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","errorCorrectionLevel":"auto","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
+<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
 https://example.invalid/qr-code
 ```
 
 Plugin-specific rules:
 - The plugin text body MUST be interpreted as the QR code payload string.
 - `pluginConfig.caption` is an optional caption rendered below the QR code.
-- `pluginConfig.errorCorrectionLevel` is optional and defaults to `"auto"`.
-  Supported values are `"auto"`, `"L"`, `"M"`, `"Q"`, and `"H"`. When set
-  to `"auto"`, renderers SHOULD use the highest error correction level that can
-  encode the current payload, trying `"H"`, then `"Q"`, then `"M"`, then `"L"`.
+- Renderers SHOULD use the highest QR error correction level that can encode the
+  current payload, trying `"H"`, then `"Q"`, then `"M"`, then `"L"`.
 - `pluginConfig.foregroundColor` and `pluginConfig.backgroundColor` are
   optional `#rrggbb` color strings.
 - `pluginConfig.dotsType` is optional and defaults to `"square"`. Supported

@@ -16,7 +16,6 @@ import {
   QR_CODE_CORNER_DOT_TYPES,
   QR_CODE_CORNER_SQUARE_TYPES,
   QR_CODE_DOT_TYPES,
-  QR_CODE_ERROR_CORRECTION_LEVELS,
   QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
@@ -27,7 +26,6 @@ import {
 interface EditorHandles {
   text: HTMLTextAreaElement;
   caption: HTMLTextAreaElement;
-  errorCorrectionLevel: HTMLSelectElement;
   foregroundColor: HTMLInputElement;
   backgroundColor: HTMLInputElement;
   dotsType: HTMLSelectElement;
@@ -140,7 +138,6 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
           <textarea rows="2" data-qr-field="caption"></textarea>
         </label>
         <div class="hvy-qr-code-style-grid">
-          ${renderSelectField('errorCorrectionLevel', 'Error correction', QR_CODE_ERROR_CORRECTION_LEVELS)}
           ${renderColorField('foregroundColor', 'Foreground')}
           ${renderColorField('backgroundColor', 'Background')}
           ${renderSelectField('dotsType', 'Dots', QR_CODE_DOT_TYPES)}
@@ -156,7 +153,6 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   const handles = {
     text: requireElement(root, '[data-qr-field="text"]', HTMLTextAreaElement),
     caption: requireElement(root, '[data-qr-field="caption"]', HTMLTextAreaElement),
-    errorCorrectionLevel: requireElement(root, '[data-qr-field="errorCorrectionLevel"]', HTMLSelectElement),
     foregroundColor: requireElement(root, '[data-qr-field="foregroundColor"]', HTMLInputElement),
     backgroundColor: requireElement(root, '[data-qr-field="backgroundColor"]', HTMLInputElement),
     dotsType: requireElement(root, '[data-qr-field="dotsType"]', HTMLSelectElement),
@@ -194,7 +190,6 @@ function syncEditorInputs(handles: EditorHandles, text: string, config: QrCodeCo
   const active = document.activeElement;
   setValueIfNotFocused(handles.text, text, active);
   setValueIfNotFocused(handles.caption, config.caption, active);
-  setValueIfNotFocused(handles.errorCorrectionLevel, config.errorCorrectionLevel, active);
   setValueIfNotFocused(handles.foregroundColor, config.foregroundColor, active);
   setValueIfNotFocused(handles.backgroundColor, config.backgroundColor, active);
   setValueIfNotFocused(handles.dotsType, config.dotsType, active);
@@ -271,9 +266,6 @@ function requireElement<T extends Element>(
 }
 
 function formatOptionLabel(value: string): string {
-  if (value === 'auto') {
-    return 'Auto (highest)';
-  }
   return value
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -347,12 +339,6 @@ export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig, m
 }
 
 function createQrCodeStylingForPayload(text: string, config: QrCodeConfig, margin = 24): { qr: QRCodeStyling; errorCorrectionLevel: QrCodeManualErrorCorrectionLevel } {
-  if (config.errorCorrectionLevel !== 'auto') {
-    return {
-      qr: new QRCodeStyling(createQrCodeStylingOptions(text, config, 640, config.errorCorrectionLevel, margin)),
-      errorCorrectionLevel: config.errorCorrectionLevel,
-    };
-  }
   let lastError: unknown = null;
   for (const errorCorrectionLevel of [...QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS].reverse()) {
     try {

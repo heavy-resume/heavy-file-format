@@ -844,8 +844,68 @@ body {
 }
 
 .reader-document-body {
+  position: relative;
+  container-type: inline-size;
   width: 100%;
   margin-inline: auto;
+}
+
+.phvy-viewer-shell .reader-document-body > :not(.phvy-page-guide-layer) {
+  position: relative;
+  z-index: 1;
+}
+
+.phvy-page-guide-layer {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  --hvy-pdf-guide-scale: calc(100cqw / var(--hvy-pdf-printable-width, 504));
+  --hvy-pdf-guide-page-width: calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-page-width, 612));
+  --hvy-pdf-guide-page-height: calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-page-height, 792));
+  --hvy-pdf-guide-printable-height: calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-printable-height, 684));
+  --hvy-pdf-guide-margin-left: calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-margin-left, 54));
+  --hvy-pdf-guide-margin-top: calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-margin-top, 54));
+  overflow: hidden;
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(100% - 1px),
+    color-mix(in srgb, var(--hvy-text-muted) 42%, transparent) calc(100% - 1px),
+    color-mix(in srgb, var(--hvy-text-muted) 42%, transparent) 100%
+  );
+  background-position: top left;
+  background-repeat: repeat-y;
+  background-size: 100% var(--hvy-pdf-guide-printable-height);
+  pointer-events: none;
+}
+
+.phvy-page-guide-layer.is-debug::before,
+.phvy-page-guide-layer.is-debug::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.phvy-page-guide-layer.is-debug::before {
+  left: calc(var(--hvy-pdf-guide-margin-left) * -1);
+  top: calc(var(--hvy-pdf-guide-margin-top) * -1);
+  width: var(--hvy-pdf-guide-page-width);
+  height: var(--hvy-pdf-guide-page-height);
+  border: 1px solid color-mix(in srgb, var(--hvy-danger, #dc2626) 70%, transparent);
+  background:
+    linear-gradient(to right, color-mix(in srgb, var(--hvy-danger, #dc2626) 12%, transparent), transparent var(--hvy-pdf-guide-margin-left)),
+    linear-gradient(to left, color-mix(in srgb, var(--hvy-danger, #dc2626) 12%, transparent), transparent calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-margin-right, 54))),
+    linear-gradient(to bottom, color-mix(in srgb, var(--hvy-danger, #dc2626) 12%, transparent), transparent var(--hvy-pdf-guide-margin-top)),
+    linear-gradient(to top, color-mix(in srgb, var(--hvy-danger, #dc2626) 12%, transparent), transparent calc(var(--hvy-pdf-guide-scale) * var(--hvy-pdf-margin-bottom, 54)));
+}
+
+.phvy-page-guide-layer.is-debug::after {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--hvy-pdf-guide-printable-height);
+  border: 1px solid color-mix(in srgb, var(--hvy-focus, #2563eb) 76%, transparent);
+  background: color-mix(in srgb, var(--hvy-focus, #2563eb) 5%, transparent);
 }
 
 [data-hvy-dynamic-visibility="true"][data-visible-state="pending"],

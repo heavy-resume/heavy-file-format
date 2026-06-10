@@ -6,6 +6,7 @@ import { getPdfDocumentViewerThemeVariables } from '../pdf-document-theme';
 import { cssFragmentTriggersNetwork } from '../css-sanitizer';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { isExternalCssAllowed } from '../reference-config';
+import { normalizePdfPageMargins, normalizePdfPageSize } from '../pdf-page-settings';
 import { isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { getHeadingStylesFromMeta } from '../heading-styles';
 import { getTextCaptionMarkdown, normalizeTextCaption } from '../caption';
@@ -33,6 +34,16 @@ const PDF_SIDEBAR_WIDTH = 180;
 const PDF_SIDEBAR_COLUMN_GAP = 24;
 const PDF_CSS_REM_IN_POINTS = 12;
 const PDF_IMAGE_CSS_REM_IN_POINTS = 8;
+const PDF_DEBUG_BLOCK_LAYOUT = {
+  hLineWidth: () => 0.5,
+  vLineWidth: () => 0.5,
+  hLineColor: () => '#f59e0b',
+  vLineColor: () => '#f59e0b',
+  paddingLeft: () => 0,
+  paddingRight: () => 0,
+  paddingTop: () => 0,
+  paddingBottom: () => 0,
+};
 
 interface PdfLayoutContext {
   availableWidth: number;
@@ -66,10 +77,12 @@ export function buildPdfExportDocDefinition(
     resolved.defaults.includeSidebar === 'include' && sidebarContent.length
       ? [{ columns: [{ width: '*', stack: mainContent }, { width: PDF_SIDEBAR_WIDTH, stack: sidebarContent }], columnGap: PDF_SIDEBAR_COLUMN_GAP }]
       : mainContent.concat(sidebarContent);
+  const background = resolved.defaults.debugPageBounds ? renderPdfDebugPageBounds(resolved.defaults.pageMargins) : undefined;
 
   return {
     pageSize: resolved.defaults.pageSize,
     pageMargins: resolved.defaults.pageMargins,
+    background,
     content: content.length ? content : [placeholderNode('No exportable content.')],
     defaultStyle: {
       font: resolved.defaults.font,
@@ -223,7 +236,11 @@ function renderBlock(
       node = renderUnsupportedBlock(block, resolved);
       break;
   }
-  return node ? applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css)) : null;
+  if (!node) {
+    return null;
+  }
+  const rendered = applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css));
+  return applyPdfDebugBlockBounds(rendered, resolved);
 }
 
 function applyBlockCssMargin(node: HvyPdfMakeNodeObject, css: string): HvyPdfMakeNodeObject {
@@ -732,32 +749,63 @@ function getPdfPageContentWidth(
   pageSize: HvyPdfExportResolvedStrategy['defaults']['pageSize'],
   pageMargins: HvyPdfExportResolvedStrategy['defaults']['pageMargins']
 ): number {
-  const size = getPdfPageSize(pageSize);
+  const size = normalizePdfPageSize(pageSize);
   const margins = normalizePdfPageMargins(pageMargins);
   return Math.max(1, size.width - margins[0] - margins[2]);
 }
 
-function getPdfPageSize(pageSize: HvyPdfExportResolvedStrategy['defaults']['pageSize']): { width: number; height: number } {
-  if (typeof pageSize !== 'string') {
-    return pageSize;
-  }
-  const normalized = pageSize.trim().toUpperCase();
-  if (normalized === 'A4') return { width: 595.28, height: 841.89 };
-  if (normalized === 'LEGAL') return { width: 612, height: 1008 };
-  if (normalized === 'TABLOID' || normalized === 'LEDGER') return { width: 792, height: 1224 };
-  return { width: 612, height: 792 };
+function renderPdfDebugPageBounds(pageMargins: HvyPdfExportResolvedStrategy['defaults']['pageMargins']): HvyPdfMakeDocumentDefinition['background'] {
+  const margins = normalizePdfPageMargins(pageMargins);
+  return (_currentPage, pageSize) => {
+    const pageWidth = Math.max(1, pageSize.width);
+    const pageHeight = Math.max(1, pageSize.height);
+    const [left, top, right, bottom] = margins;
+    return {
+      absolutePosition: { x: 0, y: 0 },
+      canvas: [
+        {
+          type: 'rect',
+          x: 0,
+          y: 0,
+          w: pageWidth,
+          h: pageHeight,
+          lineColor: '#dc2626',
+          lineWidth: 0.75,
+        },
+        {
+          type: 'rect',
+          x: left,
+          y: top,
+          w: Math.max(1, pageWidth - left - right),
+          h: Math.max(1, pageHeight - top - bottom),
+          lineColor: '#2563eb',
+          lineWidth: 0.75,
+        },
+      ],
+    };
+  };
 }
 
-function normalizePdfPageMargins(
-  pageMargins: HvyPdfExportResolvedStrategy['defaults']['pageMargins']
-): [number, number, number, number] {
-  if (typeof pageMargins === 'number') {
-    return [pageMargins, pageMargins, pageMargins, pageMargins];
+function applyPdfDebugBlockBounds(node: HvyPdfMakeNodeObject, resolved: HvyPdfExportResolvedStrategy): HvyPdfMakeNodeObject {
+  if (!resolved.defaults.debugPageBounds) {
+    return node;
   }
-  if (pageMargins.length === 2) {
-    return [pageMargins[0], pageMargins[1], pageMargins[0], pageMargins[1]];
-  }
-  return pageMargins;
+  const { margin, pageBreak, unbreakable, headlineLevel, hvyKeepWithNext, hvyKeepTogether, hvyRole, id, ...inner } = node;
+  return {
+    ...(typeof id === 'string' ? { id } : {}),
+    ...(pageBreak ? { pageBreak } : {}),
+    ...(unbreakable ? { unbreakable } : {}),
+    ...(typeof headlineLevel === 'number' ? { headlineLevel } : {}),
+    ...(hvyKeepWithNext ? { hvyKeepWithNext } : {}),
+    ...(hvyKeepTogether ? { hvyKeepTogether } : {}),
+    ...(typeof hvyRole === 'string' ? { hvyRole } : {}),
+    ...(margin !== undefined ? { margin } : {}),
+    table: {
+      widths: ['*'],
+      body: [[inner]],
+    },
+    layout: PDF_DEBUG_BLOCK_LAYOUT,
+  };
 }
 
 function toBase64(bytes: Uint8Array): string {

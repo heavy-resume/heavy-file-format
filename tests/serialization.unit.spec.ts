@@ -444,6 +444,30 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('preserves PHVY PDF page settings in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+pdf_page:
+  margins: [0.5in, 1in, 0.5in, 1in]
+  debug: true
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.phvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('pdf_page:');
+  expect(output).toContain('margins:');
+  expect(output).toContain('- 0.5in');
+  expect(output).toContain('- 1in');
+  expect(output).toContain('debug: true');
+});
+
 test('serializes reusable section template block schemas without runtime-only component defaults', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

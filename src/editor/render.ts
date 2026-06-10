@@ -60,6 +60,7 @@ import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '.
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
+import { formatPdfPointsAsInches, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings } from '../pdf-page-settings';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -1160,6 +1161,31 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     ].filter(Boolean).join(' ');
     const imageAttachmentReductionButtonDisabled = imageAttachmentReductionStatus?.state === 'reducing' || imageAttachmentReductionComplete;
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
+    const pdfPageMeta = readPdfPageMetaObject(state.documentMeta);
+    const pdfPageSettings = resolvePdfPageDimensions(resolvePdfPageSettings(state.documentMeta));
+    const pdfMargins = Array.isArray(pdfPageMeta.margins) ? pdfPageMeta.margins : [];
+    const pdfMarginValue = (index: number) => {
+      const value = pdfMargins[index];
+      const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
+      return points === null ? '' : formatPdfPointsAsInches(points);
+    };
+    const pdfPageControls = state.documentExtension === '.phvy'
+      ? `<div class="meta-pdf-page-grid">
+          <span>PDF Margins (in)</span>
+          ${renderPdfMarginInput('Left', 'meta-pdf-margin-left', pdfPageSettings.pageMargins[0], pdfMarginValue(0))}
+          ${renderPdfMarginInput('Top', 'meta-pdf-margin-top', pdfPageSettings.pageMargins[1], pdfMarginValue(1))}
+          ${renderPdfMarginInput('Right', 'meta-pdf-margin-right', pdfPageSettings.pageMargins[2], pdfMarginValue(2))}
+          ${renderPdfMarginInput('Bottom', 'meta-pdf-margin-bottom', pdfPageSettings.pageMargins[3], pdfMarginValue(3))}
+        </div>
+        <label class="checkbox-label">
+          <span>PDF Debug Bounds</span>
+          <input
+            type="checkbox"
+            data-field="meta-pdf-debug"
+            ${pdfPageMeta.debug === true ? 'checked' : ''}
+          />
+        </label>`
+      : '';
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -1189,6 +1215,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        ${pdfPageControls}
         <div class="meta-image-reduction-row">
           <span>Reduce new image sizes to fit:</span>
           <input aria-label="Image reduce width" data-field="meta-image-attachment-max-width" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.width) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.width ?? ''))}" />
@@ -1406,6 +1433,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
       </section>
     `;
+  }
+
+  function renderPdfMarginInput(label: string, field: string, placeholderPoints: number, value: string): string {
+    return `<label class="meta-pdf-margin-field">
+      <span>${deps.escapeHtml(label)}</span>
+      <input aria-label="PDF ${deps.escapeAttr(label.toLowerCase())} margin in inches" data-field="${deps.escapeAttr(field)}" type="number" min="0" max="4" step="0.05" placeholder="${deps.escapeAttr(formatPdfPointsAsInches(placeholderPoints))}" value="${deps.escapeAttr(value)}" />
+    </label>`;
   }
 
   function renderTextLineStyleEditorRows(styles: TextLineStyles): string {

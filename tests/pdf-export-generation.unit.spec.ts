@@ -139,6 +139,162 @@ test('PDF doc definition applies section default and explicit CSS margins', () =
   expect(explicitNode.margin).toEqual([0, 12, 0, 24]);
 });
 
+test('PDF doc definition uses PHVY document page margins', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Page margin text.';
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Page Margins',
+      pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'] },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+
+  expect(expectedResult.pageMargins).toEqual([36, 72, 36, 72]);
+});
+
+test('PDF doc definition renders debug page bounds into PDF background', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Page margin text.';
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Debug Bounds',
+      pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'], debug: true },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+
+  expect(typeof expectedResult.background).toBe('function');
+  if (typeof expectedResult.background !== 'function') return;
+  expect(expectedResult.background(1, { width: 612, height: 792 })).toEqual(expect.objectContaining({
+    absolutePosition: { x: 0, y: 0 },
+    canvas: [
+      expect.objectContaining({ type: 'rect', x: 0, y: 0, w: 612, h: 792, lineColor: '#dc2626' }),
+      expect.objectContaining({ type: 'rect', x: 36, y: 72, w: 540, h: 648, lineColor: '#2563eb' }),
+    ],
+  }));
+});
+
+test('pdfmake backend produces a PDF blob with debug page bounds enabled', async () => {
+  const block = createEmptyBlock('text');
+  block.schema.id = 'debug-intro';
+  block.text = 'PDF export debug bounds smoke test.';
+  const section = createEmptySection(1, '');
+  section.customId = 'debug-summary';
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Debug Smoke',
+      pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'], debug: true },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = await getHvyPdfBlob(document);
+
+  expect(expectedResult.type).toBe('application/pdf');
+  expect(expectedResult.size).toBeGreaterThan(1000);
+});
+
+test('PDF doc definition omits debug page bounds when PDF debug is disabled', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Page margin text.';
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Debug Bounds',
+      pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'] },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+
+  expect(expectedResult.background).toBeUndefined();
+});
+
+test('PDF export keeps QR static SVG captions visible with debug bounds enabled', async () => {
+  const block = createEmptyBlock('image');
+  block.schema.id = 'qr';
+  block.schema.css = 'width: 15rem; height: auto; display: block;';
+  block.schema.imageFile = 'qr-code.svg';
+  block.schema.imageAlt = 'Generated QR code';
+  block.schema.caption = createDefaultTextCaption('Scan code');
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF QR Debug',
+      pdf_page: { margins: ['0.75in', '0.75in', '0.75in', '0.75in'], debug: true },
+    },
+    extension: '.phvy',
+    attachments: [
+      {
+        id: 'image:qr-code.svg',
+        meta: { mediaType: 'image/svg+xml' },
+        bytes: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640"><rect width="640" height="640" fill="#fff"/><rect x="64" y="64" width="512" height="512" fill="#111827"/></svg>'),
+      },
+    ],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const serialized = JSON.stringify(expectedResult.content);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const qrNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const blob = await getHvyPdfBlob(document);
+
+  expect(serialized).toContain('Scan code');
+  expect(serialized).toContain('"svg"');
+  expect(qrNode?.table?.body).toHaveLength(1);
+  expect(qrNode?.layout).toEqual(expect.objectContaining({
+    hLineColor: expect.any(Function),
+    vLineColor: expect.any(Function),
+  }));
+  expect(countPdfPages(await blob.arrayBuffer())).toBe(1);
+});
+
+test('PDF export strategy page margins override PHVY document page margins', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Page margin text.';
+  const section = createEmptySection(1, '');
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Page Margins',
+      pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'] },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document, {
+    strategy: { defaults: { pageMargins: [24, 30, 24, 30] } },
+  });
+
+  expect(expectedResult.pageMargins).toEqual([24, 30, 24, 30]);
+});
+
 test('PDF doc definition constrains grid images to their column width', () => {
   const leftImage = createEmptyBlock('image');
   leftImage.schema.imageFile = 'left.png';
@@ -358,3 +514,8 @@ test('PDF doc definition applies document heading font size styles', () => {
     lineHeight: 1.1,
   }));
 });
+
+function countPdfPages(buffer: ArrayBuffer): number {
+  const text = Buffer.from(buffer).toString('latin1');
+  return (text.match(/\/Type\s*\/Page\b/g) ?? []).length;
+}

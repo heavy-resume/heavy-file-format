@@ -135,6 +135,7 @@ Document identity metadata includes:
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
 AI-facing document metadata includes:
@@ -948,6 +949,20 @@ PDF-template authoring supports these component base types:
 Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
 
 PDF export renderers SHOULD map PDF-safe text component inline `css` declarations and document `heading_styles.*.css` declarations onto equivalent PDF text properties when a direct equivalent exists. At minimum, `text-align: left|center|right` maps to PDF text alignment, `font-size` maps to PDF text size, unitless `line-height` maps to PDF line height, `font-weight: bold` or numeric weights of `600` and above map to bold PDF text, `color` maps to PDF text color, and simple `background` / `background-color` color values map to PDF text fill/background color. Exporters SHOULD also map section and block `margin` / `margin-*` declarations to PDF node margins, including margins inherited through `section_defaults.css`. CSS custom properties MAY be resolved through the document theme when the resolved value is a PDF-safe color.
+
+`.phvy` documents MAY declare `pdf_page` in front matter:
+
+```yaml
+pdf_page:
+  size: LETTER
+  margins: [0.75in, 0.75in, 0.75in, 0.75in]
+  debug: false
+```
+
+- `size` is optional and defaults to `LETTER`. Renderers SHOULD support `LETTER`, `A4`, `LEGAL`, `TABLOID`, and `LEDGER`; renderers MAY also accept `{width, height}` point objects.
+- `margins` is optional and defaults to `[0.75in, 0.75in, 0.75in, 0.75in]`. It MAY be a single length for all sides, `[horizontal, vertical]`, or `[left, top, right, bottom]`. Supported units are `in`, `cm`, `mm`, and `pt`.
+- `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters MUST NOT render debug guides into the PDF.
+- Explicit PDF export strategy defaults override `pdf_page` for that export operation.
 
 With optional schema:
 

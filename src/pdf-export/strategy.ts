@@ -8,6 +8,7 @@ import {
   getSectionReaderViewTargetKey,
   createReaderViewContext,
 } from '../reader/view-filter';
+import { normalizePdfPageMargins, resolvePdfPageSettings } from '../pdf-page-settings';
 import type {
   HvyPdfExportDecision,
   HvyPdfExportResolvedStrategy,
@@ -101,7 +102,7 @@ export function resolvePdfExportStrategy(
   }
 
   return {
-    defaults: normalizeDefaults(strategy?.defaults),
+    defaults: normalizeDefaults(document, strategy?.defaults),
     getSectionDecision(sectionKey) {
       return cloneDecision(decisions.get(`section:${sectionKey}`) ?? DEFAULT_DECISION);
     },
@@ -280,10 +281,12 @@ function getRuleRole(rule: HvyPdfExportStrategyRule): HvyPdfExportRole | null {
   return null;
 }
 
-function normalizeDefaults(defaults: HvyPdfExportStrategyDefaults | undefined): HvyPdfExportResolvedStrategy['defaults'] {
+function normalizeDefaults(document: VisualDocument, defaults: HvyPdfExportStrategyDefaults | undefined): HvyPdfExportResolvedStrategy['defaults'] {
+  const pageSettings = resolvePdfPageSettings(document.meta, defaults);
   return {
-    pageSize: defaults?.pageSize ?? 'LETTER',
-    pageMargins: defaults?.pageMargins ?? [54, 54, 54, 54],
+    pageSize: pageSettings.pageSize,
+    pageMargins: normalizePdfPageMargins(pageSettings.pageMargins),
+    debugPageBounds: pageSettings.debug,
     font: defaults?.font ?? 'Roboto',
     expansionPolicy: normalizeExpansionPolicy(defaults?.expansionPolicy),
     includeSidebar: normalizeSidebarPolicy(defaults?.includeSidebar),

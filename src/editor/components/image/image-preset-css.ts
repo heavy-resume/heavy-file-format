@@ -26,6 +26,10 @@ const IMAGE_PRESETS: Record<string, ImagePresetDefinition> = {
     controls: SIZE_CONTROLS,
   },
   medium: {
+    props: { width: '30rem', height: 'auto', display: 'block' },
+    controls: SIZE_CONTROLS,
+  },
+  large: {
     props: { width: '40rem', height: 'auto', display: 'block' },
     controls: SIZE_CONTROLS,
   },
@@ -63,4 +67,17 @@ export function mergeImagePresetCss(existingCss: string, preset: string): string
   const preserved = parseInlineCssDeclarations(existingCss).filter(([prop]) => !cleared.has(prop));
   const merged = [...preserved, ...Object.entries(definition.props)];
   return serializeInlineCssDeclarations(merged);
+}
+
+export function getMatchingImagePresetCss(existingCss: string, presets: readonly string[]): string | null {
+  const declarations = new Map(parseInlineCssDeclarations(existingCss));
+  for (const preset of presets) {
+    const definition = IMAGE_PRESETS[preset];
+    if (!definition) continue;
+    const matches = Object.entries(definition.props).every(([prop, value]) => declarations.get(prop) === value);
+    if (matches) {
+      return preset;
+    }
+  }
+  return null;
 }

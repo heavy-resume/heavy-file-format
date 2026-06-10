@@ -10,6 +10,14 @@
   flex-wrap: wrap;
 }
 
+.image-toolbar button.is-active,
+.image-toolbar button[aria-pressed="true"] {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-bg) 28%, var(--hvy-surface) 72%);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px var(--hvy-focus-ring);
+}
+
 .image-dropzone {
   position: relative;
   border: 2px dashed var(--hvy-ghost-border, var(--hvy-border));

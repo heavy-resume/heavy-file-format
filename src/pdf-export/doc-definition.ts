@@ -469,10 +469,11 @@ function renderCarouselBlock(
   images: CarouselImage[],
   layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
-  const stack = images.flatMap((entry) => {
-    const node = renderImageNode(document, entry.imageFile, entry.imageAlt, resolved, layout);
+  const stack = images.map((entry) => {
+    const hasCaption = Boolean(entry.caption.trim());
+    const node = renderImageNode(document, entry.imageFile, entry.imageAlt, resolved, layout, '', hasCaption);
     const caption = entry.caption.trim() ? [{ text: entry.caption, style: 'metadata', alignment: 'center' as const }] : [];
-    return [node, ...caption];
+    return { stack: [node, ...caption], unbreakable: true };
   });
   return stack.length ? { stack } : placeholderNode('Empty carousel.');
 }
@@ -483,11 +484,10 @@ function renderImageBlock(
   block: VisualBlock,
   layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
-  const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout);
-  const caption = block.schema.caption.trim()
-    ? [{ text: block.schema.caption, style: 'metadata', alignment: 'center' as const }]
-    : [];
-  return { stack: [image, ...caption] };
+  const hasCaption = Boolean(block.schema.caption.trim());
+  const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout, block.schema.css, hasCaption);
+  const caption = hasCaption ? [{ text: block.schema.caption, style: 'metadata', alignment: 'center' as const }] : [];
+  return { stack: [image, ...caption], unbreakable: true };
 }
 
 function renderImageNode(
@@ -495,7 +495,9 @@ function renderImageNode(
   filename: string,
   alt: string,
   resolved: HvyPdfExportResolvedStrategy,
-  layout: PdfLayoutContext
+  layout: PdfLayoutContext,
+  css = '',
+  hasCaption = false
 ): HvyPdfMakeNodeObject {
   const attachment = filename ? getImageAttachment(document, filename) : null;
   if (!attachment) {
@@ -504,16 +506,17 @@ function renderImageNode(
       : placeholderNode(alt.trim() ? `Missing image: ${alt}` : 'Missing image.');
   }
   const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : '';
-  const fit = getImageFitForLayout(layout);
+  const fit = getImageFitForCss(css, layout);
+  const margin: [number, number, number, number] = hasCaption ? [0, 0, 0, 3] : [0, 0, 0, 8];
   if (mediaType === 'image/svg+xml') {
-    return { svg: decodeText(attachment.bytes), fit, alignment: 'center', margin: [0, 0, 0, 8] };
+    return { svg: decodeText(attachment.bytes), fit, alignment: 'center', margin };
   }
   if (mediaType === 'image/png' || mediaType === 'image/jpeg') {
     return {
       image: `data:${mediaType};base64,${toBase64(attachment.bytes)}`,
       fit,
       alignment: 'center',
-      margin: [0, 0, 0, 8],
+      margin,
     };
   }
   return resolved.defaults.unsupportedPluginPolicy === 'hide'
@@ -573,6 +576,42 @@ function getImageFitForLayout(layout: PdfLayoutContext): [number, number] {
     ? Math.max(1, Math.min(PDF_DEFAULT_IMAGE_FIT[0], layout.availableWidth))
     : PDF_DEFAULT_IMAGE_FIT[0];
   return [width, PDF_DEFAULT_IMAGE_FIT[1]];
+}
+
+function getImageFitForCss(css: string, layout: PdfLayoutContext): [number, number] {
+  const fallback = getImageFitForLayout(layout);
+  const maxWidth = Number.isFinite(layout.availableWidth) ? Math.max(1, layout.availableWidth) : PDF_DEFAULT_IMAGE_FIT[0];
+  const width = cssImageLengthToPdfPoints(getCssDeclarationValue(css, 'width'), maxWidth);
+  const height = cssImageLengthToPdfPoints(getCssDeclarationValue(css, 'height'), fallback[1]);
+
+  if (!width && !height) {
+    return fallback;
+  }
+  if (width && height) {
+    return [Math.min(width, maxWidth), Math.max(1, height)];
+  }
+  if (width) {
+    const clampedWidth = Math.min(width, maxWidth);
+    return [clampedWidth, clampedWidth];
+  }
+  const clampedHeight = Math.max(1, height ?? fallback[1]);
+  return [Math.min(maxWidth, Math.max(fallback[0], clampedHeight)), clampedHeight];
+}
+
+function cssImageLengthToPdfPoints(value: string | null, percentageBase: number): number | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === 'auto') {
+    return null;
+  }
+  const percentage = /^(\d*\.?\d+)%$/.exec(normalized);
+  if (percentage) {
+    const amount = Number.parseFloat(percentage[1] ?? '');
+    return Number.isFinite(amount) && amount > 0 ? (percentageBase * amount) / 100 : null;
+  }
+  return cssLengthToPdfPoints(normalized);
 }
 
 function getPdfPageContentWidth(

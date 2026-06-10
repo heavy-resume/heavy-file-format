@@ -78,6 +78,29 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('download="avatar.jpg"');
   });
 
+  test('expected result: image size picker indicates the current preset', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.id = 'photo';
+    block.schema.css = 'margin: 0.5rem auto; display: block; width: 40rem; height: auto;';
+    initState(createTestState({
+      meta: {},
+      extension: '.phvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    }));
+
+    const expectedResult = renderImageEditor('profile', block, helpers);
+
+    const largeButton = expectedResult.match(/<button(?:(?!<button)[\s\S])*data-image-preset="large"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+    const mediumButton = expectedResult.match(/<button(?:(?!<button)[\s\S])*data-image-preset="medium"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+    const smallButton = expectedResult.match(/<button(?:(?!<button)[\s\S])*data-image-preset="small"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+    expect(largeButton).toContain('is-active');
+    expect(largeButton).toContain('aria-pressed="true"');
+    expect(mediumButton).toContain('aria-pressed="false"');
+    expect(smallButton).not.toContain('is-active');
+    expect(smallButton).toContain('aria-pressed="false"');
+  });
+
   test('expected result: carousel editor offers camera capture and attached picture duplication', () => {
     const block: VisualBlock = createEmptyBlock('carousel');
     block.id = 'carousel';

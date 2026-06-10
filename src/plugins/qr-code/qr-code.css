@@ -6,6 +6,8 @@
 }
 
 .hvy-qr-code-editor {
+  display: grid;
+  gap: 0.85rem;
   padding: 0.65rem;
   border: 1px solid var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
@@ -15,6 +17,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
 .hvy-qr-code-toolbar .toolbar-segment {
@@ -25,6 +28,14 @@
 
 .hvy-qr-code-toolbar button {
   min-height: 2rem;
+}
+
+.hvy-qr-code-toolbar button.is-active,
+.hvy-qr-code-toolbar button[aria-pressed="true"] {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-bg) 28%, var(--hvy-surface) 72%);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px var(--hvy-focus-ring);
 }
 
 .hvy-qr-code-editor-grid {
@@ -61,6 +72,24 @@
   color: var(--hvy-text);
   font: inherit;
   font-weight: 500;
+}
+
+.hvy-qr-code-field input,
+.hvy-qr-code-field select {
+  height: 2.35rem;
+}
+
+.hvy-qr-code-field select {
+  appearance: none;
+  padding-right: 2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--hvy-text-alt) 50%),
+    linear-gradient(135deg, var(--hvy-text-alt) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.95rem) 50%,
+    calc(100% - 0.65rem) 50%;
+  background-size: 0.34rem 0.34rem, 0.34rem 0.34rem;
+  background-repeat: no-repeat;
 }
 
 .hvy-qr-code-field textarea {

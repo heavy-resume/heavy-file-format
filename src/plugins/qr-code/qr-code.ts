@@ -2,7 +2,7 @@ import QRCodeStyling from 'qr-code-styling';
 
 import './qr-code.css';
 
-import { mergeImagePresetCss } from '../../editor/components/image/image-preset-css';
+import { getMatchingImagePresetCss, mergeImagePresetCss } from '../../editor/components/image/image-preset-css';
 import type { VisualBlock } from '../../editor/types';
 import { escapeHtml } from '../../utils';
 import { QR_CODE_PLUGIN_ID } from '../registry';
@@ -17,9 +17,11 @@ import {
   QR_CODE_CORNER_SQUARE_TYPES,
   QR_CODE_DOT_TYPES,
   QR_CODE_ERROR_CORRECTION_LEVELS,
+  QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
   type QrCodeConfig,
+  type QrCodeManualErrorCorrectionLevel,
 } from './qr-code-model';
 
 interface EditorHandles {
@@ -32,7 +34,10 @@ interface EditorHandles {
   cornersSquareType: HTMLSelectElement;
   cornersDotType: HTMLSelectElement;
   preview: HTMLDivElement;
+  sizePresetButtons: HTMLButtonElement[];
 }
+
+const QR_CODE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
@@ -56,7 +61,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const config = readQrCodeConfig(ctx.block.schema.pluginConfig);
     const text = ctx.block.text;
     if (editorHandles) {
-      syncEditorInputs(editorHandles, text, config);
+      syncEditorInputs(editorHandles, text, config, ctx.block.schema.css);
     }
     void renderQrCodePreview(previewHost, text, config, ++renderVersion);
   };
@@ -119,6 +124,7 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
       <div class="toolbar-segment" role="group" aria-label="QR size">
         ${renderPresetButton('small', 'Small')}
         ${renderPresetButton('medium', 'Medium')}
+        ${renderPresetButton('large', 'Large')}
         ${renderPresetButton('fit-width', 'Fit Width')}
         ${renderPresetButton('fit-height', 'Fit Height')}
       </div>
@@ -157,13 +163,15 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
     cornersSquareType: requireElement(root, '[data-qr-field="cornersSquareType"]', HTMLSelectElement),
     cornersDotType: requireElement(root, '[data-qr-field="cornersDotType"]', HTMLSelectElement),
     preview: requireElement(root, '.hvy-qr-code-preview', HTMLDivElement),
+    sizePresetButtons: Array.from(root.querySelectorAll<HTMLButtonElement>('[data-qr-size-preset]')),
   };
-  syncEditorInputs(handles, ctx.block.text, readQrCodeConfig(ctx.block.schema.pluginConfig));
+  syncEditorInputs(handles, ctx.block.text, readQrCodeConfig(ctx.block.schema.pluginConfig), ctx.block.schema.css);
   return { root, handles };
 }
 
 function renderPresetButton(preset: string, label: string): string {
-  return `<button type="button" class="ghost" data-qr-preset="${preset}">${label}</button>`;
+  const sizePresetAttr = QR_CODE_SIZE_PRESETS.includes(preset as typeof QR_CODE_SIZE_PRESETS[number]) ? ' data-qr-size-preset="true" aria-pressed="false"' : '';
+  return `<button type="button" class="ghost" data-qr-preset="${preset}"${sizePresetAttr}>${label}</button>`;
 }
 
 function renderColorField(field: keyof QrCodeConfig, label: string): string {
@@ -182,7 +190,7 @@ function renderSelectField(field: keyof QrCodeConfig, label: string, options: re
   </label>`;
 }
 
-function syncEditorInputs(handles: EditorHandles, text: string, config: QrCodeConfig): void {
+function syncEditorInputs(handles: EditorHandles, text: string, config: QrCodeConfig, css: string): void {
   const active = document.activeElement;
   setValueIfNotFocused(handles.text, text, active);
   setValueIfNotFocused(handles.caption, config.caption, active);
@@ -192,11 +200,21 @@ function syncEditorInputs(handles: EditorHandles, text: string, config: QrCodeCo
   setValueIfNotFocused(handles.dotsType, config.dotsType, active);
   setValueIfNotFocused(handles.cornersSquareType, config.cornersSquareType, active);
   setValueIfNotFocused(handles.cornersDotType, config.cornersDotType, active);
+  syncSizePresetButtons(handles.sizePresetButtons, css);
 }
 
 function setValueIfNotFocused(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string, active: Element | null): void {
   if (input !== active && input.value !== value) {
     input.value = value;
+  }
+}
+
+function syncSizePresetButtons(buttons: HTMLButtonElement[], css: string): void {
+  const activePreset = getMatchingImagePresetCss(css, QR_CODE_SIZE_PRESETS);
+  for (const button of buttons) {
+    const active = button.dataset.qrPreset === activePreset;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
 }
 
@@ -209,7 +227,7 @@ async function renderQrCodePreview(host: HTMLElement | null, text: string, confi
   }
   host.innerHTML = '<div class="hvy-qr-code-loading">Rendering QR code...</div>';
   try {
-    const qr = new QRCodeStyling(createQrCodeStylingOptions(trimmed, config));
+    const { qr } = createQrCodeStylingForPayload(trimmed, config);
     host.replaceChildren();
     const figure = document.createElement('figure');
     figure.className = 'hvy-qr-code-figure';
@@ -253,6 +271,9 @@ function requireElement<T extends Element>(
 }
 
 function formatOptionLabel(value: string): string {
+  if (value === 'auto') {
+    return 'Auto (highest)';
+  }
   return value
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -308,7 +329,7 @@ function createStaticImageSchema(id: string, imageFile: string, caption: string,
 }
 
 export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig): Promise<Uint8Array> {
-  const qr = new QRCodeStyling(createQrCodeStylingOptions(text, config));
+  const { qr } = createQrCodeStylingForPayload(text, config);
   const data = await qr.getRawData('svg');
   if (!data) {
     throw new Error('QR code renderer did not return SVG data.');
@@ -323,6 +344,27 @@ export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig): 
     return new Uint8Array(await (data as Blob).arrayBuffer());
   }
   return new TextEncoder().encode(String(data));
+}
+
+function createQrCodeStylingForPayload(text: string, config: QrCodeConfig): { qr: QRCodeStyling; errorCorrectionLevel: QrCodeManualErrorCorrectionLevel } {
+  if (config.errorCorrectionLevel !== 'auto') {
+    return {
+      qr: new QRCodeStyling(createQrCodeStylingOptions(text, config)),
+      errorCorrectionLevel: config.errorCorrectionLevel,
+    };
+  }
+  let lastError: unknown = null;
+  for (const errorCorrectionLevel of [...QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS].reverse()) {
+    try {
+      return {
+        qr: new QRCodeStyling(createQrCodeStylingOptions(text, config, 640, errorCorrectionLevel)),
+        errorCorrectionLevel,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error('Unable to render QR code with any error correction level.');
 }
 
 export const qrCodePluginFactory: HvyPluginFactory = build;

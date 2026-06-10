@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { mergeImagePresetCss } from '../src/editor/components/image/image';
+import { getMatchingImagePresetCss, mergeImagePresetCss } from '../src/editor/components/image/image-preset-css';
 
 describe('mergeImagePresetCss', () => {
   test('position preset preserves size declarations', () => {
@@ -44,11 +44,30 @@ describe('mergeImagePresetCss', () => {
   test('replaces only width/height when switching between size presets', () => {
     const fromSmall = mergeImagePresetCss('margin: 0.5rem auto; display: block; width: 20rem; height: auto;', 'medium');
     expect(fromSmall).toContain('margin: 0.5rem auto');
-    expect(fromSmall).toContain('width: 40rem');
+    expect(fromSmall).toContain('width: 30rem');
     expect((fromSmall ?? '').match(/width:/g)?.length ?? 0).toBe(1);
+  });
+
+  test('large preset uses the widest named size', () => {
+    const after = mergeImagePresetCss('margin: 0.5rem auto; display: block; width: 30rem; height: auto;', 'large');
+
+    expect(after).toContain('width: 40rem');
+    expect(after).toContain('height: auto');
   });
 
   test('returns null for an unknown preset', () => {
     expect(mergeImagePresetCss('margin: 0;', 'bogus')).toBeNull();
+  });
+});
+
+describe('getMatchingImagePresetCss', () => {
+  test('detects the active size preset from image css', () => {
+    expect(getMatchingImagePresetCss('margin: 0.5rem auto; display: block; width: 20rem; height: auto;', ['small', 'medium'])).toBe('small');
+    expect(getMatchingImagePresetCss('margin: 0.5rem auto; display: block; width: 40rem; height: auto;', ['medium', 'large'])).toBe('large');
+    expect(getMatchingImagePresetCss('width: 100%; height: auto; display: block;', ['small', 'fit-width'])).toBe('fit-width');
+  });
+
+  test('returns null when the css does not match a requested preset', () => {
+    expect(getMatchingImagePresetCss('width: 24rem; height: auto; display: block;', ['small', 'medium'])).toBeNull();
   });
 });

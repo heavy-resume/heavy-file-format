@@ -11,13 +11,14 @@ import { syncReusableTemplateForBlock } from '../../../reusable';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { cameraIcon, closeIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
-import { mergeImagePresetCss } from './image-preset-css';
+import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
 
 export { mergeImagePresetCss } from './image-preset-css';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
+const IMAGE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
 type LegacyCameraNavigator = Navigator & {
   getUserMedia?: (
@@ -314,6 +315,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
   const filename = block.schema.imageFile.trim();
   const downloadUrl = filename ? getImageBlobUrl(filename) : null;
   const canDeleteCurrentImage = filename && getImageAttachmentReferenceCount(filename) === 1;
+  const activeSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
   return `
     <div class="image-editor">
       <div class="image-toolbar">
@@ -323,10 +325,11 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           <button type="button" class="ghost" data-action="image-preset" data-image-preset="right" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Align right">Right</button>
         </div>
         <div class="toolbar-segment image-fit-buttons" role="group" aria-label="Image size">
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="small" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Small (20rem wide)">Small</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="medium" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Medium (40rem wide)">Medium</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-width" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit width">Fit Width</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-height" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit height">Fit Height</button>
+          ${renderImageSizePresetButton('small', 'Small', 'Small (20rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('medium', 'Medium', 'Medium (30rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('large', 'Large', 'Large (40rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('fit-width', 'Fit Width', 'Fit width', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('fit-height', 'Fit Height', 'Fit height', activeSizePreset, sectionKey, block.id, helpers)}
         </div>
       </div>
       <div
@@ -393,6 +396,19 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
     </div>
   `;
 };
+
+function renderImageSizePresetButton(
+  preset: string,
+  label: string,
+  title: string,
+  activePreset: string | null,
+  sectionKey: string,
+  blockId: string,
+  helpers: ComponentRenderHelpers
+): string {
+  const active = preset === activePreset;
+  return `<button type="button" class="ghost${active ? ' is-active' : ''}" data-action="image-preset" data-image-preset="${helpers.escapeAttr(preset)}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="${helpers.escapeAttr(title)}" aria-pressed="${active ? 'true' : 'false'}">${helpers.escapeHtml(label)}</button>`;
+}
 
 export const renderImageReader: ComponentReaderRenderer = (_section, block, helpers) => {
   return `<div class="image-reader">${renderPreview(block, helpers)}</div>`;

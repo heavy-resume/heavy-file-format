@@ -11,6 +11,7 @@ import {
   DEFAULT_QR_CODE_CONFIG,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
+  resolveQrCodeErrorCorrectionLevel,
 } from '../src/plugins/qr-code/qr-code-model';
 
 test('readQrCodeConfig defaults invalid style options', () => {
@@ -54,6 +55,14 @@ test('createQrCodeStylingOptions maps plugin config to styled SVG options', () =
     cornersDotOptions: { type: 'dot', color: '#0f172a' },
     backgroundOptions: { color: '#ffffff' },
   });
+});
+
+test('auto error correction starts with highest quality level', () => {
+  expect(resolveQrCodeErrorCorrectionLevel(DEFAULT_QR_CODE_CONFIG)).toBe('H');
+
+  const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', DEFAULT_QR_CODE_CONFIG);
+
+  expect(expectedResult.qrOptions).toEqual({ errorCorrectionLevel: 'H' });
 });
 
 test('configurePluginBlock seeds QR code plugin config and body text', () => {

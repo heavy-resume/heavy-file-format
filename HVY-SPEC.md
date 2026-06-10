@@ -1396,25 +1396,27 @@ plugins:
 Block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","errorCorrectionLevel":"Q","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"rounded","cornersSquareType":"extra-rounded","cornersDotType":"dot"}}-->
+<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","errorCorrectionLevel":"auto","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
 https://example.invalid/qr-code
 ```
 
 Plugin-specific rules:
 - The plugin text body MUST be interpreted as the QR code payload string.
 - `pluginConfig.caption` is an optional caption rendered below the QR code.
-- `pluginConfig.errorCorrectionLevel` is optional and defaults to `"Q"`.
-  Supported values are `"L"`, `"M"`, `"Q"`, and `"H"`.
+- `pluginConfig.errorCorrectionLevel` is optional and defaults to `"auto"`.
+  Supported values are `"auto"`, `"L"`, `"M"`, `"Q"`, and `"H"`. When set
+  to `"auto"`, renderers SHOULD use the highest error correction level that can
+  encode the current payload, trying `"H"`, then `"Q"`, then `"M"`, then `"L"`.
 - `pluginConfig.foregroundColor` and `pluginConfig.backgroundColor` are
   optional `#rrggbb` color strings.
-- `pluginConfig.dotsType` is optional and defaults to `"rounded"`. Supported
+- `pluginConfig.dotsType` is optional and defaults to `"square"`. Supported
   values are `"square"`, `"dots"`, `"rounded"`, `"classy"`,
   `"classy-rounded"`, and `"extra-rounded"`.
 - `pluginConfig.cornersSquareType` is optional and defaults to
-  `"extra-rounded"`. Supported values are `"square"`, `"dot"`,
+  `"square"`. Supported values are `"square"`, `"dot"`,
   `"extra-rounded"`, `"dots"`, `"rounded"`, `"classy"`, and
   `"classy-rounded"`.
-- `pluginConfig.cornersDotType` is optional and defaults to `"dot"`. Supported
+- `pluginConfig.cornersDotType` is optional and defaults to `"square"`. Supported
   values are `"square"`, `"dot"`, `"dots"`, `"rounded"`, `"classy"`,
   `"classy-rounded"`, and `"extra-rounded"`.
 - PHVY/PDF export renderers SHOULD resolve QR code plugin blocks to ordinary

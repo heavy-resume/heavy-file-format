@@ -114,6 +114,45 @@ test('PHVY component picker enables plugins with PDF static render capability', 
   expect(pluginButton).not.toContain('disabled');
 });
 
+test('PHVY component picker lists PDF-supported plugins before unsupported plugins', () => {
+  const document = createPdfDocument();
+  setHostPlugins([
+    {
+      id: 'fake.unsupported',
+      displayName: 'Unsupported Plugin',
+      create: () => ({ element: globalThis.document.createElement('div') }),
+    },
+    {
+      id: 'fake.supported',
+      displayName: 'Supported Plugin',
+      create: () => ({ element: globalThis.document.createElement('div') }),
+      pdf: {
+        renderStatic: () => [],
+      },
+    },
+  ]);
+
+  const html = renderAddComponentPicker(
+    {
+      id: 'section:summary',
+      action: 'add-block',
+      sectionKey: 'section-summary',
+      componentFilter: (componentName, pluginId) => isPdfAllowedComponentInstance(componentName, document.meta, pluginId),
+      componentDisabledReason: (componentName, pluginId) =>
+        isPdfAllowedComponentInstance(componentName, document.meta, pluginId) ? null : 'Not supported in PHVY',
+    },
+    {
+      escapeAttr: escapeHtml,
+      escapeHtml,
+      getComponentDefs: () => document.meta.component_defs as never,
+    }
+  );
+
+  expect(html.indexOf('data-plugin-id="fake.supported"')).toBeLessThan(html.indexOf('data-plugin-id="fake.unsupported"'));
+  const unsupportedButton = html.match(/<button(?:(?!<button)[\s\S])*data-plugin-id="fake.unsupported"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+  expect(unsupportedButton).toContain('disabled');
+});
+
 test('PHVY editor rendering omits sidebar editor affordances', () => {
   const main = createSection('summary');
   const sidebar = createSection('notes', 'sidebar');

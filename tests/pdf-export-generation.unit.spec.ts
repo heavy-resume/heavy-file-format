@@ -123,6 +123,41 @@ test('PDF doc definition constrains grid images to their column width', () => {
   expect(imageNode?.fit).toEqual([246, 240]);
 });
 
+test('PDF doc definition keeps image captions with CSS-sized images', () => {
+  const image = createEmptyBlock('image');
+  image.schema.imageFile = 'qr-code.svg';
+  image.schema.imageAlt = 'QR code';
+  image.schema.caption = 'Scan to open';
+  image.schema.css = 'margin: 0.5rem auto; display: block; width: 12rem; height: auto;';
+  const section = createEmptySection(1, '');
+  section.blocks = [image];
+  const document: VisualDocument = {
+    meta: { title: 'PDF CSS Image Size' },
+    extension: '.phvy',
+    attachments: [
+      {
+        id: 'image:qr-code.svg',
+        meta: { mediaType: 'image/svg+xml' },
+        bytes: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100"/></svg>'),
+      },
+    ],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const imageStack = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const imageNode = imageStack?.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const captionNode = imageStack?.stack?.[1] as HvyPdfMakeNodeObject | undefined;
+
+  expect(imageStack?.unbreakable).toBe(true);
+  expect(imageNode?.fit).toEqual([144, 144]);
+  expect(imageNode?.margin).toEqual([0, 0, 0, 3]);
+  expect(captionNode).toEqual(expect.objectContaining({ text: 'Scan to open', alignment: 'center' }));
+});
+
 test('PDF doc definition wraps grid items by gridColumns', () => {
   const grid = createEmptyBlock('grid');
   grid.schema.gridColumns = 2;

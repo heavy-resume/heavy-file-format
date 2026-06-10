@@ -255,6 +255,7 @@ export interface HvyPdfMakeNodeObject {
   height?: number;
   fit?: [number, number];
   pageBreak?: 'before' | 'after' | 'beforeOdd' | 'beforeEven';
+  unbreakable?: boolean;
   headlineLevel?: number;
   hvyKeepWithNext?: boolean;
   hvyKeepTogether?: boolean;

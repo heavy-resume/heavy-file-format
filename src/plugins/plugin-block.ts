@@ -1,5 +1,5 @@
 import type { VisualBlock } from '../editor/types';
-import { createQrCodePluginConfig, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
+import { createQrCodePluginConfig, QR_CODE_DEFAULT_CSS, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
 import { DEFAULT_DIAGRAM_SOURCE, DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
 import { DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from './registry';
 import { SCRIPTING_PLUGIN_VERSION } from './scripting/version';
@@ -29,6 +29,6 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? QR_CODE_PLUGIN_DEFAULT_TEXT
       : '';
   if (nextId === QR_CODE_PLUGIN_ID) {
-    block.schema.css = 'margin: 0.5rem auto; display: block; width: 20rem; height: auto;';
+    block.schema.css = QR_CODE_DEFAULT_CSS;
   }
 }

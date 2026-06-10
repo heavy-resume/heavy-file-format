@@ -1,4 +1,5 @@
 import type { Options, DotType, CornerDotType, CornerSquareType, ErrorCorrectionLevel } from 'qr-code-styling';
+import type { ImagePresetDefinition } from '../../editor/components/image/image-preset-css';
 import type { JsonObject } from '../../hvy/types';
 import type { TextCaptionPayload } from '../../editor/types';
 import { normalizeTextCaption, serializeTextCaption } from '../../caption';
@@ -9,6 +10,17 @@ export const QR_CODE_DOT_TYPES = ['square', 'dots', 'rounded', 'classy', 'classy
 export const QR_CODE_CORNER_SQUARE_TYPES = ['square', 'dot', 'extra-rounded', 'dots', 'rounded', 'classy', 'classy-rounded'] as const;
 export const QR_CODE_CORNER_DOT_TYPES = ['square', 'dot', 'dots', 'rounded', 'classy', 'classy-rounded', 'extra-rounded'] as const;
 export const QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS = ['L', 'M', 'Q', 'H'] as const;
+export const QR_CODE_DEFAULT_CSS = 'margin: 0.5rem auto; display: block; width: 15rem; height: auto;';
+export const QR_CODE_IMAGE_PRESET_OVERRIDES: Record<string, ImagePresetDefinition> = {
+  small: {
+    props: { width: '15rem', height: 'auto', display: 'block' },
+    controls: ['width', 'height', 'display'],
+  },
+  medium: {
+    props: { width: '22.5rem', height: 'auto', display: 'block' },
+    controls: ['width', 'height', 'display'],
+  },
+};
 
 export type QrCodeDotType = (typeof QR_CODE_DOT_TYPES)[number];
 export type QrCodeCornerSquareType = (typeof QR_CODE_CORNER_SQUARE_TYPES)[number];

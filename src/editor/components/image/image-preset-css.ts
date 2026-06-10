@@ -1,4 +1,4 @@
-interface ImagePresetDefinition {
+export interface ImagePresetDefinition {
   /** Properties this preset writes onto the block. */
   props: Record<string, string>;
   /** Properties this preset clears before writing props. */
@@ -60,8 +60,8 @@ function serializeInlineCssDeclarations(entries: Array<[string, string]>): strin
   return entries.map(([prop, value]) => `${prop}: ${value};`).join(' ');
 }
 
-export function mergeImagePresetCss(existingCss: string, preset: string): string | null {
-  const definition = IMAGE_PRESETS[preset];
+export function mergeImagePresetCss(existingCss: string, preset: string, presetOverrides: Record<string, ImagePresetDefinition> = {}): string | null {
+  const definition = presetOverrides[preset] ?? IMAGE_PRESETS[preset];
   if (!definition) return null;
   const cleared = new Set(definition.controls.map((prop) => prop.toLowerCase()));
   const preserved = parseInlineCssDeclarations(existingCss).filter(([prop]) => !cleared.has(prop));
@@ -69,10 +69,10 @@ export function mergeImagePresetCss(existingCss: string, preset: string): string
   return serializeInlineCssDeclarations(merged);
 }
 
-export function getMatchingImagePresetCss(existingCss: string, presets: readonly string[]): string | null {
+export function getMatchingImagePresetCss(existingCss: string, presets: readonly string[], presetOverrides: Record<string, ImagePresetDefinition> = {}): string | null {
   const declarations = new Map(parseInlineCssDeclarations(existingCss));
   for (const preset of presets) {
-    const definition = IMAGE_PRESETS[preset];
+    const definition = presetOverrides[preset] ?? IMAGE_PRESETS[preset];
     if (!definition) continue;
     const matches = Object.entries(definition.props).every(([prop, value]) => declarations.get(prop) === value);
     if (matches) {

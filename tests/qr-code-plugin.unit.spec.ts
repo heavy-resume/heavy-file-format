@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 
+import { getMatchingImagePresetCss, mergeImagePresetCss } from '../src/editor/components/image/image-preset-css';
 import type { VisualBlock } from '../src/editor/types';
 import { defaultBlockSchema } from '../src/document-factory';
 import { configurePluginBlock } from '../src/plugins/plugin-block';
@@ -9,6 +10,8 @@ import {
   createQrCodeStaticImageFilename,
   createQrCodeStylingOptions,
   DEFAULT_QR_CODE_CONFIG,
+  QR_CODE_DEFAULT_CSS,
+  QR_CODE_IMAGE_PRESET_OVERRIDES,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
   readQrCodeConfig,
 } from '../src/plugins/qr-code/qr-code-model';
@@ -92,7 +95,24 @@ test('configurePluginBlock seeds QR code plugin config and body text', () => {
   expect(block.schema.plugin).toBe(QR_CODE_PLUGIN_ID);
   expect(block.schema.pluginConfig).toEqual(createQrCodePluginConfig());
   expect(block.text).toBe(QR_CODE_PLUGIN_DEFAULT_TEXT);
-  expect(block.schema.css).toBe('margin: 0.5rem auto; display: block; width: 20rem; height: auto;');
+  expect(block.schema.css).toBe(QR_CODE_DEFAULT_CSS);
+});
+
+test('QR code size presets use reduced small and medium widths', () => {
+  const smallResult = mergeImagePresetCss(
+    'margin: 0.5rem auto; display: block; width: 40rem; height: auto;',
+    'small',
+    QR_CODE_IMAGE_PRESET_OVERRIDES
+  );
+  const mediumResult = mergeImagePresetCss(
+    'margin: 0.5rem auto; display: block; width: 15rem; height: auto;',
+    'medium',
+    QR_CODE_IMAGE_PRESET_OVERRIDES
+  );
+
+  expect(smallResult).toContain('width: 15rem');
+  expect(mediumResult).toContain('width: 22.5rem');
+  expect(getMatchingImagePresetCss(QR_CODE_DEFAULT_CSS, ['small', 'medium'], QR_CODE_IMAGE_PRESET_OVERRIDES)).toBe('small');
 });
 
 test('createQrCodeStaticImageFilename keeps attachment names stable and safe', () => {

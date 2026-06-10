@@ -13,6 +13,7 @@ import {
   createQrCodeStaticImageFilename,
   createQrCodeStylingOptions,
   DEFAULT_QR_CODE_CONFIG,
+  QR_CODE_IMAGE_PRESET_OVERRIDES,
   QR_CODE_CORNER_DOT_TYPES,
   QR_CODE_CORNER_SQUARE_TYPES,
   QR_CODE_DOT_TYPES,
@@ -85,7 +86,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const button = target?.closest<HTMLButtonElement>('[data-qr-preset]');
     if (!button) return;
     const preset = button.dataset.qrPreset ?? '';
-    const merged = mergeImagePresetCss(ctx.block.schema.css, preset);
+    const merged = mergeImagePresetCss(ctx.block.schema.css, preset, QR_CODE_IMAGE_PRESET_OVERRIDES);
     if (merged === null) return;
     ctx.setCss(merged);
   };
@@ -207,7 +208,7 @@ function setValueIfNotFocused(input: HTMLInputElement | HTMLSelectElement | HTML
 }
 
 function syncSizePresetButtons(buttons: HTMLButtonElement[], css: string): void {
-  const activePreset = getMatchingImagePresetCss(css, QR_CODE_SIZE_PRESETS);
+  const activePreset = getMatchingImagePresetCss(css, QR_CODE_SIZE_PRESETS, QR_CODE_IMAGE_PRESET_OVERRIDES);
   for (const button of buttons) {
     const active = button.dataset.qrPreset === activePreset;
     button.classList.toggle('is-active', active);

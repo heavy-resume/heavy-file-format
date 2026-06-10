@@ -113,6 +113,18 @@ function buildContext(
     });
   };
 
+  const setCss = (css: string) => {
+    runWithStateRuntime(runtime, () => {
+      const current = findBlockByIds(sectionKey, blockId);
+      if (!current) return;
+      recordHistory(`plugin-css:${plugin.id}:${sectionKey}:${blockId}`);
+      current.schema.css = css;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      getRefreshReaderPanels()();
+      refreshMountedPlugins(plugin.id, sectionKey, blockId);
+    });
+  };
+
   return {
     mode,
     get editor() {
@@ -148,6 +160,7 @@ function buildContext(
     },
     setConfig,
     setText,
+    setCss,
     requestRerender,
   };
 }

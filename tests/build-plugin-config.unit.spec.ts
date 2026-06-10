@@ -5,6 +5,7 @@ import { createHvyBuiltInPluginsModuleSource, createLazyHvyBuiltInPluginsModuleS
 test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(resolveBuiltInPluginIds(undefined)).toEqual([...HVY_BUILT_IN_PLUGIN_IDS]);
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.diagram');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.qr-code');
 });
 
 test('resolveBuiltInPluginIds accepts an explicit plugin list', () => {
@@ -43,12 +44,13 @@ test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
 });
 
 test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
-  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram']);
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code']);
 
   expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
   expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');
   expect(expectedResult).toContain('from "/src/plugins/graph.ts"');
   expect(expectedResult).toContain('from "/src/plugins/diagram.ts"');
+  expect(expectedResult).toContain('from "/src/plugins/qr-code/qr-code.ts"');
   expect(expectedResult).not.toContain('/Users/');
   expect(expectedResult).not.toContain(process.cwd());
 });
@@ -70,4 +72,12 @@ test('createLazyHvyBuiltInPluginsModuleSource skips lazy hooks when document doe
   expect(expectedResult).toContain('documentUsesPlugin(ctx.document, definition.id)');
   expect(expectedResult).toContain('await runHook(await loadPlugin(definition), \'documentLoad\', ctx)');
   expect(expectedResult).toContain('await runHook(await loadPlugin(definition), \'documentChange\', ctx)');
+});
+
+test('createLazyHvyBuiltInPluginsModuleSource exposes static PDF rendering only for capable plugins', () => {
+  const expectedResult = createLazyHvyBuiltInPluginsModuleSource(['hvy.diagram', 'hvy.qr-code']);
+
+  expect(expectedResult).toContain('"pdfStatic":true');
+  expect(expectedResult).toContain('...(definition.pdfStatic ? { pdf: {');
+  expect(expectedResult).toContain('plugin.pdf.renderStatic(ctx)');
 });

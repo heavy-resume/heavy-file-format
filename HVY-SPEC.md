@@ -1378,6 +1378,49 @@ Plugin-specific rules:
 - Renderers MUST sanitize the generated SVG/HTML before inserting it into the
   document.
 
+### 7.10 QR code plugin contract
+
+The built-in QR code plugin is `hvy.qr-code`. The encoded QR payload lives in
+the plugin text body. QR caption and visual style live in `pluginConfig`.
+Rendered size and alignment SHOULD use the standard block `css` field, matching
+image component sizing conventions.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: hvy.qr-code
+    source: builtin://qr-code
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":"Scan code","errorCorrectionLevel":"Q","foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"rounded","cornersSquareType":"extra-rounded","cornersDotType":"dot"}}-->
+https://example.invalid/qr-code
+```
+
+Plugin-specific rules:
+- The plugin text body MUST be interpreted as the QR code payload string.
+- `pluginConfig.caption` is an optional caption rendered below the QR code.
+- `pluginConfig.errorCorrectionLevel` is optional and defaults to `"Q"`.
+  Supported values are `"L"`, `"M"`, `"Q"`, and `"H"`.
+- `pluginConfig.foregroundColor` and `pluginConfig.backgroundColor` are
+  optional `#rrggbb` color strings.
+- `pluginConfig.dotsType` is optional and defaults to `"rounded"`. Supported
+  values are `"square"`, `"dots"`, `"rounded"`, `"classy"`,
+  `"classy-rounded"`, and `"extra-rounded"`.
+- `pluginConfig.cornersSquareType` is optional and defaults to
+  `"extra-rounded"`. Supported values are `"square"`, `"dot"`,
+  `"extra-rounded"`, `"dots"`, `"rounded"`, `"classy"`, and
+  `"classy-rounded"`.
+- `pluginConfig.cornersDotType` is optional and defaults to `"dot"`. Supported
+  values are `"square"`, `"dot"`, `"dots"`, `"rounded"`, `"classy"`,
+  `"classy-rounded"`, and `"extra-rounded"`.
+- PHVY/PDF export renderers SHOULD resolve QR code plugin blocks to ordinary
+  `image` blocks backed by SVG image attachments. The authored plugin block
+  MUST remain unchanged.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:

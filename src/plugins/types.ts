@@ -53,6 +53,9 @@ export interface HvyPluginContext {
   // Persist plugin-interpreted text (block.text), refreshing this plugin
   // instance in place and reader panels without a full app re-render.
   setText(text: string): void;
+  // Persist block-level presentation CSS for plugin-owned controls such as
+  // size/alignment presets, refreshing this plugin instance and reader panels.
+  setCss(css: string): void;
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;

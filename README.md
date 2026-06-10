@@ -202,7 +202,8 @@ not enabled automatically:
     "hvy.progress-bar",
     "hvy.scripting",
     "hvy.graph",
-    "hvy.diagram"
+    "hvy.diagram",
+    "hvy.qr-code"
   ]
 }
 ```

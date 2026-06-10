@@ -1,0 +1,5 @@
+# QR Code Plugin #
+
+The QR code plugin stores the encoded text in plugin.txt.
+Caption and style settings live in plugin.json pluginConfig.
+Use block css or image-size presets to control rendered size and alignment.

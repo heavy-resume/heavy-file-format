@@ -112,6 +112,9 @@ export default defineConfig(({ mode }) => {
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash][extname]',
           manualChunks(id) {
+            if (id.includes('/src/editor/components/image/image-preset-css.ts')) {
+              return 'image-preset-css';
+            }
             if (id.includes('virtual:hvy-built-in-plugins')) {
               return 'embed-builtins';
             }

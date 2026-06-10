@@ -1,6 +1,7 @@
 import type { VisualBlock } from '../editor/types';
+import { createQrCodePluginConfig, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
 import { DEFAULT_DIAGRAM_SOURCE, DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
-import { DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, SCRIPTING_PLUGIN_ID } from './registry';
+import { DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from './registry';
 import { SCRIPTING_PLUGIN_VERSION } from './scripting/version';
 
 export function configurePluginBlock(block: VisualBlock, pluginId: string): void {
@@ -17,10 +18,17 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? { type: 'bar', title: '', xAxisLabel: '', yAxisLabel: '', legend: true }
     : nextId === DIAGRAM_PLUGIN_ID
       ? { syntax: DEFAULT_DIAGRAM_SYNTAX }
+    : nextId === QR_CODE_PLUGIN_ID
+      ? createQrCodePluginConfig()
       : {};
   block.text = nextId === GRAPH_PLUGIN_ID
     ? 'Label,Value\nExample A,10\nExample B,20\nExample C,15'
     : nextId === DIAGRAM_PLUGIN_ID
       ? DEFAULT_DIAGRAM_SOURCE
+    : nextId === QR_CODE_PLUGIN_ID
+      ? QR_CODE_PLUGIN_DEFAULT_TEXT
       : '';
+  if (nextId === QR_CODE_PLUGIN_ID) {
+    block.schema.css = 'margin: 0.5rem auto; display: block; width: 20rem; height: auto;';
+  }
 }

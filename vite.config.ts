@@ -24,6 +24,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.scripting',
   'hvy.graph',
   'hvy.diagram',
+  'hvy.qr-code',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -40,6 +41,7 @@ interface HvyBuiltInPluginDefinition {
   exportName: string;
   modulePath: string;
   displayName: string;
+  pdfStatic?: boolean;
 }
 
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
@@ -84,6 +86,14 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'diagramPlugin',
     modulePath: 'src/plugins/diagram.ts',
     displayName: 'Diagram',
+  },
+  {
+    id: 'hvy.qr-code',
+    key: 'qrCode',
+    exportName: 'qrCodePlugin',
+    modulePath: 'src/plugins/qr-code/qr-code.ts',
+    displayName: 'QR Code',
+    pdfStatic: true,
   },
 ];
 
@@ -308,6 +318,7 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     id: definition.id,
     key: definition.key,
     displayName: definition.displayName,
+    pdfStatic: definition.pdfStatic === true,
     exportName: definition.exportName,
     importPath: toViteRootImportPath(definition.modulePath),
   }));
@@ -404,6 +415,13 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     `      documentLoad: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentLoad', ctx); } },`,
     `      documentChange: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentChange', ctx); } },`,
     `    },`,
+    `    ...(definition.pdfStatic ? { pdf: {`,
+    `      async renderStatic(ctx) {`,
+    `        const plugin = await loadPlugin(definition);`,
+    `        if (!plugin.pdf?.renderStatic) return ctx.block;`,
+    `        return plugin.pdf.renderStatic(ctx);`,
+    `      },`,
+    `    } } : {}),`,
     `    aiHint(block) {`,
     `      const loaded = loadedPlugins.get(definition.id);`,
     `      const hint = loaded?.aiHint;`,
@@ -437,6 +455,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (id.includes('/src/editor/components/image/image-preset-css.ts')) {
+              return 'image-preset-css';
+            }
             if (id.includes('node_modules/highlight.js')) {
               return 'vendor-highlight';
             }

@@ -12,12 +12,14 @@ export const PROGRESS_BAR_PLUGIN_ID = 'hvy.progress-bar';
 export const SCRIPTING_PLUGIN_ID = 'hvy.scripting';
 export const GRAPH_PLUGIN_ID = 'hvy.graph';
 export const DIAGRAM_PLUGIN_ID = 'hvy.diagram';
+export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
 export const BUILTIN_SCRIPTING_PLUGIN_SOURCE = 'builtin://scripting';
 export const BUILTIN_GRAPH_PLUGIN_SOURCE = 'builtin://graph';
 export const BUILTIN_DIAGRAM_PLUGIN_SOURCE = 'builtin://diagram';
+export const BUILTIN_QR_CODE_PLUGIN_SOURCE = 'builtin://qr-code';
 
 export function isDbTablePluginId(pluginId: string): boolean {
   return pluginId === DB_TABLE_PLUGIN_ID;
@@ -126,6 +128,8 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
                 ? BUILTIN_GRAPH_PLUGIN_SOURCE
                 : entry.id === DIAGRAM_PLUGIN_ID
                   ? BUILTIN_DIAGRAM_PLUGIN_SOURCE
+                  : entry.id === QR_CODE_PLUGIN_ID
+                    ? BUILTIN_QR_CODE_PLUGIN_SOURCE
                 : `host://${entry.id}`,
     }));
   }
@@ -149,6 +153,9 @@ export function getPluginDisplayName(pluginId: string): string {
   }
   if (pluginId === DIAGRAM_PLUGIN_ID) {
     return 'Diagram';
+  }
+  if (pluginId === QR_CODE_PLUGIN_ID) {
+    return 'QR Code';
   }
   return pluginId;
 }

@@ -11,7 +11,16 @@ export const QR_CODE_CORNER_SQUARE_TYPES = ['square', 'dot', 'extra-rounded', 'd
 export const QR_CODE_CORNER_DOT_TYPES = ['square', 'dot', 'dots', 'rounded', 'classy', 'classy-rounded', 'extra-rounded'] as const;
 export const QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS = ['L', 'M', 'Q', 'H'] as const;
 export const QR_CODE_DEFAULT_CSS = 'margin: 0.5rem auto; display: block; width: 15rem; height: auto;';
+export const QR_CODE_STATIC_PDF_MARGIN = 8;
 export const QR_CODE_IMAGE_PRESET_OVERRIDES: Record<string, ImagePresetDefinition> = {
+  'xx-small': {
+    props: { width: '7.5rem', height: 'auto', display: 'block' },
+    controls: ['width', 'height', 'display'],
+  },
+  'x-small': {
+    props: { width: '10rem', height: 'auto', display: 'block' },
+    controls: ['width', 'height', 'display'],
+  },
   small: {
     props: { width: '15rem', height: 'auto', display: 'block' },
     controls: ['width', 'height', 'display'],
@@ -114,5 +123,5 @@ export function createQrCodePluginConfig(config: QrCodeConfig = DEFAULT_QR_CODE_
 
 export function createQrCodeStaticImageFilename(blockId: string): string {
   const safeId = blockId.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'qr-code';
-  return `qr-code-${safeId}.svg`;
+  return `qr-code-${safeId}.png`;
 }

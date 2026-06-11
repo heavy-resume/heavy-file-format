@@ -19,6 +19,7 @@ import {
   QR_CODE_DOT_TYPES,
   QR_CODE_MANUAL_ERROR_CORRECTION_LEVELS,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
+  QR_CODE_STATIC_PDF_MARGIN,
   readQrCodeConfig,
   type QrCodeConfig,
   type QrCodeManualErrorCorrectionLevel,
@@ -35,7 +36,7 @@ interface EditorHandles {
   sizePresetButtons: HTMLButtonElement[];
 }
 
-const QR_CODE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
+const QR_CODE_SIZE_PRESETS = ['xx-small', 'x-small', 'small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
@@ -125,6 +126,8 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
         ${renderPresetButton('right', 'Right')}
       </div>
       <div class="toolbar-segment" role="group" aria-label="QR size">
+        ${renderPresetButton('xx-small', 'XXS')}
+        ${renderPresetButton('x-small', 'XS')}
         ${renderPresetButton('small', 'Small')}
         ${renderPresetButton('medium', 'Medium')}
         ${renderPresetButton('large', 'Large')}
@@ -289,10 +292,10 @@ export async function renderQrCodeStaticBlock(ctx: HvyPluginPdfStaticRenderConte
   if (!text) {
     throw new Error('QR code plugin cannot be exported without QR text.');
   }
-  const svgBytes = await renderQrCodeSvgBytes(text, config, 0);
+  const imageBytes = await renderQrCodePngBytes(text, config, QR_CODE_STATIC_PDF_MARGIN);
   const sourceId = ctx.block.schema.id || ctx.block.id || 'qr-code';
   const imageFile = createQrCodeStaticImageFilename(sourceId);
-  ctx.attachments.set(`image:${imageFile}`, { mediaType: 'image/svg+xml' }, svgBytes);
+  ctx.attachments.set(`image:${imageFile}`, { mediaType: 'image/png' }, imageBytes);
 
   const block: VisualBlock = {
     id: `${ctx.block.id}-static`,
@@ -333,10 +336,18 @@ function createStaticImageSchema(id: string, imageFile: string, caption: QrCodeC
 
 
 export async function renderQrCodeSvgBytes(text: string, config: QrCodeConfig, margin = 24): Promise<Uint8Array> {
+  return renderQrCodeImageBytes(text, config, 'svg', margin);
+}
+
+export async function renderQrCodePngBytes(text: string, config: QrCodeConfig, margin = 24): Promise<Uint8Array> {
+  return renderQrCodeImageBytes(text, config, 'png', margin);
+}
+
+async function renderQrCodeImageBytes(text: string, config: QrCodeConfig, extension: 'png' | 'svg', margin: number): Promise<Uint8Array> {
   const { qr } = createQrCodeStylingForPayload(text, config, margin);
-  const data = await qr.getRawData('svg');
+  const data = await qr.getRawData(extension);
   if (!data) {
-    throw new Error('QR code renderer did not return SVG data.');
+    throw new Error(`QR code renderer did not return ${extension.toUpperCase()} data.`);
   }
   if (data instanceof Uint8Array) {
     return data;

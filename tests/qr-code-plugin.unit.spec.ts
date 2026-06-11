@@ -13,6 +13,7 @@ import {
   QR_CODE_DEFAULT_CSS,
   QR_CODE_IMAGE_PRESET_OVERRIDES,
   QR_CODE_PLUGIN_DEFAULT_TEXT,
+  QR_CODE_STATIC_PDF_MARGIN,
   readQrCodeConfig,
 } from '../src/plugins/qr-code/qr-code-model';
 import { createDefaultTextCaption } from '../src/caption';
@@ -69,10 +70,10 @@ test('createQrCodeStylingOptions maps plugin config to styled SVG options', () =
   });
 });
 
-test('createQrCodeStylingOptions allows static PDF export to remove internal margin', () => {
-  const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', DEFAULT_QR_CODE_CONFIG, 640, 'H', 0);
+test('createQrCodeStylingOptions allows static PDF export to use a tiny clipping margin', () => {
+  const expectedResult = createQrCodeStylingOptions('https://example.invalid/qr', DEFAULT_QR_CODE_CONFIG, 640, 'H', QR_CODE_STATIC_PDF_MARGIN);
 
-  expect(expectedResult.margin).toBe(0);
+  expect(expectedResult.margin).toBe(8);
 });
 
 test('error correction defaults to highest quality level', () => {
@@ -98,7 +99,17 @@ test('configurePluginBlock seeds QR code plugin config and body text', () => {
   expect(block.schema.css).toBe(QR_CODE_DEFAULT_CSS);
 });
 
-test('QR code size presets use reduced small and medium widths', () => {
+test('QR code size presets include compact QR-specific widths', () => {
+  const xxSmallResult = mergeImagePresetCss(
+    'margin: 0.5rem auto; display: block; width: 40rem; height: auto;',
+    'xx-small',
+    QR_CODE_IMAGE_PRESET_OVERRIDES
+  );
+  const xSmallResult = mergeImagePresetCss(
+    'margin: 0.5rem auto; display: block; width: 40rem; height: auto;',
+    'x-small',
+    QR_CODE_IMAGE_PRESET_OVERRIDES
+  );
   const smallResult = mergeImagePresetCss(
     'margin: 0.5rem auto; display: block; width: 40rem; height: auto;',
     'small',
@@ -110,13 +121,17 @@ test('QR code size presets use reduced small and medium widths', () => {
     QR_CODE_IMAGE_PRESET_OVERRIDES
   );
 
+  expect(xxSmallResult).toContain('width: 7.5rem');
+  expect(xSmallResult).toContain('width: 10rem');
   expect(smallResult).toContain('width: 15rem');
   expect(mediumResult).toContain('width: 22.5rem');
-  expect(getMatchingImagePresetCss(QR_CODE_DEFAULT_CSS, ['small', 'medium'], QR_CODE_IMAGE_PRESET_OVERRIDES)).toBe('small');
+  expect(getMatchingImagePresetCss('width: 7.5rem; height: auto; display: block;', ['xx-small', 'x-small', 'small'], QR_CODE_IMAGE_PRESET_OVERRIDES)).toBe('xx-small');
+  expect(getMatchingImagePresetCss('width: 10rem; height: auto; display: block;', ['xx-small', 'x-small', 'small'], QR_CODE_IMAGE_PRESET_OVERRIDES)).toBe('x-small');
+  expect(getMatchingImagePresetCss(QR_CODE_DEFAULT_CSS, ['xx-small', 'x-small', 'small', 'medium'], QR_CODE_IMAGE_PRESET_OVERRIDES)).toBe('small');
 });
 
 test('createQrCodeStaticImageFilename keeps attachment names stable and safe', () => {
-  expect(createQrCodeStaticImageFilename('contact-card')).toBe('qr-code-contact-card.svg');
-  expect(createQrCodeStaticImageFilename('Contact Card!')).toBe('qr-code-Contact-Card.svg');
-  expect(createQrCodeStaticImageFilename('')).toBe('qr-code-qr-code.svg');
+  expect(createQrCodeStaticImageFilename('contact-card')).toBe('qr-code-contact-card.png');
+  expect(createQrCodeStaticImageFilename('Contact Card!')).toBe('qr-code-Contact-Card.png');
+  expect(createQrCodeStaticImageFilename('')).toBe('qr-code-qr-code.png');
 });

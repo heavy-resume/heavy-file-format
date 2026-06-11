@@ -30,7 +30,14 @@ import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
 import type { JsonObject } from '../../hvy/types';
-import { PDF_DOCUMENT_DEFAULT_PAGE_MARGIN_LENGTHS, formatPdfPointsAsInches, pdfPageLengthToPoints, readPdfPageMetaObject } from '../../pdf-page-settings';
+import {
+  formatPdfMarginUnitValue,
+  formatPdfPointsAsUnit,
+  inferPdfPageMarginUnit,
+  pdfPageLengthToPoints,
+  readPdfPageMetaObject,
+  type PdfPageMarginUnit,
+} from '../../pdf-page-settings';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -161,9 +168,18 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-pdf-margin-unit' && target instanceof HTMLInputElement && target.checked) {
+      const unit = target.value === 'cm' ? 'cm' : 'in';
+      recordHistory('meta:pdf-page-margin-unit');
+      writePdfPageMarginDraft(getPdfPageMarginDraft(unit), unit);
+      getRenderApp()();
+      return;
+    }
+
     if (field.startsWith('meta-pdf-margin-') && target instanceof HTMLInputElement) {
       recordHistory('meta:pdf-page-margins');
-      const margins = getPdfPageMarginDraft();
+      const unit = target.dataset.pdfMarginUnit === 'cm' ? 'cm' : 'in';
+      const margins = getPdfPageMarginDraft(unit);
       const index = field === 'meta-pdf-margin-left'
         ? 0
         : field === 'meta-pdf-margin-top'
@@ -173,11 +189,11 @@ export function bindInputBlock(app: HTMLElement): void {
             : 3;
       const value = Number(target.value);
       if (Number.isFinite(value) && value >= 0) {
-        margins[index] = `${formatPdfMarginInputInches(value)}in`;
+        margins[index] = `${formatPdfMarginUnitValue(value)}${unit}`;
       } else {
         margins[index] = null;
       }
-      writePdfPageMarginDraft(margins);
+      writePdfPageMarginDraft(margins, unit);
       getRefreshReaderPanels()();
       return;
     }
@@ -869,29 +885,25 @@ function renameSectionTemplateReferences(oldName: string, newName: string, stabl
   });
 }
 
-function getPdfPageMarginDraft(): Array<string | null> {
+function getPdfPageMarginDraft(unit: PdfPageMarginUnit = 'in'): Array<string | null> {
   const pdfPage = readPdfPageMetaObject(state.document.meta);
   const rawMargins = Array.isArray(pdfPage.margins) ? pdfPage.margins : [];
   return [0, 1, 2, 3].map((index) => {
     const value = rawMargins[index];
     const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
-    return points === null ? null : `${formatPdfPointsAsInches(points)}in`;
+    return points === null ? null : `${formatPdfPointsAsUnit(points, unit)}${unit}`;
   });
 }
 
-function writePdfPageMarginDraft(margins: Array<string | null>): void {
+function writePdfPageMarginDraft(margins: Array<string | null>, unit: PdfPageMarginUnit = inferPdfPageMarginUnit(readPdfPageMetaObject(state.document.meta).margins)): void {
   const pdfPage = readPdfPageMetaObject(state.document.meta);
   if (margins.every((value) => value === null)) {
     delete pdfPage.margins;
   } else {
-    const fallback = PDF_DOCUMENT_DEFAULT_PAGE_MARGIN_LENGTHS;
+    const fallback = [0, 1, 2, 3].map(() => `${formatPdfPointsAsUnit(54, unit)}${unit}`);
     pdfPage.margins = margins.map((value, index) => value ?? fallback[index]);
   }
   writePdfPageMetaObject(pdfPage);
-}
-
-function formatPdfMarginInputInches(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/g, '').replace(/\.$/, '');
 }
 
 function writePdfPageMetaObject(pdfPage: JsonObject): void {

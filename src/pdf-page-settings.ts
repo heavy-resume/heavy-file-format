@@ -12,6 +12,7 @@ export interface PdfPageSettings {
 }
 
 export type PdfPageMarginLength = number | string;
+export type PdfPageMarginUnit = 'in' | 'cm';
 export type PdfPageMargins = PdfPageMarginLength | [PdfPageMarginLength, PdfPageMarginLength] | [PdfPageMarginLength, PdfPageMarginLength, PdfPageMarginLength, PdfPageMarginLength];
 
 export interface ResolvedPdfPageSettings {
@@ -154,8 +155,27 @@ export function pdfPageLengthToPoints(value: PdfPageMarginLength): number | null
 }
 
 export function formatPdfPointsAsInches(points: number): string {
-  const inches = points / 72;
-  return Number.isInteger(inches) ? String(inches) : inches.toFixed(3).replace(/0+$/g, '').replace(/\.$/, '');
+  return formatPdfPointsAsUnit(points, 'in');
+}
+
+export function formatPdfPointsAsUnit(points: number, unit: PdfPageMarginUnit): string {
+  const value = unit === 'cm' ? points * 2.54 / 72 : points / 72;
+  return formatPdfMarginUnitValue(value);
+}
+
+export function formatPdfMarginUnitValue(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '';
+  }
+  const rounded = Math.round(value / 0.05) * 0.05;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/g, '').replace(/\.$/, '');
+}
+
+export function inferPdfPageMarginUnit(pageMargins: unknown): PdfPageMarginUnit {
+  const margins = Array.isArray(pageMargins) ? pageMargins : [pageMargins];
+  return margins.length > 0 && margins.every((value) => typeof value === 'string' && /cm$/i.test(value.trim()))
+    ? 'cm'
+    : 'in';
 }
 
 function isPositiveFiniteNumber(value: unknown): value is number {

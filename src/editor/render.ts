@@ -60,7 +60,7 @@ import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '.
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
-import { formatPdfPointsAsInches, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings } from '../pdf-page-settings';
+import { formatPdfPointsAsUnit, inferPdfPageMarginUnit, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings, type PdfPageMarginUnit } from '../pdf-page-settings';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -1164,18 +1164,22 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const pdfPageMeta = readPdfPageMetaObject(state.documentMeta);
     const pdfPageSettings = resolvePdfPageDimensions(resolvePdfPageSettings(state.documentMeta));
     const pdfMargins = Array.isArray(pdfPageMeta.margins) ? pdfPageMeta.margins : [];
+    const pdfMarginUnit = inferPdfPageMarginUnit(pdfPageMeta.margins);
     const pdfMarginValue = (index: number) => {
       const value = pdfMargins[index];
       const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
-      return points === null ? '' : formatPdfPointsAsInches(points);
+      return points === null ? '' : formatPdfPointsAsUnit(points, pdfMarginUnit);
     };
     const pdfPageControls = state.documentExtension === '.phvy'
       ? `<div class="meta-pdf-page-grid">
-          <span>PDF Margins (in)</span>
-          ${renderPdfMarginInput('Left', 'meta-pdf-margin-left', pdfPageSettings.pageMargins[0], pdfMarginValue(0))}
-          ${renderPdfMarginInput('Top', 'meta-pdf-margin-top', pdfPageSettings.pageMargins[1], pdfMarginValue(1))}
-          ${renderPdfMarginInput('Right', 'meta-pdf-margin-right', pdfPageSettings.pageMargins[2], pdfMarginValue(2))}
-          ${renderPdfMarginInput('Bottom', 'meta-pdf-margin-bottom', pdfPageSettings.pageMargins[3], pdfMarginValue(3))}
+          <div class="meta-pdf-page-heading">
+            <span>PDF Margins</span>
+            ${renderPdfMarginUnitToggle(pdfMarginUnit)}
+          </div>
+          ${renderPdfMarginInput('Left', 'meta-pdf-margin-left', pdfPageSettings.pageMargins[0], pdfMarginValue(0), pdfMarginUnit)}
+          ${renderPdfMarginInput('Top', 'meta-pdf-margin-top', pdfPageSettings.pageMargins[1], pdfMarginValue(1), pdfMarginUnit)}
+          ${renderPdfMarginInput('Right', 'meta-pdf-margin-right', pdfPageSettings.pageMargins[2], pdfMarginValue(2), pdfMarginUnit)}
+          ${renderPdfMarginInput('Bottom', 'meta-pdf-margin-bottom', pdfPageSettings.pageMargins[3], pdfMarginValue(3), pdfMarginUnit)}
         </div>
         <label class="checkbox-label">
           <span>PDF Debug Bounds</span>
@@ -1435,10 +1439,21 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderPdfMarginInput(label: string, field: string, placeholderPoints: number, value: string): string {
+  function renderPdfMarginUnitToggle(unit: PdfPageMarginUnit): string {
+    return `<div class="meta-pdf-unit-toggle" role="radiogroup" aria-label="PDF margin unit">
+      ${(['in', 'cm'] as PdfPageMarginUnit[]).map((option) => `
+        <label class="${unit === option ? 'is-active' : ''}">
+          <input type="radio" name="meta-pdf-margin-unit" data-field="meta-pdf-margin-unit" value="${option}" ${unit === option ? 'checked' : ''} />
+          <span>${option}</span>
+        </label>
+      `).join('')}
+    </div>`;
+  }
+
+  function renderPdfMarginInput(label: string, field: string, placeholderPoints: number, value: string, unit: PdfPageMarginUnit): string {
     return `<label class="meta-pdf-margin-field">
       <span>${deps.escapeHtml(label)}</span>
-      <input aria-label="PDF ${deps.escapeAttr(label.toLowerCase())} margin in inches" data-field="${deps.escapeAttr(field)}" type="number" min="0" max="4" step="0.05" placeholder="${deps.escapeAttr(formatPdfPointsAsInches(placeholderPoints))}" value="${deps.escapeAttr(value)}" />
+      <input aria-label="PDF ${deps.escapeAttr(label.toLowerCase())} margin in ${unit === 'cm' ? 'centimeters' : 'inches'}" data-field="${deps.escapeAttr(field)}" data-pdf-margin-unit="${unit}" type="number" min="0" max="${unit === 'cm' ? '10' : '4'}" step="0.05" placeholder="${deps.escapeAttr(formatPdfPointsAsUnit(placeholderPoints, unit))}" value="${deps.escapeAttr(value)}" />
     </label>`;
   }
 

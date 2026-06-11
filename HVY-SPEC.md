@@ -1,7 +1,7 @@
 # Heavy File Format (HVY) v0.1 Draft
 
 Status: Draft proposal  
-Last updated: 2026-04-08
+Last updated: 2026-06-11
 
 ## 1. Overview
 
@@ -14,6 +14,7 @@ Design goals:
 - Support template documents that can be filled in via `.thvy` files.
 - Support PDF template documents via `.phvy` files.
 - Support extensibility via plugins.
+- Support whole-document and component-level encryption without changing the reusable component model.
 
 ## 2. File Types
 
@@ -22,6 +23,33 @@ Design goals:
 - `.phvy`: PDF template document. Uses HVY syntax with PDF-safe authoring constraints.
 
 Rule: Any valid `.md` file is valid `.hvy`.
+
+## 2.1 Encryption
+
+HVY supports Fernet encryption for whole documents and individual components. Fernet keys are supplied by the host/client and are identified in HVY metadata by a UUID string. HVY files MUST NOT serialize raw encryption keys.
+
+### Whole-document encryption
+
+A whole-document encrypted HVY file is an encrypted envelope rather than ordinary HVY text. The envelope metadata MUST identify:
+- `hvy_encryption`: `1`
+- `algorithm`: `"fernet"`
+- `keyId`: the UUID for the Fernet key
+
+The envelope payload is one Fernet token whose plaintext is the complete standard HVY byte stream, including the textual body, tail preamble, and binary tail attachment bytes. Clients that decrypt an encrypted document SHOULD cache the decrypted document for the mount/session and MUST NOT re-decrypt the envelope during ordinary rendering, editing, or component encryption operations.
+
+### Encrypted components
+
+Individual components use the native `encrypted` component directive:
+
+```markdown
+<!--hvy:encrypted {"keyId":"00000000-0000-4000-8000-000000000000"}-->
+```
+
+`hvy:encrypted` is a built-in HVY component, not a plugin. Its only serialized directive attribute is `keyId`. The encrypted payload is stored in a tail attachment with id `encrypted:<keyId>`. The attachment payload is a Fernet token whose plaintext is exactly one serialized HVY component fragment.
+
+When a renderer has the key for an encrypted component, it SHOULD decrypt the attachment once and render the decrypted component through the normal reusable HVY component renderer. When the key is missing, viewer and document AI mode MUST NOT render the component. Editor advanced surfaces MAY show an opaque locked placeholder containing the key UUID and attachment id. Editors MUST preserve the encrypted directive and tail bytes when the key is missing.
+
+Authoring tools that encrypt a component MUST generate a fresh UUID and Fernet key unless the host explicitly provides them. The tool MUST return or report both the UUID and key to the host so the host can persist a UUID-to-key mapping. Encrypting a component MUST NOT cause a whole-document encrypted envelope to be re-decrypted.
 
 ## 3. Compatibility Model
 
@@ -295,6 +323,8 @@ Authoring tools emit block-scoped metadata comments directly in section content:
 The directive name after `hvy:` can be a component name. In that form, `component` is implied by the directive name. For compatibility, tools also support the legacy `hvy:block` directive with an explicit `component` field.
 
 Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST render code from fenced Markdown code blocks using triple backticks (or standard Markdown fences) inside text content.
+
+`hvy:encrypted` is the native encrypted-component directive. It uses the same block directive position as any other component, but its decrypted payload is stored in the HVY tail as described in §2.1 and MUST NOT be serialized as nested visible block content.
 
 ### 5.7.1 Inline responsive annotations
 

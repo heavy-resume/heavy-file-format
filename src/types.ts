@@ -5,6 +5,7 @@ import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
 import type { CaptionTextModalState } from './caption';
+import type { HvyEncryptionOptions } from './encryption';
 
 export interface DocumentAttachment {
   id: string;
@@ -18,6 +19,11 @@ export interface VisualDocument {
   sections: VisualSection[];
   attachments: DocumentAttachment[];
   attachmentStore?: AttachmentStore;
+  encryption?: {
+    algorithm: 'fernet';
+    keyId: string;
+    encrypted: boolean;
+  };
 }
 
 export interface ImageAttachmentMaxDimensions {
@@ -330,6 +336,7 @@ export interface AppState {
   persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
+  encryption?: HvyEncryptionOptions | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;

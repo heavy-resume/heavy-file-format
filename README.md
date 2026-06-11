@@ -287,6 +287,45 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, se
 const bytes = await mount.serializeDocumentBytesAsync();
 ```
 
+Encrypted documents and encrypted components use Fernet keys supplied by the
+embedded host. Keys are addressed by UUID; the host should persist its own
+UUID-to-key map and pass it as a keyring when deserializing or mounting:
+
+```js
+const keyring = {
+  '00000000-0000-4000-8000-000000000000': 'fernet-url-safe-base64-key',
+};
+
+const document = await HVY.deserializeDocumentBytesAsync(bytes, '.hvy', {
+  encryption: { keyring },
+});
+
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  encryption: {
+    keyring,
+    onKeyGenerated({ keyId, key }) {
+      keyring[keyId] = key;
+    },
+  },
+});
+
+const generated = await mount.encryptComponentAsync(sectionKey, blockId);
+keyring[generated.keyId] = generated.key;
+const savedBytes = await mount.serializeDocumentBytesAsync();
+```
+
+Whole-document encryption wraps the serialized HVY byte stream in an encrypted
+envelope. Use the async byte APIs for encrypted documents:
+
+```js
+const generated = await mount.encryptDocumentAsync();
+keyring[generated.keyId] = generated.key;
+const encryptedBytes = await mount.serializeDocumentBytesAsync();
+```
+
 Editor, AI, and import mutations can also notify hosts when the mounted
 document changes relative to the last saved baseline:
 

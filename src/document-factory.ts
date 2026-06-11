@@ -112,6 +112,16 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         buttonPositionTargetId: '',
         buttonCss: '',
       } as unknown as BlockSchema;
+    case 'encrypted':
+      return {
+        ...base,
+        kind: 'encrypted',
+        keyId: '',
+        encryptedAttachmentId: '',
+        encryptedBlock: null,
+        encryptedDirty: false,
+        encryptedError: '',
+      } as unknown as BlockSchema;
     case 'plugin':
       return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
     case 'xref-card':
@@ -448,6 +458,18 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.buttonOutputCharLimit = parsePositiveNumber(candidate.buttonOutputCharLimit, schema.buttonOutputCharLimit);
     schema.buttonPositionTargetId = typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : schema.buttonPositionTargetId;
     schema.buttonCss = typeof candidate.buttonCss === 'string' ? candidate.buttonCss : schema.buttonCss;
+  }
+  if (schema.kind === 'encrypted') {
+    schema.keyId = typeof candidate.keyId === 'string' ? candidate.keyId : schema.keyId;
+    schema.encryptedAttachmentId =
+      typeof candidate.encryptedAttachmentId === 'string' && candidate.encryptedAttachmentId.trim().length > 0
+        ? candidate.encryptedAttachmentId
+        : schema.keyId.trim().length > 0
+        ? `encrypted:${schema.keyId.trim()}`
+        : '';
+    schema.encryptedBlock = null;
+    schema.encryptedDirty = false;
+    schema.encryptedError = '';
   }
   if (schema.kind === 'xref-card') {
     schema.xrefTarget = typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : schema.xrefTarget;

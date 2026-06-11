@@ -16,7 +16,7 @@ import {
   type StateRuntime,
 } from './state';
 import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
+import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -110,6 +110,8 @@ import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
+import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
+import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -131,6 +133,7 @@ export interface HvyMountOptions {
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
+  encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -139,6 +142,9 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
+  encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
+  decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
   getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
@@ -170,7 +176,8 @@ function createEmbedState(
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
-  attachmentHost?: HvyAttachmentHostAdapter | null
+  attachmentHost?: HvyAttachmentHostAdapter | null,
+  encryption?: HvyEncryptionOptions | null
 ): AppState {
   return {
     document,
@@ -183,6 +190,7 @@ function createEmbedState(
     persistDocumentState: mode !== 'viewer',
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -800,7 +808,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
-    options.attachmentStore ?? null
+    options.attachmentStore ?? null,
+    options.encryption ?? null
   );
   const runtimeState = applyEmbeddedSessionState(
     initialState,
@@ -836,6 +845,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
+  void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
@@ -858,10 +868,42 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return runWithStateRuntime(runtime, () => state.document);
     },
     serializeDocumentBytes() {
-      return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+      return runWithStateRuntime(runtime, () => {
+        if (state.document.encryption?.encrypted === true) {
+          throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+        }
+        return serializeDocumentBytes(state.document);
+      });
     },
     serializeDocumentBytesAsync() {
-      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null));
+      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
+    },
+    encryptDocumentAsync() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const generated = generateEncryptionKey();
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        rememberEncryptionKey(state.encryption, generated);
+        state.document.encryption = { algorithm: 'fernet', keyId: generated.keyId, encrypted: true };
+        return generated;
+      });
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+        return { keyId: result.keyId, key: result.key };
+      });
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await decryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+      });
     },
     getPdfBlob(pdfOptions) {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -961,6 +1003,8 @@ export {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
@@ -971,6 +1015,7 @@ export {
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
+export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -1024,6 +1069,8 @@ export type {
 
 window.HVY = {
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,

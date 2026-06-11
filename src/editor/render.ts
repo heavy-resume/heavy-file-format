@@ -507,6 +507,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         if (item.block.id === targetBlockId || isDescendantActive(item.block, targetBlockId)) return true;
       }
     }
+    if (block.schema.encryptedBlock) {
+      return block.schema.encryptedBlock.id === targetBlockId || isDescendantActive(block.schema.encryptedBlock, targetBlockId);
+    }
     return false;
   }
 
@@ -521,6 +524,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isAiSectionEditBlock = isAiHostedSectionBlock(sectionKey, block);
     const isAiHostDescendant = isAiHostedBlockDescendant(sectionKey, block, rootSections ?? []);
     const isActive = isActiveFrame || isActiveDescendant || isAiSectionEditBlock || isAiHostDescendant;
+
+    if (block.schema.kind === 'encrypted' && block.schema.encryptedBlock && !isActive) {
+      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
+    }
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -546,6 +553,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
+    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition
+      ? block.schema.kind === 'encrypted'
+        ? `<button type="button" class="ghost" data-action="decrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Decrypt</button>`
+        : `<button type="button" class="ghost" data-action="encrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
+      : '';
     const placementActions = canRemove
       ? isPlacementSource
         ? `<button type="button" class="secondary" data-action="cancel-component-placement" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Cancel place</button>`
@@ -592,7 +604,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${state.mobileAdjustmentMode ? '' : isActiveFrame ? placementActions : ''}
+            ${state.mobileAdjustmentMode ? '' : isActiveFrame ? `${encryptionAction}${placementActions}` : ''}
           </div>
         </div>
 
@@ -670,6 +682,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
+    if (block.schema.kind === 'encrypted' && !block.schema.encryptedBlock && !state.showAdvancedEditor) {
+      return '';
+    }
     return `
       <div class="editor-block-passive hvy-link-observer-surface" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
@@ -790,6 +805,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     rootSections: VisualSection[]
   ): string {
     const base = deps.resolveBaseComponent(block.schema.component);
+
+    if (base === 'encrypted') {
+      if (block.schema.encryptedBlock) {
+        return renderPassiveEditorBlock(sectionKey, block.schema.encryptedBlock, rootSections);
+      }
+      if (!state.showAdvancedEditor) {
+        return '';
+      }
+      return renderEncryptedComponentEditor(sectionKey, block);
+    }
 
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
@@ -1583,6 +1608,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const component = deps.resolveBaseComponent(block.schema.component);
     const helpers = deps.getComponentRenderHelpers();
 
+    if (component === 'encrypted') {
+      return renderEncryptedComponentEditor(sectionKey, block);
+    }
     if (component === 'plugin') {
       return renderPluginEditor(sectionKey, block, helpers);
     }
@@ -1622,6 +1650,22 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderCarouselEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
+  }
+
+  function renderEncryptedComponentEditor(sectionKey: string, block: VisualBlock): string {
+    if (block.schema.encryptedBlock) {
+      return `<div class="encrypted-component-editor">
+        ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
+      </div>`;
+    }
+    const keyId = block.schema.keyId.trim() || '(missing)';
+    const attachmentId = block.schema.encryptedAttachmentId.trim() || `encrypted:${keyId}`;
+    return `<div class="plugin-placeholder encrypted-component-placeholder">
+      <strong>Encrypted component</strong>
+      <div>Key UUID: ${deps.escapeHtml(keyId)}</div>
+      <div>Attachment: ${deps.escapeHtml(attachmentId)}</div>
+      ${block.schema.encryptedError ? `<div>${deps.escapeHtml(block.schema.encryptedError)}</div>` : ''}
+    </div>`;
   }
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {

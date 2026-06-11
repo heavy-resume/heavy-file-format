@@ -335,7 +335,8 @@ export function findBlockContainerInList(
       findBlockContainerInList(block.schema.componentListBlocks ?? [], blockId, block.id, seen) ??
       findBlockContainerInList((block.schema.gridItems ?? []).map((item) => item.block), blockId, block.id, seen) ??
       findBlockContainerInList(block.schema.expandableStubBlocks?.children ?? [], blockId, block.id, seen) ??
-      findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id, seen);
+      findBlockContainerInList(block.schema.expandableContentBlocks?.children ?? [], blockId, block.id, seen) ??
+      findBlockContainerInList(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : [], blockId, block.id, seen);
     if (nested) {
       return nested;
     }

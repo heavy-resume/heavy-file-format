@@ -16,7 +16,7 @@ import {
   type StateRuntime,
 } from './state';
 import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
+import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
@@ -83,6 +83,8 @@ import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } f
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
+import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -103,6 +105,7 @@ export interface HvyMountOptions {
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
+  encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -111,6 +114,9 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
+  encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
+  decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
   getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
@@ -185,7 +191,8 @@ function createEmbedState(
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
-  attachmentHost?: HvyAttachmentHostAdapter | null
+  attachmentHost?: HvyAttachmentHostAdapter | null,
+  encryption?: HvyEncryptionOptions | null
 ): AppState {
   return {
     document,
@@ -198,6 +205,7 @@ function createEmbedState(
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -595,10 +603,22 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
       return mounted?.getDocument() ?? options.document;
     },
     serializeDocumentBytes() {
+      if (!mounted && options.document.encryption?.encrypted === true) {
+        throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+      }
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
     serializeDocumentBytesAsync() {
-      return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null);
+      return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null, options.encryption ?? null);
+    },
+    encryptDocumentAsync() {
+      return ready.then((mount) => mount.encryptDocumentAsync());
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return ready.then((mount) => mount.encryptComponentAsync(sectionKey, blockId));
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return ready.then((mount) => mount.decryptComponentAsync(sectionKey, blockId));
     },
     getPdfBlob(pdfOptions) {
       return ready.then((mount) => mount.getPdfBlob(pdfOptions));
@@ -713,7 +733,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
     options.storageKey ?? null,
-    options.attachmentStore ?? null
+    options.attachmentStore ?? null,
+    options.encryption ?? null
   ));
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
@@ -736,6 +757,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
+  void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
@@ -755,10 +777,42 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return runWithStateRuntime(runtime, () => state.document);
     },
     serializeDocumentBytes() {
-      return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+      return runWithStateRuntime(runtime, () => {
+        if (state.document.encryption?.encrypted === true) {
+          throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+        }
+        return serializeDocumentBytes(state.document);
+      });
     },
     serializeDocumentBytesAsync() {
-      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null));
+      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
+    },
+    encryptDocumentAsync() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const generated = generateEncryptionKey();
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        rememberEncryptionKey(state.encryption ?? null, generated);
+        state.document.encryption = { algorithm: 'fernet', keyId: generated.keyId, encrypted: true };
+        return generated;
+      });
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+        return { keyId: result.keyId, key: result.key };
+      });
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await decryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+      });
     },
     getPdfBlob(pdfOptions) {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -826,6 +880,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,
+          encryption: state.encryption,
           storageKey: state.sessionStorageKey,
           onDocumentChange: options.onDocumentChange,
         });
@@ -841,6 +896,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,
+          encryption: state.encryption,
           storageKey: state.sessionStorageKey,
           onDocumentChange: options.onDocumentChange,
         });
@@ -863,6 +919,8 @@ export {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
@@ -873,6 +931,7 @@ export {
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
+export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -928,6 +987,8 @@ declare global {
   interface Window {
     HVY?: {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
+      deserializeDocumentBytesAsync: typeof deserializeDocumentBytesAsync;
+      encryptDocumentBytes: typeof encryptDocumentBytes;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       serializeDocumentBytesAsync: typeof serializeDocumentBytesAsync;
@@ -950,6 +1011,8 @@ declare global {
 
 window.HVY = {
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,

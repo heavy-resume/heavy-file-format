@@ -80,6 +80,12 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = n
     if (nestedExpandableContent) {
       return nestedExpandableContent;
     }
+    if (block.schema.encryptedBlock) {
+      const nestedEncrypted = findBlockInList([block.schema.encryptedBlock], blockId, seen);
+      if (nestedEncrypted) {
+        return nestedEncrypted;
+      }
+    }
     for (const item of block.schema.gridItems ?? []) {
       const nestedGridBlock = findBlockInList([item.block], blockId, seen);
       if (nestedGridBlock) {
@@ -101,6 +107,7 @@ function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] |
       ...((block.schema.gridItems ?? []).map((item) => item.block)),
       ...(block.schema.expandableStubBlocks?.children ?? []),
       ...(block.schema.expandableContentBlocks?.children ?? []),
+      ...(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : []),
     ];
     const nestedPath = findBlockPathInList(nestedBlocks, blockId);
     if (nestedPath) {
@@ -995,6 +1002,7 @@ export function blockContainsBlockId(block: VisualBlock, blockId: string): boole
       || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
       || findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId)
       || findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId)
+      || findBlockInList(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : [], blockId)
   );
 }
 

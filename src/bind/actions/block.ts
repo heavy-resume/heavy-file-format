@@ -25,6 +25,7 @@ import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirm
 import { routeNextUndoToDocument } from '../../edit-command-routing';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
+import { decryptComponentInDocument, encryptComponentInDocument } from '../../encrypted-components';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
 
@@ -370,6 +371,40 @@ const openComponentMeta: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const encryptComponent: ActionHandler = ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  void (async () => {
+    try {
+      recordHistory(`component:${blockId}:encrypt`);
+      if (!state.encryption) {
+        state.encryption = { keyring: {} };
+      }
+      const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+      showTransientNotice(`Encrypted component with key ${result.keyId}.`);
+      getRenderApp()();
+    } catch (error) {
+      showTransientNotice(error instanceof Error ? error.message : 'Component could not be encrypted.');
+    }
+  })();
+};
+
+const decryptComponent: ActionHandler = ({ sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  void (async () => {
+    try {
+      recordHistory(`component:${blockId}:decrypt`);
+      await decryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+      getRenderApp()();
+    } catch (error) {
+      showTransientNotice(error instanceof Error ? error.message : 'Component could not be decrypted.');
+    }
+  })();
+};
+
 const copyComponent: ActionHandler = ({ sectionKey, blockId }) => {
   if (!blockId) {
     return;
@@ -644,6 +679,8 @@ export const blockActions: Record<string, ActionHandler> = {
   'move-block-down': moveBlock(1),
   'focus-modal': focusModal,
   'open-component-meta': openComponentMeta,
+  'encrypt-component': encryptComponent,
+  'decrypt-component': decryptComponent,
   'copy-component': copyComponent,
   'copy-expandable-stub-pane': copyExpandablePane('stub'),
   'copy-expandable-content-pane': copyExpandablePane('content'),

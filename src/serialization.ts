@@ -25,6 +25,8 @@ import {
   normalizeReusableSectionDefinitions,
 } from './document-factory';
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
+import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
+import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -55,6 +57,25 @@ export function deserializeDocument(text: string, extension: VisualDocument['ext
 
 export function deserializeDocumentBytes(bytes: Uint8Array, extension: VisualDocument['extension']): VisualDocument {
   return deserializeDocumentBytesWithDiagnostics(bytes, extension).document;
+}
+
+export async function deserializeDocumentBytesAsync(
+  bytes: Uint8Array,
+  extension: VisualDocument['extension'],
+  options?: { encryption?: HvyEncryptionOptions | null }
+): Promise<VisualDocument> {
+  if (extension === '.md') {
+    return deserializeDocumentBytes(bytes, extension);
+  }
+  const decrypted = isEncryptedDocumentBytes(bytes)
+    ? await decryptDocumentEnvelopeBytes(bytes, options?.encryption ?? null)
+    : { bytes, keyId: '' };
+  const document = deserializeDocumentBytes(decrypted.bytes, extension);
+  if (decrypted.keyId) {
+    markDocumentEncrypted(document, decrypted.keyId);
+  }
+  await decryptEncryptedComponents(document, options?.encryption ?? null);
+  return document;
 }
 
 export function deserializeDocumentWithDiagnostics(
@@ -933,8 +954,10 @@ export function serializeDocumentBytes(document: VisualDocument): Uint8Array {
 
 export async function serializeDocumentBytesAsync(
   document: VisualDocument,
-  serializer?: HvyDocumentSerializerAdapter | null
+  serializer?: HvyDocumentSerializerAdapter | null,
+  options?: { encryption?: HvyEncryptionOptions | null }
 ): Promise<Uint8Array> {
+  await prepareEncryptedComponentsForSerialization(document, options?.encryption ?? null);
   if (!serializer) {
     return serializeDocumentBytes(document);
   }
@@ -1450,6 +1473,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'buttonOutputCharLimit', schema.buttonOutputCharLimit, defaults.buttonOutputCharLimit);
     addIfChanged(payload, 'buttonPositionTargetId', schema.buttonPositionTargetId, defaults.buttonPositionTargetId);
     addIfChanged(payload, 'buttonCss', schema.buttonCss, defaults.buttonCss);
+  }
+  if (component === 'encrypted') {
+    addIfChanged(payload, 'keyId', schema.keyId, defaults.keyId);
   }
 
   return payload;

@@ -482,6 +482,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
       return renderMaybeCollapsedBlockShell(renderPluginReader(section, block, helpers));
     }
+    if (base === 'encrypted') {
+      if (block.schema.encryptedBlock) {
+        return renderReaderBlock(section, block.schema.encryptedBlock, options);
+      }
+      return '';
+    }
     if (base === 'button') {
       return renderMaybeCollapsedBlockShell(renderButtonReader(section, block, helpers));
     }

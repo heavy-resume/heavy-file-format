@@ -347,9 +347,9 @@ mount.undo();
 mount.redo();
 ```
 
-Embedded editor/AI instances do not persist reconnect/reload session state
-unless a stable `storageKey` is provided. Pass one per instance to persist
-without sharing a `sessionStorage` bucket:
+Embedded editor/AI instances do not persist reconnect/reload session state by
+default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`
+per instance to persist without sharing a `sessionStorage` bucket:
 
 ```js
 HVY.mountHvy({
@@ -357,8 +357,12 @@ HVY.mountHvy({
   document,
   mode: 'editor',
   storageKey: 'customer-profile-editor',
+  persistSessionState: true,
 });
 ```
+
+Without `persistSessionState`, `storageKey` is only a name available to hosts and
+does not cause HVY to write document state during reload lifecycle events.
 
 Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
 plugins:

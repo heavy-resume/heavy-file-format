@@ -147,6 +147,31 @@ test('undo and redo restore grouped raw editor text snapshots', () => {
   expect(state.rawEditorText).toBe('#! Third');
 });
 
+test('history stores later snapshots as deltas and restores them for undo and redo', () => {
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createHistoryTestState());
+
+  recordHistory('initial-raw');
+  state.rawEditorText = `${'A'.repeat(2000)} before`;
+  recordHistory('edited-raw');
+  state.rawEditorText = `${'A'.repeat(2000)} after`;
+
+  expect(state.history[0]).not.toContain('__hvyHistoryDelta');
+  expect(state.history[1]).toContain('__hvyHistoryDelta');
+
+  undoState();
+  expect(state.rawEditorText).toBe(`${'A'.repeat(2000)} before`);
+
+  redoState();
+  expect(state.rawEditorText).toBe(`${'A'.repeat(2000)} after`);
+});
+
 test('undo and redo restore document theme snapshots', () => {
   initCallbacks({
     renderApp: () => {},
@@ -289,9 +314,9 @@ test('undo and redo restore database attachment checkpoints without snapshotting
   ];
 
   recordDatabaseAttachmentHistory();
-  expect(state.history[state.history.length - 1]).toContain('"databaseAttachment"');
-  expect(state.history[state.history.length - 1]).toContain('"bytes": [\n      1,\n      2\n    ]');
-  expect(state.history[state.history.length - 1]).not.toContain('image:photo.png');
+  expect(state.history.join('\n')).toContain('databaseAttachment');
+  expect(state.history.join('\n')).toContain('\\"bytes\\": [\\n      1,\\n      2\\n    ]');
+  expect(state.history.join('\n')).not.toContain('image:photo.png');
   setAttachment(
     state.document,
     DB_ATTACHMENT_ID,

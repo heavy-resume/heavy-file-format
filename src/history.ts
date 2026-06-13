@@ -20,6 +20,13 @@ interface SerializedHistoryAttachment {
   bytes: number[];
 }
 
+interface HistoryDeltaEntry {
+  __hvyHistoryDelta: 1;
+  prefixLength: number;
+  deleteLength: number;
+  insert: string;
+}
+
 let databaseAttachmentChangedSinceHistory = false;
 
 type ActiveEditorRestoreState = Pick<AppState,
@@ -62,12 +69,9 @@ export function commitHistorySnapshot(): void {
   }
   const snapshotId = incrementHistorySnapshotCount();
   const snap = debugMeasure('snapshotState:commit', { snapshotId, historyLength: state.history.length }, () => snapshotState());
-  const last = state.history[state.history.length - 1];
+  const last = getLastHistorySnapshot();
   if (last !== snap) {
-    state.history.push(snap);
-    if (state.history.length > 200) {
-      state.history.shift();
-    }
+    pushHistorySnapshot(snap);
     state.future = [];
     saveSessionState(state);
   }
@@ -125,11 +129,8 @@ export function recordHistory(group?: string): void {
   stepStartedAt = performance.now();
   const snap = snapshotState();
   snapshotMs = performance.now() - stepStartedAt;
-  if (state.history[state.history.length - 1] !== snap) {
-    state.history.push(snap);
-    if (state.history.length > 200) {
-      state.history.shift();
-    }
+  if (getLastHistorySnapshot() !== snap) {
+    pushHistorySnapshot(snap);
     state.future = [];
     pushed = true;
     saveSessionState(state);
@@ -153,11 +154,8 @@ export function recordDatabaseAttachmentHistory(): void {
   }
   ensureHistoryInitialized();
   const snap = snapshotState({ includeDatabaseAttachment: true });
-  if (state.history[state.history.length - 1] !== snap) {
-    state.history.push(snap);
-    if (state.history.length > 200) {
-      state.history.shift();
-    }
+  if (getLastHistorySnapshot() !== snap) {
+    pushHistorySnapshot(snap);
     state.future = [];
     saveSessionState(state);
   }
@@ -175,20 +173,21 @@ export function undoState(): void {
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
   const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
-  const last = state.history[state.history.length - 1];
+  const last = getLastHistorySnapshot();
   if (last !== current) {
-    state.history.push(current);
+    pushHistorySnapshot(current, { clearFuture: false });
   }
   databaseAttachmentChangedSinceHistory = false;
   if (state.history.length <= 1) {
     return;
   }
   state.isRestoring = true;
-  const currentSnapshot = state.history.pop();
+  const currentSnapshot = getLastHistorySnapshot();
+  state.history.pop();
   if (currentSnapshot) {
     state.future.push(currentSnapshot);
   }
-  const prev = state.history[state.history.length - 1];
+  const prev = getLastHistorySnapshot();
   if (prev) {
     restoreFromSnapshot(prev);
     restoreActiveEditorState(activeEditor);
@@ -210,7 +209,7 @@ export function redoState(): void {
     return;
   }
   state.isRestoring = true;
-  state.history.push(next);
+  pushHistorySnapshot(next, { clearFuture: false });
   restoreFromSnapshot(next);
   restoreActiveEditorState(activeEditor);
   state.lastHistoryGroup = null;
@@ -219,6 +218,97 @@ export function redoState(): void {
   getRenderApp()();
   restoreModalScroll(modalScroll);
   notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'), { authoritative: true });
+}
+
+function pushHistorySnapshot(snapshot: string, options: { clearFuture?: boolean } = {}): void {
+  const previous = getLastHistorySnapshot();
+  state.history.push(encodeHistoryEntry(previous, snapshot));
+  compactHistoryLimit();
+  if (options.clearFuture ?? true) {
+    state.future = [];
+  }
+}
+
+function compactHistoryLimit(): void {
+  if (state.history.length <= 200) {
+    return;
+  }
+  const firstKeptIndex = state.history.length - 200;
+  const firstKeptSnapshot = getHistorySnapshotAt(firstKeptIndex);
+  state.history = [firstKeptSnapshot, ...state.history.slice(firstKeptIndex + 1)];
+}
+
+function getLastHistorySnapshot(): string | null {
+  return state.history.length > 0 ? getHistorySnapshotAt(state.history.length - 1) : null;
+}
+
+function getHistorySnapshotAt(index: number): string {
+  let snapshot = '';
+  for (let entryIndex = 0; entryIndex <= index; entryIndex += 1) {
+    snapshot = applyHistoryEntry(snapshot, state.history[entryIndex] ?? '');
+  }
+  return snapshot;
+}
+
+function encodeHistoryEntry(previous: string | null, snapshot: string): string {
+  if (previous === null) {
+    return snapshot;
+  }
+  const entry = createHistoryDeltaEntry(previous, snapshot);
+  const encoded = JSON.stringify(entry);
+  return encoded.length < snapshot.length ? encoded : snapshot;
+}
+
+function createHistoryDeltaEntry(previous: string, snapshot: string): HistoryDeltaEntry {
+  let prefixLength = 0;
+  const maxPrefixLength = Math.min(previous.length, snapshot.length);
+  while (prefixLength < maxPrefixLength && previous[prefixLength] === snapshot[prefixLength]) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  const maxSuffixLength = maxPrefixLength - prefixLength;
+  while (
+    suffixLength < maxSuffixLength
+    && previous[previous.length - 1 - suffixLength] === snapshot[snapshot.length - 1 - suffixLength]
+  ) {
+    suffixLength += 1;
+  }
+
+  return {
+    __hvyHistoryDelta: 1,
+    prefixLength,
+    deleteLength: previous.length - prefixLength - suffixLength,
+    insert: snapshot.slice(prefixLength, snapshot.length - suffixLength),
+  };
+}
+
+function applyHistoryEntry(previous: string, entry: string): string {
+  const delta = parseHistoryDeltaEntry(entry);
+  if (!delta) {
+    return entry;
+  }
+  return previous.slice(0, delta.prefixLength)
+    + delta.insert
+    + previous.slice(delta.prefixLength + delta.deleteLength);
+}
+
+function parseHistoryDeltaEntry(entry: string): HistoryDeltaEntry | null {
+  try {
+    const parsed = JSON.parse(entry) as Partial<HistoryDeltaEntry> | null;
+    if (
+      !parsed
+      || parsed.__hvyHistoryDelta !== 1
+      || typeof parsed.prefixLength !== 'number'
+      || typeof parsed.deleteLength !== 'number'
+      || typeof parsed.insert !== 'string'
+    ) {
+      return null;
+    }
+    return parsed as HistoryDeltaEntry;
+  } catch {
+    return null;
+  }
 }
 
 function captureActiveEditorRestoreState(): ActiveEditorRestoreState | null {

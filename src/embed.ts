@@ -100,6 +100,7 @@ export interface HvyMountOptions {
   controls?: boolean;
   paletteId?: string | null;
   storageKey?: string | null;
+  persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
   serializer?: HvyDocumentSerializerAdapter | null;
@@ -732,7 +733,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.document,
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
-    options.storageKey ?? null,
+    options.persistSessionState === true ? options.storageKey : null,
     options.attachmentStore ?? null,
     options.encryption ?? null
   ));
@@ -882,6 +883,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           serializer: options.serializer ?? null,
           encryption: state.encryption,
           storageKey: state.sessionStorageKey,
+          persistSessionState: options.persistSessionState,
           onDocumentChange: options.onDocumentChange,
         });
         fullMount.openThemeEditor(themeOptions);
@@ -898,6 +900,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           serializer: options.serializer ?? null,
           encryption: state.encryption,
           storageKey: state.sessionStorageKey,
+          persistSessionState: options.persistSessionState,
           onDocumentChange: options.onDocumentChange,
         });
         fullMount.mountThemeEditor(root, themeOptions);

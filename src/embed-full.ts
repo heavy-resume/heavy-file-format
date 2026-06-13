@@ -128,6 +128,7 @@ export interface HvyMountOptions {
   controls?: boolean;
   paletteId?: string | null;
   storageKey?: string | null;
+  persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
   serializer?: HvyDocumentSerializerAdapter | null;
@@ -173,6 +174,7 @@ const embedUiBindGenerations = new WeakMap<HTMLElement, number>();
 function createEmbedState(
   document: VisualDocument,
   mode: HvyEmbedMode,
+  persistSessionState: boolean,
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
@@ -187,7 +189,7 @@ function createEmbedState(
     editorMode: 'basic',
     responsivePreview: 'full',
     sessionStorageKey,
-    persistDocumentState: mode !== 'viewer',
+    persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
     encryption: encryption ?? null,
@@ -801,10 +803,12 @@ function ensureEmbedRuntime(
 
 export function mountHvy(options: HvyMountOptions): HvyMount {
   hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
-  const sessionStorageKey = options.storageKey ?? null;
+  const persistSessionState = options.persistSessionState === true;
+  const sessionStorageKey = persistSessionState ? options.storageKey : null;
   const initialState = createEmbedState(
     options.document,
     options.mode ?? 'viewer',
+    persistSessionState,
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
@@ -813,7 +817,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   );
   const runtimeState = applyEmbeddedSessionState(
     initialState,
-    options.storageKey ? loadSessionState(options.storageKey) : null
+    persistSessionState ? loadSessionState(options.storageKey) : null
   );
   if (options.chatSettings) {
     runtimeState.chat.settings = {
@@ -824,7 +828,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
-  const sessionPersistence = options.storageKey ? bindSessionPersistence(runtime) : null;
+  const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);

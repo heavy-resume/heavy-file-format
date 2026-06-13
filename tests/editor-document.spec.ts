@@ -1561,12 +1561,14 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('First Initial')), '.hvy'),
       mode: 'editor',
       storageKey: 'first-editor',
+      persistSessionState: true,
     });
     const secondMount = mountHvy({
       root: secondRoot,
       document: deserializeDocumentBytes(encoder.encode(makeSource('Second Initial')), '.hvy'),
       mode: 'editor',
       storageKey: 'second-editor',
+      persistSessionState: true,
     });
     firstMount.getDocument().sections[0]!.title = 'First Saved';
     secondMount.getDocument().sections[0]!.title = 'Second Saved';
@@ -1578,12 +1580,14 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('First Fresh')), '.hvy'),
       mode: 'editor',
       storageKey: 'first-editor',
+      persistSessionState: true,
     });
     const secondResumeMount = mountHvy({
       root: secondRoot,
       document: deserializeDocumentBytes(encoder.encode(makeSource('Second Fresh')), '.hvy'),
       mode: 'editor',
       storageKey: 'second-editor',
+      persistSessionState: true,
     });
     return {
       firstTitle: firstResumeMount.getDocument().sections[0]?.title,
@@ -1599,6 +1603,53 @@ hvy_version: 0.1
   expect(result.hasFirstStorage).toBe(true);
   expect(result.hasSecondStorage).toBe(true);
   expect(result.hasSharedStorage).toBe(false);
+});
+
+test('embedded editor storage key alone does not persist session state', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'explicit-opt-in',
+    });
+    mount.getDocument().sections[0]!.title = 'Saved Without Opt In';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    mount.destroy();
+    const remount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Editor')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'explicit-opt-in',
+    });
+    return {
+      title: remount.getDocument().sections[0]?.title,
+      hasStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1:explicit-opt-in')),
+    };
+  });
+
+  expect(result.title).toBe('Fresh Editor');
+  expect(result.hasStorage).toBe(false);
 });
 
 test('embedded editor mounts do not persist session state without a storage key', async ({ page }) => {
@@ -1639,6 +1690,53 @@ hvy_version: 0.1
   expect(result.storageKeys).toEqual([]);
 });
 
+test('embedded editor can explicitly persist session state without a storage key', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
+      mode: 'editor',
+      persistSessionState: true,
+    });
+    mount.getDocument().sections[0]!.title = 'Default Bucket Saved';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    mount.destroy();
+    const remount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Editor')), '.hvy'),
+      mode: 'editor',
+      persistSessionState: true,
+    });
+    return {
+      title: remount.getDocument().sections[0]?.title,
+      hasDefaultStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1')),
+    };
+  });
+
+  expect(result.title).toBe('Default Bucket Saved');
+  expect(result.hasDefaultStorage).toBe(true);
+});
+
 test('embedded editor storage key does not override explicit viewer mode', async ({ page }) => {
   await page.goto('/');
 
@@ -1666,6 +1764,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
       mode: 'editor',
       storageKey: 'mode-isolation',
+      persistSessionState: true,
     });
     editorMount.getDocument().sections[0]!.title = 'Saved Document';
     window.dispatchEvent(new PageTransitionEvent('pagehide'));
@@ -1675,6 +1774,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Viewer')), '.hvy'),
       mode: 'viewer',
       storageKey: 'mode-isolation',
+      persistSessionState: true,
     });
     return {
       hasViewer: Boolean(root.querySelector('#readerDocument')),
@@ -1718,6 +1818,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'editor',
       storageKey: 'rich-remount',
+      persistSessionState: true,
     });
   });
 
@@ -1746,6 +1847,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(testWindow.testHvySource), '.hvy'),
       mode: 'editor',
       storageKey: 'rich-remount',
+      persistSessionState: true,
     });
     return remount.getDocument().sections[0]?.blocks[0]?.text;
   });

@@ -125,7 +125,7 @@ scripts:
       submitInputCharLimit: 2500,
       submitOutputCharLimit: 9000,
       submitLabel: 'Generate flashcards',
-      scriptLibraries: ['random', 'browser'],
+      scriptLibraries: ['random', 're', 'browser'],
       scriptStepBudget: 1234,
     });
 
@@ -136,7 +136,7 @@ scripts:
     expect(parsed.spec.submitPrompt).toBe('Generate cards.');
     expect(parsed.spec.submitInputCharLimit).toBe(2500);
     expect(parsed.spec.submitOutputCharLimit).toBe(9000);
-    expect(parsed.spec.scriptLibraries).toEqual(['random']);
+    expect(parsed.spec.scriptLibraries).toEqual(['random', 're']);
     expect(parsed.spec.scriptStepBudget).toBe(1234);
     expect(serializeFormConfig(parsed.spec)).toMatchObject({
       submitAction: 'ai-generate',
@@ -145,7 +145,7 @@ scripts:
       submitPrompt: 'Generate cards.',
       submitInputCharLimit: 2500,
       submitOutputCharLimit: 9000,
-      scriptLibraries: ['random'],
+      scriptLibraries: ['random', 're'],
       scriptStepBudget: 1234,
     });
   });

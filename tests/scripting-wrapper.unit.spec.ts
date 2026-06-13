@@ -161,10 +161,12 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
 });
 
 test('buildPythonProgram preloads checked libraries', () => {
-  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random']);
+  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
+  expect(program).toContain('if root_name == "re":');
+  expect(program).toContain('return __HvyReModule__()');
 });
 
 test('stripPythonImports replaces plain import statements with pass', () => {
@@ -194,6 +196,56 @@ random.shuffle(items)
     `
 items = [1, 2, 3]
 random.shuffle(items)
+`
+  );
+});
+
+test('stripPythonImports allows checked regex library imports', () => {
+  expect(
+    stripPythonImports(
+      `import re
+match = re.search("a+", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `
+match = re.search("a+", "caaat")
+`
+  );
+});
+
+test('stripPythonImports allows checked regex from-import statements', () => {
+  expect(
+    stripPythonImports(
+      `from re import search
+match = search("a+", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `search = re.search
+match = search("a+", "caaat")
+`
+  );
+});
+
+test('stripPythonImports rewrites checked import aliases', () => {
+  expect(
+    stripPythonImports(
+      `import re as regex
+from re import search as find, sub
+match = find("a+", "caaat")
+clean = sub("a+", "a", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `regex = re
+find = re.search
+sub = re.sub
+match = find("a+", "caaat")
+clean = sub("a+", "a", "caaat")
 `
   );
 });

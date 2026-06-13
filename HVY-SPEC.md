@@ -1328,7 +1328,7 @@ Plugin-specific rules:
   map.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
-  client-defined; this reference client supports `"random"`. Import statements
+  client-defined; this reference client supports `"random"` and `"re"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
 - `pluginConfig.scriptStepBudget` MAY set a positive integer step budget for
   each form script run. Clients SHOULD default to 100000 steps.

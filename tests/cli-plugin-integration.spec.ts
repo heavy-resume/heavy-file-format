@@ -258,6 +258,52 @@ doc.header.set("regex_result", f"{match.group(1)}|{','.join(found)}|{clean}|{dir
   await waitForDocumentMeta(page, 'regex_result', '42|1,2|a-b-c|bbb|0-8');
 });
 
+test('scripting checked regex library does not expose Brython re dependency modules', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"regex-sandbox"}-->
+#! Regex Sandbox
+
+<!--hvy:plugin {"id":"regex-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["re"]}}-->
+import re
+
+results = []
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":leaked")
+    except BaseException:
+        results.append(label + ":blocked")
+
+record("re_python_re", lambda: getattr(re, "python_re"))
+record("re_enum", lambda: getattr(re, "enum"))
+try:
+    from re import python_re
+    results.append("from_python_re:leaked")
+except BaseException:
+    results.append("from_python_re:blocked")
+try:
+    from re import enum
+    results.append("from_enum:leaked")
+except BaseException:
+    results.append("from_enum:blocked")
+record("builtin_re_python_re", lambda: getattr(__builtins__["__import__"]("re"), "python_re"))
+record("builtin_python_re", lambda: __builtins__["__import__"]("python_re"))
+
+doc.header.set("regex_dependency_modules", ",".join(results))
+`);
+  const expectedResult = 're_python_re:blocked,re_enum:blocked,from_python_re:blocked,from_enum:blocked,builtin_re_python_re:blocked,builtin_python_re:blocked';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'regex_dependency_modules', expectedResult);
+});
+
 test('visibleScript uses the shared scripting sandbox', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

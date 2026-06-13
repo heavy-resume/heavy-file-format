@@ -1,6 +1,7 @@
 import postcss, { type Rule } from 'postcss';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import { createBrythonMinimalVfsPlugin, createHvyBuiltInPluginsPlugin } from './vite.config';
+import { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
+import { createHvyBuiltInPluginsPlugin } from './vite.config';
 
 const EMBED_SCOPE = ':where(.hvy-document)';
 

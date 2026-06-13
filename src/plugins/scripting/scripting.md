@@ -39,6 +39,12 @@ The runtime intentionally avoids Brython AST mutation. The current flow is:
 This was chosen because Brython AST rewriting proved brittle for some compare
 expressions during `compile(...)`.
 
+The loader uses `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
+virtual filesystem containing only `browser` and `sys`. Keep checked libraries
+such as `random` and `re` in `wrapper.ts` shims instead of bundling Brython's
+real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
+imports can expose a larger module object graph than the sandbox intends.
+
 Brython also emits a noisy console line in some failure paths:
 
 - `method from func w-o $infos ...`

@@ -213,6 +213,16 @@ a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at anothe
 config file. Config files may also use `include` and `exclude` arrays with the
 same plugin ids.
 
+If you build the embedded library from source or copy the Vite setup into another
+host build, include `createBrythonMinimalVfsPlugin()` from
+`heavy-file-format-ref-impl/brython-minimal-vfs-plugin` (or from
+`src/plugins/scripting/brython-minimal-vfs-plugin.ts` inside this repo). The
+scripting runtime imports `brython/brython.min.js?raw` and
+`virtual:hvy-brython-minimal-vfs`; the virtual VFS intentionally includes only
+`browser` and `sys`. Checked libraries such as `random` and `re` are provided by
+the HVY scripting shim, so do not add Brython's real `re`, `python_re`, `enum`,
+or wider stdlib dependency graph to make checked `import re` work.
+
 Embedded hosts enable plugins per mount:
 
 ```js

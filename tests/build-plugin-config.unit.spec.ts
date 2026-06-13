@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest';
+import { build, type Rollup } from 'vite';
 
+import { createBrythonMinimalVfsPlugin } from '../src/plugins/scripting/brython-minimal-vfs-plugin';
 import { createHvyBuiltInPluginsModuleSource, createLazyHvyBuiltInPluginsModuleSource, HVY_BUILT_IN_PLUGIN_IDS, resolveBuiltInPluginIds } from '../vite.config';
 
 test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
@@ -81,3 +83,60 @@ test('createLazyHvyBuiltInPluginsModuleSource exposes static PDF rendering only 
   expect(expectedResult).toContain('...(definition.pdfStatic ? { pdf: {');
   expect(expectedResult).toContain('plugin.pdf.renderStatic(ctx)');
 });
+
+test('createBrythonMinimalVfsPlugin does not bundle regex dependency modules', async () => {
+  const plugin = createBrythonMinimalVfsPlugin();
+  const resolvedId = await (plugin.resolveId as (id: string) => string | null)('virtual:hvy-brython-minimal-vfs');
+  const moduleSource = await (plugin.load as (id: string) => string | null)(resolvedId ?? '');
+  const exportedSource = JSON.parse(String(moduleSource).replace(/^export default /, '').replace(/;$/, '')) as string;
+  const vfsSource = exportedSource.match(/__BRYTHON__\.update_VFS\((.*)\);/)?.[1];
+  const expectedResult = Object.keys(JSON.parse(vfsSource ?? '{}')).sort();
+
+  expect(expectedResult).toEqual(['$timestamp', 'browser', 'sys']);
+  expect(exportedSource).not.toContain('"re"');
+  expect(exportedSource).not.toContain('"python_re"');
+  expect(exportedSource).not.toContain('"enum"');
+});
+
+test('production build of Brython loader includes the minimal VFS module', async () => {
+  const result = await build({
+    configFile: false,
+    logLevel: 'silent',
+    plugins: [
+      createBrythonMinimalVfsPlugin(),
+      {
+        name: 'hvy-brython-loader-build-test-entry',
+        resolveId(id) {
+          return id === 'virtual:hvy-brython-loader-build-test-entry' ? id : null;
+        },
+        load(id) {
+          if (id !== 'virtual:hvy-brython-loader-build-test-entry') {
+            return null;
+          }
+          return 'import { loadBrython } from "/src/plugins/scripting/brython-loader.ts"; window.__hvyTestLoadBrython = loadBrython;';
+        },
+      },
+    ],
+    build: {
+      write: false,
+      minify: false,
+      rollupOptions: {
+        input: 'virtual:hvy-brython-loader-build-test-entry',
+      },
+    },
+  });
+  const outputs = (Array.isArray(result) ? result : [result]).flatMap((item) => (
+    'output' in item ? item.output : []
+  )) as Rollup.OutputBundle[string][];
+  const chunkCodes = outputs
+    .filter((item): item is Rollup.OutputChunk => item.type === 'chunk')
+    .map((item) => item.code);
+  const expectedResult = chunkCodes.find((code) => code.includes('__BRYTHON__.update_VFS({"$timestamp"')) ?? '';
+
+  expect(chunkCodes.some((code) => code.includes('var __BRYTHON__=globalThis.__BRYTHON__'))).toBe(true);
+  expect(expectedResult).toContain('__BRYTHON__.update_VFS({"$timestamp"');
+  expect(expectedResult).toContain('"browser"');
+  expect(expectedResult).toContain('"sys"');
+  expect(expectedResult).not.toContain('"python_re"');
+  expect(expectedResult).not.toContain('"enum"');
+}, 15_000);

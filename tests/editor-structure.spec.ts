@@ -2626,7 +2626,7 @@ hvy_version: 0.1
 #! Header
 
  <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
-  # <!-- value -->
+  # _<!-- value -->_
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
@@ -2640,6 +2640,7 @@ hvy_version: 0.1
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#readerDocument')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#readerDocument h1')).not.toContainText('__');
   await expect(page.locator('#readerDocument .text-fill-in-box')).toHaveCount(0);
 });
 

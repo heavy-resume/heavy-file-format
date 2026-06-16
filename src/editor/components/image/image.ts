@@ -18,6 +18,7 @@ export { mergeImagePresetCss } from './image-preset-css';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
+const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
 const IMAGE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
@@ -82,7 +83,8 @@ export function renderImageElement(options: {
   lazy?: boolean;
   lazyCarousel?: boolean;
 }): string | null {
-  const url = options.lazyCarousel ? null : getImageBlobUrl(options.filename);
+  const shouldDeferSrc = (options.lazy ?? true) || options.lazyCarousel;
+  const url = shouldDeferSrc ? null : getImageBlobUrl(options.filename);
   if (!url && !hasImageAttachmentSource(options.filename)) {
     return null;
   }
@@ -91,7 +93,8 @@ export function renderImageElement(options: {
   const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
   const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
   const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
-  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${styleAttr} />`;
+  const imageLazyAttr = shouldDeferSrc && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
+  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
@@ -99,6 +102,66 @@ export function clearImageBlobUrlCache(): void {
     URL.revokeObjectURL(entry.url);
   }
   blobUrlCache.clear();
+}
+
+export function bindLazyImageHydration(root: ParentNode): void {
+  lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
+  lazyImageHydrationObservers.delete(root);
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img[data-hvy-lazy-image="true"]'))
+    .filter((image) => !image.getAttribute('src'));
+  if (images.length === 0) {
+    return;
+  }
+  if (typeof IntersectionObserver === 'undefined') {
+    images.forEach(hydrateLazyImage);
+    return;
+  }
+  const imagesByScroller = new Map<Element | null, HTMLImageElement[]>();
+  images.forEach((image) => {
+    const scroller = image.closest('.reader-document, .editor-tree');
+    imagesByScroller.set(scroller, [...(imagesByScroller.get(scroller) ?? []), image]);
+  });
+  const observers: IntersectionObserver[] = [];
+  imagesByScroller.forEach((scrollerImages, scroller) => {
+    const imagesByTarget = new Map<Element, HTMLImageElement[]>();
+    scrollerImages.forEach((image) => {
+      const target = image.closest('.reader-section, .editor-section-card') ?? image;
+      imagesByTarget.set(target, [...(imagesByTarget.get(target) ?? []), image]);
+    });
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        observer.unobserve(entry.target);
+        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateLazyImage);
+      });
+    }, {
+      root: scroller,
+      rootMargin: '200px 0px',
+      threshold: 0,
+    });
+    imagesByTarget.forEach((_targetImages, target) => observer.observe(target));
+    observers.push(observer);
+  });
+  lazyImageHydrationObservers.set(root, observers);
+}
+
+function hydrateLazyImage(image: HTMLImageElement): void {
+  if (image.getAttribute('src')) {
+    return;
+  }
+  const filename = image.dataset.imageFilename ?? '';
+  const url = getImageBlobUrl(filename);
+  if (url) {
+    image.src = url;
+    image.dataset.hvyLazyImage = 'loaded';
+    return;
+  }
+  const missing = image.ownerDocument.createElement('div');
+  missing.className = 'image-empty muted';
+  missing.textContent = `Missing attachment: ${filename}`;
+  image.replaceWith(missing);
 }
 
 export function renderImageAttachmentPicker(options: {

@@ -83,6 +83,7 @@ import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } f
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindLazyImageHydration } from './editor/components/image/image';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
@@ -441,9 +442,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
+  bindLazyImageHydration(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
 }
@@ -469,9 +472,11 @@ function refreshReaderPanels(): void {
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
+  bindLazyImageHydration(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
   bindCarouselInteractions(currentRoot);
 }

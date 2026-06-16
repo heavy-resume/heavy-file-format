@@ -149,7 +149,7 @@ describe('image editor render controls', () => {
     expect(expectedResult).not.toContain('hvy-carousel-reader-frame-chrome');
   });
 
-  test('expected result: hosted image component uses static url without materializing bytes', () => {
+  test('expected result: hosted image component defers static url until lazy hydration', () => {
     const block: VisualBlock = createEmptyBlock('image');
     block.schema.imageFile = 'static-photo.png';
     block.schema.imageAlt = 'Static Photo';
@@ -178,8 +178,10 @@ describe('image editor render controls', () => {
 
     const expectedResult = renderImageReader(createEmptySection(1), block, helpers);
 
-    expect(expectedResult).toContain('src="./image/static-photo.png"');
+    expect(expectedResult).toContain('data-hvy-lazy-image="true"');
+    expect(expectedResult).toContain('data-image-filename="static-photo.png"');
     expect(expectedResult).toContain('loading="lazy"');
+    expect(expectedResult).not.toContain('src="./image/static-photo.png"');
     expect(ensureDocumentAttachmentStore(document.document).isMaterialized('image:static-photo.png')).toBe(false);
   });
 

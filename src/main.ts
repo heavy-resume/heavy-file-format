@@ -45,6 +45,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
+import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import { renderNewDocumentModal } from './new-document-modal';
 
@@ -823,8 +824,10 @@ function renderApp(): void {
       reconcilePluginMounts(scope, { prune: false });
       void runButtonVisibilityScripts(scope);
       initializeCarouselReaders(scope);
+      bindLazyImageHydration(scope);
     },
   });
+  bindLazyImageHydration(app);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -1105,8 +1108,10 @@ function refreshReaderPanels(): void {
         reconcilePluginMounts(scope, { prune: false });
         void runButtonVisibilityScripts(scope);
         initializeCarouselReaders(scope);
+        bindLazyImageHydration(scope);
       },
     });
+    bindLazyImageHydration(app);
   }
 
   const modalStartedAt = performance.now();

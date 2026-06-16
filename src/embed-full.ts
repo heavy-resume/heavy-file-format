@@ -89,6 +89,7 @@ import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { bindLazyImageHydration } from './editor/components/image/image';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -549,9 +550,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
+  bindLazyImageHydration(root);
   centerPendingEditorSection(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
@@ -692,9 +695,11 @@ function refreshReaderPanels(): void {
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
+  bindLazyImageHydration(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
 }
 

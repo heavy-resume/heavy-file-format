@@ -216,6 +216,7 @@ class ImportTemplateDefinitionError extends Error {
 
 const IMPORT_TEMPLATE_FLAVOR_FIELD = '_flavor';
 const IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD = '_sectionFlavor';
+export const DEFAULT_IMPORT_MAX_CONTEXT_CHARS = 60_000;
 const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
   'You are performing an HVY import workflow.',
   'Use the supplied import context only for this request.',
@@ -1083,30 +1084,15 @@ async function preparePreplannedImportSteps(
     }
   }
   options.onProgress?.({ phase: 'thinking', message: 'Checking for missing import sections.' });
-  const missingResponse = await requestTracedImportCompletion(traceRecorder, 'additionalSections', 'thinking', {
-    settings: getImportStageSettings(llm, 'additionalSections'),
-    client: llm.client,
-    messages: [
-      {
-        id: 'ai-import-missing-sections-task',
-        role: 'user',
-        content: buildImportTaskMessage(
-          buildImportMissingSectionsPrompt(options.sourceName, options.instructions),
-          buildImportMissingSectionsResponseInstructions()
-        ),
-      },
-    ],
-    context: buildImportMissingSectionsContext(document, options.sourceName, options.sourceText, steps, extracted, options),
-    responseInstructions: buildImportMissingSectionsResponseInstructions(),
-    systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
-    mode: getImportRequestMode(options),
-    maxContextChars: options.maxContextChars,
-    debugLabel: 'ai-import-missing-sections',
-    beforeRequest: beforeLlmCall?.('thinking'),
-    signal: options.signal,
-  });
-  throwIfAborted(options.signal);
-  const missingSteps = parseImportMissingSectionsResponse(missingResponse, document, steps, extracted, options);
+  const missingSteps = await requestMissingImportSections(
+    document,
+    options,
+    steps,
+    extracted,
+    llm,
+    beforeLlmCall,
+    traceRecorder
+  );
   const candidates = [...extracted, ...missingSteps];
   if (candidates.length <= 1) {
     return candidates;
@@ -1270,9 +1256,79 @@ function buildImportMissingSectionsContext(
   extractedSteps: ImportPlanStep[],
   options: ImportSectionCandidateOptions = {}
 ): string {
-  const seenTargets = new Set(allPreplanSteps.map((step) => formatImportPlanTarget(step.target)));
-  const remaining = getImportTemplateSectionCandidates(document, options)
-    .filter((candidate) => candidate.sectionDefinition?.repeatable === true || !seenTargets.has(formatImportPlanTarget(candidateToImportPlanTarget(candidate))));
+  return [
+    buildImportMissingSectionsBaseContext(document, sourceName, sourceText, extractedSteps),
+    '',
+    buildImportMissingSectionsStartingPointsFrame(getImportMissingSectionStartingPointLines(document, allPreplanSteps, options)),
+  ].join('\n');
+}
+
+async function requestMissingImportSections(
+  document: VisualDocument,
+  options: Pick<BuildImportPlanOptions, 'sourceName' | 'sourceText' | 'instructions' | 'signal' | 'requestMode' | 'maxContextChars' | 'newSectionsOnly'>,
+  allPreplanSteps: ImportPlanStep[],
+  extractedSteps: ImportPlanStep[],
+  llm: HvyImportLlmOptions,
+  beforeLlmCall: ReturnType<typeof createImportLlmStepper>,
+  traceRecorder?: HvyImportTraceRecorder
+): Promise<ImportPlanStep[]> {
+  const settings = getImportStageSettings(llm, 'additionalSections');
+  const maxContextChars = resolveImportMaxContextChars(options.maxContextChars, settings);
+  const contexts = buildImportMissingSectionsContexts(document, options.sourceName, options.sourceText, allPreplanSteps, extractedSteps, maxContextChars, options);
+  const missingSteps: ImportPlanStep[] = [];
+  for (const [index, context] of contexts.entries()) {
+    const response = await requestTracedImportCompletion(traceRecorder, 'additionalSections', 'thinking', {
+      settings,
+      client: llm.client,
+      messages: [
+        {
+          id: contexts.length === 1 ? 'ai-import-missing-sections-task' : `ai-import-missing-sections-${index + 1}-task`,
+          role: 'user',
+          content: buildImportTaskMessage(
+            buildImportMissingSectionsPrompt(options.sourceName, options.instructions),
+            buildImportMissingSectionsResponseInstructions()
+          ),
+        },
+      ],
+      context,
+      responseInstructions: buildImportMissingSectionsResponseInstructions(),
+      systemInstructions: IMPORT_STABLE_SYSTEM_INSTRUCTIONS,
+      mode: getImportRequestMode(options),
+      maxContextChars: options.maxContextChars,
+      debugLabel: contexts.length === 1 ? 'ai-import-missing-sections' : `ai-import-missing-sections:${index + 1}`,
+      beforeRequest: beforeLlmCall?.('thinking'),
+      signal: options.signal,
+    });
+    throwIfAborted(options.signal);
+    missingSteps.push(...parseImportMissingSectionsResponse(response, document, allPreplanSteps, [...extractedSteps, ...missingSteps], options));
+  }
+  return missingSteps;
+}
+
+function buildImportMissingSectionsContexts(
+  document: VisualDocument,
+  sourceName: string | undefined,
+  sourceText: string,
+  allPreplanSteps: ImportPlanStep[],
+  extractedSteps: ImportPlanStep[],
+  maxContextChars: number,
+  options: ImportSectionCandidateOptions = {}
+): string[] {
+  const fullContext = buildImportMissingSectionsContext(document, sourceName, sourceText, allPreplanSteps, extractedSteps, options);
+  if (fullContext.length <= maxContextChars) {
+    return [fullContext];
+  }
+  const baseContext = buildImportMissingSectionsBaseContext(document, sourceName, sourceText, extractedSteps);
+  const startingPointLines = getImportMissingSectionStartingPointLines(document, allPreplanSteps, options);
+  return chunkImportMissingSectionsStartingPoints(baseContext, startingPointLines, maxContextChars);
+}
+
+function buildImportMissingSectionsBaseContext(
+  document: VisualDocument,
+  sourceName: string | undefined,
+  sourceText: string,
+  extractedSteps: ImportPlanStep[]
+): string {
   return [
     buildImportGuidanceFrame(document),
     '',
@@ -1288,17 +1344,96 @@ function buildImportMissingSectionsContext(
       ? extractedSteps.map((step) => `- ${getImportPlanStepTargetId(step)}: ${step.extractedInformation}`).join('\n')
       : '- No preplanned sections returned source-backed information.',
     '=== END ALREADY SEEN SECTIONS ===',
-    '',
+  ].join('\n');
+}
+
+function getImportMissingSectionStartingPointLines(
+  document: VisualDocument,
+  allPreplanSteps: ImportPlanStep[],
+  options: ImportSectionCandidateOptions = {}
+): string[] {
+  const seenTargets = new Set(allPreplanSteps.map((step) => formatImportPlanTarget(step.target)));
+  const remaining = getImportTemplateSectionCandidates(document, options)
+    .filter((candidate) => candidate.sectionDefinition?.repeatable === true || !seenTargets.has(formatImportPlanTarget(candidateToImportPlanTarget(candidate))));
+  return remaining.map((candidate) => {
+    const target = candidateToImportPlanTarget(candidate);
+    return `- ${formatImportPlanTarget(target)}`;
+  });
+}
+
+function buildImportMissingSectionsStartingPointsFrame(startingPointLines: string[]): string {
+  return [
     '=== BEGIN REMAINING STARTING POINTS ===',
-    remaining.length > 0
-      ? remaining.map((candidate) => {
-        const target = candidateToImportPlanTarget(candidate);
-        return `- ${formatImportPlanTarget(target)}`;
-      }).join('\n')
+    startingPointLines.length > 0
+      ? startingPointLines.join('\n')
       : '- No unused body sections or reusable section templates remain.',
     '- blank section: use only for a distinct source-backed missing topic that would not duplicate any already seen or remaining section.',
     '=== END REMAINING STARTING POINTS ===',
   ].join('\n');
+}
+
+function resolveImportMaxContextChars(optionMaxContextChars: number | undefined, settings: ChatSettings): number {
+  return optionMaxContextChars ?? settings.maxContextChars ?? DEFAULT_IMPORT_MAX_CONTEXT_CHARS;
+}
+
+function chunkImportMissingSectionsStartingPoints(baseContext: string, startingPointLines: string[], maxContextChars: number): string[] {
+  if (!Number.isFinite(maxContextChars) || maxContextChars <= 0) {
+    throw new Error(`Invalid LLM context cap for ai-import-missing-sections: ${maxContextChars}.`);
+  }
+  const emptyContext = [
+    baseContext,
+    '',
+    buildImportMissingSectionsStartingPointsFrame([]),
+  ].join('\n');
+  if (emptyContext.length > maxContextChars) {
+    throw new Error(
+      `LLM context for ai-import-missing-sections has ${baseContext.length} characters before remaining starting points; maximum is ${maxContextChars}. Reduce source or already-seen context before making this request.`
+    );
+  }
+  if (startingPointLines.length === 0) {
+    return [emptyContext];
+  }
+  const contexts: string[] = [];
+  let currentLines: string[] = [];
+  for (const line of startingPointLines) {
+    const nextLines = [...currentLines, line];
+    const nextContext = [
+      baseContext,
+      '',
+      buildImportMissingSectionsStartingPointsFrame(nextLines),
+    ].join('\n');
+    if (nextContext.length <= maxContextChars) {
+      currentLines = nextLines;
+      continue;
+    }
+    if (currentLines.length > 0) {
+      contexts.push([
+        baseContext,
+        '',
+        buildImportMissingSectionsStartingPointsFrame(currentLines),
+      ].join('\n'));
+      currentLines = [line];
+      const singleLineContext = [
+        baseContext,
+        '',
+        buildImportMissingSectionsStartingPointsFrame(currentLines),
+      ].join('\n');
+      if (singleLineContext.length <= maxContextChars) {
+        continue;
+      }
+    }
+    throw new Error(
+      `LLM context for ai-import-missing-sections cannot fit remaining starting point "${line}" within the ${maxContextChars} character maximum.`
+    );
+  }
+  if (currentLines.length > 0) {
+    contexts.push([
+      baseContext,
+      '',
+      buildImportMissingSectionsStartingPointsFrame(currentLines),
+    ].join('\n'));
+  }
+  return contexts;
 }
 
 function buildImportMissingSectionsResponseInstructions(): string {
@@ -4220,10 +4355,18 @@ async function requestTracedImportCompletion(
   phase: HvyLlmCallPhase,
   params: ProxyCompletionParams
 ): Promise<string> {
+  const importParams = withDefaultImportMaxContextChars(params);
   if (!traceRecorder) {
-    return requestProxyCompletion(params);
+    return requestProxyCompletion(importParams);
   }
-  return traceRecorder.recordCompletion(stage, phase, params);
+  return traceRecorder.recordCompletion(stage, phase, importParams);
+}
+
+function withDefaultImportMaxContextChars(params: ProxyCompletionParams): ProxyCompletionParams {
+  return {
+    ...params,
+    maxContextChars: resolveImportMaxContextChars(params.maxContextChars, params.settings),
+  };
 }
 
 function copyImportTraceRequest(params: ProxyCompletionParams): HvyImportTraceRequest {

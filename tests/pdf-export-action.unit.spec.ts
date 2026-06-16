@@ -18,6 +18,7 @@ vi.mock('../src/pdf-export/export', () => ({
 }));
 
 vi.mock('../src/ai-document-import', () => ({
+  DEFAULT_IMPORT_MAX_CONTEXT_CHARS: 60_000,
   buildImportPlanForDocument: vi.fn(async (_document, options) => {
     options.onTraceEvent?.({
       type: 'call-start',

@@ -775,6 +775,7 @@ hvy_version: 0.1
     responseInstructions: requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions,
     systemInstructions: requestProxyCompletionMock.mock.calls[0]?.[0]?.systemInstructions,
     mode: 'document-edit',
+    maxContextChars: 60_000,
   });
   expect(onTraceEvent.mock.calls.map((call) => call[0].type)).toEqual(['call-start', 'call-complete']);
   expect(onTraceEvent.mock.calls[0]?.[0]?.call.response).toBeUndefined();
@@ -1098,7 +1099,131 @@ section_defs:
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('"import_selection"');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('has_data_include');
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.responseInstructions).toContain('An omitted key, an empty string value');
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.maxContextChars).toBe(60_000);
   expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).not.toContain('ai-import-plan');
+});
+
+test('buildImportPlanForDocument chunks missing section starting points under the configured limit', async () => {
+  const expectedResultMaxContextChars = 1200;
+  requestProxyCompletionMock.mockImplementation(async (request: { debugLabel?: string; context?: string }) => {
+    if (request.debugLabel === 'ai-import-preplan-data:1') {
+      return '{"sections":{"summary":{"import_selection":"has_data_include","information":"Summary facts."}}}';
+    }
+    if (request.debugLabel?.startsWith('ai-import-missing-sections')) {
+      return request.context?.includes('- definition section: Volunteer Work')
+        ? '{"sections":{"Volunteer Work":{"target":{"kind":"definition","name":"Volunteer Work"},"information":"Volunteer Work led community migrations."}}}'
+        : '{"sections":{}}';
+    }
+    if (request.debugLabel === 'ai-import-section-dedupe') {
+      return '{"keep":["summary","volunteer-work"]}';
+    }
+    throw new Error(`Unexpected request ${request.debugLabel ?? '(missing debug label)'}`);
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+importPreplan:
+  - summary
+section_defs:
+  - name: Community Awards
+    key: community-awards
+    template:
+      id: community-awards
+      title: Community Awards
+      blocks: []
+  - name: Conference Talks
+    key: conference-talks
+    template:
+      id: conference-talks
+      title: Conference Talks
+      blocks: []
+  - name: Volunteer Work
+    key: volunteer-work
+    template:
+      id: volunteer-work
+      title: Volunteer Work
+      blocks: []
+  - name: Publications
+    key: publications
+    template:
+      id: publications
+      title: Publications
+      blocks: []
+  - name: Certifications
+    key: certifications
+    template:
+      id: certifications
+      title: Certifications
+      blocks: []
+  - name: Patents
+    key: patents
+    template:
+      id: patents
+      title: Patents
+      blocks: []
+  - name: Open Source Leadership
+    key: open-source-leadership
+    template:
+      id: open-source-leadership
+      title: Open Source Leadership
+      blocks: []
+  - name: Mentoring Programs
+    key: mentoring-programs
+    template:
+      id: mentoring-programs
+      title: Mentoring Programs
+      blocks: []
+  - name: Internal Workshops
+    key: internal-workshops
+    template:
+      id: internal-workshops
+      title: Internal Workshops
+      blocks: []
+  - name: Customer Enablement
+    key: customer-enablement
+    template:
+      id: customer-enablement
+      title: Customer Enablement
+      blocks: []
+  - name: Operational Reviews
+    key: operational-reviews
+    template:
+      id: operational-reviews
+      title: Operational Reviews
+      blocks: []
+  - name: Research Notes
+    key: research-notes
+    template:
+      id: research-notes
+      title: Research Notes
+      blocks: []
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const result = await buildImportPlanForDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Summary facts are available. Volunteer Work led community migrations.',
+    maxContextChars: expectedResultMaxContextChars,
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  expect(result.status).toBe('ready');
+  expect(result.steps?.map((step) => step.sectionTitle)).toEqual(['Summary', 'Volunteer Work']);
+  const missingSectionCalls = requestProxyCompletionMock.mock.calls
+    .map((call) => call[0])
+    .filter((request) => request?.debugLabel?.startsWith('ai-import-missing-sections'));
+  expect(missingSectionCalls.length).toBeGreaterThan(1);
+  expect(missingSectionCalls.every((request) => (request?.context?.length ?? Infinity) <= expectedResultMaxContextChars)).toBe(true);
+  expect(missingSectionCalls.every((request) => request?.context?.includes('=== BEGIN ALREADY SEEN SECTIONS ==='))).toBe(true);
+  expect(missingSectionCalls.every((request) => request?.context?.includes('Volunteer Work led community migrations.'))).toBe(true);
+  expect(missingSectionCalls.every((request) => !request?.context?.includes('SOURCE DOCUMENT CHUNK'))).toBe(true);
+  expect(missingSectionCalls.some((request) => request?.context?.includes('- definition section: Volunteer Work'))).toBe(true);
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toContain('ai-import-section-dedupe');
 });
 
 test('buildImportPlanForDocument dedupes repeated component-list scaffold items in importPreplan prompts', async () => {

@@ -2403,6 +2403,15 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'insertParagraph') {
+    if (!insertParagraphAtEditableSelection(editable)) {
+      return false;
+    }
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromPasteAsQuotation') {
     const dataTransfer = event.dataTransfer;
     if (!dataTransfer) {
@@ -2649,6 +2658,51 @@ function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[]
 function insertPlainTextAtEditableSelection(editable: HTMLElement, text: string): void {
   const html = escapeHtml(text).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
   insertHtmlAtEditableSelection(editable, html || '<br>');
+}
+
+function insertParagraphAtEditableSelection(editable: HTMLElement): boolean {
+  if (isSelectionInsideEditableList(editable) || isSelectionInsideCodeBlock(editable)) {
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    const paragraph = document.createElement('p');
+    paragraph.appendChild(document.createElement('br'));
+    editable.appendChild(paragraph);
+    placeCaretAtStart(paragraph);
+    return true;
+  }
+
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable || !/^(P|DIV|BLOCKQUOTE|H[1-6])$/.test(block.tagName)) {
+    return false;
+  }
+
+  if (!range.collapsed) {
+    range.deleteContents();
+  }
+
+  const nextBlock = block instanceof HTMLQuoteElement
+    ? document.createElement('blockquote')
+    : /^H[1-6]$/.test(block.tagName)
+      ? document.createElement('p')
+      : document.createElement('p');
+  const tailRange = document.createRange();
+  tailRange.selectNodeContents(block);
+  tailRange.setStart(range.startContainer, range.startOffset);
+  nextBlock.appendChild(tailRange.extractContents());
+  ensureEditableParagraphContent(block);
+  ensureEditableParagraphContent(nextBlock);
+  block.parentNode?.insertBefore(nextBlock, block.nextSibling);
+  placeCaretAtStart(nextBlock);
+  return true;
+}
+
+function ensureEditableParagraphContent(block: HTMLElement): void {
+  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
+    return;
+  }
+  block.replaceChildren(document.createElement('br'));
 }
 
 function placeCaretAfterInsertedFragment(range: Range, fragment: DocumentFragment): void {

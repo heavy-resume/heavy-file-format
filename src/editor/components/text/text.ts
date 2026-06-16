@@ -75,9 +75,12 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"
       >Convert to Fill-in</button>`;
+  const richToolbar = mobileAdjustment
+    ? ''
+    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
   return `
-    ${mobileAdjustment ? '' : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })}
   <div class="text-editor-shell">
+    ${richToolbar ? `<div class="text-editor-toolbar-slot">${richToolbar}</div>` : ''}
     ${fillInSelectionButton}
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"

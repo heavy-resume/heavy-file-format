@@ -549,3 +549,4 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
 - The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
 - The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.
+- Plugin editor UIs can reuse the host text editor with `ctx.textEditor.mount({ value, onChange })`. The returned element uses the same rich text toolbar, Markdown conversion, paste handling, and caret-preserving input behavior as normal HVY text components; plugins remain responsible for persisting changes through `ctx.setText`, `ctx.setConfig`, or their own `onChange` callback.

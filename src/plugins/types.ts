@@ -1,5 +1,5 @@
 import type { JsonObject } from '../hvy/types';
-import type { VisualBlock } from '../editor/types';
+import type { Align, VisualBlock } from '../editor/types';
 import type { TextCaptionPayload } from '../editor/types';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
@@ -35,6 +35,24 @@ export interface HvyPluginEditorContext {
   detailLevel: number;
 }
 
+export interface HvyPluginTextEditorMountOptions {
+  value: string;
+  align?: Align;
+  placeholder?: string;
+  includeAlign?: boolean;
+  includeFillIn?: boolean;
+  onChange: (markdown: string) => void;
+}
+
+export interface HvyPluginTextEditorInstance {
+  element: HTMLElement;
+  editable: HTMLElement;
+  getValue(): string;
+  setValue(markdown: string): void;
+  focus(): void;
+  unmount(): void;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
   editor: HvyPluginEditorContext;
@@ -61,6 +79,9 @@ export interface HvyPluginContext {
     createDefaultTextCaption(text?: string): TextCaptionPayload;
     openTextCaptionModal(options: { title?: string; configKey?: string; value?: TextCaptionPayload | null; onChange?: (next: TextCaptionPayload | null) => void }): void;
     renderTextCaption(value: TextCaptionPayload | null): HTMLElement | null;
+  };
+  textEditor: {
+    mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;
   };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.

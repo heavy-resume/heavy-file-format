@@ -13,6 +13,32 @@
   position: relative;
   min-width: 0;
   max-width: 100%;
+  container: text-editor-shell / inline-size;
+}
+
+.text-editor-toolbar-slot {
+  position: sticky;
+  top: 0.35rem;
+  bottom: calc(5lh + 0.75rem);
+  z-index: 20;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--hvy-surface) 94%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--hvy-shadow) 38%, transparent);
+}
+
+.text-editor-toolbar-slot > .rich-toolbar {
+  margin-bottom: 0;
+  padding: 0.35rem;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  z-index: 1;
+  box-shadow: none;
 }
 
 .reader-block-text:has(> .text-copy-button) {

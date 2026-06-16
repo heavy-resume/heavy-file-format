@@ -6,6 +6,7 @@ import { serializeDocument } from '../serialization';
 import { getAttachment, setAttachment, removeAttachment } from '../attachments';
 import { getHostPlugin } from './registry';
 import { createDefaultTextCaption, renderTextCaptionElement } from '../caption';
+import { mountPluginTextEditor } from './text-editor';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
@@ -174,6 +175,9 @@ function buildContext(
         getRenderApp()();
       }),
       renderTextCaption: (value) => runWithStateRuntime(runtime, () => renderTextCaptionElement(value, getCachedComponentRenderHelpers())),
+    },
+    textEditor: {
+      mount: (options) => runWithStateRuntime(runtime, () => mountPluginTextEditor(options)),
     },
     requestRerender,
   };

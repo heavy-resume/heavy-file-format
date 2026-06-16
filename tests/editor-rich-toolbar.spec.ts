@@ -159,6 +159,112 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(codeBlockButton).not.toHaveClass(/secondary/);
 });
 
+test('double Enter keeps paragraph break inside one text component', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'First paragraph');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Alpha paragraph');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Beta paragraph');
+
+  await expect(editor).toBeFocused();
+  await expect(editor.locator('p').filter({ hasText: 'Alpha paragraph' })).toHaveCount(1);
+  await expect(editor.locator('p').filter({ hasText: 'Beta paragraph' })).toHaveCount(1);
+
+  const expectedResult = await page.evaluate(async () => {
+    const [{ state }, { serializeDocument }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/serialization.ts'),
+    ]);
+    const block = state.document.sections[0]?.blocks[0];
+    return {
+      blockCount: state.document.sections[0]?.blocks.length ?? 0,
+      text: block?.text ?? '',
+      serialized: serializeDocument(state.document),
+    };
+  });
+
+  expect(expectedResult.blockCount).toBe(1);
+  expect(expectedResult.text).toBe('Alpha paragraph\n\nBeta paragraph');
+  expect(expectedResult.serialized).toContain('Alpha paragraph');
+  expect(expectedResult.serialized).toContain('Beta paragraph');
+});
+
+test('plugins can mount the shared text editor helper', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const { setHostPlugins } = await import('/src/plugins/registry.ts');
+    setHostPlugins([{
+      id: 'example.text-editor',
+      displayName: 'Text Editor Plugin',
+      create: (ctx) => {
+        const root = document.createElement('div');
+        root.className = 'example-plugin-text-editor';
+        const editor = ctx.textEditor.mount({
+          value: typeof ctx.block.schema.pluginConfig.note === 'string' ? ctx.block.schema.pluginConfig.note : '',
+          placeholder: 'Plugin note',
+          onChange: (markdown) => ctx.setConfig({ note: markdown }),
+        });
+        root.appendChild(editor.element);
+        return {
+          element: root,
+          refresh() {
+            editor.setValue(typeof ctx.block.schema.pluginConfig.note === 'string' ? ctx.block.schema.pluginConfig.note : '');
+          },
+          unmount() {
+            editor.unmount();
+          },
+        };
+      },
+    }]);
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:plugin {"id":"plugin-note","plugin":"example.text-editor","pluginConfig":{"note":"Alpha"}}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const pluginEditor = page.locator('.example-plugin-text-editor [data-field="hvy-plugin-text-editor"]');
+  await expect(pluginEditor).toBeVisible();
+  await expect(page.locator('.example-plugin-text-editor .rich-toolbar')).toBeVisible();
+  await pluginEditor.evaluate((node) => {
+    node.innerHTML = '<p>Plugin alpha</p><p>Plugin beta</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const block = state.document.sections[0]?.blocks[0];
+    return block?.schema.pluginConfig.note;
+  });
+  expect(expectedResult).toBe('Plugin alpha\n\nPlugin beta');
+});
+
 test('italic toolbar action serializes multi-paragraph and list selections', async ({ page }) => {
   await page.goto('/');
   await loadToolbarSelectionDocument(page);
@@ -347,7 +453,8 @@ ${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await expect(page.locator('.editor-block-passive').first()).toContainText(markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '');
+  const expectedText = markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '';
+  await expect(page.locator('.editor-block-passive', { hasText: expectedText }).first()).toBeVisible();
 }
 
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {

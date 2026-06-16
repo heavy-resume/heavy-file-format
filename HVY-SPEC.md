@@ -59,6 +59,8 @@ If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
+Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
+
 Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, or internal fragment (`#id`) targets. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
 
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.

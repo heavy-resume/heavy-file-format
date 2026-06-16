@@ -609,10 +609,13 @@ export async function importTextIntoDocument(
       await options.onImportFillInsApplied?.('Filled remaining placeholders in imported sections.');
     }
     createdTargets = collectCreatedImportXrefTargets(document, importedSectionKeys);
-    options.onProgress?.({ phase: 'thinking', message: 'Filling imported xref lists.' });
-    const xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets);
-    if (xrefsApplied > 0) {
-      await options.onImportXrefsApplied?.(`Filled ${xrefsApplied} imported xref list${xrefsApplied === 1 ? '' : 's'}.`);
+    let xrefsApplied = 0;
+    if (!isPdfTemplateImportMode(requestMode)) {
+      options.onProgress?.({ phase: 'thinking', message: 'Filling imported xref lists.' });
+      xrefsApplied = await runImportXrefPass(document, options, llm, beforeLlmCall, traceRecorder, importedSectionKeys, createdTargets);
+      if (xrefsApplied > 0) {
+        await options.onImportXrefsApplied?.(`Filled ${xrefsApplied} imported xref list${xrefsApplied === 1 ? '' : 's'}.`);
+      }
     }
     const message = `Imported ${created.length} section${created.length === 1 ? '' : 's'}.`;
     await options.onImportPrepared?.(message);

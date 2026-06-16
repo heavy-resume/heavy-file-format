@@ -643,6 +643,47 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('Imported summary');
 });
 
+test('importTextIntoDocument in PDF template mode skips the final xref pass', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"summarize_incoming_resume":"Imported summary"}}');
+  const progressMessages: string[] = [];
+  const onImportXrefsApplied = vi.fn();
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"pdf-summary"}-->
+#! PDF Summary
+
+<!--hvy:text {"fillIn":true}-->
+ <!-- value {"placeholder":"Summarize incoming resume"} -->
+
+<!--hvy:component-list {"id":"related-list","componentListComponent":"xref-card","componentListItemLabel":"related section"}-->
+`, '.phvy');
+
+  const result = await importTextIntoDocument(document, {
+    sourceName: 'resume.txt',
+    sourceText: 'Imported summary',
+    steps: [{ section: 'Summary', sectionId: 'pdf-summary', importMode: 'template' }],
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+    requestMode: 'pdf-template-import',
+    onImportXrefsApplied,
+    onProgress: (event) => {
+      if (event.message) progressMessages.push(event.message);
+    },
+  });
+
+  expect(result.status).toBe('complete');
+  expect(requestProxyCompletionMock.mock.calls.map((call) => call[0]?.debugLabel)).toEqual([
+    'ai-import-template-values:1',
+  ]);
+  expect(progressMessages).not.toContain('Filling imported xref lists.');
+  expect(onImportXrefsApplied).not.toHaveBeenCalled();
+  expect(serializeDocument(document)).toContain('Imported summary');
+});
+
 test('importTextIntoDocument in PDF template mode treats placeholder-only text blocks as template fields', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce('{"values":{"degree":"Computer Science, BS","school_university":"Washington State University"}}');
   const document = deserializeDocument(`---

@@ -22,6 +22,7 @@ import {
 import { applyTextFillInValueAtIndex, findTextFillInMarkers, hasTextFillInMarker, removeTextFillInMarkers } from './text-fill-in';
 import { runImportXrefPass } from './ai-import-xrefs';
 import { validateLockedSectionStructure } from './locked-structure';
+import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { makeId } from './utils';
 
 export type HvyImportProgressPhase = 'starting' | 'thinking' | 'linting' | 'complete';
@@ -106,6 +107,7 @@ export interface HvyImportTraceRecorder {
 export interface BuildImportPlanOptions {
   sourceName?: string;
   sourceText: string;
+  sourceDocument?: VisualDocument;
   instructions?: string;
   newSectionsOnly?: boolean;
   llm?: HvyImportLlmOptions;
@@ -216,7 +218,7 @@ class ImportTemplateDefinitionError extends Error {
 
 const IMPORT_TEMPLATE_FLAVOR_FIELD = '_flavor';
 const IMPORT_TEMPLATE_SECTION_FLAVOR_FIELD = '_sectionFlavor';
-export const DEFAULT_IMPORT_MAX_CONTEXT_CHARS = 60_000;
+const DEFAULT_IMPORT_MAX_CONTEXT_CHARS = 60_000;
 const IMPORT_STABLE_SYSTEM_INSTRUCTIONS = [
   'You are performing an HVY import workflow.',
   'Use the supplied import context only for this request.',
@@ -274,6 +276,7 @@ export type ImportPlanStepInput = string | ImportPlanStep | {
 export interface ImportFromTextOptions {
   sourceName?: string;
   sourceText: string;
+  sourceDocument?: VisualDocument;
   instructions?: string;
   newSectionsOnly?: boolean;
   steps: ImportPlanStepInput[];
@@ -294,10 +297,21 @@ export interface ImportFromTextResult {
   trace?: HvyImportTraceRun;
 }
 
+function resolveImportSourceOptions<T extends { sourceText: string; sourceDocument?: VisualDocument }>(options: T): T {
+  if (!options.sourceDocument) {
+    return options;
+  }
+  return {
+    ...options,
+    sourceText: exportDocumentSourceMarkdown(options.sourceDocument),
+  };
+}
+
 export async function buildImportPlanForDocument(
   document: VisualDocument,
   options: BuildImportPlanOptions
 ): Promise<BuildImportPlanResult> {
+  options = resolveImportSourceOptions(options);
   const traceRecorder = createImportTraceRecorder(options);
   options.onProgress?.({ phase: 'starting', message: `Preparing import plan for ${formatImportSourceProgress(options.sourceName)}.` });
   try {
@@ -383,6 +397,7 @@ export async function importTextIntoDocument(
     onImportFinalized?: (result: string) => Promise<void> | void;
   }
 ): Promise<ImportFromTextResult> {
+  options = resolveImportSourceOptions(options);
   const traceRecorder = createImportTraceRecorder(options);
   const steps = normalizeImportPlanSteps(options.steps, document, options);
   if (steps.length === 0) {

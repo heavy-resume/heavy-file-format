@@ -447,6 +447,43 @@ section_defs:
   expect(progress.mock.calls.map((call) => call[0].phase)).toContain('thinking');
 });
 
+test('buildImportPlanForDocument derives source text from sourceDocument', async () => {
+  requestProxyCompletionMock.mockResolvedValueOnce(
+    '{"steps":[{"section":"Summary","sectionId":"summary"}]}'
+  );
+  const target = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+  const sourceDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Imported Profile
+
+<!--hvy:text {"id":"profile-text"}-->
+ Source-backed profile text
+`, '.hvy');
+
+  await buildImportPlanForDocument(target, {
+    sourceName: 'profile.hvy',
+    sourceText: 'raw serialized fallback text',
+    sourceDocument,
+    llm: {
+      settings: { provider: 'openai', model: 'gpt-5-mini' },
+      client: { complete: vi.fn() },
+    },
+  });
+
+  const context = String(requestProxyCompletionMock.mock.calls[0]?.[0]?.context ?? '');
+  expect(context).toContain('Imported Profile');
+  expect(context).toContain('Source-backed profile text');
+  expect(context).not.toContain('raw serialized fallback text');
+});
+
 test('buildImportPlanForDocument in PDF template mode fits incoming data into one PHVY body slot', async () => {
   requestProxyCompletionMock.mockResolvedValueOnce(
     '{"steps":[{"section":"Resume Summary","sectionId":"pdf-summary"},{"section":"Skills"},{"section":"History","sectionId":"pdf-summary"}]}'

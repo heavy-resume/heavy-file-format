@@ -85,6 +85,7 @@ import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { exportDocumentSourceMarkdown } from './document-source-markdown';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -115,6 +116,7 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  exportDocumentSourceMarkdown(): string;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
   encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
   decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
@@ -612,6 +614,9 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytesAsync() {
       return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null, options.encryption ?? null);
     },
+    exportDocumentSourceMarkdown() {
+      return mounted?.exportDocumentSourceMarkdown() ?? exportDocumentSourceMarkdown(options.document);
+    },
     encryptDocumentAsync() {
       return ready.then((mount) => mount.encryptDocumentAsync());
     },
@@ -788,6 +793,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytesAsync() {
       return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
     },
+    exportDocumentSourceMarkdown() {
+      return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
     encryptDocumentAsync() {
       return runWithStateRuntimeAsync(runtime, async () => {
         const generated = generateEncryptionKey();
@@ -924,6 +932,7 @@ export {
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
@@ -992,6 +1001,7 @@ declare global {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       deserializeDocumentBytesAsync: typeof deserializeDocumentBytesAsync;
       encryptDocumentBytes: typeof encryptDocumentBytes;
+      exportDocumentSourceMarkdown: typeof exportDocumentSourceMarkdown;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       serializeDocumentBytesAsync: typeof serializeDocumentBytesAsync;
@@ -1016,6 +1026,7 @@ window.HVY = {
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,

@@ -97,6 +97,7 @@ import {
   type ImportFromTextOptions,
   type ImportFromTextResult,
 } from './ai-document-edit';
+import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import {
   initDocumentChangeTracking,
   isDocumentDirty,
@@ -143,6 +144,7 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  exportDocumentSourceMarkdown(): string;
   encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
   encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
   decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
@@ -882,6 +884,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     serializeDocumentBytesAsync() {
       return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
     },
+    exportDocumentSourceMarkdown() {
+      return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
     encryptDocumentAsync() {
       return runWithStateRuntimeAsync(runtime, async () => {
         const generated = generateEncryptionKey();
@@ -1009,6 +1014,7 @@ export {
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
@@ -1075,6 +1081,7 @@ window.HVY = {
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,

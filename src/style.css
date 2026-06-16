@@ -1,7 +1,8 @@
 :root {
   --hvy-floating-control-size: 3.2rem;
-  --hvy-sidebar-tab-size: var(--hvy-floating-control-size);
+  --hvy-sidebar-tab-gap: 0.25rem;
   --hvy-sidebar-footprint: 3.25rem;
+  --hvy-sidebar-tab-size: calc(var(--hvy-sidebar-footprint) - var(--hvy-sidebar-tab-gap));
   --hvy-document-edge-gutter: 0.9rem;
   --hvy-floating-controls-clearance: 6.6rem;
 }

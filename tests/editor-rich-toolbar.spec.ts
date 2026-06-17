@@ -252,6 +252,43 @@ hvy_version: 0.1
   const pluginEditor = page.locator('.example-plugin-text-editor [data-field="hvy-plugin-text-editor"]');
   await expect(pluginEditor).toBeVisible();
   await expect(page.locator('.example-plugin-text-editor .rich-toolbar')).toBeVisible();
+  const pluginShell = page.locator('.example-plugin-text-editor .text-editor-shell');
+  await page.waitForFunction(() => {
+    const shell = document.querySelector<HTMLElement>('.example-plugin-text-editor .text-editor-shell');
+    const toolbar = shell?.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const spacer = shell?.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell?.querySelector<HTMLElement>('.rich-editor');
+    if (!shell || !toolbar || !spacer || !editor) {
+      return false;
+    }
+    const toolbarHeight = toolbar.getBoundingClientRect().height;
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    return toolbarHeight > 0
+      && Math.abs(spacerBox.height - toolbarHeight) <= 1
+      && editorBox.top >= spacerBox.bottom;
+  }, null, { timeout: 1000 });
+  const toolbarMetrics = await pluginShell.evaluate((shell) => {
+    const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbar || !spacer || !editor) {
+      return null;
+    }
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    return {
+      toolbarHeight: toolbarBox.height,
+      spacerHeight: spacerBox.height,
+      editorTop: editorBox.top,
+      spacerBottom: spacerBox.bottom,
+    };
+  });
+  expect(toolbarMetrics).not.toBeNull();
+  expect(toolbarMetrics!.toolbarHeight).toBeGreaterThan(0);
+  expect(Math.abs(toolbarMetrics!.spacerHeight - toolbarMetrics!.toolbarHeight)).toBeLessThanOrEqual(1);
+  expect(toolbarMetrics!.editorTop).toBeGreaterThanOrEqual(toolbarMetrics!.spacerBottom);
   await pluginEditor.evaluate((node) => {
     node.innerHTML = '<p>Plugin alpha</p><p>Plugin beta</p>';
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));

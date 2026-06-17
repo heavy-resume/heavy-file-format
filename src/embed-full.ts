@@ -106,6 +106,7 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-presets';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { setEditorClipboardHost } from './editor-clipboard';
@@ -129,6 +130,7 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  pdfStylePresets?: HvyPdfStylePreset[] | null;
   storageKey?: string | null;
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
@@ -257,6 +259,8 @@ function createEmbedState(
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -379,6 +383,8 @@ function ensureRenderers(): void {
       get descriptionPopulate() { return state.descriptionPopulate; },
       get openTextLineStyleName() { return state.openTextLineStyleName; },
       get paragraphStyleRecentNames() { return state.paragraphStyleRecentNames; },
+      get pdfStylePresets() { return state.pdfStylePresets; },
+      get pdfStylePresetId() { return state.pdfStylePresetId; },
     },
     {
       escapeAttr,
@@ -842,6 +848,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   currentLinkObserver = linkObserver;
   if ('paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
+  }
+  if ('pdfStylePresets' in options) {
+    state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
+    state.pdfStylePresetId = null;
   }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });

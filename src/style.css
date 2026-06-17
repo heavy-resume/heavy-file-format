@@ -147,7 +147,7 @@ body {
   border: 1px solid var(--hvy-border-alt);
   border-radius: 8px;
   background: var(--hvy-surface);
-  color: var(--hvy-button-text);
+  color: var(--hvy-text);
   cursor: pointer;
   list-style: none;
   transition:
@@ -186,7 +186,7 @@ body {
 
 .document-menu summary:hover,
 .document-menu summary:focus-visible {
-  color: var(--hvy-button-hover-text, var(--hvy-button-text));
+  color: var(--hvy-text);
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
   box-shadow: 0 6px 16px var(--hvy-shadow);
@@ -211,6 +211,23 @@ body {
 .document-menu-panel button {
   width: 100%;
   text-align: left;
+}
+
+.document-menu-panel button.ghost {
+  color: var(--hvy-text);
+  background: color-mix(in srgb, var(--hvy-surface) 86%, transparent);
+}
+
+.document-menu-panel button.ghost:not(:disabled):hover,
+.document-menu-panel button.ghost:focus-visible {
+  color: var(--hvy-text);
+  background: color-mix(in srgb, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 24%, var(--hvy-surface));
+}
+
+.document-menu-panel button.secondary {
+  color: var(--hvy-button-text);
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
 }
 
 .file-picker {
@@ -267,6 +284,19 @@ body {
     box-shadow 140ms ease,
     color 140ms ease,
     transform 140ms ease;
+}
+
+.toolbar input[type='text'] {
+  color: var(--hvy-text);
+  caret-color: var(--hvy-text);
+}
+
+.toolbar input[type='text']::placeholder {
+  color: var(--hvy-text-muted);
+}
+
+.hvy-embed-layout :where(.hvy-button, .ghost, .tiny) {
+  color: var(--hvy-text);
 }
 
 @media (max-width: 720px) {
@@ -342,7 +372,9 @@ body {
   background: transparent;
 }
 
+.hvy-embed-layout :where(.hvy-button, .ghost, .tiny):not(:disabled):hover,
 .hvy-embed-layout :where(.ghost):not(:disabled):hover {
+  color: var(--hvy-text);
   background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
 }
 

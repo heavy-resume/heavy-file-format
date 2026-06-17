@@ -27,6 +27,7 @@ export function getPdfDocumentViewerThemeVariables(document: Pick<VisualDocument
   const textAlt = colors['--hvy-text-alt'] || textColor;
   const textMuted = colors['--hvy-text-muted'] || textAlt;
   return {
+    ...colors,
     '--hvy-bg': backgroundColor,
     '--hvy-bg-alt': colors['--hvy-bg-alt'] || backgroundColor,
     '--hvy-surface': colors['--hvy-surface'] || backgroundColor,

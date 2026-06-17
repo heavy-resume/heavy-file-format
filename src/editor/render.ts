@@ -60,7 +60,8 @@ import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '.
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
-import { formatPdfPointsAsUnit, inferPdfPageMarginUnit, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings, type PdfPageMarginUnit } from '../pdf-page-settings';
+import { PDF_DOCUMENT_PAGE_SIZE_OPTIONS, formatPdfPointsAsUnit, inferPdfPageMarginUnit, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings, type PdfPageMarginUnit } from '../pdf-page-settings';
+import type { HvyPdfStylePreset } from '../pdf-style-presets';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -156,6 +157,8 @@ interface EditorRenderState {
   openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
+  pdfStylePresets: HvyPdfStylePreset[];
+  pdfStylePresetId: string | null;
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;
@@ -1187,7 +1190,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const imageAttachmentReductionButtonDisabled = imageAttachmentReductionStatus?.state === 'reducing' || imageAttachmentReductionComplete;
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
     const pdfPageMeta = readPdfPageMetaObject(state.documentMeta);
-    const pdfPageSettings = resolvePdfPageDimensions(resolvePdfPageSettings(state.documentMeta));
+    const rawPdfPageSettings = resolvePdfPageSettings(state.documentMeta);
+    const pdfPageSettings = resolvePdfPageDimensions(rawPdfPageSettings);
+    const pdfPageSizeValue = typeof rawPdfPageSettings.pageSize === 'string'
+      ? rawPdfPageSettings.pageSize.trim().toUpperCase()
+      : 'CUSTOM';
     const pdfMargins = Array.isArray(pdfPageMeta.margins) ? pdfPageMeta.margins : [];
     const pdfMarginUnit = inferPdfPageMarginUnit(pdfPageMeta.margins);
     const pdfMarginValue = (index: number) => {
@@ -1195,8 +1202,29 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
       return points === null ? '' : formatPdfPointsAsUnit(points, pdfMarginUnit);
     };
+    const pdfPresetControls = state.pdfStylePresets.length > 0
+      ? `<div class="meta-pdf-preset-picker">
+          <label>
+            <span>PDF Preset</span>
+            <select data-field="meta-pdf-style-preset">
+              ${renderPdfPresetOptions(state.pdfStylePresets, getActivePdfStylePresetId(state.pdfStylePresets))}
+            </select>
+          </label>
+          <button type="button" class="secondary" data-action="apply-pdf-style-preset">Apply</button>
+        </div>
+        ${renderPdfPresetDescription(state.pdfStylePresets, getActivePdfStylePresetId(state.pdfStylePresets))}`
+      : '';
     const pdfPageControls = state.documentExtension === '.phvy'
-      ? `<div class="meta-pdf-page-grid">
+      ? `${pdfPresetControls}
+        <div class="meta-pdf-document-options">
+          <label class="meta-pdf-page-size-field">
+            <span>PDF Page Size</span>
+            <select data-field="meta-pdf-page-size">
+              ${renderPdfPageSizeOptions(pdfPageSizeValue)}
+            </select>
+          </label>
+        </div>
+        <div class="meta-pdf-page-grid">
           <div class="meta-pdf-page-heading">
             <span>PDF Margins</span>
             ${renderPdfMarginUnitToggle(pdfMarginUnit)}
@@ -1475,11 +1503,36 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     </div>`;
   }
 
+  function renderPdfPageSizeOptions(value: string): string {
+    const normalized = (PDF_DOCUMENT_PAGE_SIZE_OPTIONS as readonly string[]).includes(value) ? value : 'CUSTOM';
+    const customOption = normalized === 'CUSTOM'
+      ? '<option value="CUSTOM" selected disabled>Custom</option>'
+      : '';
+    return `${customOption}${PDF_DOCUMENT_PAGE_SIZE_OPTIONS.map((option) => `<option value="${option}" ${normalized === option ? 'selected' : ''}>${option}</option>`).join('')}`;
+  }
+
   function renderPdfMarginInput(label: string, field: string, placeholderPoints: number, value: string, unit: PdfPageMarginUnit): string {
     return `<label class="meta-pdf-margin-field">
       <span>${deps.escapeHtml(label)}</span>
       <input aria-label="PDF ${deps.escapeAttr(label.toLowerCase())} margin in ${unit === 'cm' ? 'centimeters' : 'inches'}" data-field="${deps.escapeAttr(field)}" data-pdf-margin-unit="${unit}" type="number" min="0" max="${unit === 'cm' ? '10' : '4'}" step="0.05" placeholder="${deps.escapeAttr(formatPdfPointsAsUnit(placeholderPoints, unit))}" value="${deps.escapeAttr(value)}" />
     </label>`;
+  }
+
+  function getActivePdfStylePresetId(presets: readonly HvyPdfStylePreset[]): string {
+    return presets.some((preset) => preset.id === state.pdfStylePresetId)
+      ? state.pdfStylePresetId ?? ''
+      : presets[0]?.id ?? '';
+  }
+
+  function renderPdfPresetOptions(presets: readonly HvyPdfStylePreset[], activeId: string): string {
+    return presets
+      .map((preset) => `<option value="${deps.escapeAttr(preset.id)}" ${preset.id === activeId ? 'selected' : ''}>${deps.escapeHtml(preset.label)}</option>`)
+      .join('');
+  }
+
+  function renderPdfPresetDescription(presets: readonly HvyPdfStylePreset[], activeId: string): string {
+    const description = presets.find((preset) => preset.id === activeId)?.description?.trim() ?? '';
+    return `<div class="meta-pdf-preset-description" data-pdf-preset-description>${deps.escapeHtml(description)}</div>`;
   }
 
   function renderTextLineStyleEditorRows(styles: TextLineStyles): string {

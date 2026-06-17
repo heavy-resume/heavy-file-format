@@ -9,6 +9,7 @@ import { buttonActions } from './button';
 import { imageAttachmentActions } from './image-attachments';
 import { textLineStyleActions } from './text-line-style';
 import { textActions } from './text';
+import { pdfStylePresetActions } from './pdf-style-preset';
 import type { AppActionHandler } from './types';
 
 export const appActionRegistry: Record<string, AppActionHandler> = {
@@ -23,4 +24,5 @@ export const appActionRegistry: Record<string, AppActionHandler> = {
   ...imageAttachmentActions,
   ...textLineStyleActions,
   ...textActions,
+  ...pdfStylePresetActions,
 };

@@ -48,6 +48,7 @@ import { initializeCarouselReaders } from './editor/components/carousel/carousel
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import { renderNewDocumentModal } from './new-document-modal';
+import { normalizePdfStylePresets } from './pdf-style-presets';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -65,6 +66,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
+  { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
@@ -170,6 +172,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -471,6 +475,12 @@ editorRenderer = createEditorRenderer(
     },
     get paragraphStyleRecentNames() {
       return state.paragraphStyleRecentNames;
+    },
+    get pdfStylePresets() {
+      return state.pdfStylePresets;
+    },
+    get pdfStylePresetId() {
+      return state.pdfStylePresetId;
     },
   },
   {

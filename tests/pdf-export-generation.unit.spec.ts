@@ -111,6 +111,69 @@ test('PDF doc definition applies component CSS margins to block wrappers', () =>
   expect(secondNode?.margin).toEqual([0, 0, 0, 24]);
 });
 
+test('PDF doc definition maps container CSS box styling to a flow box', () => {
+  const child = createEmptyBlock('text');
+  child.text = 'Box content';
+  const container = createEmptyBlock('container');
+  container.schema.id = 'styled-container';
+  container.schema.css = 'background-color: var(--hvy-surface); color: #ffffff; padding: 0.25in 0.5in; border: 2pt solid var(--hvy-border);';
+  container.schema.containerBlocks = [child];
+  const section = createEmptySection(1, '');
+  section.blocks = [container];
+  const document: VisualDocument = {
+    meta: {
+      title: 'PDF Box Styling',
+      theme: {
+        colors: {
+          '--hvy-surface': '#123456',
+          '--hvy-border': '#abcdef',
+        },
+      },
+    },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const firstSection = expectedResult.content[0];
+  expect(typeof firstSection).not.toBe('string');
+  if (typeof firstSection === 'string') return;
+  const boxNode = firstSection.stack?.[0] as HvyPdfMakeNodeObject | undefined;
+  const cell = boxNode?.table?.body[0]?.[0] as HvyPdfMakeNodeObject | undefined;
+  const boxLayout = boxNode?.layout as Record<string, () => unknown> | undefined;
+
+  expect(boxNode?.table?.widths).toEqual([504]);
+  expect(cell?.fillColor).toBe('#123456');
+  expect(cell?.color).toBe('#ffffff');
+  expect(JSON.stringify(cell?.stack)).toContain('Box content');
+  expect(boxLayout?.paddingLeft()).toBe(36);
+  expect(boxLayout?.paddingTop()).toBe(18);
+  expect(boxLayout?.hLineWidth()).toBe(2);
+  expect(boxLayout?.hLineColor()).toBe('#abcdef');
+});
+
+test('pdfmake backend produces a PDF blob with a styled flow box', async () => {
+  const child = createEmptyBlock('text');
+  child.text = 'Styled box PDF export.';
+  const container = createEmptyBlock('container');
+  container.schema.css = 'background: #f8fafc; padding: 0.2in; border: 1pt solid #cbd5e1;';
+  container.schema.containerBlocks = [child];
+  const section = createEmptySection(1, '');
+  section.blocks = [container];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Styled Box Blob' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = await getHvyPdfBlob(document);
+
+  expect(expectedResult.type).toBe('application/pdf');
+  expect(expectedResult.size).toBeGreaterThan(1000);
+});
+
 test('PDF doc definition applies section default and explicit CSS margins', () => {
   const defaultSection = createEmptySection(1, '');
   defaultSection.customId = 'default-section';
@@ -137,6 +200,34 @@ test('PDF doc definition applies section default and explicit CSS margins', () =
 
   expect(defaultNode.margin).toEqual([0, 0, 0, 6]);
   expect(explicitNode.margin).toEqual([0, 12, 0, 24]);
+});
+
+test('PDF doc definition widens styled section boxes for negative margin bleed', () => {
+  const block = createEmptyBlock('text');
+  block.text = 'Bleed header';
+  const section = createEmptySection(1, '');
+  section.customId = 'bleed-section';
+  section.css = 'margin: -0.75in -0.75in 0; background: #24566f; padding: 0.25in;';
+  section.blocks = [block];
+  const document: VisualDocument = {
+    meta: { title: 'PDF Bleed Section' },
+    extension: '.phvy',
+    attachments: [],
+    sections: [section],
+  };
+
+  const expectedResult = buildPdfExportDocDefinition(document);
+  const bleedNode = expectedResult.content[0];
+  expect(typeof bleedNode).not.toBe('string');
+  if (typeof bleedNode === 'string') return;
+  const cell = bleedNode.table?.body[0]?.[0] as HvyPdfMakeNodeObject | undefined;
+  const boxLayout = bleedNode.layout as Record<string, () => unknown> | undefined;
+
+  expect(bleedNode.margin).toEqual([-54, -54, -54, 0]);
+  expect(bleedNode.table?.widths).toEqual([612]);
+  expect(cell?.fillColor).toBe('#24566f');
+  expect(boxLayout?.paddingLeft()).toBe(18);
+  expect(JSON.stringify(cell?.stack)).toContain('Bleed header');
 });
 
 test('PDF doc definition uses PHVY document page margins', () => {

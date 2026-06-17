@@ -59,6 +59,7 @@ import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-presets';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
@@ -101,6 +102,7 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  pdfStylePresets?: HvyPdfStylePreset[] | null;
   storageKey?: string | null;
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
@@ -272,6 +274,8 @@ function createEmbedState(
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -759,6 +763,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   currentLinkObserver = linkObserver;
   if ('paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
+  }
+  if ('pdfStylePresets' in options) {
+    state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
+    state.pdfStylePresetId = null;
   }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });

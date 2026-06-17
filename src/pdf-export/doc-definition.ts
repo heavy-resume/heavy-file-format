@@ -38,6 +38,14 @@ interface PdfLayoutContext {
   availableWidth: number;
 }
 
+interface PdfBoxStyle {
+  padding?: [number, number, number, number];
+  fillColor?: string;
+  color?: string;
+  borderColor?: string;
+  borderWidth?: number;
+}
+
 export function buildPdfExportDocDefinition(
   document: VisualDocument,
   options: Pick<HvyPdfExportOptions, 'contentView' | 'strategy'> = {}
@@ -143,18 +151,23 @@ function renderSection(
     return null;
   }
   const childSidebar = sidebar || decision.role === 'sidebar' || section.location === 'sidebar';
+  const css = mergeDocumentCss(getDocumentSectionDefaultCss(document.meta), section.css);
+  const boxStyle = getPdfCssBoxStyle(document, css);
+  const childLayout = boxStyle?.padding
+    ? { availableWidth: Math.max(1, layout.availableWidth - boxStyle.padding[0] - boxStyle.padding[2]) }
+    : layout;
   const stack: HvyPdfMakeNode[] = [];
-  stack.push(...renderBlocks(document, resolved, section.blocks, layout));
-  stack.push(...renderSections(document, resolved, section.children, childSidebar, layout));
+  stack.push(...renderBlocks(document, resolved, section.blocks, childLayout));
+  stack.push(...renderSections(document, resolved, section.children, childSidebar, childLayout));
   if (stack.length === 0) {
     return null;
   }
-  return applyDecisionToNode(decision, {
+  return applyPdfBoxStyle(document, css, applyDecisionToNode(decision, {
     id: section.customId || section.key,
     stack,
     hvyRole: decision.role ?? (childSidebar ? 'sidebar' : 'body'),
-    margin: getPdfCssMargin(mergeDocumentCss(getDocumentSectionDefaultCss(document.meta), section.css), childSidebar ? [0, 0, 0, 8] : [0, 0, 0, 6]),
-  });
+    margin: getPdfCssMargin(css, childSidebar ? [0, 0, 0, 8] : [0, 0, 0, 6]),
+  }), layout);
 }
 
 function renderBlocks(
@@ -228,7 +241,13 @@ function renderBlock(
   if (!node) {
     return null;
   }
-  const rendered = applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css));
+  const rendered = applyPdfBoxStyle(
+    document,
+    block.schema.css,
+    applyDecisionToNode(decision, applyBlockCssMargin({ id: block.schema.id || block.id, ...node }, block.schema.css)),
+    layout,
+    { requireBoxSignal: baseComponent === 'text' }
+  );
   return applyPdfDebugBlockBounds(rendered, resolved, layout);
 }
 
@@ -237,17 +256,81 @@ function applyBlockCssMargin(node: HvyPdfMakeNodeObject, css: string): HvyPdfMak
   return margin ? { ...node, margin } : node;
 }
 
+function applyPdfBoxStyle(
+  document: VisualDocument,
+  css: string,
+  node: HvyPdfMakeNodeObject,
+  layout: PdfLayoutContext,
+  options: { requireBoxSignal?: boolean } = {}
+): HvyPdfMakeNodeObject {
+  const boxStyle = getPdfCssBoxStyle(document, css, options);
+  if (!boxStyle) {
+    return node;
+  }
+  const {
+    id,
+    margin,
+    pageBreak,
+    headlineLevel,
+    hvyKeepWithNext,
+    hvyKeepTogether,
+    hvyRole,
+    ...inner
+  } = node;
+  const cell: HvyPdfMakeNodeObject = {
+    stack: [inner],
+    ...(boxStyle.fillColor ? { fillColor: boxStyle.fillColor } : {}),
+    ...(boxStyle.color ? { color: boxStyle.color } : {}),
+  };
+  const marginBox = normalizePdfNodeMargin(margin);
+  const tableWidth = Math.max(1, layout.availableWidth - (marginBox?.[0] ?? 0) - (marginBox?.[2] ?? 0));
+  return {
+    ...(typeof id === 'string' ? { id } : {}),
+    ...(margin !== undefined ? { margin } : {}),
+    ...(pageBreak ? { pageBreak } : {}),
+    ...(typeof headlineLevel === 'number' ? { headlineLevel } : {}),
+    ...(hvyKeepWithNext ? { hvyKeepWithNext } : {}),
+    ...(hvyKeepTogether ? { hvyKeepTogether } : {}),
+    ...(typeof hvyRole === 'string' ? { hvyRole } : {}),
+    table: {
+      widths: [tableWidth],
+      body: [[cell]],
+    },
+    layout: createPdfBoxTableLayout(boxStyle),
+  };
+}
+
+function createPdfBoxTableLayout(boxStyle: PdfBoxStyle): Record<string, unknown> {
+  const padding = boxStyle.padding ?? [0, 0, 0, 0];
+  const borderWidth = boxStyle.borderWidth ?? 0;
+  const borderColor = boxStyle.borderColor ?? '#000000';
+  return {
+    hLineWidth: () => borderWidth,
+    vLineWidth: () => borderWidth,
+    hLineColor: () => borderColor,
+    vLineColor: () => borderColor,
+    paddingLeft: () => padding[0],
+    paddingTop: () => padding[1],
+    paddingRight: () => padding[2],
+    paddingBottom: () => padding[3],
+  };
+}
+
 function renderContainerBlock(
   document: VisualDocument,
   resolved: HvyPdfExportResolvedStrategy,
   block: VisualBlock,
   layout: PdfLayoutContext
 ): HvyPdfMakeNodeObject {
+  const boxStyle = getPdfCssBoxStyle(document, block.schema.css);
+  const childLayout = boxStyle?.padding
+    ? { availableWidth: Math.max(1, layout.availableWidth - boxStyle.padding[0] - boxStyle.padding[2]) }
+    : layout;
   const stack: HvyPdfMakeNode[] = [];
   if (block.schema.containerTitle.trim()) {
     stack.push({ text: block.schema.containerTitle, bold: true, margin: [0, 0, 0, 3], hvyKeepWithNext: true });
   }
-  stack.push(...renderBlocks(document, resolved, block.schema.containerBlocks, layout));
+  stack.push(...renderBlocks(document, resolved, block.schema.containerBlocks, childLayout));
   return { stack, style: 'container' };
 }
 
@@ -326,6 +409,93 @@ function getPdfCssTextStyle(document: VisualDocument, css: string): PdfTextBlock
   return style;
 }
 
+function getPdfCssBoxStyle(
+  document: VisualDocument,
+  css: string,
+  options: { requireBoxSignal?: boolean } = {}
+): PdfBoxStyle | null {
+  const padding = getPdfCssPadding(css);
+  const fillColor =
+    getCssColorDeclarationValue(document, css, 'background-color') ??
+    getCssColorDeclarationValue(document, css, 'background');
+  const textColor = getCssColorDeclarationValue(document, css, 'color');
+  const border = getPdfCssBorderStyle(document, css);
+  if (options.requireBoxSignal && !padding && !border) {
+    return null;
+  }
+  if (!padding && !fillColor && !textColor && !border) {
+    return null;
+  }
+  return {
+    ...(padding ? { padding } : {}),
+    ...(fillColor ? { fillColor } : {}),
+    ...(textColor ? { color: textColor } : {}),
+    ...(border?.borderColor ? { borderColor: border.borderColor } : {}),
+    ...(typeof border?.borderWidth === 'number' ? { borderWidth: border.borderWidth } : {}),
+  };
+}
+
+function getPdfCssPadding(css: string): [number, number, number, number] | undefined {
+  const padding = [0, 0, 0, 0] as [number, number, number, number];
+  let changed = false;
+  const shorthand = getCssDeclarationValue(css, 'padding');
+  if (shorthand) {
+    const values = parseCssBoxLengthValues(shorthand, { allowNegative: false });
+    if (values) {
+      padding[0] = values[0];
+      padding[1] = values[1];
+      padding[2] = values[2];
+      padding[3] = values[3];
+      changed = true;
+    }
+  }
+  const longhands: Array<[property: string, index: number]> = [
+    ['padding-top', 1],
+    ['padding-right', 2],
+    ['padding-bottom', 3],
+    ['padding-left', 0],
+  ];
+  for (const [property, index] of longhands) {
+    const value = cssLengthOrAutoToPdfPoints(getCssDeclarationValue(css, property), { allowNegative: false });
+    if (value !== null) {
+      padding[index] = value;
+      changed = true;
+    }
+  }
+  return changed ? padding : undefined;
+}
+
+function getPdfCssBorderStyle(
+  document: VisualDocument,
+  css: string
+): { borderColor?: string; borderWidth?: number } | null {
+  let borderWidth = cssLengthOrAutoToPdfPoints(getCssDeclarationValue(css, 'border-width'), { allowNegative: false });
+  let borderColor = getCssColorDeclarationValue(document, css, 'border-color');
+  const shorthand = getCssDeclarationValue(css, 'border');
+  if (shorthand && !cssFragmentTriggersNetwork(shorthand)) {
+    for (const part of shorthand.trim().split(/\s+/).filter(Boolean)) {
+      borderWidth ??= cssLengthOrAutoToPdfPoints(part, { allowNegative: false });
+      if (!borderColor && !isCssBorderStyleKeyword(part)) {
+        const resolved = resolveCssColorValue(document, part);
+        if (resolved && isPdfColorValue(resolved)) {
+          borderColor = resolved;
+        }
+      }
+    }
+  }
+  if ((borderWidth === null || borderWidth === 0) && !borderColor) {
+    return null;
+  }
+  return {
+    ...(borderColor ? { borderColor } : {}),
+    ...(borderWidth !== null ? { borderWidth } : { borderWidth: 1 }),
+  };
+}
+
+function isCssBorderStyleKeyword(value: string): boolean {
+  return /^(none|hidden|dotted|dashed|solid|double|groove|ridge|inset|outset)$/i.test(value);
+}
+
 function getTextAlignFromCss(css: string): Align | undefined {
   const align = getCssDeclarationValue(css, 'text-align')?.toLowerCase();
   return align === 'left' || align === 'center' || align === 'right' ? align : undefined;
@@ -383,7 +553,7 @@ function cssLengthToPdfPoints(value: string): number | null {
   if (!trimmed || (!isExternalCssAllowed() && cssFragmentTriggersNetwork(trimmed))) {
     return null;
   }
-  const match = /^(\d*\.?\d+)(px|pt|rem|em)?$/.exec(trimmed);
+  const match = /^(\d*\.?\d+)(px|pt|rem|em|in|cm|mm)?$/.exec(trimmed);
   if (!match) {
     return null;
   }
@@ -395,6 +565,9 @@ function cssLengthToPdfPoints(value: string): number | null {
   if (unit === 'pt') return amount;
   if (unit === 'px') return amount * 0.75;
   if (unit === 'rem' || unit === 'em') return amount * PDF_CSS_REM_IN_POINTS;
+  if (unit === 'in') return amount * 72;
+  if (unit === 'cm') return amount * 72 / 2.54;
+  if (unit === 'mm') return amount * 72 / 25.4;
   return null;
 }
 
@@ -403,7 +576,7 @@ function getPdfCssMargin(css: string, fallback?: [number, number, number, number
   let changed = false;
   const shorthand = getCssDeclarationValue(css, 'margin');
   if (shorthand) {
-    const values = parseCssBoxLengthValues(shorthand);
+    const values = parseCssBoxLengthValues(shorthand, { allowNegative: true });
     if (values) {
       margin[0] = values[0];
       margin[1] = values[1];
@@ -419,7 +592,7 @@ function getPdfCssMargin(css: string, fallback?: [number, number, number, number
     ['margin-left', 0],
   ];
   for (const [property, index] of longhands) {
-    const value = cssLengthOrAutoToPdfPoints(getCssDeclarationValue(css, property));
+    const value = cssLengthOrAutoToPdfPoints(getCssDeclarationValue(css, property), { allowNegative: true });
     if (value !== null) {
       margin[index] = value;
       changed = true;
@@ -428,12 +601,12 @@ function getPdfCssMargin(css: string, fallback?: [number, number, number, number
   return changed ? margin : fallback;
 }
 
-function parseCssBoxLengthValues(value: string): [number, number, number, number] | null {
+function parseCssBoxLengthValues(value: string, options: { allowNegative: boolean }): [number, number, number, number] | null {
   const parts = value.trim().split(/\s+/).filter(Boolean);
   if (parts.length < 1 || parts.length > 4) {
     return null;
   }
-  const parsed = parts.map((part) => cssLengthOrAutoToPdfPoints(part));
+  const parsed = parts.map((part) => cssLengthOrAutoToPdfPoints(part, options));
   if (parsed.some((part) => part === null)) {
     return null;
   }
@@ -441,7 +614,7 @@ function parseCssBoxLengthValues(value: string): [number, number, number, number
   return [left ?? 0, top ?? 0, right ?? 0, bottom ?? 0];
 }
 
-function cssLengthOrAutoToPdfPoints(value: string | null): number | null {
+function cssLengthOrAutoToPdfPoints(value: string | null, options: { allowNegative: boolean } = { allowNegative: false }): number | null {
   if (!value) {
     return null;
   }
@@ -452,18 +625,21 @@ function cssLengthOrAutoToPdfPoints(value: string | null): number | null {
   if (normalized === '0') {
     return 0;
   }
-  const match = /^(\d*\.?\d+)(px|pt|rem|em)?$/.exec(normalized);
+  const match = /^(-?\d*\.?\d+)(px|pt|rem|em|in|cm|mm)?$/.exec(normalized);
   if (!match) {
     return null;
   }
   const amount = Number.parseFloat(match[1] ?? '');
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (!Number.isFinite(amount) || (!options.allowNegative && amount < 0)) {
     return null;
   }
   const unit = match[2] ?? 'pt';
   if (unit === 'pt') return amount;
   if (unit === 'px') return amount * 0.75;
   if (unit === 'rem' || unit === 'em') return amount * PDF_CSS_REM_IN_POINTS;
+  if (unit === 'in') return amount * 72;
+  if (unit === 'cm') return amount * 72 / 2.54;
+  if (unit === 'mm') return amount * 72 / 25.4;
   return null;
 }
 

@@ -56,6 +56,7 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [Example HVY Document](examples/example.hvy)
 - [CRM Example HVY Document](examples/crm.hvy)
 - [Study Tools Example](examples/study-tools.hvy)
+- [PDF Template Example (PHVY)](examples/pdf-template.phvy)
 - [Example Resume Template (THVY)](examples/resume.thvy)
 - [Example Resume (HVY)](examples/resume.hvy)
 

@@ -4,6 +4,8 @@ import type { HvyPdfExportStrategyDefaults } from './pdf-export/types';
 export const PDF_DOCUMENT_DEFAULT_PAGE_SIZE = { width: 612, height: 792 };
 export const PDF_DOCUMENT_DEFAULT_PAGE_MARGINS: [number, number, number, number] = [54, 54, 54, 54];
 export const PDF_DOCUMENT_DEFAULT_PAGE_MARGIN_LENGTHS: [string, string, string, string] = ['0.75in', '0.75in', '0.75in', '0.75in'];
+export const PDF_DOCUMENT_PAGE_SIZE_OPTIONS = ['LETTER', 'A4', 'LEGAL', 'TABLOID', 'LEDGER'] as const;
+export type PdfPageSizeOption = typeof PDF_DOCUMENT_PAGE_SIZE_OPTIONS[number];
 
 export interface PdfPageSettings {
   pageSize: string | { width: number; height: number };

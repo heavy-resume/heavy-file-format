@@ -60,6 +60,8 @@ test('passive editor fallback renders plain reader content without re-entering A
     openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
   }, {
     escapeAttr: escapeHtml,
     escapeHtml,
@@ -127,6 +129,8 @@ test('block meta fields include grid stack width for grid components', () => {
     openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
   }, {
     escapeAttr: escapeHtml,
     escapeHtml,
@@ -194,6 +198,8 @@ test('block meta fields render hidden marker as a checkbox', () => {
     openTemplateDefinitionKeys: [],
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
   }, {
     escapeAttr: escapeHtml,
     escapeHtml,

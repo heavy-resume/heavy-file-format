@@ -6,6 +6,7 @@ import type { ProxyChatMode } from './chat/chat';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
 import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
+import type { HvyPdfStylePreset } from './pdf-style-presets';
 
 export interface DocumentAttachment {
   id: string;
@@ -284,6 +285,7 @@ export type SelectedExample =
   | 'guide'
   | 'crm'
   | 'study-tools'
+  | 'pdf-template'
   | 'resume-template'
   | 'resume-example'
   | 'import-reference'
@@ -420,6 +422,8 @@ export interface AppState {
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;
   pdfTemplateImportModal: PdfTemplateImportModalState | null;
+  pdfStylePresets: HvyPdfStylePreset[];
+  pdfStylePresetId: string | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;

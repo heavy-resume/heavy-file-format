@@ -1219,9 +1219,10 @@ hvy_version: 0.1
 
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
-  const files: Array<[string, '.hvy' | '.thvy']> = [
+  const files: Array<[string, '.hvy' | '.thvy' | '.phvy']> = [
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
+    ['examples/pdf-template.phvy', '.phvy'],
     ['examples/example.hvy', '.hvy'],
     ['examples/study-tools.hvy', '.hvy'],
   ];
@@ -1254,9 +1255,10 @@ test('resume template uses fill-in heading text for the default name', async () 
 
 test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {
   const fs = await import('node:fs/promises');
-  const files: Array<[string, '.hvy' | '.thvy']> = [
+  const files: Array<[string, '.hvy' | '.thvy' | '.phvy']> = [
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
+    ['examples/pdf-template.phvy', '.phvy'],
     ['examples/example.hvy', '.hvy'],
     ['examples/study-tools.hvy', '.hvy'],
   ];

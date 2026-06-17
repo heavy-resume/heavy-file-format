@@ -5,6 +5,7 @@ import 'highlight.js/styles/github.css';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import {
   activateStateRuntime,
   createStateRuntime,
@@ -551,11 +552,13 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     </main>`;
   bindEmbedUi(root, runtime);
   reconcilePluginMounts(root);
+  syncTextToolbarLayout(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
@@ -701,11 +704,13 @@ function refreshReaderPanels(): void {
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
   bindLazyImageHydration(currentRoot);
+  syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
 }
 

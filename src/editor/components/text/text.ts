@@ -80,7 +80,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
   return `
   <div class="text-editor-shell">
-    ${richToolbar ? `<div class="text-editor-toolbar-slot">${richToolbar}</div>` : ''}
+    ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
     ${fillInSelectionButton}
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"

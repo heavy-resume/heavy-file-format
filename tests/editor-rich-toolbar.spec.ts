@@ -679,6 +679,81 @@ test('paragraph style toolbar compacts inside phone preview', async ({ page }) =
   expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.x + shellBox!.width));
 });
 
+test('sticky text toolbar is visibly inset from the text editor shell', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result toolbar inset');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const shellBox = await activeBlock.locator('.text-editor-shell').boundingBox();
+  const toolbarBox = await activeBlock.locator('.text-editor-toolbar-slot').boundingBox();
+  expect(shellBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect(Math.floor(toolbarBox!.x - shellBox!.x)).toBeGreaterThanOrEqual(8);
+  expect(Math.floor(shellBox!.x + shellBox!.width - (toolbarBox!.x + toolbarBox!.width))).toBeGreaterThanOrEqual(8);
+});
+
+test('sticky text toolbar allocates bottom clearance without adding editor gap', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, Array.from({ length: 16 }, (_, index) => `Expected result line ${index + 1}`).join('\n\n'));
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+
+  const metrics = await activeBlock.locator('.text-editor-shell').evaluate((shell) => {
+    const toolbarBounds = shell.querySelector<HTMLElement>('.text-editor-toolbar-bounds');
+    const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const toolbar = toolbarSlot?.querySelector<HTMLElement>('.rich-toolbar');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbarBounds || !toolbarSlot || !toolbar || !spacer || !editor) {
+      return null;
+    }
+    const toolbarBoundsBox = toolbarBounds.getBoundingClientRect();
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+    return {
+      boundsGap: editorBox.bottom - toolbarBoundsBox.bottom,
+      spacerHeight: spacerBox.height,
+      toolbarHeight: toolbarBox.height,
+      editorGap: editorBox.top - spacerBox.bottom,
+      minimumGap: lineHeight * 5,
+      singleLineGap: lineHeight,
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.boundsGap).toBeGreaterThanOrEqual(metrics!.minimumGap);
+  expect(Math.abs(metrics!.spacerHeight - metrics!.toolbarHeight)).toBeLessThanOrEqual(1);
+  expect(metrics!.editorGap).toBeGreaterThanOrEqual(0);
+  expect(metrics!.editorGap).toBeLessThan(metrics!.singleLineGap);
+
+  const scrolledMetrics = await activeBlock.evaluate((block) => {
+    const scroller = block.closest<HTMLElement>('.editor-tree');
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const editor = block.querySelector<HTMLElement>('.rich-editor');
+    const lastParagraph = editor?.querySelector<HTMLElement>('p:last-child');
+    if (!scroller || !toolbar || !lastParagraph || !editor) {
+      return null;
+    }
+    scroller.scrollTop = scroller.scrollHeight;
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const lastParagraphBox = lastParagraph.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+    return {
+      toolbarBottom: toolbarBox.bottom,
+      lastParagraphTop: lastParagraphBox.top,
+      minimumGap: lineHeight * 4,
+    };
+  });
+
+  expect(scrolledMetrics).not.toBeNull();
+  expect(scrolledMetrics!.lastParagraphTop - scrolledMetrics!.toolbarBottom).toBeGreaterThanOrEqual(scrolledMetrics!.minimumGap);
+});
+
 test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {
   await page.goto('/');
 

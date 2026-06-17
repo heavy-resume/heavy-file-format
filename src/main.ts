@@ -10,6 +10,7 @@ import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
 import type { AppState, ReaderViewFilter } from './types';
@@ -821,6 +822,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   bindUi(app);
   reconcilePluginMounts(app);
+  syncTextToolbarLayout(app);
   void runButtonVisibilityScripts(app);
   bindMs = performance.now() - stepStartedAt;
 
@@ -832,6 +834,7 @@ function renderApp(): void {
     root: app,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       void runButtonVisibilityScripts(scope);
       initializeCarouselReaders(scope);
       bindLazyImageHydration(scope);
@@ -1112,10 +1115,12 @@ function refreshReaderPanels(): void {
   if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
     scheduleReaderHighlightGlow(app);
     initializeCarouselReaders(app);
+    syncTextToolbarLayout(app);
     virtualizeRenderedSections({
       root: app,
       afterRestore: (scope) => {
         reconcilePluginMounts(scope, { prune: false });
+        syncTextToolbarLayout(scope);
         void runButtonVisibilityScripts(scope);
         initializeCarouselReaders(scope);
         bindLazyImageHydration(scope);

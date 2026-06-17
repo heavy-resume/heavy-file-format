@@ -8,6 +8,7 @@ import {
 } from '../block-ops';
 import { markdownToEditorHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, removeNonTextContentFromRichEditor, turndown } from '../markdown';
 import { getCachedComponentRenderHelpers } from '../state';
+import { syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
 import type { HvyPluginTextEditorInstance, HvyPluginTextEditorMountOptions } from './types';
 
 let pluginTextEditorId = 0;
@@ -17,8 +18,12 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   const id = `plugin-text-editor-${pluginTextEditorId += 1}`;
   const shell = ownerDocument.createElement('div');
   shell.className = 'text-editor-shell hvy-plugin-text-editor';
+  const toolbarBounds = ownerDocument.createElement('div');
+  toolbarBounds.className = 'text-editor-toolbar-bounds';
   const toolbarSlot = ownerDocument.createElement('div');
   toolbarSlot.className = 'text-editor-toolbar-slot';
+  const toolbarSpacer = ownerDocument.createElement('div');
+  toolbarSpacer.className = 'text-editor-toolbar-spacer';
   const editable = ownerDocument.createElement('div');
   editable.className = 'rich-editor';
   editable.contentEditable = 'true';
@@ -32,7 +37,8 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   if (options.align && options.align !== 'left') {
     editable.style.textAlign = options.align;
   }
-  shell.append(toolbarSlot, editable);
+  toolbarBounds.append(toolbarSlot);
+  shell.append(toolbarBounds, toolbarSpacer, editable);
 
   const writeToolbar = (markdown: string): void => {
     const helpers = getCachedComponentRenderHelpers();
@@ -44,6 +50,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       currentMarkdown: markdown,
       textLineStyles: helpers.getTextLineStyles?.() ?? {},
     });
+    syncTextToolbarLayout(shell);
   };
 
   const writeEditable = (markdown: string): void => {

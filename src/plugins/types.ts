@@ -1,6 +1,7 @@
 import type { JsonObject } from '../hvy/types';
 import type { Align, VisualBlock } from '../editor/types';
 import type { TextCaptionPayload } from '../editor/types';
+import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
 
@@ -79,6 +80,10 @@ export interface HvyPluginContext {
     createDefaultTextCaption(text?: string): TextCaptionPayload;
     openTextCaptionModal(options: { title?: string; configKey?: string; value?: TextCaptionPayload | null; onChange?: (next: TextCaptionPayload | null) => void }): void;
     renderTextCaption(value: TextCaptionPayload | null): HTMLElement | null;
+  };
+  text: {
+    createDefaultText(text?: string): TextComponentPayload;
+    renderText(value: string | TextComponentPayload | null): HTMLElement | null;
   };
   textEditor: {
     mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;

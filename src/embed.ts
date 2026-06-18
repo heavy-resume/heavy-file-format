@@ -76,7 +76,7 @@ import type {
   ImportFromTextOptions,
   ImportFromTextResult,
 } from './ai-document-edit';
-import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
+import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
@@ -307,6 +307,7 @@ function localGetComponentRenderHelpers() {
       renderRichToolbar: () => '',
       renderEditorBlock: () => '',
       renderPassiveEditorBlock: () => '',
+      renderTextFragment,
       renderComponentFragment,
       renderComponentPlacementTarget: () => '',
     },
@@ -320,8 +321,12 @@ function renderComponentFragment(componentName: string, content: string, block: 
     return `<pre class="code-reader"><code data-language="${escapeAttr(language)}">${escapeHtml(content)}</code></pre>`;
   }
   const source = componentName === 'text' && block.schema.fillIn ? removeTextFillInMarkers(content) : content;
-  const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(source));
-  return markdownToReaderHtml(normalized);
+  return renderTextFragment(source);
+}
+
+function renderTextFragment(content: string): string {
+  const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
+  return addExternalLinkTargets(markdownToReaderHtml(normalized));
 }
 
 function ensureReaderRenderer(): ReaderRenderer {

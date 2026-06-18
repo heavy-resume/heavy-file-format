@@ -44,7 +44,7 @@ test('expected result: plugin text rendering uses reader text classes instead of
     expect(expectedResult?.classList.contains('reader-block-text')).toBe(true);
     expect(expectedResult?.classList.contains('hvy-plugin-text-content')).toBe(true);
     expect(expectedResult?.classList.contains('hvy-text-caption-content')).toBe(false);
-    expect(expectedResult?.innerHTML).toBe('<p>**Plugin text**</p>');
+    expect(expectedResult?.innerHTML).toBe('<p><strong>Plugin text</strong></p>');
   } finally {
     vi.unstubAllGlobals();
   }
@@ -68,6 +68,7 @@ function createTestHelpers(): ComponentRenderHelpers {
     orderReaderBlocks: (blocks) => blocks,
     orderReaderListBlocks: (blocks) => blocks,
     isReaderViewPrioritizedBlock: () => false,
+    renderTextFragment: (content) => `<p>${content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</p>`,
     renderComponentFragment: (_componentName, content) => `<p>${content}</p>`,
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

@@ -219,6 +219,7 @@ export interface EditorRenderer {
     }
   ) => string;
   renderMetaPanel: () => string;
+  renderTextFragment: (content: string) => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
@@ -2235,6 +2236,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
     renderRichToolbar,
     renderMetaPanel,
+    renderTextFragment,
     renderComponentFragment,
     renderBlockMetaFields,
     renderComponentPlacementTarget,

@@ -818,6 +818,72 @@ hvy_version: 0.1
   expect(result.previewLabel).toBe('Ready');
 });
 
+test('embedded plugin text renderer uses document link transforms', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:plugin {"plugin":"test.text-renderer"}-->
+  plugin body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      plugins: [{
+        id: 'test.text-renderer',
+        displayName: 'Text Renderer Test',
+        create(context) {
+          const element = document.createElement('div');
+          const rendered = context.text.renderText('Plugin [Expected Link](https://plugin.example/report)');
+          if (rendered) {
+            element.append(rendered);
+          }
+          return { element };
+        },
+      }],
+      async linkObserver(link) {
+        seen.push(`${link.href}:${link.text.trim()}:${link.attributes.target ?? ''}`);
+        await Promise.resolve();
+        return {
+          href: `/plugin-safe?url=${encodeURIComponent(link.href)}`,
+          attributes: { 'data-plugin-reviewed': 'true' },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const link = root.querySelector<HTMLAnchorElement>('.hvy-plugin-text-content a');
+    return {
+      seen,
+      href: link?.getAttribute('href') ?? '',
+      target: link?.getAttribute('target') ?? '',
+      rel: link?.getAttribute('rel') ?? '',
+      reviewed: link?.getAttribute('data-plugin-reviewed') ?? '',
+      textClass: root.querySelector('.hvy-plugin-text-content')?.className ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(['https://plugin.example/report:Expected Link:_blank']);
+  expect(result.href).toBe('/plugin-safe?url=https%3A%2F%2Fplugin.example%2Freport');
+  expect(result.target).toBe('_blank');
+  expect(result.rel).toBe('noopener noreferrer');
+  expect(result.reviewed).toBe('true');
+  expect(result.textClass).toContain('reader-block-text');
+});
+
 test('embedded edit modes asynchronously rewrite rendered links', async ({ page }) => {
   await page.goto('/');
 

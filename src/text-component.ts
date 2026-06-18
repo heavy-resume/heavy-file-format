@@ -1,5 +1,5 @@
 import type { ComponentRenderHelpers } from './editor/component-helpers';
-import type { TextBlockSchema, VisualBlock } from './editor/types';
+import type { TextBlockSchema } from './editor/types';
 import { sanitizeInlineCss } from './css-sanitizer';
 import { defaultBlockSchema } from './document-factory';
 import type { JsonObject } from './hvy/types';
@@ -34,8 +34,7 @@ export function renderTextComponentElement(value: unknown, helpers: ComponentRen
   if (!normalized || normalized.text.trim().length === 0) {
     return null;
   }
-  const block = createTextComponentBlock(normalized);
-  const html = helpers.renderComponentFragment('text', normalized.text, block);
+  const html = helpers.renderTextFragment(normalized.text);
   if (!html) {
     return null;
   }
@@ -54,19 +53,6 @@ export function renderTextComponentElement(value: unknown, helpers: ComponentRen
     element.style.textAlign = normalized.schema.align;
   }
   return element;
-}
-
-function createTextComponentBlock(payload: TextComponentPayload): VisualBlock {
-  return {
-    id: 'plugin-text',
-    text: payload.text,
-    schema: {
-      ...payload.schema,
-      kind: 'text',
-      component: 'text',
-    } as VisualBlock['schema'],
-    schemaMode: false,
-  };
 }
 
 function normalizeTextComponentSchema(value: unknown): TextBlockSchema {

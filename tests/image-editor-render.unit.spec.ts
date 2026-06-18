@@ -26,6 +26,7 @@ const helpers: ComponentRenderHelpers = {
   orderReaderBlocks: (blocks) => blocks,
   orderReaderListBlocks: (blocks) => blocks,
   isReaderViewPrioritizedBlock: () => false,
+  renderTextFragment: (content) => content,
   renderComponentOptions: () => '',
   renderAddComponentPicker: () => '',
   renderComponentPlacementTarget: () => '',

@@ -1014,6 +1014,7 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderRichToolbar: ComponentRenderHelpers['renderRichToolbar'];
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderTextFragment: ComponentRenderHelpers['renderTextFragment'];
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }, readerRenderer: {
@@ -1058,6 +1059,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     orderReaderBlocks: readerRenderer.orderReaderBlocks,
     orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
+    renderTextFragment: editorRenderer.renderTextFragment,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions: renderAllowedComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(

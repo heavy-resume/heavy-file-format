@@ -811,6 +811,11 @@ function ensureEmbedRuntime(
       currentLinkObserver = getLinkObserver();
       refreshModalPreview();
     }),
+    observeLinks: (target) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      observeRenderedLinks(target, currentLinkObserver);
+    }),
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
   });

@@ -884,6 +884,72 @@ hvy_version: 0.1
   expect(result.textClass).toContain('reader-block-text');
 });
 
+test('embedded plugin can observe links inserted after async rendering', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:plugin {"plugin":"test.async-text-renderer"}-->
+  plugin body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      plugins: [{
+        id: 'test.async-text-renderer',
+        displayName: 'Async Text Renderer Test',
+        create(context) {
+          const element = document.createElement('div');
+          element.className = 'async-plugin-host';
+          void Promise.resolve().then(() => {
+            const rendered = context.text.renderText('Async [Expected Link](https://async-plugin.example/report)');
+            if (rendered) {
+              element.append(rendered);
+              context.observeLinks(element);
+            }
+          });
+          return { element };
+        },
+      }],
+      async linkObserver(link) {
+        seen.push(`${link.href}:${link.text.trim()}`);
+        await Promise.resolve();
+        return {
+          href: `/async-safe?url=${encodeURIComponent(link.href)}`,
+          attributes: { 'data-async-reviewed': 'true' },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    const link = root.querySelector<HTMLAnchorElement>('.async-plugin-host a');
+    return {
+      seen,
+      href: link?.getAttribute('href') ?? '',
+      target: link?.getAttribute('target') ?? '',
+      reviewed: link?.getAttribute('data-async-reviewed') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(['https://async-plugin.example/report:Expected Link']);
+  expect(result.href).toBe('/async-safe?url=https%3A%2F%2Fasync-plugin.example%2Freport');
+  expect(result.target).toBe('_blank');
+  expect(result.reviewed).toBe('true');
+});
+
 test('embedded edit modes asynchronously rewrite rendered links', async ({ page }) => {
   await page.goto('/');
 

@@ -37,6 +37,7 @@ function createHelpers(): ComponentRenderHelpers {
     orderReaderBlocks: (blocks) => blocks,
     orderReaderListBlocks: (blocks) => blocks,
     isReaderViewPrioritizedBlock: () => false,
+    renderTextFragment: (content) => content,
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
@@ -123,6 +124,7 @@ test('table editor renders inline cell content without paragraph wrappers', () =
 test('reader table renders inline cell content without paragraph wrappers', () => {
   const helpers = {
     ...createHelpers(),
+    renderTextFragment: (content: string) => `<p>${content}</p>\n`,
     renderComponentFragment: (_componentName: string, content: string) => `<p>${content}</p>\n`,
   };
   const html = renderTableReader(section, createTableBlock([['Staff Engineer', 'Platform']]), helpers);

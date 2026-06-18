@@ -41,6 +41,7 @@ export function renderTextComponentElement(value: unknown, helpers: ComponentRen
   const element = document.createElement('div');
   element.className = [
     'hvy-plugin-text-content',
+    'hvy-link-observer-surface',
     'reader-block',
     'reader-block-text',
     normalized.schema.align === 'left' ? '' : `align-${normalized.schema.align}`,

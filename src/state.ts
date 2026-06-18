@@ -37,6 +37,7 @@ type RuntimeCallbacks = {
   renderApp: () => void;
   refreshReaderPanels: () => void;
   refreshModalPreview: () => void;
+  observeLinks: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   componentRenderHelpers: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +54,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
     renderApp: () => { throw new Error('renderApp not initialized'); },
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
+    observeLinks: () => {},
     componentRenderHelpers: null,
     readerRenderer: null,
   };
@@ -61,12 +63,14 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
 let _refreshReaderPanels: () => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
+let _observeLinks: (root: ParentNode) => void = () => {};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
 export function getRefreshReaderPanels(): () => void { return _refreshReaderPanels; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
+export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getCachedComponentRenderHelpers(): any {
   if (_componentRenderHelpers === null) {
@@ -87,6 +91,7 @@ export function initCallbacks(callbacks: {
   renderApp: () => void;
   refreshReaderPanels: () => void;
   refreshModalPreview: () => void;
+  observeLinks?: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   componentRenderHelpers: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,7 +103,10 @@ export function initCallbacks(callbacks: {
       callbacks: createUninitializedCallbacks(),
     };
   }
-  activeRuntime.callbacks = callbacks;
+  activeRuntime.callbacks = {
+    ...callbacks,
+    observeLinks: callbacks.observeLinks ?? (() => {}),
+  };
   activateStateRuntime(activeRuntime);
 }
 
@@ -138,6 +146,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   _renderApp = runtime.callbacks.renderApp;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
+  _observeLinks = runtime.callbacks.observeLinks;
   _componentRenderHelpers = runtime.callbacks.componentRenderHelpers;
   _readerRenderer = runtime.callbacks.readerRenderer;
 }

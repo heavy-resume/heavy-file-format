@@ -76,6 +76,9 @@ export interface HvyPluginContext {
   // Persist block-level presentation CSS for plugin-owned controls such as
   // size/alignment presets, refreshing this plugin instance and reader panels.
   setCss(css: string): void;
+  // Run the host's active rendered-link observer over plugin-owned DOM that was
+  // inserted after the normal HVY render pass, such as async API results.
+  observeLinks(root: ParentNode): void;
   caption: {
     createDefaultTextCaption(text?: string): TextCaptionPayload;
     openTextCaptionModal(options: { title?: string; configKey?: string; value?: TextCaptionPayload | null; onChange?: (next: TextCaptionPayload | null) => void }): void;

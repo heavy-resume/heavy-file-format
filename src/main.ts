@@ -1233,6 +1233,7 @@ initCallbacks({
   renderApp,
   refreshReaderPanels,
   refreshModalPreview,
+  observeLinks: () => {},
   componentRenderHelpers: localGetComponentRenderHelpers(),
   readerRenderer,
 });

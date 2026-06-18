@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, getActiveStateRuntime, getCachedComponentRenderHelpers, runWithStateRuntime, type StateRuntime } from '../state';
+import { state, getRenderApp, getRefreshReaderPanels, getObserveLinks, getActiveStateRuntime, getCachedComponentRenderHelpers, runWithStateRuntime, type StateRuntime } from '../state';
 import { findBlockByIds } from '../block-ops';
 import { recordHistory } from '../history';
 import { syncReusableTemplateForBlock } from '../reusable';
@@ -164,6 +164,7 @@ function buildContext(
     setConfig,
     setText,
     setCss,
+    observeLinks: (root) => runWithStateRuntime(runtime, () => getObserveLinks()(root)),
     caption: {
       createDefaultTextCaption,
       openTextCaptionModal: (options) => runWithStateRuntime(runtime, () => {

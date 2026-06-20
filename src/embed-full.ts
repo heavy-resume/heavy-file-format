@@ -116,6 +116,7 @@ import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -1046,7 +1047,9 @@ export {
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  buildDocumentRichTextCopyPayload,
 };
+export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
@@ -1118,6 +1121,7 @@ window.HVY = {
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
+  buildDocumentRichTextCopyPayload,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

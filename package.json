@@ -23,6 +23,10 @@
       "types": "./src/cli-core/index.ts",
       "default": "./src/cli-core/index.ts"
     },
+    "./rich-text-copy": {
+      "types": "./src/rich-text-copy.ts",
+      "default": "./src/rich-text-copy.ts"
+    },
     "./brython-minimal-vfs-plugin": {
       "types": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts",
       "default": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts"

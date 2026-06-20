@@ -87,6 +87,7 @@ import { bindCarouselInteractions } from './editor/components/carousel/carousel'
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
@@ -962,7 +963,9 @@ export {
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  buildDocumentRichTextCopyPayload,
 };
+export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
@@ -1032,6 +1035,7 @@ declare global {
       createPdfExportPlan: typeof createPdfExportPlan;
       createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
+      buildDocumentRichTextCopyPayload: typeof buildDocumentRichTextCopyPayload;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
@@ -1057,6 +1061,7 @@ window.HVY = {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   searchDocuments,
+  buildDocumentRichTextCopyPayload,
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   getPdfExportPromptTemplates,

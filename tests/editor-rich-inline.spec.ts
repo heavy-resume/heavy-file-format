@@ -384,7 +384,18 @@ test('rich editor wraps long text without expanding its block', async ({ page })
   const widthAfter = await block.evaluate((node) => node.getBoundingClientRect().width);
 
   expect(widthAfter).toBeLessThanOrEqual(widthBefore + 1);
-  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'normal');
+  await expect.poll(async () =>
+    editor.evaluate((node) => {
+      const content = node.closest<HTMLElement>('.editor-block-content');
+      const tree = node.closest<HTMLElement>('.editor-tree');
+      return {
+        editorOverflow: node.scrollWidth - node.clientWidth,
+        contentOverflow: content ? content.scrollWidth - content.clientWidth : 0,
+        treeOverflow: tree ? tree.scrollWidth - tree.clientWidth : 0,
+      };
+    })
+  ).toEqual({ editorOverflow: 0, contentOverflow: 0, treeOverflow: 0 });
+  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
 });
 
 test('inline code autoformats from backticks and escapes with arrow or click', async ({ page }) => {
@@ -888,6 +899,88 @@ test('cmd shift v pastes plain text without requesting clipboard read permission
     (window as typeof window & { __hvyUnhandledRejections?: string[] }).__hvyUnhandledRejections ?? []
   )).toEqual([]);
   expect(pageErrors).toEqual([]);
+});
+
+test('cmd shift v beforeinput does not make the next normal paste plain', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    (node as HTMLElement).dataset.hvyPlainPasteUntil = String(Date.now() + 2000);
+
+    const plainTransfer = new DataTransfer();
+    plainTransfer.setData('text/html', '<strong>Plain Alpha</strong>');
+    plainTransfer.setData('text/plain', 'Plain Alpha');
+    const plainPasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPasteAsQuotation',
+    });
+    Object.defineProperty(plainPasteEvent, 'inputType', { value: 'insertFromPasteAsQuotation' });
+    Object.defineProperty(plainPasteEvent, 'dataTransfer', { value: plainTransfer });
+    node.dispatchEvent(plainPasteEvent);
+
+    const richTransfer = new DataTransfer();
+    richTransfer.setData('text/html', '<strong>Bold Beta</strong>');
+    richTransfer.setData('text/plain', 'Bold Beta');
+    const richPasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(richPasteEvent, 'clipboardData', { value: richTransfer });
+    node.dispatchEvent(richPasteEvent);
+    let richBeforeInputPrevented = false;
+    if (!richPasteEvent.defaultPrevented) {
+      const richBeforeInputEvent = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertFromPaste',
+      });
+      Object.defineProperty(richBeforeInputEvent, 'dataTransfer', { value: richTransfer });
+      node.dispatchEvent(richBeforeInputEvent);
+      richBeforeInputPrevented = richBeforeInputEvent.defaultPrevented;
+    }
+
+    const secondRichTransfer = new DataTransfer();
+    secondRichTransfer.setData('text/html', '<strong>Bold Gamma</strong>');
+    secondRichTransfer.setData('text/plain', 'Bold Gamma');
+    const secondRichPasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(secondRichPasteEvent, 'dataTransfer', { value: secondRichTransfer });
+    node.dispatchEvent(secondRichPasteEvent);
+
+    return {
+      html: node.innerHTML,
+      plainPastePrevented: plainPasteEvent.defaultPrevented,
+      richPastePrevented: richPasteEvent.defaultPrevented,
+      richBeforeInputPrevented,
+      secondRichPastePrevented: secondRichPasteEvent.defaultPrevented,
+    };
+  });
+
+  expect(expectedResult.plainPastePrevented).toBe(true);
+  expect(expectedResult.richPastePrevented).toBe(false);
+  expect(expectedResult.richBeforeInputPrevented).toBe(true);
+  expect(expectedResult.secondRichPastePrevented).toBe(true);
+  expect(expectedResult.html).toContain('Plain Alpha');
+  expect(expectedResult.html).not.toContain('<strong>Plain Alpha</strong>');
+  expect(expectedResult.html).toContain('<strong>Bold Beta</strong>');
+  expect(expectedResult.html).toContain('<strong>Bold Gamma</strong>');
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

@@ -29,8 +29,13 @@ export function bindBeforeinput(app: HTMLElement): void {
       return;
     }
 
-    if (!handleRichEditorBeforeInput(event as InputEvent, editable)) {
+    const inputEvent = event as InputEvent;
+    if (!handleRichEditorBeforeInput(inputEvent, editable)) {
       return;
+    }
+
+    if (inputEvent.inputType === 'insertFromPasteAsQuotation') {
+      clearPendingPlainPaste(editable);
     }
 
     event.preventDefault();
@@ -50,6 +55,10 @@ function getRichEditable(target: HTMLElement): HTMLElement | null {
 
 function consumePendingPlainPaste(editable: HTMLElement): boolean {
   const until = Number(editable.dataset.hvyPlainPasteUntil ?? '0');
-  delete editable.dataset.hvyPlainPasteUntil;
+  clearPendingPlainPaste(editable);
   return Number.isFinite(until) && until >= Date.now();
+}
+
+function clearPendingPlainPaste(editable: HTMLElement): void {
+  delete editable.dataset.hvyPlainPasteUntil;
 }

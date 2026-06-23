@@ -4,6 +4,8 @@
   --hvy-sidebar-footprint: 3.25rem;
   --hvy-sidebar-tab-size: calc(var(--hvy-sidebar-footprint) - var(--hvy-sidebar-tab-gap));
   --hvy-document-edge-gutter: 0.9rem;
+  --hvy-floating-control-edge-gutter: 1rem;
+  --hvy-floating-control-gap: 0.5rem;
   --hvy-floating-controls-clearance: 6.6rem;
 }
 
@@ -499,10 +501,17 @@ body {
 
 .editor-top-controls {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
+}
+
+.editor-top-controls button,
+.compact-control-group button {
+  min-height: 2rem;
+  padding: 0.42rem 0.65rem;
+  font-size: 0.9rem;
 }
 
 .pdf-document-badge {
@@ -521,13 +530,13 @@ body {
 .workspace-right-controls {
   display: grid;
   justify-items: end;
-  gap: 0.45rem;
-  min-width: min(100%, 24rem);
+  gap: 0.35rem;
+  min-width: min(100%, 30rem);
 }
 
 .responsive-preview-controls {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.28rem;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
@@ -535,7 +544,7 @@ body {
 
 .preview-control-stack {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.28rem;
   justify-self: center;
 }
 
@@ -548,13 +557,78 @@ body {
 
 .meta-filter-controls {
   display: grid;
-  gap: 0.25rem;
-  width: min(100%, 24rem);
-  padding: 0.35rem;
+  gap: 0.3rem;
+  width: min(100%, 30rem);
+  padding: 0.3rem;
   border: 1px solid var(--hvy-border-translucent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);
   box-shadow: 0 10px 24px var(--hvy-shadow);
+}
+
+.meta-filter-options {
+  min-width: 0;
+}
+
+.meta-filter-options summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--hvy-button-bg) 12%, var(--hvy-surface));
+  color: var(--hvy-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.meta-filter-options summary::-webkit-details-marker {
+  display: none;
+}
+
+.meta-filter-options summary::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-0.1rem);
+  transition: transform 140ms ease;
+}
+
+.meta-filter-options[open] summary::after {
+  transform: rotate(225deg) translate(-0.1rem, -0.1rem);
+}
+
+.meta-filter-options summary:focus-visible {
+  outline: none;
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 3px var(--hvy-focus-glow);
+}
+
+.meta-filter-options summary span {
+  color: var(--hvy-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.meta-filter-options summary strong {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--hvy-text);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-filter-options-panel {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.3rem;
 }
 
 .meta-filter-mode-group {
@@ -564,10 +638,12 @@ body {
 }
 
 .meta-filter-mode {
-  min-height: 2rem;
+  min-height: 1.9rem;
+  padding: 0.35rem 0.55rem;
   border-color: var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-button-bg) 12%, var(--hvy-surface));
   color: var(--hvy-text);
+  font-size: 0.86rem;
 }
 
 .meta-filter-mode.is-active {
@@ -579,17 +655,17 @@ body {
 
 .meta-filter-input-shell {
   display: grid;
-  grid-template-columns: minmax(7rem, 1fr) auto auto;
-  gap: 0.35rem;
+  grid-template-columns: minmax(8rem, 1fr) auto auto;
+  gap: 0.3rem;
   align-items: center;
 }
 
 .meta-filter-input {
   min-width: 0;
-  height: 2.3rem;
+  height: 2.05rem;
   border: 1px solid var(--hvy-border);
   border-radius: 6px;
-  padding: 0 0.7rem;
+  padding: 0 0.6rem;
   background: var(--hvy-input-bg);
   color: var(--hvy-text);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 65%, transparent);
@@ -602,12 +678,14 @@ body {
 }
 
 .meta-filter-submit {
-  min-height: 2.3rem;
+  min-height: 2.05rem;
+  padding: 0.35rem 0.7rem;
   white-space: nowrap;
 }
 
 .meta-filter-clear {
-  min-height: 2.3rem;
+  min-height: 2.05rem;
+  padding: 0.35rem 0.65rem;
   white-space: nowrap;
 }
 

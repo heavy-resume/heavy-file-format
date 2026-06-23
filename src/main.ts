@@ -931,7 +931,7 @@ function renderResponsivePreviewControls(): string {
     { value: 'tablet', label: 'Tablet 768' },
     { value: 'desktop', label: 'Desktop' },
   ];
-  return `<div class="responsive-preview-controls" role="group" aria-label="Document preview width">
+  return `<div class="responsive-preview-controls compact-control-group" role="group" aria-label="Document preview width">
     ${options
       .map(
         (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
@@ -990,15 +990,9 @@ function renderMetaFilterControls(): string {
     : state.metaFilter.resultCount === null
     ? ''
     : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
+  const modeLabel = state.search.filterQueryMode === 'semantic' ? 'Semantic' : 'Keyword';
+  const behaviorLabel = state.search.filterMode === 'hide' ? 'Hide' : 'Shade';
   return `<form id="metaFilterComposer" class="meta-filter-controls" aria-label="Meta filter current document">
-    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
-      ${renderMetaFilterModeButton('keyword', 'Keyword')}
-      ${renderMetaFilterModeButton('semantic', 'Semantic')}
-    </div>
-    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
-      ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
-      ${renderMetaFilterBehaviorButton('hide', 'Hide')}
-    </div>
     <div class="meta-filter-input-shell">
       <input
         id="metaFilterQuery"
@@ -1016,6 +1010,22 @@ function renderMetaFilterControls(): string {
         Clear
       </button>
     </div>
+    <details class="meta-filter-options">
+      <summary>
+        <span>Filter options</span>
+        <strong data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
+      </summary>
+      <div class="meta-filter-options-panel">
+        <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
+          ${renderMetaFilterModeButton('keyword', 'Keyword')}
+          ${renderMetaFilterModeButton('semantic', 'Semantic')}
+        </div>
+        <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
+          ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
+          ${renderMetaFilterBehaviorButton('hide', 'Hide')}
+        </div>
+      </div>
+    </details>
     ${status ? `<div class="meta-filter-status${state.metaFilter.error ? ' is-error' : ''}" role="status">${escapeHtml(status)}</div>` : ''}
   </form>`;
 }

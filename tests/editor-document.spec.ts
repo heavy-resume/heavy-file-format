@@ -1338,6 +1338,7 @@ test('reference meta filter reloads the document with the filter snapshot applie
     });
   });
 
+  await page.locator('.meta-filter-options > summary').click();
   await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Semantic' }).click();
   await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Hide' }).click();
   await page.locator('#metaFilterQuery').fill('Programming languages');

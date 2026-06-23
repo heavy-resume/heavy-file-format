@@ -273,6 +273,26 @@ export function bindUi(app: HTMLElement): void {
     state.metaFilter.status = null;
   });
 
+  const updateMetaFilterOptionControls = (): void => {
+    app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]').forEach((button) => {
+      const active = button.dataset.metaFilterMode === state.search.filterQueryMode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]').forEach((button) => {
+      const active = button.dataset.metaFilterBehavior === state.search.filterMode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const optionsLabel = app.querySelector<HTMLElement>('[data-meta-filter-options-label]');
+    if (optionsLabel) {
+      const modeLabel = state.search.filterQueryMode === 'semantic' ? 'Semantic' : 'Keyword';
+      const behaviorLabel = state.search.filterMode === 'hide' ? 'Hide' : 'Shade';
+      optionsLabel.textContent = `${modeLabel} · ${behaviorLabel}`;
+    }
+    app.querySelector<HTMLElement>('.meta-filter-status')?.remove();
+  };
+
   metaFilterComposer?.addEventListener('submit', (event) => {
     event.preventDefault();
     void runInBoundRuntimeAsync(async () => {
@@ -350,7 +370,7 @@ export function bindUi(app: HTMLElement): void {
         state.metaFilter.error = null;
         state.metaFilter.status = null;
         state.metaFilter.resultCount = null;
-        getRenderApp()();
+        updateMetaFilterOptionControls();
       });
     });
   });
@@ -366,7 +386,7 @@ export function bindUi(app: HTMLElement): void {
         state.metaFilter.error = null;
         state.metaFilter.status = null;
         state.metaFilter.resultCount = null;
-        getRenderApp()();
+        updateMetaFilterOptionControls();
       });
     });
   });

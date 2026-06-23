@@ -775,21 +775,13 @@ test('rich copy inside the document preserves HVY-origin color presentation on p
   expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
 });
 
-test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
+test('native plain paste uses text instead of rich html', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
 
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        readText: async () => 'Plain <not bold>',
-      },
-    });
-  });
-  await editor.evaluate((node) => {
+  const expectedResult = await editor.evaluate((node) => {
     node.innerHTML = '<p>Before </p>';
     const paragraph = node.querySelector('p')!;
     const selection = window.getSelection();
@@ -799,17 +791,103 @@ test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData('application/x-hvy-rich-html', '<strong>Rich clipboard payload</strong>');
+    transfer.setData('text/html', '<strong>Plain &lt;not bold&gt;</strong>');
+    transfer.setData('text/plain', 'Plain <not bold>');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPasteAsQuotation',
+    });
+    Object.defineProperty(pasteEvent, 'inputType', { value: 'insertFromPasteAsQuotation' });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
   });
-
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
-
-  const expectedResult = await editor.evaluate((node) => ({
-    html: node.innerHTML,
-    text: node.textContent,
-  }));
+  expect(expectedResult.pastePrevented).toBe(true);
   expect(expectedResult.text).toContain('Before Plain <not bold>');
   expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
   expect(expectedResult.html).not.toContain('<strong>');
+});
+
+test('cmd shift v pastes plain text without requesting clipboard read permission', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(`${error.name}: ${error.message}`));
+
+  await page.goto('/');
+  await page.evaluate(() => {
+    (window as typeof window & { __hvyUnhandledRejections?: string[] }).__hvyUnhandledRejections = [];
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event.reason;
+      (window as typeof window & { __hvyUnhandledRejections: string[] }).__hvyUnhandledRejections.push(
+        reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason)
+      );
+    });
+  });
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await page.evaluate(() => {
+    (window as typeof window & { __hvyClipboardReadTextCalls?: number }).__hvyClipboardReadTextCalls = 0;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => {
+          (window as typeof window & { __hvyClipboardReadTextCalls: number }).__hvyClipboardReadTextCalls += 1;
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        },
+      },
+    });
+  });
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before</p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
+  const expectedResult = await editor.evaluate((node) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/html', '<strong>Plain &lt;not bold&gt;</strong>');
+    transfer.setData('text/plain', 'Plain <not bold>');
+    const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+    return {
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { __hvyClipboardReadTextCalls?: number }).__hvyClipboardReadTextCalls ?? 0
+  )).toBe(0);
+  await expect(page.locator('main.layout')).toHaveCount(1);
+  await expect(page.getByText('Startup Problem')).toHaveCount(0);
+  expect(expectedResult.pastePrevented).toBe(true);
+  expect(expectedResult.text).toContain('BeforePlain <not bold>');
+  expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
+  expect(expectedResult.html).not.toContain('<strong>');
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { __hvyUnhandledRejections?: string[] }).__hvyUnhandledRejections ?? []
+  )).toEqual([]);
+  expect(pageErrors).toEqual([]);
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

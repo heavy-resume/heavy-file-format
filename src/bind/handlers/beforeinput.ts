@@ -1,4 +1,4 @@
-import { handleRichEditorBeforeInput, handleRichEditorCopy } from './_imports';
+import { handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste } from './_imports';
 
 export function bindBeforeinput(app: HTMLElement): void {
   app.addEventListener('copy', (event) => {
@@ -7,6 +7,19 @@ export function bindBeforeinput(app: HTMLElement): void {
       return;
     }
     handleRichEditorCopy(event, editable);
+  });
+
+  app.addEventListener('paste', (event) => {
+    const editable = getRichEditable(event.target as HTMLElement);
+    if (!editable || !consumePendingPlainPaste(editable)) {
+      return;
+    }
+
+    if (!handleRichEditorPlainTextPaste(event, editable)) {
+      return;
+    }
+
+    event.preventDefault();
   });
 
   app.addEventListener('beforeinput', (event) => {
@@ -33,4 +46,10 @@ function getRichEditable(target: HTMLElement): HTMLElement | null {
     : target.closest<HTMLElement>(
         '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="caption-rich"]'
       );
+}
+
+function consumePendingPlainPaste(editable: HTMLElement): boolean {
+  const until = Number(editable.dataset.hvyPlainPasteUntil ?? '0');
+  delete editable.dataset.hvyPlainPasteUntil;
+  return Number.isFinite(until) && until >= Date.now();
 }

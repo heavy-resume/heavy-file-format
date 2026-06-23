@@ -2419,8 +2419,19 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (!dataTransfer) {
       return false;
     }
+    if (event.inputType === 'insertFromPasteAsQuotation') {
+      const text = dataTransfer.getData('text/plain');
+      if (text) {
+        insertPlainTextAtEditableSelection(editable, text);
+        editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        routeNextUndoToDocument();
+        updateRichToolbarState(editable);
+        return true;
+      }
+      return false;
+    }
     const html = dataTransfer.getData(HVY_RICH_CLIPBOARD_TYPE) ||
-      (event.inputType === 'insertFromPasteAsQuotation' ? '' : sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html')));
+      sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html'));
     if (html) {
       insertHtmlAtEditableSelection(editable, html);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2539,11 +2550,8 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   return true;
 }
 
-export async function pastePlainTextIntoRichEditor(editable: HTMLElement): Promise<boolean> {
-  if (!navigator.clipboard?.readText) {
-    return false;
-  }
-  const text = await navigator.clipboard.readText();
+export function handleRichEditorPlainTextPaste(event: ClipboardEvent, editable: HTMLElement): boolean {
+  const text = event.clipboardData?.getData('text/plain') ?? '';
   if (!text) {
     return false;
   }

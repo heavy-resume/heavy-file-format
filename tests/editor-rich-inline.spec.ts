@@ -786,6 +786,63 @@ test('rich copy inside the document preserves HVY-origin color presentation on p
   expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
 });
 
+test('rich copy omits editor caret anchors from copied line', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>\u200bCopied line</p><p>Target </p>';
+
+    const before = {
+      sourceText: node.querySelector('p')?.textContent ?? '',
+    };
+
+    const source = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNodeContents(source);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    const target = node.querySelectorAll('p')[1]!;
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(target);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    const after = {
+      clipboardHtml: transfer.getData('text/html'),
+      clipboardText: transfer.getData('text/plain'),
+      pastePrevented: pasteEvent.defaultPrevented,
+      targetText: target.textContent ?? '',
+    };
+
+    return { before, after };
+  });
+
+  expect(expectedResult.before.sourceText).toBe('\u200bCopied line');
+  expect(expectedResult.after.clipboardText).toBe('Copied line');
+  expect(expectedResult.after.clipboardHtml).not.toContain('\u200b');
+  expect(expectedResult.after.pastePrevented).toBe(true);
+  expect(expectedResult.after.targetText).toBe('Target Copied line');
+});
+
 test('native plain paste uses text instead of rich html', async ({ page }) => {
   await page.goto('/');
 

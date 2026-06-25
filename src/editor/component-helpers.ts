@@ -22,7 +22,7 @@ export interface XrefTargetOption {
 export interface ComponentRenderHelpers {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
-  markdownToEditorHtml: (markdown: string) => string;
+  markdownToEditorHtml: (markdown: string, codeLanguageInputAttrs?: Record<string, string>) => string;
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;

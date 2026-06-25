@@ -4,9 +4,10 @@ import {
   handleRichEditorCopy,
   handleRichEditorKeydown,
   handleRichEditorKeyup,
+  updateRichCodeBlockLanguageInput,
   refreshRichToolbarState,
 } from '../block-ops';
-import { markdownToEditorHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, removeNonTextContentFromRichEditor, turndown } from '../markdown';
+import { getRichEditorSerializableHtml, markdownToEditorHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, removeNonTextContentFromRichEditor, turndown } from '../markdown';
 import { getCachedComponentRenderHelpers } from '../state';
 import { syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
 import type { HvyPluginTextEditorInstance, HvyPluginTextEditorMountOptions } from './types';
@@ -62,10 +63,11 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
 
   const readMarkdown = (): string => {
     removeNonTextContentFromRichEditor(editable);
-    return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(editable.innerHTML)));
+    return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(editable))));
   };
 
-  const syncChange = (): void => {
+  const syncChange = (target?: EventTarget | null): void => {
+    updateRichCodeBlockLanguageInput(target ?? null);
     options.onChange(readMarkdown());
     refreshRichToolbarState(editable);
   };
@@ -78,7 +80,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   const onCopy = (event: Event): void => {
     handleRichEditorCopy(event as ClipboardEvent, editable);
   };
-  const onInput = (): void => syncChange();
+  const onInput = (event: Event): void => syncChange(event.target);
   const onKeydown = (event: KeyboardEvent): void => {
     if (handleRichEditorKeydown(event, editable)) {
       return;

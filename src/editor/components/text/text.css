@@ -1157,6 +1157,51 @@
   content: none;
 }
 
+.rich-code-block-shell {
+  position: relative;
+  margin: 0 0 0.45rem;
+}
+
+.rich-editor .rich-code-block-shell pre {
+  margin-bottom: 0;
+  padding-top: 1.55rem;
+}
+
+.rich-code-block-shell pre::before {
+  content: none;
+}
+
+.rich-code-language-control {
+  position: absolute;
+  top: 0.32rem;
+  left: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(18rem, calc(100% - 1.3rem));
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.rich-code-language-control input {
+  width: 7.5rem;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.18rem 0.38rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.rich-code-language-control input:focus {
+  border-color: var(--hvy-accent);
+  outline: 2px solid var(--hvy-accent-soft);
+  outline-offset: 1px;
+}
+
 .rich-editor pre code {
   display: block;
   min-height: 1.5em;

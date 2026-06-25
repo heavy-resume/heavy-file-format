@@ -101,6 +101,7 @@ turndown.addRule('hvy-text-fill-in-marker', {
 export interface MarkdownRenderOptions {
   textLineStyles?: TextLineStyles;
   textLineStyleMode?: 'viewer' | 'editor';
+  codeLanguageInputAttrs?: Record<string, string>;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
@@ -115,9 +116,13 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
   template.content.querySelectorAll<HTMLElement>('pre > code').forEach((code) => {
     const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'));
     const language = languageClass ? languageClass.slice('language-'.length) : code.dataset.language || 'text';
-    code.parentElement?.setAttribute('data-code-language', language || 'text');
-    code.parentElement?.setAttribute('contenteditable', 'false');
+    const pre = code.parentElement;
+    pre?.setAttribute('data-code-language', language || 'text');
+    pre?.setAttribute('contenteditable', 'false');
     code.setAttribute('contenteditable', 'true');
+    if (pre instanceof HTMLElement) {
+      wrapCodeBlockEditor(pre, renderCodeLanguageControl(pre.ownerDocument, language || 'text', options.codeLanguageInputAttrs ?? {}));
+    }
   });
   renderInlineCheckboxes(template.content);
   markInlineCheckboxLines(template.content);
@@ -127,6 +132,43 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
     checkbox.setAttribute('contenteditable', 'false');
   });
   return template.innerHTML;
+}
+
+export function getRichEditorSerializableHtml(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('.rich-code-language-control').forEach((control) => control.remove());
+  clone.querySelectorAll<HTMLElement>('.rich-code-block-shell').forEach((shell) => {
+    const pre = shell.querySelector(':scope > pre');
+    if (pre) {
+      shell.replaceWith(pre);
+    }
+  });
+  return clone.innerHTML;
+}
+
+function wrapCodeBlockEditor(pre: HTMLElement, control: HTMLElement): void {
+  const wrapper = pre.ownerDocument.createElement('div');
+  wrapper.className = 'rich-code-block-shell';
+  pre.before(wrapper);
+  wrapper.append(control, pre);
+}
+
+function renderCodeLanguageControl(ownerDocument: Document, language: string, attrs: Record<string, string>): HTMLElement {
+  const label = ownerDocument.createElement('label');
+  label.className = 'rich-code-language-control';
+  label.contentEditable = 'false';
+  const labelText = ownerDocument.createElement('span');
+  labelText.textContent = 'Language';
+  const input = ownerDocument.createElement('input');
+  input.type = 'text';
+  input.value = language === 'text' ? '' : language;
+  input.placeholder = 'text';
+  input.dataset.field = 'rich-code-language';
+  for (const [key, value] of Object.entries(attrs)) {
+    input.setAttribute(key, value);
+  }
+  label.append(labelText, input);
+  return label;
 }
 
 export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
@@ -142,7 +184,7 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
   return wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens));
 }
 
-function renderMarkdownHtml(markdown: string, options: Required<MarkdownRenderOptions>): string {
+function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRenderOptions, 'textLineStyles' | 'textLineStyleMode'>>): string {
   const segments = splitTextLineStyleSegments(markdown);
   if (segments.length === 1 && segments[0]?.kind === 'markdown') {
     return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string);

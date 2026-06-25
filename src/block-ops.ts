@@ -11,7 +11,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
-import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
+import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
@@ -29,6 +29,7 @@ import type { TextCaptionPayload } from './editor/types';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
+const CODE_BLOCK_ENTER_SUPPRESS_MS = 300;
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -205,6 +206,27 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   }
   const block = context.block;
 
+  if (field === 'rich-code-language') {
+    if (!(target instanceof HTMLInputElement)) {
+      return false;
+    }
+    const richEditor = target.closest<HTMLElement>('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+    if (!richEditor) {
+      return false;
+    }
+    updateRichCodeBlockLanguageInput(target);
+    removeNonTextContentFromRichEditor(richEditor);
+    normalizeEditableListDom(richEditor);
+    normalizeInlineCodeTextNodes(richEditor);
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(richEditor))));
+    block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    if (shouldRefreshReaderPanelsAfterRichInput(richEditor)) {
+      getRefreshReaderPanels()();
+    }
+    return true;
+  }
+
   if (field === 'caption-rich') {
     removeNonTextContentFromRichEditor(target);
     normalizeEditableListDom(target);
@@ -241,7 +263,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
     const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(
-      field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : target.innerHTML
+      field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : getRichEditorSerializableHtml(target)
     )));
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     if (field === 'text-fill-in-rich') {
@@ -1046,9 +1068,10 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown) => renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
+      codeLanguageInputAttrs,
     }),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
@@ -2319,6 +2342,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 
   if (event.key === 'Enter' && isSelectionInsideCodeBlock(editable)) {
     event.preventDefault();
+    suppressNextCodeBlockParagraphInput(editable);
     if (event.shiftKey) {
       exitCodeBlockBelowSelection(editable);
     } else {
@@ -2406,6 +2430,15 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
   if (event.inputType === 'insertParagraph') {
+    if (consumeSuppressedCodeBlockParagraphInput(editable)) {
+      return true;
+    }
+    if (isSelectionInsideCodeBlock(editable)) {
+      insertTextInSelectionCodeBlock(editable, '\n');
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
     if (!insertParagraphAtEditableSelection(editable)) {
       return false;
     }
@@ -2418,6 +2451,14 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     const dataTransfer = event.dataTransfer;
     if (!dataTransfer) {
       return false;
+    }
+    const codeBlockPasteText = dataTransfer.getData('text/plain');
+    if (isSelectionInsideCodeBlock(editable) && codeBlockPasteText) {
+      insertTextInSelectionCodeBlock(editable, codeBlockPasteText);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+      updateRichToolbarState(editable);
+      return true;
     }
     if (event.inputType === 'insertFromPasteAsQuotation') {
       const text = dataTransfer.getData('text/plain');
@@ -2539,21 +2580,47 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   }
   const container = document.createElement('div');
   container.appendChild(range.cloneContents());
+  removeEditorCaretAnchors(container);
   const html = container.innerHTML;
   if (!html) {
     return false;
   }
   clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
   clipboard.setData('text/html', html);
-  clipboard.setData('text/plain', range.toString());
+  clipboard.setData('text/plain', removeEditorCaretAnchorsFromText(range.toString()));
   event.preventDefault();
   return true;
+}
+
+function removeEditorCaretAnchors(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) {
+      textNodes.push(current);
+    }
+    current = walker.nextNode();
+  }
+  textNodes.forEach((node) => {
+    node.textContent = removeEditorCaretAnchorsFromText(node.textContent ?? '');
+  });
+}
+
+function removeEditorCaretAnchorsFromText(text: string): string {
+  return text.replace(/\u200b/g, '');
 }
 
 export function handleRichEditorPlainTextPaste(event: ClipboardEvent, editable: HTMLElement): boolean {
   const text = event.clipboardData?.getData('text/plain') ?? '';
   if (!text) {
     return false;
+  }
+  if (isSelectionInsideCodeBlock(editable)) {
+    insertTextInSelectionCodeBlock(editable, text);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
   }
   insertPlainTextAtEditableSelection(editable, text);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -3677,7 +3744,7 @@ function replaceCurrentLineWithCodeBlock(editable: HTMLElement, language: string
   code.setAttribute('contenteditable', 'true');
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
-  replaceCurrentLineElement(editable, pre);
+  replaceCurrentLineElement(editable, createRichCodeBlockShell(editable, pre, normalizedLanguage || 'text'));
   placeCaretInside(code);
 }
 
@@ -3690,8 +3757,38 @@ function insertCodeBlockAtSelection(editable: HTMLElement): void {
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
   editable.focus();
-  insertNodeAtSelection(pre);
+  insertNodeAtSelection(createRichCodeBlockShell(editable, pre, ''));
   placeCaretInside(code);
+}
+
+function createRichCodeBlockShell(editable: HTMLElement, pre: HTMLPreElement, language: string): HTMLElement {
+  const shell = document.createElement('div');
+  shell.className = 'rich-code-block-shell';
+  shell.append(createRichCodeLanguageControl(editable, language), pre);
+  return shell;
+}
+
+function createRichCodeLanguageControl(editable: HTMLElement, language: string): HTMLElement {
+  const label = document.createElement('label');
+  label.className = 'rich-code-language-control';
+  label.contentEditable = 'false';
+  const labelText = document.createElement('span');
+  labelText.textContent = 'Language';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = language === 'text' ? '' : language;
+  input.placeholder = 'text';
+  input.dataset.field = 'rich-code-language';
+  const sectionKey = editable.dataset.sectionKey;
+  const blockId = editable.dataset.blockId;
+  if (sectionKey) {
+    input.dataset.sectionKey = sectionKey;
+  }
+  if (blockId) {
+    input.dataset.blockId = blockId;
+  }
+  label.append(labelText, input);
+  return label;
 }
 
 function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
@@ -3707,7 +3804,7 @@ function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
   if (!paragraph.firstChild || paragraph.textContent === '') {
     paragraph.replaceChildren(document.createElement('br'));
   }
-  pre.replaceWith(paragraph);
+  replaceCodeBlockWith(pre, paragraph);
   if (caretOffset !== null && paragraph.firstChild instanceof Text) {
     const selection = window.getSelection();
     const nextRange = document.createRange();
@@ -3718,6 +3815,42 @@ function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
     return;
   }
   placeCaretAtEnd(paragraph);
+}
+
+export function updateRichCodeBlockLanguageInput(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLInputElement) || target.dataset.field !== 'rich-code-language') {
+    return false;
+  }
+  const pre = target.closest<HTMLElement>('.rich-code-block-shell')?.querySelector('pre') ?? target.closest('pre');
+  const code = pre?.querySelector('code');
+  if (!(pre instanceof HTMLPreElement) || !(code instanceof HTMLElement)) {
+    return false;
+  }
+  const language = normalizeRichCodeLanguage(target.value);
+  pre.dataset.codeLanguage = language;
+  Array.from(code.classList)
+    .filter((className) => className.startsWith('language-'))
+    .forEach((className) => code.classList.remove(className));
+  if (language) {
+    code.classList.add(`language-${language}`);
+    code.dataset.language = language;
+  } else {
+    delete code.dataset.language;
+  }
+  return true;
+}
+
+function normalizeRichCodeLanguage(value: string): string {
+  return value.trim().toLowerCase().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function replaceCodeBlockWith(pre: HTMLPreElement, replacement: HTMLElement): void {
+  const shell = pre.closest<HTMLElement>('.rich-code-block-shell');
+  if (shell && shell.parentElement) {
+    shell.replaceWith(replacement);
+    return;
+  }
+  pre.replaceWith(replacement);
 }
 
 function insertTextInSelectionCodeBlock(editable: HTMLElement, text: string): void {
@@ -3748,6 +3881,16 @@ function insertTextInSelectionCodeBlock(editable: HTMLElement, text: string): vo
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function suppressNextCodeBlockParagraphInput(editable: HTMLElement): void {
+  editable.dataset.hvyCodeBlockEnterSuppressUntil = String(Date.now() + CODE_BLOCK_ENTER_SUPPRESS_MS);
+}
+
+function consumeSuppressedCodeBlockParagraphInput(editable: HTMLElement): boolean {
+  const until = Number(editable.dataset.hvyCodeBlockEnterSuppressUntil ?? '0');
+  delete editable.dataset.hvyCodeBlockEnterSuppressUntil;
+  return Number.isFinite(until) && until >= Date.now();
 }
 
 function applyCodeBlockIndentation(editable: HTMLElement, direction: 'indent' | 'dedent'): boolean {
@@ -3789,7 +3932,9 @@ function exitCodeBlockBelowSelection(editable: HTMLElement): void {
   }
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createTextNode('\u200b'));
-  pre.parentNode?.insertBefore(paragraph, pre.nextSibling);
+  const shell = pre.closest<HTMLElement>('.rich-code-block-shell');
+  const reference = shell ?? pre;
+  reference.parentNode?.insertBefore(paragraph, reference.nextSibling);
   placeCaretAtEnd(paragraph);
 }
 
@@ -3799,10 +3944,15 @@ function reenterPreviousCodeBlock(editable: HTMLElement): boolean {
     return false;
   }
   const previous = block.previousElementSibling;
-  if (!(previous instanceof HTMLPreElement)) {
+  const previousPre = previous instanceof HTMLPreElement
+    ? previous
+    : previous instanceof HTMLElement && previous.classList.contains('rich-code-block-shell')
+      ? previous.querySelector('pre')
+      : null;
+  if (!(previousPre instanceof HTMLPreElement)) {
     return false;
   }
-  const code = previous.querySelector<HTMLElement>('code');
+  const code = previousPre.querySelector<HTMLElement>('code');
   if (!code) {
     return false;
   }
@@ -3888,7 +4038,7 @@ function removeEmptyCodeBlockAtSelection(editable: HTMLElement): boolean {
 
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createElement('br'));
-  pre.replaceWith(paragraph);
+  replaceCodeBlockWith(pre, paragraph);
   placeCaretAtStart(paragraph);
   return true;
 }
@@ -4092,6 +4242,10 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
   editable.innerHTML = renderMarkdownToEditorHtml(markdown, {
     textLineStyles: getTextLineStylesFromMeta(state.document.meta),
     textLineStyleMode: 'editor',
+    codeLanguageInputAttrs: {
+      ...(editable.dataset.sectionKey ? { 'data-section-key': editable.dataset.sectionKey } : {}),
+      ...(editable.dataset.blockId ? { 'data-block-id': editable.dataset.blockId } : {}),
+    },
   });
   placeCaretAtEnd(editable);
 }

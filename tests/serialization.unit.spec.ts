@@ -2,6 +2,8 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
+import { markdownToReaderHtml } from '../src/markdown';
+import { getTextLineStylesFromMeta } from '../src/text-line-styles';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -824,6 +826,35 @@ text_line_styles:
   expect(output).toContain('role:');
   expect(output).toContain('label: Role heading');
   expect(output).toContain('^role^ #### Foo');
+});
+
+test('renders serialized soft-wrapped text_line_styles as one styled paragraph after round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+text_line_styles:
+  detail-body:
+    label: Detail body
+    css: "margin-left: 0.5rem;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ ^detail-body^ Planning, coordinating, and delivering cross-functional work with clear scope, ownership, timelines, risks, and decision points.
+`, '.hvy');
+
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+  const text = roundTripped.sections[0]?.blocks[0]?.text ?? '';
+  const html = markdownToReaderHtml(text, {
+    textLineStyles: getTextLineStylesFromMeta(roundTripped.meta),
+  });
+
+  expect(output).toContain('^detail-body^ Planning, coordinating, and delivering cross-functional work');
+  expect(output).toMatch(/\n\s+risks, and decision points\./);
+  expect(html.match(/data-hvy-text-line-style="detail-body"/g)).toHaveLength(1);
+  expect(html).not.toContain('</div><p>risks');
 });
 
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {

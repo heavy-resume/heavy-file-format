@@ -101,6 +101,7 @@ export function normalizePdfTextInline(text: string): string {
 function splitPdfTextLines(text: string): PdfTextLine[] {
   const lines: PdfTextLine[] = [];
   let paragraphParts: string[] = [];
+  let allowStyledContinuation = false;
   const flushParagraph = (): void => {
     const text = paragraphParts.join(' ').replace(/[ \t]{2,}/g, ' ').trim();
     if (text.length > 0 && !/^\[\s*\]$/.test(text)) {
@@ -113,22 +114,58 @@ function splitPdfTextLines(text: string): PdfTextLine[] {
     const line = rawLine.trim();
     if (line.length === 0 || /^\[\s*\]$/.test(line)) {
       flushParagraph();
+      allowStyledContinuation = false;
       continue;
     }
     const parsed = parsePdfTextLine(line);
     if (!parsed || parsed.text.length === 0 || /^\[\s*\]$/.test(parsed.text) || !hasVisiblePdfLineText(parsed.text)) {
       flushParagraph();
+      allowStyledContinuation = false;
       continue;
     }
     if (parsed.styleName || /^(#{1,6})\s+(.+)$/.test(parsed.text) || /^[-*]\s+(.+)$/.test(parsed.text)) {
       flushParagraph();
       lines.push(parsed);
+      allowStyledContinuation = Boolean(parsed.styleName) && isPlainPdfTextContinuation(parsed.text);
+      continue;
+    }
+    if (allowStyledContinuation && canContinuePreviousPdfTextLine(lines, line)) {
+      const previous = lines[lines.length - 1];
+      if (previous) {
+        previous.text = `${previous.text} ${parsed.text}`.replace(/[ \t]{2,}/g, ' ').trim();
+      }
       continue;
     }
     paragraphParts.push(parsed.text);
+    allowStyledContinuation = false;
   }
   flushParagraph();
   return lines;
+}
+
+function canContinuePreviousPdfTextLine(lines: PdfTextLine[], line: string): boolean {
+  const previous = lines[lines.length - 1];
+  if (!previous?.styleName) {
+    return false;
+  }
+  return isPlainPdfTextContinuation(line) && isPlainPdfTextContinuation(previous.text);
+}
+
+function isPlainPdfTextContinuation(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  return !(
+    /^\\?\^[a-z0-9_-]+\^/i.test(trimmed) ||
+    /^#{1,6}\s+/.test(trimmed) ||
+    /^(?:[-*+]|\d+[.)])\s+/.test(trimmed) ||
+    /^>/.test(trimmed) ||
+    /^\|/.test(trimmed) ||
+    /^[-*_](?:\s*[-*_]){2,}\s*$/.test(trimmed) ||
+    /^<!--/.test(trimmed) ||
+    /^ {4,}\S/.test(line)
+  );
 }
 
 function hasVisiblePdfLineText(text: string): boolean {

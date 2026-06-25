@@ -209,6 +209,11 @@ function splitTextLineStyleSegments(markdown: string): TextLineStyleSegment[] {
 
     const match = line.match(/^\^([a-z0-9_-]+)\^\s?(.*)$/i);
     if (!match) {
+      if (pending.length === 0 && canContinuePreviousTextLineStyleSegment(segments, line)) {
+        const previous = segments[segments.length - 1] as Extract<TextLineStyleSegment, { kind: 'styled-line' }>;
+        previous.markdown = `${previous.markdown}\n${line.trim()}`;
+        continue;
+      }
       pending.push(line);
       continue;
     }
@@ -220,6 +225,32 @@ function splitTextLineStyleSegments(markdown: string): TextLineStyleSegment[] {
 
   flushPending();
   return segments;
+}
+
+function canContinuePreviousTextLineStyleSegment(segments: TextLineStyleSegment[], line: string): boolean {
+  const previous = segments[segments.length - 1];
+  if (!previous || previous.kind !== 'styled-line') {
+    return false;
+  }
+  return isPlainTextLineStyleContinuation(line) && isPlainTextLineStyleContinuation(previous.markdown);
+}
+
+function isPlainTextLineStyleContinuation(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  return !(
+    parseTextLineStyleFence(trimmed) ||
+    /^(\\?\^[a-z0-9_-]+\^)/i.test(trimmed) ||
+    /^#{1,6}\s+/.test(trimmed) ||
+    /^(?:[-*+]|\d+[.)])\s+/.test(trimmed) ||
+    /^>/.test(trimmed) ||
+    /^\|/.test(trimmed) ||
+    /^[-*_](?:\s*[-*_]){2,}\s*$/.test(trimmed) ||
+    /^<!--/.test(trimmed) ||
+    /^ {4,}\S/.test(line)
+  );
 }
 
 function parseTextLineStyleFence(line: string): { marker: '`' | '~'; length: number } | null {

@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import { buildPdfExportDocDefinition } from '../src/pdf-export/doc-definition';
 import { getHvyPdfBlob } from '../src/pdf-export/export';
+import { renderPdfTextBlock } from '../src/pdf-export/text';
 import type { HvyPdfMakeNodeObject } from '../src/pdf-export/types';
 import type { VisualDocument } from '../src/types';
 import { createDefaultTextCaption } from '../src/caption';
@@ -79,6 +80,28 @@ test('PDF doc definition omits unfilled placeholder-only text blocks', () => {
   expect(serialized).not.toContain('####');
   expect(serialized).not.toContain('classes');
   expect(serialized).not.toContain('<!-- value');
+});
+
+test('PDF text rendering keeps soft-wrapped text line styles in one styled node', () => {
+  const expectedResult = renderPdfTextBlock(
+    '^detail-body^ Planning, coordinating, and delivering cross-functional work with clear scope, ownership, timelines,\nrisks, and decision points.',
+    '',
+    {
+      visibility: 'show',
+      keepTogether: false,
+      keepWithNext: false,
+      allowSplit: true,
+      pageBreakBefore: false,
+      pageBreakAfter: false,
+      pdfStyle: {},
+    }
+  );
+
+  expect(expectedResult.text).toBe(
+    'Planning, coordinating, and delivering cross-functional work with clear scope, ownership, timelines, risks, and decision points.'
+  );
+  expect(expectedResult.style).toBe('detailBody');
+  expect(expectedResult.stack).toBeUndefined();
 });
 
 test('PDF doc definition applies component CSS margins to block wrappers', () => {

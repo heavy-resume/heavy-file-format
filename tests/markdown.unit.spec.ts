@@ -216,6 +216,46 @@ test('renders text line style markers as styled source-only wrappers', () => {
   expect(html).not.toContain('^role^');
 });
 
+test('renders soft-wrapped text line style paragraphs as one styled wrapper', () => {
+  const html = markdownToReaderHtml(
+    '^detail-body^ Planning, coordinating, and delivering cross-functional work with clear scope, ownership, timelines,\nrisks, and decision points.',
+    {
+      textLineStyles: {
+        'detail-body': { label: 'Detail body', css: 'margin-left: 0.5rem;' },
+      },
+    }
+  );
+
+  expect(html.match(/data-hvy-text-line-style="detail-body"/g)).toHaveLength(1);
+  expect(html).toContain('Planning, coordinating');
+  expect(html).toContain('risks, and decision points.');
+  expect(html).not.toContain('</div><p>risks');
+});
+
+test('stops text line style soft wrapping before structural markdown', () => {
+  const html = markdownToReaderHtml('^detail-body^ Planning text\n- Separate list item', {
+    textLineStyles: {
+      'detail-body': { label: 'Detail body', css: 'margin-left: 0.5rem;' },
+    },
+  });
+
+  expect(html.match(/data-hvy-text-line-style="detail-body"/g)).toHaveLength(1);
+  expect(html).toContain('<ul>');
+  expect(html).toContain('<li>Separate list item</li>');
+});
+
+test('stops text line style soft wrapping after a blank line', () => {
+  const html = markdownToReaderHtml('^detail-body^ Planning text\n\nDefault paragraph.', {
+    textLineStyles: {
+      'detail-body': { label: 'Detail body', css: 'margin-left: 0.5rem;' },
+    },
+  });
+
+  expect(html.match(/data-hvy-text-line-style="detail-body"/g)).toHaveLength(1);
+  expect(html).toContain('<p>Default paragraph.</p>');
+  expect(html).not.toContain('Planning text\nDefault paragraph');
+});
+
 test('renders unknown text line styles as normal viewer content', () => {
   const html = markdownToReaderHtml('^missing^ #### Foo', { textLineStyles: {} });
 

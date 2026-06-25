@@ -909,6 +909,8 @@ text_line_styles:
 Rules:
 - A marker has the form `^name^` at the start of a Markdown line. `name` MUST contain only ASCII letters, digits, `_`, or `-`.
 - The marker is source-only. Renderers that support `text_line_styles` MUST remove the marker from visible output and apply the referenced style to that rendered line.
+- A marked plain-text paragraph MAY be soft-wrapped across multiple physical source lines. Plain continuation lines following a marker are part of the same styled logical line and SHOULD be rendered with that marker's style.
+- A blank line, another marker, or a structural Markdown line such as a heading, list item, blockquote, table row, fenced code block, thematic break, or HVY directive ends the styled logical line.
 - `\^name^` escapes the marker and renders literal text.
 - Markers inside fenced code blocks MUST remain literal.
 - Unknown style names SHOULD render the line content normally. Authoring tools SHOULD show an editor warning so authors can catch typos.

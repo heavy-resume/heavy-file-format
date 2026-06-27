@@ -103,10 +103,11 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
       <button type="button" class="hvy-carousel-pick-button hvy-carousel-camera-button" data-action="carousel-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>Take Photo</span></button>
     </div>
     <div class="hvy-carousel-attachment-panel">
-      <div class="hvy-carousel-attachment-title">Attached images</div>
+      <div class="hvy-carousel-attachment-title">Add attached images to carousel</div>
       ${renderImageAttachmentPicker({
         helpers,
         action: 'carousel-add-existing',
+        actionLabel: 'Add to carousel',
         sectionKey,
         blockId: block.id,
         emptyText: 'No attached images yet.',

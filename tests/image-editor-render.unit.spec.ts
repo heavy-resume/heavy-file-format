@@ -70,6 +70,10 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('data-action="image-take-photo"');
     expect(expectedResult).toContain('data-action="image-use-existing"');
+    expect(expectedResult).toContain('Use an attached image');
+    expect(expectedResult).toContain('Use image');
+    expect(expectedResult).toContain('Current image');
+    expect(expectedResult).toContain('aria-label="Use image: unused.jpg"');
     expect(expectedResult).toContain('data-image-filename="avatar.jpg"');
     expect(expectedResult).toContain('data-action="image-delete-current"');
     expect(expectedResult).toContain('data-action="image-delete-unused"');
@@ -124,6 +128,9 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('data-action="carousel-take-photo"');
     expect(expectedResult).toContain('data-action="carousel-add-existing"');
+    expect(expectedResult).toContain('Add attached images to carousel');
+    expect(expectedResult).toContain('Add to carousel');
+    expect(expectedResult).toContain('aria-label="Add to carousel: slide.jpg"');
     expect(expectedResult).toContain('data-field="carousel-show-frame"');
     expect(expectedResult).toContain('data-image-filename="slide.jpg"');
     expect(expectedResult).toContain('data-action="carousel-download"');

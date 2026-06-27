@@ -59,10 +59,15 @@
   position: relative;
   top: auto;
   bottom: auto;
+  margin-bottom: 0.4rem;
 }
 
 .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot > .rich-toolbar {
   box-shadow: none;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-spacer {
+  display: none;
 }
 
 .reader-block-text:has(> .text-copy-button) {

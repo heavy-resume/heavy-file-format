@@ -214,6 +214,47 @@ hvy_version: 0.1
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
 });
 
+test('ai mode labeled container keeps nested text editor spacing compact', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:container {"css":"margin: 0.5rem 0; border: 1px solid var(--hvy-border); border-radius: 8px; padding: 0.75rem;","containerTitle":"Note"}-->
+
+  <!--hvy:text {}-->
+   AI mode is not the same thing as the chat panel.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const noteContainer = page.locator('#aiReaderDocument .reader-container', { hasText: 'AI mode is not the same thing as the chat panel' }).first();
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('position', 'static');
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('font-style', 'normal');
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('text-transform', 'uppercase');
+
+  await page.locator('#aiReaderDocument .reader-block-container', { hasText: 'AI mode is not the same thing as the chat panel' }).first().click({ position: { x: 6, y: 6 }, button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const activeContainer = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]', { hasText: 'Container Title' });
+  await expect(activeContainer).toBeVisible();
+  const toolbarToEditorGap = await activeContainer.evaluate((container) => {
+    const toolbar = container.querySelector<HTMLElement>('.rich-toolbar');
+    const editor = container.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbar || !editor) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return editor.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
+  });
+  expect(toolbarToEditorGap).toBeGreaterThanOrEqual(0);
+  expect(toolbarToEditorGap).toBeLessThan(20);
+});
+
 test('xref navigation aligns a tall target top near the reader center', async ({ page }) => {
   await page.goto('/');
 

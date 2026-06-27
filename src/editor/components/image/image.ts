@@ -9,7 +9,7 @@ import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
-import { cameraIcon, closeIcon } from '../../../icons';
+import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
 import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
@@ -167,9 +167,11 @@ function hydrateLazyImage(image: HTMLImageElement): void {
 export function renderImageAttachmentPicker(options: {
   helpers: ComponentRenderHelpers;
   action: string;
+  actionLabel: string;
   sectionKey: string;
   blockId: string;
   selectedFilename?: string;
+  selectedLabel?: string;
   emptyText: string;
 }): string {
   const filenames = listImageFilenames(state.document);
@@ -184,6 +186,9 @@ export function renderImageAttachmentPicker(options: {
       const preview = url
         ? `<img src="${options.helpers.escapeAttr(url)}" alt="">`
         : '<span>Missing</span>';
+      const actionText = selected && options.selectedLabel ? options.selectedLabel : options.actionLabel;
+      const actionIcon = selected && options.selectedLabel ? '' : plusIcon();
+      const actionTitle = `${actionText}: ${filename}`;
       return `<div class="image-attachment-choice-wrap">
         <button
           type="button"
@@ -192,10 +197,12 @@ export function renderImageAttachmentPicker(options: {
           data-section-key="${options.helpers.escapeAttr(options.sectionKey)}"
           data-block-id="${options.helpers.escapeAttr(options.blockId)}"
           data-image-filename="${options.helpers.escapeAttr(filename)}"
-          title="${options.helpers.escapeAttr(filename)}"
+          title="${options.helpers.escapeAttr(actionTitle)}"
+          aria-label="${options.helpers.escapeAttr(actionTitle)}"
         >
           <span class="image-attachment-choice-thumb">${preview}</span>
           <span class="image-attachment-choice-name">${options.helpers.escapeHtml(filename)}</span>
+          <span class="image-attachment-choice-action">${actionIcon}<span>${options.helpers.escapeHtml(actionText)}</span></span>
         </button>
         ${unused ? `<button
           type="button"
@@ -448,13 +455,15 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </label>
       </div>
       <div class="image-attachment-panel">
-        <div class="image-attachment-panel-title">Attached images</div>
+        <div class="image-attachment-panel-title">Use an attached image</div>
         ${renderImageAttachmentPicker({
           helpers,
           action: 'image-use-existing',
+          actionLabel: 'Use image',
           sectionKey,
           blockId: block.id,
           selectedFilename: filename,
+          selectedLabel: 'Current image',
           emptyText: 'No attached images yet.',
         })}
       </div>

@@ -735,13 +735,72 @@ test('external rich paste strips text background and font presentation', async (
 
   expect(expectedResult.prevented).toBe(true);
   expect(expectedResult.text).toContain('Before External Mark');
-  expect(expectedResult.html).toContain('font-weight: 700');
+  expect(expectedResult.html).toContain('<strong>External</strong>');
+  expect(expectedResult.html).not.toContain('<p><p>');
+  expect(expectedResult.html).not.toContain('font-weight: 700');
   expect(expectedResult.html).not.toContain('font-family');
   expect(expectedResult.html).not.toContain('font-size');
   expect(expectedResult.html).not.toContain('face=');
   expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
   expect(expectedResult.html).not.toContain('background-color');
   expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('external rich paste normalizes gmail media wrappers before insertion', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      `<div class="gmail_quote">
+        <div>To whom it may concern:</div>
+        <div><br></div>
+        <div><b>Thank you</b> for your time,</div>
+        <div style="height: 260px; min-height: 260px; background-color: rgb(64, 96, 128);">
+          <img src="data:image/png;base64,AAAA" width="1200" height="260">
+        </div>
+      </div>`
+    );
+    transfer.setData('text/plain', 'To whom it may concern:\n\nThank you for your time,');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult.prevented).toBe(true);
+  expect(expectedResult.text).toContain('Before To whom it may concern:');
+  expect(expectedResult.text).toContain('Thank you for your time,');
+  expect(expectedResult.html).toContain('<strong>Thank you</strong>');
+  expect(expectedResult.html).not.toContain('gmail_quote');
+  expect(expectedResult.html).not.toContain('height: 260px');
+  expect(expectedResult.html).not.toContain('min-height');
+  expect(expectedResult.html).not.toContain('background-color');
+  expect(expectedResult.html).not.toContain('<img');
 });
 
 test('undo after external rich paste restores text without duplicating pasted content', async ({ page }) => {

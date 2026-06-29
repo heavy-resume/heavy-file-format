@@ -2473,7 +2473,7 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
       return false;
     }
     const html = dataTransfer.getData(HVY_RICH_CLIPBOARD_TYPE) ||
-      sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html'));
+      normalizeExternalRichPasteHtml(dataTransfer.getData('text/html'));
     if (html) {
       insertHtmlAtEditableSelection(editable, html);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2639,6 +2639,73 @@ function sanitizeExternalRichPasteHtml(html: string): string {
     stripExternalPastePresentation(element);
   });
   return template.innerHTML;
+}
+
+function normalizeExternalRichPasteHtml(html: string): string {
+  const sanitized = sanitizeExternalRichPasteHtml(html);
+  if (!sanitized) {
+    return '';
+  }
+  const container = document.createElement('div');
+  container.innerHTML = sanitized;
+  convertExternalBoldPresentationToSemanticStrong(container);
+  removeNonTextContentFromRichEditor(container);
+  normalizeEditableListDom(container);
+  normalizeInlineCodeTextNodes(container);
+  const markdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(
+    turndown.turndown(getRichEditorSerializableHtml(container))
+  ));
+  if (!markdown.trim()) {
+    return '';
+  }
+  const editorHtml = renderMarkdownToEditorHtml(markdown);
+  return shouldInsertExternalPasteInline(sanitized, markdown) ? unwrapSingleRenderedParagraph(editorHtml) : editorHtml;
+}
+
+function shouldInsertExternalPasteInline(html: string, markdown: string): boolean {
+  if (!/<\/?(p|div|blockquote|pre|ul|ol|li|table|h[1-6]|tr|td|th)\b/i.test(html)) {
+    return true;
+  }
+  return !/\n\s*\n/.test(markdown) &&
+    !/^(#{1,6} |[-*+] |\d+\. |> |```|~~~)/m.test(markdown);
+}
+
+function unwrapSingleRenderedParagraph(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const children = Array.from(template.content.childNodes).filter((node) => {
+    return node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim().length > 0;
+  });
+  if (children.length !== 1 || !(children[0] instanceof HTMLParagraphElement)) {
+    return html;
+  }
+  return children[0].innerHTML;
+}
+
+function convertExternalBoldPresentationToSemanticStrong(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    if (!isExternalBoldPresentation(element.getAttribute('style') ?? '')) {
+      return;
+    }
+    if (element.closest('strong, b')) {
+      return;
+    }
+    const strong = document.createElement('strong');
+    element.before(strong);
+    strong.append(element);
+  });
+}
+
+function isExternalBoldPresentation(style: string): boolean {
+  const weight = style.match(/(?:^|;)\s*font-weight\s*:\s*([^;]+)/i)?.[1]?.trim().toLowerCase() ?? '';
+  if (!weight) {
+    return false;
+  }
+  if (weight === 'bold' || weight === 'bolder') {
+    return true;
+  }
+  const numeric = Number(weight);
+  return Number.isFinite(numeric) && numeric >= 600;
 }
 
 function stripExternalPastePresentation(element: HTMLElement): void {

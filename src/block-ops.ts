@@ -232,7 +232,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
-    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(target.innerHTML)));
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(target))));
     let nextCaption: TextCaptionPayload | null = null;
     if (block.schema.kind === 'image') {
       nextCaption = updateTextCaptionText(block.schema.caption, editedMarkdown);
@@ -2098,6 +2098,7 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
   }
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
+    editable.closest('.caption-text-modal')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
   ].filter((toolbar): toolbar is HTMLElement => Boolean(toolbar));
   if (toolbars.length === 0) {

@@ -68,6 +68,63 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('image caption rich editor keeps italic and bold markers distinct', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:image {"id":"photo","imageFile":"","imageAlt":"","caption":{"text":"Caption text","schema":{"kind":"text","component":"text","align":"center"}}}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  await page.locator('.image-caption-edit-button', { hasText: 'Edit caption' }).click();
+
+  const captionEditor = page.locator('.caption-text-modal .rich-editor');
+  await expect(captionEditor).toBeVisible();
+  await captionEditor.locator('p').evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+
+  const captionModal = page.locator('.caption-text-modal');
+  await captionModal.getByRole('button', { name: 'Italic' }).click();
+  await expect(captionEditor.locator('em')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Italic' })).toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Bold' }).click();
+  await expect(captionEditor.locator('strong em, em strong')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Bold' })).toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Bold' }).click();
+  await expect(captionEditor.locator('strong')).toHaveCount(0);
+  await expect(captionEditor.locator('em')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Bold' })).not.toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Underline' }).click();
+  await expect(captionEditor.locator('u em, em u')).toHaveText('Caption text');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const rawEditor = page.locator('#rawEditor');
+  await expect(rawEditor).toContainText('___');
+  await expect(rawEditor).toContainText('_Caption text_');
+  await expect(rawEditor).not.toContainText('*****');
+  await expect(rawEditor).not.toContainText('**_Caption text_**');
+});
+
 test('active text editor wraps prose without widening the editor block', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Phone 390' }).click();
@@ -784,6 +841,55 @@ test('rich copy inside the document preserves HVY-origin color presentation on p
   expect(expectedResult.pastePrevented).toBe(true);
   expect(expectedResult.html).toContain('color: rgb(10, 20, 30)');
   expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
+});
+
+test('viewer copy omits inherited theme color and preserves explicit inline color', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const expectedResult = await page.locator('#readerDocument').evaluate((reader) => {
+    const shell = reader.closest<HTMLElement>('.viewer-shell')!;
+    shell.style.color = 'rgb(120, 120, 120)';
+    reader.innerHTML = `
+      <div class="reader-document-body">
+        <div class="reader-block reader-block-text">
+          <p id="inheritedCopySource">Inherited gray</p>
+          <p><span id="explicitCopySource" style="color: rgb(10, 20, 30);">Explicit color</span></p>
+        </div>
+      </div>
+    `;
+
+    const copyElement = (element: HTMLElement) => {
+      const selection = window.getSelection();
+      const selectedRange = document.createRange();
+      selectedRange.selectNodeContents(element);
+      selection?.removeAllRanges();
+      selection?.addRange(selectedRange);
+
+      const transfer = new DataTransfer();
+      const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+      reader.dispatchEvent(copyEvent);
+      return {
+        copyPrevented: copyEvent.defaultPrevented,
+        html: transfer.getData('text/html'),
+        plainText: transfer.getData('text/plain'),
+      };
+    };
+
+    return {
+      inherited: copyElement(reader.querySelector<HTMLElement>('#inheritedCopySource')!),
+      explicit: copyElement(reader.querySelector<HTMLElement>('#explicitCopySource')!),
+    };
+  });
+
+  expect(expectedResult.inherited.copyPrevented).toBe(true);
+  expect(expectedResult.inherited.plainText).toBe('Inherited gray');
+  expect(expectedResult.inherited.html).toContain('Inherited gray');
+  expect(expectedResult.inherited.html).not.toContain('rgb(120, 120, 120)');
+  expect(expectedResult.inherited.html).not.toContain('color:');
+  expect(expectedResult.explicit.copyPrevented).toBe(true);
+  expect(expectedResult.explicit.plainText).toBe('Explicit color');
+  expect(expectedResult.explicit.html).toContain('color: rgb(10, 20, 30)');
 });
 
 test('rich copy omits editor caret anchors from copied line', async ({ page }) => {

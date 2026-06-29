@@ -3,6 +3,8 @@
 .rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
 .rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
+  position: absolute;
+  inset: 0.48rem;
   color: var(--hvy-text-muted);
   opacity: 0.72;
   pointer-events: none;
@@ -988,6 +990,7 @@
 }
 
 .rich-editor {
+  position: relative;
   min-height: 96px;
   min-width: 0;
   max-width: 100%;

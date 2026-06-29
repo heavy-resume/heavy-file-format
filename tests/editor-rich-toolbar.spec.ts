@@ -246,6 +246,28 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   await expect(pluginEditor).toBeFocused();
   await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Plugin editor updated');
 
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  await expect(pluginEditor).toBeFocused();
+  await expect(pluginEditor).toHaveText('');
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+
+  const emptyExpectedResult = await page.evaluate(() => {
+    const exampleWindow = window as Window & {
+      embedTextEditorExample: {
+        serialize(): string;
+      };
+    };
+    return {
+      serialized: exampleWindow.embedTextEditorExample.serialize(),
+    };
+  });
+  expect(emptyExpectedResult.serialized).not.toContain('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+
+  await page.keyboard.type('Plugin editor updated');
+  await expect(pluginEditor).toBeFocused();
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Plugin editor updated');
+
   await page.locator('.editor-block-passive', { hasText: 'Disabled text editor placeholder' }).click();
   const disabledPluginEditor = page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
   await expect(disabledPluginEditor).toBeVisible();

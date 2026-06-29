@@ -49,6 +49,24 @@
   pointer-events: auto;
 }
 
+.text-editor-shell.is-disabled {
+  opacity: 0.78;
+}
+
+.text-editor-shell.is-disabled .rich-editor {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-border) 18%);
+  color: var(--hvy-text-muted);
+}
+
+.text-editor-shell.is-disabled .rich-toolbar {
+  opacity: 0.72;
+}
+
+.text-editor-shell.is-disabled .rich-toolbar button {
+  cursor: not-allowed;
+}
+
 .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-bounds {
   position: relative;
   inset: auto;

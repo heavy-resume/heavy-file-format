@@ -17,6 +17,7 @@ let pluginTextEditorId = 0;
 export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance {
   const ownerDocument = document;
   const id = `plugin-text-editor-${pluginTextEditorId += 1}`;
+  let disabled = options.disabled === true;
   const shell = ownerDocument.createElement('div');
   shell.className = 'text-editor-shell hvy-plugin-text-editor';
   const toolbarBounds = ownerDocument.createElement('div');
@@ -27,7 +28,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   toolbarSpacer.className = 'text-editor-toolbar-spacer';
   const editable = ownerDocument.createElement('div');
   editable.className = 'rich-editor';
-  editable.contentEditable = 'true';
+  editable.contentEditable = disabled ? 'false' : 'true';
   editable.spellcheck = true;
   editable.dataset.field = 'hvy-plugin-text-editor';
   editable.dataset.sectionKey = `__plugin_text_editor_${id}`;
@@ -41,6 +42,18 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   toolbarBounds.append(toolbarSlot);
   shell.append(toolbarBounds, toolbarSpacer, editable);
 
+  const syncDisabledState = (): void => {
+    shell.classList.toggle('is-disabled', disabled);
+    shell.dataset.disabled = disabled ? 'true' : 'false';
+    editable.contentEditable = disabled ? 'false' : 'true';
+    editable.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    editable.tabIndex = disabled ? -1 : 0;
+    toolbarSlot.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+      button.disabled = disabled;
+      button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+  };
+
   const writeToolbar = (markdown: string): void => {
     const helpers = getCachedComponentRenderHelpers();
     toolbarSlot.innerHTML = helpers.renderRichToolbar(`__plugin_text_editor_${id}`, id, {
@@ -51,6 +64,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       currentMarkdown: markdown,
       textLineStyles: helpers.getTextLineStyles?.() ?? {},
     });
+    syncDisabledState();
     syncTextToolbarLayout(shell);
   };
 
@@ -67,12 +81,19 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   };
 
   const syncChange = (target?: EventTarget | null): void => {
+    if (disabled) {
+      return;
+    }
     updateRichCodeBlockLanguageInput(target ?? null);
     options.onChange(readMarkdown());
     refreshRichToolbarState(editable);
   };
 
   const onBeforeInput = (event: Event): void => {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
     if (handleRichEditorBeforeInput(event as InputEvent, editable)) {
       event.preventDefault();
     }
@@ -82,6 +103,9 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   };
   const onInput = (event: Event): void => syncChange(event.target);
   const onKeydown = (event: KeyboardEvent): void => {
+    if (disabled) {
+      return;
+    }
     if (handleRichEditorKeydown(event, editable)) {
       return;
     }
@@ -96,10 +120,18 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     }
   };
   const onKeyup = (): void => {
+    if (disabled) {
+      return;
+    }
     handleRichEditorKeyup(editable);
     refreshRichToolbarState(editable);
   };
   const onToolbarClick = (event: Event): void => {
+    if (disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest<HTMLElement>('[data-rich-action], [data-action]');
     if (!button || !shell.contains(button)) {
@@ -132,6 +164,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
 
   writeToolbar(options.value);
   writeEditable(options.value);
+  syncDisabledState();
   shell.addEventListener('click', onToolbarClick);
   editable.addEventListener('beforeinput', onBeforeInput);
   editable.addEventListener('copy', onCopy);
@@ -145,12 +178,18 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     getValue: readMarkdown,
     setValue(markdown: string) {
       writeToolbar(markdown);
-      if (ownerDocument.activeElement !== editable && !editable.contains(ownerDocument.activeElement)) {
+      if (disabled || (ownerDocument.activeElement !== editable && !editable.contains(ownerDocument.activeElement))) {
         writeEditable(markdown);
       }
     },
+    setDisabled(nextDisabled: boolean) {
+      disabled = nextDisabled;
+      syncDisabledState();
+    },
     focus() {
-      editable.focus();
+      if (!disabled) {
+        editable.focus();
+      }
     },
     unmount() {
       shell.removeEventListener('click', onToolbarClick);

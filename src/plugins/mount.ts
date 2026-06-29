@@ -137,7 +137,9 @@ function buildContext(
       };
     },
     sectionKey,
-    block,
+    get block() {
+      return findBlockByIds(sectionKey, blockId) ?? block;
+    },
     rawDocument: state.document,
     document: {
       getHvy: () => serializeDocument(state.document),

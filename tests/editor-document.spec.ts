@@ -19,6 +19,7 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('main.layout')).toHaveClass(/hvy-embed-layout/);
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).margin)).toBe('0px');
   await expect(page.getByRole('link', { name: 'Two embedded docs' })).toHaveAttribute('href', '/examples/two-embedded-docs.html');
+  await expect(page.getByRole('link', { name: 'Plugin text editor' })).toHaveAttribute('href', '/examples/embed-text-editor-plugin.html');
 
   const editorButton = page.getByRole('button', { name: 'Editor' });
   await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe(
@@ -46,9 +47,10 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(viewerButton).toHaveCSS('border-top-style', 'solid');
   await expect(viewerButton).not.toHaveCSS('border-top-color', 'rgb(0, 0, 0)');
 
-  const addSection = page.locator('[data-action="add-top-level-section"]');
+  const editorBody = page.locator('.editor-tree-body:not(.editor-sidebar-tree-body)');
+  const addSection = editorBody.locator('[data-action="add-top-level-section"][data-section-location="main"]');
   const addSectionBox = await addSection.boundingBox();
-  const editorBodyBox = await page.locator('.editor-tree-body').boundingBox();
+  const editorBodyBox = await editorBody.boundingBox();
   expect(addSectionBox).not.toBeNull();
   expect(editorBodyBox).not.toBeNull();
   expect(addSectionBox!.width).toBeLessThanOrEqual(editorBodyBox!.width + 1);

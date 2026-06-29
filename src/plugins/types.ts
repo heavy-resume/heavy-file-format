@@ -42,6 +42,7 @@ export interface HvyPluginTextEditorMountOptions {
   placeholder?: string;
   includeAlign?: boolean;
   includeFillIn?: boolean;
+  disabled?: boolean;
   onChange: (markdown: string) => void;
 }
 
@@ -50,6 +51,7 @@ export interface HvyPluginTextEditorInstance {
   editable: HTMLElement;
   getValue(): string;
   setValue(markdown: string): void;
+  setDisabled(disabled: boolean): void;
   focus(): void;
   unmount(): void;
 }

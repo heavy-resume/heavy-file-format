@@ -206,6 +206,84 @@ test('double Enter keeps paragraph break inside one text component', async ({ pa
   expect(expectedResult.serialized).toContain('Beta paragraph');
 });
 
+test('isolated embed example exposes matching text editors for plugin authors', async ({ page }) => {
+  await page.goto('/examples/embed-text-editor-plugin.html');
+
+  await expect(page.getByRole('heading', { name: 'Embedded Plugin Text Editor' })).toBeVisible();
+  await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+  await expect(page.locator('.example-disabled-text-placeholder')).toContainText('Disabled text editor placeholder');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+
+  await page.locator('.editor-block-passive', { hasText: 'This is a normal HVY text component.' }).click();
+  const normalEditor = page.locator('[data-field="block-rich"]').first();
+  await normalEditor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type('Normal editor updated');
+  await expect(normalEditor).toBeFocused();
+  await expect(normalEditor).toContainText('Normal editor updated');
+
+  await page.locator('.editor-block-passive', { hasText: 'Write plugin-owned Markdown here. This body is stored with ctx.setText.' }).click();
+  await expect(page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) .rich-toolbar')).toBeVisible();
+  const pluginEditor = page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) [data-field="hvy-plugin-text-editor"]');
+  await expect(pluginEditor).toBeVisible();
+  await expect(pluginEditor).toHaveAttribute('data-placeholder', 'Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+  await pluginEditor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type('Plugin editor updated');
+  await expect(pluginEditor).toBeFocused();
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Plugin editor updated');
+
+  await page.locator('.editor-block-passive', { hasText: 'Disabled text editor placeholder' }).click();
+  const disabledPluginEditor = page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(disabledPluginEditor).toBeVisible();
+  await expect(disabledPluginEditor).toHaveAttribute('contenteditable', 'false');
+  await expect(disabledPluginEditor).toHaveAttribute('aria-disabled', 'true');
+  await expect(disabledPluginEditor).toHaveAttribute('data-placeholder', 'This text field is disabled until the document enters another state.');
+
+  await page.locator('[data-example-mode="viewer"]').click();
+  await expect(page.locator('[data-example-mode="viewer"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor [data-field="hvy-plugin-text-editor"]')).toHaveCount(0);
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toHaveAttribute('data-placeholder', 'This text field is disabled until the document enters another state.');
+
+  await page.locator('[data-example-mode="ai"]').click();
+  await expect(page.locator('[data-example-mode="ai"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+
+  await page.locator('[data-example-mode="editor"]').click();
+  await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+
+  const expectedResult = await page.evaluate(() => {
+    const exampleWindow = window as Window & {
+      embedTextEditorExample: {
+        serialize(): string;
+      };
+    };
+    return {
+      serialized: exampleWindow.embedTextEditorExample.serialize(),
+    };
+  });
+
+  expect(expectedResult.serialized).toContain('Normal editor updated');
+  expect(expectedResult.serialized).toContain('Plugin editor updated');
+});
+
 test('plugins can mount the shared text editor helper', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(async () => {

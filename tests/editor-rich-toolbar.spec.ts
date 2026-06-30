@@ -522,9 +522,15 @@ test('lightweight embed includes viewer note text editor controls', async ({ pag
 test('lightweight viewer-only text editor applies heading toolbar actions', async ({ page }) => {
   await page.goto('/examples/lightweight-viewer-text-editor.html');
 
-  const editor = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  const editor = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]').first();
+  const editorWithInput = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').nth(1);
+  const extraInput = editorWithInput.locator('.viewer-note-input-field');
   await expect(editor).toBeVisible();
   await expect(editor).toHaveText('');
+  await expect(editorWithInput.locator('[data-field="hvy-plugin-text-editor"]')).toBeVisible();
+  await expect(extraInput).toBeVisible();
+  await extraInput.fill('Input fixture value');
+  await expect(extraInput).toHaveValue('Input fixture value');
 
   await editor.click();
   await page.keyboard.type('Viewer toolbar target');
@@ -541,13 +547,24 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
-  await page.locator('#lightweightViewerOnlyMount [data-rich-action="heading-1"]').click();
+  const firstViewerNote = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').first();
+  await firstViewerNote.locator('[data-rich-action="heading-1"]').click();
 
   await expect(editor.locator('h1')).toContainText('Viewer toolbar target');
-  const viewerTextButton = page.locator('#lightweightViewerOnlyMount [data-rich-action="paragraph"]').first();
-  const viewerHeadingButton = page.locator('#lightweightViewerOnlyMount [data-rich-action="heading-1"]').first();
+  const viewerTextButton = firstViewerNote.locator('[data-rich-action="paragraph"]').first();
+  const viewerHeadingButton = firstViewerNote.locator('[data-rich-action="heading-1"]').first();
   await expect(viewerHeadingButton).toHaveClass(/secondary/);
-  await page.keyboard.press('End');
+  await editor.evaluate((node) => {
+    const heading = node.querySelector('h1');
+    const textNode = heading?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode ?? heading ?? node, textNode?.textContent?.length ?? (heading?.childNodes.length ?? node.childNodes.length));
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
   await page.keyboard.press('Enter');
   for (const char of 'Plain viewer line') {
     await page.keyboard.type(char);
@@ -557,6 +574,47 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
   await expect(editor).toContainText('Plain viewer line');
   await expect(viewerTextButton).toHaveClass(/secondary/);
   await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
+
+  const secondEditor = editorWithInput.locator('[data-field="hvy-plugin-text-editor"]');
+  const secondTextButton = editorWithInput.locator('[data-rich-action="paragraph"]').first();
+  const secondHeadingButton = editorWithInput.locator('[data-rich-action="heading-1"]').first();
+  await secondEditor.click();
+  await page.keyboard.type('Input sibling target');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await secondEditor.evaluate((node) => {
+    const paragraph = node.querySelector('p') ?? node;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await secondHeadingButton.click();
+  await expect(secondHeadingButton).toHaveClass(/secondary/);
+  await secondEditor.evaluate((node) => {
+    const heading = node.querySelector('h1');
+    const textNode = heading?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode ?? heading ?? node, textNode?.textContent?.length ?? (heading?.childNodes.length ?? node.childNodes.length));
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Plain before input');
+  await expect(secondTextButton).toHaveClass(/secondary/);
+  await expect(secondHeadingButton).not.toHaveClass(/secondary/);
+  await extraInput.fill('');
+  for (const char of 'abc') {
+    await extraInput.type(char);
+    await expect(secondTextButton).toHaveClass(/secondary/);
+    await expect(secondHeadingButton).not.toHaveClass(/secondary/);
+  }
+
   const expectedResult = await page.evaluate(() => {
     const exampleWindow = window as Window & {
       lightweightViewerTextEditorExample: {

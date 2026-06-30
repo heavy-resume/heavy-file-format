@@ -105,6 +105,23 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
         white-space: nowrap;
       }
+
+      .viewer-note-input-field {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--hvy-border-input);
+        border-radius: 7px;
+        background: var(--hvy-input-bg);
+        color: var(--hvy-text);
+        padding: 0.5rem 0.6rem;
+        font: inherit;
+        line-height: 1.35;
+      }
+
+      .viewer-note-input-field:focus {
+        outline: 2px solid var(--hvy-focus);
+        outline-offset: 1px;
+      }
     </style>
   </head>
   <body>
@@ -127,19 +144,54 @@
 
     <script type="module">
       import { deserializeDocumentBytes, mountHvy, serializeDocument } from '/src/embed.ts';
-      import { viewerNotePlugin } from '/src/plugins/viewer-note.ts';
+      import { viewerNotePlugin, viewerNotePluginFactory } from '/src/plugins/viewer-note.ts';
+
+      const viewerNoteWithInputPlugin = {
+        ...viewerNotePlugin,
+        id: 'example.viewer-note-input',
+        displayName: 'Viewer Note With Input',
+        create(ctx) {
+          const instance = viewerNotePluginFactory(ctx);
+          const frame = instance.element.querySelector('.hvy-viewer-note-frame');
+          const input = document.createElement('input');
+          input.className = 'viewer-note-input-field';
+          input.type = 'text';
+          input.placeholder = 'Input after rich text';
+          input.value = typeof ctx.block.schema.pluginConfig.inputValue === 'string' ? ctx.block.schema.pluginConfig.inputValue : '';
+          input.addEventListener('input', () => {
+            ctx.setConfig({ inputValue: input.value });
+          });
+          frame?.append(input);
+          return {
+            element: instance.element,
+            refresh() {
+              instance.refresh?.();
+              const nextValue = typeof ctx.block.schema.pluginConfig.inputValue === 'string' ? ctx.block.schema.pluginConfig.inputValue : '';
+              if (document.activeElement !== input && input.value !== nextValue) {
+                input.value = nextValue;
+              }
+            },
+            unmount() {
+              instance.unmount?.();
+            },
+          };
+        },
+      };
 
       const source = `---
 hvy_version: 0.1
 title: Lightweight Viewer Text Editor
 plugins:
   - id: hvy.viewer-note
+  - id: example.viewer-note-input
 ---
 
 <!--hvy: {"id":"main"}-->
 #! Viewer
 
  <!--hvy:plugin {"id":"viewer-note","plugin":"hvy.viewer-note"}-->
+
+ <!--hvy:plugin {"id":"viewer-note-with-input","plugin":"example.viewer-note-input","pluginConfig":{"inputValue":""}}-->
 `;
 
       const encoder = new TextEncoder();
@@ -157,7 +209,7 @@ plugins:
           root,
           document: createDocument(),
           mode: 'viewer',
-          plugins: [viewerNotePlugin],
+          plugins: [viewerNotePlugin, viewerNoteWithInputPlugin],
         });
         status.textContent = 'Mounted viewer.';
       }

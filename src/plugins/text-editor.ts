@@ -20,6 +20,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   const ownerDocument = document;
   const id = `plugin-text-editor-${pluginTextEditorId += 1}`;
   let disabled = options.disabled === true;
+  let currentMarkdown = options.value;
   let savedSelection: Range | null = null;
   const shell = ownerDocument.createElement('div');
   shell.className = 'text-editor-shell hvy-plugin-text-editor';
@@ -88,7 +89,8 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       return;
     }
     updateRichCodeBlockLanguageInput(target ?? null);
-    options.onChange(readMarkdown());
+    currentMarkdown = readMarkdown();
+    options.onChange(currentMarkdown);
     refreshRichToolbarState(editable);
   };
 
@@ -235,6 +237,15 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     editable,
     getValue: readMarkdown,
     setValue(markdown: string) {
+      if (markdown === currentMarkdown) {
+        syncDisabledState();
+        if (ownerDocument.activeElement === editable || editable.contains(ownerDocument.activeElement)) {
+          refreshRichToolbarState(editable);
+        }
+        syncTextToolbarLayout(shell);
+        return;
+      }
+      currentMarkdown = markdown;
       const isActive = ownerDocument.activeElement === editable || editable.contains(ownerDocument.activeElement);
       if (disabled || !isActive) {
         writeToolbar(markdown);

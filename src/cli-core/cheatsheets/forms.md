@@ -23,6 +23,15 @@ select
 datetime
 ```
 
+Textarea fields can set an initial height:
+
+```yaml
+fields:
+  - label: Notes
+    type: textarea
+    rows: 4
+```
+
 Create a form with submit logic:
 
 ```shell

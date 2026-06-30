@@ -84,7 +84,8 @@ scripts:
   test('serializes normalized form data back to YAML', () => {
     const parsed = parseFormSpec(`fields:
   - label: Email
-    type: email
+    type: textarea
+    rows: 4
     placeholder: you@example.com
     meta:
       css: "max-width: 24rem;"
@@ -96,7 +97,8 @@ scripts:
     const expectedResult = serializeFormSpec(parsed.spec);
 
     expect(expectedResult).toContain('fields:');
-    expect(expectedResult).toContain('type: email');
+    expect(expectedResult).toContain('type: textarea');
+    expect(expectedResult).toContain('rows: 4');
     expect(expectedResult).toContain('placeholder: you@example.com');
     expect(expectedResult).toContain('meta:');
     expect(expectedResult).toContain('css: "max-width: 24rem;"');

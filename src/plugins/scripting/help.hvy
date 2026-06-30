@@ -46,6 +46,9 @@ theme:
   - `doc.json.parse(response)` / `doc.json.parse_array(response)` / `doc.json.parse_object(response)` — extract
   structured JSON from an LLM response, including fenced JSON or wrapper prose. Array/object helpers require that exact
   top-level shape and raise an error otherwise.
+  - `doc.time.now_iso()` / `doc.time.now_local()` / `doc.time.now_unix_ms()` / `doc.time.today_iso()` — read the current
+  client time as an ISO timestamp, human-readable local date/time with timezone, Unix milliseconds, or client-local
+  `YYYY-MM-DD` date.
   - Plugin-provided APIs may also be present on `doc` when the relevant plugin is available. Use the relevant plugin's
   help for that API.
   - `doc.rerender()` — flush any pending re-render now (usually unnecessary; the host re-renders automatically when the
@@ -144,6 +147,12 @@ theme:
   cards = doc.json.parse_array(response)
   first_question = str(cards[0].get("question", ""))
   doc.header.set("first_generated_question", first_question)
+  ```
+  
+  Stamp the current time:
+  
+  ```python
+  doc.header.set("last_script_run", doc.time.now_local())
   ```
 <!--hvy: {"id":"limits","lock":false,"expanded":false,"highlight":false}-->
 #! Limits and security

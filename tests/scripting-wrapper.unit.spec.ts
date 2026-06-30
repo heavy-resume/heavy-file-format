@@ -421,6 +421,27 @@ test('createScriptingRuntime doc.json throws for invalid or mismatched response 
   expect(() => runtime.doc.json.parse_object('[{"item":1}]')).toThrow('Return exactly one JSON object.');
 });
 
+test('createScriptingRuntime exposes time helpers', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    now: () => new Date(2026, 5, 30, 15, 45, 12, 345),
+  });
+
+  const expectedDate = new Date(2026, 5, 30, 15, 45, 12, 345);
+  expect(runtime.doc.time.now_iso()).toBe(expectedDate.toISOString());
+  expect(runtime.doc.time.now_local()).toBe(new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(expectedDate));
+  expect(runtime.doc.time.now_local()).not.toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  expect(runtime.doc.time.now_unix_ms()).toBe(expectedDate.getTime());
+  expect(runtime.doc.time.today_iso()).toBe('2026-06-30');
+});
+
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

@@ -1316,7 +1316,8 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
-  `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
+  `value`, `placeholder`, `required`, `rows`, `options`, `triggers`, and
+  `meta`.
 - Field `label` is both the visible label and the script key used with
   `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
@@ -1325,6 +1326,8 @@ Plugin-specific rules:
 - Supported `type` values are `text`, `textarea`, `number`, `select`,
   `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
   File inputs are not part of the standard form plugin contract.
+- `rows` applies to `textarea` fields. When present, it MUST be a positive
+  integer and controls the initial rendered textarea height in text rows.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
@@ -1348,6 +1351,12 @@ Plugin-specific rules:
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
   `set_error(label, message)`, and `clear_error(label)`.
+- Scripts MAY use `doc.time.now_iso()`, `doc.time.now_local()`,
+  `doc.time.now_unix_ms()`, and `doc.time.today_iso()` for current client time.
+  `now_iso()` returns an ISO 8601 timestamp, `now_local()` returns a
+  human-readable date/time with the client's local timezone label,
+  `now_unix_ms()` returns milliseconds since the Unix epoch, and `today_iso()`
+  returns the client-local date as `YYYY-MM-DD`.
 - Dynamic dropdown/radio options SHOULD be set by scripts using
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.

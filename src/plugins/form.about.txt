@@ -3,6 +3,7 @@ Renders editable form fields and optional scripted behavior.
 Fields live in plugin.txt as YAML under the fields key.
 Form-level settings live in plugin.json pluginConfig, including submitLabel, showSubmit, initialScript, submitAction, submitSourceScript, submitScript, submitPrompt, submit limits, scriptLibraries, and scriptStepBudget.
 Fields use label as both visible text and the scripting key.
+Textarea fields can set rows to control their initial height.
 Named scripts live in plugin.txt under scripts and are also exposed as sibling .py files in the CLI.
 Form scripts run as sandboxed Brython/Python with doc and doc.form available.
 scriptLibraries can enable checked sandbox libraries such as random and re for every script in the form.

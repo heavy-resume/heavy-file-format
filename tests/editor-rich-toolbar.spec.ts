@@ -544,6 +544,19 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
   await page.locator('#lightweightViewerOnlyMount [data-rich-action="heading-1"]').click();
 
   await expect(editor.locator('h1')).toContainText('Viewer toolbar target');
+  const viewerTextButton = page.locator('#lightweightViewerOnlyMount [data-rich-action="paragraph"]').first();
+  const viewerHeadingButton = page.locator('#lightweightViewerOnlyMount [data-rich-action="heading-1"]').first();
+  await expect(viewerHeadingButton).toHaveClass(/secondary/);
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  for (const char of 'Plain viewer line') {
+    await page.keyboard.type(char);
+    await expect(viewerTextButton).toHaveClass(/secondary/);
+    await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
+  }
+  await expect(editor).toContainText('Plain viewer line');
+  await expect(viewerTextButton).toHaveClass(/secondary/);
+  await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
   const expectedResult = await page.evaluate(() => {
     const exampleWindow = window as Window & {
       lightweightViewerTextEditorExample: {

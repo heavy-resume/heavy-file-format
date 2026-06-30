@@ -235,10 +235,14 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     editable,
     getValue: readMarkdown,
     setValue(markdown: string) {
-      writeToolbar(markdown);
-      if (disabled || (ownerDocument.activeElement !== editable && !editable.contains(ownerDocument.activeElement))) {
+      const isActive = ownerDocument.activeElement === editable || editable.contains(ownerDocument.activeElement);
+      if (disabled || !isActive) {
+        writeToolbar(markdown);
         writeEditable(markdown);
+        return;
       }
+      refreshRichToolbarState(editable);
+      syncTextToolbarLayout(shell);
     },
     setDisabled(nextDisabled: boolean) {
       disabled = nextDisabled;

@@ -2099,6 +2099,7 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
     editable.closest('.caption-text-modal')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
+    editable.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
   ].filter((toolbar): toolbar is HTMLElement => Boolean(toolbar));
   if (toolbars.length === 0) {

@@ -12,12 +12,15 @@ import { getCachedComponentRenderHelpers } from '../state';
 import { syncTextToolbarLayout } from '../editor/components/text/text-toolbar-layout';
 import type { HvyPluginTextEditorInstance, HvyPluginTextEditorMountOptions } from './types';
 
+import '../editor/components/text/text.css';
+
 let pluginTextEditorId = 0;
 
 export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance {
   const ownerDocument = document;
   const id = `plugin-text-editor-${pluginTextEditorId += 1}`;
   let disabled = options.disabled === true;
+  let savedSelection: Range | null = null;
   const shell = ownerDocument.createElement('div');
   shell.className = 'text-editor-shell hvy-plugin-text-editor';
   const toolbarBounds = ownerDocument.createElement('div');
@@ -89,6 +92,36 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     refreshRichToolbarState(editable);
   };
 
+  const hasSelectionInsideEditable = (): boolean => {
+    const selection = ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+    const range = selection.getRangeAt(0);
+    return editable.contains(range.commonAncestorContainer);
+  };
+
+  const storeSelection = (): void => {
+    const selection = ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (!editable.contains(range.commonAncestorContainer)) {
+      return;
+    }
+    savedSelection = range.cloneRange();
+  };
+
+  const restoreSelection = (): void => {
+    if (!savedSelection) {
+      return;
+    }
+    const selection = ownerDocument.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(savedSelection.cloneRange());
+  };
+
   const onBeforeInput = (event: Event): void => {
     if (disabled) {
       event.preventDefault();
@@ -124,7 +157,29 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       return;
     }
     handleRichEditorKeyup(editable);
+    storeSelection();
     refreshRichToolbarState(editable);
+  };
+  const onMouseup = (): void => {
+    if (!disabled) {
+      storeSelection();
+    }
+  };
+  const onToolbarMouseDown = (event: Event): void => {
+    if (disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest<HTMLElement>('[data-rich-action], [data-action]');
+    if (!button || !shell.contains(button)) {
+      return;
+    }
+    if (hasSelectionInsideEditable()) {
+      storeSelection();
+    }
+    event.preventDefault();
   };
   const onToolbarClick = (event: Event): void => {
     if (disabled) {
@@ -157,6 +212,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
     }
     event.preventDefault();
     const value = action === 'text-line-style' ? button.dataset.textLineStyleName ?? '' : undefined;
+    restoreSelection();
     applyRichAction(action, editable, value);
     syncChange();
     editable.focus({ preventScroll: true });
@@ -165,12 +221,14 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   writeToolbar(options.value);
   writeEditable(options.value);
   syncDisabledState();
+  shell.addEventListener('mousedown', onToolbarMouseDown);
   shell.addEventListener('click', onToolbarClick);
   editable.addEventListener('beforeinput', onBeforeInput);
   editable.addEventListener('copy', onCopy);
   editable.addEventListener('input', onInput);
   editable.addEventListener('keydown', onKeydown);
   editable.addEventListener('keyup', onKeyup);
+  editable.addEventListener('mouseup', onMouseup);
 
   return {
     element: shell,
@@ -192,12 +250,14 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       }
     },
     unmount() {
+      shell.removeEventListener('mousedown', onToolbarMouseDown);
       shell.removeEventListener('click', onToolbarClick);
       editable.removeEventListener('beforeinput', onBeforeInput);
       editable.removeEventListener('copy', onCopy);
       editable.removeEventListener('input', onInput);
       editable.removeEventListener('keydown', onKeydown);
       editable.removeEventListener('keyup', onKeyup);
+      editable.removeEventListener('mouseup', onMouseup);
       shell.remove();
     },
   };

@@ -20,6 +20,7 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).margin)).toBe('0px');
   await expect(page.getByRole('link', { name: 'Two embedded docs' })).toHaveAttribute('href', '/examples/two-embedded-docs.html');
   await expect(page.getByRole('link', { name: 'Plugin text editor' })).toHaveAttribute('href', '/examples/embed-text-editor-plugin.html');
+  await expect(page.getByRole('link', { name: 'Lightweight viewer text editor' })).toHaveAttribute('href', '/examples/lightweight-viewer-text-editor.html');
 
   const editorButton = page.getByRole('button', { name: 'Editor' });
   await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe(

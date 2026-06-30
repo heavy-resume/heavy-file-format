@@ -1,0 +1,5 @@
+Viewer Note stores editable Markdown in plugin.txt.
+
+This reference plugin mounts the shared HVY plugin text editor in both editor and viewer modes. Use it when a document needs plugin-owned rich text that remains directly editable from the rendered viewer surface.
+
+The plugin body is the note Markdown. No pluginConfig fields are required.

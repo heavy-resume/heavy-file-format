@@ -20,6 +20,14 @@ interface SavedFocus {
   selectionStart: number | null;
   selectionEnd: number | null;
   selectionDirection: 'forward' | 'backward' | 'none' | null;
+  contentEditableRange: SavedContentEditableRange | null;
+}
+
+interface SavedContentEditableRange {
+  startPath: number[];
+  startOffset: number;
+  endPath: number[];
+  endOffset: number;
 }
 
 interface MountedPlugin {
@@ -345,6 +353,7 @@ export function capturePluginFocus(): void {
     let selectionStart: number | null = null;
     let selectionEnd: number | null = null;
     let selectionDirection: 'forward' | 'backward' | 'none' | null = null;
+    let contentEditableRange: SavedContentEditableRange | null = null;
     if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
       try {
         selectionStart = active.selectionStart;
@@ -353,8 +362,10 @@ export function capturePluginFocus(): void {
       } catch {
         // selectionStart can throw on number/email/etc. inputs — ignore.
       }
+    } else if (active.isContentEditable) {
+      contentEditableRange = getSavedContentEditableRange(active);
     }
-    entry.pendingFocus = { element: active, selectionStart, selectionEnd, selectionDirection };
+    entry.pendingFocus = { element: active, selectionStart, selectionEnd, selectionDirection, contentEditableRange };
     return;
   }
 }
@@ -369,10 +380,77 @@ function applySavedFocus(saved: SavedFocus): void {
       saved.selectionEnd !== null
     ) {
       saved.element.setSelectionRange(saved.selectionStart, saved.selectionEnd, saved.selectionDirection ?? undefined);
+    } else if (saved.contentEditableRange) {
+      restoreContentEditableRange(saved.element, saved.contentEditableRange);
     }
   } catch {
     // Best-effort.
   }
+}
+
+function getSavedContentEditableRange(root: HTMLElement): SavedContentEditableRange | null {
+  const selection = root.ownerDocument.defaultView?.getSelection();
+  if (!selection?.rangeCount) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+    return null;
+  }
+  const startPath = getNodePath(root, range.startContainer);
+  const endPath = getNodePath(root, range.endContainer);
+  if (!startPath || !endPath) {
+    return null;
+  }
+  return {
+    startPath,
+    startOffset: range.startOffset,
+    endPath,
+    endOffset: range.endOffset,
+  };
+}
+
+function getNodePath(root: Node, node: Node): number[] | null {
+  const path: number[] = [];
+  let current: Node | null = node;
+  while (current && current !== root) {
+    const parent: ParentNode | null = current.parentNode;
+    if (!parent) {
+      return null;
+    }
+    path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+    current = parent;
+  }
+  return current === root ? path : null;
+}
+
+function getNodeAtPath(root: Node, path: number[]): Node | null {
+  let current: Node | null = root;
+  for (const index of path) {
+    current = current?.childNodes[index] ?? null;
+    if (!current) {
+      return null;
+    }
+  }
+  return current;
+}
+
+function restoreContentEditableRange(root: HTMLElement, saved: SavedContentEditableRange): void {
+  const start = getNodeAtPath(root, saved.startPath);
+  const end = getNodeAtPath(root, saved.endPath);
+  if (!start || !end) {
+    return;
+  }
+  const range = root.ownerDocument.createRange();
+  range.setStart(start, Math.min(saved.startOffset, getMaxRangeOffset(start)));
+  range.setEnd(end, Math.min(saved.endOffset, getMaxRangeOffset(end)));
+  const selection = root.ownerDocument.defaultView?.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function getMaxRangeOffset(node: Node): number {
+  return node.nodeType === Node.TEXT_NODE ? node.textContent?.length ?? 0 : node.childNodes.length;
 }
 
 export function unmountAllPlugins(): void {

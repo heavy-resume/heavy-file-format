@@ -85,6 +85,7 @@ import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
@@ -305,7 +306,7 @@ function localGetComponentRenderHelpers() {
   }
   return getComponentRenderHelpers(
     {
-      renderRichToolbar: () => '',
+      renderRichToolbar: renderLightweightRichToolbar,
       renderEditorBlock: () => '',
       renderPassiveEditorBlock: () => '',
       renderTextFragment,
@@ -314,6 +315,75 @@ function localGetComponentRenderHelpers() {
     },
     readerRenderer
   );
+}
+
+function renderLightweightRichToolbar(
+  sectionKey: string,
+  blockId: string,
+  options: {
+    field?: string;
+    gridItemId?: string;
+    rowIndex?: number;
+    includeAlign?: boolean;
+    includeFillIn?: boolean;
+    align?: 'left' | 'center' | 'right';
+    currentMarkdown?: string;
+  } = {}
+): string {
+  const fieldAttr = options.field ? ` data-rich-field="${escapeAttr(options.field)}"` : '';
+  const gridAttr = options.gridItemId ? ` data-grid-item-id="${escapeAttr(options.gridItemId)}"` : '';
+  const rowAttr = typeof options.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';
+  const richButtonAttrs = `${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}"`;
+  const blockStyle = getMarkdownBlockStyle(options.currentMarkdown ?? '');
+  const selectedClass = (selected: boolean) => (selected ? ' secondary is-selected' : ' ghost');
+  const hotkeyModifier = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
+  return `
+    <div class="rich-toolbar">
+      <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
+        <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-2')}" data-rich-action="heading-2" ${richButtonAttrs} title="Heading 2">H2</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-3')}" data-rich-action="heading-3" ${richButtonAttrs} title="Heading 3">H3</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-4')}" data-rich-action="heading-4" ${richButtonAttrs} title="Heading 4">H4</button>
+      </div>
+      <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
+        <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (${hotkeyModifier}+B)"><strong>B</strong></button>
+        <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (${hotkeyModifier}+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline (${hotkeyModifier}+U)"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="strikethrough" ${richButtonAttrs} aria-label="Strikethrough" title="Strikethrough"><span class="toolbar-icon strikethrough-icon" aria-hidden="true">S</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'quote')}" data-rich-action="quote" ${richButtonAttrs} aria-label="Quote" title="Quote"><span class="toolbar-icon quote-icon" aria-hidden="true">“</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'code-block')}" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code block" title="Code block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+      </div>
+    </div>
+  `;
+}
+
+function getMarkdownBlockStyle(markdown: string): string {
+  const firstLine = markdown.trimStart().split(/\r?\n/, 1)[0] ?? '';
+  const heading = firstLine.match(/^(#{1,4})\s+/);
+  if (heading) {
+    return `heading-${heading[1].length}`;
+  }
+  if (/^[-*]\s+\[[ xX]\]\s+/.test(firstLine)) {
+    return 'checklist';
+  }
+  if (/^[-*]\s+/.test(firstLine)) {
+    return 'list';
+  }
+  if (/^\d+\.\s+/.test(firstLine)) {
+    return 'ordered-list';
+  }
+  if (/^>\s+/.test(firstLine)) {
+    return 'quote';
+  }
+  if (/^```/.test(firstLine)) {
+    return 'code-block';
+  }
+  return 'paragraph';
 }
 
 function renderComponentFragment(componentName: string, content: string, block: { schema: { codeLanguage?: string; fillIn?: boolean } }): string {
@@ -447,16 +517,19 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   bindReaderUi(root);
   bindCarouselInteractions(root);
   reconcilePluginMounts(root);
+  syncTextToolbarLayout(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
   bindLazyImageHydration(root);
+  syncTextToolbarLayout(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
 }
@@ -471,22 +544,26 @@ function refreshReaderPanels(): void {
   if (sidebarSections) {
     sidebarSections.innerHTML = renderer.renderSidebarSections(state.document.sections);
     reconcilePluginMounts(sidebarSections);
+    syncTextToolbarLayout(sidebarSections);
     void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
   }
   if (reader) {
     reader.innerHTML = renderer.renderReaderSections(state.document.sections);
     reconcilePluginMounts(reader);
+    syncTextToolbarLayout(reader);
     void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
   }
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
   bindLazyImageHydration(currentRoot);
+  syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
   bindCarouselInteractions(currentRoot);
 }
@@ -783,7 +860,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   bindRuntimeActivation(options.root, runtime);
-  ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
+  ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
   initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');

@@ -6,6 +6,7 @@
     "hvy.scripting",
     "hvy.graph",
     "hvy.diagram",
-    "hvy.qr-code"
+    "hvy.qr-code",
+    "hvy.viewer-note"
   ]
 }

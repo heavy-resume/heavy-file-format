@@ -22,6 +22,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.graph',
   'hvy.diagram',
   'hvy.qr-code',
+  'hvy.viewer-note',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -91,6 +92,13 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     modulePath: 'src/plugins/qr-code/qr-code.ts',
     displayName: 'QR Code',
     pdfStatic: true,
+  },
+  {
+    id: 'hvy.viewer-note',
+    key: 'viewerNote',
+    exportName: 'viewerNotePlugin',
+    modulePath: 'src/plugins/viewer-note.ts',
+    displayName: 'Viewer Note',
   },
 ];
 

@@ -8,6 +8,7 @@ test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(resolveBuiltInPluginIds(undefined)).toEqual([...HVY_BUILT_IN_PLUGIN_IDS]);
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.diagram');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.qr-code');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.viewer-note');
 });
 
 test('resolveBuiltInPluginIds accepts an explicit plugin list', () => {
@@ -46,13 +47,14 @@ test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
 });
 
 test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
-  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code']);
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code', 'hvy.viewer-note']);
 
   expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
   expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');
   expect(expectedResult).toContain('from "/src/plugins/graph.ts"');
   expect(expectedResult).toContain('from "/src/plugins/diagram.ts"');
   expect(expectedResult).toContain('from "/src/plugins/qr-code/qr-code.ts"');
+  expect(expectedResult).toContain('from "/src/plugins/viewer-note.ts"');
   expect(expectedResult).not.toContain('/Users/');
   expect(expectedResult).not.toContain(process.cwd());
 });

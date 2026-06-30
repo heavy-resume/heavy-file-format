@@ -13,6 +13,7 @@ export const SCRIPTING_PLUGIN_ID = 'hvy.scripting';
 export const GRAPH_PLUGIN_ID = 'hvy.graph';
 export const DIAGRAM_PLUGIN_ID = 'hvy.diagram';
 export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
+export const VIEWER_NOTE_PLUGIN_ID = 'hvy.viewer-note';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
@@ -20,6 +21,18 @@ export const BUILTIN_SCRIPTING_PLUGIN_SOURCE = 'builtin://scripting';
 export const BUILTIN_GRAPH_PLUGIN_SOURCE = 'builtin://graph';
 export const BUILTIN_DIAGRAM_PLUGIN_SOURCE = 'builtin://diagram';
 export const BUILTIN_QR_CODE_PLUGIN_SOURCE = 'builtin://qr-code';
+export const BUILTIN_VIEWER_NOTE_PLUGIN_SOURCE = 'builtin://viewer-note';
+
+const BUILTIN_PLUGIN_SOURCES: Record<string, string> = {
+  [DB_TABLE_PLUGIN_ID]: BUILTIN_DB_TABLE_PLUGIN_SOURCE,
+  [FORM_PLUGIN_ID]: BUILTIN_FORM_PLUGIN_SOURCE,
+  [PROGRESS_BAR_PLUGIN_ID]: BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE,
+  [SCRIPTING_PLUGIN_ID]: BUILTIN_SCRIPTING_PLUGIN_SOURCE,
+  [GRAPH_PLUGIN_ID]: BUILTIN_GRAPH_PLUGIN_SOURCE,
+  [DIAGRAM_PLUGIN_ID]: BUILTIN_DIAGRAM_PLUGIN_SOURCE,
+  [QR_CODE_PLUGIN_ID]: BUILTIN_QR_CODE_PLUGIN_SOURCE,
+  [VIEWER_NOTE_PLUGIN_ID]: BUILTIN_VIEWER_NOTE_PLUGIN_SOURCE,
+};
 
 export function isDbTablePluginId(pluginId: string): boolean {
   return pluginId === DB_TABLE_PLUGIN_ID;
@@ -115,22 +128,7 @@ export function getAvailableDocumentPlugins(): DocumentPluginDefinition[] {
   if (normalized.length === 0) {
     return getRenderableHostPlugins().map((entry) => ({
       id: entry.id,
-      source:
-        entry.id === DB_TABLE_PLUGIN_ID
-          ? BUILTIN_DB_TABLE_PLUGIN_SOURCE
-          : entry.id === FORM_PLUGIN_ID
-            ? BUILTIN_FORM_PLUGIN_SOURCE
-          : entry.id === PROGRESS_BAR_PLUGIN_ID
-            ? BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE
-            : entry.id === SCRIPTING_PLUGIN_ID
-              ? BUILTIN_SCRIPTING_PLUGIN_SOURCE
-              : entry.id === GRAPH_PLUGIN_ID
-                ? BUILTIN_GRAPH_PLUGIN_SOURCE
-                : entry.id === DIAGRAM_PLUGIN_ID
-                  ? BUILTIN_DIAGRAM_PLUGIN_SOURCE
-                  : entry.id === QR_CODE_PLUGIN_ID
-                    ? BUILTIN_QR_CODE_PLUGIN_SOURCE
-                : `host://${entry.id}`,
+      source: BUILTIN_PLUGIN_SOURCES[entry.id] ?? `host://${entry.id}`,
     }));
   }
 
@@ -156,6 +154,9 @@ export function getPluginDisplayName(pluginId: string): string {
   }
   if (pluginId === QR_CODE_PLUGIN_ID) {
     return 'QR Code';
+  }
+  if (pluginId === VIEWER_NOTE_PLUGIN_ID) {
+    return 'Viewer Note';
   }
   return pluginId;
 }

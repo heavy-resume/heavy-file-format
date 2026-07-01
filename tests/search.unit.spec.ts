@@ -1149,10 +1149,19 @@ title: Semantic Test
     targetPath: '/body/skills/typescript',
     targetRef: 'typescript',
   });
-  expect(expectedResult.instructionPrompt).toContain('Return only a JSON array of candidateId strings, with no prose and no Markdown fences');
+  expect(expectedResult.instructionPrompt).toContain('--- user filter prompt ---\nFind frontend language work\n--- end user filter prompt ---');
+  expect(expectedResult.instructionPrompt.indexOf('Candidate list as XML-like structured text:')).toBeLessThan(
+    expectedResult.instructionPrompt.indexOf('Selection contract:')
+  );
+  expect(expectedResult.instructionPrompt).toContain('Selection contract:');
+  expect(expectedResult.instructionPrompt).toContain('list only candidate IDs that obviously satisfy the user filter prompt');
+  expect(expectedResult.instructionPrompt).toContain('write one JSON array containing exactly the candidate IDs from the first pass');
+  expect(expectedResult.instructionPrompt).toContain('If the first pass found no relevant candidates, the final JSON array must be []');
+  expect(expectedResult.instructionPrompt).toContain('Do not output all candidate IDs unless every candidate was listed as relevant in the first pass');
   expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
-  expect(expectedResult.instructionPrompt).toContain('["id1", "id2", ...]');
-  expect(expectedResult.instructionPrompt).toContain('Return only matching candidateId strings');
+  expect(expectedResult.instructionPrompt).not.toContain('may match');
+  expect(expectedResult.instructionPrompt).not.toContain('["id1", "id2", ...]');
+  expect(expectedResult.instructionPrompt).toContain('Do not put explanations inside the JSON array');
   expect(expectedResult.instructionPrompt).toContain('component:typescript');
 });
 
@@ -1747,7 +1756,22 @@ test('semantic provider parser keeps only valid candidate ids', () => {
   }]);
 });
 
-test('semantic provider parser recovers id arrays from complete object wrappers', () => {
+test('semantic provider parser reads the final JSON array after short selection notes', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    [
+      'First pass: component:C7 matches directly; component:C27 matches directly.',
+      '["component:C7","component:C27"]',
+    ].join('\n'),
+    new Set(['component:C7', 'component:C27']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C7' },
+    { candidateId: 'component:C27' },
+  ]);
+});
+
+test('semantic provider parser recovers id arrays from object wrappers', () => {
   const expectedResult = parseSemanticFilterResponse(
     '{"matches":["component:C7","component:C27"]}',
     new Set(['component:C7', 'component:C27']),
@@ -1759,19 +1783,18 @@ test('semantic provider parser recovers id arrays from complete object wrappers'
   ]);
 });
 
-test('semantic provider parser recovers id arrays from malformed object wrappers', () => {
+test('semantic provider parser uses the final array when earlier JSON is present', () => {
   const expectedResult = parseSemanticFilterResponse(
-    '{"matches":["component:C7","component:C27"]',
-    new Set(['component:C7', 'component:C27']),
+    '{"firstPass":"component:C7 matches directly."}\n["component:C7"]',
+    new Set(['component:C7']),
   );
 
   expect(expectedResult).toEqual([
     { candidateId: 'component:C7' },
-    { candidateId: 'component:C27' },
   ]);
 });
 
-test('semantic provider parser accepts fenced JSON with wrapper prose', () => {
+test('semantic provider parser accepts fenced arrays', () => {
   const expectedResult = parseSemanticFilterResponse(
     'Relevant candidates:\n```json\n["section:skills"]\n```',
     new Set(['section:skills']),
@@ -1782,23 +1805,24 @@ test('semantic provider parser accepts fenced JSON with wrapper prose', () => {
   }]);
 });
 
-test('semantic provider parser accepts trace-style fenced id arrays with prose', () => {
+test('semantic provider parser accepts prose after the final JSON array', () => {
   const expectedResult = parseSemanticFilterResponse(
-    [
-      'Here is the JSON list with the selected candidates:',
-      '',
-      '```',
-      '["component:C6", "component:C7", "component:C27"]',
-      '```',
-    ].join('\n'),
-    new Set(['component:C6', 'component:C7', 'component:C27']),
+    '["component:C6"]\nDone.',
+    new Set(['component:C6']),
   );
 
-  expect(expectedResult).toEqual([
-    { candidateId: 'component:C6' },
-    { candidateId: 'component:C7' },
-    { candidateId: 'component:C27' },
-  ]);
+  expect(expectedResult).toEqual([{
+    candidateId: 'component:C6',
+  }]);
+});
+
+test('semantic provider parser accepts an empty final array for no relevant candidates', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    'First pass: none of the candidates are relevant.\n[]',
+    new Set(['component:C6']),
+  );
+
+  expect(expectedResult).toEqual([]);
 });
 
 test('semantic provider parser errors when returned matches have no valid ids', () => {

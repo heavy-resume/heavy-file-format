@@ -108,3 +108,5 @@ Section titles are part of the editing experience and not the viewing experience
 Plugins shouldn't define their own color scheme.
 
 Under no circumstance does, "This feature has a bug" mean "Remove the bugged feature instead of fixing it"
+
+Don't put things back as if some magic fairies changed them.

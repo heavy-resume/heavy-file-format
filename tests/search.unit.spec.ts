@@ -1149,15 +1149,17 @@ title: Semantic Test
     targetPath: '/body/skills/typescript',
     targetRef: 'typescript',
   });
-  expect(expectedResult.instructionPrompt).toContain('--- user filter prompt ---\nFind frontend language work\n--- end user filter prompt ---');
+  expect(expectedResult.instructionPrompt).toContain('--- filter prompt ---\nFind frontend language work\n--- end filter prompt ---');
   expect(expectedResult.instructionPrompt.indexOf('Candidate list as XML-like structured text:')).toBeLessThan(
     expectedResult.instructionPrompt.indexOf('Selection contract:')
   );
   expect(expectedResult.instructionPrompt).toContain('Selection contract:');
-  expect(expectedResult.instructionPrompt).toContain('list only candidate IDs that obviously satisfy the user filter prompt');
-  expect(expectedResult.instructionPrompt).toContain('write one JSON array containing exactly the candidate IDs from the first pass');
-  expect(expectedResult.instructionPrompt).toContain('If the first pass found no relevant candidates, the final JSON array must be []');
-  expect(expectedResult.instructionPrompt).toContain('Do not output all candidate IDs unless every candidate was listed as relevant in the first pass');
+  expect(expectedResult.instructionPrompt).toContain('list candidate IDs that appear to satisfy the filter prompt');
+  expect(expectedResult.instructionPrompt).toContain('Review the first pass against the relevance rules');
+  expect(expectedResult.instructionPrompt).toContain('write one JSON array containing exactly the candidate IDs that survived review');
+  expect(expectedResult.instructionPrompt).toContain('If no candidates survived review, the final JSON array must be []');
+  expect(expectedResult.instructionPrompt).toContain('Do not output all candidate IDs unless every candidate survived review');
+  expect(expectedResult.instructionPrompt).not.toContain('exactly the candidate IDs from the first pass');
   expect(expectedResult.instructionPrompt).toContain('Find frontend language work');
   expect(expectedResult.instructionPrompt).not.toContain('may match');
   expect(expectedResult.instructionPrompt).not.toContain('["id1", "id2", ...]');

@@ -23,8 +23,8 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     context: request.instructionPrompt,
     responseInstructions: [
       'Follow the semantic filter selection contract in the context exactly.',
-      'Include the first-pass relevance notes requested by the context.',
-      'End with one JSON array containing exactly the candidate IDs selected in the first pass.',
+      'Include the first-pass notes and review step requested by the context.',
+      'End with one JSON array containing exactly the candidate IDs that survived review.',
     ].join('\n'),
     mode: 'qa',
     debugLabel: 'semantic-filter',

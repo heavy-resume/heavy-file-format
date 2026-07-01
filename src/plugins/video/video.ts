@@ -1,6 +1,6 @@
 import './video.css';
 
-import { escapeAttr } from '../../utils';
+import { escapeAttr, escapeHtml } from '../../utils';
 import { refreshIcon } from '../../icons';
 import { VIDEO_PLUGIN_ID } from '../registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
@@ -12,6 +12,7 @@ import {
   VIDEO_PLUGIN_DEFAULT_URL,
   normalizeVideoUrl,
   readVideoConfig,
+  type NormalizedVideo,
   type VideoConfig,
 } from './video-model';
 
@@ -48,10 +49,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const config = readVideoConfig(ctx.block.schema.pluginConfig);
     if (handles) {
       syncEditorInputs(handles, config);
-      renderVideoPreview(handles.preview, config, previewState);
+      renderVideoPreview(handles.preview, config, previewState, ctx);
       syncPreviewRefreshState(handles, config, previewState);
     } else {
-      renderVideoPreview(preview, config, previewState, { force: true });
+      renderVideoPreview(preview, config, previewState, ctx, { force: true });
     }
   };
 
@@ -82,7 +83,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       ctx.setConfig({ url: normalized.canonicalUrl });
     }
     const config = readVideoConfig(ctx.block.schema.pluginConfig);
-    renderVideoPreview(handles.preview, config, previewState, { force: true });
+    renderVideoPreview(handles.preview, config, previewState, ctx, { force: true });
     syncPreviewRefreshState(handles, config, previewState);
   };
 
@@ -164,6 +165,7 @@ function renderVideoPreview(
   host: HTMLElement,
   config: VideoConfig,
   state: VideoPreviewState,
+  ctx: HvyPluginContext,
   options: { force?: boolean } = {}
 ): void {
   const normalized = normalizeVideoUrl(config.url);
@@ -192,9 +194,21 @@ function renderVideoPreview(
     return;
   }
   const title = config.title.trim() || `${formatProvider(normalized.provider)} video`;
+  if (shouldUseExternalVideoLink(normalized)) {
+    if (state.stateKey !== stateKey || state.title !== title) {
+      host.innerHTML = renderExternalVideoLink(normalized, title);
+      state.stateKey = stateKey;
+      state.title = title;
+      host.classList.add('hvy-link-observer-surface');
+      ctx.observeLinks(host);
+    }
+    return;
+  }
+  host.classList.remove('hvy-link-observer-surface');
+  const embedUrl = createRuntimeEmbedUrl(normalized);
   if (state.stateKey !== stateKey) {
     host.innerHTML = `<div class="hvy-video-frame">
-      <iframe src="${escapeAttr(normalized.embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe>
+      <iframe src="${escapeAttr(embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="origin-when-cross-origin" allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe>
     </div>`;
     state.stateKey = stateKey;
     state.title = title;
@@ -208,6 +222,55 @@ function renderVideoPreview(
 
 function getVideoPreviewStateKey(config: VideoConfig, normalized: ReturnType<typeof normalizeVideoUrl>): string {
   return normalized ? `video:${normalized.embedUrl}` : config.url.trim() ? 'error' : 'empty';
+}
+
+function shouldUseExternalVideoLink(video: NormalizedVideo): boolean {
+  return video.provider === 'youtube' && isDesktopWebViewRuntime();
+}
+
+function isDesktopWebViewRuntime(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const protocol = window.location.protocol;
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return true;
+  }
+  const markerWindow = window as Window & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI_METADATA__?: unknown;
+  };
+  if (markerWindow.__TAURI__ || markerWindow.__TAURI_INTERNALS__ || markerWindow.__TAURI_METADATA__) {
+    return true;
+  }
+  return /\b(Electron|Tauri|Wry)\b/i.test(window.navigator.userAgent);
+}
+
+function renderExternalVideoLink(video: NormalizedVideo, title: string): string {
+  const thumbnail = video.thumbnailUrl
+    ? `<img class="hvy-video-external-thumbnail" src="${escapeAttr(video.thumbnailUrl)}" alt="">`
+    : '<div class="hvy-video-external-thumbnail hvy-video-external-thumbnail-empty"></div>';
+  return `<div class="hvy-video-external">
+    <div class="hvy-video-external-media">
+      ${thumbnail}
+      <div class="hvy-video-external-icon" aria-hidden="true"></div>
+    </div>
+    <div class="hvy-video-external-copy">
+      <strong>${escapeHtml(title)}</strong>
+      <span>YouTube playback opens outside this desktop preview.</span>
+    </div>
+    <a class="hvy-video-external-link" href="${escapeAttr(video.canonicalUrl)}" target="_blank" rel="noopener noreferrer">Open on YouTube</a>
+  </div>`;
+}
+
+function createRuntimeEmbedUrl(video: NormalizedVideo): string {
+  if (video.provider !== 'youtube' || typeof window === 'undefined' || !window.location.origin.startsWith('http')) {
+    return video.embedUrl;
+  }
+  const url = new URL(video.embedUrl);
+  url.searchParams.set('origin', window.location.origin);
+  return url.toString();
 }
 
 function formatProvider(provider: string): string {

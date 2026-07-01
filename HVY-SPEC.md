@@ -1511,7 +1511,9 @@ parameters. Video embeds MUST NOT autoplay, and clients MUST NOT honor URL
 parameters that would enable autoplay or otherwise override plugin
 configuration. When remote network access is disabled by host policy, clients
 SHOULD preserve the plugin block and render an inline placeholder instead of
-loading the iframe.
+loading the iframe. Clients MAY also render an external-open placeholder when a
+provider is known not to support playback in the current embedded browser
+runtime, such as a desktop webview.
 
 ## 8. Security & Runtime Constraints
 

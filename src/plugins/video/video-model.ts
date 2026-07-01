@@ -13,6 +13,7 @@ export interface NormalizedVideo {
   id: string;
   canonicalUrl: string;
   embedUrl: string;
+  thumbnailUrl?: string;
 }
 
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
@@ -99,6 +100,7 @@ function createYouTubeVideo(id: string): NormalizedVideo {
     id,
     canonicalUrl: `https://www.youtube.com/watch?v=${id}`,
     embedUrl: `https://www.youtube-nocookie.com/embed/${id}?autoplay=0&rel=0`,
+    thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
   };
 }
 

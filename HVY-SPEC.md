@@ -1494,7 +1494,7 @@ plugins:
     source: builtin://video
 ---
 
-<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","title":"Example video"}}-->
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=iuPWDMY0Li4","title":"Example video"}}-->
 ```
 
 Normative configuration:

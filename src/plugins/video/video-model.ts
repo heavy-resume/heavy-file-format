@@ -1,4 +1,4 @@
-export const VIDEO_PLUGIN_DEFAULT_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+export const VIDEO_PLUGIN_DEFAULT_URL = '';
 
 export const VIDEO_PROVIDERS = ['youtube', 'vimeo', 'wistia'] as const;
 export type VideoProvider = (typeof VIDEO_PROVIDERS)[number];
@@ -99,7 +99,7 @@ function createYouTubeVideo(id: string): NormalizedVideo {
     provider: 'youtube',
     id,
     canonicalUrl: `https://www.youtube.com/watch?v=${id}`,
-    embedUrl: `https://www.youtube-nocookie.com/embed/${id}?autoplay=0&rel=0`,
+    embedUrl: `https://www.youtube.com/embed/${id}?rel=0&enablejsapi=1`,
     thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
   };
 }

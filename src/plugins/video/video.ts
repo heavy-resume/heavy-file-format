@@ -28,13 +28,33 @@ interface VideoPreviewState {
   stateKey: string;
   title: string;
   stale: boolean;
+  youtubeObserverCleanup: (() => void) | null;
 }
+
+interface YouTubePlayerApi {
+  Player: new(element: HTMLIFrameElement, options: {
+    events?: {
+      onError?: (event: { data: number }) => void;
+    };
+  }) => { destroy?: () => void };
+}
+
+type YouTubePlayerInstance = InstanceType<YouTubePlayerApi['Player']>;
+
+declare global {
+  interface Window {
+    YT?: YouTubePlayerApi;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let youTubeApiPromise: Promise<YouTubePlayerApi> | null = null;
 
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-video hvy-video-${ctx.mode}`;
   let handles: EditorHandles | null = null;
-  const previewState: VideoPreviewState = { stateKey: '', title: '', stale: false };
+  const previewState: VideoPreviewState = { stateKey: '', title: '', stale: false, youtubeObserverCleanup: null };
   const preview = document.createElement('div');
 
   if (ctx.mode === 'editor') {
@@ -98,6 +118,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     element: root,
     refresh: sync,
     unmount: () => {
+      previewState.youtubeObserverCleanup?.();
+      previewState.youtubeObserverCleanup = null;
       if (ctx.mode === 'editor') {
         root.removeEventListener('input', onInput);
         root.removeEventListener('change', onChange);
@@ -177,6 +199,10 @@ function renderVideoPreview(
   }
   state.stale = false;
   host.classList.remove('is-stale');
+  if (state.stateKey !== stateKey) {
+    state.youtubeObserverCleanup?.();
+    state.youtubeObserverCleanup = null;
+  }
   if (!config.url.trim()) {
     if (state.stateKey !== stateKey) {
       host.innerHTML = '<div class="hvy-video-empty">Add a YouTube, Vimeo, or Wistia URL.</div>';
@@ -194,24 +220,15 @@ function renderVideoPreview(
     return;
   }
   const title = config.title.trim() || `${formatProvider(normalized.provider)} video`;
-  if (shouldUseExternalVideoLink(normalized)) {
-    if (state.stateKey !== stateKey || state.title !== title) {
-      host.innerHTML = renderExternalVideoLink(normalized, title);
-      state.stateKey = stateKey;
-      state.title = title;
-      host.classList.add('hvy-link-observer-surface');
-      ctx.observeLinks(host);
-    }
-    return;
-  }
   host.classList.remove('hvy-link-observer-surface');
   const embedUrl = createRuntimeEmbedUrl(normalized);
   if (state.stateKey !== stateKey) {
     host.innerHTML = `<div class="hvy-video-frame">
-      <iframe src="${escapeAttr(embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="origin-when-cross-origin" allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen></iframe>
+      <iframe src="${escapeAttr(embedUrl)}" title="${escapeAttr(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="${escapeAttr(getIframeAllowPolicy(normalized))}" allowfullscreen></iframe>
     </div>`;
     state.stateKey = stateKey;
     state.title = title;
+    observeYouTubeEmbedFailure(host, normalized, title, state, ctx);
     return;
   }
   if (state.title !== title) {
@@ -222,29 +239,6 @@ function renderVideoPreview(
 
 function getVideoPreviewStateKey(config: VideoConfig, normalized: ReturnType<typeof normalizeVideoUrl>): string {
   return normalized ? `video:${normalized.embedUrl}` : config.url.trim() ? 'error' : 'empty';
-}
-
-function shouldUseExternalVideoLink(video: NormalizedVideo): boolean {
-  return video.provider === 'youtube' && isDesktopWebViewRuntime();
-}
-
-function isDesktopWebViewRuntime(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  const protocol = window.location.protocol;
-  if (protocol !== 'http:' && protocol !== 'https:') {
-    return true;
-  }
-  const markerWindow = window as Window & {
-    __TAURI__?: unknown;
-    __TAURI_INTERNALS__?: unknown;
-    __TAURI_METADATA__?: unknown;
-  };
-  if (markerWindow.__TAURI__ || markerWindow.__TAURI_INTERNALS__ || markerWindow.__TAURI_METADATA__) {
-    return true;
-  }
-  return /\b(Electron|Tauri|Wry)\b/i.test(window.navigator.userAgent);
 }
 
 function renderExternalVideoLink(video: NormalizedVideo, title: string): string {
@@ -264,6 +258,99 @@ function renderExternalVideoLink(video: NormalizedVideo, title: string): string 
   </div>`;
 }
 
+function observeYouTubeEmbedFailure(
+  host: HTMLElement,
+  video: NormalizedVideo,
+  title: string,
+  state: VideoPreviewState,
+  ctx: HvyPluginContext
+): void {
+  if (video.provider !== 'youtube') {
+    return;
+  }
+  const iframe = host.querySelector<HTMLIFrameElement>('iframe');
+  if (!iframe) {
+    return;
+  }
+  let mounted = true;
+  let player: YouTubePlayerInstance | null = null;
+  state.youtubeObserverCleanup = () => {
+    mounted = false;
+    try {
+      player?.destroy?.();
+    } catch {
+      // Ignore YouTube cleanup failures; the iframe may already be gone.
+    }
+  };
+  void loadYouTubeIframeApi()
+    .then((api) => {
+      if (!mounted || !iframe.isConnected) {
+        return;
+      }
+      player = new api.Player(iframe, {
+        events: {
+          onError: (event) => {
+            if (!mounted || !isYouTubeExternalFallbackError(event.data)) {
+              return;
+            }
+            state.youtubeObserverCleanup?.();
+            state.youtubeObserverCleanup = null;
+            host.innerHTML = renderExternalVideoLink(video, title);
+            host.classList.add('hvy-link-observer-surface');
+            ctx.observeLinks(host);
+          },
+        },
+      });
+    })
+    .catch(() => {
+      // If the API is blocked, keep the iframe. The player can still work
+      // without JS API observability.
+    });
+}
+
+function isYouTubeExternalFallbackError(code: number): boolean {
+  return code === 101 || code === 150 || code === 153;
+}
+
+function loadYouTubeIframeApi(): Promise<YouTubePlayerApi> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('YouTube iframe API requires a browser window.'));
+  }
+  if (window.YT?.Player) {
+    return Promise.resolve(window.YT);
+  }
+  youTubeApiPromise ??= new Promise((resolve, reject) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    const timeout = window.setTimeout(() => {
+      window.onYouTubeIframeAPIReady = previousReady;
+      reject(new Error('Timed out loading YouTube iframe API.'));
+    }, 8000);
+    window.onYouTubeIframeAPIReady = () => {
+      previousReady?.();
+      window.clearTimeout(timeout);
+      if (window.YT?.Player) {
+        resolve(window.YT);
+      } else {
+        reject(new Error('YouTube iframe API loaded without Player.'));
+      }
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://www.youtube.com/iframe_api"]');
+    if (existing) {
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.async = true;
+    script.onerror = () => {
+      window.clearTimeout(timeout);
+      window.onYouTubeIframeAPIReady = previousReady;
+      reject(new Error('Could not load YouTube iframe API.'));
+    };
+    document.head.appendChild(script);
+  });
+  return youTubeApiPromise;
+}
+
 function createRuntimeEmbedUrl(video: NormalizedVideo): string {
   if (video.provider !== 'youtube' || typeof window === 'undefined' || !window.location.origin.startsWith('http')) {
     return video.embedUrl;
@@ -271,6 +358,13 @@ function createRuntimeEmbedUrl(video: NormalizedVideo): string {
   const url = new URL(video.embedUrl);
   url.searchParams.set('origin', window.location.origin);
   return url.toString();
+}
+
+function getIframeAllowPolicy(video: NormalizedVideo): string {
+  if (video.provider === 'youtube') {
+    return 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+  }
+  return 'fullscreen; picture-in-picture; encrypted-media';
 }
 
 function formatProvider(provider: string): string {

@@ -3,8 +3,8 @@
   "tasks": [
     {
       "label": "Install Dependencies",
-      "type": "npm",
-      "script": "install:deps",
+      "type": "shell",
+      "command": "node scripts/install-deps.mjs",
       "group": "build",
       "problemMatcher": []
     },

@@ -36,7 +36,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "install:deps": "bash ./scripts/install-deps.sh",
+    "install:deps": "node scripts/install-deps.mjs",
     "install:pwdeps": "bash ./scripts/install-playwright-deps.sh",
     "install:devcontainer": "bash ./scripts/install-devcontainer.sh",
     "dev": "vite",

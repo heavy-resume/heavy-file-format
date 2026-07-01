@@ -14,6 +14,7 @@ import {
   FORM_PLUGIN_ID,
   PROGRESS_BAR_PLUGIN_ID,
   SCRIPTING_PLUGIN_ID,
+  VIDEO_PLUGIN_ID,
 } from '../src/plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { initState } from '../src/state';
@@ -149,6 +150,24 @@ describe('scripting plugin block metadata', () => {
     expect(reserialized).toContain('"plugin":"hvy.scripting"');
     expect(reserialized).toContain(`"version":"${SCRIPTING_PLUGIN_VERSION}"`);
     expect(reserialized).toContain('print("hello")');
+  });
+});
+
+describe('video plugin block round-trip', () => {
+  test('preserves video plugin config across serialize/deserialize', () => {
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Video\n\n<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1","title":"Demo"}}-->\n`;
+    const doc = deserializeDocument(input, '.hvy');
+    const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
+    expect(block).toBeDefined();
+    expect(block?.schema.plugin).toBe(VIDEO_PLUGIN_ID);
+    expect(block?.schema.pluginConfig).toMatchObject({
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1',
+      title: 'Demo',
+    });
+
+    const reserialized = serializeDocument(doc);
+    expect(reserialized).toContain('"plugin":"hvy.video"');
+    expect(reserialized).toContain('"title":"Demo"');
   });
 });
 

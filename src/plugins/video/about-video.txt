@@ -1,0 +1,5 @@
+Video plugin
+
+Embeds a remote video from a supported provider URL. Supported providers are YouTube, Vimeo, and Wistia.
+
+The plugin stores the canonical video URL in pluginConfig.url and an optional title in pluginConfig.title. URL query parameters are not part of the contract; clients normalize provider URLs and build iframe embed URLs from the canonical provider/id plus plugin configuration. Video embeds must not autoplay.

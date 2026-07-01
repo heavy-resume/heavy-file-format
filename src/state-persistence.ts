@@ -385,6 +385,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'guide'
     || value === 'crm'
     || value === 'study-tools'
+    || value === 'video-demo'
     || value === 'pdf-template'
     || value === 'resume-template'
     || value === 'resume-example'

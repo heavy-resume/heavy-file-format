@@ -1481,6 +1481,38 @@ Plugin-specific rules:
   `image` blocks backed by SVG image attachments. The authored plugin block
   MUST remain unchanged.
 
+### 7.11 Video plugin contract
+
+The built-in video plugin is `hvy.video`. It embeds a remote video by URL. Video
+bytes are not stored as HVY tail attachments.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.video
+    source: builtin://video
+---
+
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","title":"Example video"}}-->
+```
+
+Normative configuration:
+- `pluginConfig.url`: REQUIRED HTTPS URL for a supported provider video. Clients
+  MUST normalize accepted URLs to a canonical provider page URL with
+  behavior-changing query parameters removed.
+- `pluginConfig.title`: optional accessible title for the embedded iframe.
+
+Supported providers for version 0.1 are YouTube, Vimeo, and Wistia. Clients MUST
+reject unsupported providers, non-HTTPS URLs, and provider URLs that do not
+identify a single video. Clients MUST construct the iframe/embed URL from the
+normalized provider/id and HVY configuration, not from arbitrary URL query
+parameters. Video embeds MUST NOT autoplay, and clients MUST NOT honor URL
+parameters that would enable autoplay or otherwise override plugin
+configuration. When remote network access is disabled by host policy, clients
+SHOULD preserve the plugin block and render an inline placeholder instead of
+loading the iframe.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:

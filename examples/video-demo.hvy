@@ -1,0 +1,18 @@
+---
+hvy_version: 1.0
+title: Video plugin demo
+plugins:
+  - id: hvy.video
+    source: builtin://video
+---
+
+#! Video plugin demo
+
+This document demonstrates URL-backed videos. The videos are not stored as HVY
+attachments; each block stores only a provider URL and title.
+
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=M7lc1UVf-VE","title":"YouTube sample"}}-->
+
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://vimeo.com/76979871","title":"Vimeo sample"}}-->
+
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://fast.wistia.net/embed/iframe/j38ihh83m5","title":"Wistia sample"}}-->

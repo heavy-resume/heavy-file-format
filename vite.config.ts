@@ -22,6 +22,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.graph',
   'hvy.diagram',
   'hvy.qr-code',
+  'hvy.video',
   'hvy.viewer-note',
 ] as const;
 
@@ -92,6 +93,13 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     modulePath: 'src/plugins/qr-code/qr-code.ts',
     displayName: 'QR Code',
     pdfStatic: true,
+  },
+  {
+    id: 'hvy.video',
+    key: 'video',
+    exportName: 'videoPlugin',
+    modulePath: 'src/plugins/video/video.ts',
+    displayName: 'Video',
   },
   {
     id: 'hvy.viewer-note',

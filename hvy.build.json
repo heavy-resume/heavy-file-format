@@ -7,6 +7,7 @@
     "hvy.graph",
     "hvy.diagram",
     "hvy.qr-code",
+    "hvy.video",
     "hvy.viewer-note"
   ]
 }

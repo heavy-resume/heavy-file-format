@@ -1,0 +1,111 @@
+.hvy-video {
+  width: 100%;
+}
+
+.hvy-video-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.hvy-video-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr) 38px;
+  gap: 10px;
+  align-items: end;
+}
+
+.hvy-video-field {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-video-field input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.hvy-video-field input:focus {
+  outline: 2px solid color-mix(in srgb, var(--hvy-accent-1) 36%, transparent);
+  border-color: var(--hvy-accent-1);
+}
+
+.hvy-video-refresh-button {
+  width: 38px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.hvy-video-refresh-button.is-stale {
+  border-color: var(--hvy-accent-1);
+  color: var(--hvy-accent-1);
+  background: color-mix(in srgb, var(--hvy-accent-1) 12%, var(--hvy-surface));
+}
+
+.hvy-video-status {
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.hvy-video-preview.is-stale .hvy-video-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid color-mix(in srgb, var(--hvy-accent-1) 70%, transparent);
+  pointer-events: none;
+}
+
+.hvy-video-empty,
+.hvy-video-error {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--hvy-border);
+  border-radius: 8px;
+  color: var(--hvy-text-alt);
+  background: var(--hvy-surface-alt);
+  text-align: center;
+  padding: 16px;
+}
+
+.hvy-video-error {
+  color: var(--hvy-danger, #b42318);
+}
+
+@container (max-width: 520px) {
+  .hvy-video-controls {
+    grid-template-columns: 1fr 38px;
+  }
+
+  .hvy-video-field:first-child {
+    grid-column: 1 / -1;
+  }
+}

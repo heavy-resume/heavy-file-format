@@ -285,6 +285,7 @@ export type SelectedExample =
   | 'guide'
   | 'crm'
   | 'study-tools'
+  | 'video-demo'
   | 'pdf-template'
   | 'resume-template'
   | 'resume-example'

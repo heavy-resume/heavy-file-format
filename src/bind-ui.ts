@@ -2,6 +2,7 @@ import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
+import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
 import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
@@ -466,6 +467,11 @@ export function bindUi(app: HTMLElement): void {
   const studyToolsExampleBtn = app.querySelector<HTMLButtonElement>('#studyToolsExampleBtn');
   studyToolsExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledStudyToolsHvy, 'study-tools.hvy', 'study-tools');
+  });
+
+  const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
+  videoDemoExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
   });
 
   const pdfTemplateExampleBtn = app.querySelector<HTMLButtonElement>('#pdfTemplateExampleBtn');

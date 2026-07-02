@@ -81,6 +81,7 @@ test('xref title and detail editors opt into native spellcheck', () => {
   expect(html.match(/spellcheck="true"/g)).toHaveLength(2);
   expect(html).toContain('data-field="block-xref-title"');
   expect(html).toContain('data-field="block-xref-detail"');
+  expect(html).toContain('data-placeholder="Optional"');
 });
 
 test('text reader can show a copy button for any text component', () => {

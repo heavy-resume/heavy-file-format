@@ -38,6 +38,11 @@
   background: var(--hvy-surface);
 }
 
+.editor-xref-card [contenteditable="true"][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--hvy-text-muted);
+}
+
 .editor-xref-card.is-target-empty [contenteditable="true"] {
   color: var(--hvy-text-muted);
   cursor: not-allowed;

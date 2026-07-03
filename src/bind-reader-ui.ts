@@ -8,11 +8,12 @@ import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { getActiveStateRuntime, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
+import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
 
@@ -273,6 +274,7 @@ export function bindReaderUi(app: HTMLElement): void {
       }
       const expandableStateKey = `${sectionKey}:${blockId}`;
       const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+      const actionStartedAt = nowMs();
       logClickTrace(event, 'reader-area:handled:expandable-toggle:run', {
         sectionKey,
         blockId,
@@ -281,16 +283,57 @@ export function bindReaderUi(app: HTMLElement): void {
         storedExpanded: state.readerExpandableState[expandableStateKey] ?? null,
         schemaExpanded: block.schema.expandableExpanded,
       });
+      logPerfTrace('reader-expandable-toggle:start', {
+        sectionKey,
+        blockId,
+        expandableStateKey,
+        willCollapse,
+        currentView: state.currentView,
+      });
       if (willCollapse) {
         const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
         readerEl?.classList.add('is-collapsing');
+        logPerfTrace('reader-expandable-toggle:collapse-animation-started', {
+          sectionKey,
+          blockId,
+          elapsedMs: elapsedMs(actionStartedAt),
+          hasReaderElement: Boolean(readerEl),
+        });
         window.setTimeout(() => {
+          const refreshStartedAt = nowMs();
           state.readerExpandableState[expandableStateKey] = false;
-          getRefreshReaderPanels()();
+          logPerfTrace('reader-expandable-toggle:collapse-refresh:start', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
+          if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+            getRefreshReaderPanels()({ runVisibilityScripts: false });
+          }
+          logPerfTrace('reader-expandable-toggle:collapse-refresh:end', {
+            sectionKey,
+            blockId,
+            refreshMs: elapsedMs(refreshStartedAt),
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
         }, 160);
       } else {
         state.readerExpandableState[expandableStateKey] = true;
-        getRefreshReaderPanels()();
+        logPerfTrace('reader-expandable-toggle:expand-refresh:start', {
+          sectionKey,
+          blockId,
+          elapsedMs: elapsedMs(actionStartedAt),
+        });
+        const refreshStartedAt = nowMs();
+        if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: true })) {
+          getRefreshReaderPanels()();
+        }
+        logPerfTrace('reader-expandable-toggle:expand-refresh:end', {
+          sectionKey,
+          blockId,
+          refreshMs: elapsedMs(refreshStartedAt),
+          elapsedMs: elapsedMs(actionStartedAt),
+        });
         const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
         readerEl?.classList.add('is-expanding');
         window.setTimeout(() => {

@@ -45,9 +45,11 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { refreshReaderBlockDom } from './reader/block-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
 
@@ -855,7 +857,7 @@ function renderApp(): void {
   scrollPendingEditorDeactivation(app);
   focusMs = performance.now() - stepStartedAt;
 
-  console.debug('[hvy:perf] renderApp', {
+  logPerfTrace('renderApp', {
     renderId,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
     captureMs: Number(captureMs.toFixed(2)),
@@ -1110,10 +1112,12 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
-function refreshReaderPanels(): void {
+function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): void {
   const refreshId = incrementRefreshReaderCount();
-  const startedAt = performance.now();
+  const startedAt = nowMs();
   let modalMs = 0;
+  let lazyMs = 0;
+  let afterRefreshMs = 0;
   const surfaceRefresh = refreshReaderSurfaces({
     root: app,
     readerRenderer,
@@ -1121,37 +1125,82 @@ function refreshReaderPanels(): void {
     refreshNavigation: true,
     capturePluginFocus,
     reconcilePluginMounts,
-    runButtonVisibilityScripts,
+    runButtonVisibilityScripts: options.runVisibilityScripts === false ? undefined : runButtonVisibilityScripts,
   });
   if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
+    const afterRefreshStartedAt = nowMs();
     scheduleReaderHighlightGlow(app);
     initializeCarouselReaders(app);
     syncTextToolbarLayout(app);
+    const lazyStartedAt = nowMs();
     virtualizeRenderedSections({
       root: app,
       afterRestore: (scope) => {
         reconcilePluginMounts(scope, { prune: false });
         syncTextToolbarLayout(scope);
-        void runButtonVisibilityScripts(scope);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(scope);
+        }
         initializeCarouselReaders(scope);
         bindLazyImageHydration(scope);
       },
     });
+    lazyMs = elapsedMs(lazyStartedAt);
     bindLazyImageHydration(app);
+    afterRefreshMs = elapsedMs(afterRefreshStartedAt);
   }
 
-  const modalStartedAt = performance.now();
+  const modalStartedAt = nowMs();
   refreshModalPreview();
   modalMs = performance.now() - modalStartedAt;
-  console.debug('[hvy:perf] refreshReaderPanels', {
+  logPerfTrace('refreshReaderPanels', {
     refreshId,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
     warningsMs: Number(surfaceRefresh.warningsMs.toFixed(2)),
     navMs: Number(surfaceRefresh.navMs.toFixed(2)),
+    sidebarRenderMs: surfaceRefresh.sidebarRenderMs,
+    sidebarDomMs: surfaceRefresh.sidebarDomMs,
+    sidebarPostMs: surfaceRefresh.sidebarPostMs,
+    readerRenderMs: surfaceRefresh.readerRenderMs,
+    readerDomMs: surfaceRefresh.readerDomMs,
+    readerPostMs: surfaceRefresh.readerPostMs,
     readerMs: Number(surfaceRefresh.readerMs.toFixed(2)),
+    lazyMs,
+    afterRefreshMs,
     modalMs: Number(modalMs.toFixed(2)),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
   });
   void runPluginDocumentHooks('unknown');
+}
+
+function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const startedAt = nowMs();
+  const refreshed = refreshReaderBlockDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    blockId,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element);
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  logPerfTrace('refreshReaderBlock', {
+    sectionKey,
+    blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
 }
 
 function refreshModalPreview(): void {
@@ -1243,6 +1292,7 @@ function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
 initCallbacks({
   renderApp,
   refreshReaderPanels,
+  refreshReaderBlock,
   refreshModalPreview,
   observeLinks: () => {},
   componentRenderHelpers: localGetComponentRenderHelpers(),

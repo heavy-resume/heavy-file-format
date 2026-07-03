@@ -13,6 +13,7 @@ import { requestProxyCompletion } from '../chat/chat';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { recordHistory } from '../history';
 import type { JsonObject } from '../hvy/types';
+import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { getActiveStateRuntime, runWithStateRuntime } from '../state';
 import type { ChatMessage } from '../types';
 import formDocumentation from './form.about.txt?raw';
@@ -533,7 +534,26 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return;
     }
     runQueue = runQueue
-      .then(() => runFormScript(name, reason))
+      .then(() => {
+        const startedAt = nowMs();
+        logPerfTrace('form-script:start', {
+          scriptName: name,
+          reason,
+          componentId: ctx.block.schema.id || ctx.block.id,
+        });
+        return runFormScript(name, reason).then((result) => {
+          logPerfTrace('form-script:end', {
+            scriptName: name,
+            reason,
+            componentId: ctx.block.schema.id || ctx.block.id,
+            ok: result.ok,
+            elapsedMs: elapsedMs(startedAt),
+            stepsExecuted: result.stepsExecuted,
+            toolCalls: result.toolCalls,
+          });
+          return result;
+        });
+      })
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;

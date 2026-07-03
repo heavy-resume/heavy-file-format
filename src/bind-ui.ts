@@ -11,6 +11,7 @@ import {
   state,
   getActiveStateRuntime,
   getRenderApp,
+  getRefreshReaderBlock,
   getRefreshReaderPanels,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
@@ -40,6 +41,7 @@ import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '.
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 
@@ -916,6 +918,7 @@ export function bindUi(app: HTMLElement): void {
       runReaderAction(event, () => {
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+        const actionStartedAt = nowMs();
         logClickTrace(event, 'reader-area:handled:expandable-toggle:run', {
           sectionKey,
           blockId,
@@ -935,17 +938,58 @@ export function bindUi(app: HTMLElement): void {
             schemaExpanded: block.schema.expandableExpanded,
           });
         }
+        logPerfTrace('reader-expandable-toggle:start', {
+          sectionKey,
+          blockId,
+          expandableStateKey,
+          willCollapse,
+          currentView: state.currentView,
+        });
         if (willCollapse) {
           // Animate collapse before re-rendering
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-collapsing');
+          logPerfTrace('reader-expandable-toggle:collapse-animation-started', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+            hasReaderElement: Boolean(readerEl),
+          });
           window.setTimeout(() => runInBoundRuntime(() => {
+            const refreshStartedAt = nowMs();
             state.readerExpandableState[expandableStateKey] = false;
-            getRefreshReaderPanels()();
+            logPerfTrace('reader-expandable-toggle:collapse-refresh:start', {
+              sectionKey,
+              blockId,
+              elapsedMs: elapsedMs(actionStartedAt),
+            });
+            if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+              getRefreshReaderPanels()({ runVisibilityScripts: false });
+            }
+            logPerfTrace('reader-expandable-toggle:collapse-refresh:end', {
+              sectionKey,
+              blockId,
+              refreshMs: elapsedMs(refreshStartedAt),
+              elapsedMs: elapsedMs(actionStartedAt),
+            });
           }), 160);
         } else {
           state.readerExpandableState[expandableStateKey] = true;
-          getRefreshReaderPanels()();
+          logPerfTrace('reader-expandable-toggle:expand-refresh:start', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
+          const refreshStartedAt = nowMs();
+          if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: true })) {
+            getRefreshReaderPanels()();
+          }
+          logPerfTrace('reader-expandable-toggle:expand-refresh:end', {
+            sectionKey,
+            blockId,
+            refreshMs: elapsedMs(refreshStartedAt),
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-expanding');
           window.setTimeout(() => runInBoundRuntime(() => {

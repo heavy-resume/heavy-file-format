@@ -2,6 +2,7 @@ import { getActiveStateRuntime, getRenderApp, runWithStateRuntime, runWithStateR
 import { serializeDocument } from '../serialization';
 import type { VisualDocument } from '../types';
 import { notifyDocumentMayHaveChanged } from '../document-change';
+import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
 import type {
@@ -125,7 +126,9 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
   const runtime = getActiveStateRuntime();
   const hookState = getHookState();
   const document = state.document;
+  const signatureStartedAt = nowMs();
   const signature = serializeDocument(document);
+  const signatureMs = elapsedMs(signatureStartedAt);
   const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
     : hookState.lastHookSignature !== signature
@@ -136,15 +139,31 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
   hookState.lastHookSignature = signature;
 
   if (hookState.hookRunDepth > 0) {
+    logPerfTrace('plugin-document-hooks:skip', {
+      changeReason,
+      skipReason: 'nested-hook-run',
+      signatureMs,
+    });
     return Promise.resolve();
   }
 
   if (!hookName) {
+    logPerfTrace('plugin-document-hooks:skip', {
+      changeReason,
+      skipReason: 'unchanged-document-signature',
+      signatureMs,
+    });
     return hookState.hookRun;
   }
 
   const ctx = createHookContext(document, hookName === 'documentLoad' ? 'load' : changeReason);
   hookState.hookRun = hookState.hookRun.then(async () => {
+    const startedAt = nowMs();
+    logPerfTrace('plugin-document-hooks:start', {
+      hookName,
+      changeReason,
+      signatureMs,
+    });
     await runWithStateRuntimeAsync(runtime, async () => {
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
@@ -152,6 +171,12 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
         hookState.lastHookSignature = serializeDocument(document);
         notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script');
       }
+    });
+    logPerfTrace('plugin-document-hooks:end', {
+      hookName,
+      changeReason,
+      elapsedMs: elapsedMs(startedAt),
+      signatureMs,
     });
   });
   return hookState.hookRun;

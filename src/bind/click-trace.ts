@@ -6,6 +6,7 @@ export function logClickTrace(event: Event, stage: string, details: Record<strin
   console.debug('[hvy:click-trace]', {
     clickId: getClickTraceId(event),
     stage,
+    sinceEventMs: Number((performance.now() - event.timeStamp).toFixed(2)),
     eventType: event.type,
     eventPhase: event.eventPhase,
     defaultPrevented: event.defaultPrevented,

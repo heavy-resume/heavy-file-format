@@ -729,10 +729,19 @@ hvy_version: 0.1
       viewerSidebarHelpDismissed: true,
       editorSidebarHelpDismissed: true,
     } as never);
-    let refreshCount = 0;
+    const refreshOptions: Array<unknown> = [];
+    const refreshBlockOptions: Array<unknown> = [];
     stateModule.initCallbacks({
       renderApp: () => {},
-      refreshReaderPanels: () => { refreshCount += 1; },
+      refreshReaderPanels: (options?: unknown) => { refreshOptions.push(options ?? null); },
+      refreshReaderBlock: (root: ParentNode, refreshSectionKey: string, refreshBlockId: string, options?: unknown) => {
+        refreshBlockOptions.push({ sectionKey: refreshSectionKey, blockId: refreshBlockId, options: options ?? null });
+        root.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.setAttribute(
+          'aria-expanded',
+          stateModule.state.readerExpandableState[`${refreshSectionKey}:${refreshBlockId}`] ? 'true' : 'false'
+        );
+        return true;
+      },
       refreshModalPreview: () => {},
       componentRenderHelpers: {},
       readerRenderer: {},
@@ -744,14 +753,69 @@ hvy_version: 0.1
     sidebar.innerHTML = `<div data-reader-action="toggle-expandable" data-section-key="${sectionKey}" data-block-id="${blockId}">Stub</div>`;
     bindReaderUi(document.querySelector<HTMLElement>('#mount')!);
     sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 190));
     return {
       expanded: stateModule.state.readerExpandableState[`${sectionKey}:${blockId}`],
-      refreshCount,
+      refreshOptions,
+      refreshBlockOptions,
+      sectionKey,
+      blockId,
     };
   });
 
-  expect(result.expanded).toBe(true);
-  expect(result.refreshCount).toBe(1);
+  expect(result.expanded).toBe(false);
+  expect(result.refreshOptions).toEqual([]);
+  expect(result.refreshBlockOptions).toEqual([
+    {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId,
+      options: { runVisibilityScripts: true },
+    },
+    {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId,
+      options: { runVisibilityScripts: false },
+    },
+  ]);
+});
+
+test('reader surface refresh preserves block and button visibility states separately', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div id="readerDocument">
+        <div data-hvy-dynamic-visibility="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="visible">
+          <div data-hvy-button="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="hidden"></div>
+        </div>
+      </div>
+    </div>`;
+    const { refreshReaderSurfaces } = await import(/* @vite-ignore */ '/src/reader/refresh-surfaces.ts');
+    refreshReaderSurfaces({
+      root: document.querySelector('#root')!,
+      sections: [],
+      readerRenderer: {
+        renderWarnings: () => '',
+        renderNavigation: () => '',
+        renderSidebarSections: () => '',
+        renderReaderSections: () => `<div data-hvy-dynamic-visibility="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="pending">
+          <div data-hvy-button="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="pending"></div>
+        </div>`,
+      },
+    });
+    const block = document.querySelector<HTMLElement>('[data-hvy-dynamic-visibility="true"]');
+    const button = document.querySelector<HTMLElement>('[data-hvy-button="true"]');
+    return {
+      blockVisibleState: block?.dataset.visibleState,
+      buttonVisibleState: button?.dataset.visibleState,
+    };
+  });
+
+  expect(result).toEqual({
+    blockVisibleState: 'visible',
+    buttonVisibleState: 'hidden',
+  });
 });
 
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {

@@ -35,7 +35,8 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 // Late-bound callbacks to avoid circular imports
 type RuntimeCallbacks = {
   renderApp: () => void;
-  refreshReaderPanels: () => void;
+  refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void;
+  refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +54,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
   return {
     renderApp: () => { throw new Error('renderApp not initialized'); },
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
+    refreshReaderBlock: () => false,
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
     observeLinks: () => {},
     componentRenderHelpers: null,
@@ -61,14 +63,16 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
-let _refreshReaderPanels: () => void = () => { throw new Error('refreshReaderPanels not initialized'); };
+let _refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
+let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
-export function getRefreshReaderPanels(): () => void { return _refreshReaderPanels; }
+export function getRefreshReaderPanels(): (options?: { runVisibilityScripts?: boolean }) => void { return _refreshReaderPanels; }
+export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +93,8 @@ export function getReaderRenderer(): any {
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
-  refreshReaderPanels: () => void;
+  refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void;
+  refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +110,7 @@ export function initCallbacks(callbacks: {
   }
   activeRuntime.callbacks = {
     ...callbacks,
+    refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
   };
   activateStateRuntime(activeRuntime);
@@ -145,6 +151,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   state = runtime.state;
   _renderApp = runtime.callbacks.renderApp;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
+  _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
   _observeLinks = runtime.callbacks.observeLinks;
   _componentRenderHelpers = runtime.callbacks.componentRenderHelpers;

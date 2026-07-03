@@ -49,6 +49,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { refreshReaderBlockDom } from './reader/block-refresh';
 import {
   initDocumentChangeTracking,
   isDocumentDirty,
@@ -90,6 +91,7 @@ import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponen
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -483,6 +485,10 @@ function renderTransientNotice(): string {
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   void options;
   if (!currentRoot) return;
+  const startedAt = nowMs();
+  let renderHtmlMs = 0;
+  let domMs = 0;
+  let postMs = 0;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
@@ -494,7 +500,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   const pdfDocument = isPdfDocument(state.document);
   capturePluginFocus();
-  root.innerHTML = `
+  const renderHtmlStartedAt = nowMs();
+  const markup = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
@@ -514,6 +521,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         </div>
       </section>
     </main>`;
+  renderHtmlMs = elapsedMs(renderHtmlStartedAt);
+  const domStartedAt = nowMs();
+  root.innerHTML = markup;
+  domMs = elapsedMs(domStartedAt);
+  const postStartedAt = nowMs();
   bindReaderUi(root);
   bindCarouselInteractions(root);
   reconcilePluginMounts(root);
@@ -532,40 +544,132 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   syncTextToolbarLayout(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
+  postMs = elapsedMs(postStartedAt);
+  logPerfTrace('renderApp', {
+    elapsedMs: elapsedMs(startedAt),
+    renderHtmlMs,
+    domMs,
+    postMs,
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+  });
 }
 
-function refreshReaderPanels(): void {
+function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): void {
   if (!currentRoot) return;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
+  const startedAt = nowMs();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
   const sidebarSections = currentRoot.querySelector<HTMLDivElement>('#readerSidebarSections');
+  let sidebarRenderMs = 0;
+  let sidebarDomMs = 0;
+  let sidebarPostMs = 0;
+  let readerRenderMs = 0;
+  let readerDomMs = 0;
+  let readerPostMs = 0;
+  let lazyMs = 0;
+  let afterRefreshMs = 0;
   capturePluginFocus();
   if (sidebarSections) {
-    sidebarSections.innerHTML = renderer.renderSidebarSections(state.document.sections);
+    let phaseStartedAt = nowMs();
+    const sidebarHtml = renderer.renderSidebarSections(state.document.sections);
+    sidebarRenderMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
+    sidebarSections.innerHTML = sidebarHtml;
+    sidebarDomMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
     reconcilePluginMounts(sidebarSections);
     syncTextToolbarLayout(sidebarSections);
-    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
+    if (options.runVisibilityScripts !== false) {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
+    }
+    sidebarPostMs = elapsedMs(phaseStartedAt);
   }
   if (reader) {
-    reader.innerHTML = renderer.renderReaderSections(state.document.sections);
+    let phaseStartedAt = nowMs();
+    const readerHtml = renderer.renderReaderSections(state.document.sections);
+    readerRenderMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
+    reader.innerHTML = readerHtml;
+    readerDomMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
     reconcilePluginMounts(reader);
     syncTextToolbarLayout(reader);
-    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
+    if (options.runVisibilityScripts !== false) {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
+    }
+    readerPostMs = elapsedMs(phaseStartedAt);
   }
+  const afterRefreshStartedAt = nowMs();
+  const lazyStartedAt = nowMs();
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
-      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
+      }
     },
   });
+  lazyMs = elapsedMs(lazyStartedAt);
   bindLazyImageHydration(currentRoot);
   syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
   bindCarouselInteractions(currentRoot);
+  afterRefreshMs = elapsedMs(afterRefreshStartedAt);
+  logPerfTrace('refreshReaderPanels', {
+    elapsedMs: elapsedMs(startedAt),
+    sidebarRenderMs,
+    sidebarDomMs,
+    sidebarPostMs,
+    readerRenderMs,
+    readerDomMs,
+    readerPostMs,
+    lazyMs,
+    afterRefreshMs,
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+}
+
+function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const runtime = getActiveStateRuntime();
+  const renderer = ensureReaderRenderer();
+  const startedAt = nowMs();
+  const refreshed = refreshReaderBlockDom({
+    root,
+    readerRenderer: renderer,
+    sections: state.document.sections,
+    sectionKey,
+    blockId,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      bindCarouselInteractions(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  logPerfTrace('refreshReaderBlock', {
+    sectionKey,
+    blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
 }
 
 function refreshModalPreview(): void {}
@@ -609,10 +713,15 @@ function ensureEmbedRuntime(
       setThemeRoot(root);
       renderApp();
     }),
-    refreshReaderPanels: () => runWithStateRuntime(runtime, () => {
+    refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
-      refreshReaderPanels();
+      refreshReaderPanels(options);
+    }),
+    refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshReaderBlock(target, sectionKey, blockId, options);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
       currentRoot = root;

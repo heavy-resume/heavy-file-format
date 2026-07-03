@@ -11,6 +11,7 @@ import { syncReusableTemplateForBlock } from '../../../reusable';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
+import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
 import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
 
@@ -105,6 +106,7 @@ export function clearImageBlobUrlCache(): void {
 }
 
 export function bindLazyImageHydration(root: ParentNode): void {
+  const startedAt = nowMs();
   lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
   lazyImageHydrationObservers.delete(root);
   const images = Array.from(root.querySelectorAll<HTMLImageElement>('img[data-hvy-lazy-image="true"]'))
@@ -114,6 +116,14 @@ export function bindLazyImageHydration(root: ParentNode): void {
   }
   if (typeof IntersectionObserver === 'undefined') {
     images.forEach(hydrateLazyImage);
+    logPerfTrace('image-lazy-hydration:bind', {
+      elapsedMs: elapsedMs(startedAt),
+      imageCount: images.length,
+      hydratedImmediately: images.length,
+      observerCount: 0,
+      targetCount: images.length,
+      observerUnavailable: true,
+    });
     return;
   }
   const imagesByScroller = new Map<Element | null, HTMLImageElement[]>();
@@ -122,6 +132,7 @@ export function bindLazyImageHydration(root: ParentNode): void {
     imagesByScroller.set(scroller, [...(imagesByScroller.get(scroller) ?? []), image]);
   });
   const observers: IntersectionObserver[] = [];
+  let targetCount = 0;
   imagesByScroller.forEach((scrollerImages, scroller) => {
     const imagesByTarget = new Map<Element, HTMLImageElement[]>();
     scrollerImages.forEach((image) => {
@@ -142,26 +153,85 @@ export function bindLazyImageHydration(root: ParentNode): void {
       threshold: 0,
     });
     imagesByTarget.forEach((_targetImages, target) => observer.observe(target));
+    targetCount += imagesByTarget.size;
     observers.push(observer);
   });
   lazyImageHydrationObservers.set(root, observers);
+  logPerfTrace('image-lazy-hydration:bind', {
+    elapsedMs: elapsedMs(startedAt),
+    imageCount: images.length,
+    hydratedImmediately: 0,
+    observerCount: observers.length,
+    targetCount,
+  });
 }
 
 function hydrateLazyImage(image: HTMLImageElement): void {
   if (image.getAttribute('src')) {
     return;
   }
+  const startedAt = nowMs();
   const filename = image.dataset.imageFilename ?? '';
   const url = getImageBlobUrl(filename);
   if (url) {
+    observeHydratedImageLoad(image, filename, startedAt);
     image.src = url;
     image.dataset.hvyLazyImage = 'loaded';
+    logPerfTrace('image-lazy-hydration:src-set', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+      complete: image.complete,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    });
     return;
   }
   const missing = image.ownerDocument.createElement('div');
   missing.className = 'image-empty muted';
   missing.textContent = `Missing attachment: ${filename}`;
   image.replaceWith(missing);
+  logPerfTrace('image-lazy-hydration:missing', {
+    filename,
+    elapsedMs: elapsedMs(startedAt),
+  });
+}
+
+function observeHydratedImageLoad(image: HTMLImageElement, filename: string, startedAt: number): void {
+  if (image.dataset.hvyLazyImageLoadObserved === 'true') {
+    return;
+  }
+  image.dataset.hvyLazyImageLoadObserved = 'true';
+  image.addEventListener('load', () => {
+    logPerfTrace('image-lazy-hydration:load', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    });
+    if (typeof image.decode === 'function') {
+      const decodeStartedAt = nowMs();
+      void image.decode()
+        .then(() => {
+          logPerfTrace('image-lazy-hydration:decode', {
+            filename,
+            elapsedMs: elapsedMs(decodeStartedAt),
+          });
+        })
+        .catch((error) => {
+          logPerfTrace('image-lazy-hydration:decode-error', {
+            filename,
+            elapsedMs: elapsedMs(decodeStartedAt),
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+  }, { once: true });
+  image.addEventListener('error', () => {
+    logPerfTrace('image-lazy-hydration:error', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+    });
+  }, { once: true });
 }
 
 export function renderImageAttachmentPicker(options: {

@@ -1705,6 +1705,95 @@ hvy_version: 0.1
   expect(result.firstBg).not.toBe(result.secondBg);
 });
 
+test('embedded reader xref from remounted sidebar navigates to main target', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.documentElement.style.height = 'auto';
+    document.documentElement.style.overflowY = 'auto';
+    document.body.style.height = 'auto';
+    document.body.style.minHeight = '100%';
+    document.body.style.overflowY = 'auto';
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const encoder = new TextEncoder();
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const firstMount = mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ First mount.
+`), '.hvy'),
+    });
+    firstMount.destroy();
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(`---
+hvy_version: 0.1
+title: Sidebar Xref Repro
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ <!--hvy:text {}-->
+  # Intro
+
+<!--hvy: {"id":"spacer"}-->
+#! Spacer
+
+ <!--hvy:text {"css":"min-height: 1050px;"}-->
+  Tall section before the target.
+
+<!--hvy: {"id":"editor-mode"}-->
+#! Editor Mode
+
+ <!--hvy:text {}-->
+  # Editor Mode
+
+<!--hvy: {"id":"quick-reference","location":"sidebar"}-->
+#! Quick Reference
+
+ <!--hvy:expandable {"expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    Editing Modes
+  <!--hvy:expandable:content {}-->
+   <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
+`), '.hvy'),
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.click();
+    root.querySelector<HTMLElement>('#readerSidebarSections [data-reader-action="toggle-expandable"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 40));
+    const target = root.querySelector<HTMLElement>('#readerDocument #editor-mode');
+    const beforeTop = target?.getBoundingClientRect().top ?? null;
+    root.querySelector<HTMLElement>('#readerSidebarSections .reader-xref-card[href="#editor-mode"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 800));
+    return {
+      shellClassName: root.querySelector<HTMLElement>('.viewer-shell')?.className ?? '',
+      tabExpanded: root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.getAttribute('aria-expanded'),
+      beforeTop,
+      afterTop: target?.getBoundingClientRect().top ?? null,
+      highlighted: target?.classList.contains('is-temp-highlighted') ?? false,
+    };
+  });
+
+  expect(result.shellClassName).toContain('is-sidebar-closed');
+  expect(result.tabExpanded).toBe('false');
+  expect(result.highlighted).toBe(true);
+  expect(result.afterTop ?? Number.POSITIVE_INFINITY).toBeLessThan(result.beforeTop ?? 0);
+});
+
 test('embedded editor and viewer mounts coexist without sharing document state', async ({ page }) => {
   await page.goto('/');
 

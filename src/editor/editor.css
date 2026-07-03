@@ -494,6 +494,7 @@
   position: relative;
   padding-left: 0.85rem;
   min-width: 0;
+  color: var(--hvy-text);
 }
 
 .editor-block-content {

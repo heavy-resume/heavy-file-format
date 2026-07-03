@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HVY Lightweight File Viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f7fa;
+        color: #20242a;
+      }
+
+      html,
+      body {
+        height: auto !important;
+        min-height: 100%;
+        overflow-y: auto !important;
+      }
+
+      body {
+        margin: 0;
+        overflow-x: hidden !important;
+      }
+
+      .file-viewer-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 0.85rem;
+        padding: 1rem;
+        box-sizing: border-box;
+      }
+
+      .file-viewer-topbar,
+      .file-viewer-footer,
+      .file-viewer-frame {
+        width: min(1080px, 100%);
+        margin: 0 auto;
+      }
+
+      .file-viewer-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+        flex-wrap: wrap;
+      }
+
+      .file-viewer-title {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .file-viewer-title h1 {
+        margin: 0;
+        font-size: 1.08rem;
+        line-height: 1.2;
+      }
+
+      .file-viewer-title span,
+      .file-viewer-footer {
+        color: #5d6570;
+        font-size: 0.82rem;
+      }
+
+      .file-viewer-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+      }
+
+      .file-viewer-button,
+      .file-viewer-picker {
+        border: 1px solid #7e8996;
+        border-radius: 7px;
+        background: #ffffff;
+        color: #20242a;
+        padding: 0.44rem 0.68rem;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(32, 36, 42, 0.12);
+      }
+
+      .file-viewer-button:hover,
+      .file-viewer-picker:hover {
+        background: #edf4fb;
+      }
+
+      .file-viewer-picker input {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .file-viewer-frame {
+        min-height: 520px;
+        border: 1px solid #c8d2dc;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      #lightweightFileViewerMount {
+        min-height: 520px;
+      }
+
+      .file-viewer-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+        flex-wrap: wrap;
+      }
+
+      .file-viewer-status {
+        min-width: 14rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="file-viewer-shell">
+      <header class="file-viewer-topbar">
+        <div class="file-viewer-title">
+          <h1>Lightweight File Viewer</h1>
+          <span>Loads local HVY/THVY/PHVY files through <code>mountHvyViewer</code>.</span>
+        </div>
+        <div class="file-viewer-actions">
+          <label class="file-viewer-picker">
+            Open File
+            <input id="hvyFileInput" type="file" accept=".hvy,.thvy,.phvy" />
+          </label>
+          <button type="button" class="file-viewer-button" id="loadHvyGuide">Load HVY Guide</button>
+          <button type="button" class="file-viewer-button" id="resetFileViewer">Reset</button>
+        </div>
+      </header>
+      <main class="file-viewer-frame">
+        <div id="lightweightFileViewerMount"></div>
+      </main>
+      <footer class="file-viewer-footer">
+        <span>This page uses the lightweight embedded viewer path, including <code>bindReaderUi</code>.</span>
+        <span class="file-viewer-status" id="fileViewerStatus">Ready.</span>
+      </footer>
+    </div>
+
+    <script type="module">
+      import { deserializeDocumentBytes, mountHvyViewer } from '/src/embed.ts';
+
+      const fallbackSource = `---
+hvy_version: 0.1
+title: Lightweight File Viewer
+---
+
+<!--hvy: {"id":"viewer"}-->
+#! Viewer
+
+ <!--hvy:text {}-->
+  # Pick a downloaded HVY file
+
+ <!--hvy:text {}-->
+  Use Open File above to load a local .hvy, .thvy, or .phvy document through the lightweight embedded viewer.
+`;
+
+      const root = document.querySelector('#lightweightFileViewerMount');
+      const fileInput = document.querySelector('#hvyFileInput');
+      const loadHvyGuideButton = document.querySelector('#loadHvyGuide');
+      const resetButton = document.querySelector('#resetFileViewer');
+      const status = document.querySelector('#fileViewerStatus');
+      const encoder = new TextEncoder();
+      let mount = null;
+
+      function extensionFromName(name) {
+        const lower = name.toLowerCase();
+        if (lower.endsWith('.thvy')) return '.thvy';
+        if (lower.endsWith('.phvy')) return '.phvy';
+        return '.hvy';
+      }
+
+      function mountDocument(document, label) {
+        mount?.destroy();
+        mount = mountHvyViewer({
+          root,
+          document,
+        });
+        status.textContent = label;
+      }
+
+      function mountFallback() {
+        mountDocument(deserializeDocumentBytes(encoder.encode(fallbackSource), '.hvy'), 'No file loaded.');
+      }
+
+      async function loadBundledDocument(url, filename) {
+        status.textContent = `Loading ${filename}...`;
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          const document = deserializeDocumentBytes(bytes, extensionFromName(filename));
+          mountDocument(document, `Loaded ${filename}.`);
+        } catch (error) {
+          status.textContent = `Could not load ${filename}.`;
+          console.error(error);
+        }
+      }
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        status.textContent = `Loading ${file.name}...`;
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const document = deserializeDocumentBytes(bytes, extensionFromName(file.name));
+          mountDocument(document, `Loaded ${file.name}.`);
+        } catch (error) {
+          status.textContent = `Could not load ${file.name}.`;
+          console.error(error);
+        } finally {
+          fileInput.value = '';
+        }
+      });
+
+      loadHvyGuideButton.addEventListener('click', () => {
+        void loadBundledDocument('/hvy-guide.hvy', 'hvy-guide.hvy');
+      });
+
+      resetButton.addEventListener('click', mountFallback);
+
+      window.lightweightFileViewerExample = {
+        getDocument: () => mount?.getDocument(),
+        loadHvyGuide: () => loadBundledDocument('/hvy-guide.hvy', 'hvy-guide.hvy'),
+        reset: mountFallback,
+      };
+
+      mountFallback();
+    </script>
+  </body>
+</html>

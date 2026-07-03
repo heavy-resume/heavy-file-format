@@ -884,7 +884,7 @@ function renderTopbar(): string {
     <header class="topbar">
       <div class="title-block">
         <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a></p>
+        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">

@@ -219,6 +219,13 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
     const container = findScrollableReaderAncestor(target);
     if (container) {
       const targetRect = target.getBoundingClientRect();
+      if (container === document.scrollingElement || container === document.documentElement || container === document.body) {
+        window.scrollTo({
+          top: Math.max(0, window.scrollY + targetRect.top - window.innerHeight / 2),
+          behavior: 'smooth',
+        });
+        return;
+      }
       const containerRect = container.getBoundingClientRect();
       const containerCenter = containerRect.top + containerRect.height / 2;
       container.scrollTo({

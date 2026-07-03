@@ -16,8 +16,10 @@ import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sideb
 import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
+const readerAppControlRuntimes = new WeakMap<HTMLElement, ReturnType<typeof getActiveStateRuntime>>();
 
 function bindReaderAppControls(app: HTMLElement): void {
+  readerAppControlRuntimes.set(app, getActiveStateRuntime());
   if (readerAppControlsBound.has(app)) {
     return;
   }
@@ -39,7 +41,7 @@ function bindReaderAppControls(app: HTMLElement): void {
     if (!actionButton || !action) {
       return;
     }
-    const runtime = getActiveStateRuntime();
+    const runtime = readerAppControlRuntimes.get(app) ?? getActiveStateRuntime();
     event.preventDefault();
     event.stopImmediatePropagation();
     void import('./bind/app-actions/registry').then(({ appActionRegistry }) => {

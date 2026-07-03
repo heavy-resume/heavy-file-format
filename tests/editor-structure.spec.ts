@@ -77,6 +77,47 @@ hvy_version: 0.1
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
+test('expandable editor frame keeps light theme text readable under inherited white text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-surface: "#ffffff"
+    --hvy-surface-alt: "#f7f7f7"
+    --hvy-text: "#222222"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.addStyleTag({ content: '.editor-shell { color: rgb(255, 255, 255); }' });
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+
+  await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await expect(activeBlock.locator('.expandable-part-stub .expandable-label')).toHaveCSS('color', 'rgb(34, 34, 34)');
+  await expect(activeBlock.locator('.expandable-part-expanded .expandable-label')).toHaveCSS('color', 'rgb(34, 34, 34)');
+  await expect(activeBlock.locator('.expandable-part-expanded .reader-block-text')).toHaveCSS('color', 'rgb(34, 34, 34)');
+});
+
 test('text editing inside expandable uses text cursor while buttons use pointer cursor', async ({ page }) => {
   await page.goto('/');
 

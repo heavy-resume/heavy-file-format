@@ -14,6 +14,7 @@ import {
   initCallbacks,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
+  type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
 import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
@@ -699,16 +700,19 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
   });
 }
 
-function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
   const runtime = getActiveStateRuntime();
   const startedAt = nowMs();
   let lazyMs = 0;
   let afterRefreshMs = 0;
+  const surface = options.surface ?? 'all';
   const surfaceRefresh = refreshReaderSurfaces({
     root: currentRoot,
     readerRenderer,
     sections: state.document.sections,
+    refreshSidebar: surface !== 'reader',
+    refreshReader: surface !== 'sidebar',
     capturePluginFocus,
     reconcilePluginMounts,
     runButtonVisibilityScripts: options.runVisibilityScripts === false
@@ -750,6 +754,7 @@ function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): 
     embedded: true,
     full: true,
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
   });
 }
 

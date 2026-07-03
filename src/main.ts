@@ -13,6 +13,7 @@ import { renderCliView } from './cli-ui/render';
 import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
+import type { ReaderPanelRefreshOptions } from './state';
 import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -1112,17 +1113,20 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
-function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   const refreshId = incrementRefreshReaderCount();
   const startedAt = nowMs();
   let modalMs = 0;
   let lazyMs = 0;
   let afterRefreshMs = 0;
+  const surface = options.surface ?? 'all';
   const surfaceRefresh = refreshReaderSurfaces({
     root: app,
     readerRenderer,
     sections: state.document.sections,
     refreshNavigation: true,
+    refreshSidebar: surface !== 'reader',
+    refreshReader: surface !== 'sidebar',
     capturePluginFocus,
     reconcilePluginMounts,
     runButtonVisibilityScripts: options.runVisibilityScripts === false ? undefined : runButtonVisibilityScripts,
@@ -1170,6 +1174,7 @@ function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): 
     modalMs: Number(modalMs.toFixed(2)),
     currentView: state.currentView,
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
   });
   void runPluginDocumentHooks('unknown');
 }

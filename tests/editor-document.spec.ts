@@ -818,6 +818,52 @@ test('reader surface refresh preserves block and button visibility states separa
   });
 });
 
+test('reader surface refresh can target only sidebar sections', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div id="readerSidebarSections">Old sidebar</div>
+      <div id="readerDocument">Old reader</div>
+    </div>`;
+    const { refreshReaderSurfaces } = await import(/* @vite-ignore */ '/src/reader/refresh-surfaces.ts');
+    const calls: string[] = [];
+    const refreshResult = refreshReaderSurfaces({
+      root: document.querySelector('#root')!,
+      sections: [],
+      refreshSidebar: true,
+      refreshReader: false,
+      readerRenderer: {
+        renderWarnings: () => '',
+        renderNavigation: () => '',
+        renderSidebarSections: () => {
+          calls.push('sidebar');
+          return 'New sidebar';
+        },
+        renderReaderSections: () => {
+          calls.push('reader');
+          return 'New reader';
+        },
+      },
+    });
+    return {
+      calls,
+      sidebarText: document.querySelector('#readerSidebarSections')?.textContent,
+      readerText: document.querySelector('#readerDocument')?.textContent,
+      refreshedSidebar: refreshResult.refreshedSidebar,
+      refreshedReader: refreshResult.refreshedReader,
+    };
+  });
+
+  expect(result).toEqual({
+    calls: ['sidebar'],
+    sidebarText: 'New sidebar',
+    readerText: 'Old reader',
+    refreshedSidebar: true,
+    refreshedReader: false,
+  });
+});
+
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
   await page.goto('/');
 
@@ -2249,7 +2295,7 @@ test('guide internal links can navigate to the filtering section', async ({ page
       mode: 'viewer',
     });
   });
-  await expect(page.locator('#readerDocument')).toContainText('Introducing the HVY File Format');
+  await expect(page.locator('#readerDocument')).toContainText('HVY File Format');
   await page.evaluate(async () => {
     const modulePath = '/src/navigation.ts';
     const { navigateToReaderTarget } = await import(/* @vite-ignore */ modulePath);
@@ -2262,6 +2308,76 @@ test('guide internal links can navigate to the filtering section', async ({ page
 
   await expect(page.locator('#readerDocument #filtering')).toHaveCount(1);
   expect(navigationErrors).toEqual([]);
+});
+
+test('viewer navigation expansion refreshes reader panels without full app render', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="mount">
+      <div class="viewer-shell is-sidebar-closed">
+        <aside class="viewer-sidebar">
+          <button type="button" class="viewer-sidebar-tab" aria-expanded="false"></button>
+        </aside>
+        <div id="readerDocument"></div>
+        <div id="readerSidebarSections"></div>
+      </div>
+    </div>`;
+    const [{ deserializeDocumentBytes }, stateModule, { navigateToReaderTarget }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/navigation.ts'),
+    ]);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+<!--hvy: {"id":"side","location":"sidebar","expanded":false}-->
+#! Side
+
+ <!--hvy:text {"id":"sidebar-target"}-->
+  Target
+`;
+    const documentModel = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    stateModule.initState({
+      document: documentModel,
+      currentView: 'viewer',
+      viewerSidebarOpen: false,
+      readerExpandableState: {},
+      readerContainerState: {},
+    } as never);
+    let renderCount = 0;
+    const refreshOptions: Array<unknown> = [];
+    stateModule.initCallbacks({
+      renderApp: () => { renderCount += 1; },
+      refreshReaderPanels: (options?: unknown) => { refreshOptions.push(options ?? null); },
+      refreshModalPreview: () => {},
+      componentRenderHelpers: {},
+      readerRenderer: {},
+    });
+    const root = document.querySelector<HTMLElement>('#mount')!;
+    navigateToReaderTarget({ targetId: 'sidebar-target' }, root);
+    return {
+      renderCount,
+      refreshOptions,
+      viewerSidebarOpen: stateModule.state.viewerSidebarOpen,
+      sidebarExpanded: stateModule.state.document.sections[1]?.expanded,
+      shellClassName: root.querySelector<HTMLElement>('.viewer-shell')?.className,
+      tabExpanded: root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.getAttribute('aria-expanded'),
+    };
+  });
+
+  expect(result).toEqual({
+    renderCount: 0,
+    refreshOptions: [{ runVisibilityScripts: false, surface: 'sidebar' }],
+    viewerSidebarOpen: true,
+    sidebarExpanded: true,
+    shellClassName: 'viewer-shell is-sidebar-open',
+    tabExpanded: 'true',
+  });
 });
 
 test('embedded viewer storage key does not persist stale document state', async ({ page }) => {

@@ -3,7 +3,7 @@ import { state } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
-import { getRenderApp } from './state';
+import { getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
@@ -122,11 +122,13 @@ export function navigateToReaderTarget(
     }
   }
 
-  // Only re-render when expand state actually changed to avoid rebuilding
-  // the sidebar DOM mid-animation. For link navigation, prefer a full render so
-  // the scroll target is resolved against the latest expanded layout.
-  if (expandChanged || requiresFullRender) {
+  // Only refresh when expand state actually changed. Staying in viewer mode can
+  // update reader/sidebar panels without rebuilding the entire app shell.
+  if (requiresFullRender) {
     getRenderApp()();
+  } else if (expandChanged) {
+    const surface: ReaderPanelRefreshSurface = loc === 'sidebar' ? 'sidebar' : loc === 'main' ? 'reader' : 'all';
+    getRefreshReaderPanels()({ runVisibilityScripts: false, surface });
   }
 
   requestTargetHighlight(app, target, {

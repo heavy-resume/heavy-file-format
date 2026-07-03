@@ -13,6 +13,7 @@ import {
   state,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
+  type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
 import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
@@ -556,13 +557,14 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   });
 }
 
-function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
   const startedAt = nowMs();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
   const sidebarSections = currentRoot.querySelector<HTMLDivElement>('#readerSidebarSections');
+  const surface = options.surface ?? 'all';
   let sidebarRenderMs = 0;
   let sidebarDomMs = 0;
   let sidebarPostMs = 0;
@@ -572,7 +574,7 @@ function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): 
   let lazyMs = 0;
   let afterRefreshMs = 0;
   capturePluginFocus();
-  if (sidebarSections) {
+  if (sidebarSections && surface !== 'reader') {
     let phaseStartedAt = nowMs();
     const sidebarHtml = renderer.renderSidebarSections(state.document.sections);
     sidebarRenderMs = elapsedMs(phaseStartedAt);
@@ -587,7 +589,7 @@ function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): 
     }
     sidebarPostMs = elapsedMs(phaseStartedAt);
   }
-  if (reader) {
+  if (reader && surface !== 'sidebar') {
     let phaseStartedAt = nowMs();
     const readerHtml = renderer.renderReaderSections(state.document.sections);
     readerRenderMs = elapsedMs(phaseStartedAt);
@@ -635,6 +637,7 @@ function refreshReaderPanels(options: { runVisibilityScripts?: boolean } = {}): 
     embedded: true,
     lightweight: true,
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
   });
 }
 

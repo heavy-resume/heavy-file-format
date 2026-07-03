@@ -21,22 +21,28 @@ export interface ReaderSurfaceRefreshOptions {
   readerRenderer: ReaderRenderer;
   sections: VisualSection[];
   refreshNavigation?: boolean;
+  refreshReader?: boolean;
+  refreshSidebar?: boolean;
   capturePluginFocus?: () => void;
   reconcilePluginMounts?: (root: HTMLElement) => void;
   runButtonVisibilityScripts?: (root: HTMLElement) => void | Promise<void>;
 }
 
 export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): ReaderSurfaceRefreshResult {
+  const refreshSidebar = options.refreshSidebar !== false;
+  const refreshReader = options.refreshReader !== false;
   const warnings = options.root.querySelector<HTMLDivElement>('#readerWarnings');
   const nav = options.refreshNavigation
     ? options.root.querySelector<HTMLDivElement>('#readerNav')
     : null;
-  const sidebarSections =
-    options.root.querySelector<HTMLDivElement>('#readerSidebarSections') ??
-    options.root.querySelector<HTMLDivElement>('#aiSidebarSections');
-  const reader =
-    options.root.querySelector<HTMLDivElement>('#readerDocument') ??
-    options.root.querySelector<HTMLDivElement>('#aiReaderDocument');
+  const sidebarSections = refreshSidebar
+    ? options.root.querySelector<HTMLDivElement>('#readerSidebarSections') ??
+      options.root.querySelector<HTMLDivElement>('#aiSidebarSections')
+    : null;
+  const reader = refreshReader
+    ? options.root.querySelector<HTMLDivElement>('#readerDocument') ??
+      options.root.querySelector<HTMLDivElement>('#aiReaderDocument')
+    : null;
 
   let warningsMs = 0;
   let navMs = 0;

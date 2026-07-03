@@ -1,5 +1,11 @@
 import type { AppState } from './types';
 
+export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
+export interface ReaderPanelRefreshOptions {
+  runVisibilityScripts?: boolean;
+  surface?: ReaderPanelRefreshSurface;
+}
+
 export const HISTORY_GROUP_WINDOW_MS = 1200;
 export const REUSABLE_SECTION_PREFIX = '__reusable__:';
 export const REUSABLE_SECTION_DEF_PREFIX = 'section-def:';
@@ -35,7 +41,7 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 // Late-bound callbacks to avoid circular imports
 type RuntimeCallbacks = {
   renderApp: () => void;
-  refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void;
+  refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
@@ -63,7 +69,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
-let _refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
+let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
@@ -71,7 +77,7 @@ let _observeLinks: (root: ParentNode) => void = () => {};
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
-export function getRefreshReaderPanels(): (options?: { runVisibilityScripts?: boolean }) => void { return _refreshReaderPanels; }
+export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
@@ -93,7 +99,7 @@ export function getReaderRenderer(): any {
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
-  refreshReaderPanels: (options?: { runVisibilityScripts?: boolean }) => void;
+  refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;

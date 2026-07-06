@@ -10,14 +10,18 @@ import {
   type HvyAttachmentHostAdapter,
 } from './attachment-store';
 import type { VisualDocument } from './types';
+import { encryptDocumentBytes, getEncryptionKey, type HvyEncryptionOptions } from './encryption';
+import { prepareEncryptedComponentsForSerialization } from './encrypted-components';
 
 export async function serializeMountedDocumentBytesAsync(
   document: VisualDocument,
   host: HvyAttachmentHostAdapter | null | undefined,
-  serializer: HvyDocumentSerializerAdapter | null | undefined
+  serializer: HvyDocumentSerializerAdapter | null | undefined,
+  encryption?: HvyEncryptionOptions | null
 ): Promise<Uint8Array> {
+  await prepareEncryptedComponentsForSerialization(document, encryption ?? null);
   if (!host && !serializer) {
-    return serializeDocumentBytesAsync(document);
+    return maybeEncryptMountedDocument(document, await serializeDocumentBytesAsync(document, null, { encryption }), encryption ?? null);
   }
   const store = ensureDocumentAttachmentStore(document);
   if (host) {
@@ -41,9 +45,20 @@ export async function serializeMountedDocumentBytesAsync(
     return recalled ? await normalizeAttachmentBytes(recalled) : null;
   };
   if (serializer) {
-    return serializer.serializeDocumentBytes({ textBody, tail, recallAttachment });
+    return maybeEncryptMountedDocument(document, await serializer.serializeDocumentBytes({ textBody, tail, recallAttachment }), encryption ?? null);
   }
-  return serializeStandardDocumentBytes(textBody, tail, recallAttachment);
+  return maybeEncryptMountedDocument(document, await serializeStandardDocumentBytes(textBody, tail, recallAttachment), encryption ?? null);
+}
+
+async function maybeEncryptMountedDocument(document: VisualDocument, bytes: Uint8Array, encryption: HvyEncryptionOptions | null): Promise<Uint8Array> {
+  if (document.encryption?.encrypted !== true || document.encryption.algorithm !== 'fernet') {
+    return bytes;
+  }
+  const key = getEncryptionKey(encryption, document.encryption.keyId);
+  if (key) {
+    return (await encryptDocumentBytes(bytes, { keyId: document.encryption.keyId, key })).bytes;
+  }
+  throw new Error(`Missing Fernet key for encrypted HVY document: ${document.encryption.keyId}`);
 }
 
 function mergeAttachmentDescriptors(

@@ -1,9 +1,11 @@
-import { expect, test } from 'vitest';
+import { beforeEach, expect, test } from 'vitest';
 
 import { renderTextEditor } from '../src/editor/components/text/text';
 import { renderTextReader } from '../src/editor/components/text/text';
 import { renderXrefCardEditor } from '../src/editor/components/xref-card/xref-card';
+import { initState, state } from '../src/state';
 import type { VisualBlock } from '../src/editor/types';
+import { createTestState } from './serialization-test-helpers';
 
 const helpers = {
   escapeAttr: (value: string) => value,
@@ -13,8 +15,18 @@ const helpers = {
   renderRichToolbar: () => '',
   isXrefTargetValid: () => true,
   getXrefTargetOptions: () => [],
+  renderTextFragment: (content: string) => `<p>${content}</p>`,
   renderComponentFragment: (_componentName: string, content: string) => `<p>${content}</p>`,
 };
+
+beforeEach(() => {
+  initState(createTestState({
+    meta: {},
+    extension: '.hvy',
+    attachments: [],
+    sections: [],
+  }));
+});
 
 test('text editor prose surfaces opt into native spellcheck', () => {
   const block = {
@@ -43,6 +55,7 @@ test('text fill-in editor opt into native spellcheck', () => {
     },
   } as unknown as VisualBlock;
 
+  state.activeTextEditorMode = { sectionKey: 'summary', blockId: 'fill-copy', mode: 'fill-in' };
   const html = renderTextEditor('summary', block, helpers as never);
 
   expect(html).toContain('class="text-fill-in-box"');
@@ -68,6 +81,7 @@ test('xref title and detail editors opt into native spellcheck', () => {
   expect(html.match(/spellcheck="true"/g)).toHaveLength(2);
   expect(html).toContain('data-field="block-xref-title"');
   expect(html).toContain('data-field="block-xref-detail"');
+  expect(html).toContain('data-placeholder="Optional"');
 });
 
 test('text reader can show a copy button for any text component', () => {

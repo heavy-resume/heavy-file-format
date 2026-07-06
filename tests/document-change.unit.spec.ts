@@ -102,6 +102,8 @@ function createDocumentChangeTestState(): AppState {
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: null,

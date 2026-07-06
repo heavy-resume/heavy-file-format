@@ -1154,6 +1154,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     orderReaderBlocks: (blocks: VisualBlock[]) => blocks,
     orderReaderListBlocks: (blocks: VisualBlock[]) => blocks,
     isReaderViewPrioritizedBlock: () => false,
+    renderTextFragment: (content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',

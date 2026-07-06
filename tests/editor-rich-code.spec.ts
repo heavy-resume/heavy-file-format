@@ -201,6 +201,93 @@ test('triple ticks typed inside a code block remain literal text', async ({ page
   await expect(editor.locator('code').first()).toContainText('```');
 });
 
+test('pasting fenced code inside a code block inserts literal text without nesting', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="json"><code class="language-json" contenteditable="true">before</code></pre>';
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.querySelector('code') as HTMLElement | null)?.focus();
+  });
+
+  const expectedResult = await editor.evaluate((node) => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', '```ts\nconst value = 1;\n```');
+    const beforeInputEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+      dataTransfer,
+    });
+    node.dispatchEvent(beforeInputEvent);
+    return {
+      defaultPrevented: beforeInputEvent.defaultPrevented,
+      codeText: node.querySelector('code')?.textContent,
+      preCount: node.querySelectorAll('pre').length,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    defaultPrevented: true,
+    codeText: 'before```ts\nconst value = 1;\n```',
+    preCount: 1,
+  });
+  await expect(editor.locator('pre')).toHaveCount(1);
+  await expect(editor.locator('code').first()).toHaveText('before```ts\nconst value = 1;\n```');
+});
+
+test('rich code block language field updates serialized fence language', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    const sectionKey = node.dataset.sectionKey ?? '';
+    const blockId = node.dataset.blockId ?? '';
+    node.innerHTML = `<div class="rich-code-block-shell"><label class="rich-code-language-control" contenteditable="false"><span>Language</span><input type="text" data-field="rich-code-language" data-section-key="${sectionKey}" data-block-id="${blockId}" value=""></label><pre data-code-language="" contenteditable="false"><code contenteditable="true">const value = 1;</code></pre></div>`;
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const textNode = node.querySelector('code')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  const languageInput = editor.locator('.rich-code-language-control input').first();
+  await expect(languageInput).toBeVisible();
+  await languageInput.fill('ts');
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return {
+      text: state.document.sections[0]?.blocks[0]?.text,
+      dataLanguage: document.querySelector('.rich-editor pre')?.getAttribute('data-code-language'),
+      codeClass: document.querySelector('.rich-editor pre code')?.getAttribute('class'),
+      activeField: (document.activeElement as HTMLElement | null)?.dataset.field ?? '',
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    text: '```ts\nconst value = 1;\n```',
+    dataLanguage: 'ts',
+    codeClass: 'language-ts',
+    activeField: 'rich-code-language',
+  });
+});
+
 test('enter inside a code block inserts code newlines and shift enter exits below it', async ({ page }) => {
   await page.goto('/');
 
@@ -247,6 +334,54 @@ test('enter inside a code block inserts code newlines and shift enter exits belo
 
   await expect(editor.locator('pre code')).toHaveText('first\nsecond again');
   await expect(page.getByRole('button', { name: 'Code block' }).first()).toHaveClass(/secondary/);
+});
+
+test('code block Enter suppresses the follow-up paragraph input', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<pre data-code-language="python"><code class="language-python" contenteditable="true">first</code></pre>';
+    const code = node.querySelector('code')!;
+    const textNode = code.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, textNode.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    code.focus();
+
+    const keydownEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+    });
+    code.dispatchEvent(keydownEvent);
+
+    const beforeInputEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertParagraph',
+    });
+    code.dispatchEvent(beforeInputEvent);
+
+    return {
+      beforeInputPrevented: beforeInputEvent.defaultPrevented,
+      codeText: code.textContent,
+      keydownPrevented: keydownEvent.defaultPrevented,
+      newlineCount: (code.textContent?.match(/\n/g) ?? []).length,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    beforeInputPrevented: true,
+    codeText: 'first\n\u200b',
+    keydownPrevented: true,
+    newlineCount: 1,
+  });
 });
 
 test('tab and shift tab indent fenced code inside the text editor by two spaces', async ({ page }) => {

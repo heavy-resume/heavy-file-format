@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, getHvyResponseDiagnostics } from '../src/serialization';
 import { createEmptyBlock } from '../src/document-factory';
 import { resolveBaseComponentFromMeta } from '../src/component-defs';
+import { parseFormSpec } from '../src/plugins/form';
 import { visitBlocks } from '../src/section-ops';
 import { state } from '../src/state';
 import { registerSerializationTestState } from './serialization-test-helpers';
@@ -695,6 +696,37 @@ test('resume reciprocal xref script generates reusable source xref card types', 
     expect(script, path).not.toContain('card.set("id"');
     expect(script, path).not.toContain('cards.set("componentListComponent", "xref-card")');
   }
+});
+
+test('meeting minutes template uses reusable timestamped minute entries', async () => {
+  const fs = await import('node:fs/promises');
+  const input = await fs.readFile('examples/meeting-minutes.thvy', 'utf8');
+  const document = deserializeDocument(input, '.thvy');
+
+  const minuteEntry = document.meta.component_defs?.find((definition) => definition.name === 'minute-entry');
+  const entries = document.sections[0]?.blocks.find((block) => block.schema.id === 'minute-entries');
+  const form = document.sections[0]?.blocks.find((block) => block.schema.id === 'add-minute-entry');
+
+  expect(minuteEntry?.baseType).toBe('container');
+  expect(minuteEntry?.schema?.containerBlocks).toEqual([]);
+  expect(entries?.schema.component).toBe('component-list');
+  expect(entries?.schema.componentListComponent).toBe('minute-entry');
+  expect(form?.schema.plugin).toBe('hvy.form');
+  const parsed = parseFormSpec(form?.text ?? '', form?.schema.pluginConfig);
+  expect(parsed.error).toBeNull();
+  expect(parsed.spec.fields[0]?.rows).toBe(4);
+  expect(parsed.spec.submitScript).toBe('add_entry');
+  expect(parsed.spec.scripts.add_entry).toContain('def note_to_markdown(value):');
+  expect(parsed.spec.scripts.add_entry).toContain('output.append(line + "  ")');
+  expect(parsed.spec.scripts.add_entry).toContain('sort_time = doc.time.now_unix_ms()');
+  expect(parsed.spec.scripts.add_entry).toContain('display_time = doc.time.now_local()');
+  expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_time)');
+  expect(parsed.spec.scripts.add_entry).toContain('"sortKeys": {"Time": sort_time}');
+  expect(parsed.spec.scripts.add_entry).toContain('entry.append_child(');
+  expect(parsed.spec.scripts.add_entry).toContain('"**" + display_time + "**"');
+  expect(parsed.spec.scripts.add_entry).toContain('"css": "margin: 0;"');
+  expect(parsed.spec.scripts.add_entry).toContain('note_to_markdown(note)');
+  expect(parsed.spec.scripts.add_entry).toContain('"minute-entry-note"');
 });
 
 test('deserializes db-table query text from the plugin block body', () => {

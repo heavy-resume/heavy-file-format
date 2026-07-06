@@ -49,6 +49,7 @@ interface ScriptingDocApi {
   form: ScriptingFormApi;
   db: ScriptingDbApi;
   json: ScriptingJsonApi;
+  time: ScriptingTimeApi;
   export: ScriptingExportApi;
   cli: ScriptingCliApi;
   rerender: () => void;
@@ -100,6 +101,13 @@ export interface ScriptingJsonApi {
   parse_object(response: string): JsonObject;
 }
 
+export interface ScriptingTimeApi {
+  now_iso(): string;
+  now_local(): string;
+  now_unix_ms(): number;
+  today_iso(): string;
+}
+
 export interface ScriptingCliApi {
   run(command: string): string;
   write(path: string, content: string): string;
@@ -122,6 +130,7 @@ export interface ScriptingRuntimeOptions {
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
+  now?: () => Date;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -220,6 +229,33 @@ function createJsonApi(): ScriptingJsonApi {
       return result.ok ? addJsonObjectHelpers(result.value) as JsonObject : throwJsonParseError(result);
     },
   };
+}
+
+function createTimeApi(now: () => Date): ScriptingTimeApi {
+  return {
+    now_iso: () => now().toISOString(),
+    now_local: () => formatLocalDateTime(now()),
+    now_unix_ms: () => now().getTime(),
+    today_iso: () => formatLocalDate(now()),
+  };
+}
+
+function formatLocalDateTime(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
+function formatLocalDate(date: Date): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
@@ -351,6 +387,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     form: options.form ?? createUnavailableFormApi(),
     db: options.db ?? createUnavailableDbApi(),
     json: createJsonApi(),
+    time: createTimeApi(options.now ?? (() => new Date())),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),
     cli: {
       run: (command) => {

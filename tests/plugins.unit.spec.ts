@@ -14,6 +14,7 @@ import {
   FORM_PLUGIN_ID,
   PROGRESS_BAR_PLUGIN_ID,
   SCRIPTING_PLUGIN_ID,
+  VIDEO_PLUGIN_ID,
 } from '../src/plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { initState } from '../src/state';
@@ -103,6 +104,23 @@ describe('plugin host registry', () => {
 });
 
 describe('progress-bar plugin block round-trip', () => {
+  test('preserves unavailable plugin block across save-style round-trip', () => {
+    const before = `---\nhvy_version: 1.0\nplugins:\n  - id: com.example.unavailable\n    source: https://plugins.example.invalid/unavailable.hvyplugin\n---\n\n#! External Widget\n\n<!--hvy:plugin {"plugin":"com.example.unavailable","pluginConfig":{"answer":42,"mode":"compact"}}-->\n plugin-owned body\n`;
+
+    const documentBeforeSave = deserializeDocument(before, '.hvy');
+    const serializedAfterSave = serializeDocument(documentBeforeSave);
+    const documentAfterSave = deserializeDocument(serializedAfterSave, '.hvy');
+
+    const expectedResult = documentAfterSave.sections[0]?.blocks.find((block) => block.schema.component === 'plugin');
+    expect(expectedResult).toBeDefined();
+    expect(expectedResult?.schema.kind).toBe('plugin');
+    expect(expectedResult?.schema.plugin).toBe('com.example.unavailable');
+    expect(expectedResult?.schema.pluginConfig).toEqual({ answer: 42, mode: 'compact' });
+    expect(expectedResult?.text.trim()).toBe('plugin-owned body');
+    expect(serializedAfterSave).toContain('id: com.example.unavailable');
+    expect(serializedAfterSave).toContain('"plugin":"com.example.unavailable"');
+  });
+
   test('preserves pluginConfig and text body across serialize/deserialize', () => {
     const input = `---\nhvy_version: 1.0\n---\n\n#! Status\n\n<!--hvy:plugin {"plugin":"hvy.progress-bar","pluginConfig":{"min":0,"max":100,"value":42,"color":"#3b82f6"}}-->\n \`\${value}%\`\n`;
     const doc = deserializeDocument(input, '.hvy');
@@ -132,6 +150,24 @@ describe('scripting plugin block metadata', () => {
     expect(reserialized).toContain('"plugin":"hvy.scripting"');
     expect(reserialized).toContain(`"version":"${SCRIPTING_PLUGIN_VERSION}"`);
     expect(reserialized).toContain('print("hello")');
+  });
+});
+
+describe('video plugin block round-trip', () => {
+  test('preserves video plugin config across serialize/deserialize', () => {
+    const input = `---\nhvy_version: 1.0\n---\n\n#! Video\n\n<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1","title":"Demo"}}-->\n`;
+    const doc = deserializeDocument(input, '.hvy');
+    const block = doc.sections[0]?.blocks.find((b) => b.schema.component === 'plugin');
+    expect(block).toBeDefined();
+    expect(block?.schema.plugin).toBe(VIDEO_PLUGIN_ID);
+    expect(block?.schema.pluginConfig).toMatchObject({
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1',
+      title: 'Demo',
+    });
+
+    const reserialized = serializeDocument(doc);
+    expect(reserialized).toContain('"plugin":"hvy.video"');
+    expect(reserialized).toContain('"title":"Demo"');
   });
 });
 

@@ -2,4 +2,4 @@
 Renders a binary image attachment from imageFile.
 imageFile is required and names the document tail attachment with id image:<filename>.
 imageAlt is optional alternate text for the rendered image.
-caption is optional text rendered centered below the image.
+caption is an optional styled text caption payload rendered below the image.

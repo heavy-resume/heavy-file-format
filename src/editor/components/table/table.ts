@@ -33,7 +33,7 @@ function unwrapTableParagraphs(html: string): string {
 }
 
 function renderTableInlineReaderHtml(value: string, block: Parameters<ComponentReaderRenderer>[1], helpers: Parameters<ComponentReaderRenderer>[2]): string {
-  return helpers.renderComponentFragment('text', value, block);
+  return unwrapTableParagraphs(helpers.renderComponentFragment('text', value, block));
 }
 
 function renderTableInlineToolbar(

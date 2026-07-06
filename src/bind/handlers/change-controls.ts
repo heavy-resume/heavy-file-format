@@ -1,5 +1,8 @@
 import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
+import type { JsonObject } from '../../hvy/types';
+import { PDF_DOCUMENT_PAGE_SIZE_OPTIONS, readPdfPageMetaObject } from '../../pdf-page-settings';
+import { findPdfStylePreset } from '../../pdf-style-presets';
 import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { SearchCategory } from '../../search/types';
@@ -28,6 +31,33 @@ export function bindChangeControls(app: HTMLElement): void {
       const category = target.dataset.searchCategory as SearchCategory | undefined;
       if (category === 'tags' || category === 'contents' || category === 'description') {
         setSearchCategory(category, target.checked);
+      }
+      return;
+    }
+
+    if (field === 'meta-pdf-page-size' && target instanceof HTMLSelectElement) {
+      const pageSize = target.value.trim().toUpperCase();
+      if (!(PDF_DOCUMENT_PAGE_SIZE_OPTIONS as readonly string[]).includes(pageSize)) {
+        return;
+      }
+      recordHistory('meta:pdf-page-size');
+      const pdfPage = readPdfPageMetaObject(state.document.meta);
+      pdfPage.size = pageSize;
+      writePdfPageMetaObject(pdfPage);
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-pdf-style-preset' && target instanceof HTMLSelectElement) {
+      const preset = findPdfStylePreset(state.pdfStylePresets, target.value);
+      if (!preset) {
+        return;
+      }
+      state.pdfStylePresetId = preset.id;
+      const picker = target.closest<HTMLElement>('.meta-pdf-preset-picker');
+      const description = picker?.nextElementSibling;
+      if (description instanceof HTMLElement && description.matches('[data-pdf-preset-description]')) {
+        description.textContent = preset.description?.trim() ?? '';
       }
       return;
     }
@@ -187,4 +217,12 @@ export function bindChangeControls(app: HTMLElement): void {
         });
     }
   });
+}
+
+function writePdfPageMetaObject(pdfPage: JsonObject): void {
+  if (Object.keys(pdfPage).length > 0) {
+    state.document.meta.pdf_page = pdfPage;
+  } else {
+    delete state.document.meta.pdf_page;
+  }
 }

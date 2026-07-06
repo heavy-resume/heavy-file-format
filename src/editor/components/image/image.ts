@@ -9,12 +9,19 @@ import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
-import { cameraIcon, closeIcon } from '../../../icons';
+import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
+import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
+import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
+import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
+
+export { mergeImagePresetCss } from './image-preset-css';
 
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
+const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
+const IMAGE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
 type LegacyCameraNavigator = Navigator & {
   getUserMedia?: (
@@ -77,7 +84,8 @@ export function renderImageElement(options: {
   lazy?: boolean;
   lazyCarousel?: boolean;
 }): string | null {
-  const url = options.lazyCarousel ? null : getImageBlobUrl(options.filename);
+  const shouldDeferSrc = (options.lazy ?? true) || options.lazyCarousel;
+  const url = shouldDeferSrc ? null : getImageBlobUrl(options.filename);
   if (!url && !hasImageAttachmentSource(options.filename)) {
     return null;
   }
@@ -86,7 +94,8 @@ export function renderImageElement(options: {
   const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
   const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
   const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
-  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${styleAttr} />`;
+  const imageLazyAttr = shouldDeferSrc && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
+  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
@@ -96,12 +105,143 @@ export function clearImageBlobUrlCache(): void {
   blobUrlCache.clear();
 }
 
+export function bindLazyImageHydration(root: ParentNode): void {
+  const startedAt = nowMs();
+  lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
+  lazyImageHydrationObservers.delete(root);
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img[data-hvy-lazy-image="true"]'))
+    .filter((image) => !image.getAttribute('src'));
+  if (images.length === 0) {
+    return;
+  }
+  if (typeof IntersectionObserver === 'undefined') {
+    images.forEach(hydrateLazyImage);
+    logPerfTrace('image-lazy-hydration:bind', {
+      elapsedMs: elapsedMs(startedAt),
+      imageCount: images.length,
+      hydratedImmediately: images.length,
+      observerCount: 0,
+      targetCount: images.length,
+      observerUnavailable: true,
+    });
+    return;
+  }
+  const imagesByScroller = new Map<Element | null, HTMLImageElement[]>();
+  images.forEach((image) => {
+    const scroller = image.closest('.reader-document, .editor-tree');
+    imagesByScroller.set(scroller, [...(imagesByScroller.get(scroller) ?? []), image]);
+  });
+  const observers: IntersectionObserver[] = [];
+  let targetCount = 0;
+  imagesByScroller.forEach((scrollerImages, scroller) => {
+    const imagesByTarget = new Map<Element, HTMLImageElement[]>();
+    scrollerImages.forEach((image) => {
+      const target = image.closest('.reader-section, .editor-section-card') ?? image;
+      imagesByTarget.set(target, [...(imagesByTarget.get(target) ?? []), image]);
+    });
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        observer.unobserve(entry.target);
+        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateLazyImage);
+      });
+    }, {
+      root: scroller,
+      rootMargin: '200px 0px',
+      threshold: 0,
+    });
+    imagesByTarget.forEach((_targetImages, target) => observer.observe(target));
+    targetCount += imagesByTarget.size;
+    observers.push(observer);
+  });
+  lazyImageHydrationObservers.set(root, observers);
+  logPerfTrace('image-lazy-hydration:bind', {
+    elapsedMs: elapsedMs(startedAt),
+    imageCount: images.length,
+    hydratedImmediately: 0,
+    observerCount: observers.length,
+    targetCount,
+  });
+}
+
+function hydrateLazyImage(image: HTMLImageElement): void {
+  if (image.getAttribute('src')) {
+    return;
+  }
+  const startedAt = nowMs();
+  const filename = image.dataset.imageFilename ?? '';
+  const url = getImageBlobUrl(filename);
+  if (url) {
+    observeHydratedImageLoad(image, filename, startedAt);
+    image.src = url;
+    image.dataset.hvyLazyImage = 'loaded';
+    logPerfTrace('image-lazy-hydration:src-set', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+      complete: image.complete,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    });
+    return;
+  }
+  const missing = image.ownerDocument.createElement('div');
+  missing.className = 'image-empty muted';
+  missing.textContent = `Missing attachment: ${filename}`;
+  image.replaceWith(missing);
+  logPerfTrace('image-lazy-hydration:missing', {
+    filename,
+    elapsedMs: elapsedMs(startedAt),
+  });
+}
+
+function observeHydratedImageLoad(image: HTMLImageElement, filename: string, startedAt: number): void {
+  if (image.dataset.hvyLazyImageLoadObserved === 'true') {
+    return;
+  }
+  image.dataset.hvyLazyImageLoadObserved = 'true';
+  image.addEventListener('load', () => {
+    logPerfTrace('image-lazy-hydration:load', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    });
+    if (typeof image.decode === 'function') {
+      const decodeStartedAt = nowMs();
+      void image.decode()
+        .then(() => {
+          logPerfTrace('image-lazy-hydration:decode', {
+            filename,
+            elapsedMs: elapsedMs(decodeStartedAt),
+          });
+        })
+        .catch((error) => {
+          logPerfTrace('image-lazy-hydration:decode-error', {
+            filename,
+            elapsedMs: elapsedMs(decodeStartedAt),
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+  }, { once: true });
+  image.addEventListener('error', () => {
+    logPerfTrace('image-lazy-hydration:error', {
+      filename,
+      elapsedMs: elapsedMs(startedAt),
+    });
+  }, { once: true });
+}
+
 export function renderImageAttachmentPicker(options: {
   helpers: ComponentRenderHelpers;
   action: string;
+  actionLabel: string;
   sectionKey: string;
   blockId: string;
   selectedFilename?: string;
+  selectedLabel?: string;
   emptyText: string;
 }): string {
   const filenames = listImageFilenames(state.document);
@@ -116,6 +256,9 @@ export function renderImageAttachmentPicker(options: {
       const preview = url
         ? `<img src="${options.helpers.escapeAttr(url)}" alt="">`
         : '<span>Missing</span>';
+      const actionText = selected && options.selectedLabel ? options.selectedLabel : options.actionLabel;
+      const actionIcon = selected && options.selectedLabel ? '' : plusIcon();
+      const actionTitle = `${actionText}: ${filename}`;
       return `<div class="image-attachment-choice-wrap">
         <button
           type="button"
@@ -124,10 +267,12 @@ export function renderImageAttachmentPicker(options: {
           data-section-key="${options.helpers.escapeAttr(options.sectionKey)}"
           data-block-id="${options.helpers.escapeAttr(options.blockId)}"
           data-image-filename="${options.helpers.escapeAttr(filename)}"
-          title="${options.helpers.escapeAttr(filename)}"
+          title="${options.helpers.escapeAttr(actionTitle)}"
+          aria-label="${options.helpers.escapeAttr(actionTitle)}"
         >
           <span class="image-attachment-choice-thumb">${preview}</span>
           <span class="image-attachment-choice-name">${options.helpers.escapeHtml(filename)}</span>
+          <span class="image-attachment-choice-action">${actionIcon}<span>${options.helpers.escapeHtml(actionText)}</span></span>
         </button>
         ${unused ? `<button
           type="button"
@@ -286,12 +431,13 @@ function escapeModalAttr(value: string): string {
 function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): string {
   const filename = block.schema.imageFile.trim();
   const alt = block.schema.imageAlt || filename || 'Image';
-  const caption = block.schema.caption.trim();
   if (!filename) {
     return '<div class="image-empty muted">No image attached.</div>';
   }
-  const captionHtml = caption
-    ? `<figcaption class="image-caption">${helpers.escapeHtml(caption)}</figcaption>`
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  const captionHtml = captionContent
+    ? `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`
     : '';
   const image = renderImageElement({
     filename,
@@ -311,6 +457,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
   const filename = block.schema.imageFile.trim();
   const downloadUrl = filename ? getImageBlobUrl(filename) : null;
   const canDeleteCurrentImage = filename && getImageAttachmentReferenceCount(filename) === 1;
+  const activeSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
   return `
     <div class="image-editor">
       <div class="image-toolbar">
@@ -320,10 +467,11 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           <button type="button" class="ghost" data-action="image-preset" data-image-preset="right" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Align right">Right</button>
         </div>
         <div class="toolbar-segment image-fit-buttons" role="group" aria-label="Image size">
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="small" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Small (20rem wide)">Small</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="medium" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Medium (40rem wide)">Medium</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-width" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit width">Fit Width</button>
-          <button type="button" class="ghost" data-action="image-preset" data-image-preset="fit-height" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" title="Fit height">Fit Height</button>
+          ${renderImageSizePresetButton('small', 'Small', 'Small (20rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('medium', 'Medium', 'Medium (30rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('large', 'Large', 'Large (40rem wide)', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('fit-width', 'Fit Width', 'Fit width', activeSizePreset, sectionKey, block.id, helpers)}
+          ${renderImageSizePresetButton('fit-height', 'Fit Height', 'Fit height', activeSizePreset, sectionKey, block.id, helpers)}
         </div>
       </div>
       <div
@@ -367,23 +515,25 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </label>
         <label class="image-alt-label">
           <span>Caption</span>
-          <textarea
-            rows="2"
+          <button
+            type="button"
+            class="image-pick-button image-caption-edit-button"
+            data-action="open-image-caption-modal"
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="image-caption"
-            placeholder="Add a caption"
-          >${helpers.escapeHtml(block.schema.caption)}</textarea>
+          >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
         </label>
       </div>
       <div class="image-attachment-panel">
-        <div class="image-attachment-panel-title">Attached images</div>
+        <div class="image-attachment-panel-title">Use an attached image</div>
         ${renderImageAttachmentPicker({
           helpers,
           action: 'image-use-existing',
+          actionLabel: 'Use image',
           sectionKey,
           blockId: block.id,
           selectedFilename: filename,
+          selectedLabel: 'Current image',
           emptyText: 'No attached images yet.',
         })}
       </div>
@@ -391,77 +541,22 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
   `;
 };
 
+function renderImageSizePresetButton(
+  preset: string,
+  label: string,
+  title: string,
+  activePreset: string | null,
+  sectionKey: string,
+  blockId: string,
+  helpers: ComponentRenderHelpers
+): string {
+  const active = preset === activePreset;
+  return `<button type="button" class="ghost${active ? ' is-active' : ''}" data-action="image-preset" data-image-preset="${helpers.escapeAttr(preset)}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" title="${helpers.escapeAttr(title)}" aria-pressed="${active ? 'true' : 'false'}">${helpers.escapeHtml(label)}</button>`;
+}
+
 export const renderImageReader: ComponentReaderRenderer = (_section, block, helpers) => {
   return `<div class="image-reader">${renderPreview(block, helpers)}</div>`;
 };
-
-interface ImagePresetDefinition {
-  /** Properties this preset writes onto the block. */
-  props: Record<string, string>;
-  /** Properties this preset *clears* from the existing inline css before writing
-   * `props`. Anything not listed here is preserved verbatim. */
-  controls: string[];
-}
-
-const POSITION_CONTROLS = ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'display'];
-const SIZE_CONTROLS = ['width', 'height', 'display'];
-
-const IMAGE_PRESETS: Record<string, ImagePresetDefinition> = {
-  left: {
-    props: { margin: '0.5rem auto 0.5rem 0', display: 'block' },
-    controls: POSITION_CONTROLS,
-  },
-  center: {
-    props: { margin: '0.5rem auto', display: 'block' },
-    controls: POSITION_CONTROLS,
-  },
-  right: {
-    props: { margin: '0.5rem 0 0.5rem auto', display: 'block' },
-    controls: POSITION_CONTROLS,
-  },
-  small: {
-    props: { width: '20rem', height: 'auto', display: 'block' },
-    controls: SIZE_CONTROLS,
-  },
-  medium: {
-    props: { width: '40rem', height: 'auto', display: 'block' },
-    controls: SIZE_CONTROLS,
-  },
-  'fit-width': {
-    props: { width: '100%', height: 'auto', display: 'block' },
-    controls: SIZE_CONTROLS,
-  },
-  'fit-height': {
-    props: { height: '100%', width: 'auto', display: 'block' },
-    controls: SIZE_CONTROLS,
-  },
-};
-
-function parseInlineCssDeclarations(css: string): Array<[string, string]> {
-  const entries: Array<[string, string]> = [];
-  for (const segment of css.split(';')) {
-    const colon = segment.indexOf(':');
-    if (colon < 0) continue;
-    const prop = segment.slice(0, colon).trim().toLowerCase();
-    const value = segment.slice(colon + 1).trim();
-    if (prop.length === 0 || value.length === 0) continue;
-    entries.push([prop, value]);
-  }
-  return entries;
-}
-
-function serializeInlineCssDeclarations(entries: Array<[string, string]>): string {
-  return entries.map(([prop, value]) => `${prop}: ${value};`).join(' ');
-}
-
-export function mergeImagePresetCss(existingCss: string, preset: string): string | null {
-  const definition = IMAGE_PRESETS[preset];
-  if (!definition) return null;
-  const cleared = new Set(definition.controls.map((prop) => prop.toLowerCase()));
-  const preserved = parseInlineCssDeclarations(existingCss).filter(([prop]) => !cleared.has(prop));
-  const merged = [...preserved, ...Object.entries(definition.props)];
-  return serializeInlineCssDeclarations(merged);
-}
 
 export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
   const block = findBlockByIds(sectionKey, blockId);
@@ -525,7 +620,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
   recordHistory(`image-current-delete:${blockId}`);
   block.schema.imageFile = '';
   block.schema.imageAlt = '';
-  block.schema.caption = '';
+  block.schema.caption = null;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   getRenderApp()();

@@ -7,6 +7,7 @@ import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, pars
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
+import { normalizeTextCaption } from './caption';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
@@ -84,7 +85,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     case 'table':
       return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
     case 'image':
-      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: '' } as unknown as BlockSchema;
+      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null } as unknown as BlockSchema;
     case 'carousel':
       return {
         ...base,
@@ -110,6 +111,16 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         buttonOutputCharLimit: 1000,
         buttonPositionTargetId: '',
         buttonCss: '',
+      } as unknown as BlockSchema;
+    case 'encrypted':
+      return {
+        ...base,
+        kind: 'encrypted',
+        keyId: '',
+        encryptedAttachmentId: '',
+        encryptedBlock: null,
+        encryptedDirty: false,
+        encryptedError: '',
       } as unknown as BlockSchema;
     case 'plugin':
       return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
@@ -425,7 +436,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   if (schema.kind === 'image') {
     schema.imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile : schema.imageFile;
     schema.imageAlt = typeof candidate.imageAlt === 'string' ? candidate.imageAlt : schema.imageAlt;
-    schema.caption = typeof candidate.caption === 'string' ? candidate.caption : schema.caption;
+    schema.caption = normalizeTextCaption(candidate.caption);
     schema.css = typeof candidate.css === 'string' ? candidate.css : schema.css;
   }
   if (schema.kind === 'carousel') {
@@ -447,6 +458,18 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.buttonOutputCharLimit = parsePositiveNumber(candidate.buttonOutputCharLimit, schema.buttonOutputCharLimit);
     schema.buttonPositionTargetId = typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : schema.buttonPositionTargetId;
     schema.buttonCss = typeof candidate.buttonCss === 'string' ? candidate.buttonCss : schema.buttonCss;
+  }
+  if (schema.kind === 'encrypted') {
+    schema.keyId = typeof candidate.keyId === 'string' ? candidate.keyId : schema.keyId;
+    schema.encryptedAttachmentId =
+      typeof candidate.encryptedAttachmentId === 'string' && candidate.encryptedAttachmentId.trim().length > 0
+        ? candidate.encryptedAttachmentId
+        : schema.keyId.trim().length > 0
+        ? `encrypted:${schema.keyId.trim()}`
+        : '';
+    schema.encryptedBlock = null;
+    schema.encryptedDirty = false;
+    schema.encryptedError = '';
   }
   if (schema.kind === 'xref-card') {
     schema.xrefTarget = typeof candidate.xrefTarget === 'string' ? candidate.xrefTarget : schema.xrefTarget;

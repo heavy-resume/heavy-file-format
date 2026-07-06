@@ -3,6 +3,8 @@
 .rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
 .rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
+  position: absolute;
+  inset: 0.48rem;
   color: var(--hvy-text-muted);
   opacity: 0.72;
   pointer-events: none;
@@ -10,9 +12,82 @@
 }
 
 .text-editor-shell {
+  --text-editor-toolbar-bottom-clearance: calc(6lh + 0.75rem);
+  --text-editor-toolbar-height: 0px;
+
   position: relative;
   min-width: 0;
   max-width: 100%;
+  container: text-editor-shell / inline-size;
+}
+
+.text-editor-toolbar-bounds {
+  position: absolute;
+  inset: 0 0 var(--text-editor-toolbar-bottom-clearance);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.text-editor-toolbar-slot {
+  position: sticky;
+  top: 0.35rem;
+  box-sizing: border-box;
+  margin-inline: 0.625rem;
+  pointer-events: none;
+}
+
+.text-editor-toolbar-spacer {
+  height: var(--text-editor-toolbar-height);
+  margin-bottom: 0.4rem;
+}
+
+.text-editor-toolbar-slot > .rich-toolbar {
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--hvy-shadow) 38%, transparent);
+  margin-bottom: 0;
+  padding: 0.35rem;
+  pointer-events: auto;
+}
+
+.text-editor-shell.is-disabled {
+  opacity: 0.78;
+}
+
+.text-editor-shell.is-disabled .rich-editor {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-border) 18%);
+  color: var(--hvy-text-muted);
+}
+
+.text-editor-shell.is-disabled .rich-toolbar {
+  opacity: 0.72;
+}
+
+.text-editor-shell.is-disabled .rich-toolbar button {
+  cursor: not-allowed;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-bounds {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  margin-bottom: 0.4rem;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot > .rich-toolbar {
+  box-shadow: none;
+}
+
+.editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-spacer {
+  display: none;
 }
 
 .reader-block-text:has(> .text-copy-button) {
@@ -915,11 +990,12 @@
 }
 
 .rich-editor {
+  position: relative;
   min-height: 96px;
   min-width: 0;
   max-width: 100%;
   cursor: text;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
@@ -947,9 +1023,14 @@
 .rich-editor p {
   min-width: 0;
   margin: 0 0 0.45rem;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
   white-space: normal;
+}
+
+.rich-editor :where(li, blockquote, h1, h2, h3, h4, h5, h6) {
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .hvy-embed-layout .rich-editor :where(ul:not(.contains-task-list)) {
@@ -1100,6 +1181,51 @@
 
 .rich-editor pre[data-code-language=""]::before {
   content: none;
+}
+
+.rich-code-block-shell {
+  position: relative;
+  margin: 0 0 0.45rem;
+}
+
+.rich-editor .rich-code-block-shell pre {
+  margin-bottom: 0;
+  padding-top: 1.55rem;
+}
+
+.rich-code-block-shell pre::before {
+  content: none;
+}
+
+.rich-code-language-control {
+  position: absolute;
+  top: 0.32rem;
+  left: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(18rem, calc(100% - 1.3rem));
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.rich-code-language-control input {
+  width: 7.5rem;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.18rem 0.38rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.rich-code-language-control input:focus {
+  border-color: var(--hvy-accent);
+  outline: 2px solid var(--hvy-accent-soft);
+  outline-offset: 1px;
 }
 
 .rich-editor pre code {

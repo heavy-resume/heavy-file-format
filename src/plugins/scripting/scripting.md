@@ -31,13 +31,19 @@ plugin mount itself.
 
 The runtime intentionally avoids Brython AST mutation. The current flow is:
 
-1. Strip Python `import` statements before execution.
+1. Strip unchecked Python `import` statements before execution.
 2. Wrap the source in a generated function so `return` can stop the script early.
 3. Prefer `sys.settrace()` for line counting.
 4. Fall back to host-side source instrumentation when tracing is unavailable.
 
 This was chosen because Brython AST rewriting proved brittle for some compare
 expressions during `compile(...)`.
+
+The loader uses `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
+virtual filesystem containing only `browser` and `sys`. Keep checked libraries
+such as `random` and `re` in `wrapper.ts` shims instead of bundling Brython's
+real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
+imports can expose a larger module object graph than the sandbox intends.
 
 Brython also emits a noisy console line in some failure paths:
 

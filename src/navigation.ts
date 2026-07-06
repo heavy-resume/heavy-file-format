@@ -3,7 +3,7 @@ import { state } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
-import { getRenderApp } from './state';
+import { getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
@@ -122,11 +122,13 @@ export function navigateToReaderTarget(
     }
   }
 
-  // Only re-render when expand state actually changed to avoid rebuilding
-  // the sidebar DOM mid-animation. For link navigation, prefer a full render so
-  // the scroll target is resolved against the latest expanded layout.
-  if (expandChanged || requiresFullRender) {
+  // Only refresh when expand state actually changed. Staying in viewer mode can
+  // update reader/sidebar panels without rebuilding the entire app shell.
+  if (requiresFullRender) {
     getRenderApp()();
+  } else if (expandChanged) {
+    const surface: ReaderPanelRefreshSurface = loc === 'sidebar' ? 'sidebar' : loc === 'main' ? 'reader' : 'all';
+    getRefreshReaderPanels()({ runVisibilityScripts: false, surface });
   }
 
   requestTargetHighlight(app, target, {
@@ -217,6 +219,13 @@ function scrollReaderTargetIntoView(target: HTMLElement): void {
     const container = findScrollableReaderAncestor(target);
     if (container) {
       const targetRect = target.getBoundingClientRect();
+      if (container === document.scrollingElement || container === document.documentElement || container === document.body) {
+        window.scrollTo({
+          top: Math.max(0, window.scrollY + targetRect.top - window.innerHeight / 2),
+          behavior: 'smooth',
+        });
+        return;
+      }
       const containerRect = container.getBoundingClientRect();
       const containerCenter = containerRect.top + containerRect.height / 2;
       container.scrollTo({
@@ -485,6 +494,7 @@ export function closeModal(): void {
   ) {
     state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
   }
+  state.captionTextModal = null;
   state.modalSectionKey = null;
   state.newDocumentModalOpen = false;
   state.componentMetaModal = null;
@@ -505,6 +515,9 @@ export function closeModalIfTarget(sectionKey: string): void {
   }
   if (state.componentMetaModal?.sectionKey === sectionKey) {
     state.componentMetaModal = null;
+  }
+  if (state.captionTextModal?.target.sectionKey === sectionKey) {
+    state.captionTextModal = null;
   }
   if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
     closeModal();

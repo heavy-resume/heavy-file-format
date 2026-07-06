@@ -23,12 +23,20 @@
       "types": "./src/cli-core/index.ts",
       "default": "./src/cli-core/index.ts"
     },
+    "./rich-text-copy": {
+      "types": "./src/rich-text-copy.ts",
+      "default": "./src/rich-text-copy.ts"
+    },
+    "./brython-minimal-vfs-plugin": {
+      "types": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts",
+      "default": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts"
+    },
     "./mcp-cli-runner": "./scripts/hvy-mcp-cli.mjs",
     "./dist-embed/*": "./dist-embed/*",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "install:deps": "bash ./scripts/install-deps.sh",
+    "install:deps": "node scripts/install-deps.mjs",
     "install:pwdeps": "bash ./scripts/install-playwright-deps.sh",
     "install:devcontainer": "bash ./scripts/install-devcontainer.sh",
     "dev": "vite",
@@ -52,6 +60,7 @@
     "marked": "^15.0.12",
     "mermaid": "^11.15.0",
     "pdfmake": "0.3.9",
+    "qr-code-styling": "^1.9.2",
     "sql.js": "^1.14.1",
     "turndown": "^7.2.0",
     "yaml": "^2.8.1"

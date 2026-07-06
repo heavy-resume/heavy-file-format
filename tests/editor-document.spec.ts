@@ -19,6 +19,8 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('main.layout')).toHaveClass(/hvy-embed-layout/);
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).margin)).toBe('0px');
   await expect(page.getByRole('link', { name: 'Two embedded docs' })).toHaveAttribute('href', '/examples/two-embedded-docs.html');
+  await expect(page.getByRole('link', { name: 'Plugin text editor' })).toHaveAttribute('href', '/examples/embed-text-editor-plugin.html');
+  await expect(page.getByRole('link', { name: 'Lightweight viewer text editor' })).toHaveAttribute('href', '/examples/lightweight-viewer-text-editor.html');
 
   const editorButton = page.getByRole('button', { name: 'Editor' });
   await expect.poll(async () => editorButton.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe(
@@ -46,9 +48,10 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(viewerButton).toHaveCSS('border-top-style', 'solid');
   await expect(viewerButton).not.toHaveCSS('border-top-color', 'rgb(0, 0, 0)');
 
-  const addSection = page.locator('[data-action="add-top-level-section"]');
+  const editorBody = page.locator('.editor-tree-body:not(.editor-sidebar-tree-body)');
+  const addSection = editorBody.locator('[data-action="add-top-level-section"][data-section-location="main"]');
   const addSectionBox = await addSection.boundingBox();
-  const editorBodyBox = await page.locator('.editor-tree-body').boundingBox();
+  const editorBodyBox = await editorBody.boundingBox();
   expect(addSectionBox).not.toBeNull();
   expect(editorBodyBox).not.toBeNull();
   expect(addSectionBox!.width).toBeLessThanOrEqual(editorBodyBox!.width + 1);
@@ -726,10 +729,19 @@ hvy_version: 0.1
       viewerSidebarHelpDismissed: true,
       editorSidebarHelpDismissed: true,
     } as never);
-    let refreshCount = 0;
+    const refreshOptions: Array<unknown> = [];
+    const refreshBlockOptions: Array<unknown> = [];
     stateModule.initCallbacks({
       renderApp: () => {},
-      refreshReaderPanels: () => { refreshCount += 1; },
+      refreshReaderPanels: (options?: unknown) => { refreshOptions.push(options ?? null); },
+      refreshReaderBlock: (root: ParentNode, refreshSectionKey: string, refreshBlockId: string, options?: unknown) => {
+        refreshBlockOptions.push({ sectionKey: refreshSectionKey, blockId: refreshBlockId, options: options ?? null });
+        root.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.setAttribute(
+          'aria-expanded',
+          stateModule.state.readerExpandableState[`${refreshSectionKey}:${refreshBlockId}`] ? 'true' : 'false'
+        );
+        return true;
+      },
       refreshModalPreview: () => {},
       componentRenderHelpers: {},
       readerRenderer: {},
@@ -741,14 +753,115 @@ hvy_version: 0.1
     sidebar.innerHTML = `<div data-reader-action="toggle-expandable" data-section-key="${sectionKey}" data-block-id="${blockId}">Stub</div>`;
     bindReaderUi(document.querySelector<HTMLElement>('#mount')!);
     sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    sidebar.querySelector<HTMLElement>('[data-reader-action="toggle-expandable"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 190));
     return {
       expanded: stateModule.state.readerExpandableState[`${sectionKey}:${blockId}`],
-      refreshCount,
+      refreshOptions,
+      refreshBlockOptions,
+      sectionKey,
+      blockId,
     };
   });
 
-  expect(result.expanded).toBe(true);
-  expect(result.refreshCount).toBe(1);
+  expect(result.expanded).toBe(false);
+  expect(result.refreshOptions).toEqual([]);
+  expect(result.refreshBlockOptions).toEqual([
+    {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId,
+      options: { runVisibilityScripts: true },
+    },
+    {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId,
+      options: { runVisibilityScripts: false },
+    },
+  ]);
+});
+
+test('reader surface refresh preserves block and button visibility states separately', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div id="readerDocument">
+        <div data-hvy-dynamic-visibility="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="visible">
+          <div data-hvy-button="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="hidden"></div>
+        </div>
+      </div>
+    </div>`;
+    const { refreshReaderSurfaces } = await import(/* @vite-ignore */ '/src/reader/refresh-surfaces.ts');
+    refreshReaderSurfaces({
+      root: document.querySelector('#root')!,
+      sections: [],
+      readerRenderer: {
+        renderWarnings: () => '',
+        renderNavigation: () => '',
+        renderSidebarSections: () => '',
+        renderReaderSections: () => `<div data-hvy-dynamic-visibility="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="pending">
+          <div data-hvy-button="true" data-section-key="section-a" data-block-id="block-a" data-visible-state="pending"></div>
+        </div>`,
+      },
+    });
+    const block = document.querySelector<HTMLElement>('[data-hvy-dynamic-visibility="true"]');
+    const button = document.querySelector<HTMLElement>('[data-hvy-button="true"]');
+    return {
+      blockVisibleState: block?.dataset.visibleState,
+      buttonVisibleState: button?.dataset.visibleState,
+    };
+  });
+
+  expect(result).toEqual({
+    blockVisibleState: 'visible',
+    buttonVisibleState: 'hidden',
+  });
+});
+
+test('reader surface refresh can target only sidebar sections', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div id="readerSidebarSections">Old sidebar</div>
+      <div id="readerDocument">Old reader</div>
+    </div>`;
+    const { refreshReaderSurfaces } = await import(/* @vite-ignore */ '/src/reader/refresh-surfaces.ts');
+    const calls: string[] = [];
+    const refreshResult = refreshReaderSurfaces({
+      root: document.querySelector('#root')!,
+      sections: [],
+      refreshSidebar: true,
+      refreshReader: false,
+      readerRenderer: {
+        renderWarnings: () => '',
+        renderNavigation: () => '',
+        renderSidebarSections: () => {
+          calls.push('sidebar');
+          return 'New sidebar';
+        },
+        renderReaderSections: () => {
+          calls.push('reader');
+          return 'New reader';
+        },
+      },
+    });
+    return {
+      calls,
+      sidebarText: document.querySelector('#readerSidebarSections')?.textContent,
+      readerText: document.querySelector('#readerDocument')?.textContent,
+      refreshedSidebar: refreshResult.refreshedSidebar,
+      refreshedReader: refreshResult.refreshedReader,
+    };
+  });
+
+  expect(result).toEqual({
+    calls: ['sidebar'],
+    sidebarText: 'New sidebar',
+    readerText: 'Old reader',
+    refreshedSidebar: true,
+    refreshedReader: false,
+  });
 });
 
 test('embedded runtime lets hosts asynchronously rewrite rendered reader links', async ({ page }) => {
@@ -816,6 +929,138 @@ hvy_version: 0.1
   expect(result.previewHref).toBe('/preview-card');
   expect(result.previewText).toBe('Preview: Preview link');
   expect(result.previewLabel).toBe('Ready');
+});
+
+test('embedded plugin text renderer uses document link transforms', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:plugin {"plugin":"test.text-renderer"}-->
+  plugin body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      plugins: [{
+        id: 'test.text-renderer',
+        displayName: 'Text Renderer Test',
+        create(context) {
+          const element = document.createElement('div');
+          const rendered = context.text.renderText('Plugin [Expected Link](https://plugin.example/report)');
+          if (rendered) {
+            element.append(rendered);
+          }
+          return { element };
+        },
+      }],
+      async linkObserver(link) {
+        seen.push(`${link.href}:${link.text.trim()}:${link.attributes.target ?? ''}`);
+        await Promise.resolve();
+        return {
+          href: `/plugin-safe?url=${encodeURIComponent(link.href)}`,
+          attributes: { 'data-plugin-reviewed': 'true' },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const link = root.querySelector<HTMLAnchorElement>('.hvy-plugin-text-content a');
+    return {
+      seen,
+      href: link?.getAttribute('href') ?? '',
+      target: link?.getAttribute('target') ?? '',
+      rel: link?.getAttribute('rel') ?? '',
+      reviewed: link?.getAttribute('data-plugin-reviewed') ?? '',
+      textClass: root.querySelector('.hvy-plugin-text-content')?.className ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(['https://plugin.example/report:Expected Link:_blank']);
+  expect(result.href).toBe('/plugin-safe?url=https%3A%2F%2Fplugin.example%2Freport');
+  expect(result.target).toBe('_blank');
+  expect(result.rel).toBe('noopener noreferrer');
+  expect(result.reviewed).toBe('true');
+  expect(result.textClass).toContain('reader-block-text');
+});
+
+test('embedded plugin can observe links inserted after async rendering', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:plugin {"plugin":"test.async-text-renderer"}-->
+  plugin body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      plugins: [{
+        id: 'test.async-text-renderer',
+        displayName: 'Async Text Renderer Test',
+        create(context) {
+          const element = document.createElement('div');
+          element.className = 'async-plugin-host';
+          void Promise.resolve().then(() => {
+            const rendered = context.text.renderText('Async [Expected Link](https://async-plugin.example/report)');
+            if (rendered) {
+              element.append(rendered);
+              context.observeLinks(element);
+            }
+          });
+          return { element };
+        },
+      }],
+      async linkObserver(link) {
+        seen.push(`${link.href}:${link.text.trim()}`);
+        await Promise.resolve();
+        return {
+          href: `/async-safe?url=${encodeURIComponent(link.href)}`,
+          attributes: { 'data-async-reviewed': 'true' },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    const link = root.querySelector<HTMLAnchorElement>('.async-plugin-host a');
+    return {
+      seen,
+      href: link?.getAttribute('href') ?? '',
+      target: link?.getAttribute('target') ?? '',
+      reviewed: link?.getAttribute('data-async-reviewed') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(['https://async-plugin.example/report:Expected Link']);
+  expect(result.href).toBe('/async-safe?url=https%3A%2F%2Fasync-plugin.example%2Freport');
+  expect(result.target).toBe('_blank');
+  expect(result.reviewed).toBe('true');
 });
 
 test('embedded edit modes asynchronously rewrite rendered links', async ({ page }) => {
@@ -1206,6 +1451,7 @@ test('reference meta filter reloads the document with the filter snapshot applie
     });
   });
 
+  await page.locator('.meta-filter-options > summary').click();
   await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Semantic' }).click();
   await page.locator('.meta-filter-mode-group').getByRole('button', { name: 'Hide' }).click();
   await page.locator('#metaFilterQuery').fill('Programming languages');
@@ -1459,6 +1705,95 @@ hvy_version: 0.1
   expect(result.firstBg).not.toBe(result.secondBg);
 });
 
+test('embedded reader xref from remounted sidebar navigates to main target', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.documentElement.style.height = 'auto';
+    document.documentElement.style.overflowY = 'auto';
+    document.body.style.height = 'auto';
+    document.body.style.minHeight = '100%';
+    document.body.style.overflowY = 'auto';
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const encoder = new TextEncoder();
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const firstMount = mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ First mount.
+`), '.hvy'),
+    });
+    firstMount.destroy();
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(`---
+hvy_version: 0.1
+title: Sidebar Xref Repro
+---
+
+<!--hvy: {"id":"intro"}-->
+#! Intro
+
+ <!--hvy:text {}-->
+  # Intro
+
+<!--hvy: {"id":"spacer"}-->
+#! Spacer
+
+ <!--hvy:text {"css":"min-height: 1050px;"}-->
+  Tall section before the target.
+
+<!--hvy: {"id":"editor-mode"}-->
+#! Editor Mode
+
+ <!--hvy:text {}-->
+  # Editor Mode
+
+<!--hvy: {"id":"quick-reference","location":"sidebar"}-->
+#! Quick Reference
+
+ <!--hvy:expandable {"expandableExpanded":false}-->
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    Editing Modes
+  <!--hvy:expandable:content {}-->
+   <!--hvy:xref-card {"xrefTitle":"Editor Mode","xrefTarget":"editor-mode"}-->
+`), '.hvy'),
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.click();
+    root.querySelector<HTMLElement>('#readerSidebarSections [data-reader-action="toggle-expandable"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 40));
+    const target = root.querySelector<HTMLElement>('#readerDocument #editor-mode');
+    const beforeTop = target?.getBoundingClientRect().top ?? null;
+    root.querySelector<HTMLElement>('#readerSidebarSections .reader-xref-card[href="#editor-mode"]')?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 800));
+    return {
+      shellClassName: root.querySelector<HTMLElement>('.viewer-shell')?.className ?? '',
+      tabExpanded: root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.getAttribute('aria-expanded'),
+      beforeTop,
+      afterTop: target?.getBoundingClientRect().top ?? null,
+      highlighted: target?.classList.contains('is-temp-highlighted') ?? false,
+    };
+  });
+
+  expect(result.shellClassName).toContain('is-sidebar-closed');
+  expect(result.tabExpanded).toBe('false');
+  expect(result.highlighted).toBe(true);
+  expect(result.afterTop ?? Number.POSITIVE_INFINITY).toBeLessThan(result.beforeTop ?? 0);
+});
+
 test('embedded editor and viewer mounts coexist without sharing document state', async ({ page }) => {
   await page.goto('/');
 
@@ -1561,12 +1896,14 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('First Initial')), '.hvy'),
       mode: 'editor',
       storageKey: 'first-editor',
+      persistSessionState: true,
     });
     const secondMount = mountHvy({
       root: secondRoot,
       document: deserializeDocumentBytes(encoder.encode(makeSource('Second Initial')), '.hvy'),
       mode: 'editor',
       storageKey: 'second-editor',
+      persistSessionState: true,
     });
     firstMount.getDocument().sections[0]!.title = 'First Saved';
     secondMount.getDocument().sections[0]!.title = 'Second Saved';
@@ -1578,12 +1915,14 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('First Fresh')), '.hvy'),
       mode: 'editor',
       storageKey: 'first-editor',
+      persistSessionState: true,
     });
     const secondResumeMount = mountHvy({
       root: secondRoot,
       document: deserializeDocumentBytes(encoder.encode(makeSource('Second Fresh')), '.hvy'),
       mode: 'editor',
       storageKey: 'second-editor',
+      persistSessionState: true,
     });
     return {
       firstTitle: firstResumeMount.getDocument().sections[0]?.title,
@@ -1599,6 +1938,53 @@ hvy_version: 0.1
   expect(result.hasFirstStorage).toBe(true);
   expect(result.hasSecondStorage).toBe(true);
   expect(result.hasSharedStorage).toBe(false);
+});
+
+test('embedded editor storage key alone does not persist session state', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'explicit-opt-in',
+    });
+    mount.getDocument().sections[0]!.title = 'Saved Without Opt In';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    mount.destroy();
+    const remount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Editor')), '.hvy'),
+      mode: 'editor',
+      storageKey: 'explicit-opt-in',
+    });
+    return {
+      title: remount.getDocument().sections[0]?.title,
+      hasStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1:explicit-opt-in')),
+    };
+  });
+
+  expect(result.title).toBe('Fresh Editor');
+  expect(result.hasStorage).toBe(false);
 });
 
 test('embedded editor mounts do not persist session state without a storage key', async ({ page }) => {
@@ -1639,6 +2025,53 @@ hvy_version: 0.1
   expect(result.storageKeys).toEqual([]);
 });
 
+test('embedded editor can explicitly persist session state without a storage key', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const makeSource = (title: string) => `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! ${title}
+
+ ${title} body
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const encoder = new TextEncoder();
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
+      mode: 'editor',
+      persistSessionState: true,
+    });
+    mount.getDocument().sections[0]!.title = 'Default Bucket Saved';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    mount.destroy();
+    const remount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Editor')), '.hvy'),
+      mode: 'editor',
+      persistSessionState: true,
+    });
+    return {
+      title: remount.getDocument().sections[0]?.title,
+      hasDefaultStorage: Boolean(sessionStorage.getItem('hvy-editor-session-state-v1')),
+    };
+  });
+
+  expect(result.title).toBe('Default Bucket Saved');
+  expect(result.hasDefaultStorage).toBe(true);
+});
+
 test('embedded editor storage key does not override explicit viewer mode', async ({ page }) => {
   await page.goto('/');
 
@@ -1666,6 +2099,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('Initial Editor')), '.hvy'),
       mode: 'editor',
       storageKey: 'mode-isolation',
+      persistSessionState: true,
     });
     editorMount.getDocument().sections[0]!.title = 'Saved Document';
     window.dispatchEvent(new PageTransitionEvent('pagehide'));
@@ -1675,6 +2109,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(encoder.encode(makeSource('Fresh Viewer')), '.hvy'),
       mode: 'viewer',
       storageKey: 'mode-isolation',
+      persistSessionState: true,
     });
     return {
       hasViewer: Boolean(root.querySelector('#readerDocument')),
@@ -1718,6 +2153,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'editor',
       storageKey: 'rich-remount',
+      persistSessionState: true,
     });
   });
 
@@ -1746,6 +2182,7 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(testWindow.testHvySource), '.hvy'),
       mode: 'editor',
       storageKey: 'rich-remount',
+      persistSessionState: true,
     });
     return remount.getDocument().sections[0]?.blocks[0]?.text;
   });
@@ -1947,7 +2384,7 @@ test('guide internal links can navigate to the filtering section', async ({ page
       mode: 'viewer',
     });
   });
-  await expect(page.locator('#readerDocument')).toContainText('Introducing the HVY File Format');
+  await expect(page.locator('#readerDocument')).toContainText('HVY File Format');
   await page.evaluate(async () => {
     const modulePath = '/src/navigation.ts';
     const { navigateToReaderTarget } = await import(/* @vite-ignore */ modulePath);
@@ -1960,6 +2397,76 @@ test('guide internal links can navigate to the filtering section', async ({ page
 
   await expect(page.locator('#readerDocument #filtering')).toHaveCount(1);
   expect(navigationErrors).toEqual([]);
+});
+
+test('viewer navigation expansion refreshes reader panels without full app render', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="mount">
+      <div class="viewer-shell is-sidebar-closed">
+        <aside class="viewer-sidebar">
+          <button type="button" class="viewer-sidebar-tab" aria-expanded="false"></button>
+        </aside>
+        <div id="readerDocument"></div>
+        <div id="readerSidebarSections"></div>
+      </div>
+    </div>`;
+    const [{ deserializeDocumentBytes }, stateModule, { navigateToReaderTarget }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/navigation.ts'),
+    ]);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+<!--hvy: {"id":"side","location":"sidebar","expanded":false}-->
+#! Side
+
+ <!--hvy:text {"id":"sidebar-target"}-->
+  Target
+`;
+    const documentModel = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    stateModule.initState({
+      document: documentModel,
+      currentView: 'viewer',
+      viewerSidebarOpen: false,
+      readerExpandableState: {},
+      readerContainerState: {},
+    } as never);
+    let renderCount = 0;
+    const refreshOptions: Array<unknown> = [];
+    stateModule.initCallbacks({
+      renderApp: () => { renderCount += 1; },
+      refreshReaderPanels: (options?: unknown) => { refreshOptions.push(options ?? null); },
+      refreshModalPreview: () => {},
+      componentRenderHelpers: {},
+      readerRenderer: {},
+    });
+    const root = document.querySelector<HTMLElement>('#mount')!;
+    navigateToReaderTarget({ targetId: 'sidebar-target' }, root);
+    return {
+      renderCount,
+      refreshOptions,
+      viewerSidebarOpen: stateModule.state.viewerSidebarOpen,
+      sidebarExpanded: stateModule.state.document.sections[1]?.expanded,
+      shellClassName: root.querySelector<HTMLElement>('.viewer-shell')?.className,
+      tabExpanded: root.querySelector<HTMLElement>('.viewer-sidebar-tab')?.getAttribute('aria-expanded'),
+    };
+  });
+
+  expect(result).toEqual({
+    renderCount: 0,
+    refreshOptions: [{ runVisibilityScripts: false, surface: 'sidebar' }],
+    viewerSidebarOpen: true,
+    sidebarExpanded: true,
+    shellClassName: 'viewer-shell is-sidebar-open',
+    tabExpanded: 'true',
+  });
 });
 
 test('embedded viewer storage key does not persist stale document state', async ({ page }) => {
@@ -3612,6 +4119,31 @@ test('document ai context is editable metadata and keeps focus while typing', as
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('ai-context: Use top skills as featured skills.');
+});
+
+test('document description and tags are editable metadata and keep focus while typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const description = page.locator('[data-field="meta-description"]');
+  await description.fill('');
+  await description.type('Hosted preview summary.');
+
+  await expect(description).toBeFocused();
+  await expect(description).toHaveValue('Hosted preview summary.');
+
+  const tags = page.locator('[data-field="meta-tags"]');
+  await tags.fill('');
+  await tags.type('preview, hosted');
+
+  await expect(tags).toBeFocused();
+  await expect(tags).toHaveValue('preview, hosted');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('description: Hosted preview summary.');
+  await expect(page.locator('#rawEditor')).toContainText('tags: preview, hosted');
 });
 
 test('document ai import guidance is editable metadata and keeps focus while typing', async ({ page }) => {

@@ -17,6 +17,8 @@ declare module 'virtual:hvy-built-in-plugins' {
     scripting?: HvyPlugin;
     graph?: HvyPlugin;
     diagram?: HvyPlugin;
+    qrCode?: HvyPlugin;
+    video?: HvyPlugin;
   }>;
   export const builtInPluginById: Readonly<Record<string, HvyPlugin | undefined>>;
 }

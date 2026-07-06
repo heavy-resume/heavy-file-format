@@ -37,6 +37,7 @@ function createHelpers(): ComponentRenderHelpers {
     orderReaderBlocks: (blocks) => blocks,
     orderReaderListBlocks: (blocks) => blocks,
     isReaderViewPrioritizedBlock: () => false,
+    renderTextFragment: (content) => content,
     renderComponentFragment: (_componentName, content) => content,
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
@@ -118,6 +119,20 @@ test('table editor renders inline cell content without paragraph wrappers', () =
   expect(html).not.toContain('</p>');
   expect(html).toContain('Staff Engineer');
   expect(html).toContain('<!--hvy:alt {"compact":"Tech"}-->Technologies<!--/hvy:alt-->');
+});
+
+test('reader table renders inline cell content without paragraph wrappers', () => {
+  const helpers = {
+    ...createHelpers(),
+    renderTextFragment: (content: string) => `<p>${content}</p>\n`,
+    renderComponentFragment: (_componentName: string, content: string) => `<p>${content}</p>\n`,
+  };
+  const html = renderTableReader(section, createTableBlock([['Staff Engineer', 'Platform']]), helpers);
+
+  expect(html).not.toContain('<p>');
+  expect(html).not.toContain('</p>');
+  expect(html).toContain('<td title="Staff Engineer">Staff Engineer</td>');
+  expect(html).toContain('<td title="Platform">Platform</td>');
 });
 
 test('reader table header title uses alt full text instead of raw annotation', () => {

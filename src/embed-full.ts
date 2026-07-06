@@ -5,6 +5,7 @@ import 'highlight.js/styles/github.css';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import {
   activateStateRuntime,
   createStateRuntime,
@@ -13,10 +14,11 @@ import {
   initCallbacks,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
+  type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
 import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
+import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -86,9 +88,11 @@ import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { refreshReaderBlockDom } from './reader/block-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { bindLazyImageHydration } from './editor/components/image/image';
 import {
   buildImportPlanForDocument,
   importTextIntoDocument,
@@ -97,6 +101,7 @@ import {
   type ImportFromTextOptions,
   type ImportFromTextResult,
 } from './ai-document-edit';
+import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import {
   initDocumentChangeTracking,
   isDocumentDirty,
@@ -104,12 +109,17 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-presets';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
+import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
+import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -125,12 +135,15 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  pdfStylePresets?: HvyPdfStylePreset[] | null;
   storageKey?: string | null;
+  persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
+  encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -139,6 +152,10 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  exportDocumentSourceMarkdown(): string;
+  encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
+  encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
+  decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
   getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
@@ -167,10 +184,12 @@ const embedUiBindGenerations = new WeakMap<HTMLElement, number>();
 function createEmbedState(
   document: VisualDocument,
   mode: HvyEmbedMode,
+  persistSessionState: boolean,
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
-  attachmentHost?: HvyAttachmentHostAdapter | null
+  attachmentHost?: HvyAttachmentHostAdapter | null,
+  encryption?: HvyEncryptionOptions | null
 ): AppState {
   return {
     document,
@@ -180,9 +199,10 @@ function createEmbedState(
     editorMode: 'basic',
     responsivePreview: 'full',
     sessionStorageKey,
-    persistDocumentState: mode !== 'viewer',
+    persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -221,6 +241,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    captionTextModal: null,
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
@@ -243,6 +264,8 @@ function createEmbedState(
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -365,6 +388,8 @@ function ensureRenderers(): void {
       get descriptionPopulate() { return state.descriptionPopulate; },
       get openTextLineStyleName() { return state.openTextLineStyleName; },
       get paragraphStyleRecentNames() { return state.paragraphStyleRecentNames; },
+      get pdfStylePresets() { return state.pdfStylePresets; },
+      get pdfStylePresetId() { return state.pdfStylePresetId; },
     },
     {
       escapeAttr,
@@ -404,6 +429,7 @@ function ensureRenderers(): void {
       get aiEditorHostBlock() { return state.aiEditorHostBlock; },
       get aiEditorHostSectionKey() { return state.aiEditorHostSectionKey; },
       get modalSectionKey() { return state.modalSectionKey; },
+      get captionTextModal() { return state.captionTextModal; },
       get sqliteRowComponentModal() { return state.sqliteRowComponentModal; },
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return state.pdfTemplateImportModal; },
@@ -453,6 +479,7 @@ function ensureRenderers(): void {
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   void options;
   if (!currentRoot) return;
+  const startedAt = nowMs();
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
   const capturedScroll = captureRenderScroll(root, state.paneScroll);
@@ -530,17 +557,27 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
     </main>`;
   bindEmbedUi(root, runtime);
   reconcilePluginMounts(root);
+  syncTextToolbarLayout(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
     },
   });
+  bindLazyImageHydration(root);
   centerPendingEditorSection(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root));
+  logPerfTrace('renderApp', {
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    full: true,
+  });
 }
 
 function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
@@ -663,25 +700,94 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
   });
 }
 
-function refreshReaderPanels(): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
   const runtime = getActiveStateRuntime();
-  refreshReaderSurfaces({
+  const startedAt = nowMs();
+  let lazyMs = 0;
+  let afterRefreshMs = 0;
+  const surface = options.surface ?? 'all';
+  const surfaceRefresh = refreshReaderSurfaces({
     root: currentRoot,
     readerRenderer,
     sections: state.document.sections,
+    refreshSidebar: surface !== 'reader',
+    refreshReader: surface !== 'sidebar',
     capturePluginFocus,
     reconcilePluginMounts,
-    runButtonVisibilityScripts: (root) => runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root)),
+    runButtonVisibilityScripts: options.runVisibilityScripts === false
+      ? undefined
+      : (root) => runWithStateRuntime(runtime, () => runButtonVisibilityScripts(root)),
   });
+  const afterRefreshStartedAt = nowMs();
+  const lazyStartedAt = nowMs();
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
+      syncTextToolbarLayout(scope);
+      bindLazyImageHydration(scope);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
+      }
     },
   });
+  lazyMs = elapsedMs(lazyStartedAt);
+  bindLazyImageHydration(currentRoot);
+  syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
+  afterRefreshMs = elapsedMs(afterRefreshStartedAt);
+  logPerfTrace('refreshReaderPanels', {
+    elapsedMs: elapsedMs(startedAt),
+    warningsMs: Number(surfaceRefresh.warningsMs.toFixed(2)),
+    navMs: Number(surfaceRefresh.navMs.toFixed(2)),
+    sidebarRenderMs: surfaceRefresh.sidebarRenderMs,
+    sidebarDomMs: surfaceRefresh.sidebarDomMs,
+    sidebarPostMs: surfaceRefresh.sidebarPostMs,
+    readerRenderMs: surfaceRefresh.readerRenderMs,
+    readerDomMs: surfaceRefresh.readerDomMs,
+    readerPostMs: surfaceRefresh.readerPostMs,
+    readerMs: Number(surfaceRefresh.readerMs.toFixed(2)),
+    lazyMs,
+    afterRefreshMs,
+    currentView: state.currentView,
+    embedded: true,
+    full: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
+  });
+}
+
+function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const runtime = getActiveStateRuntime();
+  const startedAt = nowMs();
+  const refreshed = refreshReaderBlockDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    blockId,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  logPerfTrace('refreshReaderBlock', {
+    sectionKey,
+    blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    full: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
 }
 
 function setLinkObserver(observer: HvyLinkObserver | null): void {
@@ -771,15 +877,25 @@ function ensureEmbedRuntime(
       setThemeRoot(root);
       renderApp();
     }),
-    refreshReaderPanels: () => runWithStateRuntime(runtime, () => {
+    refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
-      refreshReaderPanels();
+      refreshReaderPanels(options);
+    }),
+    refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshReaderBlock(target, sectionKey, blockId, options);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshModalPreview();
+    }),
+    observeLinks: (target) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      observeRenderedLinks(target, currentLinkObserver);
     }),
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer,
@@ -791,18 +907,21 @@ function ensureEmbedRuntime(
 
 export function mountHvy(options: HvyMountOptions): HvyMount {
   hydrateHostAttachmentDescriptorsSync(options.document, options.attachmentStore ?? null);
-  const sessionStorageKey = options.storageKey ?? null;
+  const persistSessionState = options.persistSessionState === true;
+  const sessionStorageKey = persistSessionState ? options.storageKey : null;
   const initialState = createEmbedState(
     options.document,
     options.mode ?? 'viewer',
+    persistSessionState,
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
-    options.attachmentStore ?? null
+    options.attachmentStore ?? null,
+    options.encryption ?? null
   );
   const runtimeState = applyEmbeddedSessionState(
     initialState,
-    options.storageKey ? loadSessionState(options.storageKey) : null
+    persistSessionState ? loadSessionState(options.storageKey) : null
   );
   if (options.chatSettings) {
     runtimeState.chat.settings = {
@@ -813,13 +932,17 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
-  const sessionPersistence = options.storageKey ? bindSessionPersistence(runtime) : null;
+  const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
   setThemeRoot(options.root);
   currentLinkObserver = linkObserver;
   if ('paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
+  }
+  if ('pdfStylePresets' in options) {
+    state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
+    state.pdfStylePresetId = null;
   }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
@@ -834,6 +957,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
+  void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
@@ -856,10 +980,45 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return runWithStateRuntime(runtime, () => state.document);
     },
     serializeDocumentBytes() {
-      return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+      return runWithStateRuntime(runtime, () => {
+        if (state.document.encryption?.encrypted === true) {
+          throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+        }
+        return serializeDocumentBytes(state.document);
+      });
     },
     serializeDocumentBytesAsync() {
-      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null));
+      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
+    },
+    exportDocumentSourceMarkdown() {
+      return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
+    encryptDocumentAsync() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const generated = generateEncryptionKey();
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        rememberEncryptionKey(state.encryption, generated);
+        state.document.encryption = { algorithm: 'fernet', keyId: generated.keyId, encrypted: true };
+        return generated;
+      });
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+        return { keyId: result.keyId, key: result.key };
+      });
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await decryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+      });
     },
     getPdfBlob(pdfOptions) {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -959,16 +1118,22 @@ export {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  buildDocumentRichTextCopyPayload,
 };
+export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
+export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -1022,6 +1187,9 @@ export type {
 
 window.HVY = {
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
@@ -1033,6 +1201,7 @@ window.HVY = {
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
+  buildDocumentRichTextCopyPayload,
   mountHvy,
   mountHvyViewer,
   plugins: builtInPluginMap,

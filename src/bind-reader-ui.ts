@@ -3,18 +3,23 @@ import { bindChangeControls } from './bind/handlers/change-controls';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { bindInputMisc } from './bind/handlers/input-misc';
 import { bindKeydown } from './bind/handlers/keydown';
+import { bindScrollHandler } from './bind/handlers/scroll';
 import { bindSubmit } from './bind/handlers/submit';
 import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { getActiveStateRuntime, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
+import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
+const readerAppControlRuntimes = new WeakMap<HTMLElement, ReturnType<typeof getActiveStateRuntime>>();
 
 function bindReaderAppControls(app: HTMLElement): void {
+  readerAppControlRuntimes.set(app, getActiveStateRuntime());
   if (readerAppControlsBound.has(app)) {
     return;
   }
@@ -24,6 +29,7 @@ function bindReaderAppControls(app: HTMLElement): void {
   bindChangeControls(app);
   bindSubmit(app);
   bindKeydown(app);
+  bindScrollHandler(app);
 
   app.addEventListener('click', (event) => {
     if (!app.querySelector('#readerDocument')) {
@@ -35,7 +41,7 @@ function bindReaderAppControls(app: HTMLElement): void {
     if (!actionButton || !action) {
       return;
     }
-    const runtime = getActiveStateRuntime();
+    const runtime = readerAppControlRuntimes.get(app) ?? getActiveStateRuntime();
     event.preventDefault();
     event.stopImmediatePropagation();
     void import('./bind/app-actions/registry').then(({ appActionRegistry }) => {
@@ -57,6 +63,7 @@ export function bindReaderUi(app: HTMLElement): void {
   const readerDocuments = app.querySelectorAll<HTMLDivElement>('#readerDocument, #aiReaderDocument');
   const readerSidebarSections = app.querySelectorAll<HTMLDivElement>('#readerSidebarSections, #aiSidebarSections');
   const readerNav = app.querySelector<HTMLDivElement>('#readerNav');
+  bindResponsiveSidebarShells(app);
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
 
@@ -269,6 +276,7 @@ export function bindReaderUi(app: HTMLElement): void {
       }
       const expandableStateKey = `${sectionKey}:${blockId}`;
       const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+      const actionStartedAt = nowMs();
       logClickTrace(event, 'reader-area:handled:expandable-toggle:run', {
         sectionKey,
         blockId,
@@ -277,16 +285,57 @@ export function bindReaderUi(app: HTMLElement): void {
         storedExpanded: state.readerExpandableState[expandableStateKey] ?? null,
         schemaExpanded: block.schema.expandableExpanded,
       });
+      logPerfTrace('reader-expandable-toggle:start', {
+        sectionKey,
+        blockId,
+        expandableStateKey,
+        willCollapse,
+        currentView: state.currentView,
+      });
       if (willCollapse) {
         const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
         readerEl?.classList.add('is-collapsing');
+        logPerfTrace('reader-expandable-toggle:collapse-animation-started', {
+          sectionKey,
+          blockId,
+          elapsedMs: elapsedMs(actionStartedAt),
+          hasReaderElement: Boolean(readerEl),
+        });
         window.setTimeout(() => {
+          const refreshStartedAt = nowMs();
           state.readerExpandableState[expandableStateKey] = false;
-          getRefreshReaderPanels()();
+          logPerfTrace('reader-expandable-toggle:collapse-refresh:start', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
+          if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+            getRefreshReaderPanels()({ runVisibilityScripts: false });
+          }
+          logPerfTrace('reader-expandable-toggle:collapse-refresh:end', {
+            sectionKey,
+            blockId,
+            refreshMs: elapsedMs(refreshStartedAt),
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
         }, 160);
       } else {
         state.readerExpandableState[expandableStateKey] = true;
-        getRefreshReaderPanels()();
+        logPerfTrace('reader-expandable-toggle:expand-refresh:start', {
+          sectionKey,
+          blockId,
+          elapsedMs: elapsedMs(actionStartedAt),
+        });
+        const refreshStartedAt = nowMs();
+        if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: true })) {
+          getRefreshReaderPanels()();
+        }
+        logPerfTrace('reader-expandable-toggle:expand-refresh:end', {
+          sectionKey,
+          blockId,
+          refreshMs: elapsedMs(refreshStartedAt),
+          elapsedMs: elapsedMs(actionStartedAt),
+        });
         const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
         readerEl?.classList.add('is-expanding');
         window.setTimeout(() => {

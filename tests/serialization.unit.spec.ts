@@ -2,6 +2,8 @@ import { expect, test } from 'vitest';
 
 import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
+import { markdownToReaderHtml } from '../src/markdown';
+import { getTextLineStylesFromMeta } from '../src/text-line-styles';
 import {
   normalizeSerialized,
   registerSerializationTestState,
@@ -444,6 +446,30 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('preserves PHVY PDF page settings in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+pdf_page:
+  margins: [0.5in, 1in, 0.5in, 1in]
+  debug: true
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.phvy');
+
+  const output = serializeWithState(document);
+
+  expect(output).toContain('pdf_page:');
+  expect(output).toContain('margins:');
+  expect(output).toContain('- 0.5in');
+  expect(output).toContain('- 1in');
+  expect(output).toContain('debug: true');
+});
+
 test('serializes reusable section template block schemas without runtime-only component defaults', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -800,6 +826,35 @@ text_line_styles:
   expect(output).toContain('role:');
   expect(output).toContain('label: Role heading');
   expect(output).toContain('^role^ #### Foo');
+});
+
+test('renders serialized soft-wrapped text_line_styles as one styled paragraph after round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+text_line_styles:
+  detail-body:
+    label: Detail body
+    css: "margin-left: 0.5rem;"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ ^detail-body^ Planning, coordinating, and delivering cross-functional work with clear scope, ownership, timelines, risks, and decision points.
+`, '.hvy');
+
+  const output = serializeWithState(document);
+  const roundTripped = deserializeDocument(output, '.hvy');
+  const text = roundTripped.sections[0]?.blocks[0]?.text ?? '';
+  const html = markdownToReaderHtml(text, {
+    textLineStyles: getTextLineStylesFromMeta(roundTripped.meta),
+  });
+
+  expect(output).toContain('^detail-body^ Planning, coordinating, and delivering cross-functional work');
+  expect(output).toMatch(/\n\s+risks, and decision points\./);
+  expect(html.match(/data-hvy-text-line-style="detail-body"/g)).toHaveLength(1);
+  expect(html).not.toContain('</div><p>risks');
 });
 
 test('wrapHvyFragmentAsDocument includes optional front matter metadata', () => {
@@ -1195,9 +1250,10 @@ hvy_version: 0.1
 
 test('round-trips migrated example files without reintroducing slot-level component fields', async () => {
   const fs = await import('node:fs/promises');
-  const files: Array<[string, '.hvy' | '.thvy']> = [
+  const files: Array<[string, '.hvy' | '.thvy' | '.phvy']> = [
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
+    ['examples/pdf-template.phvy', '.phvy'],
     ['examples/example.hvy', '.hvy'],
     ['examples/study-tools.hvy', '.hvy'],
   ];
@@ -1230,9 +1286,10 @@ test('resume template uses fill-in heading text for the default name', async () 
 
 test('serialize -> deserialize -> serialize stays stable for migrated examples', async () => {
   const fs = await import('node:fs/promises');
-  const files: Array<[string, '.hvy' | '.thvy']> = [
+  const files: Array<[string, '.hvy' | '.thvy' | '.phvy']> = [
     ['examples/resume.hvy', '.hvy'],
     ['examples/resume.thvy', '.thvy'],
+    ['examples/pdf-template.phvy', '.phvy'],
     ['examples/example.hvy', '.hvy'],
     ['examples/study-tools.hvy', '.hvy'],
   ];
@@ -1258,20 +1315,41 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption","css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
   expect(block?.schema.component).toBe('image');
   expect(block?.schema.imageFile).toBe('hero.png');
   expect(block?.schema.imageAlt).toBe('Cover photo');
-  expect(block?.schema.caption).toBe('Hero caption');
+  expect(block?.schema.caption?.text).toBe('Hero caption');
+  expect(block?.schema.caption?.schema.align).toBe('center');
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
-  expect(output).toContain('"caption":"Hero caption"');
+  expect(output).toContain('"caption":{"text":"Hero caption"');
+});
+
+test('image component migrates string captions to styled caption payloads', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"cover"}-->
+#! Cover
+
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Hero caption"}-->
+`, '.hvy');
+
+  const block = document.sections[0]?.blocks[0];
+  expect(block?.schema.caption?.text).toBe('Hero caption');
+  expect(block?.schema.caption?.schema.align).toBe('center');
+
+  const output = serializeWithState(document);
+  expect(output).toContain('"caption":{"text":"Hero caption"');
+  expect(output).not.toContain('"caption":"Hero caption"');
 });
 
 test('serializes and parses multiple tail attachments with byte slicing', () => {

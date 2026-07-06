@@ -10,8 +10,10 @@ import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
+import type { ReaderPanelRefreshOptions } from './state';
 import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -44,9 +46,13 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
+import { refreshReaderBlockDom } from './reader/block-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
+import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
+import { normalizePdfStylePresets } from './pdf-style-presets';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -64,6 +70,8 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
+  { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
+  { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
@@ -146,6 +154,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    captionTextModal: null,
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
@@ -168,6 +177,8 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -470,6 +481,12 @@ editorRenderer = createEditorRenderer(
     get paragraphStyleRecentNames() {
       return state.paragraphStyleRecentNames;
     },
+    get pdfStylePresets() {
+      return state.pdfStylePresets;
+    },
+    get pdfStylePresetId() {
+      return state.pdfStylePresetId;
+    },
   },
   {
     escapeAttr,
@@ -534,6 +551,9 @@ readerRenderer = createReaderRenderer(
     },
     get modalSectionKey() {
       return state.modalSectionKey;
+    },
+    get captionTextModal() {
+      return state.captionTextModal;
     },
     get sqliteRowComponentModal() {
       return state.sqliteRowComponentModal;
@@ -806,6 +826,7 @@ function renderApp(): void {
   stepStartedAt = performance.now();
   bindUi(app);
   reconcilePluginMounts(app);
+  syncTextToolbarLayout(app);
   void runButtonVisibilityScripts(app);
   bindMs = performance.now() - stepStartedAt;
 
@@ -817,10 +838,13 @@ function renderApp(): void {
     root: app,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
       void runButtonVisibilityScripts(scope);
       initializeCarouselReaders(scope);
+      bindLazyImageHydration(scope);
     },
   });
+  bindLazyImageHydration(app);
   restoreMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -834,7 +858,7 @@ function renderApp(): void {
   scrollPendingEditorDeactivation(app);
   focusMs = performance.now() - stepStartedAt;
 
-  console.debug('[hvy:perf] renderApp', {
+  logPerfTrace('renderApp', {
     renderId,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
     captureMs: Number(captureMs.toFixed(2)),
@@ -860,7 +884,7 @@ function renderTopbar(): string {
     <header class="topbar">
       <div class="title-block">
         <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a></p>
+        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">
@@ -911,7 +935,7 @@ function renderResponsivePreviewControls(): string {
     { value: 'tablet', label: 'Tablet 768' },
     { value: 'desktop', label: 'Desktop' },
   ];
-  return `<div class="responsive-preview-controls" role="group" aria-label="Document preview width">
+  return `<div class="responsive-preview-controls compact-control-group" role="group" aria-label="Document preview width">
     ${options
       .map(
         (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
@@ -970,15 +994,9 @@ function renderMetaFilterControls(): string {
     : state.metaFilter.resultCount === null
     ? ''
     : `${state.metaFilter.resultCount} result${state.metaFilter.resultCount === 1 ? '' : 's'}`;
+  const modeLabel = state.search.filterQueryMode === 'semantic' ? 'Semantic' : 'Keyword';
+  const behaviorLabel = state.search.filterMode === 'hide' ? 'Hide' : 'Shade';
   return `<form id="metaFilterComposer" class="meta-filter-controls" aria-label="Meta filter current document">
-    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
-      ${renderMetaFilterModeButton('keyword', 'Keyword')}
-      ${renderMetaFilterModeButton('semantic', 'Semantic')}
-    </div>
-    <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
-      ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
-      ${renderMetaFilterBehaviorButton('hide', 'Hide')}
-    </div>
     <div class="meta-filter-input-shell">
       <input
         id="metaFilterQuery"
@@ -996,6 +1014,22 @@ function renderMetaFilterControls(): string {
         Clear
       </button>
     </div>
+    <details class="meta-filter-options">
+      <summary>
+        <span>Filter options</span>
+        <strong data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
+      </summary>
+      <div class="meta-filter-options-panel">
+        <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
+          ${renderMetaFilterModeButton('keyword', 'Keyword')}
+          ${renderMetaFilterModeButton('semantic', 'Semantic')}
+        </div>
+        <div class="meta-filter-mode-group" role="group" aria-label="Meta filter behavior">
+          ${renderMetaFilterBehaviorButton('deprioritize', 'Shade')}
+          ${renderMetaFilterBehaviorButton('hide', 'Hide')}
+        </div>
+      </div>
+    </details>
     ${status ? `<div class="meta-filter-status${state.metaFilter.error ? ' is-error' : ''}" role="status">${escapeHtml(status)}</div>` : ''}
   </form>`;
 }
@@ -1079,44 +1113,99 @@ function renderSidebarTabLabel(): string {
     : `<span class="sidebar-tab-label">${escapeHtml(label)}</span>`;
 }
 
-function refreshReaderPanels(): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   const refreshId = incrementRefreshReaderCount();
-  const startedAt = performance.now();
+  const startedAt = nowMs();
   let modalMs = 0;
+  let lazyMs = 0;
+  let afterRefreshMs = 0;
+  const surface = options.surface ?? 'all';
   const surfaceRefresh = refreshReaderSurfaces({
     root: app,
     readerRenderer,
     sections: state.document.sections,
     refreshNavigation: true,
+    refreshSidebar: surface !== 'reader',
+    refreshReader: surface !== 'sidebar',
     capturePluginFocus,
     reconcilePluginMounts,
-    runButtonVisibilityScripts,
+    runButtonVisibilityScripts: options.runVisibilityScripts === false ? undefined : runButtonVisibilityScripts,
   });
   if (surfaceRefresh.refreshedSidebar || surfaceRefresh.refreshedReader) {
+    const afterRefreshStartedAt = nowMs();
     scheduleReaderHighlightGlow(app);
     initializeCarouselReaders(app);
+    syncTextToolbarLayout(app);
+    const lazyStartedAt = nowMs();
     virtualizeRenderedSections({
       root: app,
       afterRestore: (scope) => {
         reconcilePluginMounts(scope, { prune: false });
-        void runButtonVisibilityScripts(scope);
+        syncTextToolbarLayout(scope);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(scope);
+        }
         initializeCarouselReaders(scope);
+        bindLazyImageHydration(scope);
       },
     });
+    lazyMs = elapsedMs(lazyStartedAt);
+    bindLazyImageHydration(app);
+    afterRefreshMs = elapsedMs(afterRefreshStartedAt);
   }
 
-  const modalStartedAt = performance.now();
+  const modalStartedAt = nowMs();
   refreshModalPreview();
   modalMs = performance.now() - modalStartedAt;
-  console.debug('[hvy:perf] refreshReaderPanels', {
+  logPerfTrace('refreshReaderPanels', {
     refreshId,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
     warningsMs: Number(surfaceRefresh.warningsMs.toFixed(2)),
     navMs: Number(surfaceRefresh.navMs.toFixed(2)),
+    sidebarRenderMs: surfaceRefresh.sidebarRenderMs,
+    sidebarDomMs: surfaceRefresh.sidebarDomMs,
+    sidebarPostMs: surfaceRefresh.sidebarPostMs,
+    readerRenderMs: surfaceRefresh.readerRenderMs,
+    readerDomMs: surfaceRefresh.readerDomMs,
+    readerPostMs: surfaceRefresh.readerPostMs,
     readerMs: Number(surfaceRefresh.readerMs.toFixed(2)),
+    lazyMs,
+    afterRefreshMs,
     modalMs: Number(modalMs.toFixed(2)),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
   });
   void runPluginDocumentHooks('unknown');
+}
+
+function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const startedAt = nowMs();
+  const refreshed = refreshReaderBlockDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    blockId,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element);
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  logPerfTrace('refreshReaderBlock', {
+    sectionKey,
+    blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
 }
 
 function refreshModalPreview(): void {
@@ -1208,7 +1297,9 @@ function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
 initCallbacks({
   renderApp,
   refreshReaderPanels,
+  refreshReaderBlock,
   refreshModalPreview,
+  observeLinks: () => {},
   componentRenderHelpers: localGetComponentRenderHelpers(),
   readerRenderer,
 });

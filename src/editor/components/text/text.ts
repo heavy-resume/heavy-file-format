@@ -7,6 +7,10 @@ const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
 export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const textLineStyles = helpers.getTextLineStyles?.() ?? {};
+  const codeLanguageInputAttrs = {
+    'data-section-key': sectionKey,
+    'data-block-id': block.id,
+  };
   const fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : [];
   const alignStyle = block.schema.align === 'left' ? '' : ` style="text-align: ${helpers.escapeAttr(block.schema.align)};"`;
   if (fillInParts.length > 1 && isFillInEditorMode(sectionKey, block.id)) {
@@ -23,7 +27,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
     const fillInSource = fillInParts
       .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
       .join('');
-    let html = helpers.markdownToEditorHtml(fillInSource);
+    let html = helpers.markdownToEditorHtml(fillInSource, codeLanguageInputAttrs);
     for (let index = 0; index < fillInParts.length - 1; index += 1) {
       html = html.replace(
         `${FILL_IN_RENDER_TOKEN_PREFIX}${index}`,
@@ -64,7 +68,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   }
   const editorHtml = fillInParts.length > 1
     ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
-    : helpers.markdownToEditorHtml(block.text);
+    : helpers.markdownToEditorHtml(block.text, codeLanguageInputAttrs);
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
   const fillInSelectionButton = mobileAdjustment
     ? ''
@@ -75,9 +79,12 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
         data-section-key="${helpers.escapeAttr(sectionKey)}"
         data-block-id="${helpers.escapeAttr(block.id)}"
       >Convert to Fill-in</button>`;
+  const richToolbar = mobileAdjustment
+    ? ''
+    : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles });
   return `
-    ${mobileAdjustment ? '' : helpers.renderRichToolbar(sectionKey, block.id, { includeAlign: true, includeFillIn: true, align: block.schema.align, currentMarkdown: block.text, textLineStyles })}
   <div class="text-editor-shell">
+    ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
     ${fillInSelectionButton}
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"
@@ -102,7 +109,10 @@ function renderRichTextWithFillIns(
   const fillInSource = fillInParts
     .map((part, index) => (index < fillInParts.length - 1 ? `${part}${FILL_IN_RENDER_TOKEN_PREFIX}${index}` : part))
     .join('');
-  let html = helpers.markdownToEditorHtml(fillInSource);
+  let html = helpers.markdownToEditorHtml(fillInSource, {
+    'data-section-key': sectionKey,
+    'data-block-id': block.id,
+  });
   for (let index = 0; index < fillInParts.length - 1; index += 1) {
     const placeholder = getTextFillInPlaceholder(block.text, index);
     html = html.replace(

@@ -7,6 +7,7 @@ import { deserializeDocumentWithDiagnostics, serializeBlockFragment, serializeSe
 import { findBlockContainerById, findSectionByKey, findSectionContainer, getSectionId, moveSectionRelative, moveSectionToSiblingIndex } from './section-ops';
 import { formatQueryResultTable } from './plugins/db-table-format';
 import { renderAltAnnotationsAsFullText } from './markdown';
+import { getTextCaptionMarkdown } from './caption';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { HostChatClient } from './chat/chat';
@@ -310,7 +311,7 @@ function getLocalRenderedComponentLines(block: VisualBlock): string[] {
     return [
       `Image: ${block.schema.imageFile || '(none)'}`,
       `Alt: ${block.schema.imageAlt || '(none)'}`,
-      `Caption: ${block.schema.caption || '(none)'}`,
+      `Caption: ${getTextCaptionMarkdown(block.schema.caption) || '(none)'}`,
     ];
   }
   if (component === 'carousel') {

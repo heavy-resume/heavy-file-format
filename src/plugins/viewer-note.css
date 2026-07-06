@@ -1,0 +1,26 @@
+.hvy-viewer-note {
+  display: block;
+  min-width: 0;
+}
+
+.hvy-viewer-note-frame {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.72rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 90%, var(--hvy-accent-1) 10%);
+}
+
+.hvy-viewer-note-heading {
+  margin: 0;
+  color: var(--hvy-muted-text);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hvy-viewer-note .hvy-plugin-text-editor {
+  background: var(--hvy-input-bg);
+}

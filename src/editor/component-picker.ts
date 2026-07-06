@@ -31,7 +31,7 @@ interface PickerGroup {
 export function renderAddComponentPicker(options: AddComponentPickerOptions, deps: RenderDeps): string {
   const visibleGroups = getPickerGroups(deps.getComponentDefs()).map((group) => ({
     ...group,
-    items: group.items.map((item) => withPickerItemAvailability(options, item)),
+    items: orderPickerItems(group.id, group.items.map((item) => withPickerItemAvailability(options, item))),
   }));
   const paneStyle = `--component-picker-groups: ${visibleGroups.length};`;
   const pasteTargetAttrs = renderPickerPasteTargetAttrs(options, deps);
@@ -57,6 +57,16 @@ export function renderAddComponentPicker(options: AddComponentPickerOptions, dep
       </div>
     </div>
   `;
+}
+
+function orderPickerItems(groupId: string, items: PickerItem[]): PickerItem[] {
+  if (groupId !== 'plugins') {
+    return items;
+  }
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => Number(Boolean(a.item.disabled)) - Number(Boolean(b.item.disabled)) || a.index - b.index)
+    .map((entry) => entry.item);
 }
 
 function renderPickerPasteTargetAttrs(options: AddComponentPickerOptions, deps: RenderDeps): string {

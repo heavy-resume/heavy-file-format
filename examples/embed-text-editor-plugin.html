@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HVY Embedded Plugin Text Editor</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f6f4ef;
+        color: #1f2522;
+      }
+
+      html,
+      body {
+        height: auto !important;
+        min-height: 100%;
+        overflow-y: auto !important;
+      }
+
+      body {
+        margin: 0;
+        overflow-x: hidden !important;
+      }
+
+      .example-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto auto auto;
+        gap: 0.85rem;
+        padding: 1rem;
+        box-sizing: border-box;
+      }
+
+      .example-topbar,
+      .example-footer {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+      }
+
+      .example-title {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .example-title h1 {
+        margin: 0;
+        font-size: 1.08rem;
+        line-height: 1.2;
+      }
+
+      .example-title span,
+      .example-footer {
+        color: #5a625c;
+        font-size: 0.82rem;
+      }
+
+      .example-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
+
+      .mode-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        padding: 0.16rem;
+        border: 1px solid #7a867e;
+        border-radius: 7px;
+        background: #ffffff;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+      }
+
+      .example-button {
+        border: 1px solid #7a867e;
+        border-radius: 7px;
+        background: #ffffff;
+        color: #1f2522;
+        padding: 0.44rem 0.68rem;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(31, 37, 34, 0.12);
+      }
+
+      .mode-button {
+        min-width: 4rem;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #38413b;
+        padding: 0.34rem 0.52rem;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .mode-button[aria-pressed="true"] {
+        background: #335f52;
+        color: #ffffff;
+        box-shadow: 0 1px 2px rgba(31, 37, 34, 0.2);
+      }
+
+      .example-button:hover {
+        background: #edf5f0;
+      }
+
+      .example-mounts {
+        width: min(1180px, 100%);
+        min-height: 0;
+        margin: 0 auto;
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .example-mount-panel {
+        display: grid;
+        grid-template-rows: auto auto;
+        min-height: 0;
+        gap: 0.45rem;
+      }
+
+      .example-mount-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+        color: #38413b;
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .example-mount-heading span {
+        color: #677069;
+        font-size: 0.76rem;
+        font-weight: 700;
+      }
+
+      .example-mount-frame {
+        width: min(1180px, 100%);
+        min-height: 0;
+        border: 1px solid #c7d0c8;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      #embedTextEditorMount {
+        height: min(760px, calc(100vh - 9.5rem));
+        min-height: 520px;
+      }
+
+      #lightweightTextEditorMount {
+        min-height: 360px;
+      }
+
+      .example-plugin-rich-note {
+        display: grid;
+        gap: 0.65rem;
+      }
+
+      .example-plugin-editor-frame {
+        display: grid;
+        gap: 0.8rem;
+        margin: 0.45rem 0;
+        padding: 0.9rem;
+        border: 1px solid var(--hvy-border);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-accent) 12%);
+      }
+
+      .example-plugin-editor-panel {
+        display: grid;
+        gap: 0.45rem;
+        min-width: 0;
+      }
+
+      .example-plugin-rich-note-label {
+        margin: 0;
+        color: var(--hvy-muted-text);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .example-plugin-editor-panel-title {
+        margin: 0;
+        color: var(--hvy-muted-text);
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .example-plugin-rich-note .hvy-plugin-text-editor {
+        background: var(--hvy-input-bg);
+      }
+
+      .example-disabled-text-placeholder .hvy-plugin-text-editor {
+        background: var(--hvy-input-bg);
+      }
+
+      .example-plugin-rich-note-placeholder {
+        margin: 0;
+        border: 1px dashed var(--hvy-border);
+        border-radius: 7px;
+        background: var(--hvy-surface);
+        color: var(--hvy-text-muted);
+        padding: 0.85rem;
+        font-size: 0.92rem;
+      }
+
+      .example-plugin-rendered-preview {
+        min-height: 2.8rem;
+        border: 1px solid var(--hvy-border-translucent);
+        border-radius: 7px;
+        background: var(--hvy-surface);
+        padding: 0.75rem;
+      }
+
+      .example-status {
+        min-width: 11rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 760px) {
+        .example-shell {
+          min-height: 100vh;
+          grid-template-rows: auto 1fr auto;
+        }
+
+        .example-topbar,
+        .example-footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .example-controls {
+          justify-content: flex-start;
+        }
+
+        #embedTextEditorMount {
+          height: 720px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="example-shell">
+      <header class="example-topbar">
+        <div class="example-title">
+          <h1>Embedded Plugin Text Editor</h1>
+          <span>Normal HVY text block and plugin-owned rich text helper in one isolated mount.</span>
+        </div>
+        <div class="example-controls">
+          <div class="mode-control" role="group" aria-label="Compare view mode">
+            <button type="button" class="mode-button" data-example-mode="editor" aria-pressed="true">Editor</button>
+            <button type="button" class="mode-button" data-example-mode="ai" aria-pressed="false">AI</button>
+            <button type="button" class="mode-button" data-example-mode="viewer" aria-pressed="false">Viewer</button>
+          </div>
+          <button type="button" class="example-button" id="resetExample">Reset</button>
+          <button type="button" class="example-button" id="serializeExample">Serialize</button>
+        </div>
+      </header>
+      <main class="example-mounts">
+        <section class="example-mount-panel">
+          <div class="example-mount-heading">
+            <strong>Full embed</strong>
+            <span>Editor, AI, and viewer modes</span>
+          </div>
+          <div class="example-mount-frame">
+            <div id="embedTextEditorMount"></div>
+          </div>
+        </section>
+        <section class="example-mount-panel">
+          <div class="example-mount-heading">
+            <strong>Lightweight embed</strong>
+            <span>Viewer mode using <code>/src/embed.ts</code></span>
+          </div>
+          <div class="example-mount-frame">
+            <div id="lightweightTextEditorMount"></div>
+          </div>
+        </section>
+      </main>
+      <footer class="example-footer">
+        <span>Plugin content is stored in the plugin text body with <code>ctx.setText</code>.</span>
+        <span class="example-status" id="exampleStatus">Ready.</span>
+      </footer>
+    </div>
+
+    <script type="module">
+      import { deserializeDocumentBytes, mountHvy, serializeDocument } from '/src/embed-full.ts';
+      import { deserializeDocumentBytes as deserializeLightweightDocumentBytes, mountHvy as mountLightweightHvy } from '/src/embed.ts';
+      import { viewerNotePlugin } from '/src/plugins/viewer-note.ts';
+
+      const source = `---
+hvy_version: 0.1
+title: Embedded Plugin Text Editor
+plugins:
+  - id: example.rich-note
+  - id: hvy.viewer-note
+  - id: example.disabled-text-placeholder
+---
+
+<!--hvy: {"id":"main"}-->
+#! Text Editor Comparison
+
+ <!--hvy:text {"id":"normal-text"}-->
+This is a normal HVY text component.
+
+Use the toolbar here, then compare it with the plugin editor below.
+
+ <!--hvy:plugin {"id":"plugin-rich-note","plugin":"example.rich-note"}-->
+
+ <!--hvy:plugin {"id":"plugin-viewer-note","plugin":"hvy.viewer-note"}-->
+This plugin text editor stays editable in Viewer mode.
+
+ <!--hvy:plugin {"id":"plugin-disabled-placeholder","plugin":"example.disabled-text-placeholder"}-->
+`;
+
+      const lightweightSource = `---
+hvy_version: 0.1
+title: Lightweight Plugin Text Editor
+plugins:
+  - id: hvy.viewer-note
+---
+
+<!--hvy: {"id":"main"}-->
+#! Lightweight Text Editor
+
+ <!--hvy:plugin {"id":"plugin-lightweight-viewer-note","plugin":"hvy.viewer-note"}-->
+This lightweight viewer note should show the text editor toolbar.
+`;
+
+      const encoder = new TextEncoder();
+      const status = document.querySelector('#exampleStatus');
+      const root = document.querySelector('#embedTextEditorMount');
+      const lightweightRoot = document.querySelector('#lightweightTextEditorMount');
+      const pluginPlaceholder = 'Write plugin-owned Markdown here. This body is stored with ctx.setText.';
+      let mode = 'editor';
+      let mount = null;
+      let lightweightMount = null;
+
+      const richNotePlugin = {
+        id: 'example.rich-note',
+        displayName: 'Plugin Rich Note',
+        create(ctx) {
+          const element = document.createElement('div');
+          element.className = 'example-plugin-rich-note example-rich-note-editor';
+
+          const label = document.createElement('p');
+          label.className = 'example-plugin-rich-note-label';
+          label.textContent = 'Plugin text editor';
+          const frame = document.createElement('div');
+          frame.className = 'example-plugin-editor-frame';
+
+          if (ctx.editor.mode !== 'edit') {
+            const content = ctx.block.text.trim().length > 0
+              ? ctx.text.renderText(ctx.block.text)
+              : null;
+            const placeholder = document.createElement('p');
+            placeholder.className = 'example-plugin-rich-note-placeholder';
+            placeholder.textContent = pluginPlaceholder;
+            frame.append(content ?? placeholder);
+            element.append(label, frame);
+            return { element };
+          }
+
+          let latestMarkdown = ctx.block.text;
+          const editablePanel = document.createElement('div');
+          editablePanel.className = 'example-plugin-editor-panel';
+          const editableTitle = document.createElement('p');
+          editableTitle.className = 'example-plugin-editor-panel-title';
+          editableTitle.textContent = 'Editable helper';
+
+          const editor = ctx.textEditor.mount({
+            value: latestMarkdown,
+            placeholder: pluginPlaceholder,
+            includeAlign: true,
+            onChange(markdown) {
+              latestMarkdown = markdown;
+              status.textContent = `Plugin text: ${markdown.length} chars`;
+              writePreview(markdown);
+              ctx.setText(markdown);
+            },
+          });
+          editablePanel.append(editableTitle, editor.element);
+
+          const previewPanel = document.createElement('div');
+          previewPanel.className = 'example-plugin-editor-panel';
+          const previewTitle = document.createElement('p');
+          previewTitle.className = 'example-plugin-editor-panel-title';
+          previewTitle.textContent = 'Rendered plugin text';
+          const preview = document.createElement('div');
+          preview.className = 'example-plugin-rendered-preview';
+          const writePreview = (markdown) => {
+            preview.replaceChildren(ctx.text.renderText(markdown) ?? (() => {
+              const placeholder = document.createElement('p');
+              placeholder.className = 'example-plugin-rich-note-placeholder';
+              placeholder.textContent = pluginPlaceholder;
+              return placeholder;
+            })());
+          };
+          writePreview(latestMarkdown);
+          previewPanel.append(previewTitle, preview);
+
+          frame.append(editablePanel, previewPanel);
+          element.append(label, frame);
+
+          return {
+            element,
+            refresh() {
+              latestMarkdown = ctx.block.text;
+              editor.setValue(latestMarkdown);
+              writePreview(latestMarkdown);
+            },
+            unmount() {
+              editor.unmount();
+            },
+          };
+        },
+      };
+
+      const disabledTextPlaceholderPlugin = {
+        id: 'example.disabled-text-placeholder',
+        displayName: 'Disabled Text Placeholder',
+        create(ctx) {
+          const element = document.createElement('div');
+          element.className = 'example-plugin-rich-note example-disabled-text-placeholder';
+          const label = document.createElement('p');
+          label.className = 'example-plugin-rich-note-label';
+          label.textContent = 'Disabled text editor placeholder';
+          const frame = document.createElement('div');
+          frame.className = 'example-plugin-editor-frame';
+
+          const disabledPanel = document.createElement('div');
+          disabledPanel.className = 'example-plugin-editor-panel';
+          const disabledTitle = document.createElement('p');
+          disabledTitle.className = 'example-plugin-editor-panel-title';
+          disabledTitle.textContent = 'Disabled helper';
+          const editor = ctx.textEditor.mount({
+            value: ctx.block.text,
+            placeholder: 'This text field is disabled until the document enters another state.',
+            includeAlign: true,
+            disabled: true,
+            onChange() {},
+          });
+          disabledPanel.append(disabledTitle, editor.element);
+          frame.append(disabledPanel);
+          element.append(label, frame);
+
+          return {
+            element,
+            refresh() {
+              editor.setValue(ctx.block.text);
+            },
+            unmount() {
+              editor.unmount();
+            },
+          };
+        },
+      };
+
+      function createDocument() {
+        return deserializeDocumentBytes(encoder.encode(source), '.hvy');
+      }
+
+      function createLightweightDocument() {
+        return deserializeLightweightDocumentBytes(encoder.encode(lightweightSource), '.hvy');
+      }
+
+      function setModeButtons() {
+        document.querySelectorAll('[data-example-mode]').forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.exampleMode === mode ? 'true' : 'false');
+        });
+      }
+
+      function mountExample(options = {}) {
+        const documentToMount = options.preserveCurrent && mount ? mount.getDocument() : createDocument();
+        mount?.destroy();
+        mount = mountHvy({
+          root,
+          document: documentToMount,
+          mode,
+          plugins: [richNotePlugin, viewerNotePlugin, disabledTextPlaceholderPlugin],
+          storageKey: 'embed-text-editor-plugin-example',
+          chatClient: {
+            async complete(request) {
+              return { output: `Example AI response for: ${String(request.context || '').slice(0, 160)}` };
+            },
+          },
+        });
+        lightweightMount?.destroy();
+        lightweightMount = mountLightweightHvy({
+          root: lightweightRoot,
+          document: createLightweightDocument(),
+          mode: 'viewer',
+          plugins: [viewerNotePlugin],
+        });
+        setModeButtons();
+        status.textContent = `Mounted ${mode}.`;
+      }
+
+      document.querySelectorAll('[data-example-mode]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextMode = button.dataset.exampleMode;
+          if (!nextMode || nextMode === mode) {
+            return;
+          }
+          mode = nextMode;
+          mountExample({ preserveCurrent: true });
+        });
+      });
+      document.querySelector('#resetExample').addEventListener('click', () => mountExample());
+      document.querySelector('#serializeExample').addEventListener('click', () => {
+        const serialized = serializeDocument(mount.getDocument());
+        status.textContent = `Serialized: ${serialized.length} chars`;
+      });
+
+      window.embedTextEditorExample = {
+        getDocument: () => mount.getDocument(),
+        getLightweightDocument: () => lightweightMount.getDocument(),
+        serialize: () => serializeDocument(mount.getDocument()),
+        reset: () => mountExample(),
+        setMode(nextMode) {
+          mode = nextMode;
+          mountExample({ preserveCurrent: true });
+        },
+      };
+
+      mountExample();
+    </script>
+  </body>
+</html>

@@ -40,6 +40,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
       data-section-key="${helpers.escapeAttr(sectionKey)}"
       data-block-id="${helpers.escapeAttr(block.id)}"
       data-field="block-xref-detail"
+      data-placeholder="Optional"
       ${hasTarget ? '' : 'aria-disabled="true"'}
     >${helpers.escapeHtml(detailOverride ? block.schema.xrefDetail : hasTarget ? getDisplayDetail(block, helpers) : '')}</span>
   </div>

@@ -37,6 +37,7 @@ export type BuiltinComponentName =
   | 'image'
   | 'carousel'
   | 'button'
+  | 'encrypted'
   | 'plugin'
   | 'xref-card';
 
@@ -124,7 +125,12 @@ export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
   imageFile: string;
   imageAlt: string;
-  caption: string;
+  caption: TextCaptionPayload | null;
+}
+
+export interface TextCaptionPayload {
+  text: string;
+  schema: TextBlockSchema;
 }
 
 export interface CarouselBlockSchema extends BaseBlockSchema {
@@ -151,6 +157,15 @@ export interface ButtonBlockSchema extends BaseBlockSchema {
   buttonCss: string;
 }
 
+export interface EncryptedBlockSchema extends BaseBlockSchema {
+  kind: 'encrypted';
+  keyId: string;
+  encryptedAttachmentId: string;
+  encryptedBlock: VisualBlock | null;
+  encryptedDirty: boolean;
+  encryptedError: string;
+}
+
 export interface PluginBlockSchema extends BaseBlockSchema {
   kind: 'plugin';
   plugin: string;
@@ -174,6 +189,7 @@ export type ComponentBlockSchema =
   | ImageBlockSchema
   | CarouselBlockSchema
   | ButtonBlockSchema
+  | EncryptedBlockSchema
   | PluginBlockSchema
   | XrefCardBlockSchema;
 
@@ -213,7 +229,7 @@ interface RuntimeSchemaFieldAccess {
   tableRows: TableRow[];
   imageFile: string;
   imageAlt: string;
-  caption: string;
+  caption: TextCaptionPayload | null;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;
@@ -230,6 +246,11 @@ interface RuntimeSchemaFieldAccess {
   buttonOutputCharLimit: number;
   buttonPositionTargetId: string;
   buttonCss: string;
+  keyId: string;
+  encryptedAttachmentId: string;
+  encryptedBlock: VisualBlock | null;
+  encryptedDirty: boolean;
+  encryptedError: string;
 }
 
 export type BlockSchema = ComponentBlockSchema & RuntimeSchemaFieldAccess;

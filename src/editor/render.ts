@@ -60,6 +60,8 @@ import { getSectionFilteredMoveAvailability, isHiddenEditorOnlySection } from '.
 import { getDefaultSectionContained } from '../document-factory';
 import type { JsonObject } from '../hvy/types';
 import { resolveImageAttachmentMaxDimensions } from '../image-attachments';
+import { PDF_DOCUMENT_PAGE_SIZE_OPTIONS, formatPdfPointsAsUnit, inferPdfPageMarginUnit, pdfPageLengthToPoints, readPdfPageMetaObject, resolvePdfPageDimensions, resolvePdfPageSettings, type PdfPageMarginUnit } from '../pdf-page-settings';
+import type { HvyPdfStylePreset } from '../pdf-style-presets';
 
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sh', bash);
@@ -111,6 +113,13 @@ function getDocumentSectionContainedDefault(documentMeta: JsonObject): boolean {
   return getDefaultSectionContained(documentMeta);
 }
 
+function formatDocumentMetaTags(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((tag) => (typeof tag === 'string' ? tag.trim() : '')).filter(Boolean).join(', ');
+  }
+  return typeof value === 'string' ? value : '';
+}
+
 interface ComponentListDisplayContext {
   sortKeys: string[];
   groupKeys: string[];
@@ -148,6 +157,8 @@ interface EditorRenderState {
   openTemplateDefinitionKeys: string[];
   openTextLineStyleName: string | null;
   paragraphStyleRecentNames: string[];
+  pdfStylePresets: HvyPdfStylePreset[];
+  pdfStylePresetId: string | null;
   descriptionPopulate?: {
     isRunning: boolean;
     status: string | null;
@@ -208,6 +219,7 @@ export interface EditorRenderer {
     }
   ) => string;
   renderMetaPanel: () => string;
+  renderTextFragment: (content: string) => string;
   renderComponentFragment: (componentName: string, content: string, block: VisualBlock, sectionKey?: string) => string;
   renderBlockMetaFields: (sectionKey: string, block: VisualBlock) => string;
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
@@ -254,8 +266,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       <div class="editor-sidebar-help-title">Contains</div>
       <ul>
         ${sidebarSections
-          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
-          .join('')}
+        .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+        .join('')}
       </ul>
     </div>`;
   }
@@ -280,9 +292,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         ${renderSurfaceHeadingStyles()}
         <div class="editor-tree-body"${bodyStyle}>
           ${state.showAdvancedEditor
-            ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
-            : ''
-          }
+        ? renderTemplateGhosts(getTemplateFields(state.documentMeta), flatSections, { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml })
+        : ''
+      }
           ${sectionCards}
           ${renderTopLevelSectionAddGhost('main')}
         </div>
@@ -344,12 +356,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       ? ''
       : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
                   ${renderComponentPicker({
-                    id: `section:${section.key}`,
-                    action: 'add-block',
-                    sectionKey: section.key,
-                    label: 'Section component type',
-                    ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
-                  })}
+        id: `section:${section.key}`,
+        action: 'add-block',
+        sectionKey: section.key,
+        label: 'Section component type',
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+      })}
               </div>`;
     return `
       <article class="editor-section-card${isSubsection ? ' editor-subsection-card' : ''}" data-hvy-virtual-section="editor" data-section-key="${deps.escapeAttr(section.key)}" data-editor-section="${deps.escapeAttr(section.key)}">
@@ -373,8 +385,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
             ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
             <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
-              section.key
-            )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
+        section.key
+      )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
           </div>
         </div>
 
@@ -448,11 +460,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const label = `${capitalizePlacementMode(mode)} (in ${formatPlacementContainerLabel(options.container)})`;
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
-    )}" data-placement-container="${options.container}" data-placement="${options.placement}"${
-      options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
-    }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${
-      options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
-    }>
+    )}" data-placement-container="${options.container}" data-placement="${options.placement}"${options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
+      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
+      }>
       <span>${deps.escapeHtml(label)}</span>
     </button>`;
   }
@@ -501,6 +511,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         if (item.block.id === targetBlockId || isDescendantActive(item.block, targetBlockId)) return true;
       }
     }
+    if (block.schema.encryptedBlock) {
+      return block.schema.encryptedBlock.id === targetBlockId || isDescendantActive(block.schema.encryptedBlock, targetBlockId);
+    }
     return false;
   }
 
@@ -515,6 +528,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isAiSectionEditBlock = isAiHostedSectionBlock(sectionKey, block);
     const isAiHostDescendant = isAiHostedBlockDescendant(sectionKey, block, rootSections ?? []);
     const isActive = isActiveFrame || isActiveDescendant || isAiSectionEditBlock || isAiHostDescendant;
+
+    if (block.schema.kind === 'encrypted' && block.schema.encryptedBlock && !isActive) {
+      return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
+    }
 
     if (!isActive) {
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
@@ -540,6 +557,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
+    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition
+      ? block.schema.kind === 'encrypted'
+        ? `<button type="button" class="ghost" data-action="decrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Decrypt</button>`
+        : `<button type="button" class="ghost" data-action="encrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
+      : '';
     const placementActions = canRemove
       ? isPlacementSource
         ? `<button type="button" class="secondary" data-action="cancel-component-placement" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Cancel place</button>`
@@ -586,7 +608,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
-            ${state.mobileAdjustmentMode ? '' : isActiveFrame ? placementActions : ''}
+            ${state.mobileAdjustmentMode ? '' : isActiveFrame ? `${encryptionAction}${placementActions}` : ''}
           </div>
         </div>
 
@@ -594,18 +616,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${contentEditor}
           ${anchorAttrs.overlay}
         </div>
-        ${
-          showActiveBlockDoneRow
-            ? `<div class="editor-block-done-row">
+        ${showActiveBlockDoneRow
+        ? `<div class="editor-block-done-row">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>
                 <button type="button" class="ghost editor-block-done-button" data-action="deactivate-block" data-section-key="${deps.escapeAttr(
-                  sectionKey
-                )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
+          sectionKey
+        )}" data-block-id="${deps.escapeAttr(block.id)}">Done</button>
               </div>`
-            : ''
-        }
+        : ''
+      }
       </div>
       ${insertBelowGhost}
     `;
@@ -642,16 +663,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
       <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
       ${renderComponentPicker({
-        id: `block:${block.id}:${placement}`,
-        action: 'add-block',
-        sectionKey,
-        label: `Insert component ${placement === 'before' ? 'above' : 'below'}`,
-        extraAttrs: {
-          'data-insert-placement': placement,
-          'data-target-block-id': block.id,
-        },
-        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
-      })}
+      id: `block:${block.id}:${placement}`,
+      action: 'add-block',
+      sectionKey,
+      label: `Insert component ${placement === 'before' ? 'above' : 'below'}`,
+      extraAttrs: {
+        'data-insert-placement': placement,
+        'data-target-block-id': block.id,
+      },
+      ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+    })}
     </div>`;
   }
 
@@ -665,6 +686,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
+    if (block.schema.kind === 'encrypted' && !block.schema.encryptedBlock && !state.showAdvancedEditor) {
+      return '';
+    }
     return `
       <div class="editor-block-passive hvy-link-observer-surface" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(
       block.id
@@ -707,9 +731,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const section = deps.findSectionByKey(rootSections, sectionKey);
     const buttons = componentId && section
       ? section.blocks.filter((candidate) =>
-          deps.resolveBaseComponent(candidate.schema.component) === 'button'
-          && candidate.schema.buttonPositionTargetId.trim() === componentId
-        )
+        deps.resolveBaseComponent(candidate.schema.component) === 'button'
+        && candidate.schema.buttonPositionTargetId.trim() === componentId
+      )
       : [];
     const componentAttr = componentId ? ` data-component-id="${deps.escapeAttr(componentId)}"` : '';
     if (buttons.length === 0) {
@@ -786,6 +810,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   ): string {
     const base = deps.resolveBaseComponent(block.schema.component);
 
+    if (base === 'encrypted') {
+      if (block.schema.encryptedBlock) {
+        return renderPassiveEditorBlock(sectionKey, block.schema.encryptedBlock, rootSections);
+      }
+      if (!state.showAdvancedEditor) {
+        return '';
+      }
+      return renderEncryptedComponentEditor(sectionKey, block);
+    }
+
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
       const body = renderPassiveContainerBlocks(sectionKey, block, rootSections);
@@ -821,14 +855,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const body = !hasStubContent && !hasExpandedContent
         ? `${stubToggle}${expandedPanel}`
         : expanded
-        ? alwaysShowStub && hasStubContent
-          ? `${stubToggle}${expandedPanel}`
-          : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
-            sectionKey
-          )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
-        : hasStubContent
-          ? stubToggle
-          : collapsedContentPreview;
+          ? alwaysShowStub && hasStubContent
+            ? `${stubToggle}${expandedPanel}`
+            : `${expandedPanel}<div class="expand-collapse-strip" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+              sectionKey
+            )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="true">Collapse</div>`
+          : hasStubContent
+            ? stubToggle
+            : collapsedContentPreview;
       const className = [
         'expandable-reader',
         'is-interactive',
@@ -860,8 +894,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         const existingContent = block.schema.componentListBlocks.length > 0
           ? state.currentView === 'ai'
             ? `<div class="reader-component-list">${block.schema.componentListBlocks
-                .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
-                .join('')}</div>`
+              .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
+              .join('')}</div>`
             : deps.renderReaderBlock(section, block)
           : '';
         return `${existingContent}<div class="ghost-section-card add-ghost component-list-add-ghost passive-empty-list-ghost"${actionAttr}>
@@ -880,12 +914,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
       const leadingPlacementTarget = state.componentPlacement && !block.schema.lock && block.schema.gridItems[0]
         ? renderComponentPlacementTarget({
-            container: 'grid',
-            sectionKey,
-            parentBlockId: block.id,
-            placement: 'before',
-            targetGridItemId: block.schema.gridItems[0].id,
-          })
+          container: 'grid',
+          sectionKey,
+          parentBlockId: block.id,
+          placement: 'before',
+          targetGridItemId: block.schema.gridItems[0].id,
+        })
         : '';
       const cells = block.schema.gridItems
         .map((item, index) => {
@@ -897,12 +931,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
-                container: 'grid',
-                sectionKey,
-                parentBlockId: block.id,
-                placement: 'after',
-                targetGridItemId: item.id,
-              })
+              container: 'grid',
+              sectionKey,
+              parentBlockId: block.id,
+              placement: 'after',
+              targetGridItemId: item.id,
+            })
             : '';
           return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
@@ -966,15 +1000,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const alignControls =
       options?.includeAlign && options.align
         ? `<div class="toolbar-segment align-buttons" role="group" aria-label="Text alignment">
-            <button type="button" class="icon-button${selectedClass(options.align === 'left')}" data-action="set-block-align" data-align-value="left" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align left" title="Align left"><span class="toolbar-icon align-left-icon" aria-hidden="true"></span></button>
-            <button type="button" class="icon-button${selectedClass(options.align === 'center')}" data-action="set-block-align" data-align-value="center" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align center" title="Align center"><span class="toolbar-icon align-center-icon" aria-hidden="true"></span></button>
-            <button type="button" class="icon-button${selectedClass(options.align === 'right')}" data-action="set-block-align" data-align-value="right" data-section-key="${deps.escapeAttr(
-          sectionKey
-        )}" data-block-id="${deps.escapeAttr(blockId)}" aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'left')}" data-action="set-block-align" data-align-value="left" ${richButtonAttrs} aria-label="Align left" title="Align left"><span class="toolbar-icon align-left-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'center')}" data-action="set-block-align" data-align-value="center" ${richButtonAttrs} aria-label="Align center" title="Align center"><span class="toolbar-icon align-center-icon" aria-hidden="true"></span></button>
+            <button type="button" class="icon-button${selectedClass(options.align === 'right')}" data-action="set-block-align" data-align-value="right" ${richButtonAttrs} aria-label="Align right" title="Align right"><span class="toolbar-icon align-right-icon" aria-hidden="true"></span></button>
           </div>`
         : '';
     const textLineStyles = options?.textLineStyles ?? {};
@@ -1162,6 +1190,60 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     ].filter(Boolean).join(' ');
     const imageAttachmentReductionButtonDisabled = imageAttachmentReductionStatus?.state === 'reducing' || imageAttachmentReductionComplete;
     const descriptionPopulate = state.descriptionPopulate ?? { isRunning: false, status: null, completed: 0, total: 0, current: '', skippedLeaves: 0, lastGenerated: '' };
+    const pdfPageMeta = readPdfPageMetaObject(state.documentMeta);
+    const rawPdfPageSettings = resolvePdfPageSettings(state.documentMeta);
+    const pdfPageSettings = resolvePdfPageDimensions(rawPdfPageSettings);
+    const pdfPageSizeValue = typeof rawPdfPageSettings.pageSize === 'string'
+      ? rawPdfPageSettings.pageSize.trim().toUpperCase()
+      : 'CUSTOM';
+    const pdfMargins = Array.isArray(pdfPageMeta.margins) ? pdfPageMeta.margins : [];
+    const pdfMarginUnit = inferPdfPageMarginUnit(pdfPageMeta.margins);
+    const pdfMarginValue = (index: number) => {
+      const value = pdfMargins[index];
+      const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
+      return points === null ? '' : formatPdfPointsAsUnit(points, pdfMarginUnit);
+    };
+    const pdfPresetControls = state.pdfStylePresets.length > 0
+      ? `<div class="meta-pdf-preset-picker">
+          <label>
+            <span>PDF Preset</span>
+            <select data-field="meta-pdf-style-preset">
+              ${renderPdfPresetOptions(state.pdfStylePresets, getActivePdfStylePresetId(state.pdfStylePresets))}
+            </select>
+          </label>
+          <button type="button" class="secondary" data-action="apply-pdf-style-preset">Apply</button>
+        </div>
+        ${renderPdfPresetDescription(state.pdfStylePresets, getActivePdfStylePresetId(state.pdfStylePresets))}`
+      : '';
+    const pdfPageControls = state.documentExtension === '.phvy'
+      ? `${pdfPresetControls}
+        <div class="meta-pdf-document-options">
+          <label class="meta-pdf-page-size-field">
+            <span>PDF Page Size</span>
+            <select data-field="meta-pdf-page-size">
+              ${renderPdfPageSizeOptions(pdfPageSizeValue)}
+            </select>
+          </label>
+        </div>
+        <div class="meta-pdf-page-grid">
+          <div class="meta-pdf-page-heading">
+            <span>PDF Margins</span>
+            ${renderPdfMarginUnitToggle(pdfMarginUnit)}
+          </div>
+          ${renderPdfMarginInput('Left', 'meta-pdf-margin-left', pdfPageSettings.pageMargins[0], pdfMarginValue(0), pdfMarginUnit)}
+          ${renderPdfMarginInput('Top', 'meta-pdf-margin-top', pdfPageSettings.pageMargins[1], pdfMarginValue(1), pdfMarginUnit)}
+          ${renderPdfMarginInput('Right', 'meta-pdf-margin-right', pdfPageSettings.pageMargins[2], pdfMarginValue(2), pdfMarginUnit)}
+          ${renderPdfMarginInput('Bottom', 'meta-pdf-margin-bottom', pdfPageSettings.pageMargins[3], pdfMarginValue(3), pdfMarginUnit)}
+        </div>
+        <label class="checkbox-label">
+          <span>PDF Debug Bounds</span>
+          <input
+            type="checkbox"
+            data-field="meta-pdf-debug"
+            ${pdfPageMeta.debug === true ? 'checked' : ''}
+          />
+        </label>`
+      : '';
     return `
       <section class="meta-panel">
         <div class="meta-panel-head">
@@ -1172,6 +1254,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <input data-field="meta-title" value="${deps.escapeAttr(String(state.documentMeta.title ?? ''))}" />
         </label>
         <label>
+          <span>Description</span>
+          <textarea
+            rows="3"
+            data-field="meta-description"
+            placeholder="Describe this document"
+          >${deps.escapeHtml(String(state.documentMeta.description ?? ''))}</textarea>
+        </label>
+        <label>
+          <span>Tags</span>
+          <input data-field="meta-tags" placeholder="Enter comma separated tags for this document" value="${deps.escapeAttr(formatDocumentMetaTags(state.documentMeta.tags))}" />
+        </label>
+        <label>
           <span>Sidebar Label</span>
           <input data-field="meta-sidebar-label" placeholder="☰" value="${deps.escapeAttr(String(state.documentMeta.sidebar_label ?? ''))}" />
         </label>
@@ -1179,6 +1273,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <span>Reader Max Width</span>
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
+        ${pdfPageControls}
         <div class="meta-image-reduction-row">
           <span>Reduce new image sizes to fit:</span>
           <input aria-label="Image reduce width" data-field="meta-image-attachment-max-width" type="number" min="1" max="16384" step="1" placeholder="${deps.escapeAttr(globalImageAttachmentMaxDimensions ? String(globalImageAttachmentMaxDimensions.width) : '')}" value="${deps.escapeAttr(String(imageAttachmentMaxDimensions.width ?? ''))}" />
@@ -1267,11 +1362,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${defs.length === 0
         ? '<div class="muted template-def-empty">No component templates</div>'
         : defs
-        .map(
-          (def, index) => {
-            const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-            const detailsKey = templateDefinitionDetailsKey('component', index);
-            return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
+          .map(
+            (def, index) => {
+              const flavors = Array.isArray(def.flavors) ? def.flavors : [];
+              const detailsKey = templateDefinitionDetailsKey('component', index);
+              return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
                 <summary class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
@@ -1294,33 +1389,32 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <label>
                     <span>Default Tags</span>
                     ${renderTagEditor(
-            'def-tags',
-            def.tags ?? '',
-            {
-              defIndex: index,
-              placeholder: 'Add a default tag',
-            },
-            { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-          )}
+                'def-tags',
+                def.tags ?? '',
+                {
+                  defIndex: index,
+                  placeholder: 'Add a default tag',
+                },
+                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+              )}
                   </label>
                   <label>
                     <span>Description</span>
                     <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
                   </label>
-                  ${
-                    deps.resolveBaseComponent(def.baseType) === 'xref-card'
-                      ? `<label>
+                  ${deps.resolveBaseComponent(def.baseType) === 'xref-card'
+                  ? `<label>
                     <span>Target Tag Filter</span>
                     <input data-field="def-xref-target-tag-filter" data-def-index="${index}" placeholder="tag-name" value="${deps.escapeAttr(def.template?.schema.xrefTargetTagFilter ?? def.schema?.xrefTargetTagFilter ?? '')}" />
                   </label>`
-                      : ''
-                  }
+                  : ''
+                }
                   <div class="meta-panel-head">
                     <strong>Flavors</strong>
                   </div>
                   ${flavors.length === 0
-                    ? '<div class="muted">No flavors. Import uses the main component template.</div>'
-                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
                     ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
                       <label>
                         <span>Flavor Name</span>
@@ -1335,9 +1429,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
               </details>`;
-          }
-        )
-        .join('')}
+            }
+          )
+          .join('')}
         </div>
         <div class="meta-panel-head">
           <strong>Section Templates</strong>
@@ -1374,8 +1468,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                           <strong>Flavors</strong>
                         </div>
                         ${flavors.length === 0
-                    ? '<div class="muted">No flavors. Import uses the main section template.</div>'
-                    : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
+                  ? '<div class="muted">No flavors. Import uses the main section template.</div>'
+                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
                         ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
                             <label>
                               <span>Flavor Name</span>
@@ -1397,6 +1491,49 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
       </section>
     `;
+  }
+
+  function renderPdfMarginUnitToggle(unit: PdfPageMarginUnit): string {
+    return `<div class="meta-pdf-unit-toggle" role="radiogroup" aria-label="PDF margin unit">
+      ${(['in', 'cm'] as PdfPageMarginUnit[]).map((option) => `
+        <label class="${unit === option ? 'is-active' : ''}">
+          <input type="radio" name="meta-pdf-margin-unit" data-field="meta-pdf-margin-unit" value="${option}" ${unit === option ? 'checked' : ''} />
+          <span>${option}</span>
+        </label>
+      `).join('')}
+    </div>`;
+  }
+
+  function renderPdfPageSizeOptions(value: string): string {
+    const normalized = (PDF_DOCUMENT_PAGE_SIZE_OPTIONS as readonly string[]).includes(value) ? value : 'CUSTOM';
+    const customOption = normalized === 'CUSTOM'
+      ? '<option value="CUSTOM" selected disabled>Custom</option>'
+      : '';
+    return `${customOption}${PDF_DOCUMENT_PAGE_SIZE_OPTIONS.map((option) => `<option value="${option}" ${normalized === option ? 'selected' : ''}>${option}</option>`).join('')}`;
+  }
+
+  function renderPdfMarginInput(label: string, field: string, placeholderPoints: number, value: string, unit: PdfPageMarginUnit): string {
+    return `<label class="meta-pdf-margin-field">
+      <span>${deps.escapeHtml(label)}</span>
+      <input aria-label="PDF ${deps.escapeAttr(label.toLowerCase())} margin in ${unit === 'cm' ? 'centimeters' : 'inches'}" data-field="${deps.escapeAttr(field)}" data-pdf-margin-unit="${unit}" type="number" min="0" max="${unit === 'cm' ? '10' : '4'}" step="0.05" placeholder="${deps.escapeAttr(formatPdfPointsAsUnit(placeholderPoints, unit))}" value="${deps.escapeAttr(value)}" />
+    </label>`;
+  }
+
+  function getActivePdfStylePresetId(presets: readonly HvyPdfStylePreset[]): string {
+    return presets.some((preset) => preset.id === state.pdfStylePresetId)
+      ? state.pdfStylePresetId ?? ''
+      : presets[0]?.id ?? '';
+  }
+
+  function renderPdfPresetOptions(presets: readonly HvyPdfStylePreset[], activeId: string): string {
+    return presets
+      .map((preset) => `<option value="${deps.escapeAttr(preset.id)}" ${preset.id === activeId ? 'selected' : ''}>${deps.escapeHtml(preset.label)}</option>`)
+      .join('');
+  }
+
+  function renderPdfPresetDescription(presets: readonly HvyPdfStylePreset[], activeId: string): string {
+    const description = presets.find((preset) => preset.id === activeId)?.description?.trim() ?? '';
+    return `<div class="meta-pdf-preset-description" data-pdf-preset-description>${deps.escapeHtml(description)}</div>`;
   }
 
   function renderTextLineStyleEditorRows(styles: TextLineStyles): string {
@@ -1525,6 +1662,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const component = deps.resolveBaseComponent(block.schema.component);
     const helpers = deps.getComponentRenderHelpers();
 
+    if (component === 'encrypted') {
+      return renderEncryptedComponentEditor(sectionKey, block);
+    }
     if (component === 'plugin') {
       return renderPluginEditor(sectionKey, block, helpers);
     }
@@ -1564,6 +1704,22 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderCarouselEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
+  }
+
+  function renderEncryptedComponentEditor(sectionKey: string, block: VisualBlock): string {
+    if (block.schema.encryptedBlock) {
+      return `<div class="encrypted-component-editor">
+        ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
+      </div>`;
+    }
+    const keyId = block.schema.keyId.trim() || '(missing)';
+    const attachmentId = block.schema.encryptedAttachmentId.trim() || `encrypted:${keyId}`;
+    return `<div class="plugin-placeholder encrypted-component-placeholder">
+      <strong>Encrypted component</strong>
+      <div>Key UUID: ${deps.escapeHtml(keyId)}</div>
+      <div>Attachment: ${deps.escapeHtml(attachmentId)}</div>
+      ${block.schema.encryptedError ? `<div>${deps.escapeHtml(block.schema.encryptedError)}</div>` : ''}
+    </div>`;
   }
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
@@ -1695,28 +1851,30 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.placeholder)}"
           />
         </label>
-        <label class="checkbox-label">
-          <span>Locked</span>
-          <input
-            type="checkbox"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-lock"
-            ${block.schema.lock ? 'checked' : ''}
-          />
-        </label>
+        <div class="block-meta-checkbox-row">
+          <label class="checkbox-label">
+            <span>Locked</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-lock"
+              ${block.schema.lock ? 'checked' : ''}
+            />
+          </label>
+          <label class="checkbox-label">
+            <span>Hidden</span>
+            <input
+              type="checkbox"
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-hide-if-yes"
+              ${block.schema.hideIfYes.trim().toLowerCase() === 'yes' ? 'checked' : ''}
+            />
+          </label>
+        </div>
         ${textMetaFields}
         ${gridMetaFields}
-        <label>
-          <span>Hide If Yes</span>
-          <input
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-hide-if-yes"
-            placeholder="yes"
-            value="${deps.escapeAttr(block.schema.hideIfYes)}"
-          />
-        </label>
         <label>
           <div>Visible When Function Body</div>
           <div>Controls when this block is visible. Returns boolean.</div>
@@ -1729,9 +1887,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           >${deps.escapeHtml(block.schema.visibleScript)}</textarea>
         </label>
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
-        ${
-          component === 'container'
-            ? `<label>
+        ${component === 'container'
+        ? `<label>
           <span>Preview Height (CSS units)</span>
           <input
             type="number"
@@ -1743,11 +1900,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(String(block.schema.containerCollapsedPreviewRem))}"
           />
         </label>`
-            : ''
-        }
-        ${
-          component === 'component-list'
-            ? `<label>
+        : ''
+      }
+        ${component === 'component-list'
+        ? `<label>
           <span>List Item Label</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1769,11 +1925,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(String(block.schema.componentListGroupCollapsedPreviewRem))}"
           />
         </label>`
-            : ''
-        }
-        ${
-          deps.resolveBaseComponent(component) === 'xref-card'
-            ? `<label>
+        : ''
+      }
+        ${deps.resolveBaseComponent(component) === 'xref-card'
+        ? `<label>
           <span>Target Tag Filter</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1783,14 +1938,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.xrefTargetTagFilter)}"
           />
         </label>`
-            : ''
-        }
+        : ''
+      }
         <label>
-          <span class="description-label-with-action">Description${
-            block.schema.description.trim()
-              ? ''
-              : ` <button type="button" class="ghost inline-generate-description" data-action="generate-block-description" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Generate</button>`
-          }</span>
+          <span class="description-label-with-action">Description${block.schema.description.trim()
+        ? ''
+        : ` <button type="button" class="ghost inline-generate-description" data-action="generate-block-description" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Generate</button>`
+      }</span>
           <textarea
             rows="3"
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -2082,6 +2236,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderBlockContentEditor: (sectionKey, block) => renderBlockContentEditor(sectionKey, block),
     renderRichToolbar,
     renderMetaPanel,
+    renderTextFragment,
     renderComponentFragment,
     renderBlockMetaFields,
     renderComponentPlacementTarget,

@@ -68,6 +68,63 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('image caption rich editor keeps italic and bold markers distinct', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:image {"id":"photo","imageFile":"","imageAlt":"","caption":{"text":"Caption text","schema":{"kind":"text","component":"text","align":"center"}}}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  await page.locator('.image-caption-edit-button', { hasText: 'Edit caption' }).click();
+
+  const captionEditor = page.locator('.caption-text-modal .rich-editor');
+  await expect(captionEditor).toBeVisible();
+  await captionEditor.locator('p').evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+
+  const captionModal = page.locator('.caption-text-modal');
+  await captionModal.getByRole('button', { name: 'Italic' }).click();
+  await expect(captionEditor.locator('em')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Italic' })).toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Bold' }).click();
+  await expect(captionEditor.locator('strong em, em strong')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Bold' })).toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Bold' }).click();
+  await expect(captionEditor.locator('strong')).toHaveCount(0);
+  await expect(captionEditor.locator('em')).toHaveText('Caption text');
+  await expect(captionModal.getByRole('button', { name: 'Bold' })).not.toHaveClass(/secondary/);
+
+  await captionModal.getByRole('button', { name: 'Underline' }).click();
+  await expect(captionEditor.locator('u em, em u')).toHaveText('Caption text');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  const rawEditor = page.locator('#rawEditor');
+  await expect(rawEditor).toContainText('___');
+  await expect(rawEditor).toContainText('_Caption text_');
+  await expect(rawEditor).not.toContainText('*****');
+  await expect(rawEditor).not.toContainText('**_Caption text_**');
+});
+
 test('active text editor wraps prose without widening the editor block', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Phone 390' }).click();
@@ -384,7 +441,18 @@ test('rich editor wraps long text without expanding its block', async ({ page })
   const widthAfter = await block.evaluate((node) => node.getBoundingClientRect().width);
 
   expect(widthAfter).toBeLessThanOrEqual(widthBefore + 1);
-  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'normal');
+  await expect.poll(async () =>
+    editor.evaluate((node) => {
+      const content = node.closest<HTMLElement>('.editor-block-content');
+      const tree = node.closest<HTMLElement>('.editor-tree');
+      return {
+        editorOverflow: node.scrollWidth - node.clientWidth,
+        contentOverflow: content ? content.scrollWidth - content.clientWidth : 0,
+        treeOverflow: tree ? tree.scrollWidth - tree.clientWidth : 0,
+      };
+    })
+  ).toEqual({ editorOverflow: 0, contentOverflow: 0, treeOverflow: 0 });
+  await expect(editor.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
 });
 
 test('inline code autoformats from backticks and escapes with arrow or click', async ({ page }) => {
@@ -667,13 +735,72 @@ test('external rich paste strips text background and font presentation', async (
 
   expect(expectedResult.prevented).toBe(true);
   expect(expectedResult.text).toContain('Before External Mark');
-  expect(expectedResult.html).toContain('font-weight: 700');
+  expect(expectedResult.html).toContain('<strong>External</strong>');
+  expect(expectedResult.html).not.toContain('<p><p>');
+  expect(expectedResult.html).not.toContain('font-weight: 700');
   expect(expectedResult.html).not.toContain('font-family');
   expect(expectedResult.html).not.toContain('font-size');
   expect(expectedResult.html).not.toContain('face=');
   expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
   expect(expectedResult.html).not.toContain('background-color');
   expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('external rich paste normalizes gmail media wrappers before insertion', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      `<div class="gmail_quote">
+        <div>To whom it may concern:</div>
+        <div><br></div>
+        <div><b>Thank you</b> for your time,</div>
+        <div style="height: 260px; min-height: 260px; background-color: rgb(64, 96, 128);">
+          <img src="data:image/png;base64,AAAA" width="1200" height="260">
+        </div>
+      </div>`
+    );
+    transfer.setData('text/plain', 'To whom it may concern:\n\nThank you for your time,');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult.prevented).toBe(true);
+  expect(expectedResult.text).toContain('Before To whom it may concern:');
+  expect(expectedResult.text).toContain('Thank you for your time,');
+  expect(expectedResult.html).toContain('<strong>Thank you</strong>');
+  expect(expectedResult.html).not.toContain('gmail_quote');
+  expect(expectedResult.html).not.toContain('height: 260px');
+  expect(expectedResult.html).not.toContain('min-height');
+  expect(expectedResult.html).not.toContain('background-color');
+  expect(expectedResult.html).not.toContain('<img');
 });
 
 test('undo after external rich paste restores text without duplicating pasted content', async ({ page }) => {
@@ -775,21 +902,119 @@ test('rich copy inside the document preserves HVY-origin color presentation on p
   expect(expectedResult.html).toContain('background-color: rgb(240, 240, 0)');
 });
 
-test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
+test('viewer copy omits inherited theme color and preserves explicit inline color', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const expectedResult = await page.locator('#readerDocument').evaluate((reader) => {
+    const shell = reader.closest<HTMLElement>('.viewer-shell')!;
+    shell.style.color = 'rgb(120, 120, 120)';
+    reader.innerHTML = `
+      <div class="reader-document-body">
+        <div class="reader-block reader-block-text">
+          <p id="inheritedCopySource">Inherited gray</p>
+          <p><span id="explicitCopySource" style="color: rgb(10, 20, 30);">Explicit color</span></p>
+        </div>
+      </div>
+    `;
+
+    const copyElement = (element: HTMLElement) => {
+      const selection = window.getSelection();
+      const selectedRange = document.createRange();
+      selectedRange.selectNodeContents(element);
+      selection?.removeAllRanges();
+      selection?.addRange(selectedRange);
+
+      const transfer = new DataTransfer();
+      const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+      reader.dispatchEvent(copyEvent);
+      return {
+        copyPrevented: copyEvent.defaultPrevented,
+        html: transfer.getData('text/html'),
+        plainText: transfer.getData('text/plain'),
+      };
+    };
+
+    return {
+      inherited: copyElement(reader.querySelector<HTMLElement>('#inheritedCopySource')!),
+      explicit: copyElement(reader.querySelector<HTMLElement>('#explicitCopySource')!),
+    };
+  });
+
+  expect(expectedResult.inherited.copyPrevented).toBe(true);
+  expect(expectedResult.inherited.plainText).toBe('Inherited gray');
+  expect(expectedResult.inherited.html).toContain('Inherited gray');
+  expect(expectedResult.inherited.html).not.toContain('rgb(120, 120, 120)');
+  expect(expectedResult.inherited.html).not.toContain('color:');
+  expect(expectedResult.explicit.copyPrevented).toBe(true);
+  expect(expectedResult.explicit.plainText).toBe('Explicit color');
+  expect(expectedResult.explicit.html).toContain('color: rgb(10, 20, 30)');
+});
+
+test('rich copy omits editor caret anchors from copied line', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
 
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        readText: async () => 'Plain <not bold>',
-      },
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>\u200bCopied line</p><p>Target </p>';
+
+    const before = {
+      sourceText: node.querySelector('p')?.textContent ?? '',
+    };
+
+    const source = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNodeContents(source);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    const target = node.querySelectorAll('p')[1]!;
+    const pasteRange = document.createRange();
+    pasteRange.selectNodeContents(target);
+    pasteRange.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(pasteRange);
+
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
     });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    const after = {
+      clipboardHtml: transfer.getData('text/html'),
+      clipboardText: transfer.getData('text/plain'),
+      pastePrevented: pasteEvent.defaultPrevented,
+      targetText: target.textContent ?? '',
+    };
+
+    return { before, after };
   });
-  await editor.evaluate((node) => {
+
+  expect(expectedResult.before.sourceText).toBe('\u200bCopied line');
+  expect(expectedResult.after.clipboardText).toBe('Copied line');
+  expect(expectedResult.after.clipboardHtml).not.toContain('\u200b');
+  expect(expectedResult.after.pastePrevented).toBe(true);
+  expect(expectedResult.after.targetText).toBe('Target Copied line');
+});
+
+test('native plain paste uses text instead of rich html', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
     node.innerHTML = '<p>Before </p>';
     const paragraph = node.querySelector('p')!;
     const selection = window.getSelection();
@@ -799,17 +1024,185 @@ test('cmd shift v pastes plain text instead of rich html', async ({ page }) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData('application/x-hvy-rich-html', '<strong>Rich clipboard payload</strong>');
+    transfer.setData('text/html', '<strong>Plain &lt;not bold&gt;</strong>');
+    transfer.setData('text/plain', 'Plain <not bold>');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPasteAsQuotation',
+    });
+    Object.defineProperty(pasteEvent, 'inputType', { value: 'insertFromPasteAsQuotation' });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
   });
-
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
-
-  const expectedResult = await editor.evaluate((node) => ({
-    html: node.innerHTML,
-    text: node.textContent,
-  }));
+  expect(expectedResult.pastePrevented).toBe(true);
   expect(expectedResult.text).toContain('Before Plain <not bold>');
   expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
   expect(expectedResult.html).not.toContain('<strong>');
+});
+
+test('cmd shift v pastes plain text without requesting clipboard read permission', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(`${error.name}: ${error.message}`));
+
+  await page.goto('/');
+  await page.evaluate(() => {
+    (window as typeof window & { __hvyUnhandledRejections?: string[] }).__hvyUnhandledRejections = [];
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event.reason;
+      (window as typeof window & { __hvyUnhandledRejections: string[] }).__hvyUnhandledRejections.push(
+        reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason)
+      );
+    });
+  });
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await page.evaluate(() => {
+    (window as typeof window & { __hvyClipboardReadTextCalls?: number }).__hvyClipboardReadTextCalls = 0;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: async () => {
+          (window as typeof window & { __hvyClipboardReadTextCalls: number }).__hvyClipboardReadTextCalls += 1;
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        },
+      },
+    });
+  });
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before</p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+V' : 'Control+Shift+V');
+  const expectedResult = await editor.evaluate((node) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/html', '<strong>Plain &lt;not bold&gt;</strong>');
+    transfer.setData('text/plain', 'Plain <not bold>');
+    const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', { value: transfer });
+    node.dispatchEvent(pasteEvent);
+    return {
+      html: node.innerHTML,
+      pastePrevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { __hvyClipboardReadTextCalls?: number }).__hvyClipboardReadTextCalls ?? 0
+  )).toBe(0);
+  await expect(page.locator('main.layout')).toHaveCount(1);
+  await expect(page.getByText('Startup Problem')).toHaveCount(0);
+  expect(expectedResult.pastePrevented).toBe(true);
+  expect(expectedResult.text).toContain('BeforePlain <not bold>');
+  expect(expectedResult.html).toContain('Plain &lt;not bold&gt;');
+  expect(expectedResult.html).not.toContain('<strong>');
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { __hvyUnhandledRejections?: string[] }).__hvyUnhandledRejections ?? []
+  )).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('cmd shift v beforeinput does not make the next normal paste plain', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p>Before </p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    (node as HTMLElement).dataset.hvyPlainPasteUntil = String(Date.now() + 2000);
+
+    const plainTransfer = new DataTransfer();
+    plainTransfer.setData('text/html', '<strong>Plain Alpha</strong>');
+    plainTransfer.setData('text/plain', 'Plain Alpha');
+    const plainPasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPasteAsQuotation',
+    });
+    Object.defineProperty(plainPasteEvent, 'inputType', { value: 'insertFromPasteAsQuotation' });
+    Object.defineProperty(plainPasteEvent, 'dataTransfer', { value: plainTransfer });
+    node.dispatchEvent(plainPasteEvent);
+
+    const richTransfer = new DataTransfer();
+    richTransfer.setData('text/html', '<strong>Bold Beta</strong>');
+    richTransfer.setData('text/plain', 'Bold Beta');
+    const richPasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(richPasteEvent, 'clipboardData', { value: richTransfer });
+    node.dispatchEvent(richPasteEvent);
+    let richBeforeInputPrevented = false;
+    if (!richPasteEvent.defaultPrevented) {
+      const richBeforeInputEvent = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertFromPaste',
+      });
+      Object.defineProperty(richBeforeInputEvent, 'dataTransfer', { value: richTransfer });
+      node.dispatchEvent(richBeforeInputEvent);
+      richBeforeInputPrevented = richBeforeInputEvent.defaultPrevented;
+    }
+
+    const secondRichTransfer = new DataTransfer();
+    secondRichTransfer.setData('text/html', '<strong>Bold Gamma</strong>');
+    secondRichTransfer.setData('text/plain', 'Bold Gamma');
+    const secondRichPasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(secondRichPasteEvent, 'dataTransfer', { value: secondRichTransfer });
+    node.dispatchEvent(secondRichPasteEvent);
+
+    return {
+      html: node.innerHTML,
+      plainPastePrevented: plainPasteEvent.defaultPrevented,
+      richPastePrevented: richPasteEvent.defaultPrevented,
+      richBeforeInputPrevented,
+      secondRichPastePrevented: secondRichPasteEvent.defaultPrevented,
+    };
+  });
+
+  expect(expectedResult.plainPastePrevented).toBe(true);
+  expect(expectedResult.richPastePrevented).toBe(false);
+  expect(expectedResult.richBeforeInputPrevented).toBe(true);
+  expect(expectedResult.secondRichPastePrevented).toBe(true);
+  expect(expectedResult.html).toContain('Plain Alpha');
+  expect(expectedResult.html).not.toContain('<strong>Plain Alpha</strong>');
+  expect(expectedResult.html).toContain('<strong>Bold Beta</strong>');
+  expect(expectedResult.html).toContain('<strong>Bold Gamma</strong>');
 });
 
 test('markdown editor auto-upgrades raw task markers', async ({ page }) => {

@@ -11,7 +11,7 @@ import { initCallbacks, initState, REUSABLE_SECTION_PREFIX, state } from '../src
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import type { VisualSection } from '../src/editor/types';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance } from '../src/pdf-document-capabilities';
-import { renderPdfDocumentViewerThemeStyle } from '../src/pdf-document-theme';
+import { getPdfDocumentPageGuideVariables, renderPdfDocumentViewerThemeStyle } from '../src/pdf-document-theme';
 import { setHostPlugins } from '../src/plugins/registry';
 import type { VisualDocument } from '../src/types';
 import { escapeHtml } from '../src/utils';
@@ -114,6 +114,45 @@ test('PHVY component picker enables plugins with PDF static render capability', 
   expect(pluginButton).not.toContain('disabled');
 });
 
+test('PHVY component picker lists PDF-supported plugins before unsupported plugins', () => {
+  const document = createPdfDocument();
+  setHostPlugins([
+    {
+      id: 'fake.unsupported',
+      displayName: 'Unsupported Plugin',
+      create: () => ({ element: globalThis.document.createElement('div') }),
+    },
+    {
+      id: 'fake.supported',
+      displayName: 'Supported Plugin',
+      create: () => ({ element: globalThis.document.createElement('div') }),
+      pdf: {
+        renderStatic: () => [],
+      },
+    },
+  ]);
+
+  const html = renderAddComponentPicker(
+    {
+      id: 'section:summary',
+      action: 'add-block',
+      sectionKey: 'section-summary',
+      componentFilter: (componentName, pluginId) => isPdfAllowedComponentInstance(componentName, document.meta, pluginId),
+      componentDisabledReason: (componentName, pluginId) =>
+        isPdfAllowedComponentInstance(componentName, document.meta, pluginId) ? null : 'Not supported in PHVY',
+    },
+    {
+      escapeAttr: escapeHtml,
+      escapeHtml,
+      getComponentDefs: () => document.meta.component_defs as never,
+    }
+  );
+
+  expect(html.indexOf('data-plugin-id="fake.supported"')).toBeLessThan(html.indexOf('data-plugin-id="fake.unsupported"'));
+  const unsupportedButton = html.match(/<button(?:(?!<button)[\s\S])*data-plugin-id="fake.unsupported"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+  expect(unsupportedButton).toContain('disabled');
+});
+
 test('PHVY editor rendering omits sidebar editor affordances', () => {
   const main = createSection('summary');
   const sidebar = createSection('notes', 'sidebar');
@@ -136,6 +175,8 @@ test('PHVY editor rendering omits sidebar editor affordances', () => {
     mobileAdjustmentMode: false,
     openTextLineStyleName: null,
     paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
   }, {
     escapeAttr: escapeHtml,
     escapeHtml,
@@ -164,6 +205,69 @@ test('PHVY editor rendering omits sidebar editor affordances', () => {
   expect(renderer.renderSidebarEditorSections([main, sidebar])).toBe('');
   expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
   expect(renderer.renderSectionEditorTree([main])).not.toContain('toggle-section-location');
+});
+
+test('PHVY meta panel exposes document PDF page options', () => {
+  const main = createSection('summary');
+  const renderer = createEditorRenderer({
+    documentExtension: '.phvy',
+    documentMeta: { pdf_page: { size: 'A4', margins: ['0.5in', '1in', '0.5in', '1in'], debug: true } },
+    documentSections: [main],
+    showAdvancedEditor: false,
+    addComponentBySection: {},
+    activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
+    componentPlacement: null,
+    pendingEditorActivation: null,
+    expandableEditorPanels: {},
+    readerExpandableState: {},
+    editorSidebarHelpDismissed: false,
+    currentView: 'editor',
+    responsivePreview: 'full',
+    mobileAdjustmentMode: false,
+    openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
+    pdfStylePresets: [
+      { id: 'plain', label: 'Plain', description: 'Neutral page settings.', documentMeta: { pdf_page: { margins: ['0.75in'] } } },
+      { id: 'compact', label: 'Compact', description: 'Tighter page settings.', documentMeta: { pdf_page: { margins: ['0.5in'] } } },
+    ],
+    pdfStylePresetId: 'compact',
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    renderReaderBlock: () => '',
+    renderReusableSectionOptions: () => '',
+    renderOption: () => '',
+    resolveBaseComponent: (componentName) => componentName,
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    isActiveEditorSectionTitle: () => false,
+    isActiveEditorBlock: () => false,
+    isDefaultUntitledSectionTitle: (title) => title === 'Untitled',
+    formatSectionTitle: (title) => title,
+    findSectionByKey: (sections, key) => sections.find((section) => section.key === key) ?? null,
+    buildSectionRenderSequence: () => [],
+    getComponentDefs: () => [],
+    getSectionDefs: () => [],
+    getThemeConfig: () => ({ colors: {} }),
+    getComponentRenderHelpers: () => ({} as ComponentRenderHelpers),
+    isBuiltinComponent: () => true,
+  });
+
+  const expectedResult = renderer.renderMetaPanel();
+
+  expect(expectedResult).toContain('data-field="meta-pdf-page-size"');
+  expect(expectedResult).toContain('<option value="compact" selected>Compact</option>');
+  expect(expectedResult).toContain('Tighter page settings.');
+  expect(expectedResult).not.toContain('Neutral page settings.');
+  expect(expectedResult).toContain('<option value="A4" selected>A4</option>');
+  expect(expectedResult).toContain('data-field="meta-pdf-margin-left"');
+  expect(expectedResult).toContain('data-field="meta-pdf-debug"');
+  expect(expectedResult).toContain('checked');
 });
 
 test('PHVY reader rendering omits sidebar surface affordances', () => {
@@ -221,6 +325,7 @@ test('PHVY reader rendering omits sidebar surface affordances', () => {
 
   expect(renderer.renderSidebarSections([main, sidebar])).toBe('');
   expect(renderer.renderSidebarHelpBalloon([main, sidebar])).toBe('');
+  expect(renderer.renderReaderSections([main])).toContain('class="phvy-page-guide-layer"');
 });
 
 test('PHVY viewer paper colors default to white and black', () => {
@@ -231,6 +336,107 @@ test('PHVY viewer paper colors default to white and black', () => {
   expect(expectedResult).toContain('--hvy-bg: #ffffff;');
   expect(expectedResult).toContain('--hvy-text: #000000;');
   expect(expectedResult).toContain('--hvy-surface: #ffffff;');
+  expect(expectedResult).toContain('--hvy-pdf-page-width: 612;');
+  expect(expectedResult).toContain('--hvy-pdf-page-height: 792;');
+  expect(expectedResult).toContain('--hvy-pdf-printable-width: 504;');
+  expect(expectedResult).toContain('--hvy-pdf-printable-height: 684;');
+  expect(expectedResult).toContain('--hvy-pdf-margin-left: 54;');
+});
+
+test('PHVY page guide variables use PDF printable dimensions', () => {
+  const document = createPdfDocument();
+
+  const expectedResult = getPdfDocumentPageGuideVariables(document);
+
+  expect(expectedResult).toMatchObject({
+    '--hvy-pdf-page-width': '612',
+    '--hvy-pdf-page-height': '792',
+    '--hvy-pdf-printable-width': '504',
+    '--hvy-pdf-printable-height': '684',
+    '--hvy-pdf-margin-left': '54',
+    '--hvy-pdf-margin-top': '54',
+    '--hvy-pdf-margin-right': '54',
+    '--hvy-pdf-margin-bottom': '54',
+  });
+});
+
+test('PHVY page guide variables use document PDF margins', () => {
+  const document = createPdfDocument();
+  document.meta.pdf_page = {
+    margins: ['0.5in', '1in', '0.5in', '1in'],
+    debug: true,
+  };
+
+  const expectedResult = getPdfDocumentPageGuideVariables(document);
+
+  expect(expectedResult).toMatchObject({
+    '--hvy-pdf-printable-width': '540',
+    '--hvy-pdf-printable-height': '648',
+    '--hvy-pdf-margin-left': '36',
+    '--hvy-pdf-margin-top': '72',
+    '--hvy-pdf-margin-right': '36',
+    '--hvy-pdf-margin-bottom': '72',
+  });
+});
+
+test('PHVY reader rendering enables PDF debug bounds from metadata', () => {
+  const main = createSection('summary');
+  const renderer = createReaderRenderer({
+    documentExtension: '.phvy',
+    documentMeta: { pdf_page: { margins: ['0.5in', '1in', '0.5in', '1in'], debug: true } },
+    documentSections: [main],
+    addComponentBySection: {},
+    tempHighlights: new Set<string>(),
+    aiEditTarget: { sectionKey: null, blockId: null },
+    modalSectionKey: null,
+    sqliteRowComponentModal: null,
+    dbTableQueryModal: null,
+    pdfTemplateImportModal: null,
+    reusableSaveModal: null,
+    reusableTemplateModal: null,
+    sectionTemplateFlavorModal: null,
+    componentMetaModal: null,
+    themeModalOpen: false,
+    themeModalMode: 'full',
+    paletteOverrideId: null,
+    theme: { colors: {} },
+    currentView: 'viewer',
+    showAdvancedEditor: false,
+    responsivePreview: 'full',
+    readerExpandableState: {},
+    readerContainerState: {},
+    readerView: {},
+    readerViewActivatedTargets: new Set<string>(),
+    search: createDefaultSearchState(),
+    componentListReaderViews: {},
+    viewerSidebarHelpDismissed: false,
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    findDuplicateSectionIds: () => [],
+    findSectionByKey: () => null,
+    findBlockByIds: () => null,
+    getSectionId: (section) => section.customId,
+    formatSectionTitle: (title) => title,
+    resolveBaseComponent: (componentName) => componentName,
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    getComponentRenderHelpers: () => ({} as ComponentRenderHelpers),
+    renderEditorBlock: () => '',
+    renderBlockContentEditor: () => '',
+    renderComponentOptions: () => '',
+    renderReusableSectionOptions: () => '',
+    getSectionDefs: () => [],
+    renderBlockMetaFields: () => '',
+  });
+
+  const expectedResult = renderer.renderReaderSections([main]);
+
+  expect(expectedResult).toContain('class="phvy-page-guide-layer is-debug"');
+  expect(expectedResult).toContain('--hvy-pdf-margin-left: 36;');
+  expect(expectedResult).toContain('--hvy-pdf-margin-top: 72;');
+  expect(expectedResult).toContain('--hvy-pdf-printable-height: 648;');
 });
 
 test('PHVY viewer paper colors use document theme overrides', () => {
@@ -302,6 +508,7 @@ test('PHVY AI reader rendering omits sidebar add ghost', () => {
   });
 
   expect(renderer.renderSidebarSections([sidebar])).not.toContain('Add Section');
+  expect(renderer.renderReaderSections([sidebar])).not.toContain('phvy-page-guide-layer');
 });
 
 test('PHVY add-block action rejects forged disallowed components and allows PDF components', () => {

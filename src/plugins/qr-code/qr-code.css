@@ -1,0 +1,191 @@
+.hvy-qr-code {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  color: var(--hvy-text);
+}
+
+.hvy-qr-code-editor {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.65rem;
+  border: 1px solid var(--hvy-border);
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
+}
+
+.hvy-qr-code-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.hvy-qr-code-toolbar .toolbar-segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.hvy-qr-code-toolbar button {
+  min-height: 2rem;
+}
+
+.hvy-qr-code-toolbar button.is-active,
+.hvy-qr-code-toolbar button[aria-pressed="true"] {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-bg) 28%, var(--hvy-surface) 72%);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px var(--hvy-focus-ring);
+}
+
+.hvy-qr-code-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.hvy-qr-code-fields {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.hvy-qr-code-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-qr-code-field input,
+.hvy-qr-code-field select,
+.hvy-qr-code-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  padding: 0.46rem 0.55rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.hvy-qr-code-field input,
+.hvy-qr-code-field select {
+  height: 2.35rem;
+}
+
+.hvy-qr-code-field select {
+  appearance: none;
+  padding-right: 2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--hvy-text-alt) 50%),
+    linear-gradient(135deg, var(--hvy-text-alt) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.95rem) 50%,
+    calc(100% - 0.65rem) 50%;
+  background-size: 0.34rem 0.34rem, 0.34rem 0.34rem;
+  background-repeat: no-repeat;
+}
+
+.hvy-qr-code-field textarea {
+  resize: vertical;
+}
+
+.hvy-qr-code-field input[type="color"] {
+  height: 2.35rem;
+  padding: 0.18rem;
+  cursor: pointer;
+}
+
+.hvy-qr-code-field input:focus,
+.hvy-qr-code-field select:focus,
+.hvy-qr-code-field textarea:focus {
+  outline: 2px solid var(--hvy-focus-ring);
+  outline-offset: 1px;
+  border-color: var(--hvy-focus-ring);
+}
+
+.hvy-qr-code-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.hvy-qr-code-style-grid .hvy-qr-code-field-wide {
+  grid-column: 1 / -1;
+}
+
+.hvy-qr-code-preview-panel {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 13rem;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border);
+  background:
+    linear-gradient(45deg, color-mix(in srgb, var(--hvy-border) 32%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--hvy-border) 32%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--hvy-border) 32%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--hvy-border) 32%, transparent) 75%);
+  background-color: var(--hvy-surface-alt);
+  background-position: 0 0, 0 0.5rem, 0.5rem -0.5rem, -0.5rem 0;
+  background-size: 1rem 1rem;
+}
+
+.hvy-qr-code-figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+}
+
+.hvy-qr-code-figure > div {
+  display: block;
+  line-height: 0;
+}
+
+.hvy-qr-code-figure .image-caption {
+  margin-top: 0.4rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.hvy-qr-code-preview svg,
+.hvy-qr-code-reader svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.hvy-qr-code-error,
+.hvy-qr-code-empty,
+.hvy-qr-code-loading {
+  padding: 0.75rem;
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border));
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  text-align: center;
+}
+
+.hvy-qr-code-error {
+  border-color: color-mix(in srgb, var(--hvy-danger) 55%, var(--hvy-border));
+  color: var(--hvy-danger);
+}
+
+@container hvy-surface (inline-size < 42rem) {
+  .hvy-qr-code-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hvy-qr-code-style-grid {
+    grid-template-columns: 1fr;
+  }
+}

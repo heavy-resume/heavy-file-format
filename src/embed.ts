@@ -13,10 +13,11 @@ import {
   state,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
+  type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
 import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
-import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
+import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
@@ -49,6 +50,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
+import { refreshReaderBlockDom } from './reader/block-refresh';
 import {
   initDocumentChangeTracking,
   isDocumentDirty,
@@ -59,6 +61,7 @@ import type { HvyPlugin } from './plugins/types';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import type { HvyPdfExportOptions } from './pdf-export/types';
+import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-presets';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
@@ -75,7 +78,7 @@ import type {
   ImportFromTextOptions,
   ImportFromTextResult,
 } from './ai-document-edit';
-import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
+import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
@@ -83,6 +86,13 @@ import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } f
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindLazyImageHydration } from './editor/components/image/image';
+import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
+import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
+import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
+import { exportDocumentSourceMarkdown } from './document-source-markdown';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -97,12 +107,15 @@ export interface HvyMountOptions {
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
   paletteId?: string | null;
+  pdfStylePresets?: HvyPdfStylePreset[] | null;
   storageKey?: string | null;
+  persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
+  encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
 }
 
@@ -111,6 +124,10 @@ export interface HvyMount {
   getDocument(): VisualDocument;
   serializeDocumentBytes(): Uint8Array;
   serializeDocumentBytesAsync(): Promise<Uint8Array>;
+  exportDocumentSourceMarkdown(): string;
+  encryptDocumentAsync(): Promise<HvyGeneratedEncryptionKey>;
+  encryptComponentAsync(sectionKey: string, blockId: string): Promise<HvyGeneratedEncryptionKey>;
+  decryptComponentAsync(sectionKey: string, blockId: string): Promise<void>;
   getPdfBlob(options?: HvyPdfExportOptions): Promise<Blob>;
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
@@ -185,7 +202,8 @@ function createEmbedState(
   showAdvancedEditor = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
-  attachmentHost?: HvyAttachmentHostAdapter | null
+  attachmentHost?: HvyAttachmentHostAdapter | null,
+  encryption?: HvyEncryptionOptions | null
 ): AppState {
   return {
     document,
@@ -198,6 +216,7 @@ function createEmbedState(
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -237,6 +256,7 @@ function createEmbedState(
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    captionTextModal: null,
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
@@ -259,6 +279,8 @@ function createEmbedState(
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
+    pdfStylePresets: normalizePdfStylePresets(null),
+    pdfStylePresetId: null,
     themeModalOpen: false,
     themeModalMode: 'full',
     paletteOverrideId: loadPaletteOverrideId(),
@@ -287,14 +309,84 @@ function localGetComponentRenderHelpers() {
   }
   return getComponentRenderHelpers(
     {
-      renderRichToolbar: () => '',
+      renderRichToolbar: renderLightweightRichToolbar,
       renderEditorBlock: () => '',
       renderPassiveEditorBlock: () => '',
+      renderTextFragment,
       renderComponentFragment,
       renderComponentPlacementTarget: () => '',
     },
     readerRenderer
   );
+}
+
+function renderLightweightRichToolbar(
+  sectionKey: string,
+  blockId: string,
+  options: {
+    field?: string;
+    gridItemId?: string;
+    rowIndex?: number;
+    includeAlign?: boolean;
+    includeFillIn?: boolean;
+    align?: 'left' | 'center' | 'right';
+    currentMarkdown?: string;
+  } = {}
+): string {
+  const fieldAttr = options.field ? ` data-rich-field="${escapeAttr(options.field)}"` : '';
+  const gridAttr = options.gridItemId ? ` data-grid-item-id="${escapeAttr(options.gridItemId)}"` : '';
+  const rowAttr = typeof options.rowIndex === 'number' ? ` data-row-index="${options.rowIndex}"` : '';
+  const richButtonAttrs = `${fieldAttr}${gridAttr}${rowAttr} data-section-key="${escapeAttr(sectionKey)}" data-block-id="${escapeAttr(blockId)}"`;
+  const blockStyle = getMarkdownBlockStyle(options.currentMarkdown ?? '');
+  const selectedClass = (selected: boolean) => (selected ? ' secondary is-selected' : ' ghost');
+  const hotkeyModifier = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
+  return `
+    <div class="rich-toolbar">
+      <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
+        <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-2')}" data-rich-action="heading-2" ${richButtonAttrs} title="Heading 2">H2</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-3')}" data-rich-action="heading-3" ${richButtonAttrs} title="Heading 3">H3</button>
+        <button type="button" class="${selectedClass(blockStyle === 'heading-4')}" data-rich-action="heading-4" ${richButtonAttrs} title="Heading 4">H4</button>
+      </div>
+      <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
+        <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (${hotkeyModifier}+B)"><strong>B</strong></button>
+        <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (${hotkeyModifier}+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline (${hotkeyModifier}+U)"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="strikethrough" ${richButtonAttrs} aria-label="Strikethrough" title="Strikethrough"><span class="toolbar-icon strikethrough-icon" aria-hidden="true">S</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'quote')}" data-rich-action="quote" ${richButtonAttrs} aria-label="Quote" title="Quote"><span class="toolbar-icon quote-icon" aria-hidden="true">“</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'code-block')}" data-rich-action="code-block" ${richButtonAttrs} aria-label="Code block" title="Code block"><span class="toolbar-icon code-icon" aria-hidden="true">&lt;/&gt;</span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'list')}" data-rich-action="list" ${richButtonAttrs} aria-label="List" title="Bullet List"><span class="toolbar-icon list-icon" aria-hidden="true"></span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'ordered-list')}" data-rich-action="ordered-list" ${richButtonAttrs} aria-label="Numbered List" title="Numbered List"><span class="toolbar-icon ordered-list-icon" aria-hidden="true"></span></button>
+        <button type="button" class="icon-button${selectedClass(blockStyle === 'checklist')}" data-rich-action="checklist" ${richButtonAttrs} aria-label="Checkbox" title="Checkbox"><span class="toolbar-icon checkbox-icon" aria-hidden="true">☑</span></button>
+        <button type="button" class="icon-button ghost" data-rich-action="link" ${richButtonAttrs} aria-label="Link" title="Link (${hotkeyModifier}+K)"><span class="toolbar-icon link-icon" aria-hidden="true"></span></button>
+      </div>
+    </div>
+  `;
+}
+
+function getMarkdownBlockStyle(markdown: string): string {
+  const firstLine = markdown.trimStart().split(/\r?\n/, 1)[0] ?? '';
+  const heading = firstLine.match(/^(#{1,4})\s+/);
+  if (heading) {
+    return `heading-${heading[1].length}`;
+  }
+  if (/^[-*]\s+\[[ xX]\]\s+/.test(firstLine)) {
+    return 'checklist';
+  }
+  if (/^[-*]\s+/.test(firstLine)) {
+    return 'list';
+  }
+  if (/^\d+\.\s+/.test(firstLine)) {
+    return 'ordered-list';
+  }
+  if (/^>\s+/.test(firstLine)) {
+    return 'quote';
+  }
+  if (/^```/.test(firstLine)) {
+    return 'code-block';
+  }
+  return 'paragraph';
 }
 
 function renderComponentFragment(componentName: string, content: string, block: { schema: { codeLanguage?: string; fillIn?: boolean } }): string {
@@ -303,8 +395,12 @@ function renderComponentFragment(componentName: string, content: string, block: 
     return `<pre class="code-reader"><code data-language="${escapeAttr(language)}">${escapeHtml(content)}</code></pre>`;
   }
   const source = componentName === 'text' && block.schema.fillIn ? removeTextFillInMarkers(content) : content;
-  const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(source));
-  return markdownToReaderHtml(normalized);
+  return renderTextFragment(source);
+}
+
+function renderTextFragment(content: string): string {
+  const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
+  return addExternalLinkTargets(markdownToReaderHtml(normalized));
 }
 
 function ensureReaderRenderer(): ReaderRenderer {
@@ -324,6 +420,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get aiEditorHostBlock() { return null; },
       get aiEditorHostSectionKey() { return null; },
       get modalSectionKey() { return null; },
+      get captionTextModal() { return null; },
       get sqliteRowComponentModal() { return state.sqliteRowComponentModal; },
       get dbTableQueryModal() { return state.dbTableQueryModal; },
       get pdfTemplateImportModal() { return null; },
@@ -389,6 +486,10 @@ function renderTransientNotice(): string {
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   void options;
   if (!currentRoot) return;
+  const startedAt = nowMs();
+  let renderHtmlMs = 0;
+  let domMs = 0;
+  let postMs = 0;
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
@@ -400,7 +501,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
   const pdfDocument = isPdfDocument(state.document);
   capturePluginFocus();
-  root.innerHTML = `
+  const renderHtmlStartedAt = nowMs();
+  const markup = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
       <section class="workspace-shell">
         <div class="reader-pane pane full-pane">
@@ -420,47 +522,157 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         </div>
       </section>
     </main>`;
+  renderHtmlMs = elapsedMs(renderHtmlStartedAt);
+  const domStartedAt = nowMs();
+  root.innerHTML = markup;
+  domMs = elapsedMs(domStartedAt);
+  const postStartedAt = nowMs();
   bindReaderUi(root);
   bindCarouselInteractions(root);
   reconcilePluginMounts(root);
+  syncTextToolbarLayout(root);
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
+      syncTextToolbarLayout(scope);
+      bindLazyImageHydration(scope);
       void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
     },
   });
+  bindLazyImageHydration(root);
+  syncTextToolbarLayout(root);
   observeRenderedLinks(root, currentLinkObserver);
   void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(root));
+  postMs = elapsedMs(postStartedAt);
+  logPerfTrace('renderApp', {
+    elapsedMs: elapsedMs(startedAt),
+    renderHtmlMs,
+    domMs,
+    postMs,
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+  });
 }
 
-function refreshReaderPanels(): void {
+function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
+  const startedAt = nowMs();
   const reader = currentRoot.querySelector<HTMLDivElement>('#readerDocument');
   const sidebarSections = currentRoot.querySelector<HTMLDivElement>('#readerSidebarSections');
+  const surface = options.surface ?? 'all';
+  let sidebarRenderMs = 0;
+  let sidebarDomMs = 0;
+  let sidebarPostMs = 0;
+  let readerRenderMs = 0;
+  let readerDomMs = 0;
+  let readerPostMs = 0;
+  let lazyMs = 0;
+  let afterRefreshMs = 0;
   capturePluginFocus();
-  if (sidebarSections) {
-    sidebarSections.innerHTML = renderer.renderSidebarSections(state.document.sections);
+  if (sidebarSections && surface !== 'reader') {
+    let phaseStartedAt = nowMs();
+    const sidebarHtml = renderer.renderSidebarSections(state.document.sections);
+    sidebarRenderMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
+    sidebarSections.innerHTML = sidebarHtml;
+    sidebarDomMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
     reconcilePluginMounts(sidebarSections);
-    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
+    syncTextToolbarLayout(sidebarSections);
+    if (options.runVisibilityScripts !== false) {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(sidebarSections));
+    }
+    sidebarPostMs = elapsedMs(phaseStartedAt);
   }
-  if (reader) {
-    reader.innerHTML = renderer.renderReaderSections(state.document.sections);
+  if (reader && surface !== 'sidebar') {
+    let phaseStartedAt = nowMs();
+    const readerHtml = renderer.renderReaderSections(state.document.sections);
+    readerRenderMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
+    reader.innerHTML = readerHtml;
+    readerDomMs = elapsedMs(phaseStartedAt);
+    phaseStartedAt = nowMs();
     reconcilePluginMounts(reader);
-    void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
+    syncTextToolbarLayout(reader);
+    if (options.runVisibilityScripts !== false) {
+      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(reader));
+    }
+    readerPostMs = elapsedMs(phaseStartedAt);
   }
+  const afterRefreshStartedAt = nowMs();
+  const lazyStartedAt = nowMs();
   virtualizeRenderedSections({
     root: currentRoot,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
-      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
+      syncTextToolbarLayout(scope);
+      bindLazyImageHydration(scope);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
+      }
     },
   });
+  lazyMs = elapsedMs(lazyStartedAt);
+  bindLazyImageHydration(currentRoot);
+  syncTextToolbarLayout(currentRoot);
   observeRenderedLinks(currentRoot, currentLinkObserver);
   bindCarouselInteractions(currentRoot);
+  afterRefreshMs = elapsedMs(afterRefreshStartedAt);
+  logPerfTrace('refreshReaderPanels', {
+    elapsedMs: elapsedMs(startedAt),
+    sidebarRenderMs,
+    sidebarDomMs,
+    sidebarPostMs,
+    readerRenderMs,
+    readerDomMs,
+    readerPostMs,
+    lazyMs,
+    afterRefreshMs,
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+    surface,
+  });
+}
+
+function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const runtime = getActiveStateRuntime();
+  const renderer = ensureReaderRenderer();
+  const startedAt = nowMs();
+  const refreshed = refreshReaderBlockDom({
+    root,
+    readerRenderer: renderer,
+    sections: state.document.sections,
+    sectionKey,
+    blockId,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      bindCarouselInteractions(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  logPerfTrace('refreshReaderBlock', {
+    sectionKey,
+    blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
 }
 
 function refreshModalPreview(): void {}
@@ -504,15 +716,25 @@ function ensureEmbedRuntime(
       setThemeRoot(root);
       renderApp();
     }),
-    refreshReaderPanels: () => runWithStateRuntime(runtime, () => {
+    refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
-      refreshReaderPanels();
+      refreshReaderPanels(options);
+    }),
+    refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshReaderBlock(target, sectionKey, blockId, options);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshModalPreview();
+    }),
+    observeLinks: (target) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      observeRenderedLinks(target, currentLinkObserver);
     }),
     componentRenderHelpers: localGetComponentRenderHelpers(),
     readerRenderer: renderer,
@@ -593,10 +815,25 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
       return mounted?.getDocument() ?? options.document;
     },
     serializeDocumentBytes() {
+      if (!mounted && options.document.encryption?.encrypted === true) {
+        throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+      }
       return mounted?.serializeDocumentBytes() ?? serializeDocumentBytes(options.document);
     },
     serializeDocumentBytesAsync() {
-      return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null);
+      return mounted?.serializeDocumentBytesAsync() ?? serializeMountedDocumentBytesAsync(options.document, options.attachmentStore ?? null, options.serializer ?? null, options.encryption ?? null);
+    },
+    exportDocumentSourceMarkdown() {
+      return mounted?.exportDocumentSourceMarkdown() ?? exportDocumentSourceMarkdown(options.document);
+    },
+    encryptDocumentAsync() {
+      return ready.then((mount) => mount.encryptDocumentAsync());
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return ready.then((mount) => mount.encryptComponentAsync(sectionKey, blockId));
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return ready.then((mount) => mount.decryptComponentAsync(sectionKey, blockId));
     },
     getPdfBlob(pdfOptions) {
       return ready.then((mount) => mount.getPdfBlob(pdfOptions));
@@ -710,8 +947,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.document,
     options.showAdvancedEditor ?? false,
     options.imageAttachmentMaxDimensions,
-    options.storageKey ?? null,
-    options.attachmentStore ?? null
+    options.persistSessionState === true ? options.storageKey : null,
+    options.attachmentStore ?? null,
+    options.encryption ?? null
   ));
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
@@ -726,14 +964,19 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('paletteId' in options) {
     state.paletteOverrideId = options.paletteId && getPaletteById(options.paletteId) ? options.paletteId : null;
   }
+  if ('pdfStylePresets' in options) {
+    state.pdfStylePresets = normalizePdfStylePresets(options.pdfStylePresets ?? null);
+    state.pdfStylePresetId = null;
+  }
   if ('searchSnapshot' in options) {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   bindRuntimeActivation(options.root, runtime);
-  ensureEmbedRuntime(options.plugins ?? [], runtime, options.root, () => linkObserver);
+  ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
   initDocumentChangeTracking(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
+  void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
@@ -753,10 +996,45 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return runWithStateRuntime(runtime, () => state.document);
     },
     serializeDocumentBytes() {
-      return runWithStateRuntime(runtime, () => serializeDocumentBytes(state.document));
+      return runWithStateRuntime(runtime, () => {
+        if (state.document.encryption?.encrypted === true) {
+          throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
+        }
+        return serializeDocumentBytes(state.document);
+      });
     },
     serializeDocumentBytesAsync() {
-      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null));
+      return runWithStateRuntimeAsync(runtime, () => serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null));
+    },
+    exportDocumentSourceMarkdown() {
+      return runWithStateRuntime(runtime, () => exportDocumentSourceMarkdown(state.document));
+    },
+    encryptDocumentAsync() {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        const generated = generateEncryptionKey();
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        rememberEncryptionKey(state.encryption ?? null, generated);
+        state.document.encryption = { algorithm: 'fernet', keyId: generated.keyId, encrypted: true };
+        return generated;
+      });
+    },
+    encryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        if (!state.encryption) {
+          state.encryption = { keyring: {} };
+        }
+        const result = await encryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+        return { keyId: result.keyId, key: result.key };
+      });
+    },
+    decryptComponentAsync(sectionKey, blockId) {
+      return runWithStateRuntimeAsync(runtime, async () => {
+        await decryptComponentInDocument(state.document, sectionKey, blockId, state.encryption ?? null);
+        runtime.callbacks.renderApp();
+      });
     },
     getPdfBlob(pdfOptions) {
       return runWithStateRuntimeAsync(runtime, async () => {
@@ -824,7 +1102,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,
+          encryption: state.encryption,
           storageKey: state.sessionStorageKey,
+          persistSessionState: options.persistSessionState,
           onDocumentChange: options.onDocumentChange,
         });
         fullMount.openThemeEditor(themeOptions);
@@ -839,7 +1119,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,
+          encryption: state.encryption,
           storageKey: state.sessionStorageKey,
+          persistSessionState: options.persistSessionState,
           onDocumentChange: options.onDocumentChange,
         });
         fullMount.mountThemeEditor(root, themeOptions);
@@ -861,16 +1143,22 @@ export {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  buildDocumentRichTextCopyPayload,
 };
+export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
+export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';
 export type { HvyLinkObserver, HvyLinkObserverRequest, HvyLinkObserverResponse } from './link-observer';
 export type { HvyDocumentFilterSnapshotRequest } from './search/document-filter';
 export type {
@@ -926,6 +1214,9 @@ declare global {
   interface Window {
     HVY?: {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
+      deserializeDocumentBytesAsync: typeof deserializeDocumentBytesAsync;
+      encryptDocumentBytes: typeof encryptDocumentBytes;
+      exportDocumentSourceMarkdown: typeof exportDocumentSourceMarkdown;
       serializeDocument: typeof serializeDocument;
       serializeDocumentBytes: typeof serializeDocumentBytes;
       serializeDocumentBytesAsync: typeof serializeDocumentBytesAsync;
@@ -933,6 +1224,7 @@ declare global {
       createPdfExportPlan: typeof createPdfExportPlan;
       createPdfExportPlanFromPrompt: typeof createPdfExportPlanFromPrompt;
       searchDocuments: typeof searchDocuments;
+      buildDocumentRichTextCopyPayload: typeof buildDocumentRichTextCopyPayload;
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
@@ -948,6 +1240,9 @@ declare global {
 
 window.HVY = {
   deserializeDocumentBytes,
+  deserializeDocumentBytesAsync,
+  encryptDocumentBytes,
+  exportDocumentSourceMarkdown,
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
@@ -955,6 +1250,7 @@ window.HVY = {
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
   searchDocuments,
+  buildDocumentRichTextCopyPayload,
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   getPdfExportPromptTemplates,

@@ -159,6 +159,473 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
   await expect(codeBlockButton).not.toHaveClass(/secondary/);
 });
 
+test('double Enter keeps paragraph break inside one text component', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'First paragraph');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('[data-field="block-rich"]').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const paragraph = node.querySelector('p');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph!);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+
+  await page.keyboard.type('Alpha paragraph');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Beta paragraph');
+
+  await expect(editor).toBeFocused();
+  await expect(editor.locator('p').filter({ hasText: 'Alpha paragraph' })).toHaveCount(1);
+  await expect(editor.locator('p').filter({ hasText: 'Beta paragraph' })).toHaveCount(1);
+
+  const expectedResult = await page.evaluate(async () => {
+    const [{ state }, { serializeDocument }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/serialization.ts'),
+    ]);
+    const block = state.document.sections[0]?.blocks[0];
+    return {
+      blockCount: state.document.sections[0]?.blocks.length ?? 0,
+      text: block?.text ?? '',
+      serialized: serializeDocument(state.document),
+    };
+  });
+
+  expect(expectedResult.blockCount).toBe(1);
+  expect(expectedResult.text).toBe('Alpha paragraph\n\nBeta paragraph');
+  expect(expectedResult.serialized).toContain('Alpha paragraph');
+  expect(expectedResult.serialized).toContain('Beta paragraph');
+});
+
+test('isolated embed example exposes matching text editors for plugin authors', async ({ page }) => {
+  await page.goto('/examples/embed-text-editor-plugin.html');
+
+  await expect(page.getByRole('heading', { name: 'Embedded Plugin Text Editor' })).toBeVisible();
+  await expect(page.getByText('Plugin "hvy.viewer-note" is not available.')).toHaveCount(0);
+  await expect(page.getByText('Full embed')).toBeVisible();
+  await expect(page.getByText('Lightweight embed')).toBeVisible();
+  await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+  await expect(page.locator('#embedTextEditorMount .hvy-viewer-note')).toContainText('This plugin text editor stays editable in Viewer mode.');
+  const lightweightEditor = page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(lightweightEditor).toBeVisible();
+  await expect(lightweightEditor).toContainText('This lightweight viewer note should show the text editor toolbar.');
+  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
+  const editorModeViewerNote = page.locator('#embedTextEditorMount .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(editorModeViewerNote).toBeVisible();
+  await expect(editorModeViewerNote).toHaveAttribute('contenteditable', 'false');
+  await expect(editorModeViewerNote).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('.example-disabled-text-placeholder')).toContainText('Disabled text editor placeholder');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+
+  await page.locator('.editor-block-passive', { hasText: 'This is a normal HVY text component.' }).click();
+  const normalEditor = page.locator('[data-field="block-rich"]').first();
+  await normalEditor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type('Normal editor updated');
+  await expect(normalEditor).toBeFocused();
+  await expect(normalEditor).toContainText('Normal editor updated');
+
+  await page.locator('.editor-block-passive', { hasText: 'Write plugin-owned Markdown here. This body is stored with ctx.setText.' }).click();
+  await expect(page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) .rich-toolbar')).toBeVisible();
+  const pluginEditor = page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) [data-field="hvy-plugin-text-editor"]');
+  await expect(pluginEditor).toBeVisible();
+  await expect(pluginEditor).toHaveAttribute('data-placeholder', 'Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+  await pluginEditor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type('Plugin editor updated');
+  await expect(pluginEditor).toBeFocused();
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Plugin editor updated');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  await expect(pluginEditor).toBeFocused();
+  await expect(pluginEditor).toHaveText('');
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+
+  const emptyExpectedResult = await page.evaluate(() => {
+    const exampleWindow = window as Window & {
+      embedTextEditorExample: {
+        serialize(): string;
+      };
+    };
+    return {
+      serialized: exampleWindow.embedTextEditorExample.serialize(),
+    };
+  });
+  expect(emptyExpectedResult.serialized).not.toContain('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
+
+  await page.keyboard.type('Plugin editor updated');
+  await expect(pluginEditor).toBeFocused();
+  await expect(page.locator('.example-rich-note-editor .example-plugin-rendered-preview')).toContainText('Plugin editor updated');
+
+  await page.locator('.editor-block-passive', { hasText: 'Disabled text editor placeholder' }).click();
+  const disabledPluginEditor = page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(disabledPluginEditor).toBeVisible();
+  await expect(disabledPluginEditor).toHaveAttribute('contenteditable', 'false');
+  await expect(disabledPluginEditor).toHaveAttribute('aria-disabled', 'true');
+  await expect(disabledPluginEditor).toHaveAttribute('data-placeholder', 'This text field is disabled until the document enters another state.');
+
+  await page.locator('[data-example-mode="viewer"]').click();
+  await expect(page.locator('[data-example-mode="viewer"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor [data-field="hvy-plugin-text-editor"]')).toHaveCount(0);
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+  const viewerNoteEditor = page.locator('#embedTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(viewerNoteEditor).toBeVisible();
+  await expect(viewerNoteEditor).toContainText('This plugin text editor stays editable in Viewer mode.');
+  await viewerNoteEditor.evaluate((node) => {
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type(' Edited from viewer.');
+  await expect(viewerNoteEditor).toBeFocused();
+  await expect(viewerNoteEditor).toContainText('This plugin text editor stays editable in Viewer mode. Edited from viewer.');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toHaveAttribute('data-placeholder', 'This text field is disabled until the document enters another state.');
+
+  await page.locator('[data-example-mode="ai"]').click();
+  await expect(page.locator('[data-example-mode="ai"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+  await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
+
+  await page.locator('[data-example-mode="editor"]').click();
+  await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
+  const returnedEditorModeViewerNote = page.locator('#embedTextEditorMount .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(returnedEditorModeViewerNote).toBeVisible();
+  await expect(returnedEditorModeViewerNote).toContainText('This plugin text editor stays editable in Viewer mode. Edited from viewer.');
+  await expect(returnedEditorModeViewerNote).toHaveAttribute('contenteditable', 'false');
+
+  const expectedResult = await page.evaluate(() => {
+    const exampleWindow = window as Window & {
+      embedTextEditorExample: {
+        serialize(): string;
+      };
+    };
+    return {
+      serialized: exampleWindow.embedTextEditorExample.serialize(),
+    };
+  });
+
+  expect(expectedResult.serialized).toContain('Normal editor updated');
+  expect(expectedResult.serialized).toContain('Plugin editor updated');
+  expect(expectedResult.serialized).toContain('Edited from viewer.');
+});
+
+test('plugins can mount the shared text editor helper', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+  await page.evaluate(async () => {
+    const { setHostPlugins } = await import('/src/plugins/registry.ts');
+    setHostPlugins([{
+      id: 'example.text-editor',
+      displayName: 'Text Editor Plugin',
+      create: (ctx) => {
+        const root = document.createElement('div');
+        root.className = 'example-plugin-text-editor';
+        const editor = ctx.textEditor.mount({
+          value: typeof ctx.block.schema.pluginConfig.note === 'string' ? ctx.block.schema.pluginConfig.note : '',
+          placeholder: 'Plugin note',
+          onChange: (markdown) => ctx.setConfig({ note: markdown }),
+        });
+        root.appendChild(editor.element);
+        return {
+          element: root,
+          refresh() {
+            editor.setValue(typeof ctx.block.schema.pluginConfig.note === 'string' ? ctx.block.schema.pluginConfig.note : '');
+          },
+          unmount() {
+            editor.unmount();
+          },
+        };
+      },
+    }]);
+  });
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toBeVisible();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:plugin {"id":"plugin-note","plugin":"example.text-editor","pluginConfig":{"note":"Alpha"}}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.schema.plugin === 'example.text-editor';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const pluginEditor = page.locator('.example-plugin-text-editor [data-field="hvy-plugin-text-editor"]');
+  await expect(pluginEditor).toBeVisible();
+  await expect(page.locator('.example-plugin-text-editor .rich-toolbar')).toBeVisible();
+  const pluginShell = page.locator('.example-plugin-text-editor .text-editor-shell');
+  await page.waitForFunction(() => {
+    const shell = document.querySelector<HTMLElement>('.example-plugin-text-editor .text-editor-shell');
+    const toolbar = shell?.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const spacer = shell?.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell?.querySelector<HTMLElement>('.rich-editor');
+    if (!shell || !toolbar || !spacer || !editor) {
+      return false;
+    }
+    const toolbarHeight = toolbar.getBoundingClientRect().height;
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    return toolbarHeight > 0
+      && Math.abs(spacerBox.height - toolbarHeight) <= 1
+      && editorBox.top >= spacerBox.bottom;
+  }, null, { timeout: 1000 });
+  const toolbarMetrics = await pluginShell.evaluate((shell) => {
+    const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbar || !spacer || !editor) {
+      return null;
+    }
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    return {
+      toolbarHeight: toolbarBox.height,
+      spacerHeight: spacerBox.height,
+      editorTop: editorBox.top,
+      spacerBottom: spacerBox.bottom,
+    };
+  });
+  expect(toolbarMetrics).not.toBeNull();
+  expect(toolbarMetrics!.toolbarHeight).toBeGreaterThan(0);
+  expect(Math.abs(toolbarMetrics!.spacerHeight - toolbarMetrics!.toolbarHeight)).toBeLessThanOrEqual(1);
+  expect(toolbarMetrics!.editorTop).toBeGreaterThanOrEqual(toolbarMetrics!.spacerBottom);
+  await pluginEditor.evaluate((node) => {
+    node.innerHTML = '<p>Plugin alpha</p><p>Plugin beta</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const block = state.document.sections[0]?.blocks[0];
+    return block?.schema.pluginConfig.note;
+  });
+  expect(expectedResult).toBe('Plugin alpha\n\nPlugin beta');
+});
+
+test('built-in viewer note plugin text editor is editable from viewer mode', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toBeVisible();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:plugin {"id":"viewer-note","plugin":"hvy.viewer-note"}-->
+Initial viewer note
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.schema.plugin === 'hvy.viewer-note';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+  const editorPluginEditor = page.locator('#editorTree .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(editorPluginEditor).toBeVisible();
+  await expect(editorPluginEditor).toContainText('Initial viewer note');
+  await expect(editorPluginEditor).toHaveAttribute('contenteditable', 'false');
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const viewerPluginEditor = page.locator('#readerDocument .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(viewerPluginEditor).toBeVisible();
+  await expect(page.locator('#readerDocument .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
+  await expect(viewerPluginEditor).toContainText('Initial viewer note');
+
+  await viewerPluginEditor.evaluate((node) => {
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.type(' updated from viewer');
+
+  await expect(viewerPluginEditor).toBeFocused();
+  await expect(viewerPluginEditor).toContainText('Initial viewer note updated from viewer');
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const block = state.document.sections[0]?.blocks[0];
+    return {
+      view: state.currentView,
+      text: block?.text,
+    };
+  });
+  expect(expectedResult).toEqual({
+    view: 'viewer',
+    text: 'Initial viewer note updated from viewer',
+  });
+});
+
+test('lightweight embed includes viewer note text editor controls', async ({ page }) => {
+  await page.goto('/examples/embed-text-editor-plugin.html');
+
+  await page.waitForFunction(() => document.documentElement.scrollHeight > window.innerHeight, null, { timeout: 1000 });
+  await page.locator('#lightweightTextEditorMount').scrollIntoViewIfNeeded();
+  await expect(page.locator('#lightweightTextEditorMount')).toBeInViewport();
+
+  const editor = page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(editor).toBeVisible();
+  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
+  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar [data-rich-action="bold"]')).toBeVisible();
+  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar [data-rich-action="list"]')).toBeVisible();
+  await expect(editor).toContainText('This lightweight viewer note should show the text editor toolbar.');
+});
+
+test('lightweight viewer-only text editor applies heading toolbar actions', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editor = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]').first();
+  const editorWithInput = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').nth(1);
+  const extraInput = editorWithInput.locator('.viewer-note-input-field');
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveText('');
+  await expect(editorWithInput.locator('[data-field="hvy-plugin-text-editor"]')).toBeVisible();
+  await expect(extraInput).toBeVisible();
+  await extraInput.fill('Input fixture value');
+  await expect(extraInput).toHaveValue('Input fixture value');
+
+  await editor.click();
+  await page.keyboard.type('Viewer toolbar target');
+  await expect(editor).toContainText('Viewer toolbar target');
+  await expect(editor).toBeFocused();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await editor.evaluate((node) => {
+    const paragraph = node.querySelector('p') ?? node;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  const firstViewerNote = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').first();
+  await firstViewerNote.locator('[data-rich-action="heading-1"]').click();
+
+  await expect(editor.locator('h1')).toContainText('Viewer toolbar target');
+  const viewerTextButton = firstViewerNote.locator('[data-rich-action="paragraph"]').first();
+  const viewerHeadingButton = firstViewerNote.locator('[data-rich-action="heading-1"]').first();
+  await expect(viewerHeadingButton).toHaveClass(/secondary/);
+  await editor.evaluate((node) => {
+    const heading = node.querySelector('h1');
+    const textNode = heading?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode ?? heading ?? node, textNode?.textContent?.length ?? (heading?.childNodes.length ?? node.childNodes.length));
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Enter');
+  for (const char of 'Plain viewer line') {
+    await page.keyboard.type(char);
+    await expect(viewerTextButton).toHaveClass(/secondary/);
+    await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
+  }
+  await expect(editor).toContainText('Plain viewer line');
+  await expect(viewerTextButton).toHaveClass(/secondary/);
+  await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
+
+  const secondEditor = editorWithInput.locator('[data-field="hvy-plugin-text-editor"]');
+  const secondTextButton = editorWithInput.locator('[data-rich-action="paragraph"]').first();
+  const secondHeadingButton = editorWithInput.locator('[data-rich-action="heading-1"]').first();
+  await secondEditor.click();
+  await page.keyboard.type('Input sibling target');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await secondEditor.evaluate((node) => {
+    const paragraph = node.querySelector('p') ?? node;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await secondHeadingButton.click();
+  await expect(secondHeadingButton).toHaveClass(/secondary/);
+  await secondEditor.evaluate((node) => {
+    const heading = node.querySelector('h1');
+    const textNode = heading?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode ?? heading ?? node, textNode?.textContent?.length ?? (heading?.childNodes.length ?? node.childNodes.length));
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Plain before input');
+  await expect(secondTextButton).toHaveClass(/secondary/);
+  await expect(secondHeadingButton).not.toHaveClass(/secondary/);
+  await extraInput.fill('');
+  for (const char of 'abc') {
+    await extraInput.type(char);
+    await expect(secondTextButton).toHaveClass(/secondary/);
+    await expect(secondHeadingButton).not.toHaveClass(/secondary/);
+  }
+
+  const expectedResult = await page.evaluate(() => {
+    const exampleWindow = window as Window & {
+      lightweightViewerTextEditorExample: {
+        serialize(): string;
+      };
+    };
+    return exampleWindow.lightweightViewerTextEditorExample.serialize();
+  });
+  expect(expectedResult).toContain('# Viewer toolbar target');
+});
+
 test('italic toolbar action serializes multi-paragraph and list selections', async ({ page }) => {
   await page.goto('/');
   await loadToolbarSelectionDocument(page);
@@ -347,7 +814,8 @@ ${markdown.split('\n').map((line) => `  ${line}`).join('\n')}
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await expect(page.locator('.editor-block-passive').first()).toContainText(markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '');
+  const expectedText = markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*+]\s+/, '') ?? '';
+  await expect(page.locator('.editor-block-passive', { hasText: expectedText }).first()).toBeVisible();
 }
 
 test('toolbar heading buttons transform text and preserve typing', async ({ page }) => {
@@ -570,6 +1038,81 @@ test('paragraph style toolbar compacts inside phone preview', async ({ page }) =
   expect(shellBox).not.toBeNull();
   expect(Math.floor(modalBox!.x)).toBeGreaterThanOrEqual(Math.floor(shellBox!.x));
   expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.x + shellBox!.width));
+});
+
+test('sticky text toolbar is visibly inset from the text editor shell', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result toolbar inset');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+  const shellBox = await activeBlock.locator('.text-editor-shell').boundingBox();
+  const toolbarBox = await activeBlock.locator('.text-editor-toolbar-slot').boundingBox();
+  expect(shellBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect(Math.floor(toolbarBox!.x - shellBox!.x)).toBeGreaterThanOrEqual(8);
+  expect(Math.floor(shellBox!.x + shellBox!.width - (toolbarBox!.x + toolbarBox!.width))).toBeGreaterThanOrEqual(8);
+});
+
+test('sticky text toolbar allocates bottom clearance without adding editor gap', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, Array.from({ length: 16 }, (_, index) => `Expected result line ${index + 1}`).join('\n\n'));
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
+
+  const metrics = await activeBlock.locator('.text-editor-shell').evaluate((shell) => {
+    const toolbarBounds = shell.querySelector<HTMLElement>('.text-editor-toolbar-bounds');
+    const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const toolbar = toolbarSlot?.querySelector<HTMLElement>('.rich-toolbar');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    const editor = shell.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbarBounds || !toolbarSlot || !toolbar || !spacer || !editor) {
+      return null;
+    }
+    const toolbarBoundsBox = toolbarBounds.getBoundingClientRect();
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const spacerBox = spacer.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+    return {
+      boundsGap: editorBox.bottom - toolbarBoundsBox.bottom,
+      spacerHeight: spacerBox.height,
+      toolbarHeight: toolbarBox.height,
+      editorGap: editorBox.top - spacerBox.bottom,
+      minimumGap: lineHeight * 5,
+      singleLineGap: lineHeight,
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.boundsGap).toBeGreaterThanOrEqual(metrics!.minimumGap);
+  expect(Math.abs(metrics!.spacerHeight - metrics!.toolbarHeight)).toBeLessThanOrEqual(1);
+  expect(metrics!.editorGap).toBeGreaterThanOrEqual(0);
+  expect(metrics!.editorGap).toBeLessThan(metrics!.singleLineGap);
+
+  const scrolledMetrics = await activeBlock.evaluate((block) => {
+    const scroller = block.closest<HTMLElement>('.editor-tree');
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const editor = block.querySelector<HTMLElement>('.rich-editor');
+    const lastParagraph = editor?.querySelector<HTMLElement>('p:last-child');
+    if (!scroller || !toolbar || !lastParagraph || !editor) {
+      return null;
+    }
+    scroller.scrollTop = scroller.scrollHeight;
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const lastParagraphBox = lastParagraph.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+    return {
+      toolbarBottom: toolbarBox.bottom,
+      lastParagraphTop: lastParagraphBox.top,
+      minimumGap: lineHeight * 4,
+    };
+  });
+
+  expect(scrolledMetrics).not.toBeNull();
+  expect(scrolledMetrics!.lastParagraphTop - scrolledMetrics!.toolbarBottom).toBeGreaterThanOrEqual(scrolledMetrics!.minimumGap);
 });
 
 test('paragraph style picker fits inside compact sidebar editor', async ({ page }) => {

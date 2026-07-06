@@ -1,4 +1,5 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
+import { getTextCaptionMarkdown } from '../caption';
 import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, findVirtualDirectoryForSection } from '../cli-core/virtual-file-system';
 import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
 import { resolveBaseComponentFromMeta } from '../component-defs';
@@ -206,26 +207,34 @@ function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPat
 export function buildSemanticFilterInstructionPrompt(prompt: string, candidates: HvySemanticFilterCandidate[]): string {
   const candidateBlocks = formatSemanticCandidatePromptBlocks(candidates);
   return [
-    'You are selecting visible content from structured HVY document candidates.',
+    'You are selecting visible content from structured HVY document candidates for a semantic filter.',
     '',
-    'User filter prompt:',
-    JSON.stringify(prompt),
+    '--- begin filter prompt ---',
+    prompt,
+    '--- end filter prompt ---',
     '',
-    'Choose the candidates that are relevant to the user prompt. Return only a JSON array of candidateId strings, with no prose and no Markdown fences:',
-    '["id1", "id2", ...]',
+    'Candidate list as XML-like structured text:',
+    ...candidateBlocks,
     '',
-    'Rules:',
+    'Selection contract:',
+    '1. First pass: list candidate IDs that appear to satisfy the filter prompt, with one short sentence explaining why each may be relevant.',
+    '2. Review the first pass against the relevance rules and remove any weak, speculative, or over-broad matches to the filter prompt.',
+    '3. If no candidates survive review, write that no candidates are relevant.',
+    '4. Final answer: write one JSON array containing exactly the candidate IDs that survived review.',
+    '5. If no candidates survived review, the final JSON array must be [].',
+    '',
+    'Relevance rules:',
+    '- Relevant means the candidate has direct evidence from its text, tags, label, description, or surrounding context.',
+    '- Exclude loosely associated, incidental, speculative, or merely adjacent candidates.',
+    '- If explaining relevance takes more than one sentence, exclude the candidate.',
+    '- Do not output all candidate IDs unless every candidate survived review.',
     '- Only use candidateId values from the candidate list.',
-    '- Return only matching candidateId strings; do not include explanations.',
-    '- candidateId values identify exact section/component targets. Component targetRef values match the CLI request_structure IDs, including generated C0/C1-style IDs for anonymous components.',
     '- Prefer the most precise leaf component candidate whose text satisfies the prompt.',
     '- Parent sections and containers are included automatically when a leaf component matches.',
     '- Do not invent IDs.',
     '- Do not rewrite the document.',
-    '- Do not include unrelated candidates.',
     '',
-    'Candidate list as XML-like structured text:',
-    ...candidateBlocks,
+    'End with the final JSON array on its own line. Do not put explanations inside the JSON array.',
   ].join('\n');
 }
 
@@ -487,7 +496,7 @@ function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
     block.schema.xrefDetail ?? '',
     block.schema.containerTitle ?? '',
     block.schema.imageAlt ?? '',
-    block.schema.caption ?? '',
+    getTextCaptionMarkdown(block.schema.caption),
     (block.schema.tableColumns ?? []).join(' '),
     (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' '),
     block.text,
@@ -516,7 +525,7 @@ function getBlockSummaryText(block: VisualBlock): string {
     block.schema.containerTitle ?? '',
     block.text,
     block.schema.imageAlt ?? '',
-    block.schema.caption ?? '',
+    getTextCaptionMarkdown(block.schema.caption),
     ...(block.schema.containerBlocks ?? []).map(getBlockSummaryText),
     ...(block.schema.componentListBlocks ?? []).map(getBlockSummaryText),
     ...(block.schema.expandableStubBlocks?.children ?? []).map(getBlockSummaryText),
@@ -529,7 +538,7 @@ function getBlockLabel(block: VisualBlock): string {
   return cleanText(block.schema.xrefTitle ?? '')
     || cleanText(block.schema.containerTitle ?? '')
     || firstLine(block.text)
-    || cleanText(block.schema.caption ?? '')
+    || cleanText(getTextCaptionMarkdown(block.schema.caption))
     || cleanText(block.schema.imageAlt ?? '')
     || cleanText(block.schema.id ?? '');
 }
@@ -538,7 +547,7 @@ function getBlockContextLabel(block: VisualBlock): string {
   return cleanText(block.schema.xrefTitle ?? '')
     || cleanText(block.schema.containerTitle ?? '')
     || firstLine(block.text)
-    || cleanText(block.schema.caption ?? '')
+    || cleanText(getTextCaptionMarkdown(block.schema.caption))
     || cleanText(block.schema.imageAlt ?? '');
 }
 

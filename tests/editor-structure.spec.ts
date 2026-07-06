@@ -77,6 +77,47 @@ hvy_version: 0.1
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
 });
 
+test('expandable editor frame keeps light theme text readable under inherited white text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-surface: "#ffffff"
+    --hvy-surface-alt: "#f7f7f7"
+    --hvy-text: "#222222"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    Expanded detail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.addStyleTag({ content: '.editor-shell { color: rgb(255, 255, 255); }' });
+
+  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const activeBlock = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+
+  await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
+  await expect(activeBlock.locator('.expandable-part-stub .expandable-label')).toHaveCSS('color', 'rgb(34, 34, 34)');
+  await expect(activeBlock.locator('.expandable-part-expanded .expandable-label')).toHaveCSS('color', 'rgb(34, 34, 34)');
+  await expect(activeBlock.locator('.expandable-part-expanded .reader-block-text')).toHaveCSS('color', 'rgb(34, 34, 34)');
+});
+
 test('text editing inside expandable uses text cursor while buttons use pointer cursor', async ({ page }) => {
   await page.goto('/');
 
@@ -212,6 +253,47 @@ hvy_version: 0.1
 
   await xref.dblclick();
   await expect(page.locator('.hvy-context-popover')).toContainText('Request changes');
+});
+
+test('ai mode labeled container keeps nested text editor spacing compact', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:container {"css":"margin: 0.5rem 0; border: 1px solid var(--hvy-border); border-radius: 8px; padding: 0.75rem;","containerTitle":"Note"}-->
+
+  <!--hvy:text {}-->
+   AI mode is not the same thing as the chat panel.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const noteContainer = page.locator('#aiReaderDocument .reader-container', { hasText: 'AI mode is not the same thing as the chat panel' }).first();
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('position', 'static');
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('font-style', 'normal');
+  await expect(noteContainer.locator('.reader-container-title')).toHaveCSS('text-transform', 'uppercase');
+
+  await page.locator('#aiReaderDocument .reader-block-container', { hasText: 'AI mode is not the same thing as the chat panel' }).first().click({ position: { x: 6, y: 6 }, button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const activeContainer = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]', { hasText: 'Container Title' });
+  await expect(activeContainer).toBeVisible();
+  const toolbarToEditorGap = await activeContainer.evaluate((container) => {
+    const toolbar = container.querySelector<HTMLElement>('.rich-toolbar');
+    const editor = container.querySelector<HTMLElement>('.rich-editor');
+    if (!toolbar || !editor) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return editor.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
+  });
+  expect(toolbarToEditorGap).toBeGreaterThanOrEqual(0);
+  expect(toolbarToEditorGap).toBeLessThan(20);
 });
 
 test('xref navigation aligns a tall target top near the reader center', async ({ page }) => {
@@ -2626,7 +2708,7 @@ hvy_version: 0.1
 #! Header
 
  <!--hvy:text {"id":"name","align":"center","placeholder":"Name","fillIn":true}-->
-  # <!-- value -->
+  # _<!-- value -->_
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
@@ -2640,6 +2722,7 @@ hvy_version: 0.1
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#readerDocument')).not.toContainText('<!-- value -->');
+  await expect(page.locator('#readerDocument h1')).not.toContainText('__');
   await expect(page.locator('#readerDocument .text-fill-in-box')).toHaveCount(0);
 });
 

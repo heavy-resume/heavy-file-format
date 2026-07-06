@@ -53,3 +53,10 @@ export function cameraIcon(): string {
     <circle cx="12" cy="12" r="3.5" />
   </svg>`;
 }
+
+export function refreshIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-refresh" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M20 6v5h-5M4 18v-5h5" />
+    <path d="M18.2 9A7 7 0 0 0 6.1 6.7L4 8.8M5.8 15A7 7 0 0 0 17.9 17.3L20 15.2" />
+  </svg>`;
+}

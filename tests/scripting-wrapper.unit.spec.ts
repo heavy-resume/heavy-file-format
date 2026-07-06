@@ -161,10 +161,12 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
 });
 
 test('buildPythonProgram preloads checked libraries', () => {
-  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random']);
+  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
+  expect(program).toContain('if root_name == "re":');
+  expect(program).toContain('return __HvyReModule__()');
 });
 
 test('stripPythonImports replaces plain import statements with pass', () => {
@@ -194,6 +196,56 @@ random.shuffle(items)
     `
 items = [1, 2, 3]
 random.shuffle(items)
+`
+  );
+});
+
+test('stripPythonImports allows checked regex library imports', () => {
+  expect(
+    stripPythonImports(
+      `import re
+match = re.search("a+", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `
+match = re.search("a+", "caaat")
+`
+  );
+});
+
+test('stripPythonImports allows checked regex from-import statements', () => {
+  expect(
+    stripPythonImports(
+      `from re import search
+match = search("a+", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `search = re.search
+match = search("a+", "caaat")
+`
+  );
+});
+
+test('stripPythonImports rewrites checked import aliases', () => {
+  expect(
+    stripPythonImports(
+      `import re as regex
+from re import search as find, sub
+match = find("a+", "caaat")
+clean = sub("a+", "a", "caaat")
+`,
+      ['re']
+    )
+  ).toBe(
+    `regex = re
+find = re.search
+sub = re.sub
+match = find("a+", "caaat")
+clean = sub("a+", "a", "caaat")
 `
   );
 });
@@ -367,6 +419,27 @@ test('createScriptingRuntime doc.json throws for invalid or mismatched response 
   expect(() => runtime.doc.json.parse('not json')).toThrow('Response was not valid JSON.');
   expect(() => runtime.doc.json.parse_array('{"items":[]}')).toThrow('Return exactly one JSON array.');
   expect(() => runtime.doc.json.parse_object('[{"item":1}]')).toThrow('Return exactly one JSON object.');
+});
+
+test('createScriptingRuntime exposes time helpers', () => {
+  const runtime = createScriptingRuntime({
+    document: { meta: {}, extension: '.hvy', sections: [], attachments: [] },
+    now: () => new Date(2026, 5, 30, 15, 45, 12, 345),
+  });
+
+  const expectedDate = new Date(2026, 5, 30, 15, 45, 12, 345);
+  expect(runtime.doc.time.now_iso()).toBe(expectedDate.toISOString());
+  expect(runtime.doc.time.now_local()).toBe(new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(expectedDate));
+  expect(runtime.doc.time.now_local()).not.toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  expect(runtime.doc.time.now_unix_ms()).toBe(expectedDate.getTime());
+  expect(runtime.doc.time.today_iso()).toBe('2026-06-30');
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {

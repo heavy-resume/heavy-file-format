@@ -8,6 +8,7 @@ import type { VisualDocument } from '../types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
+import { isPdfPageMarginsInput } from '../pdf-page-settings';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -21,6 +22,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'importPreplan',
   'sidebar_label',
   'reader_max_width',
+  'pdf_page',
   'image_attachment_max_dimensions',
   'theme',
   'component_defs',
@@ -321,6 +323,27 @@ function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
       if (style && typeof style === 'object' && !Array.isArray(style)) {
         pushHeaderCssJsonIssue(issues, `heading_styles.${styleName}.css`, (style as JsonObject).css);
       }
+    }
+  }
+  const pdfPage = document.meta.pdf_page;
+  if (pdfPage && typeof pdfPage === 'object' && !Array.isArray(pdfPage)) {
+    const margins = (pdfPage as JsonObject).margins;
+    if (typeof margins !== 'undefined' && !isPdfPageMarginsInput(margins)) {
+      issues.push({
+        key: '/header.yaml:pdf_page.margins:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'pdf_page.margins must be a length such as "0.75in" or "1cm", a [horizontal, vertical] array, or a [left, top, right, bottom] array of non-negative lengths.',
+      });
+    }
+    const debug = (pdfPage as JsonObject).debug;
+    if (typeof debug !== 'undefined' && typeof debug !== 'boolean') {
+      issues.push({
+        key: '/header.yaml:pdf_page.debug:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'pdf_page.debug must be a boolean.',
+      });
     }
   }
   return issues;

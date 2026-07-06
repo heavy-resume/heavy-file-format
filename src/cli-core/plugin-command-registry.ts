@@ -418,6 +418,7 @@ registerHvyCliPluginCommands({
     'doc.db.query(sql, params) and doc.db.execute(sql, params) access the current document SQL backend when available.',
     'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.json.parse(response), doc.json.parse_array(response), and doc.json.parse_object(response) extract structured JSON from LLM responses, including fenced JSON or wrapper prose.',
+    'doc.time.now_iso(), doc.time.now_local(), doc.time.now_unix_ms(), and doc.time.today_iso() read the current client time.',
     'doc.form exists only while running form plugin scripts. Use form plugin help for doc.form methods.',
     'doc.rerender() flushes pending rendering work, but scripts usually do not need it because the host rerenders after the script finishes.',
     'Example: summary = doc.tool.request_structure(); doc.header.set("script_summary", summary[:200])',

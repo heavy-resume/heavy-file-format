@@ -6,7 +6,7 @@ import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { hasDocumentDbTables } from '../db-table-model';
 
-export const SCRIPTING_LIBRARY_OPTIONS = ['random'] as const;
+export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
 
 // Counter for unique runtime ids — each script run gets its own slot on the
@@ -20,6 +20,34 @@ interface HvyScriptingGlobal {
   errors: Record<string, string | null>;
   results: Record<string, unknown>;
   callbacks: Record<string, () => void>;
+  regex: HvyScriptingRegexBridge;
+}
+
+interface HvyScriptingRegexMatch {
+  matched: boolean;
+  captureCount(): number;
+  captureAt(index: number): string | null;
+  index: number;
+  end: number;
+}
+
+interface HvyScriptingRegexFindAllResult {
+  count(): number;
+  isTuple(index: number): boolean;
+  tupleCount(index: number): number;
+  valueAt(index: number, groupIndex: number): string | null;
+}
+
+interface HvyScriptingRegexSplitResult {
+  count(): number;
+  valueAt(index: number): string;
+}
+
+interface HvyScriptingRegexBridge {
+  exec(pattern: string, flags: string, source: string): HvyScriptingRegexMatch;
+  findall(pattern: string, flags: string, source: string): HvyScriptingRegexFindAllResult;
+  sub(pattern: string, flags: string, replacement: string, source: string, count: number): string;
+  split(pattern: string, flags: string, source: string, maxsplit: number): HvyScriptingRegexSplitResult;
 }
 
 interface LoadedScriptingDbRuntime {
@@ -38,7 +66,7 @@ function getScriptingGlobal(): HvyScriptingGlobal {
     throw new Error('Scripting runtime requires a browser environment.');
   }
   if (!window.__HVY_SCRIPTING__) {
-    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, results: {}, callbacks: {} };
+    window.__HVY_SCRIPTING__ = { runtimes: {}, sources: {}, instrumentedSources: {}, errors: {}, results: {}, callbacks: {}, regex: createScriptingRegexBridge() };
   }
   if (!window.__HVY_SCRIPTING__.callbacks) {
     window.__HVY_SCRIPTING__.callbacks = {};
@@ -49,7 +77,122 @@ function getScriptingGlobal(): HvyScriptingGlobal {
   if (!window.__HVY_SCRIPTING__.results) {
     window.__HVY_SCRIPTING__.results = {};
   }
+  if (!window.__HVY_SCRIPTING__.regex) {
+    window.__HVY_SCRIPTING__.regex = createScriptingRegexBridge();
+  }
   return window.__HVY_SCRIPTING__;
+}
+
+function normalizeRegexFlags(flags: string, globalSearch: boolean): string {
+  const out = new Set<string>();
+  for (const flag of flags) {
+    if (flag === 'g') {
+      continue;
+    }
+    out.add(flag);
+  }
+  if (globalSearch) {
+    out.add('g');
+  }
+  return Array.from(out).join('');
+}
+
+function createRegex(pattern: string, flags: string, globalSearch: boolean): RegExp {
+  return new RegExp(pattern, normalizeRegexFlags(flags, globalSearch));
+}
+
+function createScriptingRegexBridge(): HvyScriptingRegexBridge {
+  return {
+    exec(pattern, flags, source) {
+      const regex = createRegex(pattern, flags, true);
+      const match = regex.exec(source);
+      if (!match) {
+        return { matched: false, captureCount: () => 0, captureAt: () => null, index: -1, end: -1 };
+      }
+      const captures = Array.from(match, (value) => value ?? null);
+      return {
+        matched: true,
+        captureCount: () => captures.length,
+        captureAt: (index) => captures[Math.trunc(index)] ?? null,
+        index: match.index,
+        end: match.index + match[0].length,
+      };
+    },
+    findall(pattern, flags, source) {
+      const regex = createRegex(pattern, flags, true);
+      const out: Array<string | null | Array<string | null>> = [];
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(source)) !== null) {
+        if (match.length > 2) {
+          out.push(match.slice(1).map((value) => value ?? null));
+        } else if (match.length === 2) {
+          out.push(match[1] ?? null);
+        } else {
+          out.push(match[0]);
+        }
+        if (match[0] === '') {
+          regex.lastIndex += 1;
+        }
+      }
+      return {
+        count: () => out.length,
+        isTuple: (index) => Array.isArray(out[Math.trunc(index)]),
+        tupleCount: (index) => {
+          const item = out[Math.trunc(index)];
+          return Array.isArray(item) ? item.length : 1;
+        },
+        valueAt: (index, groupIndex) => {
+          const item = out[Math.trunc(index)];
+          if (Array.isArray(item)) {
+            return item[Math.trunc(groupIndex)] ?? null;
+          }
+          return item ?? null;
+        },
+      };
+    },
+    sub(pattern, flags, replacement, source, count) {
+      const limit = Math.floor(Number.isFinite(count) ? count : 0);
+      if (limit <= 0) {
+        return source.replace(createRegex(pattern, flags, true), replacement);
+      }
+      let replaced = 0;
+      return source.replace(createRegex(pattern, flags, true), (match) => {
+        if (replaced >= limit) {
+          return match;
+        }
+        replaced += 1;
+        return replacement;
+      });
+    },
+    split(pattern, flags, source, maxsplit) {
+      const limit = Math.floor(Number.isFinite(maxsplit) ? maxsplit : 0);
+      if (limit <= 0) {
+        const parts = source.split(createRegex(pattern, flags, true));
+        return {
+          count: () => parts.length,
+          valueAt: (index) => parts[Math.trunc(index)] ?? '',
+        };
+      }
+      const out: string[] = [];
+      const regex = createRegex(pattern, flags, true);
+      let cursor = 0;
+      let splitCount = 0;
+      let match: RegExpExecArray | null;
+      while (splitCount < limit && (match = regex.exec(source)) !== null) {
+        out.push(source.slice(cursor, match.index));
+        cursor = match.index + match[0].length;
+        splitCount += 1;
+        if (match[0] === '') {
+          regex.lastIndex += 1;
+        }
+      }
+      out.push(source.slice(cursor));
+      return {
+        count: () => out.length,
+        valueAt: (index) => out[Math.trunc(index)] ?? '',
+      };
+    },
+  };
 }
 
 function shouldSuppressBrythonConsoleNoise(args: unknown[]): boolean {
@@ -235,16 +378,39 @@ function isImportStatementStart(line: string): boolean {
   return /^import\b/.test(trimmed) || /^from\b.*\bimport\b/.test(trimmed);
 }
 
-function getAllowedImportLibrary(line: string, allowedLibraries: readonly string[]): string | null {
+function getAllowedImportReplacement(line: string, allowedLibraries: readonly string[]): string | null {
   const allowed = new Set(allowedLibraries);
   const trimmed = line.trimStart();
   const importMatch = trimmed.match(/^import\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*$/);
   if (importMatch) {
-    return allowed.has(importMatch[1] ?? '') ? importMatch[1] ?? null : null;
+    const library = importMatch[1] ?? '';
+    if (!allowed.has(library)) {
+      return null;
+    }
+    const aliasMatch = trimmed.match(/\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s*$/);
+    return aliasMatch?.[1] ? `${aliasMatch[1]} = ${library}` : '';
   }
-  const fromMatch = trimmed.match(/^from\s+([A-Za-z_][A-Za-z0-9_]*)\s+import\b/);
+  const fromMatch = trimmed.match(/^from\s+([A-Za-z_][A-Za-z0-9_]*)\s+import\s+(.+?)\s*$/);
   if (fromMatch) {
-    return allowed.has(fromMatch[1] ?? '') ? fromMatch[1] ?? null : null;
+    const library = fromMatch[1] ?? '';
+    if (!allowed.has(library)) {
+      return null;
+    }
+    const imports = (fromMatch[2] ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+    if (imports.length === 0) {
+      return null;
+    }
+    const assignments: string[] = [];
+    for (const item of imports) {
+      const itemMatch = item.match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/);
+      if (!itemMatch) {
+        return null;
+      }
+      const name = itemMatch[1] ?? '';
+      const alias = itemMatch[2] ?? name;
+      assignments.push(`${alias} = ${library}.${name}`);
+    }
+    return assignments.join('\n');
   }
   return null;
 }
@@ -291,8 +457,9 @@ export function stripPythonImports(source: string, allowedLibraries: readonly st
     const indentation = line.match(/^\s*/)?.[0] ?? '';
 
     if (!statementOpen && !analysis.isBlankOrComment && isImportStatementStart(line)) {
-      if (getAllowedImportLibrary(line, allowedLibraries)) {
-        stripped.push('');
+      const replacement = getAllowedImportReplacement(line, allowedLibraries);
+      if (replacement !== null) {
+        stripped.push(replacement.split('\n').map((replacementLine) => `${indentation}${replacementLine}`).join('\n'));
         strippingImport = false;
       } else {
         stripped.push(`${indentation}raise RuntimeError(${JSON.stringify(STRIPPED_IMPORT_MESSAGE)})`);
@@ -447,6 +614,8 @@ def __hvy_script_import__(name, globals=None, locals=None, fromlist=(), level=0)
         raise RuntimeError("Import statements are not allowed in HVY scripts.")
     if root_name == "random":
         return __HvyRandomModule__()
+    if root_name == "re":
+        return __HvyReModule__()
     return __hvy_builtin_import__(name, globals, locals, fromlist, level)
 
 
@@ -462,6 +631,129 @@ class __HvyRandomModule__:
             items[index] = items[swap_index]
             items[swap_index] = temp
             index -= 1
+
+
+class __HvyReMatch__:
+    def __init__(self, regex_match, source):
+        self.__regex_match = regex_match
+        self.string = source
+        self.__capture_count = int(regex_match.captureCount())
+        self.lastindex = self.__capture_count - 1 if self.__capture_count > 1 else None
+
+    def group(self, *indexes):
+        if len(indexes) == 0:
+            indexes = (0,)
+        values = []
+        for index in indexes:
+            if not isinstance(index, int):
+                raise TypeError("HVY re match group indexes must be integers.")
+            if index < 0 or index >= self.__capture_count:
+                raise IndexError("no such group")
+            value = self.__regex_match.captureAt(index)
+            values.append(None if value is None else str(value))
+        return values[0] if len(values) == 1 else tuple(values)
+
+    def groups(self):
+        return tuple(self.group(index) for index in range(1, self.__capture_count))
+
+    def start(self, index=0):
+        if index != 0:
+            raise RuntimeError("HVY re match start() only supports group 0.")
+        return int(self.__regex_match.index)
+
+    def end(self, index=0):
+        if index != 0:
+            raise RuntimeError("HVY re match end() only supports group 0.")
+        return int(self.__regex_match.end)
+
+    def span(self, index=0):
+        return (self.start(index), self.end(index))
+
+
+class __HvyRePattern__:
+    def __init__(self, pattern, flags=0):
+        self.pattern = str(pattern)
+        self.flags = int(flags or 0)
+
+    def __hvy_js_flags__(self, global_search=False):
+        flags = "u"
+        if self.flags & __HvyReModule__.IGNORECASE:
+            flags += "i"
+        if self.flags & __HvyReModule__.MULTILINE:
+            flags += "m"
+        if self.flags & __HvyReModule__.DOTALL:
+            flags += "s"
+        return flags
+
+    def search(self, string):
+        source = str(string)
+        found = __hvy_globals__.regex.exec(self.pattern, self.__hvy_js_flags__(), source)
+        return None if not found.matched else __HvyReMatch__(found, source)
+
+    def match(self, string):
+        source = str(string)
+        found = __hvy_globals__.regex.exec(self.pattern, self.__hvy_js_flags__(), source)
+        if not found.matched or int(found.index) != 0:
+            return None
+        return __HvyReMatch__(found, source)
+
+    def fullmatch(self, string):
+        source = str(string)
+        found = self.match(source)
+        if found is None or found.end(0) != len(source):
+            return None
+        return found
+
+    def findall(self, string):
+        results = __hvy_globals__.regex.findall(self.pattern, self.__hvy_js_flags__(), str(string))
+        out = []
+        for index in range(0, int(results.count())):
+            if results.isTuple(index):
+                out.append(tuple(
+                    None if results.valueAt(index, group_index) is None else str(results.valueAt(index, group_index))
+                    for group_index in range(0, int(results.tupleCount(index)))
+                ))
+            else:
+                value = results.valueAt(index, 0)
+                out.append(None if value is None else str(value))
+        return out
+
+    def sub(self, repl, string, count=0):
+        return str(__hvy_globals__.regex.sub(self.pattern, self.__hvy_js_flags__(), str(repl), str(string), int(count or 0)))
+
+    def split(self, string, maxsplit=0):
+        results = __hvy_globals__.regex.split(self.pattern, self.__hvy_js_flags__(), str(string), int(maxsplit or 0))
+        return [str(results.valueAt(index)) for index in range(0, int(results.count()))]
+
+
+class __HvyReModule__:
+    IGNORECASE = 2
+    I = IGNORECASE
+    MULTILINE = 8
+    M = MULTILINE
+    DOTALL = 16
+    S = DOTALL
+
+    def compile(self, pattern, flags=0):
+        return __HvyRePattern__(pattern, flags)
+
+    def search(self, pattern, string, flags=0):
+        return self.compile(pattern, flags).search(string)
+
+    def match(self, pattern, string, flags=0):
+        return self.compile(pattern, flags).match(string)
+
+    def fullmatch(self, pattern, string, flags=0):
+        return self.compile(pattern, flags).fullmatch(string)
+
+    def findall(self, pattern, string, flags=0):
+        return self.compile(pattern, flags).findall(string)
+
+    def sub(self, pattern, repl, string, count=0, flags=0):
+        return self.compile(pattern, flags).sub(repl, string, count)
+
+    def split(self, pattern, string, maxsplit=0, flags=0):
+        return self.compile(pattern, flags).split(string, maxsplit)
 
 
 def __hvy_print__(*values, sep=' ', end='\\n', file=None, flush=False):

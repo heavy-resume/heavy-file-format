@@ -27,6 +27,13 @@ async function waitForScriptingIdle(page: Page): Promise<void> {
   }, undefined, { timeout: SCRIPTING_IDLE_TIMEOUT_MS });
 }
 
+async function waitForDocumentMeta(page: Page, key: string, expectedValue: string): Promise<void> {
+  await expect.poll(() => page.evaluate(async (metaKey) => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.document.meta[metaKey];
+  }, key), { timeout: SCRIPTING_IDLE_TIMEOUT_MS }).toBe(expectedValue);
+}
+
 test('cli-created chore chart form and db-table plugins run end to end', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'CLI' }).click();
@@ -139,7 +146,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"sandbox"}-->
 #! Sandbox
 
-<!--hvy:plugin {"id":"globals-check","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"globals-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 forbidden = [
     "window",
     "document",
@@ -150,6 +157,7 @@ forbidden = [
     "__hvy_runtime__",
     "__hvy_source__",
     "__hvy_instrumented_source__",
+    "__hvy_builtin_import__",
     "__hvy_user_globals__",
     "__hvy_user_main__",
 ]
@@ -178,6 +186,8 @@ doc.header.set("sandbox_direct", ",".join(direct_leaked) or "clean")
 
 test('scripting sandbox blocks dynamic imports eval globals and frame escapes', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
@@ -186,7 +196,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"sandbox"}-->
 #! Sandbox
 
-<!--hvy:plugin {"id":"dynamic-check","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+<!--hvy:plugin {"id":"dynamic-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
 results = []
 
 def record(label, action):
@@ -198,29 +208,100 @@ def record(label, action):
 
 record("direct_import", lambda: __import__("browser"))
 record("eval_import", lambda: eval("__import__('browser')"))
+record("builtins_import", lambda: eval("__builtins__")["__import__"]("browser"))
+record("builtin_import", lambda: __hvy_builtin_import__("browser"))
+record("eval_builtin_import", lambda: eval("__hvy_builtin_import__('browser')"))
 record("frame_import", lambda: eval("__import__('sys')._getframe(1).f_globals.get('__hvy_window__')"))
 record("custom_eval_globals", lambda: eval("window", {"window": "leaked"}))
 
-try:
-    builtins = eval("__builtins__")
-    import_present = "__import__" in builtins
-except BaseException:
-    import_present = False
-
 doc.header.set("sandbox_dynamic", ",".join(results))
-doc.header.set("sandbox_import_builtin", str(import_present))
 `);
+  const expectedResult = 'direct_import:blocked,eval_import:blocked,builtins_import:blocked,builtin_import:blocked,eval_builtin_import:blocked,frame_import:blocked,custom_eval_globals:blocked';
   await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Viewer' }).click();
-  await waitForScriptingIdle(page);
+  await waitForDocumentMeta(page, 'sandbox_dynamic', expectedResult);
 
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return {
+      sandboxDynamic: state.document.meta.sandbox_dynamic,
+    };
+  });
+  expect(expectedState).toEqual({
+    sandboxDynamic: expectedResult,
+  });
+});
+
+test('scripting checked regex library runs without Brython native re import', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
-  await page.getByRole('button', { name: 'Reset' }).click();
-  await expect(page.locator('#rawEditor')).toContainText(
-    'sandbox_dynamic: direct_import:blocked,eval_import:blocked,frame_import:blocked,custom_eval_globals:blocked'
-  );
-  await expect(page.locator('#rawEditor')).toContainText('sandbox_import_builtin: "False"');
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"regex"}-->
+#! Regex
+
+<!--hvy:plugin {"id":"regex-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["re"]}}-->
+import re
+from re import search as find, sub
+
+match = re.search(r"Order\\s+(\\d+)", "Order 42")
+compiled = re.compile(r"item-(\\d+)", re.I)
+found = compiled.findall("ITEM-1 item-2")
+clean = sub(r"\\s+", "-", "a b  c")
+direct = find(r"b+", "abbbc").group(0)
+doc.header.set("regex_result", f"{match.group(1)}|{','.join(found)}|{clean}|{direct}|{match.span(0)[0]}-{match.span(0)[1]}")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'regex_result', '42|1,2|a-b-c|bbb|0-8');
+});
+
+test('scripting checked regex library does not expose Brython re dependency modules', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"regex-sandbox"}-->
+#! Regex Sandbox
+
+<!--hvy:plugin {"id":"regex-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["re"]}}-->
+import re
+
+results = []
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":leaked")
+    except BaseException:
+        results.append(label + ":blocked")
+
+record("re_python_re", lambda: getattr(re, "python_re"))
+record("re_enum", lambda: getattr(re, "enum"))
+try:
+    from re import python_re
+    results.append("from_python_re:leaked")
+except BaseException:
+    results.append("from_python_re:blocked")
+try:
+    from re import enum
+    results.append("from_enum:leaked")
+except BaseException:
+    results.append("from_enum:blocked")
+record("builtin_re_python_re", lambda: getattr(__builtins__["__import__"]("re"), "python_re"))
+record("builtin_python_re", lambda: __builtins__["__import__"]("python_re"))
+
+doc.header.set("regex_dependency_modules", ",".join(results))
+`);
+  const expectedResult = 're_python_re:blocked,re_enum:blocked,from_python_re:blocked,from_enum:blocked,builtin_re_python_re:blocked,builtin_python_re:blocked';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'regex_dependency_modules', expectedResult);
 });
 
 test('visibleScript uses the shared scripting sandbox', async ({ page }) => {

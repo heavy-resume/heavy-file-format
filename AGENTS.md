@@ -106,3 +106,7 @@ Don't guess, get logs and examine them. If they dont exist, make them exist. Jus
 Section titles are part of the editing experience and not the viewing experience. We don't render it on PDFs, in viewer mode, etc. Its just for naming and linking.
 
 Plugins shouldn't define their own color scheme.
+
+Under no circumstance does, "This feature has a bug" mean "Remove the bugged feature instead of fixing it"
+
+Don't put things back as if some magic fairies changed them.

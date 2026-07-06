@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from 'vitest';
+import { injectPreviewMetadata } from '../hosted-viewer/server.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -38,11 +39,13 @@ hvy_version: 0.1
 
   const documentText = await readFile(join(outDir, 'document.hvy'), 'utf8');
   const manifest = JSON.parse(await readFile(join(outDir, 'attachments.json'), 'utf8'));
+  const preview = JSON.parse(await readFile(join(outDir, 'preview.json'), 'utf8'));
   const extractedImage = await stat(join(outDir, 'image', 'large.png'));
 
   expect(documentText).toContain('<!--hvy:image {"imageFile":"large.png","imageAlt":"Large"}-->');
   expect(documentText).not.toContain('--HVY-TAIL--');
   expect(Buffer.byteLength(documentText)).toBeLessThan(1024);
+  expect(preview).toEqual({ title: 'HVY Viewer' });
   expect(manifest.attachments).toEqual([
     {
       id: 'image:large.png',
@@ -97,4 +100,67 @@ print("hello")
     },
   ]);
   expect(Array.from(extractedDb)).toEqual([31, 139, 8, 0, 1, 2, 3]);
+});
+
+test('expected result: hosted extraction writes preview metadata from front matter without tail bytes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hvy-hosted-preview-extract-'));
+  const source = join(dir, 'preview.hvy');
+  const outDir = join(dir, 'site');
+  const prefix = `---
+hvy_version: 0.1
+title: Preview Title
+description: Hosted preview description.
+tags: [alpha, beta]
+---
+
+<!--hvy: {"id":"preview"}-->
+#! Preview
+
+<!--hvy:image {"imageFile":"large.png","imageAlt":"Large"}-->
+<!--hvy:tail {"id":"image:large.png","mediaType":"image/png","length":15}-->
+--HVY-TAIL--
+`;
+  const prefixBytes = new TextEncoder().encode(prefix);
+  const tailBytes = new TextEncoder().encode('tail title leak');
+  const sourceBytes = new Uint8Array(prefixBytes.length + tailBytes.length);
+  sourceBytes.set(prefixBytes, 0);
+  sourceBytes.set(tailBytes, prefixBytes.length);
+  await writeFile(source, sourceBytes);
+
+  await execFileAsync(process.execPath, ['scripts/extract-hvy-assets.mjs', source, '--out', outDir], {
+    cwd: process.cwd(),
+  });
+
+  const preview = JSON.parse(await readFile(join(outDir, 'preview.json'), 'utf8'));
+
+  expect(preview).toEqual({
+    title: 'Preview Title',
+    description: 'Hosted preview description.',
+    tags: ['alpha', 'beta'],
+  });
+});
+
+test('expected result: hosted viewer html injects escaped static preview tags', () => {
+  const html = `<!doctype html>
+<html>
+  <head>
+    <!--HVY_PREVIEW_META_START-->
+    <title>HVY Viewer</title>
+    <!--HVY_PREVIEW_META_END-->
+  </head>
+</html>`;
+
+  const expectedResult = injectPreviewMetadata(html, {
+    title: 'A&B "Title"',
+    description: 'Less < more & quoted "summary"',
+  });
+
+  expect(expectedResult).toContain('<title>A&amp;B &quot;Title&quot;</title>');
+  expect(expectedResult).toContain('<meta name="description" content="Less &lt; more &amp; quoted &quot;summary&quot;" />');
+  expect(expectedResult).toContain('<meta property="og:title" content="A&amp;B &quot;Title&quot;" />');
+  expect(expectedResult).toContain('<meta property="og:description" content="Less &lt; more &amp; quoted &quot;summary&quot;" />');
+  expect(expectedResult).toContain('<meta property="og:type" content="article" />');
+  expect(expectedResult).toContain('<meta name="twitter:card" content="summary" />');
+  expect(expectedResult).toContain('<meta name="twitter:title" content="A&amp;B &quot;Title&quot;" />');
+  expect(expectedResult).toContain('<meta name="twitter:description" content="Less &lt; more &amp; quoted &quot;summary&quot;" />');
 });

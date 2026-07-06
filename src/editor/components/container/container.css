@@ -89,7 +89,7 @@
 }
 
 .reader-container.is-bordered.has-title {
-  margin-top: var(--hvy-container-title-clearance, 0.5rem);
+  margin-top: 0;
 }
 
 .reader-container-head {
@@ -102,34 +102,25 @@
 
 .reader-container-title {
   min-width: 0;
-  color: var(--hvy-text);
-  font-weight: 700;
+  color: var(--hvy-text-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 
 .reader-container.is-bordered.has-title > .reader-container-head {
-  position: absolute;
-  left: 0.35rem;
-  right: 0.35rem;
-  top: -0.95rem;
-  z-index: 4;
-  pointer-events: none;
+  position: static;
+  margin-bottom: 0.15rem;
 }
 
 .reader-container.is-bordered.has-title > .reader-container-head .reader-container-title {
   max-width: min(100%, 28rem);
-  padding: 0 0.45rem;
-  border-radius: 999px;
-  background: var(--hvy-surface);
-  font-style: italic;
-  font-weight: 600;
-  line-height: 1.2;
-  box-decoration-break: clone;
-}
-
-.reader-container.is-bordered.has-title > .reader-container-head .reader-container-actions {
-  pointer-events: auto;
-  transform: translateY(0.25rem);
+  padding: 0;
+  background: transparent;
+  font-style: normal;
 }
 
 .reader-container-actions {
@@ -144,7 +135,7 @@
 }
 
 .reader-container-body {
-  margin-top: 0.2rem;
+  margin-top: 0;
 }
 
 .reader-container-body > .reader-block-text:last-child {

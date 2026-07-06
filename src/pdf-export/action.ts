@@ -3,12 +3,12 @@ import { deserializeDocumentBytes } from '../serialization';
 import { normalizeFilename } from '../utils';
 import { isPdfDocument } from '../pdf-document-capabilities';
 import { buildImportPlanForDocument, importTextIntoDocument } from '../ai-document-import';
+const DEFAULT_IMPORT_MAX_CONTEXT_CHARS = 60_000;
 import { exportHvyPdf } from './export';
 import { exportDocumentSourceMarkdown } from '../document-source-markdown';
 import type { HvyImportTraceCall } from '../ai-document-import';
 import type { ChatTokenUsage, PdfTemplateImportModalState, PdfTemplateImportRequestLogEntry, PdfTemplateImportStepState } from '../types';
 
-const PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS = 60_000;
 export const ENABLE_PDF_TEMPLATE_IMPORT_STEPPER = import.meta.env?.VITE_HVY_ENABLE_PDF_IMPORT_STEPPER === 'true';
 
 let pendingPdfTemplateImportLlmResume: (() => void) | null = null;
@@ -150,7 +150,7 @@ export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Arra
       instructions: 'Import the incoming data into this PHVY PDF template before export.',
       llm: { settings: state.chat.settings },
       requestMode: 'pdf-template-import',
-      maxContextChars: PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS,
+      maxContextChars: DEFAULT_IMPORT_MAX_CONTEXT_CHARS,
       beforeLlmCall: ENABLE_PDF_TEMPLATE_IMPORT_STEPPER ? (event) => waitForLlmStep(event.debugLabel) : undefined,
       onTraceEvent: (event) => {
         if (event.type === 'call-start') recordLlmRequestLog(toPdfTemplateImportRequestLogEntry(event.call));
@@ -173,7 +173,7 @@ export async function exportCurrentDocumentPdfWithTemplateBytes(bytes: Uint8Arra
       steps: plan.steps,
       llm: { settings: state.chat.settings },
       requestMode: 'pdf-template-import',
-      maxContextChars: PDF_TEMPLATE_IMPORT_MAX_CONTEXT_CHARS,
+      maxContextChars: DEFAULT_IMPORT_MAX_CONTEXT_CHARS,
       beforeLlmCall: ENABLE_PDF_TEMPLATE_IMPORT_STEPPER ? (event) => waitForLlmStep(event.debugLabel) : undefined,
       onTraceEvent: (event) => {
         if (event.type === 'call-start') recordLlmRequestLog(toPdfTemplateImportRequestLogEntry(event.call));

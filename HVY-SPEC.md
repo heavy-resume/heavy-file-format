@@ -1,7 +1,7 @@
 # Heavy File Format (HVY) v0.1 Draft
 
 Status: Draft proposal  
-Last updated: 2026-04-08
+Last updated: 2026-06-11
 
 ## 1. Overview
 
@@ -14,6 +14,7 @@ Design goals:
 - Support template documents that can be filled in via `.thvy` files.
 - Support PDF template documents via `.phvy` files.
 - Support extensibility via plugins.
+- Support whole-document and component-level encryption without changing the reusable component model.
 
 ## 2. File Types
 
@@ -23,6 +24,33 @@ Design goals:
 
 Rule: Any valid `.md` file is valid `.hvy`.
 
+## 2.1 Encryption
+
+HVY supports Fernet encryption for whole documents and individual components. Fernet keys are supplied by the host/client and are identified in HVY metadata by a UUID string. HVY files MUST NOT serialize raw encryption keys.
+
+### Whole-document encryption
+
+A whole-document encrypted HVY file is an encrypted envelope rather than ordinary HVY text. The envelope metadata MUST identify:
+- `hvy_encryption`: `1`
+- `algorithm`: `"fernet"`
+- `keyId`: the UUID for the Fernet key
+
+The envelope payload is one Fernet token whose plaintext is the complete standard HVY byte stream, including the textual body, tail preamble, and binary tail attachment bytes. Clients that decrypt an encrypted document SHOULD cache the decrypted document for the mount/session and MUST NOT re-decrypt the envelope during ordinary rendering, editing, or component encryption operations.
+
+### Encrypted components
+
+Individual components use the native `encrypted` component directive:
+
+```markdown
+<!--hvy:encrypted {"keyId":"00000000-0000-4000-8000-000000000000"}-->
+```
+
+`hvy:encrypted` is a built-in HVY component, not a plugin. Its only serialized directive attribute is `keyId`. The encrypted payload is stored in a tail attachment with id `encrypted:<keyId>`. The attachment payload is a Fernet token whose plaintext is exactly one serialized HVY component fragment.
+
+When a renderer has the key for an encrypted component, it SHOULD decrypt the attachment once and render the decrypted component through the normal reusable HVY component renderer. When the key is missing, viewer and document AI mode MUST NOT render the component. Editor advanced surfaces MAY show an opaque locked placeholder containing the key UUID and attachment id. Editors MUST preserve the encrypted directive and tail bytes when the key is missing.
+
+Authoring tools that encrypt a component MUST generate a fresh UUID and Fernet key unless the host explicitly provides them. The tool MUST return or report both the UUID and key to the host so the host can persist a UUID-to-key mapping. Encrypting a component MUST NOT cause a whole-document encrypted envelope to be re-decrypted.
+
 ## 3. Compatibility Model
 
 ### 3.1 Markdown compatibility
@@ -30,6 +58,8 @@ Rule: Any valid `.md` file is valid `.hvy`.
 If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
+
+Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
 
 Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, or internal fragment (`#id`) targets. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
 
@@ -122,13 +152,20 @@ Top-of-file YAML front matter is optional and maps to `document.meta`.
 ---
 hvy_version: 0.1
 title: Example
+description: A short summary for document previews.
 tags: [guide, onboarding]
 ---
 ```
 
+Document identity metadata includes:
+- `title`: optional string naming the document.
+- `description`: optional string summarizing the document for metadata surfaces such as hosted link previews.
+- `tags`: optional comma-separated string or string array for document-level classification.
+
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
 AI-facing document metadata includes:
@@ -289,6 +326,8 @@ The directive name after `hvy:` can be a component name. In that form, `componen
 
 Block content indentation is structural and MUST NOT be interpreted as Markdown code. Renderers MUST render code from fenced Markdown code blocks using triple backticks (or standard Markdown fences) inside text content.
 
+`hvy:encrypted` is the native encrypted-component directive. It uses the same block directive position as any other component, but its decrypted payload is stored in the HVY tail as described in §2.1 and MUST NOT be serialized as nested visible block content.
+
 ### 5.7.1 Inline responsive annotations
 
 Text content MAY include paired HVY comment annotations for explicit responsive hints:
@@ -404,13 +443,13 @@ component_defs:
 Image blocks reference a binary attachment stored in the document tail:
 
 ```markdown
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":"Product overview"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Product overview","schema":{"kind":"text","component":"text","align":"center"}}}-->
 ```
 
 Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
-- `caption`: optional caption text. Readers SHOULD render it centered below the image when present.
+- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -870,6 +909,8 @@ text_line_styles:
 Rules:
 - A marker has the form `^name^` at the start of a Markdown line. `name` MUST contain only ASCII letters, digits, `_`, or `-`.
 - The marker is source-only. Renderers that support `text_line_styles` MUST remove the marker from visible output and apply the referenced style to that rendered line.
+- A marked plain-text paragraph MAY be soft-wrapped across multiple physical source lines. Plain continuation lines following a marker are part of the same styled logical line and SHOULD be rendered with that marker's style.
+- A blank line, another marker, or a structural Markdown line such as a heading, list item, blockquote, table row, fenced code block, thematic break, or HVY directive ends the styled logical line.
 - `\^name^` escapes the marker and renders literal text.
 - Markers inside fenced code blocks MUST remain literal.
 - Unknown style names SHOULD render the line content normally. Authoring tools SHOULD show an editor warning so authors can catch typos.
@@ -941,7 +982,23 @@ PDF-template authoring supports these component base types:
 
 Custom component templates are allowed only when their resolved `baseType` is one of the supported PDF component base types. `.phvy` documents MUST NOT contain sidebar sections. Authoring clients SHOULD disable sidebar creation and sidebar movement controls for `.phvy` documents and SHOULD NOT render a viewer/sidebar surface for them. Existing incompatible components or sidebar sections remain visible for correction in authoring surfaces, but PDF export MUST reject the document rather than hiding or replacing them.
 
-PDF export renderers SHOULD map PDF-safe text component inline `css` declarations onto equivalent PDF text properties when a direct equivalent exists. At minimum, `text-align: left|center|right` maps to PDF text alignment, `font-weight: bold` or numeric weights of `600` and above map to bold PDF text, `color` maps to PDF text color, and simple `background` / `background-color` color values map to PDF text fill/background color. CSS custom properties MAY be resolved through the document theme when the resolved value is a PDF-safe color.
+PDF export renderers SHOULD map PDF-safe text component inline `css` declarations and document `heading_styles.*.css` declarations onto equivalent PDF text properties when a direct equivalent exists. At minimum, `text-align: left|center|right` maps to PDF text alignment, `font-size` maps to PDF text size, unitless `line-height` maps to PDF line height, `font-weight: bold` or numeric weights of `600` and above map to bold PDF text, `color` maps to PDF text color, and simple `background` / `background-color` color values map to PDF text fill/background color. Exporters SHOULD also map section and block `margin` / `margin-*` declarations to PDF node margins, including margins inherited through `section_defaults.css`. PDF renderers MAY honor negative margins for explicit print bleed effects; authors SHOULD use them sparingly and verify exported output.
+
+For `.phvy` flow boxes, PDF export renderers SHOULD map a small PDF-safe box CSS subset on sections, containers, and other block wrappers when the backend can preserve text flow. At minimum, simple `background` / `background-color`, `color`, `padding` / `padding-*`, `border-width`, `border-color`, and simple `border` declarations SHOULD map to a flowing PDF box that grows with its content. Supported CSS length units in this PDF-safe subset SHOULD include `pt`, `px`, `rem`, `em`, `in`, `cm`, and `mm`; padding and border widths MUST NOT be negative. CSS custom properties MAY be resolved through the document theme when the resolved value is a PDF-safe color.
+
+`.phvy` documents MAY declare `pdf_page` in front matter:
+
+```yaml
+pdf_page:
+  size: LETTER
+  margins: [0.75in, 0.75in, 0.75in, 0.75in]
+  debug: false
+```
+
+- `size` is optional and defaults to `LETTER`. Renderers SHOULD support `LETTER`, `A4`, `LEGAL`, `TABLOID`, and `LEDGER`; renderers MAY also accept `{width, height}` point objects.
+- `margins` is optional and defaults to `[0.75in, 0.75in, 0.75in, 0.75in]`. It MAY be a single length for all sides, `[horizontal, vertical]`, or `[left, top, right, bottom]`. Supported units are `in`, `cm`, `mm`, and `pt`.
+- `debug` is optional and defaults to `false`. Authoring clients MAY use it to show page and printable-area bounds in PHVY preview surfaces. Exporters SHOULD render diagnostic page and printable-area bounds into generated PDFs when `debug` is `true`; authors SHOULD disable it for final PDFs.
+- Explicit PDF export strategy defaults override `pdf_page` for that export operation.
 
 With optional schema:
 
@@ -1259,7 +1316,8 @@ Plugin-specific rules:
 - The plugin block text MUST be interpreted as YAML owned by the form plugin.
 - Top-level YAML keys are `fields` and `scripts`.
 - `fields` is an ordered list. Each field supports `label`, `type`,
-  `value`, `placeholder`, `required`, `options`, `triggers`, and `meta`.
+  `value`, `placeholder`, `required`, `rows`, `options`, `triggers`, and
+  `meta`.
 - Field `label` is both the visible label and the script key used with
   `doc.form` helpers.
 - Field `meta` is plugin-owned field metadata. `meta.css` is an optional
@@ -1268,6 +1326,8 @@ Plugin-specific rules:
 - Supported `type` values are `text`, `textarea`, `number`, `select`,
   `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
   File inputs are not part of the standard form plugin contract.
+- `rows` applies to `textarea` fields. When present, it MUST be a positive
+  integer and controls the initial rendered textarea height in text rows.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
@@ -1277,7 +1337,7 @@ Plugin-specific rules:
   map.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
-  client-defined; this reference client supports `"random"`. Import statements
+  client-defined; this reference client supports `"random"` and `"re"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
 - `pluginConfig.scriptStepBudget` MAY set a positive integer step budget for
   each form script run. Clients SHOULD default to 100000 steps.
@@ -1291,6 +1351,12 @@ Plugin-specific rules:
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
   `set_error(label, message)`, and `clear_error(label)`.
+- Scripts MAY use `doc.time.now_iso()`, `doc.time.now_local()`,
+  `doc.time.now_unix_ms()`, and `doc.time.today_iso()` for current client time.
+  `now_iso()` returns an ISO 8601 timestamp, `now_local()` returns a
+  human-readable date/time with the client's local timezone label,
+  `now_unix_ms()` returns milliseconds since the Unix epoch, and `today_iso()`
+  returns the client-local date as `YYYY-MM-DD`.
 - Dynamic dropdown/radio options SHOULD be set by scripts using
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.
@@ -1371,6 +1437,83 @@ Plugin-specific rules:
   the original plugin text body.
 - Renderers MUST sanitize the generated SVG/HTML before inserting it into the
   document.
+
+### 7.10 QR code plugin contract
+
+The built-in QR code plugin is `hvy.qr-code`. The encoded QR payload lives in
+the plugin text body. QR caption and visual style live in `pluginConfig`.
+Rendered size and alignment SHOULD use the standard block `css` field, matching
+image component sizing conventions.
+
+Declaration example:
+
+```yaml
+plugins:
+  - id: hvy.qr-code
+    source: builtin://qr-code
+```
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"hvy.qr-code","pluginConfig":{"caption":{"text":"Scan code","schema":{"kind":"text","component":"text","align":"center"}},"foregroundColor":"#111827","backgroundColor":"#ffffff","dotsType":"square","cornersSquareType":"square","cornersDotType":"square"}}-->
+https://example.invalid/qr-code
+```
+
+Plugin-specific rules:
+- The plugin text body MUST be interpreted as the QR code payload string.
+- `pluginConfig.caption` is an optional text caption payload rendered below the QR code. It has the same shape and centered default as image `caption`.
+- Renderers SHOULD use the highest QR error correction level that can encode the
+  current payload, trying `"H"`, then `"Q"`, then `"M"`, then `"L"`.
+- `pluginConfig.foregroundColor` and `pluginConfig.backgroundColor` are
+  optional `#rrggbb` color strings.
+- `pluginConfig.dotsType` is optional and defaults to `"square"`. Supported
+  values are `"square"`, `"dots"`, `"rounded"`, `"classy"`,
+  `"classy-rounded"`, and `"extra-rounded"`.
+- `pluginConfig.cornersSquareType` is optional and defaults to
+  `"square"`. Supported values are `"square"`, `"dot"`,
+  `"extra-rounded"`, `"dots"`, `"rounded"`, `"classy"`, and
+  `"classy-rounded"`.
+- `pluginConfig.cornersDotType` is optional and defaults to `"square"`. Supported
+  values are `"square"`, `"dot"`, `"dots"`, `"rounded"`, `"classy"`,
+  `"classy-rounded"`, and `"extra-rounded"`.
+- PHVY/PDF export renderers SHOULD resolve QR code plugin blocks to ordinary
+  `image` blocks backed by SVG image attachments. The authored plugin block
+  MUST remain unchanged.
+
+### 7.11 Video plugin contract
+
+The built-in video plugin is `hvy.video`. It embeds a remote video by URL. Video
+bytes are not stored as HVY tail attachments.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.video
+    source: builtin://video
+---
+
+<!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=iuPWDMY0Li4","title":"Example video"}}-->
+```
+
+Normative configuration:
+- `pluginConfig.url`: REQUIRED HTTPS URL for a supported provider video. Clients
+  MUST normalize accepted URLs to a canonical provider page URL with
+  behavior-changing query parameters removed.
+- `pluginConfig.title`: optional accessible title for the embedded iframe.
+
+Supported providers for version 0.1 are YouTube, Vimeo, and Wistia. Clients MUST
+reject unsupported providers, non-HTTPS URLs, and provider URLs that do not
+identify a single video. Clients MUST construct the iframe/embed URL from the
+normalized provider/id and HVY configuration, not from arbitrary URL query
+parameters. Video embeds MUST NOT autoplay, and clients MUST NOT honor URL
+parameters that would enable autoplay or otherwise override plugin
+configuration. When remote network access is disabled by host policy, clients
+SHOULD preserve the plugin block and render an inline placeholder instead of
+loading the iframe. Clients MAY also render an external-open placeholder when a
+provider is known not to support playback in the current embedded browser
+runtime, such as a desktop webview.
 
 ## 8. Security & Runtime Constraints
 

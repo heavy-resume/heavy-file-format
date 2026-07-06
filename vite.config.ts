@@ -1,13 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { createChatProxyPlugin } from './proxy/chat-proxy';
+import { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
 
-const require = createRequire(import.meta.url);
-const BRYTHON_MINIMAL_VFS_ID = 'virtual:hvy-brython-minimal-vfs';
-const BRYTHON_MINIMAL_VFS_RESOLVED_ID = `\0${BRYTHON_MINIMAL_VFS_ID}`;
 const BUILT_IN_PLUGINS_ID = 'virtual:hvy-built-in-plugins';
 const BUILT_IN_PLUGINS_RESOLVED_ID = `\0${BUILT_IN_PLUGINS_ID}`;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -24,6 +21,9 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.scripting',
   'hvy.graph',
   'hvy.diagram',
+  'hvy.qr-code',
+  'hvy.video',
+  'hvy.viewer-note',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -40,6 +40,7 @@ interface HvyBuiltInPluginDefinition {
   exportName: string;
   modulePath: string;
   displayName: string;
+  pdfStatic?: boolean;
 }
 
 const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
@@ -84,6 +85,28 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'diagramPlugin',
     modulePath: 'src/plugins/diagram.ts',
     displayName: 'Diagram',
+  },
+  {
+    id: 'hvy.qr-code',
+    key: 'qrCode',
+    exportName: 'qrCodePlugin',
+    modulePath: 'src/plugins/qr-code/qr-code.ts',
+    displayName: 'QR Code',
+    pdfStatic: true,
+  },
+  {
+    id: 'hvy.video',
+    key: 'video',
+    exportName: 'videoPlugin',
+    modulePath: 'src/plugins/video/video.ts',
+    displayName: 'Video',
+  },
+  {
+    id: 'hvy.viewer-note',
+    key: 'viewerNote',
+    exportName: 'viewerNotePlugin',
+    modulePath: 'src/plugins/viewer-note.ts',
+    displayName: 'Viewer Note',
   },
 ];
 
@@ -162,38 +185,7 @@ function toViteRootImportPath(modulePath: string): string {
   return `/${modulePath.replace(/^\/+/, '')}`;
 }
 
-export function createBrythonMinimalVfsPlugin(): Plugin {
-  return {
-    name: 'hvy-brython-minimal-vfs',
-    resolveId(id) {
-      return id === BRYTHON_MINIMAL_VFS_ID ? BRYTHON_MINIMAL_VFS_RESOLVED_ID : null;
-    },
-    load(id) {
-      if (id !== BRYTHON_MINIMAL_VFS_RESOLVED_ID) {
-        return null;
-      }
-      const stdlibPath = require.resolve('brython/brython_stdlib.js');
-      const stdlibSource = readFileSync(stdlibPath, 'utf8');
-      const marker = 'var scripts = ';
-      const start = stdlibSource.indexOf(marker);
-      const end = stdlibSource.lastIndexOf('\n__BRYTHON__.update_VFS');
-      if (start < 0 || end < 0) {
-        throw new Error('Unable to extract Brython VFS metadata.');
-      }
-      const vfs = Function(`return ${stdlibSource.slice(start + marker.length, end).trim().replace(/;$/, '')}`)() as Record<string, unknown>;
-      const minimalVfs = {
-        $timestamp: vfs.$timestamp,
-        browser: vfs.browser,
-        sys: vfs.sys,
-      };
-      const source = [
-        '__BRYTHON__.use_VFS = true;',
-        `__BRYTHON__.update_VFS(${JSON.stringify(minimalVfs)});`,
-      ].join('\n');
-      return `export default ${JSON.stringify(source)};`;
-    },
-  };
-}
+export { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
 
 export function createHvyBuiltInPluginsPlugin(env: Record<string, string>): Plugin {
   const resolvedEnv = normalizeRuntimeEnv(env);
@@ -308,6 +300,7 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     id: definition.id,
     key: definition.key,
     displayName: definition.displayName,
+    pdfStatic: definition.pdfStatic === true,
     exportName: definition.exportName,
     importPath: toViteRootImportPath(definition.modulePath),
   }));
@@ -404,6 +397,13 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     `      documentLoad: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentLoad', ctx); } },`,
     `      documentChange: { async run(ctx) { if (documentUsesPlugin(ctx.document, definition.id)) await runHook(await loadPlugin(definition), 'documentChange', ctx); } },`,
     `    },`,
+    `    ...(definition.pdfStatic ? { pdf: {`,
+    `      async renderStatic(ctx) {`,
+    `        const plugin = await loadPlugin(definition);`,
+    `        if (!plugin.pdf?.renderStatic) return ctx.block;`,
+    `        return plugin.pdf.renderStatic(ctx);`,
+    `      },`,
+    `    } } : {}),`,
     `    aiHint(block) {`,
     `      const loaded = loadedPlugins.get(definition.id);`,
     `      const hint = loaded?.aiHint;`,
@@ -437,6 +437,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (id.includes('/src/editor/components/image/image-preset-css.ts')) {
+              return 'image-preset-css';
+            }
             if (id.includes('node_modules/highlight.js')) {
               return 'vendor-highlight';
             }

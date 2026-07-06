@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 
 const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
 
@@ -23,6 +24,7 @@ async function main() {
       attachments: extraction.attachments.map(({ id, meta, length, url }) => ({ id, meta, length, url })),
     }, null, 2)}\n`
   );
+  await writeFile(join(outDir, 'preview.json'), `${JSON.stringify(extractHostedPreviewMetadata(extraction.documentBytes), null, 2)}\n`);
   console.log(`Extracted ${extraction.attachments.length} attachment(s) to ${outDir}`);
 }
 
@@ -82,6 +84,47 @@ function parseArgs(args) {
     throw new Error('Usage: node scripts/extract-hvy-assets.mjs input.hvy --out dist-hvy-viewer');
   }
   return { input, outDir };
+}
+
+export function extractHostedPreviewMetadata(documentBytes) {
+  const text = new TextDecoder().decode(documentBytes);
+  const meta = parseFrontMatterMetadata(text);
+  const description = previewString(meta.description);
+  const tags = normalizePreviewTags(meta.tags);
+  return {
+    title: previewString(meta.title) || 'HVY Viewer',
+    ...(description ? { description } : {}),
+    ...(tags.length > 0 ? { tags } : {}),
+  };
+}
+
+function parseFrontMatterMetadata(text) {
+  if (!text.startsWith('---\n') && !text.startsWith('---\r\n')) {
+    return {};
+  }
+  const newline = text.startsWith('---\r\n') ? '\r\n' : '\n';
+  const endMarker = `${newline}---${newline}`;
+  const endIndex = text.indexOf(endMarker, 3);
+  if (endIndex < 0) {
+    return {};
+  }
+  const yamlSource = text.slice(3 + newline.length, endIndex);
+  const parsed = parseYaml(yamlSource);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+}
+
+function previewString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizePreviewTags(value) {
+  if (Array.isArray(value)) {
+    return value.map((tag) => previewString(tag)).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+  }
+  return [];
 }
 
 function parseTailDirectives(source) {

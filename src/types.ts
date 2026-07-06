@@ -4,6 +4,9 @@ import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
+import type { CaptionTextModalState } from './caption';
+import type { HvyEncryptionOptions } from './encryption';
+import type { HvyPdfStylePreset } from './pdf-style-presets';
 
 export interface DocumentAttachment {
   id: string;
@@ -17,6 +20,11 @@ export interface VisualDocument {
   sections: VisualSection[];
   attachments: DocumentAttachment[];
   attachmentStore?: AttachmentStore;
+  encryption?: {
+    algorithm: 'fernet';
+    keyId: string;
+    encrypted: boolean;
+  };
 }
 
 export interface ImageAttachmentMaxDimensions {
@@ -277,6 +285,8 @@ export type SelectedExample =
   | 'guide'
   | 'crm'
   | 'study-tools'
+  | 'video-demo'
+  | 'pdf-template'
   | 'resume-template'
   | 'resume-example'
   | 'import-reference'
@@ -329,6 +339,7 @@ export interface AppState {
   persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
+  encryption?: HvyEncryptionOptions | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;
@@ -381,6 +392,7 @@ export interface AppState {
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;
+  captionTextModal: CaptionTextModalState | null;
   newDocumentModalOpen: boolean;
   reusableSaveModal: ReusableSaveModalState | null;
   reusableTemplateModal: ReusableTemplateModalState | null;
@@ -411,6 +423,8 @@ export interface AppState {
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;
   pdfTemplateImportModal: PdfTemplateImportModalState | null;
+  pdfStylePresets: HvyPdfStylePreset[];
+  pdfStylePresetId: string | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;

@@ -14,8 +14,8 @@
   --hvy-accent-1-text: #1d1d1d;
   --hvy-accent-2: #c5d3ca;
   --hvy-accent-2-alt: #64bb82;
-  --hvy-button-bg: #ffffff;
-  --hvy-button-hover-bg: #3aa2be2c;
+  --hvy-button-bg: #abcab4;
+  --hvy-button-hover-bg: rgba(100, 187, 130, 0.22);
   --hvy-button-text: #1d1d1d;
   --hvy-button-hover-text: rgb(165, 154, 74);
   --hvy-highlight-1: rgba(58, 162, 190, 0.17);

@@ -56,8 +56,10 @@ Use of JSON and Markdown make it easy for LLMs to parse.
 - [Example HVY Document](examples/example.hvy)
 - [CRM Example HVY Document](examples/crm.hvy)
 - [Study Tools Example](examples/study-tools.hvy)
+- [PDF Template Example (PHVY)](examples/pdf-template.phvy)
 - [Example Resume Template (THVY)](examples/resume.thvy)
 - [Example Resume (HVY)](examples/resume.hvy)
+- [Embedded Plugin Text Editor Example](examples/embed-text-editor-plugin.html)
 
 ## TypeScript Reference Implementation
 
@@ -175,6 +177,7 @@ The output is static-server friendly:
 dist-hvy-viewer/
   document.hvy
   attachments.json
+  preview.json
   image/<encoded image filename>
 ```
 
@@ -201,7 +204,8 @@ not enabled automatically:
     "hvy.progress-bar",
     "hvy.scripting",
     "hvy.graph",
-    "hvy.diagram"
+    "hvy.diagram",
+    "hvy.qr-code"
   ]
 }
 ```
@@ -210,6 +214,16 @@ Use `HVY_BUILD_PLUGINS=hvy.form,hvy.progress-bar npm run build` for
 a one-off override, or `HVY_BUILD_CONFIG=path/to/config.json` to point at another
 config file. Config files may also use `include` and `exclude` arrays with the
 same plugin ids.
+
+If you build the embedded library from source or copy the Vite setup into another
+host build, include `createBrythonMinimalVfsPlugin()` from
+`heavy-file-format-ref-impl/brython-minimal-vfs-plugin` (or from
+`src/plugins/scripting/brython-minimal-vfs-plugin.ts` inside this repo). The
+scripting runtime imports `brython/brython.min.js?raw` and
+`virtual:hvy-brython-minimal-vfs`; the virtual VFS intentionally includes only
+`browser` and `sys`. Checked libraries such as `random` and `re` are provided by
+the HVY scripting shim, so do not add Brython's real `re`, `python_re`, `enum`,
+or wider stdlib dependency graph to make checked `import re` work.
 
 Embedded hosts enable plugins per mount:
 
@@ -285,6 +299,45 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, se
 const bytes = await mount.serializeDocumentBytesAsync();
 ```
 
+Encrypted documents and encrypted components use Fernet keys supplied by the
+embedded host. Keys are addressed by UUID; the host should persist its own
+UUID-to-key map and pass it as a keyring when deserializing or mounting:
+
+```js
+const keyring = {
+  '00000000-0000-4000-8000-000000000000': 'fernet-url-safe-base64-key',
+};
+
+const document = await HVY.deserializeDocumentBytesAsync(bytes, '.hvy', {
+  encryption: { keyring },
+});
+
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  encryption: {
+    keyring,
+    onKeyGenerated({ keyId, key }) {
+      keyring[keyId] = key;
+    },
+  },
+});
+
+const generated = await mount.encryptComponentAsync(sectionKey, blockId);
+keyring[generated.keyId] = generated.key;
+const savedBytes = await mount.serializeDocumentBytesAsync();
+```
+
+Whole-document encryption wraps the serialized HVY byte stream in an encrypted
+envelope. Use the async byte APIs for encrypted documents:
+
+```js
+const generated = await mount.encryptDocumentAsync();
+keyring[generated.keyId] = generated.key;
+const encryptedBytes = await mount.serializeDocumentBytesAsync();
+```
+
 Editor, AI, and import mutations can also notify hosts when the mounted
 document changes relative to the last saved baseline:
 
@@ -306,9 +359,9 @@ mount.undo();
 mount.redo();
 ```
 
-Embedded editor/AI instances do not persist reconnect/reload session state
-unless a stable `storageKey` is provided. Pass one per instance to persist
-without sharing a `sessionStorage` bucket:
+Embedded editor/AI instances do not persist reconnect/reload session state by
+default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`
+per instance to persist without sharing a `sessionStorage` bucket:
 
 ```js
 HVY.mountHvy({
@@ -316,8 +369,12 @@ HVY.mountHvy({
   document,
   mode: 'editor',
   storageKey: 'customer-profile-editor',
+  persistSessionState: true,
 });
 ```
+
+Without `persistSessionState`, `storageKey` is only a name available to hosts and
+does not cause HVY to write document state during reload lifecycle events.
 
 Third-party plugins use the same `HvyPlugin` shape and can be mixed with bundled
 plugins:
@@ -494,3 +551,5 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
 - The plugin instance is authored as a `plugin` component with `plugin` and `pluginConfig`.
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
 - The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.
+- Plugin editor UIs can reuse the host text editor with `ctx.textEditor.mount({ value, onChange })`. The returned element uses the same rich text toolbar, Markdown conversion, paste handling, and caret-preserving input behavior as normal HVY text components; plugins remain responsible for persisting changes through `ctx.setText`, `ctx.setConfig`, or their own `onChange` callback.
+- See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.

@@ -201,6 +201,7 @@ export interface HvyPdfExportResult {
 export interface HvyPdfMakeDocumentDefinition {
   pageSize?: string | { width: number; height: number };
   pageMargins?: number | [number, number] | [number, number, number, number];
+  background?: HvyPdfMakeNode | ((currentPage: number, pageSize: { width: number; height: number }) => HvyPdfMakeNode);
   content: HvyPdfMakeNode[];
   styles?: Record<string, Record<string, unknown>>;
   defaultStyle?: Record<string, unknown>;
@@ -242,7 +243,7 @@ export interface HvyPdfMakeNodeObject {
   image?: string;
   svg?: string;
   canvas?: unknown[];
-  layout?: string;
+  layout?: string | Record<string, unknown>;
   style?: string | string[];
   margin?: number | [number, number] | [number, number, number, number];
   fontSize?: number;
@@ -255,6 +256,7 @@ export interface HvyPdfMakeNodeObject {
   height?: number;
   fit?: [number, number];
   pageBreak?: 'before' | 'after' | 'beforeOdd' | 'beforeEven';
+  unbreakable?: boolean;
   headlineLevel?: number;
   hvyKeepWithNext?: boolean;
   hvyKeepTogether?: boolean;
@@ -279,6 +281,7 @@ export interface HvyPdfExportResolvedStrategy {
   defaults: Required<Pick<HvyPdfExportStrategyDefaults, 'expansionPolicy' | 'unsupportedPluginPolicy'>> & {
     pageSize: string | { width: number; height: number };
     pageMargins: number | [number, number] | [number, number, number, number];
+    debugPageBounds: boolean;
     font: string;
     includeSidebar: HvyPdfExportSidebarPolicy;
   };

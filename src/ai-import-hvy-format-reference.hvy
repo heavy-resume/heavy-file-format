@@ -216,7 +216,7 @@ text_line_styles:
    <!--hvy:text {}-->
     # image
     
-    `<!--hvy:image {"id":"portrait","imageFile":"portrait.png","imageAlt":"Portrait","caption":"Portrait caption"}-->`
+    `<!--hvy:image {"id":"portrait","imageFile":"portrait.png","imageAlt":"Portrait","caption":{"text":"Portrait caption","schema":{"kind":"text","component":"text","align":"center"}}}-->`
 
   <!--hvy:expandable:content {"description":"Image component description and example"}-->
 
@@ -229,7 +229,7 @@ text_line_styles:
    <!--hvy:text {}-->
     Example:
     ```hvy
-    <!--hvy:image {"id":"widget-image","imageFile":"widget.png","imageAlt":"Fake widget image","caption":"Fake widget caption"}-->
+    <!--hvy:image {"id":"widget-image","imageFile":"widget.png","imageAlt":"Fake widget image","caption":{"text":"Fake widget caption","schema":{"kind":"text","component":"text","align":"center"}}}-->
     ```
 
  <!--hvy:expandable {"id":"component-plugin","tags":"component, core, plugin, dynamic"}-->

@@ -10,6 +10,14 @@
   flex-wrap: wrap;
 }
 
+.image-toolbar button.is-active,
+.image-toolbar button[aria-pressed="true"] {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-bg) 28%, var(--hvy-surface) 72%);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px var(--hvy-focus-ring);
+}
+
 .image-dropzone {
   position: relative;
   border: 2px dashed var(--hvy-ghost-border, var(--hvy-border));
@@ -171,6 +179,7 @@
   color: var(--hvy-text);
   cursor: pointer;
   text-align: left;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
 .image-attachment-choice:hover,
@@ -178,6 +187,12 @@
 .image-attachment-choice.is-selected {
   border-color: var(--hvy-accent-1);
   background: color-mix(in srgb, var(--hvy-accent-1) 12%, var(--hvy-surface));
+}
+
+.image-attachment-choice:hover,
+.image-attachment-choice:focus-visible {
+  box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, var(--hvy-accent-1) 16%, transparent);
+  transform: translateY(-1px);
 }
 
 .image-attachment-choice-thumb {
@@ -200,6 +215,33 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.78rem;
+}
+
+.image-attachment-choice-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 1.7rem;
+  border-radius: 999px;
+  padding: 0.24rem 0.5rem;
+  background: color-mix(in srgb, var(--hvy-button-bg) 88%, var(--hvy-surface));
+  color: var(--hvy-button-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.image-attachment-choice.is-selected .image-attachment-choice-action {
+  background: color-mix(in srgb, var(--hvy-accent-1) 22%, var(--hvy-surface));
+  color: var(--hvy-text);
+}
+
+.image-attachment-choice-action .hvy-ui-icon {
+  width: 0.82rem;
+  height: 0.82rem;
+  stroke-width: 2.6;
 }
 
 .image-attachment-delete {

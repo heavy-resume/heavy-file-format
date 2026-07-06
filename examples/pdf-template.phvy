@@ -1,0 +1,78 @@
+---
+hvy_version: 0.1
+title: PDF Template Example
+pdf_page:
+  size: LETTER
+  margins: [0.65in, 0.65in, 0.65in, 0.65in]
+  debug: false
+reader_max_width: 56rem
+section_defaults:
+  contained: false
+  css: "margin: 0.35rem 0;"
+text_line_styles:
+  kicker:
+    label: Kicker
+    css: "margin: 0; font-size: 9pt; font-weight: 700; color: var(--hvy-accent-1);"
+  body:
+    label: Body
+    css: "margin: 0 0 0.2rem; font-size: 10pt; line-height: 1.25;"
+theme:
+  colors:
+    --hvy-bg: "#f7f4ee"
+    --hvy-bg-alt: "#efe7db"
+    --hvy-surface: "#ffffff"
+    --hvy-surface-alt: "#fbf8f2"
+    --hvy-text: "#20252a"
+    --hvy-text-alt: "#40505a"
+    --hvy-text-muted: "#6e7b80"
+    --hvy-accent-1: "#285a63"
+    --hvy-accent-1-alt: "#1e444b"
+    --hvy-accent-2: "#b45b38"
+    --hvy-button-bg: "#285a63"
+    --hvy-button-text: "#ffffff"
+    --hvy-link-color: "#285a63"
+    --hvy-highlight-1: "rgba(180, 91, 56, 0.14)"
+    --hvy-border: "#d7cbbb"
+    --hvy-border-alt: "#b9aa99"
+    --hvy-shadow: "rgba(49, 43, 35, 0.12)"
+---
+
+<!--hvy: {"id":"cover-band","contained":false,"css":"margin: -0.65in -0.65in 0.35in; padding: 0.55in 0.65in 0.35in; background: #e6f2ef; color: var(--hvy-accent-1-alt);"}-->
+#! Cover Band
+
+ <!--hvy:text {"id":"template-kicker","css":"margin: 0 0 0.12in; color: var(--hvy-accent-2); font-size: 9pt; font-weight: bold;"}-->
+  PDF TEMPLATE EXAMPLE
+
+ <!--hvy:text {"id":"template-title","css":"margin: 0; color: var(--hvy-accent-1-alt); font-size: 25pt; font-weight: bold; line-height: 1.05;"}-->
+  Project Brief
+
+ <!--hvy:text {"id":"template-summary","css":"margin: 0.16in 0 0; color: var(--hvy-text-alt); font-size: 10pt; line-height: 1.3;"}-->
+  A generic PHVY document that demonstrates page-level PDF settings, themed component styling, and a header band that reaches the page edge through ordinary flow layout.
+
+<!--hvy: {"id":"overview","contained":false,"css":"margin: 0 0 0.2in;"}-->
+#! Overview
+
+ <!--hvy:grid {"id":"overview-grid","css":"margin: 0; gap: 0.18in;","gridColumns":2}-->
+  <!--hvy:grid:0 {"id":"overview-left"}-->
+   <!--hvy:container {"id":"scope-card","css":"margin: 0; padding: 0.16in; background: var(--hvy-surface); border: 1pt solid var(--hvy-border);"}-->
+    <!--hvy:text {"id":"scope-heading","css":"margin: 0 0 0.08in; color: var(--hvy-accent-1); font-size: 10pt; font-weight: bold;"}-->
+     Scope
+
+    <!--hvy:text {"id":"scope-body","css":"margin: 0; font-size: 9.5pt; line-height: 1.28;"}-->
+     Use PHVY when the final deliverable is a styled, printable document but the source should remain structured, editable, and exportable through the same HVY model.
+
+  <!--hvy:grid:1 {"id":"overview-right"}-->
+   <!--hvy:container {"id":"status-card","css":"margin: 0; padding: 0.16in; background: var(--hvy-highlight-1); border: 1pt solid var(--hvy-accent-2);"}-->
+    <!--hvy:text {"id":"status-heading","css":"margin: 0 0 0.08in; color: var(--hvy-accent-2); font-size: 10pt; font-weight: bold;"}-->
+     Document Setup
+
+    <!--hvy:text {"id":"status-body","css":"margin: 0; font-size: 9.5pt; line-height: 1.28;"}-->
+     The document meta declares page size, margins, theme colors, and reusable paragraph styles. Component CSS controls the colored regions and content bounds.
+
+<!--hvy: {"id":"details","contained":false,"css":"margin: 0.05in 0 0;"}-->
+#! Details
+
+ <!--hvy:table {"id":"project-table","css":"margin: 0 0 0.18in;","tableColumns":["AREA","DETAIL"],"tableShowHeader":true,"tableRows":[{"cells":["Layout","The top band uses negative section margins plus padding, so the colored region grows with its content and still belongs to normal document flow."]},{"cells":["Styling","Containers use PDF-safe background, border, padding, and text color declarations."]},{"cells":["Export","The PDF exporter reads pdf_page.size, pdf_page.margins, and pdf_page.debug from document metadata."]}]}-->
+
+ <!--hvy:text {"id":"closing-note","css":"margin: 0; padding: 0.12in 0.16in; background: var(--hvy-surface-alt); border: 1pt solid var(--hvy-border); font-size: 9.5pt; line-height: 1.28;"}-->
+  This example intentionally keeps the design tied to components and sections. Changing the text changes the height of the styled regions without requiring a separate page-region layer.

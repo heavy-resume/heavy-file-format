@@ -2,6 +2,8 @@ import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
+import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
+import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
@@ -9,6 +11,7 @@ import {
   state,
   getActiveStateRuntime,
   getRenderApp,
+  getRefreshReaderBlock,
   getRefreshReaderPanels,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
@@ -38,6 +41,7 @@ import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '.
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
+import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 
@@ -272,6 +276,26 @@ export function bindUi(app: HTMLElement): void {
     state.metaFilter.status = null;
   });
 
+  const updateMetaFilterOptionControls = (): void => {
+    app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]').forEach((button) => {
+      const active = button.dataset.metaFilterMode === state.search.filterQueryMode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]').forEach((button) => {
+      const active = button.dataset.metaFilterBehavior === state.search.filterMode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const optionsLabel = app.querySelector<HTMLElement>('[data-meta-filter-options-label]');
+    if (optionsLabel) {
+      const modeLabel = state.search.filterQueryMode === 'semantic' ? 'Semantic' : 'Keyword';
+      const behaviorLabel = state.search.filterMode === 'hide' ? 'Hide' : 'Shade';
+      optionsLabel.textContent = `${modeLabel} · ${behaviorLabel}`;
+    }
+    app.querySelector<HTMLElement>('.meta-filter-status')?.remove();
+  };
+
   metaFilterComposer?.addEventListener('submit', (event) => {
     event.preventDefault();
     void runInBoundRuntimeAsync(async () => {
@@ -349,7 +373,7 @@ export function bindUi(app: HTMLElement): void {
         state.metaFilter.error = null;
         state.metaFilter.status = null;
         state.metaFilter.resultCount = null;
-        getRenderApp()();
+        updateMetaFilterOptionControls();
       });
     });
   });
@@ -365,7 +389,7 @@ export function bindUi(app: HTMLElement): void {
         state.metaFilter.error = null;
         state.metaFilter.status = null;
         state.metaFilter.resultCount = null;
-        getRenderApp()();
+        updateMetaFilterOptionControls();
       });
     });
   });
@@ -445,6 +469,16 @@ export function bindUi(app: HTMLElement): void {
   const studyToolsExampleBtn = app.querySelector<HTMLButtonElement>('#studyToolsExampleBtn');
   studyToolsExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledStudyToolsHvy, 'study-tools.hvy', 'study-tools');
+  });
+
+  const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
+  videoDemoExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
+  });
+
+  const pdfTemplateExampleBtn = app.querySelector<HTMLButtonElement>('#pdfTemplateExampleBtn');
+  pdfTemplateExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledPdfTemplatePhvy, 'pdf-template.phvy', 'pdf-template');
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
@@ -884,6 +918,7 @@ export function bindUi(app: HTMLElement): void {
       runReaderAction(event, () => {
         const expandableStateKey = `${sectionKey}:${blockId}`;
         const willCollapse = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+        const actionStartedAt = nowMs();
         logClickTrace(event, 'reader-area:handled:expandable-toggle:run', {
           sectionKey,
           blockId,
@@ -903,17 +938,58 @@ export function bindUi(app: HTMLElement): void {
             schemaExpanded: block.schema.expandableExpanded,
           });
         }
+        logPerfTrace('reader-expandable-toggle:start', {
+          sectionKey,
+          blockId,
+          expandableStateKey,
+          willCollapse,
+          currentView: state.currentView,
+        });
         if (willCollapse) {
           // Animate collapse before re-rendering
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-collapsing');
+          logPerfTrace('reader-expandable-toggle:collapse-animation-started', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+            hasReaderElement: Boolean(readerEl),
+          });
           window.setTimeout(() => runInBoundRuntime(() => {
+            const refreshStartedAt = nowMs();
             state.readerExpandableState[expandableStateKey] = false;
-            getRefreshReaderPanels()();
+            logPerfTrace('reader-expandable-toggle:collapse-refresh:start', {
+              sectionKey,
+              blockId,
+              elapsedMs: elapsedMs(actionStartedAt),
+            });
+            if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+              getRefreshReaderPanels()({ runVisibilityScripts: false });
+            }
+            logPerfTrace('reader-expandable-toggle:collapse-refresh:end', {
+              sectionKey,
+              blockId,
+              refreshMs: elapsedMs(refreshStartedAt),
+              elapsedMs: elapsedMs(actionStartedAt),
+            });
           }), 160);
         } else {
           state.readerExpandableState[expandableStateKey] = true;
-          getRefreshReaderPanels()();
+          logPerfTrace('reader-expandable-toggle:expand-refresh:start', {
+            sectionKey,
+            blockId,
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
+          const refreshStartedAt = nowMs();
+          if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: true })) {
+            getRefreshReaderPanels()();
+          }
+          logPerfTrace('reader-expandable-toggle:expand-refresh:end', {
+            sectionKey,
+            blockId,
+            refreshMs: elapsedMs(refreshStartedAt),
+            elapsedMs: elapsedMs(actionStartedAt),
+          });
           const readerEl = app.querySelector<HTMLElement>(`[data-expandable-id="${CSS.escape(blockId)}"]`);
           readerEl?.classList.add('is-expanding');
           window.setTimeout(() => runInBoundRuntime(() => {

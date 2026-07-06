@@ -1,6 +1,7 @@
 import { getReferenceAppConfig } from '../reference-config';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { renderAltAnnotationsAsFullText } from '../markdown';
+import { getTextCaptionMarkdown } from '../caption';
 import type { VisualDocument } from '../types';
 import type { HvyDescriptionParentContext, HvyDescriptionProvider, HvyDescriptionRequest, HvyDescriptionResponse, HvyDescriptionTargetKind } from './types';
 import { loadChatSettings, requestProxyCompletion } from '../chat/chat';
@@ -181,7 +182,7 @@ function summarizeBlock(block: VisualBlock): string {
     block.schema.xrefDetail ?? '',
     block.schema.containerTitle ?? '',
     block.schema.imageAlt ?? '',
-    block.schema.caption ?? '',
+    getTextCaptionMarkdown(block.schema.caption),
     block.text,
     block.schema.component === 'table' ? renderAltAnnotationsAsFullText((block.schema.tableColumns ?? []).join(' ')) : '',
     block.schema.component === 'table' ? (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') : '',
@@ -234,7 +235,7 @@ function getBlockLabel(block: VisualBlock): string {
   return block.schema.xrefTitle.trim()
     || (block.schema.containerTitle ?? '').trim()
     || firstLine(block.text)
-    || (block.schema.caption ?? '').trim()
+    || getTextCaptionMarkdown(block.schema.caption).trim()
     || (block.schema.imageAlt ?? '').trim()
     || getTableRowLabel(block)
     || getNestedHeadingLabel(block, new Set([block]))

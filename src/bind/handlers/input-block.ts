@@ -30,6 +30,14 @@ import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
 import type { JsonObject } from '../../hvy/types';
+import {
+  formatPdfMarginUnitValue,
+  formatPdfPointsAsUnit,
+  inferPdfPageMarginUnit,
+  pdfPageLengthToPoints,
+  readPdfPageMetaObject,
+  type PdfPageMarginUnit,
+} from '../../pdf-page-settings';
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -53,6 +61,26 @@ export function bindInputBlock(app: HTMLElement): void {
     if (field === 'meta-title' && target instanceof HTMLInputElement) {
       recordHistory('meta:title');
       state.document.meta.title = target.value;
+      return;
+    }
+
+    if (field === 'meta-description' && target instanceof HTMLTextAreaElement) {
+      recordHistory('meta:description');
+      if (target.value.trim().length > 0) {
+        state.document.meta.description = target.value;
+      } else {
+        delete state.document.meta.description;
+      }
+      return;
+    }
+
+    if (field === 'meta-tags' && target instanceof HTMLInputElement) {
+      recordHistory('meta:tags');
+      if (target.value.trim().length > 0) {
+        state.document.meta.tags = target.value;
+      } else {
+        delete state.document.meta.tags;
+      }
       return;
     }
 
@@ -140,6 +168,36 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-pdf-margin-unit' && target instanceof HTMLInputElement && target.checked) {
+      const unit = target.value === 'cm' ? 'cm' : 'in';
+      recordHistory('meta:pdf-page-margin-unit');
+      writePdfPageMarginDraft(getPdfPageMarginDraft(unit), unit);
+      getRenderApp()();
+      return;
+    }
+
+    if (field.startsWith('meta-pdf-margin-') && target instanceof HTMLInputElement) {
+      recordHistory('meta:pdf-page-margins');
+      const unit = target.dataset.pdfMarginUnit === 'cm' ? 'cm' : 'in';
+      const margins = getPdfPageMarginDraft(unit);
+      const index = field === 'meta-pdf-margin-left'
+        ? 0
+        : field === 'meta-pdf-margin-top'
+          ? 1
+          : field === 'meta-pdf-margin-right'
+            ? 2
+            : 3;
+      const value = Number(target.value);
+      if (Number.isFinite(value) && value >= 0) {
+        margins[index] = `${formatPdfMarginUnitValue(value)}${unit}`;
+      } else {
+        margins[index] = null;
+      }
+      writePdfPageMarginDraft(margins, unit);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'meta-section-contained-default' && target instanceof HTMLInputElement) {
       recordHistory('meta:section-contained-default');
       const existingDefaults = state.document.meta.section_defaults;
@@ -150,6 +208,19 @@ export function bindInputBlock(app: HTMLElement): void {
         ...sectionDefaults,
         contained: target.checked,
       };
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-pdf-debug' && target instanceof HTMLInputElement) {
+      recordHistory('meta:pdf-debug');
+      const pdfPage = readPdfPageMetaObject(state.document.meta);
+      if (target.checked) {
+        pdfPage.debug = true;
+      } else {
+        delete pdfPage.debug;
+      }
+      writePdfPageMetaObject(pdfPage);
       getRefreshReaderPanels()();
       return;
     }
@@ -581,14 +652,6 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'image-caption' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-      const block = resolveBlockContext(target)?.block ?? null;
-      if (!block) return;
-      recordHistory(`image-caption:${block.id}`);
-      block.schema.caption = target.value;
-      getRefreshReaderPanels()();
-      return;
-    }
   });
 }
 
@@ -820,6 +883,35 @@ function renameSectionTemplateReferences(oldName: string, newName: string, stabl
       }
     });
   });
+}
+
+function getPdfPageMarginDraft(unit: PdfPageMarginUnit = 'in'): Array<string | null> {
+  const pdfPage = readPdfPageMetaObject(state.document.meta);
+  const rawMargins = Array.isArray(pdfPage.margins) ? pdfPage.margins : [];
+  return [0, 1, 2, 3].map((index) => {
+    const value = rawMargins[index];
+    const points = typeof value === 'number' || typeof value === 'string' ? pdfPageLengthToPoints(value) : null;
+    return points === null ? null : `${formatPdfPointsAsUnit(points, unit)}${unit}`;
+  });
+}
+
+function writePdfPageMarginDraft(margins: Array<string | null>, unit: PdfPageMarginUnit = inferPdfPageMarginUnit(readPdfPageMetaObject(state.document.meta).margins)): void {
+  const pdfPage = readPdfPageMetaObject(state.document.meta);
+  if (margins.every((value) => value === null)) {
+    delete pdfPage.margins;
+  } else {
+    const fallback = [0, 1, 2, 3].map(() => `${formatPdfPointsAsUnit(54, unit)}${unit}`);
+    pdfPage.margins = margins.map((value, index) => value ?? fallback[index]);
+  }
+  writePdfPageMetaObject(pdfPage);
+}
+
+function writePdfPageMetaObject(pdfPage: JsonObject): void {
+  if (Object.keys(pdfPage).length > 0) {
+    state.document.meta.pdf_page = pdfPage;
+  } else {
+    delete state.document.meta.pdf_page;
+  }
 }
 
 function cssEscape(value: string): string {

@@ -1,5 +1,7 @@
 import type { JsonObject } from '../hvy/types';
-import type { VisualBlock } from '../editor/types';
+import type { Align, VisualBlock } from '../editor/types';
+import type { TextCaptionPayload } from '../editor/types';
+import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
 
@@ -34,6 +36,26 @@ export interface HvyPluginEditorContext {
   detailLevel: number;
 }
 
+export interface HvyPluginTextEditorMountOptions {
+  value: string;
+  align?: Align;
+  placeholder?: string;
+  includeAlign?: boolean;
+  includeFillIn?: boolean;
+  disabled?: boolean;
+  onChange: (markdown: string) => void;
+}
+
+export interface HvyPluginTextEditorInstance {
+  element: HTMLElement;
+  editable: HTMLElement;
+  getValue(): string;
+  setValue(markdown: string): void;
+  setDisabled(disabled: boolean): void;
+  focus(): void;
+  unmount(): void;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
   editor: HvyPluginEditorContext;
@@ -53,6 +75,24 @@ export interface HvyPluginContext {
   // Persist plugin-interpreted text (block.text), refreshing this plugin
   // instance in place and reader panels without a full app re-render.
   setText(text: string): void;
+  // Persist block-level presentation CSS for plugin-owned controls such as
+  // size/alignment presets, refreshing this plugin instance and reader panels.
+  setCss(css: string): void;
+  // Run the host's active rendered-link observer over plugin-owned DOM that was
+  // inserted after the normal HVY render pass, such as async API results.
+  observeLinks(root: ParentNode): void;
+  caption: {
+    createDefaultTextCaption(text?: string): TextCaptionPayload;
+    openTextCaptionModal(options: { title?: string; configKey?: string; value?: TextCaptionPayload | null; onChange?: (next: TextCaptionPayload | null) => void }): void;
+    renderTextCaption(value: TextCaptionPayload | null): HTMLElement | null;
+  };
+  text: {
+    createDefaultText(text?: string): TextComponentPayload;
+    renderText(value: string | TextComponentPayload | null): HTMLElement | null;
+  };
+  textEditor: {
+    mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;
+  };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.
   requestRerender(): void;

@@ -67,7 +67,7 @@ test('reader container omits the title line when no title is configured', () => 
   expect(html).not.toContain('has-title');
 });
 
-test('reader container marks titled bordered containers for border-straddling label styling', () => {
+test('reader container marks titled bordered containers for label styling', () => {
   const block = makeContainerBlock('Education');
   const html = renderContainerReader(makeSection([block]), block, helpers);
 

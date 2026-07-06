@@ -2,6 +2,7 @@ import { findBlockByIds } from '../../../block-ops';
 import { requestProxyCompletion } from '../../../chat/chat';
 import { recordHistory } from '../../../history';
 import { runUserScript } from '../../../plugins/scripting/wrapper';
+import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
 import { getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntime } from '../../../state';
 import type { ChatMessage } from '../../../types';
 import { clearButtonAiGenerateRunning, isButtonAiGenerateRunning, markButtonAiGenerateRunning } from './button-state';
@@ -28,9 +29,15 @@ function coerceReturnedBoolean(value: unknown): boolean {
 }
 
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
+  const startedAt = nowMs();
   const runtime = getActiveStateRuntime();
   const inVisibilityRuntime = <T>(action: () => T): T => runWithStateRuntime(runtime, action);
   const dynamicBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-dynamic-visibility="true"]'));
+  const buttons = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-button="true"]'));
+  logPerfTrace('button-visibility-scripts:start', {
+    dynamicBlockCount: dynamicBlocks.length,
+    buttonCount: buttons.length,
+  });
   await Promise.all(dynamicBlocks.map(async (element) => {
     const sectionKey = element.dataset.sectionKey ?? '';
     const blockId = element.dataset.blockId ?? '';
@@ -56,7 +63,6 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
     element.dataset.visibleState = result.ok && coerceReturnedBoolean(result.returnValue) ? 'visible' : 'hidden';
   }));
 
-  const buttons = Array.from(root.querySelectorAll<HTMLElement>('[data-hvy-button="true"]'));
   await Promise.all(buttons.map(async (element) => {
     const sectionKey = element.dataset.sectionKey ?? '';
     const blockId = element.dataset.blockId ?? '';
@@ -90,6 +96,11 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
     }
     element.dataset.visibleState = coerceReturnedBoolean(result.returnValue) ? 'visible' : 'hidden';
   }));
+  logPerfTrace('button-visibility-scripts:end', {
+    dynamicBlockCount: dynamicBlocks.length,
+    buttonCount: buttons.length,
+    elapsedMs: elapsedMs(startedAt),
+  });
 }
 
 export async function runButtonAiGenerate(app: HTMLElement, actionButton: HTMLElement, sectionKey: string, blockId: string): Promise<void> {

@@ -13,6 +13,8 @@ import { getHvyReferenceDocs } from './reference-library';
 import { assertCssValueIsDeclarationString } from '../css-value-validation';
 import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
+import { normalizeTextCaption } from '../caption';
+import { isPdfPageMarginsInput } from '../pdf-page-settings';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -138,6 +140,17 @@ function validateHeaderCssValues(meta: JsonObject): void {
       if (style && typeof style === 'object' && !Array.isArray(style) && typeof (style as JsonObject).css === 'string') {
         assertCssValueIsDeclarationString((style as JsonObject).css as string, `heading_styles.${styleName}.css`);
       }
+    }
+  }
+  const pdfPage = meta.pdf_page;
+  if (pdfPage && typeof pdfPage === 'object' && !Array.isArray(pdfPage)) {
+    const margins = (pdfPage as JsonObject).margins;
+    if (typeof margins !== 'undefined' && !isPdfPageMarginsInput(margins)) {
+      throw new Error('pdf_page.margins must be a length such as "0.75in" or "1cm", a [horizontal, vertical] array, or a [left, top, right, bottom] array of non-negative lengths.');
+    }
+    const debug = (pdfPage as JsonObject).debug;
+    if (typeof debug !== 'undefined' && typeof debug !== 'boolean') {
+      throw new Error('pdf_page.debug must be a boolean.');
     }
   }
 }
@@ -969,7 +982,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
-  if (typeof value.caption === 'string') schema.caption = value.caption;
+  if ('caption' in value) schema.caption = normalizeTextCaption(value.caption);
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null;

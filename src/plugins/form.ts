@@ -13,6 +13,7 @@ import { requestProxyCompletion } from '../chat/chat';
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { recordHistory } from '../history';
 import type { JsonObject } from '../hvy/types';
+import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { getActiveStateRuntime, runWithStateRuntime } from '../state';
 import type { ChatMessage } from '../types';
 import formDocumentation from './form.about.txt?raw';
@@ -55,6 +56,7 @@ export interface FormFieldDefinition {
   value: string | boolean;
   placeholder: string;
   required: boolean;
+  rows: number;
   options: FormOption[];
   triggers: Partial<Record<FormTriggerName, string>>;
   meta: {
@@ -113,6 +115,7 @@ const DEFAULT_FIELD: FormFieldDefinition = {
   value: '',
   placeholder: '',
   required: false,
+  rows: 0,
   options: [],
   triggers: {},
   meta: {
@@ -175,6 +178,11 @@ function normalizeFieldType(value: unknown): FormFieldType {
   return getCanonicalFormFieldType(value) ?? 'text';
 }
 
+function normalizeFieldRows(value: unknown): number {
+  const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : 0;
+}
+
 function normalizeOption(value: unknown): FormOption | null {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     const label = String(value);
@@ -220,6 +228,7 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
     value: fieldValue,
     placeholder: typeof raw.placeholder === 'string' ? raw.placeholder : '',
     required: raw.required === true,
+    rows: type === 'textarea' ? normalizeFieldRows(raw.rows) : 0,
     options,
     triggers: normalizeTriggers(raw.triggers),
     meta: {
@@ -350,6 +359,7 @@ export function serializeFormSpec(spec: FormSpec): string {
     if (field.value !== '' && field.value !== false) item.value = field.value;
     if (field.placeholder.length > 0) item.placeholder = field.placeholder;
     if (field.required) item.required = true;
+    if (field.type === 'textarea' && field.rows > 0) item.rows = field.rows;
     if (field.options.length > 0) item.options = field.options.map((option) => ({ label: option.label, value: option.value }));
     if (Object.keys(field.triggers).length > 0) item.triggers = field.triggers;
     if (field.meta.css.length > 0) item.meta = { css: field.meta.css };
@@ -524,7 +534,26 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return;
     }
     runQueue = runQueue
-      .then(() => runFormScript(name, reason))
+      .then(() => {
+        const startedAt = nowMs();
+        logPerfTrace('form-script:start', {
+          scriptName: name,
+          reason,
+          componentId: ctx.block.schema.id || ctx.block.id,
+        });
+        return runFormScript(name, reason).then((result) => {
+          logPerfTrace('form-script:end', {
+            scriptName: name,
+            reason,
+            componentId: ctx.block.schema.id || ctx.block.id,
+            ok: result.ok,
+            elapsedMs: elapsedMs(startedAt),
+            stepsExecuted: result.stepsExecuted,
+            toolCalls: result.toolCalls,
+          });
+          return result;
+        });
+      })
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;
@@ -659,6 +688,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
             ? `<label class="hvy-form-checkbox-label"><span>Default Checked</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="value" ${field.value === true ? 'checked' : ''}></label>`
             : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
           ${renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
+          ${field.type === 'textarea' ? `<label><span>Rows</span><input type="number" min="1" step="1" value="${field.rows || 2}" data-form-field-index="${index}" data-form-field-prop="rows"></label>` : ''}
           <label class="hvy-form-checkbox-label"><span>Required</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="required" ${field.required ? 'checked' : ''}></label>
         </div>
         ${(field.type === 'select' || field.type === 'radio')
@@ -831,6 +861,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       textarea.value = String(value ?? '');
       textarea.placeholder = field.placeholder;
       textarea.required = field.required;
+      if (field.rows > 0) {
+        textarea.rows = field.rows;
+      }
       appendControl(wrap, textarea, field);
     } else if (field.type === 'select') {
       const select = document.createElement('select');
@@ -940,6 +973,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'options' && target instanceof HTMLTextAreaElement) field.options = parseOptionsText(target.value);
       if (prop === 'label') field.label = target.value;
       if (prop === 'placeholder') field.placeholder = target.value;
+      if (prop === 'rows') field.rows = normalizeFieldRows(target.value);
       if (prop === 'metaCss') field.meta.css = target.value;
       commitSpec(spec, { refreshEditor: prop === 'type' || prop === 'options' });
       return;
@@ -1179,7 +1213,7 @@ export const formPlugin: HvyPlugin = {
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',
-    '`scriptLibraries` enables checked sandbox libraries such as `random` for every form script.',
+    '`scriptLibraries` enables checked sandbox libraries such as `random` and `re` for every form script.',
     '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',

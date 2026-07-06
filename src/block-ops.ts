@@ -3,7 +3,7 @@ import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
-import { state, getRefreshReaderPanels, getRenderApp } from './state';
+import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
@@ -11,7 +11,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
-import { applyMobileAltAdjustment, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
+import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
@@ -24,9 +24,12 @@ import { createTextFillInMarker, hasTextFillInMarker, prepareTextFillIn } from '
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
+import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
+import type { TextCaptionPayload } from './editor/types';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
+const CODE_BLOCK_ENTER_SUPPRESS_MS = 300;
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
@@ -78,6 +81,12 @@ export function findBlockInList(blocks: VisualBlock[], blockId: string, seen = n
     if (nestedExpandableContent) {
       return nestedExpandableContent;
     }
+    if (block.schema.encryptedBlock) {
+      const nestedEncrypted = findBlockInList([block.schema.encryptedBlock], blockId, seen);
+      if (nestedEncrypted) {
+        return nestedEncrypted;
+      }
+    }
     for (const item of block.schema.gridItems ?? []) {
       const nestedGridBlock = findBlockInList([item.block], blockId, seen);
       if (nestedGridBlock) {
@@ -99,6 +108,7 @@ function findBlockPathInList(blocks: VisualBlock[], blockId: string): string[] |
       ...((block.schema.gridItems ?? []).map((item) => item.block)),
       ...(block.schema.expandableStubBlocks?.children ?? []),
       ...(block.schema.expandableContentBlocks?.children ?? []),
+      ...(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : []),
     ];
     const nestedPath = findBlockPathInList(nestedBlocks, blockId);
     if (nestedPath) {
@@ -196,6 +206,53 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   }
   const block = context.block;
 
+  if (field === 'rich-code-language') {
+    if (!(target instanceof HTMLInputElement)) {
+      return false;
+    }
+    const richEditor = target.closest<HTMLElement>('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+    if (!richEditor) {
+      return false;
+    }
+    updateRichCodeBlockLanguageInput(target);
+    removeNonTextContentFromRichEditor(richEditor);
+    normalizeEditableListDom(richEditor);
+    normalizeInlineCodeTextNodes(richEditor);
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(richEditor))));
+    block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    if (shouldRefreshReaderPanelsAfterRichInput(richEditor)) {
+      getRefreshReaderPanels()();
+    }
+    return true;
+  }
+
+  if (field === 'caption-rich') {
+    removeNonTextContentFromRichEditor(target);
+    normalizeEditableListDom(target);
+    convertInlineCodeInsertedShortcut(target);
+    normalizeInlineCodeTextNodes(target);
+    const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(target))));
+    let nextCaption: TextCaptionPayload | null = null;
+    if (block.schema.kind === 'image') {
+      nextCaption = updateTextCaptionText(block.schema.caption, editedMarkdown);
+      block.schema.caption = nextCaption;
+    } else if (state.captionTextModal?.target.kind === 'plugin-config') {
+      const key = state.captionTextModal.target.configKey;
+      const current = normalizeTextCaption(block.schema.pluginConfig[key]);
+      nextCaption = updateTextCaptionText(current, editedMarkdown);
+      state.captionTextModal.onChange?.(nextCaption);
+    } else {
+      return false;
+    }
+    refreshCaptionModalPreview(target, nextCaption);
+    if (block.schema.kind === 'image') {
+      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+      getRefreshReaderPanels()();
+    }
+    return true;
+  }
+
   if (field === 'block-rich' || field === 'text-fill-in-rich') {
     let turndownMs = 0;
     let syncMs = 0;
@@ -206,7 +263,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
     const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(
-      field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : target.innerHTML
+      field === 'text-fill-in-rich' ? getTextFillInRichEditorHtml(target) : getRichEditorSerializableHtml(target)
     )));
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     if (field === 'text-fill-in-rich') {
@@ -535,6 +592,17 @@ function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock)
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
   return !target.closest('.editor-tree, .hvy-ai-reader-surface');
+}
+
+function refreshCaptionModalPreview(target: HTMLElement, caption: TextCaptionPayload | null): void {
+  const modal = target.closest<HTMLElement>('.caption-text-modal');
+  const preview = modal?.querySelector<HTMLElement>('.caption-text-modal-preview .image-caption');
+  if (!preview) {
+    return;
+  }
+  const helpers = getCachedComponentRenderHelpers();
+  preview.innerHTML = renderTextCaptionHtml(caption, helpers);
+  preview.style.textAlign = caption?.schema.align ?? 'center';
 }
 
 function buildTextFromFillInEditor(target: HTMLElement, block: VisualBlock, migrateFillInPlaceholders: boolean): string {
@@ -956,6 +1024,7 @@ export function blockContainsBlockId(block: VisualBlock, blockId: string): boole
       || findBlockInList((block.schema.gridItems ?? []).map((item) => item.block), blockId)
       || findBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId)
       || findBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId)
+      || findBlockInList(block.schema.encryptedBlock ? [block.schema.encryptedBlock] : [], blockId)
   );
 }
 
@@ -967,6 +1036,7 @@ export function getComponentRenderHelpers(editorRenderer: {
   renderRichToolbar: ComponentRenderHelpers['renderRichToolbar'];
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
+  renderTextFragment: ComponentRenderHelpers['renderTextFragment'];
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }, readerRenderer: {
@@ -998,9 +1068,10 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown) => renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
+      codeLanguageInputAttrs,
     }),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
@@ -1011,6 +1082,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     orderReaderBlocks: readerRenderer.orderReaderBlocks,
     orderReaderListBlocks: readerRenderer.orderReaderListBlocks,
     isReaderViewPrioritizedBlock: readerRenderer.isReaderViewPrioritizedBlock,
+    renderTextFragment: editorRenderer.renderTextFragment,
     renderComponentFragment: editorRenderer.renderComponentFragment,
     renderComponentOptions: renderAllowedComponentOptions,
     renderAddComponentPicker: (options) => renderAddComponentPicker(
@@ -2026,6 +2098,8 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
   }
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,
+    editable.closest('.caption-text-modal')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
+    editable.closest('.text-editor-shell')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
     editable.closest('.editor-block')?.querySelector<HTMLElement>('.rich-toolbar') ?? null,
   ].filter((toolbar): toolbar is HTMLElement => Boolean(toolbar));
   if (toolbars.length === 0) {
@@ -2270,6 +2344,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 
   if (event.key === 'Enter' && isSelectionInsideCodeBlock(editable)) {
     event.preventDefault();
+    suppressNextCodeBlockParagraphInput(editable);
     if (event.shiftKey) {
       exitCodeBlockBelowSelection(editable);
     } else {
@@ -2356,13 +2431,50 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
+  if (event.inputType === 'insertParagraph') {
+    if (consumeSuppressedCodeBlockParagraphInput(editable)) {
+      return true;
+    }
+    if (isSelectionInsideCodeBlock(editable)) {
+      insertTextInSelectionCodeBlock(editable, '\n');
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+    if (!insertParagraphAtEditableSelection(editable)) {
+      return false;
+    }
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromPasteAsQuotation') {
     const dataTransfer = event.dataTransfer;
     if (!dataTransfer) {
       return false;
     }
+    const codeBlockPasteText = dataTransfer.getData('text/plain');
+    if (isSelectionInsideCodeBlock(editable) && codeBlockPasteText) {
+      insertTextInSelectionCodeBlock(editable, codeBlockPasteText);
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+      updateRichToolbarState(editable);
+      return true;
+    }
+    if (event.inputType === 'insertFromPasteAsQuotation') {
+      const text = dataTransfer.getData('text/plain');
+      if (text) {
+        insertPlainTextAtEditableSelection(editable, text);
+        editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        routeNextUndoToDocument();
+        updateRichToolbarState(editable);
+        return true;
+      }
+      return false;
+    }
     const html = dataTransfer.getData(HVY_RICH_CLIPBOARD_TYPE) ||
-      (event.inputType === 'insertFromPasteAsQuotation' ? '' : sanitizeExternalRichPasteHtml(dataTransfer.getData('text/html')));
+      normalizeExternalRichPasteHtml(dataTransfer.getData('text/html'));
     if (html) {
       insertHtmlAtEditableSelection(editable, html);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2470,24 +2582,47 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   }
   const container = document.createElement('div');
   container.appendChild(range.cloneContents());
+  removeEditorCaretAnchors(container);
   const html = container.innerHTML;
   if (!html) {
     return false;
   }
   clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
   clipboard.setData('text/html', html);
-  clipboard.setData('text/plain', range.toString());
+  clipboard.setData('text/plain', removeEditorCaretAnchorsFromText(range.toString()));
   event.preventDefault();
   return true;
 }
 
-export async function pastePlainTextIntoRichEditor(editable: HTMLElement): Promise<boolean> {
-  if (!navigator.clipboard?.readText) {
-    return false;
+function removeEditorCaretAnchors(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text) {
+      textNodes.push(current);
+    }
+    current = walker.nextNode();
   }
-  const text = await navigator.clipboard.readText();
+  textNodes.forEach((node) => {
+    node.textContent = removeEditorCaretAnchorsFromText(node.textContent ?? '');
+  });
+}
+
+function removeEditorCaretAnchorsFromText(text: string): string {
+  return text.replace(/\u200b/g, '');
+}
+
+export function handleRichEditorPlainTextPaste(event: ClipboardEvent, editable: HTMLElement): boolean {
+  const text = event.clipboardData?.getData('text/plain') ?? '';
   if (!text) {
     return false;
+  }
+  if (isSelectionInsideCodeBlock(editable)) {
+    insertTextInSelectionCodeBlock(editable, text);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
   }
   insertPlainTextAtEditableSelection(editable, text);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -2505,6 +2640,73 @@ function sanitizeExternalRichPasteHtml(html: string): string {
     stripExternalPastePresentation(element);
   });
   return template.innerHTML;
+}
+
+function normalizeExternalRichPasteHtml(html: string): string {
+  const sanitized = sanitizeExternalRichPasteHtml(html);
+  if (!sanitized) {
+    return '';
+  }
+  const container = document.createElement('div');
+  container.innerHTML = sanitized;
+  convertExternalBoldPresentationToSemanticStrong(container);
+  removeNonTextContentFromRichEditor(container);
+  normalizeEditableListDom(container);
+  normalizeInlineCodeTextNodes(container);
+  const markdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(
+    turndown.turndown(getRichEditorSerializableHtml(container))
+  ));
+  if (!markdown.trim()) {
+    return '';
+  }
+  const editorHtml = renderMarkdownToEditorHtml(markdown);
+  return shouldInsertExternalPasteInline(sanitized, markdown) ? unwrapSingleRenderedParagraph(editorHtml) : editorHtml;
+}
+
+function shouldInsertExternalPasteInline(html: string, markdown: string): boolean {
+  if (!/<\/?(p|div|blockquote|pre|ul|ol|li|table|h[1-6]|tr|td|th)\b/i.test(html)) {
+    return true;
+  }
+  return !/\n\s*\n/.test(markdown) &&
+    !/^(#{1,6} |[-*+] |\d+\. |> |```|~~~)/m.test(markdown);
+}
+
+function unwrapSingleRenderedParagraph(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const children = Array.from(template.content.childNodes).filter((node) => {
+    return node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim().length > 0;
+  });
+  if (children.length !== 1 || !(children[0] instanceof HTMLParagraphElement)) {
+    return html;
+  }
+  return children[0].innerHTML;
+}
+
+function convertExternalBoldPresentationToSemanticStrong(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    if (!isExternalBoldPresentation(element.getAttribute('style') ?? '')) {
+      return;
+    }
+    if (element.closest('strong, b')) {
+      return;
+    }
+    const strong = document.createElement('strong');
+    element.before(strong);
+    strong.append(element);
+  });
+}
+
+function isExternalBoldPresentation(style: string): boolean {
+  const weight = style.match(/(?:^|;)\s*font-weight\s*:\s*([^;]+)/i)?.[1]?.trim().toLowerCase() ?? '';
+  if (!weight) {
+    return false;
+  }
+  if (weight === 'bold' || weight === 'bolder') {
+    return true;
+  }
+  const numeric = Number(weight);
+  return Number.isFinite(numeric) && numeric >= 600;
 }
 
 function stripExternalPastePresentation(element: HTMLElement): void {
@@ -2602,6 +2804,51 @@ function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[]
 function insertPlainTextAtEditableSelection(editable: HTMLElement, text: string): void {
   const html = escapeHtml(text).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
   insertHtmlAtEditableSelection(editable, html || '<br>');
+}
+
+function insertParagraphAtEditableSelection(editable: HTMLElement): boolean {
+  if (isSelectionInsideEditableList(editable) || isSelectionInsideCodeBlock(editable)) {
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    const paragraph = document.createElement('p');
+    paragraph.appendChild(document.createElement('br'));
+    editable.appendChild(paragraph);
+    placeCaretAtStart(paragraph);
+    return true;
+  }
+
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable || !/^(P|DIV|BLOCKQUOTE|H[1-6])$/.test(block.tagName)) {
+    return false;
+  }
+
+  if (!range.collapsed) {
+    range.deleteContents();
+  }
+
+  const nextBlock = block instanceof HTMLQuoteElement
+    ? document.createElement('blockquote')
+    : /^H[1-6]$/.test(block.tagName)
+      ? document.createElement('p')
+      : document.createElement('p');
+  const tailRange = document.createRange();
+  tailRange.selectNodeContents(block);
+  tailRange.setStart(range.startContainer, range.startOffset);
+  nextBlock.appendChild(tailRange.extractContents());
+  ensureEditableParagraphContent(block);
+  ensureEditableParagraphContent(nextBlock);
+  block.parentNode?.insertBefore(nextBlock, block.nextSibling);
+  placeCaretAtStart(nextBlock);
+  return true;
+}
+
+function ensureEditableParagraphContent(block: HTMLElement): void {
+  if (block.childNodes.length > 0 && !isEffectivelyEmptyBlock(block)) {
+    return;
+  }
+  block.replaceChildren(document.createElement('br'));
 }
 
 function placeCaretAfterInsertedFragment(range: Range, fragment: DocumentFragment): void {
@@ -3566,7 +3813,7 @@ function replaceCurrentLineWithCodeBlock(editable: HTMLElement, language: string
   code.setAttribute('contenteditable', 'true');
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
-  replaceCurrentLineElement(editable, pre);
+  replaceCurrentLineElement(editable, createRichCodeBlockShell(editable, pre, normalizedLanguage || 'text'));
   placeCaretInside(code);
 }
 
@@ -3579,8 +3826,38 @@ function insertCodeBlockAtSelection(editable: HTMLElement): void {
   code.appendChild(document.createTextNode(''));
   pre.appendChild(code);
   editable.focus();
-  insertNodeAtSelection(pre);
+  insertNodeAtSelection(createRichCodeBlockShell(editable, pre, ''));
   placeCaretInside(code);
+}
+
+function createRichCodeBlockShell(editable: HTMLElement, pre: HTMLPreElement, language: string): HTMLElement {
+  const shell = document.createElement('div');
+  shell.className = 'rich-code-block-shell';
+  shell.append(createRichCodeLanguageControl(editable, language), pre);
+  return shell;
+}
+
+function createRichCodeLanguageControl(editable: HTMLElement, language: string): HTMLElement {
+  const label = document.createElement('label');
+  label.className = 'rich-code-language-control';
+  label.contentEditable = 'false';
+  const labelText = document.createElement('span');
+  labelText.textContent = 'Language';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = language === 'text' ? '' : language;
+  input.placeholder = 'text';
+  input.dataset.field = 'rich-code-language';
+  const sectionKey = editable.dataset.sectionKey;
+  const blockId = editable.dataset.blockId;
+  if (sectionKey) {
+    input.dataset.sectionKey = sectionKey;
+  }
+  if (blockId) {
+    input.dataset.blockId = blockId;
+  }
+  label.append(labelText, input);
+  return label;
 }
 
 function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
@@ -3596,7 +3873,7 @@ function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
   if (!paragraph.firstChild || paragraph.textContent === '') {
     paragraph.replaceChildren(document.createElement('br'));
   }
-  pre.replaceWith(paragraph);
+  replaceCodeBlockWith(pre, paragraph);
   if (caretOffset !== null && paragraph.firstChild instanceof Text) {
     const selection = window.getSelection();
     const nextRange = document.createRange();
@@ -3607,6 +3884,42 @@ function convertSelectionCodeBlockToParagraph(editable: HTMLElement): void {
     return;
   }
   placeCaretAtEnd(paragraph);
+}
+
+export function updateRichCodeBlockLanguageInput(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLInputElement) || target.dataset.field !== 'rich-code-language') {
+    return false;
+  }
+  const pre = target.closest<HTMLElement>('.rich-code-block-shell')?.querySelector('pre') ?? target.closest('pre');
+  const code = pre?.querySelector('code');
+  if (!(pre instanceof HTMLPreElement) || !(code instanceof HTMLElement)) {
+    return false;
+  }
+  const language = normalizeRichCodeLanguage(target.value);
+  pre.dataset.codeLanguage = language;
+  Array.from(code.classList)
+    .filter((className) => className.startsWith('language-'))
+    .forEach((className) => code.classList.remove(className));
+  if (language) {
+    code.classList.add(`language-${language}`);
+    code.dataset.language = language;
+  } else {
+    delete code.dataset.language;
+  }
+  return true;
+}
+
+function normalizeRichCodeLanguage(value: string): string {
+  return value.trim().toLowerCase().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function replaceCodeBlockWith(pre: HTMLPreElement, replacement: HTMLElement): void {
+  const shell = pre.closest<HTMLElement>('.rich-code-block-shell');
+  if (shell && shell.parentElement) {
+    shell.replaceWith(replacement);
+    return;
+  }
+  pre.replaceWith(replacement);
 }
 
 function insertTextInSelectionCodeBlock(editable: HTMLElement, text: string): void {
@@ -3637,6 +3950,16 @@ function insertTextInSelectionCodeBlock(editable: HTMLElement, text: string): vo
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function suppressNextCodeBlockParagraphInput(editable: HTMLElement): void {
+  editable.dataset.hvyCodeBlockEnterSuppressUntil = String(Date.now() + CODE_BLOCK_ENTER_SUPPRESS_MS);
+}
+
+function consumeSuppressedCodeBlockParagraphInput(editable: HTMLElement): boolean {
+  const until = Number(editable.dataset.hvyCodeBlockEnterSuppressUntil ?? '0');
+  delete editable.dataset.hvyCodeBlockEnterSuppressUntil;
+  return Number.isFinite(until) && until >= Date.now();
 }
 
 function applyCodeBlockIndentation(editable: HTMLElement, direction: 'indent' | 'dedent'): boolean {
@@ -3678,7 +4001,9 @@ function exitCodeBlockBelowSelection(editable: HTMLElement): void {
   }
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createTextNode('\u200b'));
-  pre.parentNode?.insertBefore(paragraph, pre.nextSibling);
+  const shell = pre.closest<HTMLElement>('.rich-code-block-shell');
+  const reference = shell ?? pre;
+  reference.parentNode?.insertBefore(paragraph, reference.nextSibling);
   placeCaretAtEnd(paragraph);
 }
 
@@ -3688,10 +4013,15 @@ function reenterPreviousCodeBlock(editable: HTMLElement): boolean {
     return false;
   }
   const previous = block.previousElementSibling;
-  if (!(previous instanceof HTMLPreElement)) {
+  const previousPre = previous instanceof HTMLPreElement
+    ? previous
+    : previous instanceof HTMLElement && previous.classList.contains('rich-code-block-shell')
+      ? previous.querySelector('pre')
+      : null;
+  if (!(previousPre instanceof HTMLPreElement)) {
     return false;
   }
-  const code = previous.querySelector<HTMLElement>('code');
+  const code = previousPre.querySelector<HTMLElement>('code');
   if (!code) {
     return false;
   }
@@ -3777,7 +4107,7 @@ function removeEmptyCodeBlockAtSelection(editable: HTMLElement): boolean {
 
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createElement('br'));
-  pre.replaceWith(paragraph);
+  replaceCodeBlockWith(pre, paragraph);
   placeCaretAtStart(paragraph);
   return true;
 }
@@ -3981,6 +4311,10 @@ export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: stri
   editable.innerHTML = renderMarkdownToEditorHtml(markdown, {
     textLineStyles: getTextLineStylesFromMeta(state.document.meta),
     textLineStyleMode: 'editor',
+    codeLanguageInputAttrs: {
+      ...(editable.dataset.sectionKey ? { 'data-section-key': editable.dataset.sectionKey } : {}),
+      ...(editable.dataset.blockId ? { 'data-block-id': editable.dataset.blockId } : {}),
+    },
   });
   placeCaretAtEnd(editable);
 }

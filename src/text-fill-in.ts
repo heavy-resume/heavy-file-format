@@ -1,6 +1,9 @@
 export const TEXT_FILL_IN_MARKER = '<!-- value -->';
-const TEXT_FILL_IN_MARKER_PATTERN = /<!--\s*value(?:\s+(\{.*?\}))?\s*-->/g;
-const TEXT_FILL_IN_MARKER_SPLIT_PATTERN = /<!--\s*value(?:\s+\{.*?\})?\s*-->/g;
+const TEXT_FILL_IN_MARKER_SOURCE = '<!--\\s*value(?:\\s+(\\{.*?\\}))?\\s*-->';
+const TEXT_FILL_IN_MARKER_SPLIT_SOURCE = '<!--\\s*value(?:\\s+\\{.*?\\})?\\s*-->';
+const TEXT_FILL_IN_MARKER_PATTERN = new RegExp(TEXT_FILL_IN_MARKER_SOURCE, 'g');
+const TEXT_FILL_IN_MARKER_SPLIT_PATTERN = new RegExp(TEXT_FILL_IN_MARKER_SPLIT_SOURCE, 'g');
+const TEXT_FILL_IN_EMPTY_EMPHASIS_PATTERN = new RegExp(`(\\*\\*\\*|___|\\*\\*|__|\\*|_)${TEXT_FILL_IN_MARKER_SPLIT_SOURCE}\\1`, 'g');
 
 export interface TextFillInMarker {
   marker: string;
@@ -38,7 +41,10 @@ export function prepareTextFillIn(text: string): { text: string; placeholder: st
 }
 
 export function removeTextFillInMarkers(text: string): string {
-  return text.replace(TEXT_FILL_IN_MARKER_SPLIT_PATTERN, '').trimEnd();
+  return text
+    .replace(TEXT_FILL_IN_EMPTY_EMPHASIS_PATTERN, '')
+    .replace(TEXT_FILL_IN_MARKER_SPLIT_PATTERN, '')
+    .trimEnd();
 }
 
 export function applyTextFillInValue(text: string, value: string): string {

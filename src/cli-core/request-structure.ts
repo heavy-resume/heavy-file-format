@@ -128,6 +128,7 @@ export function extractVirtualPathsFromOutput(output: string): string[] {
 }
 
 function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtualFileSystem): ComponentStructureEntry[] {
+  const directBodyFilesByDirectory = collectDirectBodyFilesByDirectory(fs);
   return [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
       entry.kind === 'file'
@@ -135,14 +136,19 @@ function collectComponentStructureEntries(document: VisualDocument, fs: HvyVirtu
       && entry.path.endsWith('.json')
       && !entry.path.endsWith('/section.json')
       && !entry.path.endsWith('/children-order.json'))
-    .map((entry) => componentEntryFromJsonFile(document, fs, entry.path))
+    .map((entry) => componentEntryFromJsonFile(document, fs, entry.path, directBodyFilesByDirectory))
     .filter((entry): entry is ComponentStructureEntry => !!entry);
 }
 
-function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFileSystem, jsonPath: string): ComponentStructureEntry | null {
+function componentEntryFromJsonFile(
+  document: VisualDocument,
+  fs: HvyVirtualFileSystem,
+  jsonPath: string,
+  directBodyFilesByDirectory: Map<string, string[]>
+): ComponentStructureEntry | null {
   const directory = jsonPath.replace(/\/[^/]+$/, '');
   const type = jsonPath.split('/').pop()?.replace(/\.json$/, '') ?? '';
-  const textPath = findPrimaryBodyFilePath(fs, directory, type);
+  const textPath = findPrimaryBodyFilePath(fs, directory, type, directBodyFilesByDirectory);
   if (!type || !textPath) {
     return null;
   }
@@ -168,25 +174,39 @@ function componentEntryFromJsonFile(document: VisualDocument, fs: HvyVirtualFile
   };
 }
 
-function findPrimaryBodyFilePath(fs: HvyVirtualFileSystem, directory: string, type: string): string {
+function collectDirectBodyFilesByDirectory(fs: HvyVirtualFileSystem): Map<string, string[]> {
+  const bodyFilesByDirectory = new Map<string, string[]>();
+  for (const entry of fs.entries.values()) {
+    if (entry.kind !== 'file' || !entry.path.startsWith('/body/')) {
+      continue;
+    }
+    const filename = entry.path.split('/').pop() ?? '';
+    if (
+      !filename.startsWith('about-')
+      && filename !== 'section-info.txt'
+      && filename !== 'children-order.json'
+      && (entry.path.endsWith('.txt') || entry.path.endsWith('.py'))
+    ) {
+      const directory = entry.path.replace(/\/[^/]+$/, '');
+      const files = bodyFilesByDirectory.get(directory) ?? [];
+      files.push(entry.path);
+      bodyFilesByDirectory.set(directory, files);
+    }
+  }
+  for (const files of bodyFilesByDirectory.values()) {
+    files.sort();
+  }
+  return bodyFilesByDirectory;
+}
+
+function findPrimaryBodyFilePath(fs: HvyVirtualFileSystem, directory: string, type: string, directBodyFilesByDirectory: Map<string, string[]>): string {
   const candidates = [`${directory}/${type}.txt`, `${directory}/script.py`];
   for (const path of candidates) {
     if (fs.entries.get(path)?.kind === 'file') {
       return path;
     }
   }
-  const directBodyFiles = [...fs.entries.values()]
-    .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } =>
-      entry.kind === 'file'
-      && entry.path.startsWith(`${directory}/`)
-      && !entry.path.slice(directory.length + 1).includes('/')
-      && !entry.path.split('/').pop()?.startsWith('about-')
-      && !entry.path.endsWith('/section-info.txt')
-      && !entry.path.endsWith('/children-order.json')
-      && (entry.path.endsWith('.txt') || entry.path.endsWith('.py')))
-    .map((entry) => entry.path)
-    .sort();
-  return directBodyFiles[0] ?? '';
+  return directBodyFilesByDirectory.get(directory)?.[0] ?? '';
 }
 
 function readJsonFile(fs: HvyVirtualFileSystem, path: string): JsonObject {

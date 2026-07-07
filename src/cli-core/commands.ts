@@ -58,6 +58,9 @@ export interface HvyCliExecution {
   output: string;
   mutated: boolean;
   invalidatesVirtualFileSystem?: boolean;
+  mutatedPaths?: string[];
+  refreshSectionPaths?: string[];
+  requiresFullRefresh?: boolean;
 }
 
 type HvyCliCommandContext = {
@@ -81,6 +84,9 @@ type HvyMiniShellProcess = {
   status: number;
   mutated: boolean;
   invalidatesVirtualFileSystem?: boolean;
+  mutatedPaths?: string[];
+  refreshSectionPaths?: string[];
+  requiresFullRefresh?: boolean;
 };
 
 const sessionVirtualFileSystems = new WeakMap<HvyCliSession, ReturnType<typeof buildHvyVirtualFileSystem>>();
@@ -96,6 +102,21 @@ export function invalidateHvyCliSessionVirtualFileSystem(session: HvyCliSession)
 
 function shouldInvalidateVirtualFileSystem(result: { mutated: boolean; invalidatesVirtualFileSystem?: boolean }): boolean {
   return result.invalidatesVirtualFileSystem ?? result.mutated;
+}
+
+function mergeMutatedPaths(...groups: Array<string[] | undefined>): string[] | undefined {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const path of group ?? []) {
+      if (seen.has(path)) {
+        continue;
+      }
+      seen.add(path);
+      paths.push(path);
+    }
+  }
+  return paths.length > 0 ? paths : undefined;
 }
 
 function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
@@ -138,6 +159,9 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     const outputs: string[] = [];
     let mutated = false;
     let invalidatesVirtualFileSystem = false;
+    let mutatedPaths: string[] | undefined;
+    let refreshSectionPaths: string[] | undefined;
+    let requiresFullRefresh = false;
     let scratchpadTouched = false;
     for (const heredoc of heredocs) {
       const fs = buildSessionVirtualFileSystem(document, session);
@@ -149,6 +173,9 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       }
       mutated = mutated || result.mutated;
       invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
+      mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
+      refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
+      requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
       if (shouldInvalidateVirtualFileSystem(result)) {
         invalidateHvyCliSessionVirtualFileSystem(session);
       }
@@ -156,7 +183,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     }
     updateScratchpadCommandHistory(session, expandedInput);
     const output = truncateCliOutput(outputs.join('\n'));
-    const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem };
+    const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
     if (scratchpadTouched && isScratchpadTooLong(session)) {
       return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
     }
@@ -171,6 +198,9 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   let lastProcess: HvyMiniShellProcess = { cwd: session.cwd, stdout: '', stderr: '', status: 0, mutated: false };
   let mutated = false;
   let invalidatesVirtualFileSystem = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let requiresFullRefresh = false;
   let scratchpadTouched = false;
   let previousStatus = 0;
   const outputParts: string[] = [];
@@ -191,6 +221,9 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
     invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(lastProcess);
+    mutatedPaths = mergeMutatedPaths(mutatedPaths, lastProcess.mutatedPaths);
+    refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, lastProcess.refreshSectionPaths);
+    requiresFullRefresh = requiresFullRefresh || Boolean(lastProcess.requiresFullRefresh);
     if (shouldInvalidateVirtualFileSystem(lastProcess)) {
       invalidateHvyCliSessionVirtualFileSystem(session);
     }
@@ -211,7 +244,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     ? outputParts.join('\n')
     : lastProcess.status === 0 ? lastProcess.stdout : lastProcess.stderr || lastProcess.stdout;
   const output = truncateCliOutput(rawOutput, { preserveFindWarning: true });
-  const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem };
+  const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
     return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
   }
@@ -283,15 +316,15 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sed') {
     const result = commandSed(ctx, rest);
-    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'hvy') {
     if (rest[0] === 'lint') {
@@ -316,7 +349,14 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
       return executeHvyShellAliasCommandSync(ctx, rest[0] ?? '', rest.slice(1));
     }
     const result = executeHvyDocumentCommand(ctx, rest);
-    return { cwd: result.cwd ?? cwd, output: result.output, mutated: result.mutated };
+    return {
+      cwd: result.cwd ?? cwd,
+      output: result.output,
+      mutated: result.mutated,
+      mutatedPaths: result.mutatedPaths,
+      refreshSectionPaths: result.refreshSectionPaths,
+      requiresFullRefresh: result.requiresFullRefresh,
+    };
   }
   throw new Error(`doc.cli.run does not support command "${command}".`);
 }
@@ -330,7 +370,7 @@ export function writeHvyVirtualFileSync(document: VisualDocument, path: string, 
   const fs = buildSessionVirtualFileSystem(document, session);
   addSessionFiles(fs, document, session);
   const result = writeVirtualFile({ fs, cwd, session }, path, content, false, 'doc.cli.write');
-  return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+  return { cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
 }
 
 function truncateCliOutput(output: string, options: { preserveFindWarning?: boolean } = {}): string {
@@ -416,15 +456,15 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'hvy') {
     if (args[0] === 'lint') {
@@ -469,7 +509,14 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
       return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
     }
     const result = executeHvyDocumentCommand(ctx, args);
-    return { cwd: result.cwd ?? ctx.cwd, output: result.output, mutated: result.mutated };
+    return {
+      cwd: result.cwd ?? ctx.cwd,
+      output: result.output,
+      mutated: result.mutated,
+      mutatedPaths: result.mutatedPaths,
+      refreshSectionPaths: result.refreshSectionPaths,
+      requiresFullRefresh: result.requiresFullRefresh,
+    };
   }
   throw new Error(`Unknown command "${command}". Try "help".`);
 }
@@ -555,18 +602,18 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   }
   if (command === 'sed') {
     const result = commandSed(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'sort' || command === 'uniq' || command === 'wc' || command === 'tr') {
     return runTextCommand(ctx, command, args);
   }
   if (command === 'echo') {
     const result = commandEcho(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   if (command === 'printf') {
     const result = commandPrintf(ctx, args);
-    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem };
+    return { cwd: ctx.cwd, output: result.output, mutated: result.mutated, invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem, mutatedPaths: result.mutatedPaths };
   }
   throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
 }
@@ -1506,6 +1553,9 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
   const commandOutputs: string[] = [];
   let mutated = false;
   let invalidatesVirtualFileSystem = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let requiresFullRefresh = false;
   const runs = parsed.exec.terminator === '+'
     ? [expandFindExecCommand(parsed.exec.command, matches)]
     : matches.map((match) => expandFindExecCommand(parsed.exec?.command ?? [], [match]));
@@ -1517,12 +1567,15 @@ async function commandFind(ctx: HvyCliCommandContext, args: string[]): Promise<H
     const result = await runCommand(ctx, command, commandRest);
     mutated = mutated || result.mutated;
     invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
+    mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
+    refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
+    requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
     ctx.cwd = result.cwd;
     if (result.output) {
       commandOutputs.push(result.output);
     }
   }
-  return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated, invalidatesVirtualFileSystem };
+  return { cwd: ctx.cwd, output: withWarnings(commandOutputs.join('\n'), warnings), mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 function commandFindWithoutExec(ctx: HvyCliCommandContext, args: string[]): string {
@@ -1981,7 +2034,7 @@ function pathSegmentForId(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean } {
+function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
   const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
   if (redirectIndex < 0) {
     return { output: args.join(' '), mutated: false };
@@ -1998,7 +2051,7 @@ function commandEcho(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cw
   return writeVirtualFile(ctx, path, text, operator === '>>', 'echo');
 }
 
-function commandPrintf(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean } {
+function commandPrintf(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
   const redirectIndex = args.findIndex((arg) => arg === '>' || arg === '>>');
   const printArgs = redirectIndex < 0 ? args : args.slice(0, redirectIndex);
   const output = formatPrintfOutput(printArgs);
@@ -2108,7 +2161,7 @@ function writeVirtualFile(
   content: string,
   append: boolean,
   command: string
-): { output: string; mutated: boolean; invalidatesVirtualFileSystem: boolean } {
+): { output: string; mutated: boolean; invalidatesVirtualFileSystem: boolean; mutatedPaths?: string[]; refreshSectionPaths?: string[]; requiresFullRefresh?: boolean } {
   const file = getReadableFile(ctx, path);
   if (!file.write) {
     throw new Error(`${command}: file is read-only: ${file.path}`);
@@ -2118,6 +2171,7 @@ function writeVirtualFile(
     output: `${file.path}: ${append ? 'appended' : 'written'}`,
     mutated: true,
     invalidatesVirtualFileSystem: virtualFileWriteInvalidatesFileSystem(file.path),
+    mutatedPaths: [file.path],
   };
 }
 
@@ -2187,7 +2241,7 @@ function modifiedSidecarPath(path: string): string {
   return path.replace(/(\.(?:json|ya?ml))$/i, '.modified$1');
 }
 
-function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean } {
+function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd: string; session?: HvyCliSession }, args: string[]): { output: string; mutated: boolean; invalidatesVirtualFileSystem?: boolean; mutatedPaths?: string[] } {
   const parsed = parseCliFlags(args, {
     command: 'sed',
     booleanShort: ['E', 'r', 'n'],
@@ -2206,6 +2260,7 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
     return { output: withWarnings(outputs.join('\n'), parsed.warnings), mutated: false };
   }
   let invalidatesVirtualFileSystem = false;
+  const mutatedPaths: string[] = [];
   return { output: withWarnings(paths
     .map((path) => {
       const file = getReadableFile(ctx, path);
@@ -2216,10 +2271,11 @@ function commandSed(ctx: { fs: ReturnType<typeof buildHvyVirtualFileSystem>; cwd
       const after = applySedEditExpression(before, expression);
       writeVirtualFileContent(ctx, file, after);
       invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || virtualFileWriteInvalidatesFileSystem(file.path);
+      mutatedPaths.push(file.path);
       const changed = before === after ? 0 : 1;
       return `${file.path}: ${changed ? 'updated' : 'no matches'}`;
     })
-    .join('\n'), parsed.warnings), mutated: true, invalidatesVirtualFileSystem };
+    .join('\n'), parsed.warnings), mutated: true, invalidatesVirtualFileSystem, mutatedPaths: mergeMutatedPaths(mutatedPaths) };
 }
 
 function applySedEditExpression(input: string, expression: string): string {
@@ -3121,6 +3177,9 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
   let stderr = '';
   let mutated = false;
   let invalidatesVirtualFileSystem = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let requiresFullRefresh = false;
   let status = 0;
   for (let index = 0; index < commands.length; index += 1) {
     const result = await runMiniShellApplication(ctx, commands[index] ?? [], index === 0 ? null : stdout);
@@ -3129,12 +3188,15 @@ async function executeMiniShellPipeline(ctx: HvyCliCommandContext, commands: str
     status = result.status;
     mutated = mutated || result.mutated;
     invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
+    mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
+    refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
+    requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
     ctx.cwd = result.cwd;
     if (status !== 0) {
       break;
     }
   }
-  return { cwd: ctx.cwd, stdout, stderr, status, mutated, invalidatesVirtualFileSystem };
+  return { cwd: ctx.cwd, stdout, stderr, status, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: string[], stdin: string | null): Promise<HvyMiniShellProcess> {
@@ -3158,6 +3220,9 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
         status: 0,
         mutated: result.mutated,
         invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem,
+        mutatedPaths: result.mutatedPaths,
+        refreshSectionPaths: result.refreshSectionPaths,
+        requiresFullRefresh: result.requiresFullRefresh,
       };
     }
     const writeResult = writeVirtualFile(
@@ -3174,6 +3239,7 @@ async function runMiniShellApplication(ctx: HvyCliCommandContext, commandArgs: s
       status: 0,
       mutated: true,
       invalidatesVirtualFileSystem: writeResult.invalidatesVirtualFileSystem,
+      mutatedPaths: writeResult.mutatedPaths,
     };
   } catch (error) {
     return {
@@ -3380,6 +3446,9 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
   const commandOutputs: string[] = [];
   let mutated = false;
   let invalidatesVirtualFileSystem = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let requiresFullRefresh = false;
   const runs = parsed.replacement
     ? inputItems.map((item) => parsed.command.map((arg) => arg.replaceAll(parsed.replacement ?? '{}', item)))
     : [parsed.command.concat(inputItems)];
@@ -3390,12 +3459,15 @@ async function applyXargsStage(ctx: HvyCliCommandContext, output: string, args: 
     ctx.cwd = result.cwd;
     mutated = mutated || result.mutated;
     invalidatesVirtualFileSystem = invalidatesVirtualFileSystem || shouldInvalidateVirtualFileSystem(result);
+    mutatedPaths = mergeMutatedPaths(mutatedPaths, result.mutatedPaths);
+    refreshSectionPaths = mergeMutatedPaths(refreshSectionPaths, result.refreshSectionPaths);
+    requiresFullRefresh = requiresFullRefresh || Boolean(result.requiresFullRefresh);
     if (result.output.length > 0) {
       commandOutputs.push(result.output);
     }
   }
 
-  return { cwd: ctx.cwd, output: commandOutputs.join('\n'), mutated, invalidatesVirtualFileSystem };
+  return { cwd: ctx.cwd, output: commandOutputs.join('\n'), mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
 }
 
 function parseXargsArgs(args: string[]): { noRunIfEmpty: boolean; nullInput: boolean; replacement: string | null; command: string[] } {

@@ -11,6 +11,7 @@ import {
   buildChatCliNativeToolDefinitions,
   buildChatCliInitialSimTurnState,
   runChatCliEditLoop,
+  type ChatCliMutationSummary,
   type ChatCliSelectedComponentFocus,
   type ChatCliSimTurnState,
 } from '../chat-cli/chat-cli-edit-loop';
@@ -199,7 +200,7 @@ export async function requestDocumentEditChatTurn(params: {
   messages: ChatMessage[];
   request: string;
   selectedComponent?: ChatCliSelectedComponentFocus;
-  onMutation?: (group?: string) => void;
+  onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {

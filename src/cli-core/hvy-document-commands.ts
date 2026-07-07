@@ -54,6 +54,9 @@ export interface HvyDocumentCommandResult {
   output: string;
   mutated: boolean;
   cwd?: string;
+  mutatedPaths?: string[];
+  refreshSectionPaths?: string[];
+  requiresFullRefresh?: boolean;
 }
 
 export function executeHvyDocumentCommand(ctx: HvyDocumentCommandContext, args: string[]): HvyDocumentCommandResult {
@@ -537,6 +540,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
     }, ctx.pathNaming),
     mutated: true,
     cwd: path,
+    refreshSectionPaths: [resolvedParentPath],
   };
 }
 

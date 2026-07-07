@@ -12,6 +12,7 @@ import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliFailedCo
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
 import { getHvyCliPreferredCommandSummary, getHvyCliSessionVirtualFileSystem, type HvyCliSession } from '../cli-core/commands';
+import type { HvyVirtualPathNamingState } from '../cli-core/virtual-file-system';
 import {
   appendProviderToolResultsToState,
   buildInitialProviderToolState,
@@ -45,6 +46,13 @@ export interface ChatCliEditTurnResult {
   asked?: boolean;
 }
 
+export interface ChatCliMutationSummary {
+  paths?: string[];
+  refreshSectionPaths?: string[];
+  virtualPathNaming?: HvyVirtualPathNamingState;
+  requiresFullRefresh?: boolean;
+}
+
 export interface ChatCliInitialTurnRequest {
   messages: ChatMessage[];
   context: string;
@@ -68,6 +76,7 @@ export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
 export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
   commandResultMessage: string;
   mutated: boolean;
+  mutationSummary?: ChatCliMutationSummary;
   batchHadSuccess?: boolean;
   batchHadError?: boolean;
   lastFailedCommand?: string;
@@ -92,7 +101,7 @@ export async function runChatCliEditLoop(params: {
   request: string;
   priorMessages?: ChatMessage[];
   selectedComponent?: ChatCliSelectedComponentFocus;
-  onMutation?: (group?: string) => void;
+  onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (content: string) => void;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
@@ -184,7 +193,7 @@ export async function runChatCliEditLoop(params: {
         }
       }
       if (advanced.mutated) {
-        params.onMutation?.('chat-cli');
+        params.onMutation?.('chat-cli', advanced.mutationSummary);
       }
     }
     if (!advanced.terminalSummary && !advanced.askedQuestion) {
@@ -285,6 +294,9 @@ async function advanceChatCliNativeToolTurnState(params: {
   let mutated = false;
   let batchHadSuccess = false;
   let batchHadError = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let mutationRequiresFullRefresh = false;
   let lastFailedCommand = '';
   let lastCommandError = '';
   let terminalSummary = '';
@@ -336,6 +348,11 @@ async function advanceChatCliNativeToolTurnState(params: {
       stdout = execution.output;
       commandMutated = execution.mutated && !isSessionOnlyCommand(command);
       mutated = mutated || commandMutated;
+      if (commandMutated) {
+        mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, execution.mutatedPaths);
+        refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, execution.refreshSectionPaths);
+        mutationRequiresFullRefresh = mutationRequiresFullRefresh || Boolean(execution.requiresFullRefresh || (!execution.mutatedPaths?.length && !execution.refreshSectionPaths?.length));
+      }
       batchHadSuccess = true;
       commandOutputs.push({ command, output: formatOutputForModel(stdout, CHAT_CLI_MODEL_OUTPUT_MAX_LINES) });
       if (params.writeTrace && params.traceRunId) {
@@ -432,6 +449,7 @@ async function advanceChatCliNativeToolTurnState(params: {
 
   return {
     ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, messages, commandResultMessage, mutated, urgency, params.state.diagnostics),
+    mutationSummary: buildChatCliMutationSummary(mutatedPaths, refreshSectionPaths, params.state.session, mutationRequiresFullRefresh),
     batchHadSuccess,
     batchHadError,
     lastFailedCommand,
@@ -439,6 +457,38 @@ async function advanceChatCliNativeToolTurnState(params: {
     toolTurn: params.turn,
     toolState,
   };
+}
+
+function buildChatCliMutationSummary(
+  paths: string[] | undefined,
+  refreshSectionPaths: string[] | undefined,
+  session: HvyCliSession,
+  requiresFullRefresh: boolean
+): ChatCliMutationSummary | undefined {
+  if (!paths && !refreshSectionPaths && !session.virtualPathNaming && !requiresFullRefresh) {
+    return undefined;
+  }
+  return {
+    ...(paths ? { paths } : {}),
+    ...(refreshSectionPaths ? { refreshSectionPaths } : {}),
+    ...(session.virtualPathNaming ? { virtualPathNaming: session.virtualPathNaming } : {}),
+    ...(requiresFullRefresh ? { requiresFullRefresh } : {}),
+  };
+}
+
+function mergeChatCliMutationPaths(...groups: Array<string[] | undefined>): string[] | undefined {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const path of group ?? []) {
+      if (seen.has(path)) {
+        continue;
+      }
+      seen.add(path);
+      paths.push(path);
+    }
+  }
+  return paths.length > 0 ? paths : undefined;
 }
 
 function getStringToolArg(call: ProviderToolCall, key: string): string {

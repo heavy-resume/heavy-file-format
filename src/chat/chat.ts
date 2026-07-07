@@ -19,6 +19,7 @@ import { getDocumentAiContext } from '../document-ai-context';
 import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon } from '../icons';
+import { measureAsyncPhase, measurePhase } from '../perf-trace';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
@@ -677,8 +678,10 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
 
 export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise<ProxyToolTurn> {
   const debugLabel = params.debugLabel?.trim() || 'chat-tools';
-  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
-  const requestPayload = buildProxyChatRequest({
+  measurePhase('chat.proxyTool.contextLimit', { debugLabel }, () => {
+    assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
+  });
+  const requestPayload = measurePhase('chat.proxyTool.buildPayload', { debugLabel }, () => buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
@@ -688,7 +691,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     traceRunId: params.traceRunId,
     tools: params.tools,
     toolState: params.toolState,
-  });
+  }));
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
   console.debug(`[hvy:${debugLabel}] client native tool request`, {
@@ -724,16 +727,17 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     };
   }
 
-  const response = await fetch('/api/chat', {
+  const requestBody = measurePhase('chat.proxyTool.stringify', { debugLabel }, () => JSON.stringify(requestPayload));
+  const response = await measureAsyncPhase('chat.proxyTool.fetch', { debugLabel, requestChars: requestBody.length }, () => fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(requestPayload),
+    body: requestBody,
     signal: params.signal,
-  });
+  }));
 
-  const payload = await readJsonResponse(response);
+  const payload = await measureAsyncPhase('chat.proxyTool.readJson', { debugLabel }, () => readJsonResponse(response));
   console.debug(`[hvy:${debugLabel}] client native tool response`, {
     ok: response.ok,
     status: response.status,
@@ -747,19 +751,22 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   if (!typed?.toolState || !Array.isArray(typed.toolCalls) || !Array.isArray(typed.nativeMessages)) {
     throw new Error('Proxy returned an invalid native tool turn.');
   }
-  const output = typeof typed.output === 'string' ? typed.output.trim() : '';
-  const reasoningSummary = typeof typed.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
-  if (reasoningSummary) {
-    params.onReasoningSummary?.(reasoningSummary);
+  const responsePayload = measurePhase('chat.proxyTool.normalize', { debugLabel }, () => {
+    const output = typeof typed.output === 'string' ? typed.output.trim() : '';
+    const reasoningSummary = typeof typed.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
+    const usage = normalizeProxyTokenUsage(typed.usage);
+    return { output, reasoningSummary, usage };
+  });
+  if (responsePayload.reasoningSummary) {
+    params.onReasoningSummary?.(responsePayload.reasoningSummary);
   }
-  const usage = normalizeProxyTokenUsage(typed.usage);
-  if (usage) {
-    params.onTokenUsage?.(usage);
+  if (responsePayload.usage) {
+    params.onTokenUsage?.(responsePayload.usage);
   }
   return {
-    output,
-    reasoningSummary,
-    ...(usage ? { usage } : {}),
+    output: responsePayload.output,
+    reasoningSummary: responsePayload.reasoningSummary,
+    ...(responsePayload.usage ? { usage: responsePayload.usage } : {}),
     toolCalls: typed.toolCalls,
     nativeMessages: typed.nativeMessages,
     toolState: typed.toolState,

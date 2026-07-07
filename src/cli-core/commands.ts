@@ -2,9 +2,9 @@ import type { VisualDocument } from '../types';
 import {
   buildHvyVirtualFileSystem,
   buildVirtualDirectoryBlockLookupWithAliases,
+  buildVirtualDirectorySectionLookupWithAliases,
   findBlockForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
-  findSectionForVirtualDirectory,
   listDirectory,
   resolveVirtualPath,
   type HvyVirtualEntry,
@@ -435,7 +435,7 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
         }
         return { cwd: ctx.cwd, output: ['Applied lint fixes:', ...fixed.map((line) => `- ${line}`)].join('\n'), mutated: true };
       }
-      return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document)), mutated: false };
+      return { cwd: ctx.cwd, output: formatHvyCliLintIssues(await runHvyCliLinter(ctx.document, ctx.fs)), mutated: false };
     }
     if (args[0] === 'prune-xref') {
       return { cwd: ctx.cwd, output: commandPruneXref(ctx.document, args.slice(1)), mutated: true };
@@ -913,21 +913,18 @@ function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSys
 function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
   measurePhase('cli.sessionFiles.rawSections.add', { entries: fs.entries.size }, () => {
     session.rawSectionWipContentByPath ??= {};
+    const sectionsByPath = measurePhase('cli.sessionFiles.rawSections.lookupBuild', {}, () =>
+      buildVirtualDirectorySectionLookupWithAliases(document, session.virtualPathNaming)
+    );
     let candidateCount = 0;
     let addedCount = 0;
-    let lookupMs = 0;
     const startedAt = performance.now();
-    for (const entry of [...fs.entries.values()]) {
-      if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
+    for (const [sectionPath, section] of sectionsByPath) {
+      const entry = fs.entries.get(sectionPath);
+      if (entry?.kind !== 'dir') {
         continue;
       }
       candidateCount += 1;
-      const lookupStartedAt = performance.now();
-      const section = findSectionForVirtualDirectory(document, entry.path, session.virtualPathNaming);
-      lookupMs += performance.now() - lookupStartedAt;
-      if (!section) {
-        continue;
-      }
       addedCount += 1;
       addRawSectionFilesForSection(fs, document, session, entry.path, section);
     }
@@ -935,7 +932,6 @@ function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSyst
       recordMeasurement('cli.sessionFiles.rawSections.counts', performance.now() - startedAt, {
         candidateCount,
         addedCount,
-        lookupMs: Number(lookupMs.toFixed(2)),
       });
     }
   });

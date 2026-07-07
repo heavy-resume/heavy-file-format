@@ -42,8 +42,7 @@ export interface HvyCliLintIssue {
   message: string;
 }
 
-export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliLintIssue[]> {
-  const fs = buildHvyVirtualFileSystem(document);
+export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFileSystem = buildHvyVirtualFileSystem(document)): Promise<HvyCliLintIssue[]> {
   const componentJsonFiles = [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => isLintableComponentJsonPath(fs, entry))
     .filter((entry) => !isFlattenedComponentListAlias(fs, entry.path));
@@ -242,6 +241,7 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
         && candidatePath !== `${sectionPath}/section-info.txt`
         && candidatePath !== `${sectionPath}/about-section.txt`
         && candidatePath !== `${sectionPath}/children-order.json`
+        && !isRawEditHelperPath(candidatePath)
       );
     })
     .map((entry) => {
@@ -254,6 +254,11 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
       };
     }));
   return issues;
+}
+
+function isRawEditHelperPath(path: string): boolean {
+  const filename = path.split('/').pop() ?? '';
+  return filename === 'raw.hvy' || filename === 'raw-preview.hvy.txt' || filename === 'raw.wip.hvy';
 }
 
 function lintCoreComponent(params: { path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {

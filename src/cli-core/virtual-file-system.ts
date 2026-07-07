@@ -210,6 +210,35 @@ export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlo
   return null;
 }
 
+export function buildVirtualDirectorySectionLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
+  const entries = new Map<string, HvyVirtualEntry>();
+  const sections = new Map<string, VisualSection>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  return sections;
+}
+
+export function buildVirtualDirectorySectionLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
+  const sections = buildVirtualDirectorySectionLookup(document, naming);
+  const idEntries = new Map<string, HvyVirtualEntry>();
+  idEntries.set('/id', { kind: 'dir', path: '/id' });
+  const canonicalSections = [...sections.entries()];
+  for (const alias of collectCanonicalIdAliases(document)) {
+    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
+    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    for (const [sourcePath, section] of canonicalSections) {
+      if (sourcePath !== alias.sourcePath && !sourcePath.startsWith(`${alias.sourcePath}/`)) {
+        continue;
+      }
+      sections.set(`${aliasRoot}${sourcePath.slice(alias.sourcePath.length)}`, section);
+    }
+  }
+  return sections;
+}
+
 export function buildVirtualDirectoryBlockLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();

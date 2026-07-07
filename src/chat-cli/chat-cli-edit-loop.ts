@@ -367,7 +367,10 @@ async function advanceChatCliNativeToolTurnState(params: {
   }
 
   if (terminalSummary) {
-    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.finish', {}, () => collectHvyCliDiagnostics(params.document));
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.finish', {}, () => collectHvyCliDiagnostics(
+      params.document,
+      getHvyCliSessionVirtualFileSystem(params.document, params.state.session)
+    ));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -468,7 +471,10 @@ async function advanceChatCliTurnState(params: {
     return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency, params.state.diagnostics);
   }
   if (action.kind === 'done') {
-    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.done', {}, () => collectHvyCliDiagnostics(params.document));
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.done', {}, () => collectHvyCliDiagnostics(
+      params.document,
+      getHvyCliSessionVirtualFileSystem(params.document, params.state.session)
+    ));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -688,7 +694,10 @@ async function buildChatCliInitialTurnRequest(params: {
     'I am getting the component structure so I can identify sections, component template types, and likely edit surfaces.',
     'hvy request_structure --collapse'
   );
-  const diagnostics = await measureAsyncPhase('chatCli.initial.diagnostics', {}, () => collectHvyCliDiagnostics(params.document));
+  const diagnostics = await measureAsyncPhase('chatCli.initial.diagnostics', {}, () => collectHvyCliDiagnostics(
+    params.document,
+    getHvyCliSessionVirtualFileSystem(params.document, cli.session)
+  ));
   const initialSearch = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
     `hvy search ${quoteChatCliShellArg(params.request)} --max 5`

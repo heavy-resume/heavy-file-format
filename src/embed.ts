@@ -50,7 +50,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
-import { refreshReaderBlockDom } from './reader/block-refresh';
+import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import {
   initDocumentChangeTracking,
   isDocumentDirty,
@@ -675,6 +675,38 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
   return refreshed;
 }
 
+function refreshReaderSection(root: ParentNode, sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const runtime = getActiveStateRuntime();
+  const renderer = ensureReaderRenderer();
+  const startedAt = nowMs();
+  const refreshed = refreshReaderSectionDom({
+    root,
+    readerRenderer: renderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      bindCarouselInteractions(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  logPerfTrace('refreshReaderSection', {
+    sectionKey,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    lightweight: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
+}
+
 function refreshModalPreview(): void {}
 
 async function runButtonVisibilityScriptsIfNeeded(root: ParentNode): Promise<void> {
@@ -720,6 +752,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshReaderPanels(options);
+    }),
+    refreshReaderSection: (target, sectionKey, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshReaderSection(target, sectionKey, options);
     }),
     refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

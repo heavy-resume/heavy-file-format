@@ -46,7 +46,7 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom } from './reader/block-refresh';
+import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
@@ -1208,6 +1208,33 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
   return refreshed;
 }
 
+function refreshReaderSection(root: ParentNode, sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const startedAt = nowMs();
+  const refreshed = refreshReaderSectionDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element);
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  logPerfTrace('refreshReaderSection', {
+    sectionKey,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
+}
+
 function refreshModalPreview(): void {
   if (!state.modalSectionKey) {
     return;
@@ -1297,6 +1324,7 @@ function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
 initCallbacks({
   renderApp,
   refreshReaderPanels,
+  refreshReaderSection,
   refreshReaderBlock,
   refreshModalPreview,
   observeLinks: () => {},

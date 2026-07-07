@@ -13,6 +13,7 @@ import {
   getRenderApp,
   getRefreshReaderBlock,
   getRefreshReaderPanels,
+  getRefreshReaderSection,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
 } from './state';
@@ -818,7 +819,9 @@ export function bindUi(app: HTMLElement): void {
           willExpand: !section.expanded,
         });
         section.expanded = !section.expanded;
-        getRefreshReaderPanels()();
+        if (!getRefreshReaderSection()(app, sectionKey)) {
+          getRefreshReaderPanels()();
+        }
       });
       return;
       }

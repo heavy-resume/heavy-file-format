@@ -13,7 +13,7 @@ import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expan
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
+import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
 const readerAppControlRuntimes = new WeakMap<HTMLElement, ReturnType<typeof getActiveStateRuntime>>();
@@ -238,7 +238,9 @@ export function bindReaderUi(app: HTMLElement): void {
         willExpand: !section.expanded,
       });
       section.expanded = !section.expanded;
-      getRefreshReaderPanels()();
+      if (!getRefreshReaderSection()(app, sectionKey)) {
+        getRefreshReaderPanels()();
+      }
       return;
     }
 

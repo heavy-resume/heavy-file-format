@@ -88,7 +88,7 @@ import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom } from './reader/block-refresh';
+import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { virtualizeRenderedSections } from './section-virtualizer';
@@ -790,6 +790,36 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
   return refreshed;
 }
 
+function refreshReaderSection(root: ParentNode, sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const runtime = getActiveStateRuntime();
+  const startedAt = nowMs();
+  const refreshed = refreshReaderSectionDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  logPerfTrace('refreshReaderSection', {
+    sectionKey,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    embedded: true,
+    full: true,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
+}
+
 function setLinkObserver(observer: HvyLinkObserver | null): void {
   currentLinkObserver = observer;
   if (currentRoot) {
@@ -881,6 +911,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       refreshReaderPanels(options);
+    }),
+    refreshReaderSection: (target, sectionKey, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshReaderSection(target, sectionKey, options);
     }),
     refreshReaderBlock: (target, sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

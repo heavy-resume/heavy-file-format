@@ -68,6 +68,10 @@
 
 .chat-panel.is-document-edit {
   flex-basis: 34rem;
+  border: 2px solid color-mix(in srgb, var(--hvy-accent-2) 76%, var(--hvy-border));
+  box-shadow:
+    0 0 0 0.18rem color-mix(in srgb, var(--hvy-accent-2) 18%, transparent),
+    0 18px 40px var(--hvy-shadow);
 }
 
 .chat-panel > * {

@@ -1,4 +1,5 @@
-import { Index } from 'flexsearch';
+import { Encoder, Index } from 'flexsearch';
+import englishEncoder from 'flexsearch/lang/en';
 
 import { serializeDocument } from '../serialization';
 import { buildSemanticFilterCandidates } from '../search/semantic-candidates';
@@ -20,11 +21,12 @@ const MIN_RESULTS_BEFORE_GAP_CUTOFF = 2;
 const MAX_RECORD_TEXT_CHARS = 2_000;
 const SCORE_GAP_MULTIPLIER = 2.5;
 const SCORE_GAP_MIN_RELATIVE_DROP = 0.35;
-const STOP_WORDS = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'with', 'this', 'that', 'about', 'what', 'which', 'who', 'when', 'where', 'how']);
+const chatContextEncoder = new Encoder(englishEncoder);
 
 interface RuntimeIndex {
   key: HvyChatSearchIndexKey;
   records: HvyChatSearchIndexRecord[];
+  recordSearchHashes: Map<string, string>;
   index: Index;
 }
 
@@ -75,6 +77,9 @@ function getKeywordIndex(document: VisualDocument, cache: HvyChatSearchCache | n
   if (cached && cached.key.fingerprint === key.fingerprint && cached.key.documentId === key.documentId) {
     return cached;
   }
+  if (cached && cached.key.documentId === key.documentId) {
+    return updateKeywordIndex(document, cached, key, cache);
+  }
   return buildKeywordIndex(document, key, cache);
 }
 
@@ -86,6 +91,7 @@ async function buildKeywordIndex(document: VisualDocument, key: HvyChatSearchInd
   const runtime = {
     key,
     records: snapshot.records,
+    recordSearchHashes: buildRecordSearchHashes(snapshot.records),
     index: createFlexIndex(snapshot.records),
   };
   runtimeIndexes.set(document, runtime);
@@ -95,12 +101,49 @@ async function buildKeywordIndex(document: VisualDocument, key: HvyChatSearchInd
   return runtime;
 }
 
+async function updateKeywordIndex(
+  document: VisualDocument,
+  runtime: RuntimeIndex,
+  key: HvyChatSearchIndexKey,
+  cache: HvyChatSearchCache | null
+): Promise<RuntimeIndex> {
+  const nextRecords = buildIndexRecords(document);
+  const nextRecordsByKey = new Map(nextRecords.map((record) => [record.key, record]));
+  const nextHashes = buildRecordSearchHashes(nextRecords);
+  for (const [recordKey, previousHash] of runtime.recordSearchHashes) {
+    const nextRecord = nextRecordsByKey.get(recordKey);
+    if (!nextRecord) {
+      runtime.index.remove(recordKey);
+      continue;
+    }
+    const nextHash = nextHashes.get(recordKey);
+    if (nextHash !== previousHash) {
+      runtime.index.update(recordKey, buildRecordSearchText(nextRecord));
+    }
+  }
+  for (const record of nextRecords) {
+    if (!runtime.recordSearchHashes.has(record.key)) {
+      runtime.index.add(record.key, buildRecordSearchText(record));
+    }
+  }
+  runtime.key = key;
+  runtime.records = nextRecords;
+  runtime.recordSearchHashes = nextHashes;
+  runtimeIndexes.set(document, runtime);
+  await cache?.putIndex(key, { version: 1, records: nextRecords });
+  return runtime;
+}
+
 function createFlexIndex(records: HvyChatSearchIndexRecord[]): Index {
-  const index = new Index({ tokenize: 'forward', preset: 'score' });
+  const index = new Index({ tokenize: 'forward', preset: 'score', encoder: englishEncoder });
   for (const record of records) {
     index.add(record.key, buildRecordSearchText(record));
   }
   return index;
+}
+
+function buildRecordSearchHashes(records: HvyChatSearchIndexRecord[]): Map<string, string> {
+  return new Map(records.map((record) => [record.key, hashString(buildRecordSearchText(record))]));
 }
 
 function buildIndexKey(document: VisualDocument): HvyChatSearchIndexKey {
@@ -349,8 +392,7 @@ function debugRecord(result: { record: HvyChatSearchIndexRecord; score: number }
 }
 
 function tokenizeSearchText(value: string): string[] {
-  return [...new Set(value.toLowerCase().match(/[a-z0-9_]+/g) ?? [])]
-    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
+  return [...new Set(chatContextEncoder.encode(value.toLowerCase()).filter((token) => token.length > 1))];
 }
 
 function truncateText(value: string, maxChars: number): string {

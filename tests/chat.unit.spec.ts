@@ -347,12 +347,12 @@ hvy_version: 0.1
   expect(client.complete).not.toHaveBeenCalled();
 });
 
-test('buildKeywordChatContext lazily builds, reuses, and rebuilds when the document changes', async () => {
+test('buildKeywordChatContext lazily builds, reuses, and incrementally updates when the document changes', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
 
-#! Alpha
+#! Generic
 
 <!--hvy:text {"id":"alpha-note"}-->
  alpha facts
@@ -372,9 +372,11 @@ hvy_version: 0.1
   await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
   await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
   document.sections[0]!.blocks[0]!.text = 'beta facts';
-  await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
+  const expectedResult = await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
 
-  expect(cache.getIndex).toHaveBeenCalledTimes(2);
+  expect(expectedResult.context).toContain('beta facts');
+  expect(expectedResult.context).not.toContain('alpha facts');
+  expect(cache.getIndex).toHaveBeenCalledTimes(1);
   expect(cache.putIndex).toHaveBeenCalledTimes(2);
 });
 
@@ -444,6 +446,33 @@ hvy_version: 0.1
   expect(result.context.length).toBeLessThanOrEqual(160);
   expect(result.budget.usedContextChars).toBe(result.context.length);
   expect(result.budget.truncated).toBe(true);
+});
+
+test('buildKeywordChatContext matches derivational token forms such as educational to education', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"education","description":"Education","tags":"education"}-->
+#! Education
+
+<!--hvy:text {"id":"degree"}-->
+ B.S. Computer Science
+
+<!--hvy:text {"id":"institution"}-->
+ University of Washington
+`, '.hvy');
+
+  const result = await buildKeywordChatContext({
+    document,
+    question: "What's their educational background?",
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, { mode: 'keyword-retrieval' });
+
+  expect(result.context).toContain('Education');
+  expect(result.context).toContain('University of Washington');
 });
 
 test('applyScoreGapCutoff cuts only at a clear adaptive score gap', () => {

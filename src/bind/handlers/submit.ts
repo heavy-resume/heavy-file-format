@@ -122,6 +122,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         if (options.documentChanged && isDocumentEditChat && state.currentView === 'ai') {
           getRefreshReaderPanels()({ runVisibilityScripts: false });
+          documentEditMutationNeedsRender = false;
           if (getRefreshChatSurface()()) {
             return;
           }

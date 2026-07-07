@@ -15,6 +15,7 @@ import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { measurePhase } from '../perf-trace';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -44,6 +45,10 @@ export type HvyVirtualBlockInsertionTarget =
   | { kind: 'grid'; insert: (block: VisualBlock, index?: number) => void };
 
 export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
+  return measurePhase('cli.fs.build', { sections: document.sections.length }, () => buildHvyVirtualFileSystemUnmeasured(document, naming));
+}
+
+function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
   const addDir = (path: string) => entries.set(path, { kind: 'dir', path });
   const addFile = (path: string, read: () => string, write?: (content: string) => void) =>
@@ -231,16 +236,18 @@ function addSectionLookup(
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
-  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
-  const entries = new Map<string, HvyVirtualEntry>();
-  const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  targets.set('/body', { kind: 'blocks', insert: () => {} });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
-  return targets.get(normalized) ?? null;
+  return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () => {
+    const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+    const entries = new Map<string, HvyVirtualEntry>();
+    const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
+    entries.set('/', { kind: 'dir', path: '/' });
+    entries.set('/body', { kind: 'dir', path: '/body' });
+    targets.set('/body', { kind: 'blocks', insert: () => {} });
+    document.sections
+      .filter((section) => !section.isGhost)
+      .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+    return targets.get(normalized) ?? null;
+  });
 }
 
 export function normalizeVirtualPath(cwd: string, input = '.'): string {

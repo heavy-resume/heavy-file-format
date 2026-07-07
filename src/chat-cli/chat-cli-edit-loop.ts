@@ -22,6 +22,7 @@ import {
   type ProviderToolTurn,
   type ProviderToolState,
 } from '../chat/provider-tools';
+import { measureAsyncPhase, measurePhase } from '../perf-trace';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
@@ -98,9 +99,10 @@ export async function runChatCliEditLoop(params: {
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
+  return measureAsyncPhase('chatCli.loop.run', { sections: params.document.sections.length }, async () => {
   const traceRunId = createChatCliTraceRunId();
-  await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
-  const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true });
+  await measureAsyncPhase('chatCli.trace.userQuery', {}, () => writeChatCliUserQueryTrace(traceRunId, params.request, params.signal));
+  const initial = await measureAsyncPhase('chatCli.initial.build', {}, () => buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true }));
   let turnState: ChatCliSimTurnState = {
     messages: initial.messages,
     context: initial.context,
@@ -126,7 +128,7 @@ export async function runChatCliEditLoop(params: {
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
     let currentInputTokens: number | undefined;
-    const nativeTurn = await requestProxyToolTurn({
+    const nativeTurn = await measureAsyncPhase('chatCli.model.toolTurn', { step: step + 1 }, () => requestProxyToolTurn({
       settings: params.settings,
       messages: turnState.messages,
       context: turnState.context,
@@ -143,9 +145,9 @@ export async function runChatCliEditLoop(params: {
         params.onTokenUsage?.(usage);
       },
       signal: params.signal,
-    });
+    }));
     const advanced = nativeTurn.toolCalls.length > 0
-      ? await advanceChatCliNativeToolTurnState({
+      ? await measureAsyncPhase('chatCli.advance.nativeToolTurn', { step: step + 1, toolCalls: nativeTurn.toolCalls.length }, () => advanceChatCliNativeToolTurnState({
           settings: params.settings,
           document: params.document,
           state: turnState,
@@ -155,8 +157,8 @@ export async function runChatCliEditLoop(params: {
           traceRunId,
           writeTrace: true,
           lastInputTokens: currentInputTokens,
-        })
-      : await advanceChatCliTurnState({
+        }))
+      : await measureAsyncPhase('chatCli.advance.textTurn', { step: step + 1 }, () => advanceChatCliTurnState({
       settings: params.settings,
       document: params.document,
       state: turnState,
@@ -166,7 +168,7 @@ export async function runChatCliEditLoop(params: {
       traceRunId,
       writeTrace: true,
       lastInputTokens: currentInputTokens,
-    });
+    }));
     turnState = advanced;
     if (advanced.commandResultMessage) {
       if (advanced.batchHadSuccess) {
@@ -205,6 +207,7 @@ export async function runChatCliEditLoop(params: {
     summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
     ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
   };
+  });
 }
 
 export async function buildChatCliInitialProxyTurnRequest(params: {
@@ -330,7 +333,7 @@ async function advanceChatCliNativeToolTurnState(params: {
       if (/^\s*ask(?:\s|$)/.test(command)) {
         throw new Error('Native tool mode uses ask_user({ question }), not run_hvy_cli with ask.');
       }
-      const execution = await cli.run(command);
+      const execution = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
       stdout = execution.output;
       commandMutated = execution.mutated && !isSessionOnlyCommand(command);
       mutated = mutated || commandMutated;
@@ -365,7 +368,7 @@ async function advanceChatCliNativeToolTurnState(params: {
   }
 
   if (terminalSummary) {
-    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.finish', {}, () => collectHvyCliDiagnostics(params.document));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -466,7 +469,7 @@ async function advanceChatCliTurnState(params: {
     return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency, params.state.diagnostics);
   }
   if (action.kind === 'done') {
-    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.done', {}, () => collectHvyCliDiagnostics(params.document));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -527,7 +530,7 @@ async function advanceChatCliTurnState(params: {
     params.onProgress?.(executableCommands.length > 1 ? `$ [${commandIndex + 1}/${executableCommands.length}] ${command}` : `$ ${command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
     try {
-      result = await cli.run(command);
+      result = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
       batchHadSuccess = true;
       mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
     } catch (error) {
@@ -631,14 +634,14 @@ function buildSimAdvanceResult(
   return {
     ...baseState,
     messages,
-    context: buildChatCliLoopContext(
+    context: measurePhase('chatCli.context.loop', {}, () => buildChatCliLoopContext(
       cli.snapshot(),
       params.document,
       params.state.request,
       params.state.priorMessages,
       params.state.priorConversation,
       params.state.selectedComponent
-    ),
+    )),
     systemInstructions: buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary),
     diagnostics,
     urgency,
@@ -667,7 +670,7 @@ async function buildChatCliInitialTurnRequest(params: {
     cli.session.cwd = params.selectedComponent.path;
   }
   const runInitialCommand = async (explanation: string, command: string) => {
-    const output = await cli.run(command);
+    const output = await measureAsyncPhase('chatCli.initial.command', { command }, () => cli.run(command));
     if (params.writeTrace) {
       await writeChatCliCommandTrace(params.traceRunId, output.command, output.output, params.signal);
     }
@@ -685,7 +688,7 @@ async function buildChatCliInitialTurnRequest(params: {
     'I am getting the component structure so I can identify sections, component template types, and likely edit surfaces.',
     'hvy request_structure --collapse'
   );
-  const diagnostics = await collectHvyCliDiagnostics(params.document);
+  const diagnostics = await measureAsyncPhase('chatCli.initial.diagnostics', {}, () => collectHvyCliDiagnostics(params.document));
   const initialSearch = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
     `hvy search ${quoteChatCliShellArg(params.request)} --max 5`
@@ -713,14 +716,14 @@ async function buildChatCliInitialTurnRequest(params: {
     },
     ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
   ];
-  const context = buildChatCliLoopContext(
+  const context = measurePhase('chatCli.context.initial', {}, () => buildChatCliLoopContext(
     cli.snapshot(),
     params.document,
     params.request,
     params.priorMessages ?? [],
     priorConversation,
     params.selectedComponent
-  );
+  ));
   const systemInstructions = buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary);
   const provider = params.settings?.provider ?? 'openai';
   const toolState = buildInitialChatCliToolState({

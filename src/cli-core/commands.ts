@@ -24,6 +24,7 @@ import { deserializeDocumentWithDiagnostics, serializeDocument, serializeSection
 import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { removeTextFillInMarkers } from '../text-fill-in';
+import { measureAsyncPhase, measurePhase, recordMeasurement, isMeasurementEnabled } from '../perf-trace';
 
 const loadDbTableRuntime = () => import('../plugins/db-table');
 
@@ -94,9 +95,10 @@ function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCli
   session.virtualPathNaming.anonymousBlockNamesById ??= {};
   const cached = sessionVirtualFileSystems.get(session);
   if (cached) {
+    recordMeasurement('cli.fs.session.get', 0, { cached: true, entries: cached.entries.size });
     return cached;
   }
-  const fs = buildHvyVirtualFileSystem(document, session.virtualPathNaming);
+  const fs = measurePhase('cli.fs.session.get', { cached: false }, () => buildHvyVirtualFileSystem(document, session.virtualPathNaming));
   sessionVirtualFileSystems.set(session, fs);
   return fs;
 }
@@ -110,6 +112,10 @@ export function getHvyCliPreferredCommandSummary(): string {
 }
 
 export async function executeHvyCliCommand(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
+  return measureAsyncPhase('cli.command.execute', { command: input }, () => executeHvyCliCommandUnmeasured(document, session, input));
+}
+
+async function executeHvyCliCommandUnmeasured(document: VisualDocument, session: HvyCliSession, input: string): Promise<HvyCliExecution> {
   session.scratchpadTouchedThisCommand = false;
   const expandedInput = expandShellSubstitutions(input, session.now ?? new Date());
   if (expandedInput.trim().startsWith('#')) {
@@ -163,7 +169,9 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     const fs = buildSessionVirtualFileSystem(document, session);
     addSessionFiles(fs, document, session);
     enforceScratchpadHardCap(session);
-    lastProcess = await executeMiniShellPipeline({ document, fs, cwd: session.cwd, session, pathNaming: session.virtualPathNaming }, pipeline.commands);
+    lastProcess = await measureAsyncPhase('cli.command.pipeline', { command: pipeline.tokens.join(' ') }, () =>
+      executeMiniShellPipeline({ document, fs, cwd: session.cwd, session, pathNaming: session.virtualPathNaming }, pipeline.commands)
+    );
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
@@ -752,9 +760,11 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
 }
 
 function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  addSessionScratchpadFile(fs, session);
-  addSessionRawHvyFiles(fs, document, session);
-  addSessionModifiedFiles(fs, session);
+  measurePhase('cli.sessionFiles.add', { entriesBefore: fs.entries.size }, () => {
+    addSessionScratchpadFile(fs, session);
+    addSessionRawHvyFiles(fs, document, session);
+    addSessionModifiedFiles(fs, session);
+  });
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
@@ -794,7 +804,7 @@ function addSessionModifiedFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem
 }
 
 function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  const serialized = serializeDocument(document);
+  const serialized = measurePhase('cli.sessionFiles.rawDocument.serialize', {}, () => serializeDocument(document));
   if (serialized.length < RAW_HVY_MAX_CHARS) {
     fs.entries.set('/raw.hvy', {
       kind: 'file',
@@ -842,17 +852,34 @@ function addSessionRawDocumentFiles(fs: ReturnType<typeof buildHvyVirtualFileSys
 }
 
 function addSessionRawSectionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  session.rawSectionWipContentByPath ??= {};
-  for (const entry of [...fs.entries.values()]) {
-    if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
-      continue;
+  measurePhase('cli.sessionFiles.rawSections.add', { entries: fs.entries.size }, () => {
+    session.rawSectionWipContentByPath ??= {};
+    let candidateCount = 0;
+    let addedCount = 0;
+    let lookupMs = 0;
+    const startedAt = performance.now();
+    for (const entry of [...fs.entries.values()]) {
+      if (entry.kind !== 'dir' || !fs.entries.has(`${entry.path}/section.json`)) {
+        continue;
+      }
+      candidateCount += 1;
+      const lookupStartedAt = performance.now();
+      const section = findSectionForVirtualDirectory(document, entry.path, session.virtualPathNaming);
+      lookupMs += performance.now() - lookupStartedAt;
+      if (!section) {
+        continue;
+      }
+      addedCount += 1;
+      addRawSectionFilesForSection(fs, document, session, entry.path, section);
     }
-    const section = findSectionForVirtualDirectory(document, entry.path, session.virtualPathNaming);
-    if (!section) {
-      continue;
+    if (isMeasurementEnabled()) {
+      recordMeasurement('cli.sessionFiles.rawSections.counts', performance.now() - startedAt, {
+        candidateCount,
+        addedCount,
+        lookupMs: Number(lookupMs.toFixed(2)),
+      });
     }
-    addRawSectionFilesForSection(fs, document, session, entry.path, section);
-  }
+  });
 }
 
 function addRawSectionFilesForSection(
@@ -923,17 +950,34 @@ function addRawSectionFilesForSection(
 }
 
 function addSessionRawComponentFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
-  session.rawWipContentByPath ??= {};
-  for (const entry of [...fs.entries.values()]) {
-    if (entry.kind !== 'dir' || entry.path === '/' || entry.path === '/body' || entry.path === '/attachments') {
-      continue;
+  measurePhase('cli.sessionFiles.rawComponents.add', { entries: fs.entries.size }, () => {
+    session.rawWipContentByPath ??= {};
+    let candidateCount = 0;
+    let addedCount = 0;
+    let lookupMs = 0;
+    const startedAt = performance.now();
+    for (const entry of [...fs.entries.values()]) {
+      if (entry.kind !== 'dir' || entry.path === '/' || entry.path === '/body' || entry.path === '/attachments') {
+        continue;
+      }
+      candidateCount += 1;
+      const lookupStartedAt = performance.now();
+      const block = findBlockForVirtualDirectory(document, entry.path, session.virtualPathNaming);
+      lookupMs += performance.now() - lookupStartedAt;
+      if (!block) {
+        continue;
+      }
+      addedCount += 1;
+      addRawComponentFilesForBlock(fs, document, session, entry.path, block);
     }
-    const block = findBlockForVirtualDirectory(document, entry.path, session.virtualPathNaming);
-    if (!block) {
-      continue;
+    if (isMeasurementEnabled()) {
+      recordMeasurement('cli.sessionFiles.rawComponents.counts', performance.now() - startedAt, {
+        candidateCount,
+        addedCount,
+        lookupMs: Number(lookupMs.toFixed(2)),
+      });
     }
-    addRawComponentFilesForBlock(fs, document, session, entry.path, block);
-  }
+  });
 }
 
 function addRawComponentFilesForBlock(

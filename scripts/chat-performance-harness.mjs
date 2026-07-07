@@ -3,6 +3,7 @@ const DEFAULT_SECTION_COUNT = 32;
 export default async function chatPerformanceHarness({ chromium, baseUrl }) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const cpuProfiler = await createCpuProfiler(page);
   page.setDefaultTimeout(20_000);
   page.setDefaultNavigationTimeout(20_000);
 
@@ -19,6 +20,25 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
   let qaCalls = 0;
   let editCalls = 0;
   const apiRequests = [];
+  const agentTraces = [];
+  await page.route('**/api/agent-trace', async (route) => {
+    const body = route.request().postData() || '{}';
+    let payload = {};
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      payload = {};
+    }
+    agentTraces.push({
+      timeMs: Number(performance.now().toFixed(2)),
+      requestChars: body.length,
+      payload,
+    });
+    await route.fulfill({
+      status: 204,
+      body: '',
+    });
+  });
   await page.route('**/api/chat', async (route) => {
     const requestStartedAt = performance.now();
     const requestBody = route.request().postData() || '{}';
@@ -125,6 +145,10 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
       longTasks: [],
       perfEvents: [],
     };
+    window.__hvyMeasure = {
+      enabled: true,
+      events: [],
+    };
 
     const originalDebug = console.debug.bind(console);
     console.debug = (...args) => {
@@ -226,7 +250,7 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
       await submitChatComposer(page);
       await page.locator('.chat-bubble', { hasText: 'Mock document edit completed.' }).waitFor();
       await page.locator('#aiReaderDocument', { hasText: 'Measured edit result from mocked tool call.' }).waitFor();
-    }));
+    }, { cpuProfiler }));
 
     const summary = {
       document: {
@@ -238,6 +262,7 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
         documentEdit: editCalls,
       },
       apiRequests,
+      agentTraces: summarizeAgentTraces(agentTraces),
       metrics,
     };
     console.log(`chat-performance ${JSON.stringify(summary)}`);
@@ -246,6 +271,25 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
   } finally {
     await browser.close();
   }
+}
+
+function summarizeAgentTraces(traces) {
+  if (traces.length === 0) {
+    return [];
+  }
+  const firstTimeMs = traces[0].timeMs;
+  return traces.map((trace, index) => {
+    const payload = trace.payload?.payload ?? {};
+    return {
+      index: index + 1,
+      sinceFirstMs: Number((trace.timeMs - firstTimeMs).toFixed(2)),
+      gapMs: Number((trace.timeMs - (traces[index - 1]?.timeMs ?? firstTimeMs)).toFixed(2)),
+      event: payload.event ?? trace.payload?.type ?? '',
+      command: payload.command ?? '',
+      outputChars: typeof payload.output === 'string' ? payload.output.length : 0,
+      requestChars: trace.requestChars,
+    };
+  });
 }
 
 function getSectionCount() {
@@ -266,10 +310,12 @@ async function submitChatComposer(page) {
   });
 }
 
-async function measureStep(page, name, action) {
+async function measureStep(page, name, action, options = {}) {
   const before = await snapshotPerf(page);
+  await options.cpuProfiler?.start(name);
   await action();
-  return measureSince(page, name, before);
+  const cpuProfile = await options.cpuProfiler?.stop(name);
+  return measureSince(page, name, before, { cpuProfile });
 }
 
 async function snapshotPerf(page) {
@@ -285,11 +331,12 @@ async function snapshotPerf(page) {
       longTaskCount: perf.longTasks.length,
       longTaskMs: Number(perf.longTasks.reduce((sum, task) => sum + task.duration, 0).toFixed(2)),
       perfEventCount: perf.perfEvents.length,
+      measureEventCount: window.__hvyMeasure?.events.length ?? 0,
     };
   });
 }
 
-async function measureSince(page, name, before) {
+async function measureSince(page, name, before, options = {}) {
   const after = await snapshotPerf(page);
   return {
     name,
@@ -302,7 +349,129 @@ async function measureSince(page, name, before) {
     longTaskCount: after.longTaskCount - before.longTaskCount,
     longTaskMs: Number((after.longTaskMs - before.longTaskMs).toFixed(2)),
     perf: await summarizePerfEventsSince(page, before.perfEventCount),
+    measures: await summarizeMeasurementsSince(page, before.measureEventCount),
+    ...(options.cpuProfile ? { cpuProfile: options.cpuProfile } : {}),
   };
+}
+
+async function summarizeMeasurementsSince(page, startIndex) {
+  return page.evaluate((index) => {
+    const events = window.__hvyMeasure?.events.slice(index) ?? [];
+    const byLabel = new Map();
+    for (const event of events) {
+      const total = byLabel.get(event.label) ?? {
+        count: 0,
+        elapsedMs: 0,
+        maxMs: 0,
+        details: [],
+      };
+      total.count += 1;
+      total.elapsedMs += event.elapsedMs;
+      total.maxMs = Math.max(total.maxMs, event.elapsedMs);
+      if (event.details && total.details.length < 5) {
+        total.details.push(event.details);
+      }
+      byLabel.set(event.label, total);
+    }
+    return {
+      eventCount: events.length,
+      totals: Object.fromEntries([...byLabel.entries()]
+        .map(([label, total]) => [
+          label,
+          {
+            count: total.count,
+            elapsedMs: Number(total.elapsedMs.toFixed(2)),
+            maxMs: Number(total.maxMs.toFixed(2)),
+            details: total.details,
+          },
+        ])
+        .sort((left, right) => right[1].elapsedMs - left[1].elapsedMs)),
+      timeline: events.map((event, eventIndex) => ({
+        index: eventIndex + 1,
+        label: event.label,
+        elapsedMs: event.elapsedMs,
+        details: event.details ?? {},
+      })).filter((event) => event.elapsedMs >= 10).slice(-80),
+    };
+  }, startIndex);
+}
+
+async function createCpuProfiler(page) {
+  if (process.env.HVY_CHAT_PERF_CPU_PROFILE !== '1') {
+    return null;
+  }
+  const session = await page.context().newCDPSession(page);
+  await session.send('Profiler.enable');
+  return {
+    async start() {
+      await session.send('Profiler.start');
+    },
+    async stop() {
+      const { profile } = await session.send('Profiler.stop');
+      return summarizeCpuProfile(profile);
+    },
+  };
+}
+
+function summarizeCpuProfile(profile) {
+  const selfTimeByNodeId = new Map();
+  const samples = profile.samples ?? [];
+  const deltas = profile.timeDeltas ?? [];
+  for (let index = 0; index < samples.length; index += 1) {
+    const nodeId = samples[index];
+    const deltaUs = deltas[index] ?? 0;
+    selfTimeByNodeId.set(nodeId, (selfTimeByNodeId.get(nodeId) ?? 0) + deltaUs / 1000);
+  }
+  const totalSampledMs = [...selfTimeByNodeId.values()].reduce((sum, ms) => sum + ms, 0);
+  const grouped = new Map();
+  for (const row of (profile.nodes ?? [])
+    .map((node) => ({
+      functionName: node.callFrame?.functionName || '(anonymous)',
+      url: compactProfileUrl(node.callFrame?.url ?? ''),
+      line: (node.callFrame?.lineNumber ?? -1) + 1,
+      selfMs: selfTimeByNodeId.get(node.id) ?? 0,
+    }))
+    .filter((row) => row.selfMs >= 1 && !isProfilerNoise(row))) {
+    const key = `${row.functionName}\n${row.url}\n${row.line}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.selfMs += row.selfMs;
+    } else {
+      grouped.set(key, { ...row });
+    }
+  }
+  const rows = [...grouped.values()]
+    .sort((left, right) => right.selfMs - left.selfMs)
+    .slice(0, 20)
+    .map((row) => ({
+      ...row,
+      selfMs: Number(row.selfMs.toFixed(2)),
+    }));
+  return {
+    sampleCount: samples.length,
+    totalSampledMs: Number(totalSampledMs.toFixed(2)),
+    topSelfMs: Number(rows.reduce((sum, row) => sum + row.selfMs, 0).toFixed(2)),
+    topSelf: rows,
+  };
+}
+
+function compactProfileUrl(url) {
+  if (!url) {
+    return '';
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.replace(/^\//, '') || parsed.href;
+  } catch {
+    return url;
+  }
+}
+
+function isProfilerNoise(row) {
+  return row.url === ''
+    || row.functionName === '(program)'
+    || row.functionName === '(idle)'
+    || row.functionName === 'garbageCollect';
 }
 
 async function summarizePerfEventsSince(page, startIndex) {

@@ -15,7 +15,7 @@ import {
   stripDocumentHeaderAndComments,
   toggleChatPanelOpen,
 } from '../src/chat/chat';
-import { applyScoreGapCutoff, buildKeywordChatContext } from '../src/chat/chat-context';
+import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged } from '../src/chat/chat-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument } from '../src/serialization';
@@ -227,6 +227,71 @@ hvy_version: 0.1
   expect(context).not.toContain('hvy_version');
 });
 
+test('requestChatCompletion reports context preparation phases', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts live here
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Alpha answer.' })),
+  };
+  const expectedEvents: string[] = [];
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'What alpha facts exist?' }],
+    chatContext: { mode: 'keyword-retrieval', maxResults: 1, maxContextChars: 1_200 },
+    onContextPreparation: (event) => {
+      expectedEvents.push(event.phase);
+    },
+  });
+
+  expect(expectedEvents).toEqual(['preparing-context', 'context-ready']);
+});
+
+test('buildKeywordChatContext reuses the runtime index until document changes are marked', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Generic
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  const cache = {
+    getIndex: vi.fn(() => null),
+    putIndex: vi.fn(),
+  };
+  const request = {
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa' as const,
+  };
+
+  await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
+  await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
+  document.sections[0]!.blocks[0]!.text = 'beta facts';
+  const staleResult = await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
+  markKeywordChatContextDocumentChanged(document);
+  const expectedResult = await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
+
+  expect(staleResult.context).not.toContain('beta facts');
+  expect(expectedResult.context).toContain('beta facts');
+  expect(expectedResult.context).not.toContain('alpha facts');
+  expect(cache.getIndex).toHaveBeenCalledTimes(1);
+  expect(cache.putIndex).toHaveBeenCalledTimes(2);
+});
+
 test('requestChatCompletion lets a custom chatContextProvider override default retrieval', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -372,6 +437,7 @@ hvy_version: 0.1
   await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
   await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
   document.sections[0]!.blocks[0]!.text = 'beta facts';
+  markKeywordChatContextDocumentChanged(document);
   const expectedResult = await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
 
   expect(expectedResult.context).toContain('beta facts');

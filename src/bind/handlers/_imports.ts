@@ -8,7 +8,7 @@ export { createEmptyBlock, createEmptySection, createDefaultTableRow, instantiat
 export { recordHistory, undoState, redoState } from '../../history';
 export { setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, navigateToSection, resetTransientUiState } from '../../navigation';
 export { deserializeDocument, serializeDocument } from '../../serialization';
-export { saveSessionState } from '../../state-persistence';
+export { saveChatSessionState, saveSessionState } from '../../state-persistence';
 export { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from '../../reusable';
 export { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow, createKeyboardInsertedTableRow } from '../../table-ops';
 export { createGridItem } from '../../grid-ops';

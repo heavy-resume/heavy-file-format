@@ -1,6 +1,6 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -16,7 +16,7 @@ import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
-import { buildKeywordChatContext } from './chat-context';
+import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon } from '../icons';
 
@@ -154,6 +154,7 @@ export function createDefaultChatState(): ChatState {
     draft: '',
     messages: [],
     isSending: false,
+    status: null,
     error: null,
     panelOpen: false,
     requestNonce: 0,
@@ -167,6 +168,7 @@ export function clearChatConversation(chat: ChatState): void {
   chat.draft = '';
   chat.messages = [];
   chat.isSending = false;
+  chat.status = null;
   chat.error = null;
   chat.abortController?.abort();
   chat.abortController = null;
@@ -182,6 +184,7 @@ export function stopChatRequest(chat: ChatState): boolean {
   chat.abortController?.abort();
   chat.abortController = null;
   chat.isSending = false;
+  chat.status = null;
   chat.requestNonce += 1;
   chat.error = null;
   chat.messages = [
@@ -284,9 +287,8 @@ export function renderChatPanel(
   const hostManagedChat = hasHostChatClient();
   const showProviderControls = !hostManagedChat && shouldRenderChatProviderControls(surface);
   const isDocumentEdit = mode === 'document-edit';
-  const needsQaContext = chat.panelOpen && !isDocumentEdit && !chat.isSending;
-  const qaContextLength = needsQaContext ? buildChatDocumentContext(document).trim().length : 0;
-  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || qaContextLength > 0);
+  const hasQaDocumentContent = document.sections.length > 0;
+  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || hasQaDocumentContent);
   const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
   const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
@@ -297,7 +299,7 @@ export function renderChatPanel(
     isSending: chat.isSending,
     hasDraft,
     missingModel,
-    contextLength: qaContextLength,
+    contextLength: hasQaDocumentContent ? 'available' : 0,
     messageCount: chat.messages.length,
   });
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
@@ -364,7 +366,7 @@ export function renderChatPanel(
     : '';
   const composerHtml = chat.isSending
     ? `<div class="chat-busy-footer">
-         <span class="chat-composer-status">Working through the request...</span>
+         <span class="chat-composer-status">${deps.escapeHtml(chat.status ?? 'Working through the request...')}</span>
          <button type="button" class="danger" data-action="cancel-chat-request">Stop</button>
        </div>`
     : `<form id="chatComposer" class="chat-composer">
@@ -502,6 +504,7 @@ export async function requestChatCompletion(params: {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
@@ -514,6 +517,7 @@ export async function requestChatCompletion(params: {
     chatContext: params.chatContext,
     chatContextProvider: params.chatContextProvider,
     chatSearchCache: params.chatSearchCache,
+    onContextPreparation: params.onContextPreparation,
     signal: params.signal,
   });
   if (context.trim().length === 0) {
@@ -542,11 +546,14 @@ async function buildQaChatContext(params: {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
   signal?: AbortSignal;
 }): Promise<string> {
   const maxContextChars = params.chatContext?.maxContextChars ?? params.settings.maxContextChars ?? MAX_PROXY_COMPLETION_CONTEXT_CHARS;
   let result: HvyChatContextResult | null = null;
+  let contextStartedCached = false;
   if (params.chatContextProvider) {
+    await params.onContextPreparation?.({ phase: 'preparing-context', cached: false });
     result = await params.chatContextProvider.buildContext({
       document: params.document,
       question: params.question,
@@ -556,6 +563,8 @@ async function buildQaChatContext(params: {
       ...(params.signal ? { signal: params.signal } : {}),
     });
   } else if (params.chatContext?.mode === 'keyword-retrieval') {
+    contextStartedCached = isKeywordChatContextPrepared(params.document);
+    await params.onContextPreparation?.({ phase: 'preparing-context', cached: contextStartedCached });
     result = await buildKeywordChatContext({
       document: params.document,
       question: params.question,
@@ -564,6 +573,9 @@ async function buildQaChatContext(params: {
       mode: 'qa',
       ...(params.signal ? { signal: params.signal } : {}),
     }, params.chatContext, params.chatSearchCache ?? null);
+  }
+  if (result) {
+    await params.onContextPreparation?.({ phase: 'context-ready', cached: contextStartedCached });
   }
   if (!result) {
     return buildChatDocumentContext(params.document);

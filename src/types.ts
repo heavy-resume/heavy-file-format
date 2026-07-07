@@ -96,6 +96,7 @@ export interface ChatState {
   draft: string;
   messages: ChatMessage[];
   isSending: boolean;
+  status: string | null;
   error: string | null;
   panelOpen: boolean;
   requestNonce: number;
@@ -120,6 +121,17 @@ export interface HvyChatContextRequest {
   mode: 'qa';
   signal?: AbortSignal;
 }
+
+export type HvyChatContextPreparationPhase = 'preparing-context' | 'context-ready';
+
+export interface HvyChatContextPreparationEvent {
+  phase: HvyChatContextPreparationPhase;
+  cached?: boolean;
+}
+
+export type HvyChatContextPreparationCallback = (
+  event: HvyChatContextPreparationEvent
+) => Promise<void> | void;
 
 export interface HvyChatEvidence {
   label: string;

@@ -6,6 +6,7 @@ import { detectExtension } from './utils';
 import { ensureDocumentAttachmentStore } from './attachment-store';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
+const CHAT_SESSION_STORAGE_SUFFIX = ':chat';
 const LEGACY_SESSION_STORAGE_KEYS = [
   'hvy-editor-resume-state-v2',
   'hvy-editor-resume-state-v1',
@@ -42,6 +43,13 @@ interface SessionStatePayload {
   documentBase64?: string;
   documentTextBase64?: string;
   activeEditor?: SavedActiveEditorState;
+}
+
+interface ChatSessionStatePayload {
+  version: 1;
+  savedAt: string;
+  currentView: AppState['currentView'];
+  chat: SessionStatePayload['chat'];
 }
 
 type SavedSearchState = Omit<SearchState, 'isLoading' | 'semanticProgress' | 'error' | 'requestNonce' | 'abortController'>;
@@ -85,6 +93,7 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
     }
     const filename = typeof parsed.filename === 'string' && parsed.filename.trim() ? parsed.filename : 'document.hvy';
     const document = loadSavedDocument(parsed, filename, storageKey);
+    const chat = loadSavedChatState(parsed, storageKey);
     return {
       document,
       filename,
@@ -94,14 +103,7 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
       showAdvancedEditor: Boolean(parsed.showAdvancedEditor),
       rawEditorText: typeof parsed.rawEditorText === 'string' ? parsed.rawEditorText : '',
       templateValues: isStringRecord(parsed.templateValues) ? parsed.templateValues : {},
-      chat: {
-        settings: normalizeChatSettings(parsed.chat?.settings),
-        draft: typeof parsed.chat?.draft === 'string' ? parsed.chat.draft : '',
-        messages: Array.isArray(parsed.chat?.messages)
-          ? parsed.chat.messages.map(normalizeChatMessage).filter((message): message is ChatMessage => Boolean(message))
-          : [],
-        panelOpen: Boolean(parsed.chat?.panelOpen),
-      },
+      chat,
       search: normalizeSearchState(parsed.search),
       cli: {
         draft: typeof parsed.cli?.draft === 'string' ? parsed.cli.draft : '',
@@ -157,9 +159,30 @@ export function saveSessionState(state: AppState): void {
       payload.activeEditor = activeEditor;
     }
     window.sessionStorage.setItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
+    window.sessionStorage.removeItem(getChatSessionStorageKey(state.sessionStorageKey));
     removeLegacySessionState();
   } catch (error) {
     console.warn('[hvy:session] failed to save state', error);
+  }
+}
+
+export function saveChatSessionState(state: AppState): void {
+  if (state.sessionStorageKey === null) {
+    return;
+  }
+  if (typeof window === 'undefined' || !window.sessionStorage) {
+    return;
+  }
+  try {
+    const payload: ChatSessionStatePayload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      currentView: state.currentView,
+      chat: createChatStatePayload(state),
+    };
+    window.sessionStorage.setItem(getChatSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
+  } catch (error) {
+    console.warn('[hvy:session] failed to save chat state', error);
   }
 }
 
@@ -276,6 +299,7 @@ export function clearSessionState(storageKey?: string | null): void {
   try {
     attachmentTailSessionCache.delete(getAttachmentTailStorageKey(storageKey));
     window.sessionStorage?.removeItem(getSessionStorageKey(storageKey));
+    window.sessionStorage?.removeItem(getChatSessionStorageKey(storageKey));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(storageKey));
     removeLegacySessionState();
   } catch {
@@ -298,8 +322,49 @@ function getSessionStorageKey(storageKey?: string | null): string {
   return `${SESSION_STORAGE_KEY}:${suffix}`;
 }
 
+function getChatSessionStorageKey(storageKey?: string | null): string {
+  return `${getSessionStorageKey(storageKey)}${CHAT_SESSION_STORAGE_SUFFIX}`;
+}
+
 function getAttachmentTailStorageKey(storageKey?: string | null): string {
   return `${getSessionStorageKey(storageKey)}:attachments`;
+}
+
+function createChatStatePayload(state: AppState): SessionStatePayload['chat'] {
+  return {
+    settings: state.chat.settings,
+    draft: state.chat.draft,
+    messages: state.chat.messages,
+    panelOpen: state.chat.panelOpen,
+  };
+}
+
+function normalizeSavedChatState(chat: Partial<SessionStatePayload['chat']> | undefined): SessionStatePayload['chat'] {
+  return {
+    settings: normalizeChatSettings(chat?.settings),
+    draft: typeof chat?.draft === 'string' ? chat.draft : '',
+    messages: Array.isArray(chat?.messages)
+      ? chat.messages.map(normalizeChatMessage).filter((message): message is ChatMessage => Boolean(message))
+      : [],
+    panelOpen: Boolean(chat?.panelOpen),
+  };
+}
+
+function loadSavedChatState(parsed: Partial<SessionStatePayload>, storageKey?: string | null): SessionStatePayload['chat'] {
+  const baseChat = normalizeSavedChatState(parsed.chat);
+  try {
+    const raw = window.sessionStorage?.getItem(getChatSessionStorageKey(storageKey));
+    if (!raw) {
+      return baseChat;
+    }
+    const overlay = JSON.parse(raw) as Partial<ChatSessionStatePayload> | null;
+    if (!overlay || overlay.version !== 1) {
+      return baseChat;
+    }
+    return normalizeSavedChatState(overlay.chat);
+  } catch {
+    return baseChat;
+  }
 }
 
 const attachmentTailSessionCache = new Map<string, { signature: string; base64: string }>();

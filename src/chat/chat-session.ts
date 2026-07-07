@@ -3,7 +3,7 @@ import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
 import { hasDocumentDbTables } from '../plugins/db-table-model';
 import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
@@ -63,6 +63,7 @@ export async function requestChatTurn(params: {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
@@ -99,6 +100,7 @@ export async function requestChatTurn(params: {
           chatContext: params.chatContext,
           chatContextProvider: params.chatContextProvider,
           chatSearchCache: params.chatSearchCache,
+          onContextPreparation: params.onContextPreparation,
           onReasoningSummary: (summary) => {
             reasoningSummary = summary;
           },

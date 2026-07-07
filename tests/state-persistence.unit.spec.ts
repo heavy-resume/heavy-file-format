@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { deserializeDocument } from '../src/serialization';
 import { createDefaultSearchState } from '../src/search/state';
-import { loadSessionState, saveSessionState } from '../src/state-persistence';
+import { loadSessionState, saveChatSessionState, saveSessionState } from '../src/state-persistence';
 import type { AppState } from '../src/types';
 import { setAttachment } from '../src/attachments';
 
@@ -37,6 +37,7 @@ hvy_version: 0.1
       messages: [],
       panelOpen: false,
       isSending: false,
+      status: null,
       error: null,
       requestNonce: 0,
       abortController: null,
@@ -235,6 +236,46 @@ hvy_version: 0.1
   expect(loaded?.document?.sections[0]?.blocks[0]?.text).toBe('Saved work');
   expect(storage.has('hvy-editor-session-state-v1')).toBe(true);
   expect(legacyStorage.has('hvy-editor-resume-state-v1')).toBe(false);
+});
+
+test('saveChatSessionState stores chat updates separately without rewriting the document payload', () => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    },
+  });
+  const state = createPersistenceTestState('Chat Delta', '');
+  state.chat.panelOpen = false;
+  saveSessionState(state);
+  const originalMainPayload = storage.get('hvy-editor-session-state-v1');
+  expect(JSON.parse(originalMainPayload ?? '{}')).toHaveProperty('documentBase64');
+
+  state.chat.panelOpen = true;
+  state.chat.messages = [
+    { id: 'u1', role: 'user', content: 'What changed?' },
+    { id: 'a1', role: 'assistant', content: 'Only chat changed.' },
+  ];
+  saveChatSessionState(state);
+
+  expect(storage.get('hvy-editor-session-state-v1')).toBe(originalMainPayload);
+  const chatPayload = storage.get('hvy-editor-session-state-v1:chat');
+  expect(chatPayload).toContain('Only chat changed.');
+  expect(JSON.parse(chatPayload ?? '{}')).not.toHaveProperty('documentBase64');
+  const loaded = loadSessionState();
+  expect(loaded?.document?.sections[0]?.title).toBe('Chat Delta');
+  expect(loaded?.chat.panelOpen).toBe(true);
+  expect(loaded?.chat.messages).toEqual([
+    { id: 'u1', role: 'user', content: 'What changed?' },
+    { id: 'a1', role: 'assistant', content: 'Only chat changed.' },
+  ]);
 });
 
 test('loadSessionState ignores legacy shared localStorage state from other tabs', () => {

@@ -25,12 +25,23 @@ const chatContextEncoder = new Encoder(englishEncoder);
 
 interface RuntimeIndex {
   key: HvyChatSearchIndexKey;
+  documentRevision: number;
   records: HvyChatSearchIndexRecord[];
   recordSearchHashes: Map<string, string>;
   index: Index;
 }
 
 const runtimeIndexes = new WeakMap<VisualDocument, RuntimeIndex>();
+const documentRevisions = new WeakMap<VisualDocument, number>();
+
+export function markKeywordChatContextDocumentChanged(document: VisualDocument): void {
+  documentRevisions.set(document, getKeywordDocumentRevision(document) + 1);
+}
+
+export function isKeywordChatContextPrepared(document: VisualDocument): boolean {
+  const cached = runtimeIndexes.get(document);
+  return Boolean(cached && cached.documentRevision === getKeywordDocumentRevision(document));
+}
 
 export async function buildKeywordChatContext(
   request: HvyChatContextRequest,
@@ -72,24 +83,35 @@ export async function buildKeywordChatContext(
 }
 
 function getKeywordIndex(document: VisualDocument, cache: HvyChatSearchCache | null): Promise<RuntimeIndex> | RuntimeIndex {
-  const key = buildIndexKey(document);
+  const documentRevision = getKeywordDocumentRevision(document);
   const cached = runtimeIndexes.get(document);
+  if (cached && cached.documentRevision === documentRevision) {
+    return cached;
+  }
+  const key = buildIndexKey(document);
   if (cached && cached.key.fingerprint === key.fingerprint && cached.key.documentId === key.documentId) {
+    cached.documentRevision = documentRevision;
     return cached;
   }
   if (cached && cached.key.documentId === key.documentId) {
-    return updateKeywordIndex(document, cached, key, cache);
+    return updateKeywordIndex(document, cached, key, documentRevision, cache);
   }
-  return buildKeywordIndex(document, key, cache);
+  return buildKeywordIndex(document, key, documentRevision, cache);
 }
 
-async function buildKeywordIndex(document: VisualDocument, key: HvyChatSearchIndexKey, cache: HvyChatSearchCache | null): Promise<RuntimeIndex> {
+async function buildKeywordIndex(
+  document: VisualDocument,
+  key: HvyChatSearchIndexKey,
+  documentRevision: number,
+  cache: HvyChatSearchCache | null
+): Promise<RuntimeIndex> {
   const cached = await cache?.getIndex(key);
   const snapshot = cached?.version === 1 && Array.isArray(cached.records)
     ? cached
     : { version: 1 as const, records: buildIndexRecords(document) };
   const runtime = {
     key,
+    documentRevision,
     records: snapshot.records,
     recordSearchHashes: buildRecordSearchHashes(snapshot.records),
     index: createFlexIndex(snapshot.records),
@@ -105,6 +127,7 @@ async function updateKeywordIndex(
   document: VisualDocument,
   runtime: RuntimeIndex,
   key: HvyChatSearchIndexKey,
+  documentRevision: number,
   cache: HvyChatSearchCache | null
 ): Promise<RuntimeIndex> {
   const nextRecords = buildIndexRecords(document);
@@ -127,11 +150,16 @@ async function updateKeywordIndex(
     }
   }
   runtime.key = key;
+  runtime.documentRevision = documentRevision;
   runtime.records = nextRecords;
   runtime.recordSearchHashes = nextHashes;
   runtimeIndexes.set(document, runtime);
   await cache?.putIndex(key, { version: 1, records: nextRecords });
   return runtime;
+}
+
+function getKeywordDocumentRevision(document: VisualDocument): number {
+  return documentRevisions.get(document) ?? 0;
 }
 
 function createFlexIndex(records: HvyChatSearchIndexRecord[]): Index {

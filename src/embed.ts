@@ -162,6 +162,7 @@ function createDefaultChatState(): AppState['chat'] {
     draft: '',
     messages: [],
     isSending: false,
+    status: null,
     error: null,
     panelOpen: false,
     requestNonce: 0,

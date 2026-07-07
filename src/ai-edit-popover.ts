@@ -186,6 +186,7 @@ export async function submitAiEditRequest(): Promise<void> {
   state.chat.panelOpen = true;
   state.chat.error = null;
   state.chat.isSending = true;
+  state.chat.status = 'Working through the request...';
   state.chat.requestNonce += 1;
   const chatRequestNonce = state.chat.requestNonce;
   const abortController = new AbortController();
@@ -254,6 +255,7 @@ export async function submitAiEditRequest(): Promise<void> {
     if (chatRequestNonce === state.chat.requestNonce) {
       state.chat.abortController = null;
       state.chat.isSending = false;
+      state.chat.status = null;
     }
     if (requestNonce !== state.aiEdit.requestNonce) {
       getRenderApp()();

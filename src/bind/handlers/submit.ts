@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshChatSurface, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveSessionState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
+import { state, getRenderApp, getRefreshChatSurface, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveChatSessionState, saveSessionState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
 import { applySearchFilter, submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
@@ -102,18 +102,30 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.draft = '';
       state.chat.error = null;
       state.chat.isSending = true;
+      state.chat.status = 'Working through the request...';
       state.chat.requestNonce += 1;
-      saveSessionState(state);
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
+      const saveChatOrSessionState = (): void => {
+        if (isDocumentEditChat) {
+          saveSessionState(state);
+          return;
+        }
+        saveChatSessionState(state);
+      };
       const refreshChatOrRenderApp = (): void => {
         if (!isDocumentEditChat && getRefreshChatSurface()()) {
           return;
         }
         getRenderApp()();
       };
+      const refreshChatAfterStatusChange = async (): Promise<void> => {
+        refreshChatOrRenderApp();
+        await waitForNextFrame();
+      };
+      saveChatOrSessionState();
       console.debug('[hvy:chat-submit] started request', {
         requestNonce,
         currentView: state.currentView,
@@ -171,6 +183,22 @@ export function bindSubmit(app: HTMLElement): void {
                 chatContext: state.chatContext,
                 chatContextProvider: state.chatContextProvider,
                 chatSearchCache: state.chatSearchCache,
+                onContextPreparation: async (event) => {
+                  if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
+                    return;
+                  }
+                  if (event.cached) {
+                    return;
+                  }
+                  state.chat.status = event.phase === 'preparing-context'
+                    ? 'Preparing document context...'
+                    : 'Waiting for answer...';
+                  if (event.phase === 'preparing-context') {
+                    await refreshChatAfterStatusChange();
+                    return;
+                  }
+                  refreshChatOrRenderApp();
+                },
                 signal: abortController.signal,
               });
         console.debug('[hvy:chat-submit] chat turn resolved', {
@@ -190,7 +218,7 @@ export function bindSubmit(app: HTMLElement): void {
         }
         state.chat.messages = result.messages;
         state.chat.error = result.error;
-        saveSessionState(state);
+        saveChatOrSessionState();
         if (isDocumentEditChat && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
@@ -213,7 +241,8 @@ export function bindSubmit(app: HTMLElement): void {
         });
         state.chat.abortController = null;
         state.chat.isSending = false;
-        saveSessionState(state);
+        state.chat.status = null;
+        saveChatOrSessionState();
         refreshChatOrRenderApp();
       }
       return;
@@ -238,6 +267,12 @@ export function bindSubmit(app: HTMLElement): void {
       getRenderApp()();
       restoreCliViewAfterRender();
     }
+  });
+}
+
+function waitForNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
   });
 }
 

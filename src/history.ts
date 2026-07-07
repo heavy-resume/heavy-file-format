@@ -5,6 +5,7 @@ import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
+import { markKeywordChatContextDocumentChanged } from './chat/chat-context';
 import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
@@ -93,6 +94,7 @@ export function recordHistory(group?: string): void {
   if (state.isRestoring) {
     return;
   }
+  markKeywordChatContextDocumentChanged(state.document);
   const changeSource = inferDocumentChangeSource(group);
   const recordId = incrementRecordHistoryCount();
   const startedAt = performance.now();

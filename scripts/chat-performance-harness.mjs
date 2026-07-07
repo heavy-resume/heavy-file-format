@@ -26,7 +26,7 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          output: 'Mock QA answer for performance measurement.',
+          output: `Mock QA answer ${qaCalls} for performance measurement.`,
           usage: { inputTokens: 2400, outputTokens: 32, totalTokens: 2432 },
         }),
       });
@@ -168,10 +168,16 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
       await page.getByRole('heading', { name: 'Ask This Document' }).waitFor();
     }));
 
-    metrics.push(await measureStep(page, 'viewer-ask-question', async () => {
+    metrics.push(await measureStep(page, 'viewer-ask-question-cold', async () => {
       await page.locator('[data-field="chat-input"]').fill('What themes does this performance document cover?');
       await submitChatComposer(page);
-      await page.locator('.chat-bubble', { hasText: 'Mock QA answer for performance measurement.' }).waitFor();
+      await page.locator('.chat-bubble', { hasText: 'Mock QA answer 1 for performance measurement.' }).waitFor();
+    }));
+
+    metrics.push(await measureStep(page, 'viewer-ask-question-warm', async () => {
+      await page.locator('[data-field="chat-input"]').fill('Which sections mention implementation details?');
+      await submitChatComposer(page);
+      await page.locator('.chat-bubble', { hasText: 'Mock QA answer 2 for performance measurement.' }).waitFor();
     }));
 
     metrics.push(await measureStep(page, 'switch-to-ai-edit-chat', async () => {

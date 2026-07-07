@@ -1777,17 +1777,17 @@ hvy_version: 0.1
 
  <!--hvy:component-list:0 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":80},"groupKeys":{"Category":"Database"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":80,"Name":"PostgreSQL"},"groupKeys":{"Category":"Database"}}-->
    PostgreSQL
 
  <!--hvy:component-list:1 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":95},"groupKeys":{"Category":"Language"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":95,"Name":"TypeScript"},"groupKeys":{"Category":"Language"}}-->
    TypeScript
 
  <!--hvy:component-list:2 {}-->
 
-  <!--hvy:text {"sortKeys":{"Job Match":90},"groupKeys":{"Category":"Database"}}-->
+  <!--hvy:text {"sortKeys":{"Job Match":90,"Name":"SQLite"},"groupKeys":{"Category":"Database"}}-->
    SQLite
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
@@ -1826,12 +1826,31 @@ hvy_version: 0.1
   await expect(page.locator('.reader-component-list')).toContainText('PostgreSQL');
 
   await readerControls.locator('[data-field="component-list-reader-group"]').selectOption('Category');
+  await readerControls.locator('[data-field="component-list-reader-view"]').selectOption('Name');
 
   await groups.nth(0).locator('.reader-container-toggle').click();
 
   await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(groups.nth(0)).toContainText('PostgreSQL');
   await expect(groups.nth(0)).toContainText('SQLite');
+
+  const expectedResult = await page.evaluate(async () => {
+    const [{ state }, { deserializeDocument, serializeDocument }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/serialization.ts'),
+    ]);
+    const serialized = serializeDocument(state.document);
+    const roundTripped = deserializeDocument(serialized, '.hvy');
+    return {
+      serialized,
+      direction: state.document.sections[0]?.blocks[0]?.schema.componentListDefaultSortDirection,
+      roundTrippedDirection: roundTripped.sections[0]?.blocks[0]?.schema.componentListDefaultSortDirection,
+    };
+  });
+  expect(expectedResult.serialized).toContain('"componentListDefaultSortKey":"Name","componentListDefaultGroupKey":"Category"');
+  expect(expectedResult.serialized).not.toContain('"componentListDefaultSortDirection":"desc"');
+  expect(expectedResult.direction).toBe('asc');
+  expect(expectedResult.roundTrippedDirection).toBe('asc');
 });
 
 test('component-list reader controls hide unavailable sort and group controls', async ({ page }) => {

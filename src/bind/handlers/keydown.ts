@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, createDefaultTableRow, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, createKeyboardInsertedTableRow, syncReusableTemplateForBlock } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
@@ -241,7 +241,7 @@ function moveTableCellFocus(
 
   if (nextRowIndex >= context.block.schema.tableRows.length) {
     recordHistory(`table-row-keyboard-add:${sectionKey}:${blockId}`);
-    context.block.schema.tableRows.push(createDefaultTableRow(columnCount));
+    context.block.schema.tableRows.push(createKeyboardInsertedTableRow(columnCount));
     syncReusableTemplateForBlock(sectionKey, context.block.id);
     getRefreshReaderPanels()();
     state.pendingEditorActivation = null;

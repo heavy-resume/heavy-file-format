@@ -5,11 +5,17 @@ import { bindInputMisc } from './bind/handlers/input-misc';
 import { bindKeydown } from './bind/handlers/keydown';
 import { bindScrollHandler } from './bind/handlers/scroll';
 import { bindSubmit } from './bind/handlers/submit';
-import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  parseComponentListRuntimeView,
+  persistComponentListDisplayState,
+} from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
@@ -74,14 +80,21 @@ export function bindReaderUi(app: HTMLElement): void {
     if (!sectionKey || !blockId) {
       return;
     }
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block) {
+      return;
+    }
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
-    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+    const nextView = encodeComponentListRuntimeView({
       sortKey: current.sortKeyOverride ? current.sortKey : viewId,
       sortKeyOverride: current.sortKeyOverride || !!viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
     });
+    persistComponentListDisplayState(block, getComponentListDisplayState(block, nextView));
+    syncReusableTemplateForBlock(sectionKey, blockId);
+    delete state.componentListReaderViews[key];
   };
 
   const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {

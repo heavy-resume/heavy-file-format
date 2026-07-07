@@ -57,6 +57,15 @@ export function getComponentListDisplayState(block: VisualBlock, runtimeViewId =
   };
 }
 
+export function persistComponentListDisplayState(
+  block: VisualBlock,
+  display: Pick<ComponentListDisplayState, 'sortKey' | 'direction' | 'groupKey'>
+): void {
+  block.schema.componentListDefaultSortKey = display.sortKey.trim();
+  block.schema.componentListDefaultSortDirection = display.direction;
+  block.schema.componentListDefaultGroupKey = display.groupKey.trim();
+}
+
 export function resolveComponentListItems(block: VisualBlock, runtimeViewId = ''): ComponentListResolvedItems {
   const display = getComponentListDisplayState(block, runtimeViewId);
   const blocks = block.schema.componentListBlocks ?? [];

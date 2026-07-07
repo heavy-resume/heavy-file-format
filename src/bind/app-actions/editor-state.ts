@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
@@ -106,6 +106,7 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   event.stopPropagation();
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   commitActiveTextFillIn('deactivate-block');
+  commitActiveInlineTableEdit(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
@@ -119,6 +120,21 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   }
   getRenderApp()();
 };
+
+function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return;
+  }
+  const field = activeElement.dataset.field;
+  if (field !== 'table-cell' && field !== 'table-column') {
+    return;
+  }
+  if (activeElement.dataset.sectionKey !== sectionKey || activeElement.dataset.blockId !== blockId) {
+    return;
+  }
+  commitInlineTableEdit(activeElement);
+}
 
 const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {

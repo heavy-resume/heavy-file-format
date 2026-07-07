@@ -93,6 +93,15 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
     }
+    if (actionButton && isTableEditorCompletionButton(actionButton)) {
+      event.preventDefault();
+      const handled = executeActionButton(app, actionButton, event);
+      if (handled) {
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
     if (actionButton && isTableEditorActionButton(actionButton)) {
       event.preventDefault();
     }
@@ -409,6 +418,22 @@ function isTableEditorActionButton(actionButton: HTMLElement): boolean {
     || action === 'add-table-row'
     || action === 'add-table-column')
     && Boolean(actionButton.closest('.table-editor'));
+}
+
+function isTableEditorCompletionButton(actionButton: HTMLElement): boolean {
+  const action = actionButton.dataset.action ?? '';
+  if (action !== 'deactivate-block' && action !== 'cancel-block-edit') {
+    return false;
+  }
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return false;
+  }
+  const activeField = activeElement.dataset.field;
+  if (activeField !== 'table-cell' && activeField !== 'table-column') {
+    return false;
+  }
+  return Boolean(actionButton.closest('.editor-block')?.contains(activeElement));
 }
 
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {

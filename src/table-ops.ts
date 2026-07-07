@@ -1,4 +1,4 @@
-import type { BlockSchema } from './editor/types';
+import type { BlockSchema, TableRow } from './editor/types';
 import { moveItem } from './utils';
 
 export function normalizeTableColumns(columns: string[]): string[] {
@@ -55,4 +55,26 @@ export function moveTableRow(schema: BlockSchema, fromIndex: number, toIndex: nu
     return;
   }
   schema.tableRows = moveItem(schema.tableRows, fromIndex, toIndex);
+}
+
+export function createKeyboardInsertedTableRow(columnCount: number): TableRow {
+  return {
+    cells: new Array(Math.max(columnCount, 1)).fill(''),
+    editorCreatedByEnter: true,
+  };
+}
+
+export function isEmptyTableRow(row: TableRow, columnCount: number): boolean {
+  const cellCount = Math.max(columnCount, row.cells.length, 1);
+  return Array.from({ length: cellCount }).every((_item, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
+}
+
+export function pruneEmptyKeyboardInsertedTableRows(schema: BlockSchema): boolean {
+  const columnCount = getTableColumns(schema).length;
+  const nextRows = schema.tableRows.filter((row) => !row.editorCreatedByEnter || !isEmptyTableRow(row, columnCount));
+  if (nextRows.length === schema.tableRows.length) {
+    return false;
+  }
+  schema.tableRows = nextRows;
+  return true;
 }

@@ -5,6 +5,7 @@ export type Slot = 'left' | 'center' | 'right';
 
 export interface TableRow {
   cells: string[];
+  editorCreatedByEnter?: boolean;
 }
 
 export interface CarouselImage {

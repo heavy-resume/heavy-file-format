@@ -1,7 +1,12 @@
 import { expect, test } from 'vitest';
 
 import { defaultBlockSchema } from '../src/document-factory';
-import { encodeComponentListRuntimeView, resolveComponentListItems } from '../src/editor/components/component-list/component-list-view';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  persistComponentListDisplayState,
+  resolveComponentListItems,
+} from '../src/editor/components/component-list/component-list-view';
 import type { VisualBlock } from '../src/editor/types';
 
 function textItem(
@@ -173,4 +178,34 @@ test('component-list runtime sort none overrides a stored default sort', () => {
   if (expectedResult.kind === 'items') {
     expect(expectedResult.blocks.map((block) => block.text)).toEqual(['first', 'second']);
   }
+});
+
+test('component-list runtime display can be persisted as list defaults', () => {
+  const list: VisualBlock = {
+    id: 'skills',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('component-list'),
+      componentListBlocks: [
+        textItem('first', { Name: 'First', Strength: 1 }, { Category: 'A' }),
+        textItem('second', { Name: 'Second', Strength: 9 }, { Category: 'B' }),
+      ],
+      componentListDefaultSortKey: 'Strength',
+      componentListDefaultSortDirection: 'desc',
+      componentListDefaultGroupKey: '',
+    },
+  };
+
+  const expectedResult = getComponentListDisplayState(list, encodeComponentListRuntimeView({
+    sortKey: 'Name',
+    sortKeyOverride: true,
+    reversed: true,
+    groupKey: 'Category',
+  }));
+  persistComponentListDisplayState(list, expectedResult);
+
+  expect(list.schema.componentListDefaultSortKey).toBe('Name');
+  expect(list.schema.componentListDefaultSortDirection).toBe('asc');
+  expect(list.schema.componentListDefaultGroupKey).toBe('Category');
 });

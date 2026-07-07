@@ -9,7 +9,7 @@ import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } f
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
 import { syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
-import { getTableColumns, setTableColumns } from './table-ops';
+import { getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
@@ -538,6 +538,9 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
       row.cells[cellIndex] = getInlineEditableMarkdown(target, { preserveLineBreaks: true });
+      if (row.editorCreatedByEnter && !isEmptyTableRow(row, getTableColumns(block.schema).length)) {
+        delete row.editorCreatedByEnter;
+      }
       syncTableRowEmptyClass(target);
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -936,6 +939,9 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): Deac
     return 'unchanged';
   }
   const block = findBlockByIds(sectionKey, blockId);
+  if (block?.schema.kind === 'table' && pruneEmptyKeyboardInsertedTableRows(block.schema)) {
+    syncReusableTemplateForBlock(sectionKey, blockId);
+  }
   if (block && shouldRemoveXrefOnEditorExit(block)) {
     const rootBlocks = getEditorRootBlocks(sectionKey);
     if (rootBlocks && removeBlockFromList(rootBlocks, blockId)) {

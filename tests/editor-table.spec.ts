@@ -242,3 +242,47 @@ hvy_version: 0.1
   await page.keyboard.type('Beta');
   await expect(addedRowFirstCell).toContainText('Beta');
 });
+
+test('static table Done does not persist untouched Enter-created rows', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-enter-prune-test"}-->
+#! Table Enter Prune Test
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+  const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await firstCell.click();
+  await expect(firstCell).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  const untouchedAddedRowFirstCell = page.locator('[data-field="table-cell"][data-row-index="1"][data-cell-index="0"]');
+  await expect(untouchedAddedRowFirstCell).toBeFocused();
+
+  const doneButton = page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Done' });
+  await doneButton.scrollIntoViewIfNeeded();
+  const doneButtonBox = await doneButton.boundingBox();
+  expect(doneButtonBox).not.toBeNull();
+  const expectedResult = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim() ?? '',
+    { x: doneButtonBox!.x + doneButtonBox!.width / 2, y: doneButtonBox!.y + doneButtonBox!.height / 2 }
+  );
+  expect(expectedResult).toBe('Done');
+  await page.mouse.click(doneButtonBox!.x + doneButtonBox!.width / 2, doneButtonBox!.y + doneButtonBox!.height / 2);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Alpha' }).first();
+  await expect(passiveTable.locator('.reader-table tbody tr')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/"tableRows":\[\{"cells":\["Alpha","Open"\]\}\]/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/"cells":\["",""\]/);
+});

@@ -10,7 +10,7 @@ export { setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, n
 export { deserializeDocument, serializeDocument } from '../../serialization';
 export { saveSessionState } from '../../state-persistence';
 export { syncReusableTemplateForBlock, revertReusableComponent, findReusableOwner } from '../../reusable';
-export { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow } from '../../table-ops';
+export { addTableColumn, removeTableColumn, getTableColumns, moveTableColumn, moveTableRow, createKeyboardInsertedTableRow } from '../../table-ops';
 export { createGridItem } from '../../grid-ops';
 export { detectExtension, sanitizeOptionalId, moveItem } from '../../utils';
 export { openLinkInlineModal } from '../../bind-link-modal';

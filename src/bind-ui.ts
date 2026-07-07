@@ -38,12 +38,18 @@ import { createDefaultSearchState } from './search/state';
 import { externalSearchSnapshotToDocumentState } from './search/snapshot';
 import { traceSemanticFilterEvent } from './search/semantic-trace';
 import type { HvySearchSnapshot } from './search/types';
-import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  parseComponentListRuntimeView,
+  persistComponentListDisplayState,
+} from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
@@ -655,14 +661,21 @@ export function bindUi(app: HTMLElement): void {
     if (!sectionKey || !blockId) {
       return;
     }
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block) {
+      return;
+    }
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
-    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+    const nextView = encodeComponentListRuntimeView({
       sortKey: current.sortKeyOverride ? current.sortKey : viewId,
       sortKeyOverride: current.sortKeyOverride || !!viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
     });
+    persistComponentListDisplayState(block, getComponentListDisplayState(block, nextView));
+    syncReusableTemplateForBlock(sectionKey, blockId);
+    delete state.componentListReaderViews[key];
   };
 
   const handleCollapsedListControlPointerDown = (event: Event) => {

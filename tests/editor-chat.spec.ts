@@ -171,6 +171,34 @@ test('viewer question updates chat without rerendering the app', async ({ page }
   expect(renderAppLogCount).toBe(0);
 });
 
+test('AI mode informational question uses QA chat instead of document edit CLI', async ({ page }) => {
+  const chatRequests: Array<{ mode?: string; messages?: Array<{ content?: string }> }> = [];
+  await page.route('**/api/chat', async (route) => {
+    const body = route.request().postDataJSON() as { mode?: string; messages?: Array<{ content?: string }> };
+    chatRequests.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: 'James has used Python on automation and data projects.',
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('What projects has James done with Python?');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.locator('.chat-bubble', { hasText: 'James has used Python on automation and data projects.' })).toBeVisible();
+  expect(chatRequests).toHaveLength(1);
+  expect(chatRequests[0]?.mode).toBe('qa');
+  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('What projects has James done with Python?');
+  await expect(page.locator('.chat-cli-sim')).toHaveCount(0);
+});
+
 test('right click AI change request uses CLI sim when enabled', async ({ page }) => {
   await page.goto('/');
 

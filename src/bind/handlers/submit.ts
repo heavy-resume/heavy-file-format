@@ -5,6 +5,7 @@ import { findBlockForVirtualDirectory, findSectionForVirtualDirectory } from '..
 import type { HvyVirtualPathNamingState } from '../../cli-core/virtual-file-system';
 import type { VisualBlock, VisualSection } from '../../editor/types';
 import { recordMeasurement } from '../../perf-trace';
+import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
 
 interface PendingDocumentEditMutation {
   requiresFullRefresh: boolean;
@@ -114,12 +115,14 @@ export function bindSubmit(app: HTMLElement): void {
       state.chat.draft = '';
       state.chat.error = null;
       state.chat.isSending = true;
-      state.chat.status = 'Working through the request...';
       state.chat.requestNonce += 1;
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
+      const answerDocumentEditChatAsQuestion = isDocumentEditChat && isLikelyInformationalAnswerRequest(question);
+      const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
+      state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
       const saveChatOrSessionState = (): void => {
         if (isDocumentEditChat) {
           saveSessionState(state);
@@ -161,6 +164,7 @@ export function bindSubmit(app: HTMLElement): void {
         requestNonce,
         currentView: state.currentView,
         isDocumentEditChat,
+        answerDocumentEditChatAsQuestion,
         sections: state.document.sections.length,
       });
       refreshChatOrRenderApp();
@@ -168,7 +172,7 @@ export function bindSubmit(app: HTMLElement): void {
       try {
         console.debug('[hvy:chat-submit] dispatching chat turn', {
           requestNonce,
-          mode: isDocumentEditChat ? 'document-edit' : 'qa',
+          mode: useDocumentEditTurn ? 'document-edit' : 'qa',
         });
         let recordedDocumentEditMutation = false;
         const recordDocumentEditMutation = (_group?: string, mutation?: ChatCliMutationSummary): void => {
@@ -181,7 +185,7 @@ export function bindSubmit(app: HTMLElement): void {
           recordHistory(`ai-document-edit:${requestNonce}`);
         };
         const result =
-          isDocumentEditChat
+          useDocumentEditTurn
             ? await requestDocumentEditChatTurn({
                 settings: state.chat.settings,
                 document: state.document,
@@ -216,6 +220,7 @@ export function bindSubmit(app: HTMLElement): void {
                 chatContext: state.chatContext,
                 chatContextProvider: state.chatContextProvider,
                 chatSearchCache: state.chatSearchCache,
+                allowDbQaTools: !answerDocumentEditChatAsQuestion,
                 onContextPreparation: async (event) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {
                     return;
@@ -252,7 +257,7 @@ export function bindSubmit(app: HTMLElement): void {
         state.chat.messages = result.messages;
         state.chat.error = result.error;
         saveChatOrSessionState();
-        if (isDocumentEditChat && !result.error) {
+        if (useDocumentEditTurn && !result.error) {
           state.rawEditorText = serializeDocument(state.document);
           state.rawEditorError = null;
           state.rawEditorDiagnostics = [];

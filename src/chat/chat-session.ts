@@ -65,6 +65,7 @@ export async function requestChatTurn(params: {
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
+  allowDbQaTools?: boolean;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
@@ -85,7 +86,7 @@ export async function requestChatTurn(params: {
   let tokenUsage: ChatTokenUsage | null = null;
 
   try {
-    const answer = hasDocumentDbTables(params.document)
+    const answer = params.allowDbQaTools !== false && hasDocumentDbTables(params.document)
       ? await runQaToolLoop({
           settings: params.settings,
           document: params.document,

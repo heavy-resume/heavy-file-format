@@ -27,6 +27,7 @@ interface ImportMetaEnv {
   readonly VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
   readonly VITE_HVY_CHAT_MODEL?: string;
   readonly VITE_HVY_ENABLE_CHAT_MODEL_PICKER?: string;
+  readonly VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS?: string;
   readonly VITE_HVY_ENABLE_PDF_IMPORT_STEPPER?: string;
   readonly VITE_OPENAI_MODEL?: string;
   readonly VITE_ANTHROPIC_MODEL?: string;

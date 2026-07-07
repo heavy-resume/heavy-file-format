@@ -16,6 +16,8 @@ export interface XrefTargetOption {
   detail: string;
 }
 
+const XREF_TARGET_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export function getXrefTargetOptions(tagFilter = ''): XrefTargetOption[] {
   return getXrefTargetOptionsForDocument(state.document, tagFilter);
 }
@@ -185,8 +187,8 @@ function compareXrefTargetOptions(
   left: { value: string; title: string; detail: string; label: string },
   right: { value: string; title: string; detail: string; label: string }
 ): number {
-  return left.title.localeCompare(right.title, undefined, { numeric: true, sensitivity: 'base' })
-    || left.value.localeCompare(right.value, undefined, { numeric: true, sensitivity: 'base' });
+  return XREF_TARGET_OPTION_COLLATOR.compare(left.title, right.title)
+    || XREF_TARGET_OPTION_COLLATOR.compare(left.value, right.value);
 }
 
 function normalizeTagFilter(tagFilter: string): string[] {

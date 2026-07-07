@@ -30,6 +30,7 @@ export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 20_000;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
+const ENABLE_CHAT_PROXY_DEBUG_LOGS = import.meta.env?.VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS === 'true';
 export type ChatControlSurface = 'reference' | 'embedded';
 
 interface RenderChatPanelDeps {
@@ -609,13 +610,13 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   });
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
-  console.debug(`[hvy:${debugLabel}] client request`, {
+  logChatProxyDebug(debugLabel, 'client request', () => ({
     provider: requestPayload.provider,
     model: requestPayload.model,
     messages: requestPayload.messages,
     contextLength: requestPayload.context.length,
     hostManaged: !!hostClient,
-  });
+  }));
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
@@ -648,11 +649,11 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   });
 
   const payload = await readJsonResponse(response);
-  console.debug(`[hvy:${debugLabel}] client response`, {
+  logChatProxyDebug(debugLabel, 'client response', () => ({
     ok: response.ok,
     status: response.status,
     payload,
-  });
+  }));
   if (!response.ok) {
     throw new Error(extractProxyError(payload, 'Chat request failed.'));
   }
@@ -672,7 +673,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   if (usage) {
     params.onTokenUsage?.(usage);
   }
-  console.debug(`[hvy:${debugLabel}] client extracted output`, output);
+  logChatProxyDebug(debugLabel, 'client extracted output', () => output);
   return output;
 }
 
@@ -694,13 +695,13 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   }));
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
-  console.debug(`[hvy:${debugLabel}] client native tool request`, {
+  logChatProxyDebug(debugLabel, 'client native tool request', () => ({
     provider: requestPayload.provider,
     model: requestPayload.model,
     toolCount: params.tools.length,
     hasToolState: !!params.toolState,
     hostManaged: !!hostClient,
-  });
+  }));
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
@@ -738,11 +739,11 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   }));
 
   const payload = await measureAsyncPhase('chat.proxyTool.readJson', { debugLabel }, () => readJsonResponse(response));
-  console.debug(`[hvy:${debugLabel}] client native tool response`, {
+  logChatProxyDebug(debugLabel, 'client native tool response', () => ({
     ok: response.ok,
     status: response.status,
     payload,
-  });
+  }));
   if (!response.ok) {
     throw new Error(extractProxyError(payload, 'Chat tool request failed.'));
   }
@@ -771,6 +772,13 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     nativeMessages: typed.nativeMessages,
     toolState: typed.toolState,
   };
+}
+
+function logChatProxyDebug(debugLabel: string, event: string, details: () => unknown): void {
+  if (!ENABLE_CHAT_PROXY_DEBUG_LOGS) {
+    return;
+  }
+  console.debug(`[hvy:${debugLabel}] ${event}`, details());
 }
 
 function assertProxyContextWithinLimit(context: string, debugLabel: string, maxContextChars = MAX_PROXY_COMPLETION_CONTEXT_CHARS): void {

@@ -33,6 +33,7 @@ import {
 import { formatHvyRequestStructure, formatHvyRequestStructureForDirectory } from './request-structure';
 import { formatHvySearch } from './intent-search';
 import {
+  buildHvyVirtualBlockSubtreeFileSystem,
   buildHvyVirtualFileSystem,
   findBlockForVirtualDirectory,
   findBlockInsertionTargetForVirtualDirectory,
@@ -529,7 +530,7 @@ function addComponentToPath(ctx: HvyDocumentCommandContext, params: {
   target.insert(block, params.index ?? -1);
   const path = `${resolvedParentPath.replace(/\/$/, '')}/${id}`;
   return {
-    output: formatCreatedComponentDirectory(ctx.document, path, resolvedParentPath, parentBlock, target.kind, {
+    output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedParentPath, parentBlock, target.kind, {
       returnAboutTxtOnCreation: params.returnAboutTxtOnCreation,
       returnOrderOnCreation: params.returnOrderOnCreation,
       returnStructureOnCreation: params.returnStructureOnCreation,
@@ -599,6 +600,7 @@ function createCliGridItem(block: VisualBlock): GridItem {
 function formatCreatedComponentDirectory(
   document: VisualDocument,
   componentPath: string,
+  createdBlock: VisualBlock | null,
   parentPath = '',
   parentBlock: VisualBlock | null = null,
   insertionKind?: 'blocks' | 'grid',
@@ -609,12 +611,12 @@ function formatCreatedComponentDirectory(
   } = {},
   pathNaming?: HvyVirtualPathNamingState
 ): string {
-  const fs = buildHvyVirtualFileSystem(document, pathNaming);
-  const normalizedComponentPath = fs.entries.has(componentPath)
-    ? componentPath
-    : componentPath.startsWith('/body/')
+  const normalizedComponentPath = componentPath.startsWith('/body/') || componentPath.startsWith('/id/')
     ? componentPath
     : `/body${componentPath.startsWith('/') ? componentPath : `/${componentPath}`}`;
+  const fs = createdBlock && !options.returnStructureOnCreation
+    ? buildHvyVirtualBlockSubtreeFileSystem(document.meta, createdBlock, normalizedComponentPath, pathNaming)
+    : buildHvyVirtualFileSystem(document, pathNaming);
   const entry = fs.entries.get(normalizedComponentPath);
   if (!entry || entry.kind !== 'dir') {
     return componentPath;
@@ -622,7 +624,7 @@ function formatCreatedComponentDirectory(
   const children = listDirectory(fs, normalizedComponentPath)
     .map((child) => `${child.kind === 'dir' ? 'dir ' : 'file'} ${child.path.split('/').pop() ?? child.path}`)
     .join('\n');
-  const component = findBlockForVirtualDirectory(document, normalizedComponentPath, pathNaming);
+  const component = createdBlock ?? findBlockForVirtualDirectory(document, normalizedComponentPath, pathNaming);
   const componentName = component?.schema.component ?? '';
   const structureDisplay = componentName && options.returnStructureOnCreation
     ? formatCreatedComponentStructureDisplay(document, fs, normalizedComponentPath)
@@ -711,9 +713,11 @@ function addPluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: H
   if (aliasError) {
     throw new Error(aliasError);
   }
-  insertChild(section.blocks, createPluginBlock(id, plugin, {}, ''), index);
-  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
+  const block = createPluginBlock(id, plugin, {}, '');
+  insertChild(section.blocks, block, index);
+  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
+  const path = `${resolvedSectionPath.replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
 }
 
 function formatRawPluginAliasError(plugin: string): string {
@@ -738,12 +742,14 @@ function addFormPluginBlock(ctx: HvyDocumentCommandContext, args: string[], inde
   if (rest.length > 0) {
     throw new Error('hvy insert plugin form: creation does not accept fields, scripts, or submit settings; create it blank, then edit plugin.txt and plugin.json.');
   }
-  insertChild(section.blocks, createPluginBlock(id, FORM_PLUGIN_ID, {
+  const block = createPluginBlock(id, FORM_PLUGIN_ID, {
     version: '0.1',
     showSubmit: false,
-  }, 'fields: []'), index);
-  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
+  }, 'fields: []');
+  insertChild(section.blocks, block, index);
+  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
+  const path = `${resolvedSectionPath.replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
 }
 
 function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], index: HvyInsertIndex = -1): HvyDocumentCommandResult {
@@ -755,13 +761,11 @@ function addDbTablePluginBlock(ctx: HvyDocumentCommandContext, args: string[], i
   if (rest.length > 0) {
     throw new Error('hvy insert plugin db-table: creation does not accept table or query inline; create it blank, then edit plugin.json and plugin.txt.');
   }
-  insertChild(
-    section.blocks,
-    createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: '', queryLimit: 10 }, ''),
-    index
-  );
-  const path = `${resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath).replace(/\/$/, '')}/${id}`;
-  return { output: formatCreatedComponentDirectory(ctx.document, path, resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath), null, 'blocks'), mutated: true, cwd: path };
+  const block = createPluginBlock(id, DB_TABLE_PLUGIN_ID, { source: 'with-file', table: '', queryLimit: 10 }, '');
+  insertChild(section.blocks, block, index);
+  const resolvedSectionPath = resolveVirtualPath(ctx.fs, ctx.cwd, sectionPath);
+  const path = `${resolvedSectionPath.replace(/\/$/, '')}/${id}`;
+  return { output: formatCreatedComponentDirectory(ctx.document, path, block, resolvedSectionPath, null, 'blocks'), mutated: true, cwd: path };
 }
 
 function findSectionParent(ctx: HvyDocumentCommandContext, path: string): VisualSection | null {

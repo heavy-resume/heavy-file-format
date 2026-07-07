@@ -41,6 +41,7 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 // Late-bound callbacks to avoid circular imports
 type RuntimeCallbacks = {
   renderApp: () => void;
+  refreshChatSurface: () => boolean;
   refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -61,6 +62,7 @@ export interface StateRuntime {
 function createUninitializedCallbacks(): RuntimeCallbacks {
   return {
     renderApp: () => { throw new Error('renderApp not initialized'); },
+    refreshChatSurface: () => false,
     refreshSearchSurface: () => false,
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshReaderSection: () => false,
@@ -73,6 +75,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
+let _refreshChatSurface: () => boolean = () => false;
 let _refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
@@ -83,6 +86,7 @@ let _observeLinks: (root: ParentNode) => void = () => {};
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
+export function getRefreshChatSurface(): () => boolean { return _refreshChatSurface; }
 export function getRefreshSearchSurface(): (root: ParentNode, options?: { focusInput?: boolean }) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
@@ -107,6 +111,7 @@ export function getReaderRenderer(): any {
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
+  refreshChatSurface?: () => boolean;
   refreshSearchSurface?: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -126,6 +131,7 @@ export function initCallbacks(callbacks: {
   }
   activeRuntime.callbacks = {
     ...callbacks,
+    refreshChatSurface: callbacks.refreshChatSurface ?? (() => false),
     refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
     refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
@@ -168,6 +174,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   activeRuntime = runtime;
   state = runtime.state;
   _renderApp = runtime.callbacks.renderApp;
+  _refreshChatSurface = runtime.callbacks.refreshChatSurface;
   _refreshSearchSurface = runtime.callbacks.refreshSearchSurface;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshReaderSection = runtime.callbacks.refreshReaderSection;

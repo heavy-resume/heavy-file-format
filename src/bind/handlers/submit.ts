@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveSessionState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
+import { state, getRenderApp, getRefreshChatSurface, getRefreshReaderPanels, recordHistory, serializeDocument, appendUserChatMessage, buildDocumentEditCliSimRequest, requestChatTurn, requestDocumentEditChatTurn, saveSessionState, submitAiEditRequest, submitCliCommand, restoreCliViewAfterRender, ENABLE_CHAT_CLI_SIM } from './_imports';
 import { applySearchFilter, submitSearch } from '../../search/actions';
 
 export function bindSubmit(app: HTMLElement): void {
@@ -107,16 +107,22 @@ export function bindSubmit(app: HTMLElement): void {
       const requestNonce = state.chat.requestNonce;
       const abortController = new AbortController();
       state.chat.abortController = abortController;
+      const isDocumentEditChat = state.currentView !== 'viewer';
+      const refreshChatOrRenderApp = (): void => {
+        if (!isDocumentEditChat && getRefreshChatSurface()()) {
+          return;
+        }
+        getRenderApp()();
+      };
       console.debug('[hvy:chat-submit] started request', {
         requestNonce,
         currentView: state.currentView,
-        isDocumentEditChat: state.currentView !== 'viewer',
+        isDocumentEditChat,
         sections: state.document.sections.length,
       });
-      getRenderApp()();
+      refreshChatOrRenderApp();
 
       try {
-        const isDocumentEditChat = state.currentView !== 'viewer';
         console.debug('[hvy:chat-submit] dispatching chat turn', {
           requestNonce,
           mode: isDocumentEditChat ? 'document-edit' : 'qa',
@@ -208,7 +214,7 @@ export function bindSubmit(app: HTMLElement): void {
         state.chat.abortController = null;
         state.chat.isSending = false;
         saveSessionState(state);
-        getRenderApp()();
+        refreshChatOrRenderApp();
       }
       return;
     }

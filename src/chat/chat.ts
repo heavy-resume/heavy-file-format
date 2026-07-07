@@ -279,13 +279,14 @@ export function renderChatPanel(
   canCopyToHvy = false,
   surface: ChatControlSurface = 'reference'
 ): string {
-  const context = buildChatDocumentContext(document);
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const hostManagedChat = hasHostChatClient();
   const showProviderControls = !hostManagedChat && shouldRenderChatProviderControls(surface);
   const isDocumentEdit = mode === 'document-edit';
-  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || context.trim().length > 0);
+  const needsQaContext = chat.panelOpen && !isDocumentEdit && !chat.isSending;
+  const qaContextLength = needsQaContext ? buildChatDocumentContext(document).trim().length : 0;
+  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || qaContextLength > 0);
   const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
   const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
@@ -296,7 +297,7 @@ export function renderChatPanel(
     isSending: chat.isSending,
     hasDraft,
     missingModel,
-    contextLength: context.trim().length,
+    contextLength: qaContextLength,
     messageCount: chat.messages.length,
   });
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';

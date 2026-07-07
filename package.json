@@ -48,6 +48,7 @@
     "preview": "vite preview",
     "browser:start": "node scripts/browser-harness.mjs start",
     "browser:smoke": "node scripts/browser-harness.mjs smoke",
+    "browser:chat-perf": "node scripts/browser-harness.mjs chat-perf",
     "browser:stop": "node scripts/browser-harness.mjs stop",
     "test:unit": "vitest run",
     "test:e2e": "playwright test"

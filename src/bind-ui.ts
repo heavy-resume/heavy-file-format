@@ -262,6 +262,20 @@ export function bindUi(app: HTMLElement): void {
     }, getAiEditorDoubleClickDelayMs());
   };
 
+  const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
+    window.requestAnimationFrame(() => {
+      runInBoundRuntime(() => {
+        if (!state.readerDeferredSectionBodies[sectionKey]) {
+          return;
+        }
+        delete state.readerDeferredSectionBodies[sectionKey];
+        if (!getRefreshReaderSection()(app, sectionKey)) {
+          getRefreshReaderPanels()();
+        }
+      });
+    });
+  };
+
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
   }
@@ -557,6 +571,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerDeferredSectionBodies = {};
     state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
     saveSessionState(state);
     getRenderApp()();
@@ -581,6 +596,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerDeferredSectionBodies = {};
     saveSessionState(state);
     getRenderApp()();
   });
@@ -818,9 +834,18 @@ export function bindUi(app: HTMLElement): void {
           sectionKey,
           willExpand: !section.expanded,
         });
-        section.expanded = !section.expanded;
+        const willExpand = !section.expanded;
+        section.expanded = willExpand;
+        if (willExpand) {
+          state.readerDeferredSectionBodies[sectionKey] = true;
+        } else {
+          delete state.readerDeferredSectionBodies[sectionKey];
+        }
         if (!getRefreshReaderSection()(app, sectionKey)) {
           getRefreshReaderPanels()();
+        }
+        if (willExpand) {
+          scheduleReaderSectionBodyHydration(sectionKey);
         }
       });
       return;

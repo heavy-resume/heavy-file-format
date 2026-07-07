@@ -186,6 +186,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     expandableEditorPanels: {},
     readerExpandableState: {},
     readerContainerState: {},
+    readerDeferredSectionBodies: {},
     readerView: {},
     readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
@@ -605,6 +606,9 @@ readerRenderer = createReaderRenderer(
     },
     get readerContainerState() {
       return state.readerContainerState;
+    },
+    get readerDeferredSectionBodies() {
+      return state.readerDeferredSectionBodies;
     },
     get readerView() {
       return state.readerView;

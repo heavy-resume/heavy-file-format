@@ -85,6 +85,7 @@ interface ReaderRenderState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerDeferredSectionBodies?: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
   search: SearchState;
@@ -338,10 +339,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const contentClass = modifiers.has('collapse') || section.contained
       ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
       : 'reader-section-content';
-    const blocksHtml = renderReaderBlocks(section, section.blocks);
-    const childrenHtml = orderReaderSections(
-      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
-    ).map((child) => renderReaderSection(child)).join('');
+    const deferExpandedBody = state.readerDeferredSectionBodies?.[section.key] === true;
+    const renderCheapPreview = shouldRenderCheapSectionBody(sectionExpanded, deferExpandedBody, searchContext);
+    const blocksHtml = renderCheapPreview
+      ? renderReaderPreviewBlocks(section, section.blocks)
+      : renderReaderBlocks(section, section.blocks);
+    const childrenHtml = renderCheapPreview
+      ? ''
+      : orderReaderSections(
+        section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
+      ).map((child) => renderReaderSection(child)).join('');
     if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
       return '';
     }
@@ -378,6 +385,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         ${content}
       </section>
     `;
+  }
+
+  function shouldRenderCheapSectionBody(sectionExpanded: boolean, deferExpandedBody: boolean, searchContext: SearchFilterContext): boolean {
+    return state.currentView === 'viewer' && !searchContext.active && (!sectionExpanded || deferExpandedBody);
   }
 
   function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
@@ -607,6 +618,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
     return orderReaderBlocks(blocks)
       .filter((block) => !isAnchoredReaderButton(section, block))
+      .map((block) => renderReaderBlock(section, block))
+      .join('');
+  }
+
+  function renderReaderPreviewBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderBlocks(blocks)
+      .filter((block) => !isAnchoredReaderButton(section, block))
+      .slice(0, 3)
       .map((block) => renderReaderBlock(section, block))
       .join('');
   }

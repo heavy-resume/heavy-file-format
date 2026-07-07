@@ -84,6 +84,18 @@ export function bindReaderUi(app: HTMLElement): void {
     });
   };
 
+  const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
+    window.requestAnimationFrame(() => {
+      if (!state.readerDeferredSectionBodies[sectionKey]) {
+        return;
+      }
+      delete state.readerDeferredSectionBodies[sectionKey];
+      if (!getRefreshReaderSection()(app, sectionKey)) {
+        getRefreshReaderPanels()();
+      }
+    });
+  };
+
   const handleCollapsedListControlPointerDown = (event: Event) => {
     const target = event.target as HTMLElement;
     const select = target.closest<HTMLSelectElement>('select');
@@ -237,9 +249,18 @@ export function bindReaderUi(app: HTMLElement): void {
         sectionKey,
         willExpand: !section.expanded,
       });
-      section.expanded = !section.expanded;
+      const willExpand = !section.expanded;
+      section.expanded = willExpand;
+      if (willExpand) {
+        state.readerDeferredSectionBodies[sectionKey] = true;
+      } else {
+        delete state.readerDeferredSectionBodies[sectionKey];
+      }
       if (!getRefreshReaderSection()(app, sectionKey)) {
         getRefreshReaderPanels()();
+      }
+      if (willExpand) {
+        scheduleReaderSectionBodyHydration(sectionKey);
       }
       return;
     }

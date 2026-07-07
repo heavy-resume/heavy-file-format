@@ -432,6 +432,7 @@ export interface AppState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerDeferredSectionBodies: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
   componentListReaderViews: Record<string, string>;

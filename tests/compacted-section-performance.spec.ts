@@ -68,6 +68,7 @@ test('compacted section click refresh cost compares small, large, and nearly emp
 
   await loadRawDocument(page, createMixedSectionDocument());
   const sameFileLarge = await measureCompactedSectionClick(page, 'same-file large click refresh', 'large-section');
+  await expect(page.locator('#large-section [data-component-id="large-text-140"]')).toBeVisible();
 
   await loadRawDocument(page, createNearlyEmptySectionDocument());
   const nearlyEmptySmall = await measureCompactedSectionClick(page, 'nearly-empty small click refresh', 'small-section');
@@ -98,7 +99,13 @@ async function loadRawDocument(page: Page, source: string): Promise<void> {
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toBeVisible();
-  await page.locator('#rawEditor').fill(source);
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Raw editor textarea missing.');
+    }
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, source);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#readerDocument .reader-section.is-collapsed-preview')).toHaveCount(

@@ -13,7 +13,7 @@ export function renderSearchCollapsedSurface(): string {
 }
 
 export function renderSearchFloatingSurface(): string {
-  return `<div data-search-surface="floating">${renderSearchLauncher(state.search)}${renderSearchModal(state.search, state.document, {
+  return `<div data-search-surface="floating" class="search-floating-surface${state.chat.panelOpen ? ' is-chat-open' : ''}">${renderSearchLauncher(state.search)}${renderSearchModal(state.search, state.document, {
     escapeAttr,
     escapeHtml,
     readerRenderer: getReaderRenderer(),
@@ -30,6 +30,8 @@ export function refreshSearchSurface(root: ParentNode, options: { focusInput?: b
     collapsedSurface.innerHTML = renderCollapsedSearchBar(state.search, { escapeHtml });
   }
   if (floatingSurface) {
+    floatingSurface.classList.add('search-floating-surface');
+    floatingSurface.classList.toggle('is-chat-open', state.chat.panelOpen);
     floatingSurface.innerHTML = `${renderSearchLauncher(state.search)}${renderSearchModal(state.search, state.document, {
       escapeAttr,
       escapeHtml,

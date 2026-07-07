@@ -11,6 +11,7 @@ import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, clearFilteringForTarget, stopSearchRequest } from '../src/search/actions';
+import { renderSearchFloatingSurface } from '../src/search/surface-refresh';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
@@ -40,6 +41,25 @@ hvy_version: 0.1
   });
 
   expect(expectedResult.map((result) => result.category)).toEqual(['tags', 'contents', 'description']);
+});
+
+test('floating search surface hides launcher while chat panel is open', () => {
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: {},
+  });
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.chat.panelOpen = true;
+
+  const expectedMarkup = renderSearchFloatingSurface();
+
+  expect(expectedMarkup).toContain('data-search-surface="floating" class="search-floating-surface is-chat-open"');
 });
 
 test('built-in search respects match case', async () => {

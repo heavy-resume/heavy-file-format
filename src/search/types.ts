@@ -62,6 +62,7 @@ export interface HvySemanticFilterCandidate {
   contextLabel?: string;
   tags: string[];
   description: string;
+  componentType?: string;
   summary: string;
   documentOrder: number;
   truncated: boolean;

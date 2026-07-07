@@ -16,7 +16,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatProvider, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatProvider, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync as syncColorMode, setThemeRoot } from './theme';
@@ -103,6 +103,9 @@ export interface HvyMountOptions {
   plugins?: HvyPlugin[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
@@ -212,6 +215,9 @@ function createEmbedState(
     currentView: 'viewer',
     editorMode: 'basic',
     responsivePreview: 'full',
+    chatContext: null,
+    chatContextProvider: null,
+    chatSearchCache: null,
     sessionStorageKey,
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
@@ -991,6 +997,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.encryption ?? null
   ));
   let linkObserver = options.linkObserver ?? null;
+  runtime.state.chatContext = options.chatContext ?? null;
+  runtime.state.chatContextProvider = options.chatContextProvider ?? null;
+  runtime.state.chatSearchCache = options.chatSearchCache ?? null;
   activateStateRuntime(runtime);
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);

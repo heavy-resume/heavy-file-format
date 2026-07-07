@@ -1,4 +1,4 @@
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import {
   buildChatDocumentContext,
@@ -8,14 +8,23 @@ import {
   getEnvChatSettings,
   MAX_PROXY_COMPLETION_CONTEXT_CHARS,
   mergeChatSettings,
+  requestChatCompletion,
   requestProxyCompletion,
+  setHostChatClient,
   stopChatRequest,
   stripDocumentHeaderAndComments,
   toggleChatPanelOpen,
 } from '../src/chat/chat';
+import { applyScoreGapCutoff, buildKeywordChatContext } from '../src/chat/chat-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument } from '../src/serialization';
+import type { HvyChatSearchIndexSnapshot } from '../src/types';
+
+afterEach(() => {
+  setHostChatClient(null);
+  vi.restoreAllMocks();
+});
 
 test('stripDocumentHeaderAndComments removes front matter and preserves structural hvy comments', () => {
   const input = `---
@@ -180,6 +189,283 @@ test('requestProxyCompletion uses the default context cap when no override is su
   });
 
   expect(client.complete).toHaveBeenCalledTimes(1);
+});
+
+test('requestChatCompletion uses keyword retrieval without serializing the full document', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note","description":"Alpha answer"}-->
+ alpha facts live here
+
+<!--hvy: {"id":"secret"}-->
+#! Secret
+
+<!--hvy:text {"id":"secret-note"}-->
+ SECRET_FULL_DOCUMENT_ONLY
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Alpha answer.' })),
+  };
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'What alpha facts exist?' }],
+    chatContext: { mode: 'keyword-retrieval', maxResults: 1, maxContextChars: 1_200 },
+  });
+
+  const context = client.complete.mock.calls[0]?.[0].context ?? '';
+  expect(context).toContain('Retrieved document evidence:');
+  expect(context).toContain('alpha facts live here');
+  expect(context).not.toContain('SECRET_FULL_DOCUMENT_ONLY');
+  expect(context).not.toContain('hvy_version');
+});
+
+test('requestChatCompletion lets a custom chatContextProvider override default retrieval', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Source
+
+<!--hvy:text {}-->
+ built-in source text
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Custom answer.' })),
+  };
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'Question?' }],
+    chatContext: { mode: 'keyword-retrieval', maxContextChars: 100 },
+    chatContextProvider: {
+      buildContext: (request) => ({
+        context: 'custom-only context',
+        budget: {
+          maxContextChars: request.maxContextChars,
+          usedContextChars: 'custom-only context'.length,
+          truncated: false,
+        },
+      }),
+    },
+  });
+
+  expect(client.complete.mock.calls[0]?.[0].context).toBe('custom-only context');
+});
+
+test('requestChatCompletion trims custom provider context before proxying', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Source
+
+<!--hvy:text {}-->
+ source text
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Should not send.' })),
+  };
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'Question?' }],
+    chatContext: { maxContextChars: 5 },
+    chatContextProvider: {
+      buildContext: () => ({
+        context: 'too long',
+        budget: {
+          maxContextChars: 5,
+          usedContextChars: 'too long'.length,
+          truncated: false,
+        },
+      }),
+    },
+  });
+  expect(client.complete).toHaveBeenCalledTimes(1);
+  expect(client.complete.mock.calls[0]?.[0].context).toHaveLength(5);
+});
+
+test('requestChatCompletion keeps full-document mode behavior', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+
+<!--hvy:text {}-->
+ full document context text
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Full document answer.' })),
+  };
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'Question?' }],
+    chatContext: { mode: 'full-document' },
+  });
+
+  expect(client.complete.mock.calls[0]?.[0].context).toContain('full document context text');
+});
+
+test('requestChatCompletion errors when full-document context exceeds the configured cap', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+
+<!--hvy:text {}-->
+ ${'full document context text '.repeat(20)}
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Trimmed answer.' })),
+  };
+  setHostChatClient(client);
+
+  await expect(requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'Question?' }],
+    chatContext: { mode: 'full-document', maxContextChars: 120 },
+  })).rejects.toThrow(/maximum is 120/);
+
+  expect(client.complete).not.toHaveBeenCalled();
+});
+
+test('buildKeywordChatContext lazily builds, reuses, and rebuilds when the document changes', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  const cache = {
+    getIndex: vi.fn(() => null),
+    putIndex: vi.fn(),
+  };
+  const request = {
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa' as const,
+  };
+
+  await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
+  await buildKeywordChatContext(request, { mode: 'keyword-retrieval' }, cache);
+  document.sections[0]!.blocks[0]!.text = 'beta facts';
+  await buildKeywordChatContext({ ...request, question: 'beta' }, { mode: 'keyword-retrieval' }, cache);
+
+  expect(cache.getIndex).toHaveBeenCalledTimes(2);
+  expect(cache.putIndex).toHaveBeenCalledTimes(2);
+});
+
+test('buildKeywordChatContext can hydrate from host-supplied cached records', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Cache Test
+---
+
+#! Source
+
+<!--hvy:text {}-->
+ source text
+`, '.hvy');
+  const snapshot: HvyChatSearchIndexSnapshot = {
+    version: 1,
+    records: [{
+      key: 'cached:alpha',
+      targetKind: 'block',
+      sectionKey: document.sections[0]!.key,
+      targetId: 'cached-alpha',
+      label: 'Cached Alpha',
+      tags: ['alpha'],
+      description: 'Cached description',
+      componentType: 'text',
+      text: 'cached alpha evidence',
+      documentOrder: 1,
+    }],
+  };
+  const cache = {
+    getIndex: vi.fn(() => snapshot),
+    putIndex: vi.fn(),
+  };
+
+  const result = await buildKeywordChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, { mode: 'keyword-retrieval' }, cache);
+
+  expect(result.context).toContain('Cached Alpha');
+  expect(result.context).toContain('cached alpha evidence');
+  expect(cache.putIndex).not.toHaveBeenCalled();
+});
+
+test('buildKeywordChatContext strictly fits the context budget', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha ${'large '.repeat(200)}
+`, '.hvy');
+
+  const result = await buildKeywordChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 160,
+    mode: 'qa',
+  }, { mode: 'keyword-retrieval', maxContextChars: 160 });
+
+  expect(result.context.length).toBeLessThanOrEqual(160);
+  expect(result.budget.usedContextChars).toBe(result.context.length);
+  expect(result.budget.truncated).toBe(true);
+});
+
+test('applyScoreGapCutoff cuts only at a clear adaptive score gap', () => {
+  expect(applyScoreGapCutoff([
+    { id: 'one', score: 100 },
+    { id: 'two', score: 95 },
+    { id: 'three', score: 90 },
+    { id: 'four', score: 20 },
+    { id: 'five', score: 18 },
+  ])).toEqual([
+    { id: 'one', score: 100 },
+    { id: 'two', score: 95 },
+    { id: 'three', score: 90 },
+  ]);
+
+  const expectedResultNoGap = [
+    { id: 'one', score: 100 },
+    { id: 'two', score: 82 },
+    { id: 'three', score: 68 },
+    { id: 'four', score: 55 },
+  ];
+  expect(applyScoreGapCutoff(expectedResultNoGap)).toEqual(expectedResultNoGap);
 });
 
 test('getEnvChatSettings prepopulates provider and model from vite env vars', () => {

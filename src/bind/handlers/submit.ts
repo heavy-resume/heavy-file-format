@@ -162,6 +162,9 @@ export function bindSubmit(app: HTMLElement): void {
                 document: state.document,
                 messages: previousMessages,
                 question,
+                chatContext: state.chatContext,
+                chatContextProvider: state.chatContextProvider,
+                chatSearchCache: state.chatSearchCache,
                 signal: abortController.signal,
               });
         console.debug('[hvy:chat-submit] chat turn resolved', {

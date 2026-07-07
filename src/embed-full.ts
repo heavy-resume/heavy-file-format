@@ -17,7 +17,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatSettings, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -131,6 +131,9 @@ export interface HvyMountOptions {
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatSettings?: Partial<ChatSettings> | null;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
@@ -198,6 +201,9 @@ function createEmbedState(
     currentView: mode,
     editorMode: 'basic',
     responsivePreview: 'full',
+    chatContext: null,
+    chatContextProvider: null,
+    chatSearchCache: null,
     sessionStorageKey,
     persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
@@ -970,6 +976,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       ...options.chatSettings,
     };
   }
+  runtimeState.chatContext = options.chatContext ?? null;
+  runtimeState.chatContextProvider = options.chatContextProvider ?? null;
+  runtimeState.chatSearchCache = options.chatSearchCache ?? null;
   const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);

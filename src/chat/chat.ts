@@ -1,6 +1,6 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -16,6 +16,7 @@ import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
+import { buildKeywordChatContext } from './chat-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon } from '../icons';
 
@@ -496,11 +497,24 @@ export async function requestChatCompletion(params: {
   settings: ChatSettings;
   document: VisualDocument;
   messages: ChatMessage[];
+  question?: string;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<string> {
-  const context = buildChatDocumentContext(params.document);
+  const context = await buildQaChatContext({
+    document: params.document,
+    messages: params.messages,
+    question: params.question ?? params.messages.filter((message) => message.role === 'user').at(-1)?.content ?? '',
+    settings: params.settings,
+    chatContext: params.chatContext,
+    chatContextProvider: params.chatContextProvider,
+    chatSearchCache: params.chatSearchCache,
+    signal: params.signal,
+  });
   if (context.trim().length === 0) {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
@@ -514,8 +528,57 @@ export async function requestChatCompletion(params: {
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
     onTokenUsage: params.onTokenUsage,
+    maxContextChars: params.chatContext?.maxContextChars,
     signal: params.signal,
   });
+}
+
+async function buildQaChatContext(params: {
+  document: VisualDocument;
+  messages: ChatMessage[];
+  question: string;
+  settings: ChatSettings;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const maxContextChars = params.chatContext?.maxContextChars ?? params.settings.maxContextChars ?? MAX_PROXY_COMPLETION_CONTEXT_CHARS;
+  let result: HvyChatContextResult | null = null;
+  if (params.chatContextProvider) {
+    result = await params.chatContextProvider.buildContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      ...(params.signal ? { signal: params.signal } : {}),
+    });
+  } else if (params.chatContext?.mode === 'keyword-retrieval') {
+    result = await buildKeywordChatContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      ...(params.signal ? { signal: params.signal } : {}),
+    }, params.chatContext, params.chatSearchCache ?? null);
+  }
+  if (!result) {
+    return buildChatDocumentContext(params.document);
+  }
+  return trimChatContextToCap(result.context, maxContextChars);
+}
+
+function trimChatContextToCap(context: string, maxContextChars: number): string {
+  const trimmed = context.trim();
+  if (trimmed.length <= maxContextChars) {
+    return trimmed;
+  }
+  if (maxContextChars <= 3) {
+    return trimmed.slice(0, Math.max(0, maxContextChars));
+  }
+  return `${trimmed.slice(0, maxContextChars - 3).trimEnd()}...`;
 }
 
 export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {

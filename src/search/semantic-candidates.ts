@@ -172,6 +172,7 @@ export function buildSemanticFilterCandidates(
       ...(contextLabel ? { contextLabel } : {}),
       tags: splitTags(block.schema.tags ?? ''),
       description: cleanText(block.schema.description ?? ''),
+      componentType: baseComponent,
       summary: summaryResult.summary,
       documentOrder: blockOrder,
       truncated: summaryResult.truncated,

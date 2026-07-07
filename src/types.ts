@@ -104,6 +104,85 @@ export interface ChatState {
   cliSim: ChatCliSimState | null;
 }
 
+export type HvyChatContextMode = 'full-document' | 'keyword-retrieval';
+
+export interface HvyChatContextOptions {
+  mode?: HvyChatContextMode;
+  maxContextChars?: number;
+  maxResults?: number;
+}
+
+export interface HvyChatContextRequest {
+  document: VisualDocument;
+  question: string;
+  messages: ChatMessage[];
+  maxContextChars: number;
+  mode: 'qa';
+  signal?: AbortSignal;
+}
+
+export interface HvyChatEvidence {
+  label: string;
+  contextLabel?: string;
+  targetKind?: 'section' | 'block';
+  targetId?: string;
+  targetRef?: string;
+  targetPath?: string;
+  sectionKey?: string;
+  blockId?: string;
+  score?: number;
+  source?: string;
+}
+
+export interface HvyChatContextResult {
+  context: string;
+  evidence?: HvyChatEvidence[];
+  budget: {
+    maxContextChars: number;
+    usedContextChars: number;
+    truncated: boolean;
+  };
+}
+
+export interface HvyChatContextProvider {
+  buildContext(request: HvyChatContextRequest): Promise<HvyChatContextResult> | HvyChatContextResult;
+}
+
+export interface HvyChatSearchIndexKey {
+  documentId: string;
+  fingerprint: string;
+}
+
+export interface HvyChatSearchIndexRecord {
+  key: string;
+  targetKind: 'section' | 'block';
+  sectionKey: string;
+  blockId?: string;
+  targetId: string;
+  targetRef?: string;
+  targetPath?: string;
+  documentTitle?: string;
+  aiContext?: string;
+  label: string;
+  contextLabel?: string;
+  tags: string[];
+  description: string;
+  componentType?: string;
+  text: string;
+  documentOrder: number;
+}
+
+export interface HvyChatSearchIndexSnapshot {
+  version: 1;
+  records: HvyChatSearchIndexRecord[];
+}
+
+export interface HvyChatSearchCache {
+  getIndex(key: HvyChatSearchIndexKey): Promise<HvyChatSearchIndexSnapshot | null> | HvyChatSearchIndexSnapshot | null;
+  putIndex(key: HvyChatSearchIndexKey, snapshot: HvyChatSearchIndexSnapshot): Promise<void> | void;
+  deleteIndex?(key: HvyChatSearchIndexKey): Promise<void> | void;
+}
+
 export interface PdfExportPlanModalState {
   templateId: string;
   values: Record<string, string>;
@@ -340,6 +419,9 @@ export interface AppState {
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
   encryption?: HvyEncryptionOptions | null;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;

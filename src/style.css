@@ -436,7 +436,7 @@ body {
 .hvy-floating-launcher:not(:disabled):hover {
   color: var(--hvy-button-hover-text, var(--hvy-button-text));
   border-color: var(--hvy-focus);
-  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  background: color-mix(in srgb, var(--hvy-button-bg) 74%, var(--hvy-surface));
   box-shadow: 0 18px 40px var(--hvy-shadow-lg), 0 0 0 4px var(--hvy-focus-glow);
   transform: translateY(-1px);
 }

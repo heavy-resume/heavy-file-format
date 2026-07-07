@@ -78,7 +78,7 @@ import {
 import type { HvySearchSnapshot, HvySearchSnapshotInput } from './search/types';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { createDefaultSearchState } from './search/state';
-import { renderSearchLauncher, renderSearchModal } from './search/render';
+import { refreshSearchSurface, renderSearchFloatingSurface } from './search/surface-refresh';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { centerPendingEditorSection } from './scroll';
@@ -548,8 +548,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   state.currentView === 'editor' || state.currentView === 'ai',
                   'embedded'
                 )}
-                ${renderSearchLauncher(state.search)}
-                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+                ${renderSearchFloatingSurface()}`
           }
         </div>
       </section>
@@ -908,6 +907,11 @@ function ensureEmbedRuntime(
       currentLinkObserver = getLinkObserver();
       setThemeRoot(root);
       renderApp();
+    }),
+    refreshSearchSurface: (target, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshSearchSurface(target, options);
     }),
     refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

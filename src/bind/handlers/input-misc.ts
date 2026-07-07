@@ -36,7 +36,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
         return;
       }
-      void submitSearch();
+      void submitSearch(app);
     }, 120);
   });
 

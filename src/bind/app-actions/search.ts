@@ -1,14 +1,14 @@
 import type { AppActionHandler } from './types';
 import { applySearchFilter, closeSearch, expandSearchResults, isSearchFilterApplied, openSearch, selectAdjacentSearchResult, selectSearchResult, setSearchCategory, setSearchFilterMode, setSearchFilterQueryMode, setSearchTab, stopSearch, stopSearchRequest } from '../../search/actions';
 import type { SearchCategory, SearchFilterMode, SearchFilterQueryMode, SearchModalTab } from '../../search/types';
-import { getRenderApp, state } from '../../state';
+import { getRefreshSearchSurface, getRenderApp, state } from '../../state';
 
 const openSearchAction: AppActionHandler = ({ app }) => {
   openSearch(app);
 };
 
-const closeSearchAction: AppActionHandler = () => {
-  closeSearch();
+const closeSearchAction: AppActionHandler = ({ app }) => {
+  closeSearch(app);
 };
 
 const stopSearchAction: AppActionHandler = () => {
@@ -35,37 +35,39 @@ const nextSearchResultAction: AppActionHandler = ({ app }) => {
   selectAdjacentSearchResult(app, 1);
 };
 
-const toggleSearchCategoryAction: AppActionHandler = ({ actionButton }) => {
+const toggleSearchCategoryAction: AppActionHandler = ({ app, actionButton }) => {
   const category = actionButton.dataset.searchCategory as SearchCategory | undefined;
   if (category !== 'tags' && category !== 'contents' && category !== 'description') {
     return;
   }
   setSearchCategory(category, !state.search.categories[category]);
-  getRenderApp()();
+  if (!getRefreshSearchSurface()(app)) {
+    getRenderApp()();
+  }
 };
 
-const setSearchTabAction: AppActionHandler = ({ actionButton }) => {
+const setSearchTabAction: AppActionHandler = ({ app, actionButton }) => {
   const tab = actionButton.dataset.searchTab as SearchModalTab | undefined;
   if (tab === 'search' || tab === 'filter') {
-    setSearchTab(tab);
+    setSearchTab(tab, app);
   }
 };
 
-const setSearchFilterModeAction: AppActionHandler = ({ actionButton }) => {
+const setSearchFilterModeAction: AppActionHandler = ({ app, actionButton }) => {
   const mode = actionButton.dataset.searchFilterMode as SearchFilterMode | undefined;
   if (mode === 'deprioritize' || mode === 'hide') {
-    setSearchFilterMode(mode);
+    setSearchFilterMode(mode, app);
   }
 };
 
-const setSearchFilterQueryModeAction: AppActionHandler = ({ actionButton }) => {
+const setSearchFilterQueryModeAction: AppActionHandler = ({ app, actionButton }) => {
   const mode = actionButton.dataset.searchFilterQueryMode as SearchFilterQueryMode | undefined;
   if (mode === 'semantic') {
-    setSearchFilterQueryMode(state.search.filterQueryMode === 'semantic' ? 'keyword' : 'semantic');
+    setSearchFilterQueryMode(state.search.filterQueryMode === 'semantic' ? 'keyword' : 'semantic', app);
     return;
   }
   if (mode === 'keyword') {
-    setSearchFilterQueryMode('keyword');
+    setSearchFilterQueryMode('keyword', app);
   }
 };
 

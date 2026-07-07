@@ -10,7 +10,7 @@ export function bindSubmit(app: HTMLElement): void {
         await applySearchFilter({ enabled: true });
         return;
       }
-      await submitSearch();
+      await submitSearch(app);
       return;
     }
 

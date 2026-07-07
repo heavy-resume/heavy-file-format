@@ -11,7 +11,7 @@ export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean
   if (state.search.open) {
     event.preventDefault();
     event.stopPropagation();
-    closeSearch();
+    closeSearch(app);
     return true;
   }
   if (state.chat.panelOpen) {

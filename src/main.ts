@@ -38,7 +38,8 @@ import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
+import { centerSearchResultLenses } from './search/render';
+import { refreshSearchSurface, renderSearchCollapsedSurface, renderSearchFloatingSurface } from './search/surface-refresh';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
 import { chatSemanticFilterProvider } from './search/semantic-provider';
@@ -716,7 +717,7 @@ function renderApp(): void {
           })}
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
-          ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
+          ${isCliEditor || isDocumentMetaView ? '' : renderSearchCollapsedSurface()}
           ${
             isEditorView
               ? `${isRawEditor
@@ -807,8 +808,7 @@ function renderApp(): void {
                   isViewerView ? 'qa' : 'document-edit',
                   state.currentView === 'editor' || state.currentView === 'ai'
                 )}
-                ${renderSearchLauncher(state.search)}
-                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+                ${renderSearchFloatingSurface()}`
           }
         </div>
       </section>
@@ -1327,6 +1327,7 @@ function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
 // Initialize late-bound callbacks so all modules can access renderApp/refreshReaderPanels
 initCallbacks({
   renderApp,
+  refreshSearchSurface,
   refreshReaderPanels,
   refreshReaderSection,
   refreshReaderBlock,

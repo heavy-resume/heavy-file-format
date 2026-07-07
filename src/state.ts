@@ -41,6 +41,7 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 // Late-bound callbacks to avoid circular imports
 type RuntimeCallbacks = {
   renderApp: () => void;
+  refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -60,6 +61,7 @@ export interface StateRuntime {
 function createUninitializedCallbacks(): RuntimeCallbacks {
   return {
     renderApp: () => { throw new Error('renderApp not initialized'); },
+    refreshSearchSurface: () => false,
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshReaderSection: () => false,
     refreshReaderBlock: () => false,
@@ -71,6 +73,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
+let _refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
@@ -80,6 +83,7 @@ let _observeLinks: (root: ParentNode) => void = () => {};
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
+export function getRefreshSearchSurface(): (root: ParentNode, options?: { focusInput?: boolean }) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
@@ -103,6 +107,7 @@ export function getReaderRenderer(): any {
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
+  refreshSearchSurface?: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -121,6 +126,7 @@ export function initCallbacks(callbacks: {
   }
   activeRuntime.callbacks = {
     ...callbacks,
+    refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
     refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
@@ -162,6 +168,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   activeRuntime = runtime;
   state = runtime.state;
   _renderApp = runtime.callbacks.renderApp;
+  _refreshSearchSurface = runtime.callbacks.refreshSearchSurface;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshReaderSection = runtime.callbacks.refreshReaderSection;
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;

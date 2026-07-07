@@ -115,9 +115,16 @@ export function bindSubmit(app: HTMLElement): void {
         }
         saveChatSessionState(state);
       };
-      const refreshChatOrRenderApp = (): void => {
-        if (!isDocumentEditChat && getRefreshChatSurface()()) {
+      let documentEditMutationNeedsRender = false;
+      const refreshChatOrRenderApp = (options: { documentChanged?: boolean } = {}): void => {
+        if (!options.documentChanged && getRefreshChatSurface()()) {
           return;
+        }
+        if (options.documentChanged && isDocumentEditChat && state.currentView === 'ai') {
+          getRefreshReaderPanels()({ runVisibilityScripts: false });
+          if (getRefreshChatSurface()()) {
+            return;
+          }
         }
         getRenderApp()();
       };
@@ -145,6 +152,7 @@ export function bindSubmit(app: HTMLElement): void {
             return;
           }
           recordedDocumentEditMutation = true;
+          documentEditMutationNeedsRender = true;
           recordHistory(`ai-document-edit:${requestNonce}`);
         };
         const result =
@@ -171,7 +179,7 @@ export function bindSubmit(app: HTMLElement): void {
                   });
                   state.chat.messages = upsertChatProgressMessage(state.chat.messages, message);
                   saveSessionState(state);
-                  getRenderApp()();
+                  refreshChatOrRenderApp({ documentChanged: documentEditMutationNeedsRender });
                 },
                 signal: abortController.signal,
               })
@@ -243,7 +251,7 @@ export function bindSubmit(app: HTMLElement): void {
         state.chat.isSending = false;
         state.chat.status = null;
         saveChatOrSessionState();
-        refreshChatOrRenderApp();
+        refreshChatOrRenderApp({ documentChanged: documentEditMutationNeedsRender });
       }
       return;
     }

@@ -79,14 +79,26 @@ type HvyMiniShellProcess = {
   mutated: boolean;
 };
 
+const sessionVirtualFileSystems = new WeakMap<HvyCliSession, ReturnType<typeof buildHvyVirtualFileSystem>>();
+
 export function createHvyCliSession(): HvyCliSession {
   return { cwd: '/', scratchpadContent: defaultScratchpadContent(), virtualPathNaming: { anonymousBlockNamesById: {} } };
+}
+
+export function invalidateHvyCliSessionVirtualFileSystem(session: HvyCliSession): void {
+  sessionVirtualFileSystems.delete(session);
 }
 
 function buildSessionVirtualFileSystem(document: VisualDocument, session: HvyCliSession): ReturnType<typeof buildHvyVirtualFileSystem> {
   session.virtualPathNaming ??= { anonymousBlockNamesById: {} };
   session.virtualPathNaming.anonymousBlockNamesById ??= {};
-  return buildHvyVirtualFileSystem(document, session.virtualPathNaming);
+  const cached = sessionVirtualFileSystems.get(session);
+  if (cached) {
+    return cached;
+  }
+  const fs = buildHvyVirtualFileSystem(document, session.virtualPathNaming);
+  sessionVirtualFileSystems.set(session, fs);
+  return fs;
 }
 
 export function getHvyCliCommandSummary(): string {
@@ -117,6 +129,9 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
         outputs.push(result.output);
       }
       mutated = mutated || result.mutated;
+      if (result.mutated) {
+        invalidateHvyCliSessionVirtualFileSystem(session);
+      }
       scratchpadTouched = scratchpadTouched || heredoc.path === 'scratchpad.txt' || heredoc.path === '/scratchpad.txt';
     }
     updateScratchpadCommandHistory(session, expandedInput);
@@ -152,6 +167,9 @@ export async function executeHvyCliCommand(document: VisualDocument, session: Hv
     enforceScratchpadHardCap(session);
     session.cwd = lastProcess.cwd;
     mutated = mutated || lastProcess.mutated;
+    if (lastProcess.mutated) {
+      invalidateHvyCliSessionVirtualFileSystem(session);
+    }
     scratchpadTouched = scratchpadTouched || pipeline.tokens.some((token) => token === 'scratchpad.txt' || token === '/scratchpad.txt');
     previousStatus = lastProcess.status;
 

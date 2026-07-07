@@ -6,6 +6,7 @@ import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
 import { markKeywordChatContextDocumentChanged } from './chat/chat-context';
+import { invalidateHvyCliSessionVirtualFileSystem } from './cli-core/commands';
 import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
@@ -95,6 +96,7 @@ export function recordHistory(group?: string): void {
     return;
   }
   markKeywordChatContextDocumentChanged(state.document);
+  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
   const changeSource = inferDocumentChangeSource(group);
   const recordId = incrementRecordHistoryCount();
   const startedAt = performance.now();

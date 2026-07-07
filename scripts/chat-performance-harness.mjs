@@ -18,10 +18,16 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
 
   let qaCalls = 0;
   let editCalls = 0;
+  const apiRequests = [];
   await page.route('**/api/chat', async (route) => {
-    const payload = JSON.parse(route.request().postData() || '{}');
+    const requestStartedAt = performance.now();
+    const requestBody = route.request().postData() || '{}';
+    const parseStartedAt = performance.now();
+    const payload = JSON.parse(requestBody);
+    const parseMs = performance.now() - parseStartedAt;
     if (!Array.isArray(payload.tools)) {
       qaCalls += 1;
+      const fulfillStartedAt = performance.now();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -30,11 +36,19 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
           usage: { inputTokens: 2400, outputTokens: 32, totalTokens: 2432 },
         }),
       });
+      apiRequests.push({
+        kind: 'qa',
+        requestChars: requestBody.length,
+        parseMs: Number(parseMs.toFixed(2)),
+        fulfillMs: Number((performance.now() - fulfillStartedAt).toFixed(2)),
+        totalMs: Number((performance.now() - requestStartedAt).toFixed(2)),
+      });
       return;
     }
 
     editCalls += 1;
     if (editCalls === 1) {
+      const fulfillStartedAt = performance.now();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -61,9 +75,17 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
           toolState: { provider: 'openai', input: [] },
         }),
       });
+      apiRequests.push({
+        kind: 'document-edit',
+        requestChars: requestBody.length,
+        parseMs: Number(parseMs.toFixed(2)),
+        fulfillMs: Number((performance.now() - fulfillStartedAt).toFixed(2)),
+        totalMs: Number((performance.now() - requestStartedAt).toFixed(2)),
+      });
       return;
     }
 
+    const fulfillStartedAt = performance.now();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -84,6 +106,13 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
         toolState: { provider: 'openai', input: [] },
       }),
     });
+    apiRequests.push({
+      kind: 'document-edit',
+      requestChars: requestBody.length,
+      parseMs: Number(parseMs.toFixed(2)),
+      fulfillMs: Number((performance.now() - fulfillStartedAt).toFixed(2)),
+      totalMs: Number((performance.now() - requestStartedAt).toFixed(2)),
+    });
   });
 
   await page.addInitScript(() => {
@@ -94,6 +123,7 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
       chatRenderCount: 0,
       storageWrites: [],
       longTasks: [],
+      perfEvents: [],
     };
 
     const originalDebug = console.debug.bind(console);
@@ -103,6 +133,12 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
       }
       if (args[0] === '[hvy:chat-render] composer state') {
         window.__hvyChatPerf.chatRenderCount += 1;
+      }
+      if (typeof args[0] === 'string' && args[0].startsWith('[hvy:perf]')) {
+        window.__hvyChatPerf.perfEvents.push({
+          label: args[0],
+          details: args[1] && typeof args[1] === 'object' ? { ...args[1] } : null,
+        });
       }
       originalDebug(...args);
     };
@@ -201,6 +237,7 @@ export default async function chatPerformanceHarness({ chromium, baseUrl }) {
         qa: qaCalls,
         documentEdit: editCalls,
       },
+      apiRequests,
       metrics,
     };
     console.log(`chat-performance ${JSON.stringify(summary)}`);
@@ -247,6 +284,7 @@ async function snapshotPerf(page) {
       storageWriteChars: perf.storageWrites.reduce((sum, write) => sum + write.chars, 0),
       longTaskCount: perf.longTasks.length,
       longTaskMs: Number(perf.longTasks.reduce((sum, task) => sum + task.duration, 0).toFixed(2)),
+      perfEventCount: perf.perfEvents.length,
     };
   });
 }
@@ -263,7 +301,59 @@ async function measureSince(page, name, before) {
     storageWriteChars: after.storageWriteChars - before.storageWriteChars,
     longTaskCount: after.longTaskCount - before.longTaskCount,
     longTaskMs: Number((after.longTaskMs - before.longTaskMs).toFixed(2)),
+    perf: await summarizePerfEventsSince(page, before.perfEventCount),
   };
+}
+
+async function summarizePerfEventsSince(page, startIndex) {
+  return page.evaluate((index) => {
+    const events = window.__hvyChatPerf.perfEvents.slice(index);
+    const renderEvents = events
+      .filter((event) => event.details?.event === 'renderApp')
+      .map((event) => event.details);
+    const historyEvents = events
+      .filter((event) => event.label === '[hvy:perf] recordHistory')
+      .map((event) => event.details);
+    return {
+      renderAppElapsedMs: sumNumber(renderEvents, 'elapsedMs'),
+      renderMarkupMs: sumNumber(renderEvents, 'markupMs'),
+      renderDomMs: sumNumber(renderEvents, 'domMs'),
+      renderBindMs: sumNumber(renderEvents, 'bindMs'),
+      renderRestoreMs: sumNumber(renderEvents, 'restoreMs'),
+      renderHistoryMs: sumNumber(renderEvents, 'historyMs'),
+      recordHistoryElapsedMs: sumNumber(historyEvents, 'elapsedMs'),
+      recordHistorySnapshotMs: sumNumber(historyEvents, 'snapshotMs'),
+      recordHistoryPushed: historyEvents.filter((event) => event?.pushed).length,
+      eventTotals: summarizeEvents(events),
+      labels: events.map((event) => event.label),
+    };
+
+    function sumNumber(items, key) {
+      return Number(items.reduce((sum, item) => sum + (typeof item?.[key] === 'number' ? item[key] : 0), 0).toFixed(2));
+    }
+
+    function summarizeEvents(items) {
+      const totals = {};
+      for (const event of items) {
+        const details = event.details;
+        const name = typeof details?.event === 'string'
+          ? details.event
+          : event.label.replace(/^\[hvy:perf\]\s*/, '') || event.label;
+        totals[name] ??= { count: 0, elapsedMs: 0 };
+        totals[name].count += 1;
+        if (typeof details?.elapsedMs === 'number') {
+          totals[name].elapsedMs += details.elapsedMs;
+        }
+      }
+      return Object.fromEntries(Object.entries(totals).map(([name, total]) => [
+        name,
+        {
+          count: total.count,
+          elapsedMs: Number(total.elapsedMs.toFixed(2)),
+        },
+      ]));
+    }
+  }, startIndex);
 }
 
 function buildLargePerfDocument(options) {

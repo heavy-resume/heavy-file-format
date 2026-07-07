@@ -6,13 +6,12 @@ import {
 } from '../cli-core/document-diagnostics';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import { getDocumentAiContext } from '../document-ai-context';
-import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliFailedCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
-import { getHvyCliPreferredCommandSummary, type HvyCliSession } from '../cli-core/commands';
+import { getHvyCliPreferredCommandSummary, getHvyCliSessionVirtualFileSystem, type HvyCliSession } from '../cli-core/commands';
 import {
   appendProviderToolResultsToState,
   buildInitialProviderToolState,
@@ -637,6 +636,7 @@ function buildSimAdvanceResult(
     context: measurePhase('chatCli.context.loop', {}, () => buildChatCliLoopContext(
       cli.snapshot(),
       params.document,
+      params.state.session,
       params.state.request,
       params.state.priorMessages,
       params.state.priorConversation,
@@ -719,6 +719,7 @@ async function buildChatCliInitialTurnRequest(params: {
   const context = measurePhase('chatCli.context.initial', {}, () => buildChatCliLoopContext(
     cli.snapshot(),
     params.document,
+    cli.session,
     params.request,
     params.priorMessages ?? [],
     priorConversation,
@@ -848,6 +849,7 @@ function buildSyntheticChatCliToolTurn(provider: ChatSettings['provider'], callI
 function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
   document: VisualDocument,
+  session: HvyCliSession,
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
@@ -855,7 +857,7 @@ function buildChatCliLoopContext(
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   const documentAiContext = getDocumentAiContext(document);
-  const cwdComponentContext = formatHvyComponentDescriptionHistory(document, buildHvyVirtualFileSystem(document), snapshot.cwd);
+  const cwdComponentContext = formatHvyComponentDescriptionHistory(document, getHvyCliSessionVirtualFileSystem(document, session), snapshot.cwd);
   return [
     'Current request:',
     request,

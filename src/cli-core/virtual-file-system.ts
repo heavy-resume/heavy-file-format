@@ -221,6 +221,24 @@ export function buildVirtualDirectoryBlockLookup(document: VisualDocument, namin
   return blocks;
 }
 
+export function buildVirtualDirectoryBlockLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
+  const blocks = buildVirtualDirectoryBlockLookup(document, naming);
+  const idEntries = new Map<string, HvyVirtualEntry>();
+  idEntries.set('/id', { kind: 'dir', path: '/id' });
+  const canonicalBlocks = [...blocks.entries()];
+  for (const alias of collectCanonicalIdAliases(document)) {
+    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
+    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    for (const [sourcePath, block] of canonicalBlocks) {
+      if (sourcePath !== alias.sourcePath && !sourcePath.startsWith(`${alias.sourcePath}/`)) {
+        continue;
+      }
+      blocks.set(`${aliasRoot}${sourcePath.slice(alias.sourcePath.length)}`, block);
+    }
+  }
+  return blocks;
+}
+
 function addSectionLookup(
   entries: Map<string, HvyVirtualEntry>,
   lookup: Map<string, VisualSection>,

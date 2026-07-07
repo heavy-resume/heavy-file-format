@@ -15,7 +15,7 @@ import {
   stripDocumentHeaderAndComments,
   toggleChatPanelOpen,
 } from '../src/chat/chat';
-import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged } from '../src/chat/chat-context';
+import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged, prepareKeywordChatContext } from '../src/chat/chat-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument } from '../src/serialization';
@@ -290,6 +290,35 @@ hvy_version: 0.1
   expect(expectedResult.context).not.toContain('alpha facts');
   expect(cache.getIndex).toHaveBeenCalledTimes(1);
   expect(cache.putIndex).toHaveBeenCalledTimes(2);
+});
+
+test('prepareKeywordChatContext warms the first retrieval context build', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Generic
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  const cache = {
+    getIndex: vi.fn(() => null),
+    putIndex: vi.fn(),
+  };
+
+  await prepareKeywordChatContext(document, cache);
+  const expectedResult = await buildKeywordChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, { mode: 'keyword-retrieval' }, cache);
+
+  expect(expectedResult.context).toContain('alpha facts');
+  expect(cache.getIndex).toHaveBeenCalledTimes(1);
+  expect(cache.putIndex).toHaveBeenCalledTimes(1);
 });
 
 test('requestChatCompletion lets a custom chatContextProvider override default retrieval', async () => {

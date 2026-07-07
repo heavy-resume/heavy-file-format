@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
+import { prepareKeywordChatContext } from '../../chat/chat-context';
 import {
   TEXT_LINE_STYLE_NAME_PATTERN,
   formatTextLineStyleCssLines,
@@ -26,6 +27,7 @@ import {
   writeHeadingStylesToMeta,
   type HeadingStyleName,
 } from '../../heading-styles';
+
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { visitBlocks, visitBlocksInList } from '../../section-ops';
 import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types';
@@ -38,6 +40,10 @@ import {
   readPdfPageMetaObject,
   type PdfPageMarginUnit,
 } from '../../pdf-page-settings';
+
+const CHAT_CONTEXT_PREWARM_DELAY_MS = 250;
+let chatContextPrewarmTimer: number | null = null;
+let chatContextPrewarmIdleCallback: number | null = null;
 
 export function bindInputBlock(app: HTMLElement): void {
     app.addEventListener('input', (event) => {
@@ -108,6 +114,7 @@ export function bindInputBlock(app: HTMLElement): void {
     if (field === 'chat-input' && target instanceof HTMLTextAreaElement) {
       state.chat.draft = target.value;
       state.chat.error = null;
+      scheduleChatContextPrewarm();
       console.debug('[hvy:chat-input] draft updated', {
         draftLength: state.chat.draft.length,
         trimmedDraftLength: state.chat.draft.trim().length,
@@ -653,6 +660,39 @@ export function bindInputBlock(app: HTMLElement): void {
     }
 
   });
+}
+
+function scheduleChatContextPrewarm(): void {
+  if (chatContextPrewarmTimer !== null) {
+    window.clearTimeout(chatContextPrewarmTimer);
+    chatContextPrewarmTimer = null;
+  }
+  if (chatContextPrewarmIdleCallback !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(chatContextPrewarmIdleCallback);
+    chatContextPrewarmIdleCallback = null;
+  }
+  if (!shouldPrewarmChatContext()) {
+    return;
+  }
+  chatContextPrewarmTimer = window.setTimeout(() => {
+    chatContextPrewarmTimer = null;
+    const run = (): void => {
+      chatContextPrewarmIdleCallback = null;
+      void prepareKeywordChatContext(state.document, state.chatSearchCache ?? null).catch(() => {});
+    };
+    if ('requestIdleCallback' in window) {
+      chatContextPrewarmIdleCallback = window.requestIdleCallback(run, { timeout: 1_000 });
+      return;
+    }
+    globalThis.setTimeout(run, 0);
+  }, CHAT_CONTEXT_PREWARM_DELAY_MS);
+}
+
+function shouldPrewarmChatContext(): boolean {
+  return state.currentView === 'viewer'
+    && state.chat.draft.trim().length > 0
+    && !state.chatContextProvider
+    && state.chatContext?.mode === 'keyword-retrieval';
 }
 
 function mergePickerHexIntoCssColor(hex: string, currentValue: string): string {

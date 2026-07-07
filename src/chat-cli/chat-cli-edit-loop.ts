@@ -193,7 +193,11 @@ export async function runChatCliEditLoop(params: {
         }
       }
       if (advanced.mutated) {
-        params.onMutation?.('chat-cli', advanced.mutationSummary);
+        if (advanced.mutationSummary) {
+          params.onMutation?.('chat-cli', advanced.mutationSummary);
+        } else {
+          params.onMutation?.('chat-cli');
+        }
       }
     }
     if (!advanced.terminalSummary && !advanced.askedQuestion) {

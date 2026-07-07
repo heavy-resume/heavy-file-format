@@ -342,7 +342,7 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
     'chat-cli-test',
     'hvy search "Add a chore section." --max 5',
-    expect.stringContaining('No search results found'),
+    expect.stringContaining('Search results for: "Add a chore section.":'),
     undefined,
   ]);
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
@@ -561,7 +561,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     { type: 'function_call', call_id: 'startup_call_3', name: 'run_hvy_cli', arguments: '{"command":"hvy request_structure --collapse"}' },
     expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_3', output: expect.stringContaining('Components:') }),
     { type: 'function_call', call_id: 'startup_call_4', name: 'run_hvy_cli', arguments: '{"command":"hvy search \\"Add a chore section.\\" --max 5"}' },
-    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('No search results found') }),
+    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('Search results for: \\"Add a chore section.\\":') }),
   ]);
   expect(result.requestJson).not.toContain('### CMD RESULT ###');
   expect(result.requestJson).not.toContain('```shell\\nls /\\n```');

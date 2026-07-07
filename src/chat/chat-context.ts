@@ -32,15 +32,21 @@ interface RuntimeIndex {
 }
 
 const runtimeIndexes = new WeakMap<VisualDocument, RuntimeIndex>();
+const pendingRuntimeIndexes = new WeakMap<VisualDocument, { documentRevision: number; promise: Promise<RuntimeIndex> }>();
 const documentRevisions = new WeakMap<VisualDocument, number>();
 
 export function markKeywordChatContextDocumentChanged(document: VisualDocument): void {
   documentRevisions.set(document, getKeywordDocumentRevision(document) + 1);
+  pendingRuntimeIndexes.delete(document);
 }
 
 export function isKeywordChatContextPrepared(document: VisualDocument): boolean {
   const cached = runtimeIndexes.get(document);
   return Boolean(cached && cached.documentRevision === getKeywordDocumentRevision(document));
+}
+
+export async function prepareKeywordChatContext(document: VisualDocument, cache: HvyChatSearchCache | null = null): Promise<void> {
+  await getKeywordIndex(document, cache);
 }
 
 export async function buildKeywordChatContext(
@@ -88,15 +94,29 @@ function getKeywordIndex(document: VisualDocument, cache: HvyChatSearchCache | n
   if (cached && cached.documentRevision === documentRevision) {
     return cached;
   }
+  const pending = pendingRuntimeIndexes.get(document);
+  if (pending && pending.documentRevision === documentRevision) {
+    return pending.promise;
+  }
   const key = buildIndexKey(document);
   if (cached && cached.key.fingerprint === key.fingerprint && cached.key.documentId === key.documentId) {
     cached.documentRevision = documentRevision;
     return cached;
   }
   if (cached && cached.key.documentId === key.documentId) {
-    return updateKeywordIndex(document, cached, key, documentRevision, cache);
+    return trackPendingKeywordIndex(document, documentRevision, updateKeywordIndex(document, cached, key, documentRevision, cache));
   }
-  return buildKeywordIndex(document, key, documentRevision, cache);
+  return trackPendingKeywordIndex(document, documentRevision, buildKeywordIndex(document, key, documentRevision, cache));
+}
+
+function trackPendingKeywordIndex(document: VisualDocument, documentRevision: number, promise: Promise<RuntimeIndex>): Promise<RuntimeIndex> {
+  pendingRuntimeIndexes.set(document, { documentRevision, promise });
+  void promise.finally(() => {
+    if (pendingRuntimeIndexes.get(document)?.promise === promise) {
+      pendingRuntimeIndexes.delete(document);
+    }
+  });
+  return promise;
 }
 
 async function buildKeywordIndex(

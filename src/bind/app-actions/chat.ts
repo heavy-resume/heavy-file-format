@@ -1,7 +1,9 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
+import { copyTextToClipboard } from '../../clipboard';
 import { clearChatConversation, ENABLE_CHAT_CLI_SIM, stopChatRequest } from '../../chat/chat';
+import { buildChatResponseRichTextCopyPayload } from '../../chat/chat-response-document';
 import { prepareEmbeddingChatContext } from '../../chat/embedding-context';
 import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
@@ -12,6 +14,7 @@ const clearChatHistory: AppActionHandler = () => {
 };
 
 const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
+  closeChatCopyMenu(actionButton);
   const messageId = actionButton?.dataset.messageId ?? '';
   const result = copyChatMessageToHvySection({
     messages: state.chat.messages,
@@ -30,6 +33,61 @@ const copyChatResponseToHvy: AppActionHandler = ({ actionButton }) => {
   state.chat.error = null;
   getRenderApp()();
 };
+
+const copyChatResponseText: AppActionHandler = ({ actionButton }) => {
+  closeChatCopyMenu(actionButton);
+  const messageId = actionButton?.dataset.messageId ?? '';
+  const message = state.chat.messages.find((candidate) => candidate.id === messageId);
+  if (!message || message.role !== 'assistant' || message.error) {
+    state.chat.error = 'Only successful assistant messages can be copied.';
+    getRenderApp()();
+    return;
+  }
+  const content = message.content.trim();
+  if (!content) {
+    state.chat.error = 'Message has no content to copy.';
+    getRenderApp()();
+    return;
+  }
+  const payload = buildChatResponseRichTextCopyPayload(content);
+  if (!payload) {
+    state.chat.error = 'Could not copy response as text.';
+    getRenderApp()();
+    return;
+  }
+  void copyTextToClipboard(payload).then((ok) => {
+    if (!ok) {
+      state.chat.error = 'Copy failed.';
+      getRenderApp()();
+      return;
+    }
+    state.chat.error = null;
+    markChatCopyMenuCopied(actionButton);
+  });
+};
+
+function closeChatCopyMenu(actionButton: HTMLElement): void {
+  const menu = actionButton.closest<HTMLDetailsElement>('.chat-copy-menu');
+  if (menu) {
+    menu.open = false;
+  }
+}
+
+function markChatCopyMenuCopied(actionButton: HTMLElement): void {
+  const bubble = actionButton.closest<HTMLElement>('.chat-bubble');
+  const toggle = bubble?.querySelector<HTMLElement>('.chat-copy-menu-toggle');
+  if (!toggle) {
+    return;
+  }
+  toggle.classList.add('is-copied');
+  toggle.setAttribute('aria-label', 'Copied response');
+  toggle.setAttribute('title', 'Copied response');
+  window.setTimeout(() => {
+    toggle.classList.remove('is-copied');
+    toggle.setAttribute('aria-label', 'Copy options');
+    toggle.setAttribute('title', 'Copy options');
+  }, 1200);
+}
 
 const cancelChatRequest: AppActionHandler = () => {
   if (stopChatRequest(state.chat)) {
@@ -229,6 +287,7 @@ function formatEmbeddingBuildStatus(
 export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,
   'copy-chat-response-to-hvy': copyChatResponseToHvy,
+  'copy-chat-response-text': copyChatResponseText,
   'cancel-chat-request': cancelChatRequest,
   'toggle-chat-cli-sim': toggleChatCliSim,
   'run-chat-cli-sim-step': runChatCliSimStep,

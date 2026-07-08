@@ -64,6 +64,8 @@ test('collapsed expandable with empty stub previews content without rendering a 
   expect(html).toContain('is-collapsed');
   expect(html).toContain('expandable-reader-pane-content-preview');
   expect(html).toContain('Expanded content');
+  expect(html).not.toContain('expandable-reader-cue');
+  expect(html).not.toContain('expandable-pane-expanded');
   expect(html).not.toContain('expandable-reader-pane-stub');
 });
 
@@ -76,5 +78,6 @@ test('expanded expandable with empty stub omits the stub pane and keeps content 
   expect(html).toContain('data-expandable-content="true"');
   expect(html).toContain('aria-expanded="true"');
   expect(html).toContain('Expanded content');
+  expect(html).not.toContain('expandable-pane-expanded');
   expect(html).not.toContain('expandable-reader-pane-stub');
 });

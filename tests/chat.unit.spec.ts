@@ -17,7 +17,7 @@ import {
 } from '../src/chat/chat';
 import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged, prepareKeywordChatContext } from '../src/chat/chat-context';
 import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from '../src/chat/embedding-context';
-import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
+import { buildChatResponseRichTextCopyPayload, wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
 import { searchDocuments } from '../src/search/documents';
@@ -1294,6 +1294,14 @@ test('wrapChatResponseAsDocument injects chat response component defaults into f
   const document = deserializeDocument(wrapped, '.hvy');
 
   expect(getDocumentComponentDefaultCss(document.meta, 'xref-card')).toBe('margin-top: 0.25rem; margin-bottom: 0.25rem;');
+});
+
+test('buildChatResponseRichTextCopyPayload copies HVY chat responses as readable text', () => {
+  const payload = buildChatResponseRichTextCopyPayload(`<!--hvy:table {"id":"history","tableColumns":["Title","Organization"],"tableShowHeader":true,"tableRows":[{"cells":["Team Member","Burger King"]},{"cells":["Crew Member","McDonald's"]}]}-->`);
+
+  expect(payload?.plainText).toBe("Title\tOrganization\nTeam Member\tBurger King\nCrew Member\tMcDonald's");
+  expect(payload?.html).toContain('<table>');
+  expect(payload?.plainText).not.toContain('<!--hvy:table');
 });
 
 function makeDeterministicEmbeddingProvider(): HvyEmbeddingProvider {

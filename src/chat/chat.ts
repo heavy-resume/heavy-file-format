@@ -20,7 +20,7 @@ import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-co
 import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
 import type { ProxyChatMode } from './chat-provider-payload';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
-import { closeIcon } from '../icons';
+import { closeIcon, copyIcon } from '../icons';
 import { measureAsyncPhase, measurePhase } from '../perf-trace';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
@@ -1122,23 +1122,50 @@ function formatChatTokenUsage(usage: ChatTokenUsage): string {
 }
 
 function renderChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps, canCopyToHvy: boolean): string {
+  const tokenUsage = getChatMessageDisplayTokenUsage(message);
+  const canCopyMessage = canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress;
   const classes = [
     'chat-bubble',
     `chat-bubble-${message.role}`,
     message.error ? 'chat-bubble-error' : '',
     message.progress ? 'chat-bubble-progress' : '',
     message.work ? 'chat-bubble-work' : '',
+    tokenUsage ? 'has-token-usage' : '',
   ].filter(Boolean).join(' ');
   return `
     <article class="${classes}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
       <div class="chat-bubble-role">${deps.escapeHtml(formatChatBubbleRole(message))}</div>
+      ${tokenUsage || canCopyMessage ? renderChatBubbleMetaHtml(message, deps, tokenUsage, canCopyMessage) : ''}
       ${message.work ? renderChatWorkMessageHtml(message, deps) : renderStandardChatMessageHtml(message, deps)}
-      ${
-        canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
-          ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
-          : ''
-      }
     </article>
+  `;
+}
+
+function getChatMessageDisplayTokenUsage(message: ChatMessage): ChatTokenUsage | null {
+  return message.tokenUsage ?? message.work?.tokenUsage ?? null;
+}
+
+function renderChatBubbleMetaHtml(message: ChatMessage, deps: RenderChatPanelDeps, tokenUsage: ChatTokenUsage | null, canCopyMessage: boolean): string {
+  return `
+    <div class="chat-bubble-meta">
+      ${tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(tokenUsage))}</div>` : ''}
+      ${canCopyMessage ? renderChatCopyMenuHtml(message, deps) : ''}
+    </div>
+  `;
+}
+
+function renderChatCopyMenuHtml(message: ChatMessage, deps: RenderChatPanelDeps): string {
+  const messageId = deps.escapeAttr(message.id);
+  return `
+    <details class="chat-copy-menu">
+      <summary class="ghost chat-copy-menu-toggle" aria-label="Copy options" title="Copy options" data-tooltip="Copy options">
+        ${copyIcon()}
+      </summary>
+      <div class="chat-copy-menu-popover" role="menu" aria-label="Copy response options">
+        <button type="button" data-action="copy-chat-response-text" data-message-id="${messageId}" role="menuitem">Copy response</button>
+        <button type="button" data-action="copy-chat-response-to-hvy" data-message-id="${messageId}" role="menuitem">Copy as new section</button>
+      </div>
+    </details>
   `;
 }
 
@@ -1164,7 +1191,6 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
         ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
         : ''
     }
-    ${message.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage))}</div>` : ''}
   `;
 }
 
@@ -1182,7 +1208,6 @@ function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDe
       ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
     </div>
     ${renderChatWorkDetails(work, deps, message.id)}
-    ${message.tokenUsage || work.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage ?? work.tokenUsage!))}</div>` : ''}
   `;
 }
 

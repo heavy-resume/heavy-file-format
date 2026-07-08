@@ -68,9 +68,12 @@ hvy_version: 0.1
 #! Summary
 `, '.hvy');
 
-  const html = renderChatPanel(chat, document, deps, 'document-edit');
+  const html = renderChatPanel(chat, document, deps, 'document-edit', true);
 
+  expect(html).toContain('<article class="chat-bubble chat-bubble-assistant has-token-usage"');
   expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
+  expect(html).toContain('aria-label="Copy response options"');
+  expect(html.indexOf('>Copy response</button>')).toBeLessThan(html.indexOf('>Copy as new section</button>'));
   expect(html).toContain('Last tokens: input 120 / output 30');
 });
 

@@ -10,6 +10,13 @@ export function closeIcon(): string {
   </svg>`;
 }
 
+export function copyIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-copy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <rect x="8" y="8" width="11" height="11" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+  </svg>`;
+}
+
 export function magnifyingGlassIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-search" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <circle cx="11" cy="11" r="6.5" />

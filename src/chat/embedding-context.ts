@@ -5,6 +5,7 @@ import { buildSemanticRetrievalChunks } from '../search/semantic-candidates';
 import type { HvyDocumentSearchDocument, HvyDocumentSearchResult } from '../search/types';
 import type {
   HvyChatContextOptions,
+  HvyChatContextPreparationProgressCallback,
   HvyChatContextRequest,
   HvyChatContextResult,
   HvyChatEvidence,
@@ -294,7 +295,7 @@ export async function buildEmbeddingChatContext(
   }
   const maxContextChars = Math.max(1, Math.floor(options.maxContextChars ?? request.maxContextChars));
   const maxResults = Math.max(1, Math.floor(options.maxResults ?? DEFAULT_MAX_RESULTS));
-  const index = await getEmbeddingIndex(request.document, options, embeddingProvider, request.signal);
+  const index = await getEmbeddingIndex(request.document, options, embeddingProvider, request.signal, request.onProgress);
   if (index.records.length === 0) {
     return packEmbeddingContext(request.document, [], maxContextChars);
   }
@@ -410,7 +411,8 @@ async function getEmbeddingIndex(
   document: VisualDocument,
   options: HvyChatContextOptions,
   embeddingProvider: HvyEmbeddingProvider,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: HvyChatContextPreparationProgressCallback
 ): Promise<RuntimeEmbeddingIndex> {
   const documentRevision = getEmbeddingDocumentRevision(document);
   const records = buildEmbeddingRecords(document);
@@ -439,6 +441,7 @@ async function getEmbeddingIndex(
     documentRevision,
     options,
     embeddingProvider,
+    onProgress,
     ...(signal ? { signal } : {}),
   });
   pendingRuntimeIndexes.set(document, { documentRevision, profileKey, promise });
@@ -457,6 +460,7 @@ async function buildRuntimeEmbeddingIndex(params: {
   documentRevision: number;
   options: HvyChatContextOptions;
   embeddingProvider: HvyEmbeddingProvider;
+  onProgress?: HvyChatContextPreparationProgressCallback;
   signal?: AbortSignal;
 }): Promise<RuntimeEmbeddingIndex> {
   const attached = readEmbeddingAttachment(params.document, params.profile);
@@ -479,12 +483,22 @@ async function buildRuntimeEmbeddingIndex(params: {
   }
   const missingRecords = params.records.filter((record) => !vectors.has(record.key));
   const rebuiltChunks = missingRecords.length;
+  const reportProgress = (embeddedChunks: number): void => {
+    void params.onProgress?.({
+      totalChunks: params.records.length,
+      reusedChunks: previousEntries.length,
+      missingChunks: missingRecords.length,
+      embeddedChunks,
+    });
+  };
+  reportProgress(0);
   if (missingRecords.length > 0) {
     const embedded = await embedRecords({
       provider: params.embeddingProvider,
       model: params.profile.model,
       records: missingRecords,
       batchSize: normalizeBatchSize(params.options.embeddingBatchSize),
+      onProgress: reportProgress,
       ...(params.profile.dimensions !== undefined ? { dimensions: params.profile.dimensions } : {}),
       ...(params.signal ? { signal: params.signal } : {}),
     });
@@ -612,6 +626,7 @@ async function embedRecords(params: {
   model: string;
   records: EmbeddingRecord[];
   batchSize: number;
+  onProgress?: (embeddedChunks: number) => void;
   dimensions?: number;
   signal?: AbortSignal;
 }): Promise<Map<string, number[]>> {
@@ -631,6 +646,7 @@ async function embedRecords(params: {
         vectors.set(entry.id, vector);
       }
     }
+    params.onProgress?.(Math.min(params.records.length, index + batch.length));
   }
   return vectors;
 }

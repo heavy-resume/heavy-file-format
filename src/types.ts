@@ -124,14 +124,27 @@ export interface HvyChatContextRequest {
   messages: ChatMessage[];
   maxContextChars: number;
   mode: 'qa';
+  onProgress?: HvyChatContextPreparationProgressCallback;
   signal?: AbortSignal;
 }
 
 export type HvyChatContextPreparationPhase = 'preparing-context' | 'context-ready';
 
+export interface HvyChatContextPreparationProgress {
+  totalChunks: number;
+  reusedChunks: number;
+  missingChunks: number;
+  embeddedChunks: number;
+}
+
+export type HvyChatContextPreparationProgressCallback = (
+  progress: HvyChatContextPreparationProgress
+) => Promise<void> | void;
+
 export interface HvyChatContextPreparationEvent {
   phase: HvyChatContextPreparationPhase;
   cached?: boolean;
+  progress?: HvyChatContextPreparationProgress;
 }
 
 export type HvyChatContextPreparationCallback = (

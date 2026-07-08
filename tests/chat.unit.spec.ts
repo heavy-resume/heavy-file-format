@@ -22,7 +22,7 @@ import { getDocumentComponentDefaultCss } from '../src/document-component-defaul
 import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
 import { searchDocuments } from '../src/search/documents';
 import { getAttachmentDescriptors } from '../src/attachment-store';
-import type { HvyChatSearchIndexSnapshot, HvyEmbeddingProvider } from '../src/types';
+import type { HvyChatContextPreparationProgress, HvyChatSearchIndexSnapshot, HvyEmbeddingProvider } from '../src/types';
 
 afterEach(() => {
   setHostChatClient(null);
@@ -311,6 +311,53 @@ hvy_version: 0.1
   expect(embeddingAttachment?.meta.mediaType).toBe('application/vnd.hvy.embedding-index');
   expect(new TextDecoder().decode(embeddingAttachment?.bytes ?? new Uint8Array())).not.toContain('"vectors"');
   expect(provider).toHaveBeenCalledTimes(3);
+});
+
+test('requestChatCompletion stays quiet when persisted embedding cache is complete', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  const provider = vi.fn(makeDeterministicEmbeddingProvider());
+
+  await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+  materializePreparedEmbeddingAttachments(document);
+  const roundTripped = deserializeDocumentBytes(serializeDocumentBytes(document), '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Alpha answer.' })),
+  };
+  const preparationEvents: string[] = [];
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: roundTripped,
+    messages: [{ id: '1', role: 'user', content: 'What alpha facts exist?' }],
+    chatContext: { mode: 'embedding-retrieval', embeddingModel: 'text-embedding-ada-002', maxResults: 1, maxContextChars: 1_200 },
+    embeddingProvider: provider,
+    onContextPreparation: (event) => {
+      preparationEvents.push(event.phase);
+    },
+  });
+
+  expect(client.complete).toHaveBeenCalledTimes(1);
+  expect(preparationEvents).toEqual([]);
 });
 
 test('buildEmbeddingChatContext reuses unchanged section vectors after edits', async () => {
@@ -710,6 +757,63 @@ hvy_version: 0.1
   });
 
   expect(expectedEvents).toEqual(['preparing-context', 'context-ready']);
+});
+
+test('requestChatCompletion reports embedding context progress', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts live here
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-note"}-->
+ beta facts live here
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Alpha answer.' })),
+  };
+  const progressEvents: HvyChatContextPreparationProgress[] = [];
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'What alpha facts exist?' }],
+    chatContext: {
+      mode: 'embedding-retrieval',
+      embeddingModel: 'text-embedding-ada-002',
+      embeddingBatchSize: 1,
+      maxResults: 1,
+      maxContextChars: 1_200,
+    },
+    embeddingProvider: makeDeterministicEmbeddingProvider(),
+    onContextPreparation: (event) => {
+      if (event.progress) {
+        progressEvents.push(event.progress);
+      }
+    },
+  });
+
+  expect(progressEvents.length).toBeGreaterThan(1);
+  expect(progressEvents[0]).toMatchObject({
+    totalChunks: 2,
+    reusedChunks: 0,
+    missingChunks: 2,
+    embeddedChunks: 0,
+  });
+  expect(progressEvents.at(-1)).toMatchObject({
+    totalChunks: 2,
+    reusedChunks: 0,
+    missingChunks: 2,
+    embeddedChunks: 2,
+  });
 });
 
 test('buildKeywordChatContext reuses the runtime index until document changes are marked', async () => {

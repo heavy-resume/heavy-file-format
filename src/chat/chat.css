@@ -1,4 +1,7 @@
 .chat-dock {
+  --hvy-chat-panel-height: 42rem;
+  --hvy-chat-document-edit-panel-height: 44rem;
+
   position: absolute;
   top: var(--hvy-floating-control-edge-gutter);
   right: var(--hvy-floating-control-edge-gutter);
@@ -49,7 +52,7 @@
 
 .chat-panel {
   position: relative;
-  flex: 0 1 30rem;
+  flex: 0 1 var(--hvy-chat-panel-height);
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
@@ -67,7 +70,7 @@
 }
 
 .chat-panel.is-document-edit {
-  flex-basis: 34rem;
+  flex-basis: var(--hvy-chat-document-edit-panel-height);
   border: 2px solid color-mix(in srgb, var(--hvy-accent-2) 76%, var(--hvy-border));
   box-shadow:
     0 0 0 0.18rem color-mix(in srgb, var(--hvy-accent-2) 18%, transparent),
@@ -561,27 +564,33 @@
 
 @media (max-width: 980px) {
   .chat-dock {
+    --hvy-chat-panel-height: 34rem;
+    --hvy-chat-document-edit-panel-height: 36rem;
+
     width: min(28rem, calc(100% - 4rem));
   }
 
   .chat-panel {
     width: 100%;
-    flex-basis: 28rem;
+    flex-basis: var(--hvy-chat-panel-height);
   }
 }
 
 @media (max-width: 800px) {
   .chat-dock {
+    --hvy-chat-panel-height: 20rem;
+    --hvy-chat-document-edit-panel-height: 20rem;
+
     width: calc(100% - var(--hvy-floating-control-edge-gutter) - var(--hvy-floating-control-edge-gutter));
   }
 
   .chat-panel {
     width: 100%;
-    flex-basis: 20rem;
+    flex-basis: var(--hvy-chat-panel-height);
   }
 
   .chat-panel.is-document-edit {
-    flex-basis: 20rem;
+    flex-basis: var(--hvy-chat-document-edit-panel-height);
   }
 
   .chat-settings {
@@ -598,25 +607,31 @@
 }
 
 .pane.hvy-preview-frame-tablet .chat-dock {
+  --hvy-chat-panel-height: 34rem;
+  --hvy-chat-document-edit-panel-height: 36rem;
+
   width: min(28rem, calc(100% - 4rem));
 }
 
 .pane.hvy-preview-frame-tablet .chat-panel {
   width: 100%;
-  flex-basis: 28rem;
+  flex-basis: var(--hvy-chat-panel-height);
 }
 
 .pane.hvy-preview-frame-phone .chat-dock {
+  --hvy-chat-panel-height: 20rem;
+  --hvy-chat-document-edit-panel-height: 20rem;
+
   width: calc(100% - var(--hvy-floating-control-edge-gutter) - var(--hvy-floating-control-edge-gutter));
 }
 
 .pane.hvy-preview-frame-phone .chat-panel {
   width: 100%;
-  flex-basis: 20rem;
+  flex-basis: var(--hvy-chat-panel-height);
 }
 
 .pane.hvy-preview-frame-phone .chat-panel.is-document-edit {
-  flex-basis: 20rem;
+  flex-basis: var(--hvy-chat-document-edit-panel-height);
 }
 
 .pane.hvy-preview-frame-phone .chat-composer textarea,

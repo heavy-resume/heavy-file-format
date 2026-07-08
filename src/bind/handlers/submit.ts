@@ -4,6 +4,7 @@ import type { ChatCliMutationSummary } from '../../chat-cli/chat-cli-edit-loop';
 import { findBlockForVirtualDirectory, findSectionForVirtualDirectory } from '../../cli-core/virtual-file-system';
 import type { HvyVirtualPathNamingState } from '../../cli-core/virtual-file-system';
 import type { VisualBlock, VisualSection } from '../../editor/types';
+import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
 import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
 
@@ -12,6 +13,20 @@ interface PendingDocumentEditMutation {
   paths: Set<string>;
   refreshSectionPaths: Set<string>;
   virtualPathNaming?: HvyVirtualPathNamingState;
+}
+
+function formatContextPreparationStatus(progress?: HvyChatContextPreparationProgress): string {
+  if (!progress || progress.totalChunks <= 0) {
+    return 'Preparing document context...';
+  }
+  const readyChunks = Math.min(
+    progress.totalChunks,
+    progress.reusedChunks + progress.embeddedChunks
+  );
+  if (progress.missingChunks <= 0) {
+    return `Preparing document context: ${readyChunks}/${progress.totalChunks} chunks ready...`;
+  }
+  return `Preparing document context: ${readyChunks}/${progress.totalChunks} chunks ready, embedding ${progress.embeddedChunks}/${progress.missingChunks} new...`;
 }
 
 export function bindSubmit(app: HTMLElement): void {
@@ -230,7 +245,7 @@ export function bindSubmit(app: HTMLElement): void {
                     return;
                   }
                   state.chat.status = event.phase === 'preparing-context'
-                    ? 'Preparing document context...'
+                    ? formatContextPreparationStatus(event.progress)
                     : 'Waiting for answer...';
                   if (event.phase === 'preparing-context') {
                     await refreshChatAfterStatusChange();

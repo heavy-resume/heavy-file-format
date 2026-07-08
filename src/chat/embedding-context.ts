@@ -491,8 +491,8 @@ async function buildRuntimeEmbeddingIndex(params: {
       embeddedChunks,
     });
   };
-  reportProgress(0);
   if (missingRecords.length > 0) {
+    reportProgress(0);
     const embedded = await embedRecords({
       provider: params.embeddingProvider,
       model: params.profile.model,

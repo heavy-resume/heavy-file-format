@@ -116,6 +116,7 @@ export interface HvyChatContextOptions {
   embeddingBatchSize?: number;
   embeddingMinScore?: number;
   persistEmbeddingsToAttachments?: boolean;
+  onEmbeddingIndexPrepared?: () => void | Promise<void>;
 }
 
 export interface HvyChatContextRequest {

@@ -33,6 +33,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
 import { visitBlocks } from '../section-ops';
+import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
@@ -319,8 +320,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
-    const autoExpanded = !modifiers.has('collapse') && !section.expanded && shouldAutoExpandAuthoringSection(section);
-    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : section.expanded;
+    const authoredOrNavigationExpanded = getReaderSectionExpandedOverride(section) ?? section.expanded;
+    const autoExpanded = !modifiers.has('collapse') && !authoredOrNavigationExpanded && shouldAutoExpandAuthoringSection(section);
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : authoredOrNavigationExpanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',

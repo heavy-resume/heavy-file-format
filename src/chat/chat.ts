@@ -625,7 +625,9 @@ async function buildQaChatContext(params: {
   const maxContextChars = params.chatContext?.maxContextChars ?? params.settings.maxContextChars ?? MAX_PROXY_COMPLETION_CONTEXT_CHARS;
   let result: HvyChatContextResult | null = null;
   let contextStartedCached = false;
+  let contextPreparationReported = false;
   if (params.chatContextProvider) {
+    contextPreparationReported = true;
     await params.onContextPreparation?.({ phase: 'preparing-context', cached: false });
     result = await params.chatContextProvider.buildContext({
       document: params.document,
@@ -637,6 +639,7 @@ async function buildQaChatContext(params: {
     });
   } else if (params.chatContext?.mode === 'keyword-retrieval') {
     contextStartedCached = isKeywordChatContextPrepared(params.document);
+    contextPreparationReported = true;
     await params.onContextPreparation?.({ phase: 'preparing-context', cached: contextStartedCached });
     result = await buildKeywordChatContext({
       document: params.document,
@@ -648,17 +651,29 @@ async function buildQaChatContext(params: {
     }, params.chatContext, params.chatSearchCache ?? null);
   } else if (params.chatContext?.mode === 'embedding-retrieval') {
     contextStartedCached = isEmbeddingChatContextPrepared(params.document, params.chatContext);
-    await params.onContextPreparation?.({ phase: 'preparing-context', cached: contextStartedCached });
+    let embeddedMissingChunks = false;
     result = await buildEmbeddingChatContext({
       document: params.document,
       question: params.question,
       messages: params.messages,
       maxContextChars,
       mode: 'qa',
+      onProgress: (progress) => {
+        embeddedMissingChunks = embeddedMissingChunks || progress.missingChunks > 0;
+        contextPreparationReported = true;
+        return params.onContextPreparation?.({
+          phase: 'preparing-context',
+          cached: false,
+          progress,
+        });
+      },
       ...(params.signal ? { signal: params.signal } : {}),
     }, params.chatContext, params.embeddingProvider ?? null);
+    if (embeddedMissingChunks) {
+      await params.chatContext.onEmbeddingIndexPrepared?.();
+    }
   }
-  if (result) {
+  if (result && contextPreparationReported) {
     await params.onContextPreparation?.({ phase: 'context-ready', cached: contextStartedCached });
   }
   if (!result) {

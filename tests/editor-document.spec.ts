@@ -818,6 +818,79 @@ test('reader surface refresh preserves block and button visibility states separa
   });
 });
 
+test('reader block refresh normalizes table stripes inside the affected section', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div class="reader-section" data-section-key="section-a">
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-a">
+          <table class="reader-table">
+            <thead><tr><th>Title</th></tr></thead>
+            <tbody><tr class="table-main-row table-main-row-even"><td>Alpha</td></tr></tbody>
+          </table>
+        </div>
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-b">
+          <table class="reader-table">
+            <tbody><tr class="table-main-row table-main-row-odd"><td>Bravo</td></tr></tbody>
+          </table>
+        </div>
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-c">
+          <table class="reader-table">
+            <tbody><tr class="table-main-row table-main-row-odd"><td>Old Charlie</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const { refreshReaderBlockDom } = await import(/* @vite-ignore */ '/src/reader/block-refresh.ts');
+    state.document.sections = [
+      {
+        key: 'section-a',
+        blocks: [
+          { id: 'block-a', schema: {} },
+          { id: 'block-b', schema: {} },
+          { id: 'block-c', schema: {} },
+        ],
+      },
+    ];
+    const calls: string[] = [];
+    const refreshed = refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-c',
+      readerRenderer: {
+        renderReaderBlock: () => {
+          calls.push('block');
+          return `<div class="reader-block" data-section-key="section-a" data-block-id="block-c">
+            <table class="reader-table">
+              <tbody><tr class="table-main-row table-main-row-odd"><td>Charlie</td></tr></tbody>
+            </table>
+          </div>`;
+        },
+      },
+    });
+    return {
+      refreshed,
+      calls,
+      rowClasses: Array.from(document.querySelectorAll('.table-main-row')).map((row) => row.className),
+      rowText: Array.from(document.querySelectorAll('.table-main-row')).map((row) => row.textContent?.trim()),
+    };
+  });
+
+  expect(result).toEqual({
+    refreshed: true,
+    calls: ['block'],
+    rowClasses: [
+      'table-main-row table-main-row-even',
+      'table-main-row table-main-row-odd',
+      'table-main-row table-main-row-even',
+    ],
+    rowText: ['Alpha', 'Bravo', 'Charlie'],
+  });
+});
+
 test('reader surface refresh can target only sidebar sections', async ({ page }) => {
   await page.goto('/');
 

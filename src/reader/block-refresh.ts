@@ -21,6 +21,25 @@ export interface ReaderSectionRefreshOptions {
   afterReplace?: (element: HTMLElement) => void;
 }
 
+function normalizeReaderTableStripes(scope: ParentNode): void {
+  let stripeIndex = 0;
+  scope.querySelectorAll<HTMLTableElement>('.reader-table').forEach((table) => {
+    if (table.querySelector('thead')) {
+      stripeIndex = 0;
+    }
+    table.querySelectorAll<HTMLTableRowElement>('.table-main-row').forEach((row) => {
+      const isEven = stripeIndex % 2 === 0;
+      row.classList.toggle('table-main-row-even', isEven);
+      row.classList.toggle('table-main-row-odd', !isEven);
+      stripeIndex += 1;
+    });
+  });
+}
+
+function normalizeReaderTableStripesNear(element: HTMLElement): void {
+  normalizeReaderTableStripes(element.closest('.reader-section') ?? element);
+}
+
 export function refreshReaderSectionDom(options: ReaderSectionRefreshOptions): boolean {
   const section = findSectionByKey(options.sections, options.sectionKey);
   if (!section) {
@@ -46,6 +65,7 @@ export function refreshReaderSectionDom(options: ReaderSectionRefreshOptions): b
     restoreVisibilityStates(replacement, captureVisibilityStates(target));
     target.replaceWith(replacement);
     options.afterReplace?.(replacement);
+    normalizeReaderTableStripesNear(replacement);
     replaced += 1;
   });
   return replaced > 0;
@@ -77,6 +97,7 @@ export function refreshReaderBlockDom(options: ReaderBlockRefreshOptions): boole
     restoreVisibilityStates(replacement, captureVisibilityStates(target));
     target.replaceWith(replacement);
     options.afterReplace?.(replacement);
+    normalizeReaderTableStripesNear(replacement);
     replaced += 1;
   });
   return replaced > 0;

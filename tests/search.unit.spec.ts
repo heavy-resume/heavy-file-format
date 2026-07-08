@@ -5,7 +5,7 @@ import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchModal } from '../src/search/render';
-import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
+import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
@@ -1410,6 +1410,75 @@ hvy_version: 0.1
     'two',
     'three',
   ]);
+});
+
+test('semantic retrieval chunks merge leaves by section and split large sections at the target size', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"small"}-->
+#! Small
+
+<!--hvy:text {"id":"small-one"}-->
+ small one
+
+<!--hvy:text {"id":"small-two"}-->
+ small two
+
+<!--hvy: {"id":"large"}-->
+#! Large
+
+<!--hvy:text {"id":"large-one"}-->
+ ${'large one '.repeat(30)}
+
+<!--hvy:text {"id":"large-two"}-->
+ ${'large two '.repeat(30)}
+
+<!--hvy:text {"id":"large-three"}-->
+ ${'large three '.repeat(30)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, { targetChunkChars: 500 });
+  const smallChunks = expectedResult.filter((chunk) => chunk.sectionKey === document.sections[0]!.key);
+  const largeChunks = expectedResult.filter((chunk) => chunk.sectionKey === document.sections[1]!.key);
+
+  expect(smallChunks).toHaveLength(1);
+  expect(smallChunks[0]!.sourceCandidateIds).toEqual(['component:small-one', 'component:small-two']);
+  expect(largeChunks.length).toBeGreaterThan(1);
+  expect([...new Set(largeChunks.flatMap((chunk) => chunk.sourceCandidateIds))]).toEqual([
+    'component:large-one',
+    'component:large-two',
+    'component:large-three',
+  ]);
+  for (const chunk of largeChunks) {
+    expect(chunk.summary.length).toBeLessThanOrEqual(500);
+  }
+});
+
+test('semantic retrieval chunks use configurable overlap and continuation markers for oversized leaves', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"large"}-->
+#! Large
+
+<!--hvy:text {"id":"long-note"}-->
+ ${'alpha '.repeat(140)}needle ${'omega '.repeat(140)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, { targetChunkChars: 500, overlapChars: 200 });
+
+  expect(expectedResult.length).toBeGreaterThan(1);
+  expect(expectedResult.some((chunk) => chunk.summary.startsWith('...') || chunk.summary.includes('\n\n...'))).toBe(true);
+  expect(expectedResult.some((chunk) => chunk.summary.endsWith('...'))).toBe(true);
+  expect(expectedResult.some((chunk, index) =>
+    index > 0 && expectedResult[index - 1]!.summary.slice(-80).includes(chunk.summary.replace(/^\.\.\./, '').slice(0, 20))
+  )).toBe(true);
+  for (const chunk of expectedResult) {
+    expect(chunk.summary.length).toBeLessThanOrEqual(500);
+  }
 });
 
 test('semantic filter provider matches become normal filter results', async () => {

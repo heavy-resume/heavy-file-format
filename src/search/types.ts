@@ -52,6 +52,7 @@ export interface HvySemanticFilterCandidate {
   documentId?: string;
   documentTitle?: string;
   targetKind: SearchTargetKind;
+  parentCandidateId?: string;
   sectionKey: string;
   blockId?: string;
   targetId: string;
@@ -76,6 +77,7 @@ export interface HvySemanticFilterCandidate {
 
 export interface HvyRetrievalChunk extends HvySemanticFilterCandidate {
   chunkId: string;
+  sourceCandidateIds: string[];
 }
 
 export interface HvySemanticFilterCandidateBudget {

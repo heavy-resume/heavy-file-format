@@ -16,7 +16,8 @@ const DEFAULT_MAX_CANDIDATE_SUMMARY_CHARS = 800;
 const DEFAULT_MAX_TOTAL_CANDIDATE_CHARS = 80_000;
 const DEFAULT_MAX_WINDOW_CANDIDATE_CHARS = 10_000;
 const UNLIMITED_CANDIDATE_SUMMARY_CHARS = Number.MAX_SAFE_INTEGER;
-const SEMANTIC_WINDOW_CHUNK_OVERLAP_CHARS = 400;
+const SEMANTIC_FILTER_CHUNK_OVERLAP_CHARS = 400;
+const RETRIEVAL_CHUNK_OVERLAP_CHARS = 200;
 
 interface BuildSemanticFilterRequestOptions {
   document: VisualDocument;
@@ -83,18 +84,28 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 
 export function buildSemanticRetrievalChunks(
   document: VisualDocument,
-  options: { targetChunkChars?: number } = {}
+  options: { targetChunkChars?: number; overlapChars?: number } = {}
 ): HvyRetrievalChunk[] {
   const targetChunkChars = Math.max(1, Math.floor(options.targetChunkChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS));
+  const overlapChars = normalizeOverlapChars(options.overlapChars, RETRIEVAL_CHUNK_OVERLAP_CHARS);
   const candidates = buildSemanticFilterCandidates(document, { maxCandidateSummaryChars: UNLIMITED_CANDIDATE_SUMMARY_CHARS })
     .sort((left, right) => left.documentOrder - right.documentOrder);
   const candidateIdsWithDescendants = getCandidateIdsWithDescendants(candidates);
-  return candidates
-    .filter((candidate) => !candidateIdsWithDescendants.has(candidate.candidateId))
-    .flatMap((candidate): HvyRetrievalChunk[] => buildWindowCandidateChunks(candidate, targetChunkChars).map((chunk) => ({
-      ...chunk,
-      chunkId: getSemanticRetrievalChunkId(chunk),
-    })));
+  const leavesBySectionKey = new Map<string, HvySemanticFilterCandidate[]>();
+  const sectionsByKey = new Map(candidates
+    .filter((candidate) => candidate.targetKind === 'section')
+    .map((candidate) => [candidate.sectionKey, candidate]));
+  for (const candidate of candidates) {
+    if (candidateIdsWithDescendants.has(candidate.candidateId)) {
+      continue;
+    }
+    const leaves = leavesBySectionKey.get(candidate.sectionKey) ?? [];
+    leaves.push(candidate);
+    leavesBySectionKey.set(candidate.sectionKey, leaves);
+  }
+  return [...leavesBySectionKey.entries()].flatMap(([sectionKey, leaves]) =>
+    buildSectionRetrievalChunks(sectionsByKey.get(sectionKey), leaves, targetChunkChars, overlapChars)
+  );
 }
 
 export function buildSemanticFilterWindowRequest(
@@ -153,7 +164,7 @@ export function buildSemanticFilterCandidates(
     });
     const nextAncestors = appendContext(ancestors, sectionLabel);
     for (const block of section.blocks) {
-      visitBlock(document, section, block, nextAncestors, sectionLabel);
+      visitBlock(document, section, block, nextAncestors, sectionLabel, `section:${targetRef}`);
     }
     for (const child of section.children) {
       visitSection(child, nextAncestors);
@@ -165,7 +176,8 @@ export function buildSemanticFilterCandidates(
     section: VisualSection,
     block: VisualBlock,
     contextTrail: string[],
-    nearestLocationLabel: string
+    nearestLocationLabel: string,
+    parentCandidateId: string
   ): void => {
     const blockOrder = documentOrder;
     documentOrder += 1;
@@ -179,6 +191,7 @@ export function buildSemanticFilterCandidates(
     blockCandidates.push({
       candidateId: `component:${targetRef}`,
       targetKind: 'block',
+      parentCandidateId,
       sectionKey: section.key,
       blockId: block.id,
       targetId: (block.schema.id ?? '').trim() || block.id,
@@ -196,15 +209,16 @@ export function buildSemanticFilterCandidates(
     });
     const childTrail = appendContext(contextTrail, getBlockContextLabel(block));
     const childLocation = locationLabel || nearestLocationLabel;
-    for (const child of block.schema.containerBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation);
-    for (const child of block.schema.componentListBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation);
+    const childParentCandidateId = `component:${targetRef}`;
+    for (const child of block.schema.containerBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
+    for (const child of block.schema.componentListBlocks ?? []) visitBlock(document, section, child, childTrail, childLocation, childParentCandidateId);
     for (const child of block.schema.expandableStubBlocks?.children ?? []) {
-      visitBlock(document, section, child, childTrail, (block.schema.expandableStubDescription ?? '').trim() || childLocation);
+      visitBlock(document, section, child, childTrail, (block.schema.expandableStubDescription ?? '').trim() || childLocation, childParentCandidateId);
     }
     for (const child of block.schema.expandableContentBlocks?.children ?? []) {
-      visitBlock(document, section, child, childTrail, (block.schema.expandableContentDescription ?? '').trim() || childLocation);
+      visitBlock(document, section, child, childTrail, (block.schema.expandableContentDescription ?? '').trim() || childLocation, childParentCandidateId);
     }
-    for (const item of block.schema.gridItems ?? []) visitBlock(document, section, item.block, childTrail, childLocation);
+    for (const item of block.schema.gridItems ?? []) visitBlock(document, section, item.block, childTrail, childLocation, childParentCandidateId);
   };
 
   for (const section of document.sections) {
@@ -426,6 +440,15 @@ function packSemanticCandidateWindows(
 
 function getCandidateIdsWithDescendants(candidates: HvySemanticFilterCandidate[]): Set<string> {
   const candidatesWithDescendants = new Set<string>();
+  const candidateIds = new Set(candidates.map((candidate) => candidate.candidateId));
+  const parentsByCandidateId = new Map(candidates.map((candidate) => [candidate.candidateId, candidate.parentCandidateId]));
+  for (const candidate of candidates) {
+    let parentCandidateId = candidate.parentCandidateId;
+    while (parentCandidateId && candidateIds.has(parentCandidateId)) {
+      candidatesWithDescendants.add(parentCandidateId);
+      parentCandidateId = parentsByCandidateId.get(parentCandidateId);
+    }
+  }
   const candidatesWithPaths = candidates.filter((candidate) => candidate.targetPath);
   for (const candidate of candidatesWithPaths) {
     const candidatePath = candidate.targetPath;
@@ -442,7 +465,8 @@ function getCandidateIdsWithDescendants(candidates: HvySemanticFilterCandidate[]
 
 function buildWindowCandidateChunks(
   candidate: HvySemanticFilterCandidate,
-  maxWindowCandidateChars: number
+  maxWindowCandidateChars: number,
+  overlapChars = SEMANTIC_FILTER_CHUNK_OVERLAP_CHARS
 ): HvySemanticFilterCandidate[] {
   const candidateChars = getSemanticCandidatePromptChars(candidate);
   if (candidateChars <= maxWindowCandidateChars || candidate.summary.length === 0) {
@@ -455,11 +479,8 @@ function buildWindowCandidateChunks(
     return [candidate];
   }
 
-  const overlapChars = Math.min(
-    SEMANTIC_WINDOW_CHUNK_OVERLAP_CHARS,
-    Math.max(0, Math.floor(maxSummaryChars / 4))
-  );
-  const stepChars = Math.max(1, maxSummaryChars - overlapChars);
+  const normalizedOverlapChars = Math.min(overlapChars, Math.max(0, maxSummaryChars - 1));
+  const stepChars = Math.max(1, maxSummaryChars - normalizedOverlapChars);
   const ranges: Array<{ start: number; end: number }> = [];
   for (let start = 0; start < candidate.summary.length; start += stepChars) {
     const end = Math.min(candidate.summary.length, start + maxSummaryChars);
@@ -482,11 +503,110 @@ function buildWindowCandidateChunks(
   }));
 }
 
-function getSemanticRetrievalChunkId(candidate: HvySemanticFilterCandidate): string {
-  if (!candidate.windowChunk) {
-    return candidate.candidateId;
+function buildSectionRetrievalChunks(
+  section: HvySemanticFilterCandidate | undefined,
+  leaves: HvySemanticFilterCandidate[],
+  targetChunkChars: number,
+  overlapChars: number
+): HvyRetrievalChunk[] {
+  if (leaves.length === 0) {
+    return [];
   }
-  return `${candidate.candidateId}#chunk:${candidate.windowChunk.index + 1}:${candidate.windowChunk.start}-${candidate.windowChunk.end}`;
+  const sectionCandidate = section ?? leaves[0]!;
+  const pieces = leaves.flatMap((leaf) =>
+    buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars).flatMap((chunk) =>
+      splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk), targetChunkChars)
+    )
+  );
+  const groups: Array<{ pieces: typeof pieces; chars: number }> = [];
+  let current: typeof pieces = [];
+  let currentChars = 0;
+  const flush = (): void => {
+    if (current.length === 0) {
+      return;
+    }
+    groups.push({ pieces: current, chars: currentChars });
+    current = [];
+    currentChars = 0;
+  };
+  for (const piece of pieces) {
+    const nextChars = current.length === 0 ? piece.text.length : currentChars + 2 + piece.text.length;
+    if (current.length > 0 && nextChars > targetChunkChars) {
+      flush();
+    }
+    current.push(piece);
+    currentChars = current.length === 1 ? piece.text.length : currentChars + 2 + piece.text.length;
+  }
+  flush();
+  return groups.map((group, index): HvyRetrievalChunk => {
+    const sourceCandidateIds = [...new Set(group.pieces.map((piece) => piece.candidate.candidateId))];
+    const summary = group.pieces.map((piece) => piece.text).join('\n\n');
+    return {
+      ...sectionCandidate,
+      chunkId: getSectionRetrievalChunkId(sectionCandidate, index, groups.length),
+      sourceCandidateIds,
+      targetKind: 'section',
+      blockId: undefined,
+      componentType: undefined,
+      summary,
+      tags: [...new Set([
+        ...sectionCandidate.tags,
+        ...group.pieces.flatMap((piece) => piece.candidate.tags),
+      ])],
+      description: sectionCandidate.description || group.pieces.map((piece) => piece.candidate.description).find(Boolean) || '',
+      documentOrder: group.pieces[0]?.candidate.documentOrder ?? sectionCandidate.documentOrder,
+      truncated: group.pieces.some((piece) => piece.candidate.truncated),
+      ...(groups.length > 1
+        ? { windowChunk: { index, count: groups.length, start: 0, end: summary.length } }
+        : { windowChunk: undefined }),
+    };
+  });
+}
+
+function getSectionRetrievalChunkId(section: HvySemanticFilterCandidate, index: number, count: number): string {
+  const baseId = section.targetRef ? `section:${section.targetRef}` : section.candidateId;
+  return count <= 1 ? baseId : `${baseId}#chunk:${index + 1}`;
+}
+
+function formatRetrievalLeafText(candidate: HvySemanticFilterCandidate): string {
+  return [
+    candidate.label ? `Label: ${candidate.label}` : '',
+    candidate.contextLabel ? `Context: ${candidate.contextLabel}` : '',
+    candidate.locationLabel ? `Location: ${candidate.locationLabel}` : '',
+    candidate.tags.length ? `Tags: ${candidate.tags.join(', ')}` : '',
+    candidate.description ? `Description: ${candidate.description}` : '',
+    candidate.componentType ? `Component: ${candidate.componentType}` : '',
+    candidate.summary ? `Text: ${candidate.summary}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function splitRetrievalPieceText(
+  candidate: HvySemanticFilterCandidate,
+  text: string,
+  targetChunkChars: number
+): Array<{ candidate: HvySemanticFilterCandidate; text: string }> {
+  if (text.length <= targetChunkChars) {
+    return [{ candidate, text }];
+  }
+  const chunks: Array<{ candidate: HvySemanticFilterCandidate; text: string }> = [];
+  const bodyChars = Math.max(1, targetChunkChars - 6);
+  for (let start = 0; start < text.length; start += bodyChars) {
+    const end = Math.min(text.length, start + bodyChars);
+    const prefix = start > 0 ? '...' : '';
+    const suffix = end < text.length ? '...' : '';
+    chunks.push({
+      candidate,
+      text: `${prefix}${text.slice(start, end)}${suffix}`,
+    });
+  }
+  return chunks;
+}
+
+function normalizeOverlapChars(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.floor(value));
 }
 
 function getSemanticCandidatePromptChars(candidate: HvySemanticFilterCandidate): number {

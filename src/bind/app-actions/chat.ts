@@ -190,14 +190,15 @@ const buildChatEmbeddings: AppActionHandler = () => {
   state.chat.status = 'Building embedding cache...';
   state.chat.error = null;
   getRenderApp()();
+  const startedAt = Date.now();
   void prepareEmbeddingChatContext(state.document, {
     ...state.chatContext,
     mode: 'embedding-retrieval',
     embeddingModel: state.chatContext.embeddingModel?.trim() || 'text-embedding-ada-002',
     persistEmbeddingsToAttachments: true,
   }, state.embeddingProvider, abortController.signal)
-    .then(() => {
-      state.chat.status = 'Embedding cache is ready for the next save.';
+    .then((stats) => {
+      state.chat.status = formatEmbeddingBuildStatus(stats, Date.now() - startedAt);
       state.chat.error = null;
     })
     .catch((error: unknown) => {
@@ -212,6 +213,18 @@ const buildChatEmbeddings: AppActionHandler = () => {
       getRenderApp()();
     });
 };
+
+function formatEmbeddingBuildStatus(
+  stats: { totalChunks: number; reusedChunks: number; rebuiltChunks: number; missingVectors: number; alreadyPrepared: boolean },
+  elapsedMs: number
+): string {
+  const elapsed = elapsedMs >= 1_000 ? `${(elapsedMs / 1_000).toFixed(1)}s` : `${Math.max(0, elapsedMs)}ms`;
+  const suffix = stats.missingVectors > 0 ? `, ${stats.missingVectors} missing` : '';
+  if (stats.alreadyPrepared) {
+    return `Embedding cache unchanged: rebuilt 0, reused ${stats.reusedChunks}/${stats.totalChunks} chunks (${elapsed}).`;
+  }
+  return `Embedding cache ready for next save: rebuilt ${stats.rebuiltChunks}, reused ${stats.reusedChunks}/${stats.totalChunks} chunks${suffix} (${elapsed}).`;
+}
 
 export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,

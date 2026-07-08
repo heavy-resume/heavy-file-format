@@ -36,6 +36,7 @@ interface RuntimeEmbeddingIndex {
   vectors: Map<string, number[]>;
   textHashes: Map<string, string>;
   persistToAttachments: boolean;
+  lastBuildStats: HvyEmbeddingCacheBuildStats;
 }
 
 interface EmbeddingIndexProfile {
@@ -58,6 +59,14 @@ interface EmbeddingIndexSnapshot {
 interface EmbeddingSearchResult {
   record: EmbeddingRecord;
   score: number;
+}
+
+export interface HvyEmbeddingCacheBuildStats {
+  totalChunks: number;
+  reusedChunks: number;
+  rebuiltChunks: number;
+  missingVectors: number;
+  alreadyPrepared: boolean;
 }
 
 const runtimeIndexes = new WeakMap<VisualDocument, RuntimeEmbeddingIndex>();
@@ -113,14 +122,15 @@ export async function prepareEmbeddingChatContext(
   options: HvyChatContextOptions = {},
   embeddingProvider: HvyEmbeddingProvider | null = null,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<HvyEmbeddingCacheBuildStats> {
   if (!embeddingProvider) {
     throw new Error('Embedding chat context requires an embeddingProvider.');
   }
-  await getEmbeddingIndex(document, {
+  const index = await getEmbeddingIndex(document, {
     ...options,
     persistEmbeddingsToAttachments: options.persistEmbeddingsToAttachments === true,
   }, embeddingProvider, signal);
+  return index.lastBuildStats;
 }
 
 export async function buildEmbeddingChatContext(
@@ -258,6 +268,13 @@ async function getEmbeddingIndex(
   const cached = runtimeIndexes.get(document);
   if (cached && cached.documentRevision === documentRevision && getEmbeddingProfileKey(cached.profile) === profileKey) {
     cached.persistToAttachments ||= options.persistEmbeddingsToAttachments === true;
+    cached.lastBuildStats = {
+      totalChunks: records.length,
+      reusedChunks: records.length,
+      rebuiltChunks: 0,
+      missingVectors: records.filter((record) => !cached.vectors.has(record.key)).length,
+      alreadyPrepared: true,
+    };
     return cached;
   }
   const pending = pendingRuntimeIndexes.get(document);
@@ -310,6 +327,7 @@ async function buildRuntimeEmbeddingIndex(params: {
     textHashes.set(entry.id, entry.textHash);
   }
   const missingRecords = params.records.filter((record) => !vectors.has(record.key));
+  const rebuiltChunks = missingRecords.length;
   if (missingRecords.length > 0) {
     const embedded = await embedRecords({
       provider: params.embeddingProvider,
@@ -334,6 +352,13 @@ async function buildRuntimeEmbeddingIndex(params: {
     vectors,
     textHashes,
     persistToAttachments: params.options.persistEmbeddingsToAttachments === true,
+    lastBuildStats: {
+      totalChunks: params.records.length,
+      reusedChunks: previousEntries.length,
+      rebuiltChunks,
+      missingVectors: params.records.filter((record) => !vectors.has(record.key)).length,
+      alreadyPrepared: false,
+    },
   };
   runtimeIndexes.set(params.document, runtime);
   return runtime;

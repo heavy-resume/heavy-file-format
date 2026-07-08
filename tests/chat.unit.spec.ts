@@ -16,7 +16,7 @@ import {
   toggleChatPanelOpen,
 } from '../src/chat/chat';
 import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged, prepareKeywordChatContext } from '../src/chat/chat-context';
-import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments } from '../src/chat/embedding-context';
+import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments, prepareEmbeddingChatContext } from '../src/chat/embedding-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
@@ -313,7 +313,7 @@ hvy_version: 0.1
   expect(provider).toHaveBeenCalledTimes(3);
 });
 
-test('buildEmbeddingChatContext reuses unchanged component vectors after edits', async () => {
+test('buildEmbeddingChatContext reuses unchanged section vectors after edits', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -323,6 +323,9 @@ hvy_version: 0.1
 
 <!--hvy:text {"id":"alpha-note"}-->
  alpha facts
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
 
 <!--hvy:text {"id":"beta-note"}-->
  beta facts
@@ -345,7 +348,7 @@ hvy_version: 0.1
     persistEmbeddingsToAttachments: true,
   }, provider);
   materializePreparedEmbeddingAttachments(document);
-  document.sections[0]!.blocks[1]!.text = ' beta facts changed';
+  document.sections[1]!.blocks[0]!.text = ' beta facts changed';
   markEmbeddingChatContextDocumentChanged(document);
 
   await buildVectorChatContext({
@@ -366,6 +369,82 @@ hvy_version: 0.1
   expect(recordEmbeddingCalls[1]).toHaveLength(1);
   expect(recordEmbeddingCalls[1]![0]).toContain('beta facts changed');
   expect(recordEmbeddingCalls[1]![0]).not.toContain('alpha facts');
+});
+
+test('prepareEmbeddingChatContext reports no-op stats when cache is unchanged', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+
+<!--hvy:text {"id":"beta-note"}-->
+ beta facts
+`, '.hvy');
+  const provider = vi.fn(makeDeterministicEmbeddingProvider());
+
+  const firstStats = await prepareEmbeddingChatContext(document, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+  provider.mockClear();
+  const expectedResult = await prepareEmbeddingChatContext(document, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+
+  expect(firstStats.rebuiltChunks).toBeGreaterThan(0);
+  expect(expectedResult).toEqual({
+    totalChunks: firstStats.totalChunks,
+    reusedChunks: firstStats.totalChunks,
+    rebuiltChunks: 0,
+    missingVectors: 0,
+    alreadyPrepared: true,
+  });
+  expect(provider).not.toHaveBeenCalled();
+});
+
+test('prepareEmbeddingChatContext does not rebuild nested detail chunks after summary text edits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:expandable {"id":"summary-card"}-->
+ <!--hvy:expandable:stub {}-->
+  <!--hvy:text {"id":"summary-short"}-->
+   Short summary sentence.
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"summary-detail"}-->
+   ${'Long detail sentence. '.repeat(320)}
+`, '.hvy');
+  const provider = vi.fn(makeDeterministicEmbeddingProvider());
+
+  const firstStats = await prepareEmbeddingChatContext(document, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+  document.sections[0]!.blocks[0]!.schema.expandableStubBlocks!.children[0]!.text = ' Changed short summary sentence.';
+  markEmbeddingChatContextDocumentChanged(document);
+
+  const expectedResult = await prepareEmbeddingChatContext(document, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+
+  expect(firstStats.totalChunks).toBeGreaterThan(2);
+  expect(expectedResult.rebuiltChunks).toBe(1);
+  expect(expectedResult.reusedChunks).toBe(firstStats.totalChunks - 1);
 });
 
 test('persistPreparedEmbeddingAttachments routes embedding bytes through the attachment host', async () => {

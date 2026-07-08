@@ -140,6 +140,7 @@ export interface HvyMountOptions {
   embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
+  crossDocumentLinks?: boolean;
   controls?: boolean;
   paletteId?: string | null;
   pdfStylePresets?: HvyPdfStylePreset[] | null;
@@ -196,7 +197,8 @@ function createEmbedState(
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
-  encryption?: HvyEncryptionOptions | null
+  encryption?: HvyEncryptionOptions | null,
+  crossDocumentLinksEnabled = false
 ): AppState {
   return {
     document,
@@ -209,6 +211,7 @@ function createEmbedState(
     chatContextProvider: null,
     chatSearchCache: null,
     embeddingProvider: null,
+    crossDocumentLinksEnabled,
     sessionStorageKey,
     persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
@@ -393,6 +396,7 @@ function ensureRenderers(): void {
       get readerExpandableState() { return state.readerExpandableState; },
       get editorSidebarHelpDismissed() { return state.editorSidebarHelpDismissed; },
       get currentView() { return state.currentView; },
+      get crossDocumentLinksEnabled() { return state.crossDocumentLinksEnabled; },
       get responsivePreview() { return state.responsivePreview; },
       get mobileAdjustmentMode() { return state.editorMode === 'mobile-adjustment'; },
       get editingReusableDefinition() { return state.reusableDefinitionEditModal?.mode === 'edit'; },
@@ -974,7 +978,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
     options.attachmentStore ?? null,
-    options.encryption ?? null
+    options.encryption ?? null,
+    options.crossDocumentLinks === true
   );
   const runtimeState = applyEmbeddedSessionState(
     initialState,

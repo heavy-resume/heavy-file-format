@@ -1,5 +1,6 @@
 import './xref-card.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
+import { classifyXrefTarget } from '../../../workspace-links';
 
 export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const targetTagFilter = getEffectiveTargetTagFilter(block, helpers);
@@ -60,17 +61,27 @@ function renderXrefCardPreview(
   title: string,
   detail: string,
   target: string,
-  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml' | 'getDocumentComponentCss'>,
+  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml' | 'getDocumentComponentCss' | 'isCrossDocumentLinksEnabled'>,
   className: string
 ): string {
-  const href = targetToHref(target);
-  const externalAttrs = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : '';
+  const classified = classifyXrefTarget(target);
   const defaultCss = helpers.getDocumentComponentCss('xref-card').trim();
   const styleAttr = defaultCss ? ` style="${helpers.escapeAttr(defaultCss)}"` : '';
-  return `<a class="${helpers.escapeAttr(className)}" href="${helpers.escapeAttr(href)}"${styleAttr}${externalAttrs}>
+  const content = `
     <strong>${helpers.escapeHtml(title || 'Untitled')}</strong>
-    ${detail.trim().length > 0 ? `<span>${helpers.escapeHtml(detail)}</span>` : ''}
+    ${detail.trim().length > 0 ? `<span>${helpers.escapeHtml(detail)}</span>` : ''}`;
+  if (classified.kind === 'local') {
+    return `<a class="${helpers.escapeAttr(className)}" href="${helpers.escapeAttr(classified.href)}"${styleAttr} data-hvy-link-kind="xref-card" data-hvy-cross-document="false" data-hvy-xref-target="${helpers.escapeAttr(target.trim())}">${content}
   </a>`;
+  }
+  if (classified.kind === 'workspace' && helpers.isCrossDocumentLinksEnabled?.() === true) {
+    return `<a class="${helpers.escapeAttr(className)}" href="${helpers.escapeAttr(classified.href)}"${styleAttr} data-hvy-link-kind="xref-card" data-hvy-cross-document="true" data-hvy-xref-target="${helpers.escapeAttr(target.trim())}">${content}
+  </a>`;
+  }
+  const disabledClass = `${className} is-disabled-target`;
+  const invalidClass = classified.kind === 'invalid' ? `${disabledClass} is-invalid-target` : disabledClass;
+  return `<div class="${helpers.escapeAttr(invalidClass)}"${styleAttr} role="link" aria-disabled="true" data-hvy-link-kind="xref-card" data-hvy-cross-document="${classified.kind === 'workspace' ? 'true' : 'false'}" data-hvy-xref-target="${helpers.escapeAttr(target.trim())}">${content}
+  </div>`;
 }
 
 function renderTargetOptions(
@@ -111,15 +122,4 @@ function getEffectiveTargetTagFilter(block: Parameters<ComponentEditorRenderer>[
 function normalizeTargetValue(target: string): string {
   const trimmed = target.trim();
   return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
-}
-
-function targetToHref(target: string): string {
-  const trimmed = target.trim();
-  if (!trimmed) {
-    return '#';
-  }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#')) {
-    return trimmed;
-  }
-  return `#${trimmed}`;
 }

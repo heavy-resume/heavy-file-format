@@ -931,6 +931,113 @@ hvy_version: 0.1
   expect(result.previewLabel).toBe('Ready');
 });
 
+test('embedded workspace links are disabled by default and not observed', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Other document](./other.hvy#details)
+ <!--hvy:xref-card {"xrefTitle":"Other card","xrefTarget":"./other.hvy#details"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      async linkObserver(link) {
+        seen.push(`${link.kind}:${link.href}`);
+        return null;
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const textLink = root.querySelector<HTMLElement>('.reader-block-text .hvy-workspace-link-disabled');
+    const xref = root.querySelector<HTMLElement>('.reader-xref-card');
+    return {
+      seen,
+      textHref: textLink?.getAttribute('href') ?? null,
+      textDisabled: textLink?.getAttribute('aria-disabled') ?? '',
+      xrefTag: xref?.tagName ?? '',
+      xrefHref: xref?.getAttribute('href') ?? null,
+      xrefDisabled: xref?.getAttribute('aria-disabled') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual([]);
+  expect(result.textHref).toBeNull();
+  expect(result.textDisabled).toBe('true');
+  expect(result.xrefTag).toBe('DIV');
+  expect(result.xrefHref).toBeNull();
+  expect(result.xrefDisabled).toBe('true');
+});
+
+test('embedded workspace links are observed when cross-document links are enabled', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Other document](./other.hvy#details)
+ <!--hvy:xref-card {"xrefTitle":"Other card","xrefTarget":"/docs/other.hvy#details"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: Array<{ href: string; kind: string; crossDocument: boolean; xrefTarget?: string }> = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      crossDocumentLinks: true,
+      async linkObserver(link) {
+        seen.push({
+          href: link.href,
+          kind: link.kind,
+          crossDocument: link.crossDocument,
+          xrefTarget: link.xrefTarget,
+        });
+        return {
+          attributes: { 'data-observed-workspace-link': link.kind },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    return {
+      seen,
+      textObserved: root.querySelector<HTMLAnchorElement>('.reader-block-text a')?.getAttribute('data-observed-workspace-link') ?? '',
+      xrefObserved: root.querySelector<HTMLAnchorElement>('.reader-xref-card')?.getAttribute('data-observed-workspace-link') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(
+    expect.arrayContaining([
+      { href: './other.hvy#details', kind: 'link', crossDocument: true, xrefTarget: undefined },
+      { href: '/docs/other.hvy#details', kind: 'xref-card', crossDocument: true, xrefTarget: '/docs/other.hvy#details' },
+    ])
+  );
+  expect(result.textObserved).toBe('link');
+  expect(result.xrefObserved).toBe('xref-card');
+});
+
 test('embedded plugin text renderer uses document link transforms', async ({ page }) => {
   await page.goto('/');
 

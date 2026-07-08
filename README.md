@@ -521,6 +521,24 @@ HVY.mountHvyViewer({
 Return `{ html }` to replace the rendered link with sanitized HTML, or return
 `null` / `undefined` to keep the default rendering.
 
+Cross-document HVY workspace links are disabled by default. Hosts can enable
+workspace paths in text links and xref cards with `crossDocumentLinks: true`;
+the embedded client still does not resolve or load the path. Enabled workspace
+links are reported to `linkObserver` with `crossDocument: true` and, for xref
+cards, `kind: 'xref-card'` plus `xrefTarget`.
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  crossDocumentLinks: true,
+  async linkObserver(link) {
+    if (!link.crossDocument) return null;
+    return { href: `/workspace-link?target=${encodeURIComponent(link.href)}` };
+  },
+});
+```
+
 Embedded hosts can also enable semantic filtering by providing a callback that
 selects candidate IDs from the AI-friendly request packet:
 

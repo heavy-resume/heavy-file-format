@@ -1101,6 +1101,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     getXrefTargetOptions,
     isXrefTargetValid,
     getEffectiveXrefTargetTagFilter: (block) => getEffectiveXrefTargetTagFilter(state.document, block),
+    isCrossDocumentLinksEnabled: () => state.crossDocumentLinksEnabled === true,
     getTableColumns,
     ensureContainerBlocks,
     ensureComponentListBlocks,

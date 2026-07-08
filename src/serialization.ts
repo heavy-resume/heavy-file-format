@@ -27,6 +27,7 @@ import {
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
 import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { classifyXrefTarget } from './workspace-links';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -199,6 +200,8 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'An xref-card needs `xrefTitle`, for example `<!--hvy:xref-card {"xrefTitle":"Label"}-->`.';
     case 'xref_card_missing_target':
       return 'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.';
+    case 'xref_card_invalid_target':
+      return 'Use a local id, `#id`, `./relative.hvy`, `../relative.hvy`, or `/workspace/path.hvy`; URL schemes are not valid xref targets.';
     default:
       return 'Return valid HVY with proper section and component directives.';
   }
@@ -723,11 +726,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, docume
         message: `Section "${sectionLabel}": xref-card is missing xrefTitle.`,
       });
     }
-    if (block.schema.xrefTarget.trim().length === 0) {
+    const xrefTarget = block.schema.xrefTarget.trim();
+    const classifiedTarget = classifyXrefTarget(xrefTarget);
+    if (xrefTarget.length === 0) {
       diagnostics.push({
         severity: 'warning',
         code: 'xref_card_missing_target',
         message: `Section "${sectionLabel}": xref-card is missing xrefTarget and will be disabled.`,
+      });
+    } else if (classifiedTarget.kind === 'invalid') {
+      diagnostics.push({
+        severity: 'error',
+        code: 'xref_card_invalid_target',
+        message: `Section "${sectionLabel}": xref-card has invalid xrefTarget "${escapeHvyJsonString(xrefTarget)}".`,
       });
     }
   }

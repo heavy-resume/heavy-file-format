@@ -30,6 +30,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { applyWorkspaceLinkRendering } from '../workspace-links';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
@@ -151,6 +152,7 @@ interface EditorRenderState {
   readerExpandableState: Record<string, boolean>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
+  crossDocumentLinksEnabled?: boolean;
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
   editingReusableDefinition?: boolean;
@@ -2141,7 +2143,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
-    })), deps.escapeHtml));
+      crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
+    }), state.crossDocumentLinksEnabled === true), deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {
@@ -2411,7 +2414,7 @@ function unwrapSingleParagraph(html: string): string {
   return inner;
 }
 
-function addExternalLinkTargets(html: string): string {
+function addExternalLinkTargets(html: string, crossDocumentLinksEnabled: boolean): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
@@ -2421,5 +2424,6 @@ function addExternalLinkTargets(html: string): string {
       anchor.setAttribute('rel', 'noopener noreferrer');
     }
   });
+  applyWorkspaceLinkRendering(template.content, crossDocumentLinksEnabled === true);
   return template.innerHTML;
 }

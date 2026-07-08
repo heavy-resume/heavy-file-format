@@ -61,7 +61,7 @@ Text components preserve standard Markdown unordered and ordered list syntax. Au
 
 Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
 
-Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, or internal fragment (`#id`) targets. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
 
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
@@ -427,7 +427,8 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 
 Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
-- `xrefTarget` is RECOMMENDED. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+- `xrefTarget` is RECOMMENDED. It MUST be either a local target id (`section-id`), an internal fragment target (`#section-id`), or a host-gated HVY workspace path beginning with `./`, `../`, or `/` and optionally followed by a fragment target. URL/scheme targets such as `http:`, `https:`, `mailto:`, and `file:` are not valid `xrefTarget` values. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+- Workspace-path xrefs are not filesystem paths. A leading `/` is relative to the host-defined HVY workspace root, not the host filesystem root. The reference implementation MUST NOT fetch, resolve, authorize, or traverse workspace-path xrefs; embedded hosts MAY explicitly enable cross-document links and handle enabled xrefs through the host link observer.
 - `xrefTargetTagFilter` is optional authoring metadata. When present, editors SHOULD filter target pickers to sections or components tagged with at least one listed tag. The value uses the same comma-separated tag syntax as `tags`; it does not affect rendering or link resolution.
 
 Reusable cross-reference card components can carry target picker filters:

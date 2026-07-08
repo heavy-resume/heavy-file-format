@@ -461,6 +461,7 @@ export interface AppState {
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
+  crossDocumentLinksEnabled?: boolean;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;

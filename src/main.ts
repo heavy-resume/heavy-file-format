@@ -107,6 +107,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chatContextProvider: null,
     chatSearchCache: null,
     embeddingProvider: createProxyEmbeddingProvider(),
+    crossDocumentLinksEnabled: false,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -467,6 +468,9 @@ editorRenderer = createEditorRenderer(
     },
     get currentView() {
       return state.currentView;
+    },
+    get crossDocumentLinksEnabled() {
+      return state.crossDocumentLinksEnabled;
     },
     get responsivePreview() {
       return state.responsivePreview;

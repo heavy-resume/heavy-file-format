@@ -894,3 +894,31 @@ hvy_version: 0.1
     'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.'
   );
 });
+
+test('xref-card URL scheme targets are invalid while workspace paths are valid', () => {
+  const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"links"}-->
+#! Links
+
+ <!--hvy:xref-card {"xrefTitle":"Remote","xrefTarget":"https://example.com/doc.hvy"}-->
+ <!--hvy:xref-card {"xrefTitle":"Relative","xrefTarget":"./other.hvy#summary"}-->
+ <!--hvy:xref-card {"xrefTitle":"Root","xrefTarget":"/docs/other.hvy"}-->
+`, '.hvy');
+
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'xref_card_invalid_target',
+      }),
+    ])
+  );
+  expect(result.diagnostics.filter((entry) => entry.code === 'xref_card_invalid_target')).toHaveLength(1);
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'xref_card_invalid_target');
+  expect(getHvyDiagnosticUsageHint(diagnostic!)).toBe(
+    'Use a local id, `#id`, `./relative.hvy`, `../relative.hvy`, or `/workspace/path.hvy`; URL schemes are not valid xref targets.'
+  );
+});

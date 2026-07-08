@@ -112,6 +112,7 @@ export interface HvyMountOptions {
   embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
+  crossDocumentLinks?: boolean;
   controls?: boolean;
   paletteId?: string | null;
   pdfStylePresets?: HvyPdfStylePreset[] | null;
@@ -211,7 +212,8 @@ function createEmbedState(
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
-  encryption?: HvyEncryptionOptions | null
+  encryption?: HvyEncryptionOptions | null,
+  crossDocumentLinksEnabled = false
 ): AppState {
   return {
     document,
@@ -224,6 +226,7 @@ function createEmbedState(
     chatContextProvider: null,
     chatSearchCache: null,
     embeddingProvider: null,
+    crossDocumentLinksEnabled,
     sessionStorageKey,
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
@@ -413,7 +416,9 @@ function renderComponentFragment(componentName: string, content: string, block: 
 
 function renderTextFragment(content: string): string {
   const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
-  return addExternalLinkTargets(markdownToReaderHtml(normalized));
+  return addExternalLinkTargets(markdownToReaderHtml(normalized, {
+    crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
+  }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true });
 }
 
 function ensureReaderRenderer(): ReaderRenderer {
@@ -1004,7 +1009,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     options.persistSessionState === true ? options.storageKey : null,
     options.attachmentStore ?? null,
-    options.encryption ?? null
+    options.encryption ?? null,
+    options.crossDocumentLinks === true
   ));
   let linkObserver = options.linkObserver ?? null;
   runtime.state.chatContext = options.chatContext ?? null;

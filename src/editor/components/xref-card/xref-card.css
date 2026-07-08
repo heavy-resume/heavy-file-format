@@ -93,6 +93,11 @@
   color: var(--hvy-text-muted);
 }
 
+.reader-xref-card.is-disabled-target {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .editor-xref-card.is-invalid-target .xref-target-picker input,
 .editor-xref-card.is-invalid-target .xref-target-picker select {
   border-color: var(--hvy-border-alt);

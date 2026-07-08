@@ -3,10 +3,10 @@ import { state } from './state';
 import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import type { VisualDocument } from './types';
+import { classifyXrefTarget, normalizeLocalXrefTarget } from './workspace-links';
 
 export function normalizeXrefTarget(target: unknown): string {
-  const trimmed = readXrefString(target);
-  return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  return normalizeLocalXrefTarget(target);
 }
 
 export interface XrefTargetOption {
@@ -49,11 +49,14 @@ export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFil
 }
 
 export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
-  const normalized = normalizeXrefTarget(target);
-  if (normalized.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(normalized)) {
+  const classified = classifyXrefTarget(target);
+  if (classified.kind === 'empty' || classified.kind === 'workspace') {
     return true;
   }
-  return getXrefTargetOptions(tagFilter).some((option) => option.value === normalized);
+  if (classified.kind === 'invalid') {
+    return false;
+  }
+  return getXrefTargetOptions(tagFilter).some((option) => option.value === classified.target);
 }
 
 export function getXrefTargetTagFilterForComponent(document: VisualDocument, componentName: string): string {

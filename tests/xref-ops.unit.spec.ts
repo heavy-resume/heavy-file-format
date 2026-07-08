@@ -73,6 +73,39 @@ hvy_version: 0.1
   expect(expectedResult).not.toContain(document.sections[0]?.key);
 });
 
+test('xref target validation accepts workspace paths and rejects URL schemes', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  expect(isXrefTargetValid('./other.hvy#target')).toBe(true);
+  expect(isXrefTargetValid('../shared/other.hvy')).toBe(true);
+  expect(isXrefTargetValid('/docs/other.hvy#target')).toBe(true);
+  expect(isXrefTargetValid('https://example.com')).toBe(false);
+  expect(isXrefTargetValid('mailto:person@example.com')).toBe(false);
+  expect(isXrefTargetValid('file:///tmp/example.hvy')).toBe(false);
+});
+
+test('xref target options do not treat workspace paths as local target ids', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  initState(createTestState(document));
+
+  expect(getXrefTargetOptions().map((option) => option.value)).toEqual(['summary']);
+});
+
 test('xref target options sort alphabetically by visible title with id tie-breakers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

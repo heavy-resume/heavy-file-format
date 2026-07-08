@@ -47,6 +47,12 @@ body {
   text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
 }
 
+.hvy-embed-layout .hvy-workspace-link-disabled {
+  color: var(--hvy-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .hvy-embed-layout :where(input),
 .hvy-embed-layout :where(select),
 .hvy-embed-layout :where(textarea) {

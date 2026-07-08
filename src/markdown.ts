@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 import { createTextFillInMarker } from './text-fill-in';
+import { renderWorkspaceLinksInHtml } from './workspace-links';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -102,6 +103,7 @@ export interface MarkdownRenderOptions {
   textLineStyles?: TextLineStyles;
   textLineStyleMode?: 'viewer' | 'editor';
   codeLanguageInputAttrs?: Record<string, string>;
+  crossDocumentLinksEnabled?: boolean;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
@@ -181,7 +183,10 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'viewer',
   });
-  return wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens));
+  return renderWorkspaceLinksInHtml(
+    wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens)),
+    options.crossDocumentLinksEnabled === true
+  );
 }
 
 function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRenderOptions, 'textLineStyles' | 'textLineStyleMode'>>): string {
@@ -581,7 +586,10 @@ export function normalizeMarkdownIndentation(markdown: string): string {
   return lines.map((line) => (line.startsWith(prefix) ? line.slice(minIndent) : line)).join('\n');
 }
 
-export function addExternalLinkTargets(html: string): string {
+export function addExternalLinkTargets(html: string, options: { crossDocumentLinksEnabled?: boolean } = {}): string {
+  if (typeof document === 'undefined') {
+    return renderWorkspaceLinksInHtml(addExternalLinkTargetsWithoutDom(html), options.crossDocumentLinksEnabled === true);
+  }
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
@@ -591,7 +599,16 @@ export function addExternalLinkTargets(html: string): string {
       anchor.setAttribute('rel', 'noopener noreferrer');
     }
   });
-  return template.innerHTML;
+  return renderWorkspaceLinksInHtml(template.innerHTML, options.crossDocumentLinksEnabled === true);
+}
+
+function addExternalLinkTargetsWithoutDom(html: string): string {
+  return html.replace(/<a\b([^>]*?)\bhref="(https?:\/\/[^"]*)"([^>]*)>/gi, (match, before, href, after) => {
+    const withTarget = /\btarget=/.test(match) ? match : `<a${before}href="${href}"${after} target="_blank">`;
+    return /\brel=/.test(withTarget)
+      ? withTarget
+      : withTarget.replace(/>$/, ' rel="noopener noreferrer">');
+  });
 }
 
 export function escapeRawHtml(markdown: string): string {

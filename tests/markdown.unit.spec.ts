@@ -146,6 +146,18 @@ test('renders mailto links from text markdown', () => {
   );
 });
 
+test('renders workspace markdown links disabled unless cross-document links are enabled', () => {
+  const disabled = markdownToReaderHtml('[Other](./other.hvy#summary) and [Root](/docs/root.hvy)');
+  expect(disabled).toContain('class="hvy-workspace-link-disabled"');
+  expect(disabled).toContain('aria-disabled="true"');
+  expect(disabled).not.toContain('href="./other.hvy#summary"');
+  expect(disabled).not.toContain('href="/docs/root.hvy"');
+
+  const enabled = markdownToReaderHtml('[Other](./other.hvy#summary)', { crossDocumentLinksEnabled: true });
+  expect(enabled).toContain('href="./other.hvy#summary"');
+  expect(enabled).toContain('data-hvy-cross-document="true"');
+});
+
 test('does not render markdown image syntax in text components', () => {
   expect(markdownToReaderHtml('Before ![Alt](https://example.invalid/image.png) after.')).toBe('<p>Before  after.</p>\n');
 });

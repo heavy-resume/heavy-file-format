@@ -16,10 +16,13 @@ import {
   toggleChatPanelOpen,
 } from '../src/chat/chat';
 import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged, prepareKeywordChatContext } from '../src/chat/chat-context';
+import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments } from '../src/chat/embedding-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
-import { deserializeDocument } from '../src/serialization';
-import type { HvyChatSearchIndexSnapshot } from '../src/types';
+import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
+import { searchDocuments } from '../src/search/documents';
+import { getAttachmentDescriptors } from '../src/attachment-store';
+import type { HvyChatSearchIndexSnapshot, HvyEmbeddingProvider } from '../src/types';
 
 afterEach(() => {
   setHostChatClient(null);
@@ -225,6 +228,251 @@ hvy_version: 0.1
   expect(context).toContain('alpha facts live here');
   expect(context).not.toContain('SECRET_FULL_DOCUMENT_ONLY');
   expect(context).not.toContain('hvy_version');
+});
+
+test('requestChatCompletion uses embedding retrieval from a host provider', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha implementation facts live here
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-note"}-->
+ beta accounting facts live here
+`, '.hvy');
+  const client = {
+    complete: vi.fn(async () => ({ output: 'Alpha answer.' })),
+  };
+  setHostChatClient(client);
+
+  await requestChatCompletion({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [{ id: '1', role: 'user', content: 'implementation alpha' }],
+    chatContext: { mode: 'embedding-retrieval', embeddingModel: 'text-embedding-ada-002', maxResults: 1, maxContextChars: 1_200 },
+    embeddingProvider: makeDeterministicEmbeddingProvider(),
+  });
+
+  const context = client.complete.mock.calls[0]?.[0].context ?? '';
+  expect(context).toContain('Retrieved document evidence:');
+  expect(context).toContain('alpha implementation facts live here');
+  expect(context).not.toContain('beta accounting facts live here');
+});
+
+test('buildEmbeddingChatContext persists and reuses a tail attachment cache', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  const provider = vi.fn(makeDeterministicEmbeddingProvider());
+
+  const firstResult = await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+  expect(document.attachments.some((attachment) => attachment.id.startsWith('embedding-index:'))).toBe(false);
+  materializePreparedEmbeddingAttachments(document);
+  const bytes = serializeDocumentBytes(document);
+  const roundTripped = deserializeDocumentBytes(bytes, '.hvy');
+  const embeddingAttachment = roundTripped.attachments.find((attachment) => attachment.id.startsWith('embedding-index:'));
+  const secondResult = await buildVectorChatContext({
+    document: roundTripped,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+  }, provider);
+
+  expect(firstResult.context).toContain('alpha facts');
+  expect(secondResult.context).toContain('alpha facts');
+  expect(embeddingAttachment?.meta.mediaType).toBe('application/vnd.hvy.embedding-index');
+  expect(new TextDecoder().decode(embeddingAttachment?.bytes ?? new Uint8Array())).not.toContain('"vectors"');
+  expect(provider).toHaveBeenCalledTimes(3);
+});
+
+test('buildEmbeddingChatContext reuses unchanged component vectors after edits', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+
+<!--hvy:text {"id":"beta-note"}-->
+ beta facts
+`, '.hvy');
+  const embeddedInputs: string[][] = [];
+  const provider: HvyEmbeddingProvider = vi.fn(async (request) => {
+    embeddedInputs.push(request.inputs.map((input) => input.text));
+    return makeDeterministicEmbeddingProvider()(request);
+  });
+
+  await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+  materializePreparedEmbeddingAttachments(document);
+  document.sections[0]!.blocks[1]!.text = ' beta facts changed';
+  markEmbeddingChatContextDocumentChanged(document);
+
+  await buildVectorChatContext({
+    document,
+    question: 'beta',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, provider);
+
+  const recordEmbeddingCalls = embeddedInputs.filter((inputs) => inputs.some((input) => input.includes('facts')));
+  expect(recordEmbeddingCalls[0]!.join('\n')).toContain('alpha facts');
+  expect(recordEmbeddingCalls[0]!.join('\n')).toContain('beta facts');
+  expect(recordEmbeddingCalls[1]).toHaveLength(1);
+  expect(recordEmbeddingCalls[1]![0]).toContain('beta facts changed');
+  expect(recordEmbeddingCalls[1]![0]).not.toContain('alpha facts');
+});
+
+test('persistPreparedEmbeddingAttachments routes embedding bytes through the attachment host', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.hvy');
+  await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, makeDeterministicEmbeddingProvider());
+  const stored = new Map<string, { bytes: Uint8Array; meta: Record<string, unknown> }>();
+
+  await persistPreparedEmbeddingAttachments(document, {
+    list: () => [],
+    recall: (id) => stored.get(id)?.bytes ?? null,
+    store: (id, bytes, meta) => {
+      stored.set(id, { bytes, meta });
+      return { id, meta: { ...meta, storage: 'external' }, length: bytes.length };
+    },
+    remove: () => {},
+  });
+
+  const descriptor = getAttachmentDescriptors(document).find((attachment) => attachment.id.startsWith('embedding-index:'));
+  expect(stored.size).toBe(1);
+  expect(descriptor?.meta.storage).toBe('external');
+  expect(descriptor?.length).toBe([...stored.values()][0]!.bytes.length);
+  expect(document.attachments.find((attachment) => attachment.id === descriptor?.id)?.bytes).toHaveLength(0);
+});
+
+test('buildEmbeddingChatContext does not persist embedding attachments for templates', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts
+`, '.thvy');
+
+  await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, makeDeterministicEmbeddingProvider());
+
+  expect(document.attachments.some((attachment) => attachment.id.startsWith('embedding-index:'))).toBe(false);
+});
+
+test('searchDocuments supports embedding mode across documents', async () => {
+  const alphaDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha implementation evidence
+`, '.hvy');
+  const betaDocument = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"beta"}-->
+#! Beta
+
+<!--hvy:text {"id":"beta-note"}-->
+ beta accounting evidence
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'implementation alpha',
+    mode: 'embedding',
+    embeddingProvider: makeDeterministicEmbeddingProvider(),
+    documents: [
+      { documentId: 'alpha-doc', documentTitle: 'Alpha Doc', document: alphaDocument },
+      { documentId: 'beta-doc', documentTitle: 'Beta Doc', document: betaDocument },
+    ],
+    maxResults: 1,
+  });
+
+  expect(expectedResult.mode).toBe('embedding');
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]?.documentId).toBe('alpha-doc');
+  expect(expectedResult.results[0]?.preview).toContain('alpha implementation evidence');
 });
 
 test('requestChatCompletion reports context preparation phases', async () => {
@@ -735,3 +983,21 @@ test('wrapChatResponseAsDocument injects chat response component defaults into f
 
   expect(getDocumentComponentDefaultCss(document.meta, 'xref-card')).toBe('margin-top: 0.25rem; margin-bottom: 0.25rem;');
 });
+
+function makeDeterministicEmbeddingProvider(): HvyEmbeddingProvider {
+  return (request) => request.inputs.map((input) => ({
+    id: input.id,
+    vector: getExpectedEmbeddingVector(input.text),
+  }));
+}
+
+function getExpectedEmbeddingVector(text: string): number[] {
+  const normalized = text.toLowerCase();
+  if (normalized.includes('alpha') || normalized.includes('implementation')) {
+    return [1, 0, 0];
+  }
+  if (normalized.includes('beta') || normalized.includes('accounting')) {
+    return [0, 1, 0];
+  }
+  return [0, 0, 1];
+}

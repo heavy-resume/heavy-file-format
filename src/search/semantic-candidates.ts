@@ -5,6 +5,7 @@ import { collectHvyComponentStructureReferences } from '../cli-core/request-stru
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getSectionId } from '../section-ops';
 import type {
+  HvyRetrievalChunk,
   HvySemanticFilterCandidate,
   HvySemanticFilterCandidateBudget,
   HvySemanticFilterRequest,
@@ -78,6 +79,22 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
     overallCandidateBudget: candidateBudget,
   });
   return { candidates, candidateBudget, windows };
+}
+
+export function buildSemanticRetrievalChunks(
+  document: VisualDocument,
+  options: { targetChunkChars?: number } = {}
+): HvyRetrievalChunk[] {
+  const targetChunkChars = Math.max(1, Math.floor(options.targetChunkChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS));
+  const candidates = buildSemanticFilterCandidates(document, { maxCandidateSummaryChars: UNLIMITED_CANDIDATE_SUMMARY_CHARS })
+    .sort((left, right) => left.documentOrder - right.documentOrder);
+  const candidateIdsWithDescendants = getCandidateIdsWithDescendants(candidates);
+  return candidates
+    .filter((candidate) => !candidateIdsWithDescendants.has(candidate.candidateId))
+    .flatMap((candidate): HvyRetrievalChunk[] => buildWindowCandidateChunks(candidate, targetChunkChars).map((chunk) => ({
+      ...chunk,
+      chunkId: getSemanticRetrievalChunkId(chunk),
+    })));
 }
 
 export function buildSemanticFilterWindowRequest(
@@ -463,6 +480,13 @@ function buildWindowCandidateChunks(
       end: range.end,
     },
   }));
+}
+
+function getSemanticRetrievalChunkId(candidate: HvySemanticFilterCandidate): string {
+  if (!candidate.windowChunk) {
+    return candidate.candidateId;
+  }
+  return `${candidate.candidateId}#chunk:${candidate.windowChunk.index + 1}:${candidate.windowChunk.start}-${candidate.windowChunk.end}`;
 }
 
 function getSemanticCandidatePromptChars(candidate: HvySemanticFilterCandidate): number {

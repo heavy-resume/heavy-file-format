@@ -105,12 +105,17 @@ export interface ChatState {
   cliSim: ChatCliSimState | null;
 }
 
-export type HvyChatContextMode = 'full-document' | 'keyword-retrieval';
+export type HvyChatContextMode = 'full-document' | 'keyword-retrieval' | 'embedding-retrieval';
 
 export interface HvyChatContextOptions {
   mode?: HvyChatContextMode;
   maxContextChars?: number;
   maxResults?: number;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  embeddingBatchSize?: number;
+  embeddingMinScore?: number;
+  persistEmbeddingsToAttachments?: boolean;
 }
 
 export interface HvyChatContextRequest {
@@ -159,6 +164,27 @@ export interface HvyChatContextResult {
 export interface HvyChatContextProvider {
   buildContext(request: HvyChatContextRequest): Promise<HvyChatContextResult> | HvyChatContextResult;
 }
+
+export interface HvyEmbeddingInput {
+  id: string;
+  text: string;
+}
+
+export interface HvyEmbeddingProviderRequest {
+  model: string;
+  inputs: HvyEmbeddingInput[];
+  dimensions?: number;
+  signal?: AbortSignal;
+}
+
+export interface HvyEmbeddingVector {
+  id: string;
+  vector: number[];
+}
+
+export type HvyEmbeddingProvider = (
+  request: HvyEmbeddingProviderRequest
+) => Promise<HvyEmbeddingVector[]> | HvyEmbeddingVector[];
 
 export interface HvyChatSearchIndexKey {
   documentId: string;
@@ -434,6 +460,7 @@ export interface AppState {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;

@@ -28,6 +28,7 @@ import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendi
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { bindChatThreadUi, captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { loadSessionState, saveSessionState } from './state-persistence';
@@ -105,6 +106,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chatContext: { mode: 'keyword-retrieval' },
     chatContextProvider: null,
     chatSearchCache: null,
+    embeddingProvider: createProxyEmbeddingProvider(),
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -810,7 +812,13 @@ function renderApp(): void {
                   state.document,
                   { escapeAttr, escapeHtml },
                   isViewerView ? 'qa' : 'document-edit',
-                  state.currentView === 'editor' || state.currentView === 'ai'
+                  state.currentView === 'editor' || state.currentView === 'ai',
+                  'reference',
+                  {
+                    chatContext: state.chatContext,
+                    embeddingAvailable: Boolean(state.embeddingProvider),
+                    canPersistEmbeddingCache: state.document.extension === '.hvy',
+                  }
                 )}
                 ${renderSearchFloatingSurface()}`
           }
@@ -931,7 +939,13 @@ function refreshChatSurface(): boolean {
     state.document,
     { escapeAttr, escapeHtml },
     state.currentView === 'viewer' ? 'qa' : 'document-edit',
-    state.currentView === 'editor' || state.currentView === 'ai'
+    state.currentView === 'editor' || state.currentView === 'ai',
+    'reference',
+    {
+      chatContext: state.chatContext,
+      embeddingAvailable: Boolean(state.embeddingProvider),
+      canPersistEmbeddingCache: state.document.extension === '.hvy',
+    }
   );
   const nextBackdrop = template.content.querySelector<HTMLElement>('.chat-backdrop');
   const nextDock = template.content.querySelector<HTMLElement>('.chat-dock');

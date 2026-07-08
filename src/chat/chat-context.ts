@@ -15,6 +15,7 @@ import type {
   VisualDocument,
 } from '../types';
 import { getDocumentAiContext } from '../document-ai-context';
+import { markEmbeddingChatContextDocumentChanged } from './embedding-context';
 
 const DEFAULT_MAX_RESULTS = 12;
 const MIN_RESULTS_BEFORE_GAP_CUTOFF = 2;
@@ -38,6 +39,7 @@ const documentRevisions = new WeakMap<VisualDocument, number>();
 export function markKeywordChatContextDocumentChanged(document: VisualDocument): void {
   documentRevisions.set(document, getKeywordDocumentRevision(document) + 1);
   pendingRuntimeIndexes.delete(document);
+  markEmbeddingChatContextDocumentChanged(document);
 }
 
 export function isKeywordChatContextPrepared(document: VisualDocument): boolean {

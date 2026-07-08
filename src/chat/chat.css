@@ -162,6 +162,32 @@
   grid-column: 1 / -1;
 }
 
+.chat-context-controls {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-bg-alt) 60%, transparent);
+}
+
+.chat-embedding-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.chat-embedding-controls.is-hidden {
+  display: none;
+}
+
+.chat-context-status {
+  margin: 0;
+  color: var(--hvy-text-alt);
+  font-size: 0.82rem;
+}
+
 .chat-setting input,
 .chat-setting select,
 .chat-composer textarea {
@@ -564,6 +590,10 @@
 
   .chat-setting-wide {
     grid-column: auto;
+  }
+
+  .chat-embedding-controls {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

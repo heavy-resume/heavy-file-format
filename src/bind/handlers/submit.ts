@@ -220,6 +220,7 @@ export function bindSubmit(app: HTMLElement): void {
                 chatContext: state.chatContext,
                 chatContextProvider: state.chatContextProvider,
                 chatSearchCache: state.chatSearchCache,
+                embeddingProvider: state.embeddingProvider,
                 allowDbQaTools: !answerDocumentEditChatAsQuestion,
                 onContextPreparation: async (event) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {

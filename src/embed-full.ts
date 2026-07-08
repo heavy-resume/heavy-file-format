@@ -17,7 +17,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -66,6 +66,8 @@ import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
+import { createProxyEmbeddingProvider } from './chat/embedding-provider';
+import { prepareEmbeddingChatContext } from './chat/embedding-context';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -115,6 +117,7 @@ import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pd
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
+import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
@@ -134,6 +137,7 @@ export interface HvyMountOptions {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   linkObserver?: HvyLinkObserver | null;
   controls?: boolean;
@@ -204,6 +208,7 @@ function createEmbedState(
     chatContext: null,
     chatContextProvider: null,
     chatSearchCache: null,
+    embeddingProvider: null,
     sessionStorageKey,
     persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
@@ -552,7 +557,12 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   { escapeAttr, escapeHtml },
                   state.currentView === 'viewer' ? 'qa' : 'document-edit',
                   state.currentView === 'editor' || state.currentView === 'ai',
-                  'embedded'
+                  'embedded',
+                  {
+                    chatContext: state.chatContext,
+                    embeddingAvailable: Boolean(state.embeddingProvider),
+                    canPersistEmbeddingCache: state.document.extension === '.hvy',
+                  }
                 )}
                 ${renderSearchFloatingSurface()}`
           }
@@ -979,6 +989,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   runtimeState.chatContext = options.chatContext ?? null;
   runtimeState.chatContextProvider = options.chatContextProvider ?? null;
   runtimeState.chatSearchCache = options.chatSearchCache ?? null;
+  runtimeState.embeddingProvider = options.embeddingProvider ?? null;
   const runtime = createStateRuntime(runtimeState);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
@@ -1034,6 +1045,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         if (state.document.encryption?.encrypted === true) {
           throw new Error('Encrypted HVY documents require serializeDocumentBytesAsync().');
         }
+        materializePreparedEmbeddingAttachments(state.document);
         return serializeDocumentBytes(state.document);
       });
     },
@@ -1201,6 +1213,7 @@ export type {
   ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
+export { createProxyEmbeddingProvider, prepareEmbeddingChatContext };
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
   HvyPdfExportOptions,
@@ -1248,6 +1261,8 @@ window.HVY = {
   createPdfExportPlanFromPrompt,
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
+  createProxyEmbeddingProvider,
+  prepareEmbeddingChatContext,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,

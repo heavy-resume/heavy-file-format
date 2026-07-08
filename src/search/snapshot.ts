@@ -101,7 +101,7 @@ export function normalizeSearchSnapshotInput(input?: HvySearchSnapshotInput | nu
   }
   const query = typeof input.query === 'string' ? input.query.trim() : '';
   const excludeTags = typeof input.excludeTags === 'string' ? input.excludeTags.trim() : '';
-  const mode = input.mode === 'semantic' ? 'semantic' : 'keyword';
+  const mode = input.mode === 'semantic' ? 'semantic' : input.mode === 'embedding' ? 'embedding' : 'keyword';
   const results = (input.results ?? []).map(normalizeSearchResult);
   const filterEnabled = input.filterEnabled === false ? false : Boolean((excludeTags || (query && results.length > 0)) && (input.filterEnabled ?? true));
   const activeResultId = normalizeActiveResultId(input.activeResultId ?? null, results);
@@ -120,6 +120,7 @@ export function normalizeSearchSnapshotInput(input?: HvySearchSnapshotInput | nu
 
 export function searchSnapshotToState(input?: HvySearchSnapshotInput | null): SearchState {
   const snapshot = normalizeSearchSnapshotInput(input);
+  const filterQueryMode = snapshot.mode === 'semantic' ? 'semantic' : 'keyword';
   const state = createDefaultSearchState();
   return {
     ...state,
@@ -130,8 +131,8 @@ export function searchSnapshotToState(input?: HvySearchSnapshotInput | null): Se
     activeTab: snapshot.filterEnabled ? 'filter' : 'search',
     filterEnabled: snapshot.filterEnabled,
     filterMode: snapshot.filterMode,
-    filterQueryMode: snapshot.mode,
-    submittedFilterQueryMode: snapshot.mode,
+    filterQueryMode,
+    submittedFilterQueryMode: filterQueryMode,
     excludeTags: snapshot.excludeTags,
     submittedExcludeTags: snapshot.excludeTags,
     activeResultId: snapshot.activeResultId ?? null,

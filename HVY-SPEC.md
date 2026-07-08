@@ -1212,6 +1212,20 @@ Rules:
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
+Embedding retrieval caches MAY be stored as derived tail attachments with ids
+beginning `embedding-index:` and media type
+`application/vnd.hvy.embedding-index`. These attachments are optional cache
+data for clients that rank document chunks with embedding vectors. The payload
+SHOULD use a binary layout with a small header identifying cache schema version,
+metadata length, vector count, and vector dimensions; compact metadata SHOULD
+identify the embedding model, optional dimensions, and stable chunk/content
+hashes; vector data SHOULD be stored as contiguous little-endian float32 values.
+Clients MUST treat embedding-index attachments as stale unless the model
+profile and chunk hashes match the current document-derived retrieval records.
+Deleting an embedding-index attachment MUST NOT change the document's authored
+content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
+embedding caches.
+
 ### 7.6 DB table plugin contract
 
 The first standardized plugin contract is `hvy.db-table`.

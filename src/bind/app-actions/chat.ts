@@ -2,6 +2,7 @@ import { state, getRenderApp } from '../../state';
 import { recordHistory } from '../../history';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, ENABLE_CHAT_CLI_SIM, stopChatRequest } from '../../chat/chat';
+import { prepareEmbeddingChatContext } from '../../chat/embedding-context';
 import { advanceDocumentEditCliSimStep, copyChatMessageToHvySection, runDocumentEditCliSimStep, type DocumentEditCliSimRequest } from '../../chat/chat-session';
 import type { AppActionHandler } from './types';
 
@@ -164,10 +165,59 @@ const runChatCliSimStep: AppActionHandler = () => {
     });
 };
 
+const buildChatEmbeddings: AppActionHandler = () => {
+  if (state.chat.isSending) {
+    return;
+  }
+  if (state.chatContext?.mode !== 'embedding-retrieval') {
+    state.chat.error = 'Select embedding retrieval before building embeddings.';
+    getRenderApp()();
+    return;
+  }
+  if (!state.embeddingProvider) {
+    state.chat.error = 'Embedding provider is not configured.';
+    getRenderApp()();
+    return;
+  }
+  if (state.document.extension !== '.hvy') {
+    state.chat.error = 'Embedding caches can only be attached to .hvy documents.';
+    getRenderApp()();
+    return;
+  }
+  const abortController = new AbortController();
+  state.chat.isSending = true;
+  state.chat.abortController = abortController;
+  state.chat.status = 'Building embedding cache...';
+  state.chat.error = null;
+  getRenderApp()();
+  void prepareEmbeddingChatContext(state.document, {
+    ...state.chatContext,
+    mode: 'embedding-retrieval',
+    embeddingModel: state.chatContext.embeddingModel?.trim() || 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, state.embeddingProvider, abortController.signal)
+    .then(() => {
+      state.chat.status = 'Embedding cache is ready for the next save.';
+      state.chat.error = null;
+    })
+    .catch((error: unknown) => {
+      state.chat.status = null;
+      state.chat.error = error instanceof Error ? error.message : 'Embedding cache build failed.';
+    })
+    .finally(() => {
+      if (state.chat.abortController === abortController) {
+        state.chat.abortController = null;
+      }
+      state.chat.isSending = false;
+      getRenderApp()();
+    });
+};
+
 export const chatActions: Record<string, AppActionHandler> = {
   'clear-chat-history': clearChatHistory,
   'copy-chat-response-to-hvy': copyChatResponseToHvy,
   'cancel-chat-request': cancelChatRequest,
   'toggle-chat-cli-sim': toggleChatCliSim,
   'run-chat-cli-sim-step': runChatCliSimStep,
+  'build-chat-embeddings': buildChatEmbeddings,
 };

@@ -12,6 +12,7 @@ import {
 import type { VisualDocument } from './types';
 import { encryptDocumentBytes, getEncryptionKey, type HvyEncryptionOptions } from './encryption';
 import { prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 
 export async function serializeMountedDocumentBytesAsync(
   document: VisualDocument,
@@ -19,6 +20,7 @@ export async function serializeMountedDocumentBytesAsync(
   serializer: HvyDocumentSerializerAdapter | null | undefined,
   encryption?: HvyEncryptionOptions | null
 ): Promise<Uint8Array> {
+  await persistPreparedEmbeddingAttachments(document, host);
   await prepareEncryptedComponentsForSerialization(document, encryption ?? null);
   if (!host && !serializer) {
     return maybeEncryptMountedDocument(document, await serializeDocumentBytesAsync(document, null, { encryption }), encryption ?? null);

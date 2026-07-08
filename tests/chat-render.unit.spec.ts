@@ -137,6 +137,48 @@ hvy_version: 0.1
   expect(html).not.toContain('data-field="chat-compaction-model"');
 });
 
+test('renderChatPanel shows reusable context controls for document questions', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa', false, 'reference', {
+    chatContext: { mode: 'embedding-retrieval', embeddingModel: 'text-embedding-ada-002' },
+    embeddingAvailable: true,
+    canPersistEmbeddingCache: true,
+  });
+
+  expect(html).toContain('data-field="chat-context-mode"');
+  expect(html).toContain('value="embedding-retrieval" selected');
+  expect(html).toContain('data-field="chat-embedding-model"');
+  expect(html).toContain('data-action="build-chat-embeddings"');
+  expect(html).toContain('Build Embeddings</button>');
+});
+
+test('renderChatPanel shows context controls for document editing question fallback', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit', false, 'reference', {
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingAvailable: true,
+    canPersistEmbeddingCache: true,
+  });
+
+  expect(html).toContain('data-field="chat-context-mode"');
+  expect(html).toContain('value="embedding-retrieval" selected');
+  expect(html).toContain('data-action="build-chat-embeddings"');
+});
+
 test('renderAiEditPopover shows provider and model controls together in the reference surface', () => {
   const state = {
     chat: createDefaultChatState(),

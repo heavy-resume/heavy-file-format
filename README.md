@@ -115,6 +115,51 @@ Notes:
 - API keys are consumed by the isolated local proxy in [`proxy/chat-proxy.ts`](proxy/chat-proxy.ts).
 - `VITE_OPENAI_API_KEY` / `VITE_ANTHROPIC_API_KEY` are still accepted as a dev fallback, but `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are preferred so keys are not exposed to the client bundle.
 
+The reference app's Ask This Document panel can switch between full-document,
+keyword retrieval, and embedding retrieval context. Choose Embedding retrieval,
+optionally edit the embedding model, then click Build Embeddings to prepare an
+embedding cache that will be attached the next time the current `.hvy` file is
+saved.
+
+Embedded hosts can use the same embedding-based RAG path instead of the built-in
+keyword retrieval. Hosts may provide any embedding provider callback; if they
+expose an OpenAI-compatible `/api/embeddings` endpoint, they can reuse HVY's
+proxy provider helper. HVY builds document chunks, ranks vectors in JavaScript,
+and packs the retrieved evidence into the chat context:
+
+```js
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'viewer',
+  chatClient,
+  chatContext: {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    maxResults: 8,
+    persistEmbeddingsToAttachments: true,
+  },
+  embeddingProvider: HVY.createProxyEmbeddingProvider(),
+});
+```
+
+When `persistEmbeddingsToAttachments` is true, HVY keeps the prepared cache in
+memory until the document is explicitly saved or serialized through the mount
+save API. At that point HVY treats the embedding index like any other derived
+attachment: if an `attachmentStore` is mounted, HVY calls
+`attachmentStore.store(id, bytes, meta)` and keeps the returned descriptor in
+the document; otherwise it writes the optional cache into the `.hvy` tail. The
+cache records the model profile, dimensions, stable chunk hashes, and contiguous
+float32 vectors in a binary `application/vnd.hvy.embedding-index` attachment.
+Changed chunks are re-embedded by chunk ID and hash, unchanged chunks reuse
+their stored vectors, and stale or deleted chunks are ignored. The attachment
+can be deleted without changing document content. `.thvy` files should not
+persist tail attachments.
+
+Hosts can also call `HVY.prepareEmbeddingChatContext(document, options,
+embeddingProvider)` directly to build the same cache without asking a chat
+question.
+
 ### Run In VS Code
 
 VS Code configuration is included:
@@ -483,6 +528,29 @@ const mount = HVY.mountHvyViewer({
 
 // Or apply a later meta-app selection without remounting the document.
 mount.setSearchSnapshot(selectedSnapshot);
+```
+
+Embedding mode uses the same document candidates, but ranks them locally with
+vectors returned by the host-provided embedding provider. This path is useful
+when a host already has an embedding endpoint or wants to reuse cached vectors
+for multi-file search:
+
+```js
+const response = await HVY.searchDocuments({
+  query: 'Find implementation experience',
+  mode: 'embedding',
+  embeddingModel: 'text-embedding-ada-002',
+  embeddingProvider: HVY.createProxyEmbeddingProvider(),
+  documents: [
+    { documentId: 'resume', documentTitle: 'Resume', document: resumeDocument },
+    { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
+  ],
+  maxResults: 20,
+});
+
+for (const result of response.results) {
+  console.log(result.documentId, result.score, result.targetRef);
+}
 ```
 
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a

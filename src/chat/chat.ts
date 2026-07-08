@@ -1,6 +1,6 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -17,6 +17,7 @@ import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
+import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon } from '../icons';
 import { measureAsyncPhase, measurePhase } from '../perf-trace';
@@ -36,6 +37,12 @@ export type ChatControlSurface = 'reference' | 'embedded';
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
+}
+
+export interface RenderChatContextControlsOptions {
+  chatContext?: HvyChatContextOptions | null;
+  embeddingAvailable?: boolean;
+  canPersistEmbeddingCache?: boolean;
 }
 
 interface ProxyChatMessage {
@@ -282,7 +289,8 @@ export function renderChatPanel(
   deps: RenderChatPanelDeps,
   mode: 'qa' | 'document-edit' = 'qa',
   canCopyToHvy = false,
-  surface: ChatControlSurface = 'reference'
+  surface: ChatControlSurface = 'reference',
+  contextControls: RenderChatContextControlsOptions = {}
 ): string {
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
@@ -366,6 +374,11 @@ export function renderChatPanel(
          </label>
        </div>`
     : '';
+  const contextControlsHtml = renderChatContextControls(chat, deps, {
+    chatContext: contextControls.chatContext,
+    embeddingAvailable: contextControls.embeddingAvailable === true,
+    canPersistEmbeddingCache: contextControls.canPersistEmbeddingCache === true && document.extension === '.hvy',
+  });
   const composerHtml = chat.isSending
     ? `<div class="chat-busy-footer">
          <span class="chat-composer-status">${deps.escapeHtml(chat.status ?? 'Working through the request...')}</span>
@@ -416,6 +429,7 @@ export function renderChatPanel(
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  ${providerControlsHtml}
+                 ${contextControlsHtml}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
                  ${cliSimHtml}
@@ -443,6 +457,60 @@ export function renderChatPanel(
       }
       <button type="button" class="hvy-floating-launcher chat-launcher" data-action="toggle-chat-panel" aria-expanded="${chat.panelOpen ? 'true' : 'false'}" aria-label="${chat.panelOpen ? 'Close chat' : 'Open chat'}">?</button>
     </div>
+  `;
+}
+
+function renderChatContextControls(
+  chat: ChatState,
+  deps: RenderChatPanelDeps,
+  options: RenderChatContextControlsOptions
+): string {
+  const mode = options.chatContext?.mode ?? 'full-document';
+  const embeddingModel = options.chatContext?.embeddingModel?.trim() || 'text-embedding-ada-002';
+  const embeddingSelected = mode === 'embedding-retrieval';
+  const embeddingAvailable = options.embeddingAvailable === true;
+  const canPersistEmbeddingCache = options.canPersistEmbeddingCache === true;
+  const buildDisabled = chat.isSending || !embeddingSelected || !embeddingAvailable || !canPersistEmbeddingCache;
+  const buildTitle = !embeddingSelected
+    ? 'Select embedding retrieval before building embeddings.'
+    : !embeddingAvailable
+    ? 'Embedding provider is not configured.'
+    : !canPersistEmbeddingCache
+    ? 'Embedding caches can only be attached to .hvy documents.'
+    : 'Build embedding cache for the next save';
+  return `
+    <section class="chat-context-controls" aria-label="Chat context">
+      <label class="chat-setting chat-setting-wide">
+        <span>Context method</span>
+        <select data-field="chat-context-mode" aria-label="Chat context method" ${chat.isSending ? 'disabled' : ''}>
+          <option value="keyword-retrieval"${mode === 'keyword-retrieval' ? ' selected' : ''}>Keyword retrieval</option>
+          <option value="embedding-retrieval"${embeddingSelected ? ' selected' : ''}>Embedding retrieval</option>
+          <option value="full-document"${mode === 'full-document' ? ' selected' : ''}>Full document</option>
+        </select>
+      </label>
+      <div class="chat-embedding-controls${embeddingSelected ? '' : ' is-hidden'}">
+        <label class="chat-setting">
+          <span>Embedding model</span>
+          <input
+            type="text"
+            data-field="chat-embedding-model"
+            value="${deps.escapeAttr(embeddingModel)}"
+            placeholder="text-embedding-ada-002"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Embedding model"
+            ${chat.isSending ? 'disabled' : ''}
+          />
+        </label>
+        <button type="button" class="secondary" data-action="build-chat-embeddings" title="${deps.escapeAttr(buildTitle)}"${buildDisabled ? ' disabled' : ''}>Build Embeddings</button>
+      </div>
+      ${
+        chat.status && !chat.isSending
+          ? `<p class="chat-context-status">${deps.escapeHtml(chat.status)}</p>`
+          : ''
+      }
+    </section>
   `;
 }
 
@@ -506,6 +574,7 @@ export async function requestChatCompletion(params: {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
@@ -519,6 +588,7 @@ export async function requestChatCompletion(params: {
     chatContext: params.chatContext,
     chatContextProvider: params.chatContextProvider,
     chatSearchCache: params.chatSearchCache,
+    embeddingProvider: params.embeddingProvider,
     onContextPreparation: params.onContextPreparation,
     signal: params.signal,
   });
@@ -548,6 +618,7 @@ async function buildQaChatContext(params: {
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   onContextPreparation?: HvyChatContextPreparationCallback;
   signal?: AbortSignal;
 }): Promise<string> {
@@ -575,6 +646,17 @@ async function buildQaChatContext(params: {
       mode: 'qa',
       ...(params.signal ? { signal: params.signal } : {}),
     }, params.chatContext, params.chatSearchCache ?? null);
+  } else if (params.chatContext?.mode === 'embedding-retrieval') {
+    contextStartedCached = isEmbeddingChatContextPrepared(params.document, params.chatContext);
+    await params.onContextPreparation?.({ phase: 'preparing-context', cached: contextStartedCached });
+    result = await buildEmbeddingChatContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      ...(params.signal ? { signal: params.signal } : {}),
+    }, params.chatContext, params.embeddingProvider ?? null);
   }
   if (result) {
     await params.onContextPreparation?.({ phase: 'context-ready', cached: contextStartedCached });

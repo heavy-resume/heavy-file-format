@@ -104,6 +104,17 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'chat-embedding-model' && target instanceof HTMLInputElement) {
+      state.chatContext = {
+        ...(state.chatContext ?? {}),
+        mode: 'embedding-retrieval',
+        embeddingModel: target.value,
+      };
+      state.chat.error = null;
+      state.chat.status = null;
+      return;
+    }
+
     if (field === 'ai-model' && target instanceof HTMLInputElement) {
       state.chat.settings.model = target.value;
       persistChatSettings(state.chat.settings);

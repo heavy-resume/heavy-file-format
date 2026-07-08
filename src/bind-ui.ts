@@ -26,6 +26,7 @@ import { exportCurrentDocumentPdf } from './pdf-export/action';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
+import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
@@ -189,6 +190,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
   downloadName.value = normalized;
+  await persistPreparedEmbeddingAttachments(state.document, state.attachmentHost);
   const bytes = serializeDocumentBytes(state.document);
   const sourceDocument = state.selectedExample ? SOURCE_DOCUMENTS_BY_EXAMPLE[state.selectedExample] : undefined;
   if (sourceDocument) {
@@ -634,11 +636,14 @@ export function bindUi(app: HTMLElement): void {
   });
 
   downloadBtn.addEventListener('click', () => {
-    const normalized = normalizeFilename(state.filename || 'document.hvy');
-    state.filename = normalized;
-    const bytes = serializeDocumentBytes(state.document);
-    downloadBinaryFile(normalized, bytes);
-    getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      const normalized = normalizeFilename(state.filename || 'document.hvy');
+      state.filename = normalized;
+      await persistPreparedEmbeddingAttachments(state.document, state.attachmentHost);
+      const bytes = serializeDocumentBytes(state.document);
+      downloadBinaryFile(normalized, bytes);
+      getRenderApp()();
+    });
   });
 
   exportPdfBtn?.addEventListener('click', () => {

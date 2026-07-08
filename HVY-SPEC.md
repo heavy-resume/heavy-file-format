@@ -1218,9 +1218,12 @@ beginning `embedding-index:` and media type
 data for clients that rank document chunks with embedding vectors. The payload
 SHOULD use a binary layout with a small header identifying cache schema version,
 metadata length, vector count, and vector dimensions; compact metadata SHOULD
-identify the embedding model, optional dimensions, and stable chunk/content
-hashes; vector data SHOULD be stored as contiguous little-endian float32 values.
-Clients MUST treat embedding-index attachments as stale unless the model
+identify the embedding model, optional dimensions, stable chunk/content hashes,
+and chunk descriptors needed to route a match back to document content. Chunk
+descriptors SHOULD include the chunk id, text, text hash, target kind, section
+key, optional block id, target id, optional target ref/path, display labels, and
+document order. Vector data SHOULD be stored as contiguous little-endian float32
+values. Clients MUST treat embedding-index attachments as stale unless the model
 profile and chunk hashes match the current document-derived retrieval records.
 Deleting an embedding-index attachment MUST NOT change the document's authored
 content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for

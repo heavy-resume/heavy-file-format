@@ -16,7 +16,7 @@ import type {
 } from '../types';
 
 const DEFAULT_MAX_RESULTS = 12;
-const DEFAULT_EMBEDDING_BATCH_SIZE = 64;
+const DEFAULT_EMBEDDING_BATCH_SIZE = 8;
 const DEFAULT_EMBEDDING_MODEL = 'text-embedding-ada-002';
 const MAX_RECORD_TEXT_CHARS = 2_000;
 const EMBEDDING_ATTACHMENT_MEDIA_TYPE = 'application/vnd.hvy.embedding-index';
@@ -53,7 +53,7 @@ interface EmbeddingIndexSnapshot {
   dimensions?: number;
   fingerprint: string;
   recordsHash: string;
-  entries: Array<HvyEmbeddingVector & { textHash: string }>;
+  entries: Array<HvyEmbeddingVector & { textHash: string; chunk?: HvyEmbeddingIndexChunk }>;
 }
 
 interface EmbeddingSearchResult {
@@ -67,6 +67,62 @@ export interface HvyEmbeddingCacheBuildStats {
   rebuiltChunks: number;
   missingVectors: number;
   alreadyPrepared: boolean;
+}
+
+export interface HvyEmbeddingIndexVector {
+  id: string;
+  textHash: string;
+  vector: number[];
+  model: string;
+  dimensions?: number;
+}
+
+export interface HvyEmbeddingIndexChunk {
+  id: string;
+  text: string;
+  textHash: string;
+  targetKind: HvyChatSearchIndexRecord['targetKind'];
+  sectionKey: string;
+  blockId?: string;
+  targetId: string;
+  targetRef?: string;
+  targetPath?: string;
+  label: string;
+  contextLabel?: string;
+  documentTitle?: string;
+  documentOrder: number;
+}
+
+export interface HvyEmbeddingIndexUpdatePlan {
+  model: string;
+  dimensions?: number;
+  chunks: HvyEmbeddingIndexChunk[];
+  reused: HvyEmbeddingIndexVector[];
+  inputsToEmbed: Array<{ id: string; text: string; textHash: string }>;
+  stale: HvyEmbeddingIndexVector[];
+  removed: HvyEmbeddingIndexVector[];
+}
+
+export interface HvyEmbeddingIndexUpdateRequest {
+  document: VisualDocument;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  targetChunkChars?: number;
+  overlapChars?: number;
+  existingVectors?: HvyEmbeddingIndexVector[];
+}
+
+export interface HvySerializedEmbeddingIndex {
+  attachmentId: string;
+  model: string;
+  dimensions?: number;
+  chunks: HvyEmbeddingIndexChunk[];
+  vectors: HvyEmbeddingIndexVector[];
+}
+
+export interface HvySerializedEmbeddingIndexReadOptions {
+  embeddingModel?: string;
+  embeddingDimensions?: number;
 }
 
 const runtimeIndexes = new WeakMap<VisualDocument, RuntimeEmbeddingIndex>();
@@ -131,6 +187,101 @@ export async function prepareEmbeddingChatContext(
     persistEmbeddingsToAttachments: options.persistEmbeddingsToAttachments === true,
   }, embeddingProvider, signal);
   return index.lastBuildStats;
+}
+
+export function planEmbeddingIndexUpdate(request: HvyEmbeddingIndexUpdateRequest): HvyEmbeddingIndexUpdatePlan {
+  const model = getEmbeddingModel({
+    embeddingModel: request.embeddingModel,
+    embeddingDimensions: request.embeddingDimensions,
+    embeddingBatchSize: undefined,
+  });
+  const dimensions = normalizeDimensions(request.embeddingDimensions);
+  const records = buildEmbeddingRecords(request.document, {
+    ...(request.targetChunkChars !== undefined ? { targetChunkChars: request.targetChunkChars } : {}),
+    ...(request.overlapChars !== undefined ? { overlapChars: request.overlapChars } : {}),
+  });
+  const chunks = records.map(recordToEmbeddingIndexChunk);
+  const currentHashes = new Map(records.map((record) => [record.key, record.textHash]));
+  const reused: HvyEmbeddingIndexVector[] = [];
+  const stale: HvyEmbeddingIndexVector[] = [];
+  const removed: HvyEmbeddingIndexVector[] = [];
+  const seen = new Set<string>();
+  for (const vector of request.existingVectors ?? []) {
+    const vectorDimensions = normalizeDimensions(vector.dimensions);
+    const matchesProfile = vector.model === model && vectorDimensions === dimensions;
+    const currentHash = currentHashes.get(vector.id);
+    const normalizedVector = normalizeVector(vector.vector);
+    if (!currentHash) {
+      removed.push(vector);
+    } else if (matchesProfile && currentHash === vector.textHash && normalizedVector) {
+      reused.push({
+        id: vector.id,
+        textHash: vector.textHash,
+        vector: normalizedVector,
+        model: vector.model,
+        ...(vectorDimensions !== undefined ? { dimensions: vectorDimensions } : {}),
+      });
+      seen.add(vector.id);
+    } else {
+      stale.push(vector);
+    }
+  }
+  const inputsToEmbed = records
+    .filter((record) => !seen.has(record.key))
+    .map((record) => ({
+      id: record.key,
+      text: record.embeddingText,
+      textHash: record.textHash,
+    }));
+  return {
+    model,
+    ...(dimensions !== undefined ? { dimensions } : {}),
+    chunks,
+    reused,
+    inputsToEmbed,
+    stale,
+    removed,
+  };
+}
+
+export function readEmbeddingIndexFromDocumentBytes(
+  bytes: Uint8Array,
+  extension: VisualDocument['extension'],
+  options: HvySerializedEmbeddingIndexReadOptions = {}
+): HvySerializedEmbeddingIndex[] {
+  if (extension !== '.hvy') {
+    return [];
+  }
+  const model = options.embeddingModel?.trim();
+  const dimensions = normalizeDimensions(options.embeddingDimensions);
+  return readTailAttachmentSlices(bytes)
+    .filter((attachment) => attachment.meta.mediaType === EMBEDDING_ATTACHMENT_MEDIA_TYPE)
+    .flatMap((attachment): HvySerializedEmbeddingIndex[] => {
+      try {
+        const snapshot = parseEmbeddingIndexBinary(attachment.bytes);
+        if (
+          (model && snapshot.model !== model)
+          || (dimensions !== undefined && snapshot.dimensions !== dimensions)
+        ) {
+          return [];
+        }
+        return [{
+          attachmentId: attachment.id,
+          model: snapshot.model,
+          ...(snapshot.dimensions !== undefined ? { dimensions: snapshot.dimensions } : {}),
+          chunks: snapshot.entries.flatMap((entry) => entry.chunk ? [entry.chunk] : []),
+          vectors: snapshot.entries.map((entry) => ({
+            id: entry.id,
+            textHash: entry.textHash,
+            vector: entry.vector,
+            model: snapshot.model,
+            ...(snapshot.dimensions !== undefined ? { dimensions: snapshot.dimensions } : {}),
+          })),
+        }];
+      } catch {
+        return [];
+      }
+    });
 }
 
 export async function buildEmbeddingChatContext(
@@ -364,10 +515,16 @@ async function buildRuntimeEmbeddingIndex(params: {
   return runtime;
 }
 
-function buildEmbeddingRecords(document: VisualDocument): EmbeddingRecord[] {
+function buildEmbeddingRecords(
+  document: VisualDocument,
+  options: { targetChunkChars?: number; overlapChars?: number } = {}
+): EmbeddingRecord[] {
   const documentTitle = getDocumentTitle(document);
   const aiContext = getDocumentAiContext(document);
-  return buildSemanticRetrievalChunks(document, { targetChunkChars: MAX_RECORD_TEXT_CHARS })
+  return buildSemanticRetrievalChunks(document, {
+    targetChunkChars: options.targetChunkChars ?? MAX_RECORD_TEXT_CHARS,
+    ...(options.overlapChars !== undefined ? { overlapChars: options.overlapChars } : {}),
+  })
     .map((candidate): EmbeddingRecord => {
       const text = truncateText(candidate.summary, MAX_RECORD_TEXT_CHARS);
       const record: HvyChatSearchIndexRecord = {
@@ -395,6 +552,24 @@ function buildEmbeddingRecords(document: VisualDocument): EmbeddingRecord[] {
         textHash: hashString(embeddingText),
       };
     });
+}
+
+function recordToEmbeddingIndexChunk(record: EmbeddingRecord): HvyEmbeddingIndexChunk {
+  return {
+    id: record.key,
+    text: record.embeddingText,
+    textHash: record.textHash,
+    targetKind: record.targetKind,
+    sectionKey: record.sectionKey,
+    ...(record.blockId ? { blockId: record.blockId } : {}),
+    targetId: record.targetId,
+    ...(record.targetRef ? { targetRef: record.targetRef } : {}),
+    ...(record.targetPath ? { targetPath: record.targetPath } : {}),
+    label: record.label,
+    ...(record.contextLabel ? { contextLabel: record.contextLabel } : {}),
+    ...(record.documentTitle ? { documentTitle: record.documentTitle } : {}),
+    documentOrder: record.documentOrder,
+  };
 }
 
 function buildRecordEmbeddingText(record: HvyChatSearchIndexRecord): string {
@@ -622,6 +797,68 @@ function readEmbeddingAttachment(document: VisualDocument, profile: EmbeddingInd
   return null;
 }
 
+function readTailAttachmentSlices(bytes: Uint8Array): Array<{ id: string; meta: Record<string, unknown>; bytes: Uint8Array }> {
+  const sentinel = new TextEncoder().encode('\n--HVY-TAIL--\n');
+  const sentinelIndex = lastIndexOfBytes(bytes, sentinel);
+  if (sentinelIndex < 0) {
+    return [];
+  }
+  const prefixText = new TextDecoder().decode(bytes.slice(0, sentinelIndex)).replace(/\r\n/g, '\n');
+  const directives: Array<{ id: string; meta: Record<string, unknown>; length: number }> = [];
+  let cursor = prefixText.length;
+  while (cursor > 0) {
+    const previousNewline = prefixText.lastIndexOf('\n', cursor - 1);
+    const lineStart = previousNewline + 1;
+    const line = prefixText.slice(lineStart, cursor).trim();
+    const match = line.match(/^<!--hvy:tail\s+(\{.*\})\s*-->$/);
+    if (!match) {
+      break;
+    }
+    const parsed = parseTailAttachmentDirective(match[1]!);
+    if (!parsed) {
+      return [];
+    }
+    directives.unshift(parsed);
+    cursor = previousNewline;
+  }
+  if (directives.length === 0) {
+    return [];
+  }
+  const tailStart = sentinelIndex + sentinel.length;
+  let offset = 0;
+  return directives.flatMap((directive) => {
+    const start = tailStart + offset;
+    const end = start + directive.length;
+    offset += directive.length;
+    if (start < tailStart || end > bytes.length) {
+      return [];
+    }
+    return {
+      id: directive.id,
+      meta: directive.meta,
+      bytes: bytes.slice(start, end),
+    };
+  });
+}
+
+function parseTailAttachmentDirective(source: string): { id: string; meta: Record<string, unknown>; length: number } | null {
+  try {
+    const parsed = JSON.parse(source);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    const meta = parsed as Record<string, unknown>;
+    const id = typeof meta.id === 'string' ? meta.id : '';
+    const length = typeof meta.length === 'number' && Number.isFinite(meta.length) ? Math.floor(meta.length) : -1;
+    if (!id || length < 0) {
+      return null;
+    }
+    return { id, meta, length };
+  } catch {
+    return null;
+  }
+}
+
 function parseEmbeddingAttachmentBytes(bytes: Uint8Array, profile: EmbeddingIndexProfile): EmbeddingIndexSnapshot | null {
   try {
     const parsed = parseEmbeddingIndexBinary(bytes);
@@ -654,7 +891,7 @@ function buildEmbeddingAttachment(runtime: RuntimeEmbeddingIndex): { id: string;
     entries: runtime.records.flatMap((record) => {
       const vector = runtime.vectors.get(record.key);
       const textHash = runtime.textHashes.get(record.key);
-      return vector && textHash === record.textHash ? [{ id: record.key, textHash, vector }] : [];
+      return vector && textHash === record.textHash ? [{ id: record.key, textHash, vector, chunk: recordToEmbeddingIndexChunk(record) }] : [];
     }),
   };
   return {
@@ -680,6 +917,7 @@ function serializeEmbeddingIndexBinary(snapshot: EmbeddingIndexSnapshot): Uint8A
     recordsHash: snapshot.recordsHash,
     ids: snapshot.entries.map((entry) => entry.id),
     hashes: snapshot.entries.map((entry) => entry.textHash),
+    chunks: snapshot.entries.map((entry) => entry.chunk ?? null),
   }));
   const vectorBytes = vectorCount * dimensionCount * Float32Array.BYTES_PER_ELEMENT;
   const bytes = new Uint8Array(EMBEDDING_INDEX_HEADER_SIZE + metadata.length + vectorBytes);
@@ -730,6 +968,7 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
     recordsHash?: unknown;
     ids?: unknown;
     hashes?: unknown;
+    chunks?: unknown;
   };
   if (
     metadata.version !== EMBEDDING_INDEX_VERSION
@@ -738,8 +977,10 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
     || typeof metadata.recordsHash !== 'string'
     || !Array.isArray(metadata.ids)
     || !Array.isArray(metadata.hashes)
+    || !Array.isArray(metadata.chunks)
     || metadata.ids.length !== vectorCount
     || metadata.hashes.length !== vectorCount
+    || metadata.chunks.length !== vectorCount
     || metadata.ids.some((id) => typeof id !== 'string')
     || metadata.hashes.some((hash) => typeof hash !== 'string')
   ) {
@@ -748,17 +989,24 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
   if (metadata.dimensions !== undefined && (typeof metadata.dimensions !== 'number' || !Number.isFinite(metadata.dimensions))) {
     throw new Error('Embedding index attachment has invalid dimensions.');
   }
-  const entries: Array<HvyEmbeddingVector & { textHash: string }> = [];
+  const entries: Array<HvyEmbeddingVector & { textHash: string; chunk?: HvyEmbeddingIndexChunk }> = [];
   let offset = EMBEDDING_INDEX_HEADER_SIZE + metadataLength;
   const ids = metadata.ids as string[];
   const hashes = metadata.hashes as string[];
+  const chunks = metadata.chunks as unknown[];
   for (const [entryIndex, id] of ids.entries()) {
     const vector: number[] = [];
     for (let index = 0; index < dimensionCount; index += 1) {
       vector.push(view.getFloat32(offset, true));
       offset += Float32Array.BYTES_PER_ELEMENT;
     }
-    entries.push({ id, textHash: hashes[entryIndex]!, vector });
+    const chunk = normalizeEmbeddingIndexChunk(chunks[entryIndex]);
+    entries.push({
+      id,
+      textHash: hashes[entryIndex]!,
+      vector,
+      ...(chunk ? { chunk } : {}),
+    });
   }
   return {
     version: EMBEDDING_INDEX_VERSION,
@@ -767,6 +1015,41 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
     fingerprint: metadata.fingerprint,
     recordsHash: metadata.recordsHash,
     entries,
+  };
+}
+
+function normalizeEmbeddingIndexChunk(value: unknown): HvyEmbeddingIndexChunk | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const chunk = value as Partial<HvyEmbeddingIndexChunk>;
+  if (
+    typeof chunk.id !== 'string'
+    || typeof chunk.text !== 'string'
+    || typeof chunk.textHash !== 'string'
+    || (chunk.targetKind !== 'section' && chunk.targetKind !== 'block')
+    || typeof chunk.sectionKey !== 'string'
+    || typeof chunk.targetId !== 'string'
+    || typeof chunk.label !== 'string'
+    || typeof chunk.documentOrder !== 'number'
+    || !Number.isFinite(chunk.documentOrder)
+  ) {
+    return null;
+  }
+  return {
+    id: chunk.id,
+    text: chunk.text,
+    textHash: chunk.textHash,
+    targetKind: chunk.targetKind,
+    sectionKey: chunk.sectionKey,
+    ...(typeof chunk.blockId === 'string' ? { blockId: chunk.blockId } : {}),
+    targetId: chunk.targetId,
+    ...(typeof chunk.targetRef === 'string' ? { targetRef: chunk.targetRef } : {}),
+    ...(typeof chunk.targetPath === 'string' ? { targetPath: chunk.targetPath } : {}),
+    label: chunk.label,
+    ...(typeof chunk.contextLabel === 'string' ? { contextLabel: chunk.contextLabel } : {}),
+    ...(typeof chunk.documentTitle === 'string' ? { documentTitle: chunk.documentTitle } : {}),
+    documentOrder: chunk.documentOrder,
   };
 }
 
@@ -857,6 +1140,25 @@ function hashString(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(16);
+}
+
+function lastIndexOfBytes(source: Uint8Array, needle: Uint8Array): number {
+  if (needle.length === 0 || source.length < needle.length) {
+    return -1;
+  }
+  for (let index = source.length - needle.length; index >= 0; index -= 1) {
+    let matches = true;
+    for (let needleIndex = 0; needleIndex < needle.length; needleIndex += 1) {
+      if (source[index + needleIndex] !== needle[needleIndex]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

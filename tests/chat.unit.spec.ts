@@ -16,7 +16,7 @@ import {
   toggleChatPanelOpen,
 } from '../src/chat/chat';
 import { applyScoreGapCutoff, buildKeywordChatContext, markKeywordChatContextDocumentChanged, prepareKeywordChatContext } from '../src/chat/chat-context';
-import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments, prepareEmbeddingChatContext } from '../src/chat/embedding-context';
+import { buildEmbeddingChatContext as buildVectorChatContext, materializePreparedEmbeddingAttachments, markEmbeddingChatContextDocumentChanged, persistPreparedEmbeddingAttachments, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from '../src/chat/embedding-context';
 import { wrapChatResponseAsDocument } from '../src/chat/chat-response-document';
 import { getDocumentComponentDefaultCss } from '../src/document-component-defaults';
 import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
@@ -447,6 +447,92 @@ hvy_version: 0.1
   expect(expectedResult.reusedChunks).toBe(firstStats.totalChunks - 1);
 });
 
+test('planEmbeddingIndexUpdate returns headless chunk inputs for external embedding storage', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-note"}-->
+ alpha implementation evidence
+`, '.hvy');
+
+  const expectedResult = planEmbeddingIndexUpdate({
+    document,
+    embeddingModel: 'text-embedding-ada-002',
+  });
+
+  expect(expectedResult.model).toBe('text-embedding-ada-002');
+  expect(expectedResult.chunks).toHaveLength(1);
+  expect(expectedResult.chunks[0]!.id).toBe('section:/body/summary');
+  expect(expectedResult.chunks[0]!.text).toContain('alpha implementation evidence');
+  expect(expectedResult.inputsToEmbed).toEqual([{
+    id: expectedResult.chunks[0]!.id,
+    text: expectedResult.chunks[0]!.text,
+    textHash: expectedResult.chunks[0]!.textHash,
+  }]);
+  expect(expectedResult.reused).toEqual([]);
+  expect(expectedResult.stale).toEqual([]);
+  expect(expectedResult.removed).toEqual([]);
+});
+
+test('planEmbeddingIndexUpdate reuses valid vectors and separates stale and removed vectors', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"summary-note"}-->
+ alpha implementation evidence
+
+<!--hvy: {"id":"details"}-->
+#! Details
+
+<!--hvy:text {"id":"details-note"}-->
+ beta accounting evidence
+`, '.hvy');
+  const initialPlan = planEmbeddingIndexUpdate({
+    document,
+    embeddingModel: 'text-embedding-ada-002',
+  });
+  const summaryChunk = initialPlan.chunks.find((chunk) => chunk.id === 'section:/body/summary')!;
+  const detailsChunk = initialPlan.chunks.find((chunk) => chunk.id === 'section:/body/details')!;
+
+  const expectedResult = planEmbeddingIndexUpdate({
+    document,
+    embeddingModel: 'text-embedding-ada-002',
+    existingVectors: [
+      {
+        id: summaryChunk.id,
+        textHash: summaryChunk.textHash,
+        vector: [1, 0, 0],
+        model: 'text-embedding-ada-002',
+      },
+      {
+        id: detailsChunk.id,
+        textHash: 'old-hash',
+        vector: [0, 1, 0],
+        model: 'text-embedding-ada-002',
+      },
+      {
+        id: 'section:/body/removed',
+        textHash: 'removed-hash',
+        vector: [0, 0, 1],
+        model: 'text-embedding-ada-002',
+      },
+    ],
+  });
+
+  expect(expectedResult.reused.map((entry) => entry.id)).toEqual([summaryChunk.id]);
+  expect(expectedResult.stale.map((entry) => entry.id)).toEqual([detailsChunk.id]);
+  expect(expectedResult.removed.map((entry) => entry.id)).toEqual(['section:/body/removed']);
+  expect(expectedResult.inputsToEmbed.map((entry) => entry.id)).toEqual([detailsChunk.id]);
+});
+
 test('persistPreparedEmbeddingAttachments routes embedding bytes through the attachment host', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -486,6 +572,49 @@ hvy_version: 0.1
   expect(descriptor?.meta.storage).toBe('external');
   expect(descriptor?.length).toBe([...stored.values()][0]!.bytes.length);
   expect(document.attachments.find((attachment) => attachment.id === descriptor?.id)?.bytes).toHaveLength(0);
+});
+
+test('readEmbeddingIndexFromDocumentBytes returns stored vectors and chunk metadata from the hvy tail', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"alpha-note"}-->
+ alpha facts for file cache lookup
+`, '.hvy');
+
+  await buildVectorChatContext({
+    document,
+    question: 'alpha',
+    messages: [],
+    maxContextChars: 1_000,
+    mode: 'qa',
+  }, {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    persistEmbeddingsToAttachments: true,
+  }, makeDeterministicEmbeddingProvider());
+  materializePreparedEmbeddingAttachments(document);
+
+  const expectedResult = readEmbeddingIndexFromDocumentBytes(serializeDocumentBytes(document), '.hvy', {
+    embeddingModel: 'text-embedding-ada-002',
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.attachmentId).toMatch(/^embedding-index:/);
+  expect(expectedResult[0]!.model).toBe('text-embedding-ada-002');
+  expect(expectedResult[0]!.vectors).toHaveLength(1);
+  expect(expectedResult[0]!.chunks).toHaveLength(1);
+  expect(expectedResult[0]!.chunks[0]!.id).toBe(expectedResult[0]!.vectors[0]!.id);
+  expect(expectedResult[0]!.chunks[0]!.textHash).toBe(expectedResult[0]!.vectors[0]!.textHash);
+  expect(expectedResult[0]!.chunks[0]!.text).toContain('alpha facts for file cache lookup');
+  expect(expectedResult[0]!.vectors[0]!.vector.length).toBeGreaterThan(0);
+  expect(readEmbeddingIndexFromDocumentBytes(serializeDocumentBytes(document), '.hvy', {
+    embeddingModel: 'different-model',
+  })).toEqual([]);
 });
 
 test('buildEmbeddingChatContext does not persist embedding attachments for templates', async () => {

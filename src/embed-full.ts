@@ -67,7 +67,7 @@ import { runButtonVisibilityScripts } from './editor/components/button/button-ac
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
-import { prepareEmbeddingChatContext } from './chat/embedding-context';
+import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -1213,7 +1213,15 @@ export type {
   ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
-export { createProxyEmbeddingProvider, prepareEmbeddingChatContext };
+export { createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes };
+export type {
+  HvyEmbeddingIndexChunk,
+  HvyEmbeddingIndexUpdatePlan,
+  HvyEmbeddingIndexUpdateRequest,
+  HvyEmbeddingIndexVector,
+  HvySerializedEmbeddingIndex,
+  HvySerializedEmbeddingIndexReadOptions,
+} from './chat/embedding-context';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
   HvyPdfExportOptions,
@@ -1262,7 +1270,9 @@ window.HVY = {
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   createProxyEmbeddingProvider,
+  planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,
+  readEmbeddingIndexFromDocumentBytes,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   searchDocuments,

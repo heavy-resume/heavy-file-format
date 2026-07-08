@@ -64,7 +64,7 @@ import type { HvyPdfExportOptions } from './pdf-export/types';
 import { normalizePdfStylePresets, type HvyPdfStylePreset } from './pdf-style-presets';
 import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export/planning';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
-import { prepareEmbeddingChatContext } from './chat/embedding-context';
+import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -1237,7 +1237,17 @@ export type {
 } from './ai-document-edit';
 export type { HvyEmbeddingInput, HvyEmbeddingProvider, HvyEmbeddingProviderRequest, HvyEmbeddingVector, ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
 export { createProxyEmbeddingProvider };
+export { planEmbeddingIndexUpdate };
 export { prepareEmbeddingChatContext };
+export { readEmbeddingIndexFromDocumentBytes };
+export type {
+  HvyEmbeddingIndexChunk,
+  HvyEmbeddingIndexUpdatePlan,
+  HvyEmbeddingIndexUpdateRequest,
+  HvyEmbeddingIndexVector,
+  HvySerializedEmbeddingIndex,
+  HvySerializedEmbeddingIndexReadOptions,
+} from './chat/embedding-context';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
   HvyPdfExportOptions,
@@ -1290,7 +1300,9 @@ declare global {
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       createProxyEmbeddingProvider: typeof createProxyEmbeddingProvider;
+      planEmbeddingIndexUpdate: typeof planEmbeddingIndexUpdate;
       prepareEmbeddingChatContext: typeof prepareEmbeddingChatContext;
+      readEmbeddingIndexFromDocumentBytes: typeof readEmbeddingIndexFromDocumentBytes;
       getPdfExportPromptTemplates: typeof getPdfExportPromptTemplates;
       renderPdfExportPromptTemplate: typeof renderPdfExportPromptTemplate;
       mountHvy: typeof mountHvy;
@@ -1318,7 +1330,9 @@ window.HVY = {
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   createProxyEmbeddingProvider,
+  planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,
+  readEmbeddingIndexFromDocumentBytes,
   getPdfExportPromptTemplates,
   renderPdfExportPromptTemplate,
   mountHvy,

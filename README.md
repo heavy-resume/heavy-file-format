@@ -160,6 +160,72 @@ Hosts can also call `HVY.prepareEmbeddingChatContext(document, options,
 embeddingProvider)` directly to build the same cache without asking a chat
 question.
 
+Desktop or workspace hosts that store embeddings outside HVY can use the
+headless planner instead. The planner parses the current document structure into
+section-scoped embedding chunks and compares them against vectors from the
+host's own store:
+
+```js
+const document = HVY.deserializeDocumentBytes(bytes, '.hvy');
+const existingVectors = await vectorDb.loadForFile(fileId);
+
+const plan = HVY.planEmbeddingIndexUpdate({
+  document,
+  embeddingModel: 'text-embedding-ada-002',
+  existingVectors,
+});
+
+const embedded = await embeddingProvider({
+  model: plan.model,
+  inputs: plan.inputsToEmbed,
+});
+const inputsById = new Map(plan.inputsToEmbed.map((input) => [input.id, input]));
+
+await vectorDb.upsert(fileId, [
+  ...plan.reused,
+  ...embedded.flatMap((entry) => {
+    const input = inputsById.get(entry.id);
+    if (!input) return [];
+    return {
+      id: entry.id,
+      textHash: input.textHash,
+      vector: entry.vector,
+      model: plan.model,
+      dimensions: plan.dimensions,
+    };
+  }),
+]);
+await vectorDb.remove(fileId, plan.removed);
+```
+
+`plan.inputsToEmbed` contains only missing or stale chunks. A stored vector is
+reused when its model, dimensions, chunk id, and chunk text hash still match.
+This lets a desktop app index unopened `.hvy` files by loading them headlessly,
+while keeping ownership of the vector database and file discovery.
+
+If a `.hvy` file already contains an embedding cache attachment, hosts can read
+that stored index directly from serialized bytes without deserializing the
+document:
+
+```js
+const indexes = HVY.readEmbeddingIndexFromDocumentBytes(bytes, '.hvy', {
+  embeddingModel: 'text-embedding-ada-002',
+});
+
+await vectorDb.upsert(fileId, indexes.flatMap((index) =>
+  index.vectors.map((vector, entryIndex) => ({
+    ...vector,
+    chunk: index.chunks[entryIndex],
+  }))
+));
+```
+
+This byte-level reader returns existing vectors plus their chunk metadata. It is
+useful for reusing file-stored caches as a cross-document search substrate. To
+validate whether those vectors are still current for edited document content,
+deserialize headlessly and run `HVY.planEmbeddingIndexUpdate(...)` against the
+host's stored vectors.
+
 ### Run In VS Code
 
 VS Code configuration is included:

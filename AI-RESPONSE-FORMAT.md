@@ -33,6 +33,18 @@ Minimal `xref-card` example:
 <!--hvy:xref-card {"xrefTitle":"Heavy Stack","xrefDetail":"Project","xrefTarget":"anchor-without-hash"}-->
 ```
 
+When presenting multiple advanced components such as xrefs as a list, use a `component-list` with one numbered `component-list:N` slot per xref-card. Do not put HVY components inside Markdown bulleted lists.
+
+Example with xrefs
+
+```markdown
+<!--hvy:component-list {"componentListComponent":"xref-card","componentListItemLabel":"reference"}-->
+ <!--hvy:component-list:0 {}>
+  <!--hvy:xref-card {"xrefTitle":"Foo","xrefDetail":"Relevant detail","xrefTarget":"foo"}-->
+ <!--hvy:component-list:1 {}>
+  <!--hvy:xref-card {"xrefTitle":"Bar","xrefDetail":"Relevant detail","xrefTarget":"bar"}-->
+```
+
 Use `expandable` when:
 - Short info thats suitable for someone who may not care about details.
 - Use content exponent when there's extra.

@@ -499,6 +499,10 @@ function parseBlocks(
       return;
     }
 
+    if (isStructuralHvyClosingComment(line)) {
+      return;
+    }
+
     const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
@@ -637,6 +641,10 @@ function parseBlocks(
     ...block,
     schema: schemaFromUnknown(schemas[index] ?? block.schema, new WeakSet<object>(), documentMeta),
   }));
+}
+
+function isStructuralHvyClosingComment(line: string): boolean {
+  return /^<!--\s*\/\s*hvy:(?!(?:alt|nowrap)\b)[a-z][a-z0-9-]*(?::[a-z0-9-]+)*\s*-->$/i.test(line.trim());
 }
 
 function mapParserErrorToDiagnostic(message: string): HvyDiagnostic {

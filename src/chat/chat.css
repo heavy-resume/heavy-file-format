@@ -390,6 +390,33 @@
   overflow-wrap: anywhere;
 }
 
+.chat-bubble-body code {
+  padding: 0.08rem 0.26rem;
+  border-radius: 4px;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  font: 0.94em/1.45 "JetBrains Mono", "Fira Code", monospace;
+}
+
+.chat-bubble-body pre {
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 8px;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+}
+
+.chat-bubble-body pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
 .chat-hvy-response,
 .chat-hvy-section-body,
 .chat-hvy-component-list,

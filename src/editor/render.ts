@@ -849,11 +849,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const contentBody = hasExpandedContent ? contentHtml : '<div class="expandable-passive-empty-ghost">Empty expanded content</div>';
       const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" style="${stubPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubBody}</div></div></div>`;
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><span class="expandable-reader-cue" aria-hidden="true"></span><div class="expand-stub">${stubBody}</div></div></div>`;
       const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentBody}</div></div>`;
       const collapsedContentPreview = `<div class="expandable-pane expandable-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="false">${contentBody}</div></div>`;
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="false"><span class="expandable-reader-cue" aria-hidden="true"></span>${contentBody}</div></div>`;
       const body = !hasStubContent && !hasExpandedContent
         ? `${stubToggle}${expandedPanel}`
         : expanded

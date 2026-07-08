@@ -18,7 +18,8 @@ import {
   type ProviderToolState,
   type ToolProvider,
 } from '../src/chat/provider-tools';
-import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
+import { runHvyDocumentBlockLinter } from '../src/cli-core/document-block-linter';
+import { deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, type HvyDiagnostic, wrapHvyFragmentAsDocument } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_EMBEDDINGS_API_URL = 'https://api.openai.com/v1/embeddings';
@@ -84,6 +85,13 @@ interface ProviderCompletion {
   toolCalls?: unknown[];
   nativeMessages?: unknown[];
   toolState?: ProviderToolState;
+}
+
+interface HvyResponseLintIssue {
+  key: string;
+  path: string;
+  component: string;
+  message: string;
 }
 
 interface ProviderTokenUsage {
@@ -343,7 +351,7 @@ async function requestProviderWithRepair(
   if (body.mode === 'document-edit' || body.mode === 'pdf-template-import') {
     return initialCompletion;
   }
-  const diagnostics = getHvyResponseDiagnostics(initialCompletion.output);
+  const diagnostics = await getHvyResponseRepairDiagnostics(initialCompletion.output);
   if (diagnostics.length === 0) {
     return initialCompletion;
   }
@@ -372,9 +380,26 @@ async function requestProviderWithRepair(
   };
 
   const repairedCompletion = await requestProviderOnce(repairRequest, env, signal, runId);
-  const repairedDiagnostics = getHvyResponseDiagnostics(repairedCompletion.output);
+  const repairedDiagnostics = await getHvyResponseRepairDiagnostics(repairedCompletion.output);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
   return repairedCompletion;
+}
+
+async function getHvyResponseRepairDiagnostics(source: string): Promise<HvyDiagnostic[]> {
+  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(source), '.hvy');
+  const lintIssues = runHvyDocumentBlockLinter(parsed.document);
+  return [
+    ...parsed.diagnostics,
+    ...lintIssues.map(lintIssueToDiagnostic),
+  ];
+}
+
+function lintIssueToDiagnostic(issue: HvyResponseLintIssue): HvyDiagnostic {
+  return {
+    severity: 'warning',
+    code: `lint:${issue.key}`,
+    message: `[${issue.component}] ${issue.path} - ${issue.message}`,
+  };
 }
 
 async function requestProviderOnce(
@@ -399,7 +424,7 @@ export function buildRepairPrompt(diagnostics: HvyDiagnostic[]): string {
   const uniqueDiagnostics = diagnostics
     .map((diagnostic) => ({
       message: diagnostic.message,
-      hint: getHvyDiagnosticUsageHint(diagnostic),
+      hint: getRepairDiagnosticHint(diagnostic),
     }))
     .filter(
       (entry, index, all) =>
@@ -420,6 +445,13 @@ Issues:
 ${issues}
 
 Return the full corrected HVY response body only. Do not add commentary outside the HVY response.`;
+}
+
+function getRepairDiagnosticHint(diagnostic: HvyDiagnostic): string {
+  if (diagnostic.code.startsWith('lint:')) {
+    return 'Fix this HVY lint issue before returning the response.';
+  }
+  return getHvyDiagnosticUsageHint(diagnostic);
 }
 
 async function requestOpenAi(

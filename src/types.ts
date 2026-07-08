@@ -2,7 +2,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
-import type { ProxyChatMode } from './chat/chat';
+import type { ProxyChatMode } from './chat/chat-provider-payload';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
 import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';

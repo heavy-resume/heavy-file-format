@@ -3,8 +3,8 @@ import type { HvyVirtualFileSystem } from './virtual-file-system';
 import {
   formatHvyCliLintIssueLine,
   runHvyCliLinter,
-  type HvyCliLintIssue,
 } from './document-linter';
+import type { HvyCliLintIssue } from './lint-types';
 
 export type HvyCliDiagnosticIssue = HvyCliLintIssue;
 

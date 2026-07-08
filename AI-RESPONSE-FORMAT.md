@@ -13,7 +13,7 @@ Do not rely on GitHub-flavored Markdown table syntax.
 
 Code blocks use backticks or the code component.
 
-Common clickable/expandable row structure:
+Example table with expandable rows structure:
   table - header only
   expandable
     stub: table - header copied (hidden) + row 1
@@ -47,8 +47,9 @@ Example with xrefs
 
 Use `expandable` when:
 - Short info thats suitable for someone who may not care about details.
-- Use content exponent when there's extra.
+- Use expanded content when there's extra detail.
 - When the information is spread out.
+- Do not create an outer expandable whose content is only other expandables. For multiple expandable records, emit sibling expandables or a component-list of expandable records.
 
 Minimal `expandable` example:
 
@@ -67,3 +68,5 @@ Minimal `expandable` example:
    - More context
    - Note that bullet points are only text. Create components for a more complex design.
 ```
+
+Do not emit closing tags or closing comments for HVY block directives. Indentation defines where an `expandable`, `container`, `grid`, component-list slot, or expandable slot ends.

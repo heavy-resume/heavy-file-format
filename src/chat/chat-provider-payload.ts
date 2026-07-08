@@ -1,6 +1,5 @@
-import type { ProxyChatMode } from './chat';
-
 const OPENAI_REASONING_EFFORT = 'low';
+export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-template-import';
 export type OpenAiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
 export interface ProviderProxyChatRequest {

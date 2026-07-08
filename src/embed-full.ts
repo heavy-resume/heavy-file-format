@@ -17,7 +17,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -66,6 +66,7 @@ import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
+import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
@@ -126,6 +127,13 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
+export interface HvyChatSessionState {
+  settings?: ChatSettings;
+  draft?: string;
+  messages?: ChatMessage[];
+  panelOpen?: boolean;
+}
+
 export interface HvyMountOptions {
   root: HTMLElement;
   document: VisualDocument;
@@ -134,6 +142,7 @@ export interface HvyMountOptions {
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatSettings?: Partial<ChatSettings> | null;
+  initialChatState?: HvyChatSessionState | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
   chatSearchCache?: HvyChatSearchCache | null;
@@ -176,6 +185,8 @@ export interface HvyMount {
   setPaletteOverrideId(id: string | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
+  getChatState(): HvyChatSessionState;
+  setChatState(chatState: HvyChatSessionState | null | undefined): void;
   getRecoveryState(): string | null;
   applyRecoveryState(payload: string | null | undefined): void;
   openDocumentMeta(): boolean;
@@ -344,6 +355,42 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
   };
   applyRecoveryStatePayload(restored, savedSession.activeEditor ? JSON.stringify({ version: 1, activeEditor: savedSession.activeEditor }) : null);
   return restored;
+}
+
+function createChatSessionState(state: AppState): HvyChatSessionState {
+  return {
+    settings: { ...state.chat.settings },
+    draft: state.chat.draft,
+    messages: state.chat.messages.map((message) => ({ ...message })),
+    panelOpen: state.chat.panelOpen,
+  };
+}
+
+function applyChatSessionState(state: AppState, chatState: HvyChatSessionState | null | undefined): void {
+  if (!chatState) {
+    return;
+  }
+  if (chatState.settings) {
+    state.chat.settings = { ...state.chat.settings, ...chatState.settings };
+  }
+  if (typeof chatState.draft === 'string') {
+    state.chat.draft = chatState.draft;
+  }
+  if (Array.isArray(chatState.messages)) {
+    state.chat.messages = chatState.messages
+      .filter((message): message is ChatMessage => (
+        Boolean(message)
+        && typeof message.id === 'string'
+        && (message.role === 'user' || message.role === 'assistant')
+        && typeof message.content === 'string'
+      ))
+      .map((message) => ({ ...message }));
+  }
+  if (typeof chatState.panelOpen === 'boolean') {
+    state.chat.panelOpen = chatState.panelOpen;
+  }
+  state.chat.isSending = false;
+  state.chat.abortController = null;
 }
 
 function bindSessionPersistence(runtime: StateRuntime): AbortController {
@@ -577,6 +624,11 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
   bindEmbedUi(root, runtime);
+  bindChatThreadUi(
+    root.querySelector<HTMLDivElement>('.chat-thread'),
+    root.querySelector<HTMLDivElement>('[data-chat-scroll-container]'),
+    root.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]')
+  );
   reconcilePluginMounts(root);
   syncTextToolbarLayout(root);
   restoreRenderScroll(root, capturedScroll);
@@ -985,6 +1037,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     initialState,
     persistSessionState ? loadSessionState(options.storageKey) : null
   );
+  applyChatSessionState(runtimeState, options.initialChatState ?? null);
   if (options.chatSettings) {
     runtimeState.chat.settings = {
       ...runtimeState.chat.settings,
@@ -1143,6 +1196,15 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     },
     getSearchSnapshot() {
       return runWithStateRuntime(runtime, () => searchStateToSnapshot(state.search));
+    },
+    getChatState() {
+      return runWithStateRuntime(runtime, () => createChatSessionState(state));
+    },
+    setChatState(chatState) {
+      runWithStateRuntime(runtime, () => {
+        applyChatSessionState(state, chatState);
+        runtime.callbacks.renderApp();
+      });
     },
     getRecoveryState() {
       return runWithStateRuntime(runtime, () => createRecoveryStatePayload(state));

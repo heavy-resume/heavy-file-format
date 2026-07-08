@@ -7,7 +7,7 @@ vi.mock('dompurify', () => ({
 }));
 
 vi.mock('../src/markdown', () => ({
-  markdownToEditorHtml: (value: string) => value,
+  markdownToReaderHtml: (value: string) => value,
   normalizeMarkdownLists: (value: string) => value,
 }));
 
@@ -72,6 +72,70 @@ hvy_version: 0.1
 
   expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
   expect(html).toContain('Last tokens: input 120 / output 30');
+});
+
+test('renderChatPanel gives HVY response expandables a visible disclosure cue', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: `<!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+ <!--hvy:expandable:stub {}-->
+  <!--hvy:text {"id":"details-summary"}-->
+   Short answer
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"details-body"}-->
+   Longer answer`,
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub"');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview" hidden');
+  expect(html).not.toContain('expandable-pane-stub');
+  expect(html).toContain('class="expandable-reader-cue" aria-hidden="true"');
+  expect(html).toContain('data-chat-action="toggle-expandable" aria-expanded="false"');
+});
+
+test('renderChatPanel does not show a blank expandable stub for content-only HVY response expandables', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: `<!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+ <!--hvy:expandable:stub {}-->
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"details-body"}-->
+   Key points of Actual grouped`,
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview"');
+  expect(html).not.toContain('expandable-pane-expanded');
+  expect(html).toContain('Key points of Actual grouped');
+  expect(html).toContain('class="expandable-reader-cue" aria-hidden="true"');
 });
 
 test('renderChatPanel hides the change request input while document edits are running', () => {

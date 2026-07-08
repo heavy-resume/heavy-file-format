@@ -276,15 +276,16 @@ export const renderExpandableReader: ComponentReaderRenderer = (section, block, 
   const toggleAttrs = `data-reader-action="toggle-expandable" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(
     block.id
   )}" aria-expanded="${expanded ? 'true' : 'false'}"`;
-  const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub">
+  const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub expandable-pane expandable-pane-stub">
     <div class="expand-stub-toggle" style="${stubPaneStyle}" ${toggleAttrs}>
+      <span class="expandable-reader-cue" aria-hidden="true"></span>
       <div class="expand-stub">${stubHtml}</div>
     </div>
   </div>`;
   const contentToggleAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="true"`;
   const collapsedContentPreviewAttrs = `data-reader-action="toggle-expandable" data-expandable-content="true" data-section-key="${helpers.escapeAttr(section.key)}" data-block-id="${helpers.escapeAttr(block.id)}" aria-expanded="false"`;
-  const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${contentToggleAttrs}>${contentHtml}</div></div>`;
-  const collapsedContentPreview = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" ${collapsedContentPreviewAttrs}>${contentHtml}</div></div>`;
+  const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${contentToggleAttrs}>${contentHtml}</div></div>`;
+  const collapsedContentPreview = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}" ${collapsedContentPreviewAttrs}><span class="expandable-reader-cue" aria-hidden="true"></span>${contentHtml}</div></div>`;
   const body = expanded
     ? alwaysShowStub && hasStubContent
       ? `${stubToggle}${contentPane}`

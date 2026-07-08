@@ -861,6 +861,35 @@ hvy_version: 0.1
   );
 });
 
+test('deserialization discards structural hvy closing comments from LLM responses', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"id":"actual-main-points"}-->
+
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    **Summary of "Actual" (main points)**
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    1. First point
+
+<!--/hvy:expandable-->
+`, '.hvy');
+
+  const expandable = document.sections[0]?.blocks[0];
+  expect(expandable?.schema.component).toBe('expandable');
+  expect(expandable?.schema.expandableContentBlocks.children).toHaveLength(1);
+  expect(expandable?.schema.expandableContentBlocks.children[0]?.text).toBe('1. First point');
+  expect(document.sections[0]?.blocks).toHaveLength(1);
+});
+
 test('xref-card missing title is an error and missing target is a warning', () => {
   const result = deserializeDocumentWithDiagnostics(`---
 hvy_version: 0.1

@@ -1091,48 +1091,16 @@ export function bindUi(app: HTMLElement): void {
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
-    if (anchor) {
-      const id = anchor.getAttribute('href')?.slice(1) ?? '';
-      if (id) {
-        event.preventDefault();
-        navigateToSection(id, app);
-        return;
-      }
-    }
-
-    const expandable = target.closest<HTMLElement>('[data-chat-action="toggle-expandable"]');
-    if (!expandable) {
+    if (!anchor) {
       return;
     }
-
+    const id = anchor.getAttribute('href')?.slice(1) ?? '';
+    if (!id) {
+      return;
+    }
     event.preventDefault();
-    event.stopPropagation();
-
-    const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
-    if (!readerEl) {
-      return;
-    }
-
-    const currentlyExpanded = expandable.getAttribute('aria-expanded') === 'true';
-    const nextExpanded = !currentlyExpanded;
-
-    readerEl.querySelectorAll<HTMLElement>('[data-chat-action="toggle-expandable"]').forEach((element) => {
-      element.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
-    });
-
-    const expandedPane = readerEl.querySelector<HTMLElement>('.expandable-reader-pane-expanded');
-    if (nextExpanded) {
-      if (expandedPane) {
-        expandedPane.style.display = '';
-      }
-      return;
-    }
-
-    if (expandedPane) {
-      expandedPane.style.display = 'none';
-    }
+    navigateToSection(id, app);
   });
 
   readerNav?.addEventListener('click', (event) => {

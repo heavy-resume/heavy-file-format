@@ -2,7 +2,7 @@ import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
 import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
-import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
+import { markdownToReaderHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
@@ -18,6 +18,7 @@ import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
 import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
+import type { ProxyChatMode } from './chat-provider-payload';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon } from '../icons';
 import { measureAsyncPhase, measurePhase } from '../perf-trace';
@@ -51,8 +52,6 @@ interface ProxyChatMessage {
   content: string;
   error?: boolean;
 }
-
-export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-template-import';
 
 interface ProxyChatRequest {
   provider: ChatSettings['provider'];
@@ -1215,7 +1214,7 @@ function renderAssistantMessageHtml(markdown: string): string {
   if (hvyHtml !== null) {
     return hvyHtml;
   }
-  return markdownToEditorHtml(normalizeMarkdownLists(markdown));
+  return renderChatMarkdown(markdown);
 }
 
 function renderAssistantHvyHtml(source: string): string | null {
@@ -1264,20 +1263,39 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
     const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const expanded = block.schema.expandableExpanded;
+    const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+    const hasStubContent = stubHtml.trim().length > 0;
     const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
     const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
     const toggleAttrs = `data-chat-action="toggle-expandable" aria-expanded="${expanded ? 'true' : 'false'}"`;
-    return `<div class="expandable-reader is-interactive chat-expandable-reader${expanded ? ' is-expanded' : ' is-collapsed'}" data-expandable-id="${escapeChatAttr(block.id)}">
-      <div class="expandable-reader-body">
-        <div class="expandable-reader-pane expandable-reader-pane-stub">
-          <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>
-            <div class="expand-stub">${stubHtml}</div>
-          </div>
-        </div>
-        <div class="expandable-reader-pane expandable-reader-pane-expanded"${expanded ? '' : ' style="display: none;"'}>
-          <div class="expand-content"${contentPaneStyle} ${toggleAttrs}>${contentHtml}</div>
-        </div>
+    const stubVisible = expanded ? alwaysShowStub && hasStubContent : hasStubContent;
+    const contentVisible = expanded;
+    const previewVisible = !expanded && !hasStubContent;
+    const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub"${stubVisible ? '' : ' hidden'}>
+      <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>
+        <span class="expandable-reader-cue" aria-hidden="true"></span>
+        <div class="expand-stub">${stubHtml}</div>
       </div>
+    </div>`;
+    const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content"${contentVisible ? '' : ' hidden'}>
+      <div class="expand-content"${contentPaneStyle} ${toggleAttrs}>${contentHtml}</div>
+    </div>`;
+    const previewPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview"${previewVisible ? '' : ' hidden'}>
+      <div class="expand-content"${contentPaneStyle} data-chat-action="toggle-expandable" aria-expanded="false"><span class="expandable-reader-cue" aria-hidden="true"></span>${contentHtml}</div>
+    </div>`;
+    const className = [
+      'expandable-reader',
+      'is-interactive',
+      'chat-expandable-reader',
+      expanded ? 'is-expanded' : 'is-collapsed',
+      hasStubContent ? '' : 'has-empty-stub',
+    ].filter(Boolean).join(' ');
+    return `<div class="${escapeChatAttr(className)}" data-expandable-id="${escapeChatAttr(block.id)}" data-chat-expandable-has-stub="${hasStubContent ? 'true' : 'false'}" data-chat-expandable-always-show-stub="${alwaysShowStub ? 'true' : 'false'}">
+      <div class="expandable-reader-body">
+        ${stubToggle}
+        ${contentPane}
+        ${previewPane}
+        </div>
     </div>`;
   }
 
@@ -1299,11 +1317,15 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
     return renderGridReader(getChatReaderSection(), block, helpers);
   }
 
-  return `<div class="chat-hvy-text">${markdownToEditorHtml(normalizeMarkdownLists(block.text))}</div>`;
+  return `<div class="chat-hvy-text">${renderChatMarkdown(block.text)}</div>`;
 }
 
 function looksLikeHvyResponse(source: string): boolean {
   return /<!--hvy:(?:[a-z]|subsection|doc|css)/i.test(source);
+}
+
+function renderChatMarkdown(markdown: string): string {
+  return markdownToReaderHtml(normalizeMarkdownLists(markdown));
 }
 
 function getChatReaderSection(): VisualSection {
@@ -1332,7 +1354,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
   return {
     escapeAttr: escapeChatAttr,
     escapeHtml: escapeChatHtml,
-    markdownToEditorHtml,
+    markdownToEditorHtml: renderChatMarkdown,
     renderRichToolbar: () => '',
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
@@ -1342,8 +1364,8 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     orderReaderBlocks: (blocks: VisualBlock[]) => blocks,
     orderReaderListBlocks: (blocks: VisualBlock[]) => blocks,
     isReaderViewPrioritizedBlock: () => false,
-    renderTextFragment: (content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
-    renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
+    renderTextFragment: renderChatMarkdown,
+    renderComponentFragment: (_componentName: string, content: string) => renderChatMarkdown(content),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
     renderComponentPlacementTarget: () => '',

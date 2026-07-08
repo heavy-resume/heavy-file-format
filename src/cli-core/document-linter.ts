@@ -5,6 +5,8 @@ import { findFormFieldTypeIssues, parseFormSpec, serializeFormSpec } from '../pl
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { visitBlocks } from '../section-ops';
 import type { VisualDocument } from '../types';
+import { runHvyDocumentBlockLinter } from './document-block-linter';
+import type { HvyCliLintIssue } from './lint-types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
@@ -35,13 +37,6 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
 
-export interface HvyCliLintIssue {
-  key: string;
-  path: string;
-  component: string;
-  message: string;
-}
-
 export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFileSystem = buildHvyVirtualFileSystem(document)): Promise<HvyCliLintIssue[]> {
   const componentJsonFiles = [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => isLintableComponentJsonPath(fs, entry))
@@ -52,6 +47,7 @@ export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFi
     ...lintHeader(document),
     ...lintHeaderCssValues(document),
     ...lintSections(fs),
+    ...runHvyDocumentBlockLinter(document),
     ...componentIssues.flat(),
   ];
 }

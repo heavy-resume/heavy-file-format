@@ -711,6 +711,8 @@ Leading whitespace determines nesting depth. Each level of nesting adds one spac
 
 Parsers MUST use the leading whitespace count of a directive line to determine which open frames to close before processing that directive. When a directive at indent N is encountered, all open frames at indent >= N are closed first. Content lines (non-directive) inherit the indent of their enclosing block.
 
+Block directives such as `<!--hvy:expandable ...-->`, `<!--hvy:container ...-->`, `<!--hvy:grid ...-->`, and their slot directives do not use closing tags. Full-line structural closing comments such as `<!--/hvy:expandable-->` are not part of HVY and parsers SHOULD discard them. Inline annotations that define their own paired syntax, such as `<!--hvy:alt ...-->...<!--/hvy:alt-->` and `<!--hvy:nowrap-->...<!--/hvy:nowrap-->`, are the exception and remain inline text annotations.
+
 | Element | Indent |
 |---|---|
 | Top-level section directive (`<!--hvy: ...-->`) and `#!` title | 0 spaces |

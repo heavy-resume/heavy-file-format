@@ -478,8 +478,22 @@ test('buildRepairPrompt turns diagnostics into concise repair guidance', () => {
         code: 'expandable_slot_without_parent',
         message: 'Section "Response", line 6: Expandable stub/content was provided without an enclosing expandable block.',
       },
+      {
+        severity: 'warning',
+        code: 'lint:/body/response/actual-main-points:expandable-content-only-nested-expandables',
+        message: '[expandable] /body/response/actual-main-points - expandable content contains only nested expandables.',
+      },
     ])
   ).toContain('Return the full corrected HVY response body only.');
+  expect(
+    buildRepairPrompt([
+      {
+        severity: 'warning',
+        code: 'lint:/body/response/actual-main-points:expandable-content-only-nested-expandables',
+        message: '[expandable] /body/response/actual-main-points - expandable content contains only nested expandables.',
+      },
+    ])
+  ).toContain('Hint: Fix this HVY lint issue before returning the response.');
 });
 
 test('formatTraceEvent writes one ndjson event with timestamp and payload', () => {

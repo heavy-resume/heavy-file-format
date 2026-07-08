@@ -1158,7 +1158,7 @@ function renderChatCopyMenuHtml(message: ChatMessage, deps: RenderChatPanelDeps)
   const messageId = deps.escapeAttr(message.id);
   return `
     <details class="chat-copy-menu">
-      <summary class="ghost chat-copy-menu-toggle" aria-label="Copy options" title="Copy options" data-tooltip="Copy options">
+      <summary class="chat-copy-menu-toggle" aria-label="Copy options" title="Copy options" data-tooltip="Copy options">
         ${copyIcon()}
       </summary>
       <div class="chat-copy-menu-popover" role="menu" aria-label="Copy response options">

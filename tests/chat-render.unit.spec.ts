@@ -72,6 +72,8 @@ hvy_version: 0.1
 
   expect(html).toContain('<article class="chat-bubble chat-bubble-assistant has-token-usage"');
   expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
+  expect(html).toContain('<summary class="chat-copy-menu-toggle"');
+  expect(html).not.toContain('<summary class="ghost chat-copy-menu-toggle"');
   expect(html).toContain('aria-label="Copy response options"');
   expect(html.indexOf('>Copy response</button>')).toBeLessThan(html.indexOf('>Copy as new section</button>'));
   expect(html).toContain('Last tokens: input 120 / output 30');

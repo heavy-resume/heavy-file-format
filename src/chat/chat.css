@@ -77,7 +77,7 @@
     0 18px 40px var(--hvy-shadow);
 }
 
-.chat-panel > * {
+.chat-panel>* {
   min-width: 0;
   max-width: 100%;
 }
@@ -212,11 +212,9 @@
   padding: 0.8rem 0.9rem;
   border-radius: 12px;
   border: 1px solid var(--hvy-border-translucent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--hvy-bg-alt) 55%, transparent),
-    color-mix(in srgb, var(--hvy-surface) 92%, transparent)
-  );
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--hvy-bg-alt) 55%, transparent),
+      color-mix(in srgb, var(--hvy-surface) 92%, transparent));
 }
 
 .chat-context-card p {
@@ -339,11 +337,13 @@
 }
 
 @keyframes chat-work-pulse {
+
   0%,
   100% {
     opacity: 0.35;
     transform: scale(0.88);
   }
+
   50% {
     opacity: 1;
     transform: scale(1);
@@ -399,13 +399,20 @@
 }
 
 .chat-copy-menu-toggle {
+  appearance: none;
   display: inline-grid;
+  grid-template: 1fr / 1fr;
   place-items: center;
+  align-content: center;
+  justify-content: center;
   box-sizing: border-box;
   width: 1.55rem;
   min-width: 1.55rem;
+  max-width: 1.55rem;
   min-height: 1.55rem;
   height: 1.55rem;
+  max-height: 1.55rem;
+  margin: 0;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--hvy-accent-2) 48%, var(--hvy-border-alt));
   border-radius: 6px;
@@ -416,9 +423,22 @@
   line-height: 1;
 }
 
+.chat-copy-menu-toggle:hover,
+.chat-copy-menu-toggle:focus-visible {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
+  color: var(--hvy-text);
+  outline: none;
+  box-shadow: 0 0 0 0.16rem var(--hvy-focus-glow);
+  transform: none;
+}
+
 .chat-copy-menu-toggle .hvy-ui-icon {
+  place-self: center;
   width: 0.95rem;
   height: 0.95rem;
+  margin: auto;
+  transform: translateX(0.05rem) translateY(0.05rem);
 }
 
 .chat-copy-menu-toggle::-webkit-details-marker {
@@ -524,11 +544,11 @@
   color: var(--hvy-text-alt);
 }
 
-.chat-hvy-text > :first-child {
+.chat-hvy-text> :first-child {
   margin-top: 0;
 }
 
-.chat-hvy-text > :last-child {
+.chat-hvy-text> :last-child {
   margin-bottom: 0;
 }
 

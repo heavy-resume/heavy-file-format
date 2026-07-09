@@ -8,6 +8,7 @@ import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFro
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
+import { normalizeSortValueDefs } from './sort-values';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
@@ -295,6 +296,12 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
         name,
         baseType,
       };
+      const sortValueDefs = normalizeSortValueDefs(raw.sortValueDefs);
+      if (Object.keys(sortValueDefs).length > 0) {
+        normalized.sortValueDefs = sortValueDefs;
+      } else {
+        delete normalized.sortValueDefs;
+      }
       if (raw.schema && typeof raw.schema === 'object' && !Array.isArray(raw.schema)) {
         normalized.schema = schemaFromUnknown({ ...(raw.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
       }

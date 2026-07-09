@@ -84,6 +84,21 @@ test('keeps markdown task list markers as task lists', () => {
   expect(html).not.toContain('hvy-inline-checkbox');
 });
 
+test('renders sort value annotations as visible text without leaking markers', () => {
+  const html = markdownToReaderHtml('Skill: <!--hvy:sort-value {"key":"Strength"}-->Expert<!--/hvy:sort-value-->');
+
+  expect(html).toContain('Skill: Expert');
+  expect(html).not.toContain('hvy:sort-value');
+});
+
+test('serializes editor sort value annotations back to hvy comments', () => {
+  expect(
+    turndown.turndown(
+      '<p>Strength: <span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="Strength">2</span></p>'
+    )
+  ).toBe('Strength: <!--hvy:sort-value {"key":"Strength"}-->2<!--/hvy:sort-value-->');
+});
+
 test('renders markdown quote markers as blockquotes', () => {
   const html = markdownToReaderHtml('> Alpha\n>\n> - Bravo\n> - Charlie\n>\n> Delta');
 

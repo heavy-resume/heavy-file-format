@@ -731,7 +731,8 @@ body {
 }
 
 .pane.full-pane:has(.editor-shell),
-.pane.full-pane:has(.viewer-shell) {
+.pane.full-pane:has(.viewer-shell),
+.pane.full-pane:has(.raw-editor-shell) {
   border: 0;
   border-radius: 0;
   padding: 0;

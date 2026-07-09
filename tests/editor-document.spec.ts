@@ -300,6 +300,26 @@ hvy_version: 0.1
   await expect(page.locator('.search-results-empty')).toContainText('Search results will appear here.');
 });
 
+test('raw HVY editor keeps native find and fills its surface', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+
+  await page.locator('#rawEditor').click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+
+  await expect(page.locator('.search-modal')).toHaveCount(0);
+  await expect(page.locator('#rawEditor')).toBeFocused();
+  await expect.poll(async () =>
+    page.locator('.raw-editor-shell').evaluate((shell) => {
+      const textarea = shell.querySelector<HTMLTextAreaElement>('#rawEditor');
+      if (!textarea) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(textarea.getBoundingClientRect().bottom - shell.getBoundingClientRect().bottom);
+    })
+  ).toBeLessThanOrEqual(16);
+});
+
 test('editor search opens sidebar for sidebar results', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

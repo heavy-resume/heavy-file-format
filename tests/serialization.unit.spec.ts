@@ -39,6 +39,38 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
 });
 
+test('round-trips sort value annotations in text content', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: Expert
+            value: 100
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}>
+
+   <!--hvy:skill-record {"sortKeys":{"Strength":100}}-->
+    Strength: <!--hvy:sort-value {"key":"Strength"}-->Expert<!--/hvy:sort-value-->
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('sortValueDefs:');
+  expect(expectedResult).toContain('<!--hvy:sort-value {"key":"Strength"}-->Expert<!--/hvy:sort-value-->');
+  expect(expectedResult).toContain('"sortKeys":{"Strength":100}');
+});
+
 test('serializes a single block fragment without document wrappers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

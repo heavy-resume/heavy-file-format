@@ -429,6 +429,7 @@ export interface ComponentDefinition {
   baseType: string;
   tags?: string;
   description?: string;
+  sortValueDefs?: Record<string, SortValueDefinition>;
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
@@ -441,6 +442,18 @@ export interface ComponentTemplateFlavor {
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
+}
+
+export type SortValueType = 'text' | 'number' | 'datetime' | 'enum';
+
+export interface SortValueEnumOption {
+  label: string;
+  value: string | number;
+}
+
+export interface SortValueDefinition {
+  type: SortValueType;
+  options?: SortValueEnumOption[];
 }
 
 export interface SectionDefinition {

@@ -3,6 +3,11 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
+import { getComponentSortValueDefs, getSortValueDefsForBlock, replaceSortValueAnnotations } from '../../../sort-values';
+import type { SortValueDefinition } from '../../../types';
+import { state } from '../../../state';
+import { getReusableNameFromSectionKey } from '../../../component-defs';
+import { findReusableOwner } from '../../../reusable';
 
 let readerTableStripeIndex = 0;
 
@@ -16,8 +21,47 @@ function getNextReaderTableStripeClass(): 'even' | 'odd' {
   return stripe;
 }
 
-function renderTableInlineEditorHtml(value: string, helpers: Parameters<ComponentEditorRenderer>[2]): string {
-  return unwrapTableParagraphs(helpers.markdownToEditorHtml(value));
+function renderTableInlineEditorHtml(
+  value: string,
+  sectionKey: string,
+  blockId: string,
+  block: Parameters<ComponentEditorRenderer>[1],
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const defs = getSortValueDefsForTableBlock(sectionKey, block);
+  if (Object.keys(defs).length === 0) {
+    return unwrapTableParagraphs(helpers.markdownToEditorHtml(value));
+  }
+  const replacements: string[] = [];
+  const source = replaceSortValueAnnotations(value, (annotation) => {
+    const token = `HVY_TABLE_SORT_VALUE_TOKEN_${replacements.length}`;
+    replacements.push(renderTableSortValueEditorControl(annotation.key, annotation.text, defs[annotation.key], sectionKey, blockId, helpers));
+    return token;
+  });
+  let html = unwrapTableParagraphs(helpers.markdownToEditorHtml(source));
+  replacements.forEach((replacement, index) => {
+    html = html.replace(`HVY_TABLE_SORT_VALUE_TOKEN_${index}`, replacement);
+  });
+  return html;
+}
+
+function getSortValueDefsForTableBlock(sectionKey: string, block: Parameters<ComponentEditorRenderer>[1]): Record<string, SortValueDefinition> {
+  try {
+    if (!state?.document) {
+      return {};
+    }
+    if (getReusableNameFromSectionKey(sectionKey)) {
+      const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+      if (Object.keys(direct).length > 0) {
+        return direct;
+      }
+      const owner = findReusableOwner(sectionKey, block.id);
+      return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    }
+    return getSortValueDefsForBlock(state.document, block);
+  } catch {
+    return {};
+  }
 }
 
 function unwrapTableParagraphs(html: string): string {
@@ -48,12 +92,13 @@ function renderTableInlineToolbar(
 
 function renderTableRowEditor(
   sectionKey: string,
-  blockId: string,
+  block: Parameters<ComponentEditorRenderer>[1],
   columns: string[],
   row: TableRow,
   rowIndex: number,
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
+  const blockId = block.id;
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
   return `
@@ -90,7 +135,7 @@ function renderTableRowEditor(
                 data-field="table-cell"
                 data-placeholder="${helpers.escapeAttr(placeholder)}"
                 data-placeholder-compact="${helpers.escapeAttr(compactPlaceholder)}"
-              >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', helpers)}</div>
+              >${renderTableInlineEditorHtml(row.cells[cellIndex] ?? '', sectionKey, blockId, block, helpers)}</div>
               ${renderTableInlineToolbar(sectionKey, blockId, 'table-cell', helpers, { rowIndex, cellIndex })}
             </div>
           </td>`;
@@ -104,6 +149,32 @@ function renderTableRowEditor(
       </td>
     </tr>
   `;
+}
+
+function renderTableSortValueEditorControl(
+  key: string,
+  text: string,
+  definition: SortValueDefinition | undefined,
+  sectionKey: string,
+  blockId: string,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  if (definition?.type !== 'enum') {
+    return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${helpers.escapeAttr(key)}">${helpers.escapeHtml(text)}</span>`;
+  }
+  const selected = text.trim();
+  const options = (definition.options ?? []).map((option) =>
+    `<option value="${helpers.escapeAttr(option.label)}"${option.label === selected ? ' selected' : ''}>${helpers.escapeHtml(option.label)}</option>`
+  ).join('');
+  return `<select
+    class="hvy-sort-value hvy-sort-value-enum"
+    contenteditable="false"
+    data-hvy-sort-value="true"
+    data-sort-value-key="${helpers.escapeAttr(key)}"
+    data-field="sort-value-enum"
+    data-section-key="${helpers.escapeAttr(sectionKey)}"
+    data-block-id="${helpers.escapeAttr(blockId)}"
+  >${options}</select>`;
 }
 
 export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -155,7 +226,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                             data-block-id="${helpers.escapeAttr(block.id)}"
                             data-column-index="${columnIndex}"
                             data-field="table-column"
-                          >${renderTableInlineEditorHtml(column, helpers)}</div>
+                          >${unwrapTableParagraphs(helpers.markdownToEditorHtml(column))}</div>
                           ${renderTableInlineToolbar(sectionKey, block.id, 'table-column', helpers, { columnIndex })}
                         </div>
                         ${
@@ -181,7 +252,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
             </tr>
           </thead>
           <tbody>
-            ${block.schema.tableRows.map((row, rowIndex) => renderTableRowEditor(sectionKey, block.id, columns, row, rowIndex, helpers)).join('')}
+            ${block.schema.tableRows.map((row, rowIndex) => renderTableRowEditor(sectionKey, block, columns, row, rowIndex, helpers)).join('')}
             <tr class="table-add-row-line">
               <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(

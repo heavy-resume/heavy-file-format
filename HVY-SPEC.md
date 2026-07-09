@@ -287,6 +287,16 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 `sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting without changing source document order.
 `groupKeys` is an optional object on any block. Keys are human-readable grouping names and MAY contain spaces. Values MUST be strings. Component-list views use these values to create reader-only grouped displays.
 
+Visible text inside a component-list item MAY be marked as the source for an item `sortKeys` entry using a paired sort-value annotation:
+
+```markdown
+<!--hvy:sort-value {"key":"Strength"}-->Strong<!--/hvy:sort-value-->
+```
+
+The annotation payload MUST contain `key`, naming a sort value definition on the nearest reusable component definition that owns the component-list item. Authoring tools resolve the annotation against that reusable component's `sortValueDefs` entry and write the resolved value back to the owning component-list item's `sortKeys`. Reader-oriented renderers MUST render only the annotation body text and MUST NOT depend on scripts or annotation parsing for sorting; they use the resolved `sortKeys`.
+
+Sort-value annotations may appear in text components and table cells, including inside nested containers, grids, and expandable panes. If the key cannot be resolved, the value cannot be coerced, or an enum label is not one of the defined options, authoring tools SHOULD preserve the annotation and leave the existing resolved key value unchanged.
+
 Section metadata also includes optional presentation keys such as:
 - `expanded`
 - `highlight`
@@ -633,6 +643,29 @@ Notes:
 - A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
+- Component template definitions MAY include `sortValueDefs`, keyed by human-readable sort key. Each definition has `type` (`"text"`, `"number"`, `"datetime"`, or `"enum"`). `text` writes trimmed visible text. `number` parses trimmed visible text as a finite number. `datetime` parses visible text with an explicit timezone (`Z`, a numeric offset such as `-07:00`, a `GMT-7` style offset, an IANA timezone such as `America/Los_Angeles`, or a short timezone abbreviation such as `PDT` when the runtime can resolve it to a single UTC offset for that date) and writes the equivalent UTC ISO-8601 timestamp string to `sortKeys`. `enum` requires `options`, an ordered list of `{label, value}` objects where `label` is the visible canonical text and `value` is a string or finite number written to `sortKeys`.
+
+Example sort-value enum on a reusable component:
+
+```yaml
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: Expert
+            value: 100
+          - label: Strong
+            value: 80
+          - label: Familiar
+            value: 50
+      Name:
+        type: text
+```
+
+For enum-backed values, authoring UIs SHOULD present a constrained themed picker using the reusable component's options. Selecting an option updates the visible annotation body and the owning component-list item's resolved key. Raw/advanced editors MAY expose the annotation text directly.
 
 Component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the component template definition:
 

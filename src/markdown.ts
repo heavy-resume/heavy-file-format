@@ -4,6 +4,7 @@ import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
+import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -97,6 +98,23 @@ turndown.addRule('hvy-text-line-style', {
 turndown.addRule('hvy-text-fill-in-marker', {
   filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-fill-in-marker') === 'true',
   replacement: (_content, node) => createTextFillInMarker((node as Element).getAttribute('data-placeholder') ?? ''),
+});
+
+turndown.addRule('hvy-sort-value', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-sort-value') === 'true',
+  replacement: (content, node) => {
+    const element = node as HTMLElement;
+    const key = element.getAttribute('data-sort-value-key')?.trim() ?? '';
+    if (!key) {
+      return content;
+    }
+    const label = element.nodeName.toUpperCase() === 'SELECT'
+      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected || option.hasAttribute('selected'))?.textContent?.trim()
+        ?? element.getAttribute('value')?.trim()
+        ?? content
+      : element.textContent?.trim() ?? content;
+    return formatSortValueAnnotation({ key }, label);
+  },
 });
 
 export interface MarkdownRenderOptions {
@@ -346,7 +364,14 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
   const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
-  return { markdown: options.editable ? withNowrap : replaceInlineCheckboxMarkers(withNowrap, makeToken), tokens };
+  const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
+    makeToken(options.editable ? renderSortValueAnnotationHtml(annotation.key, annotation.text) : escapeHtml(annotation.text))
+  );
+  return { markdown: options.editable ? withSortValues : replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
+}
+
+function renderSortValueAnnotationHtml(key: string, text: string): string {
+  return `<span data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
 function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {

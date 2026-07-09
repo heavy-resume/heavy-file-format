@@ -109,6 +109,18 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'sort-value-enum' && target instanceof HTMLSelectElement) {
+      const editor = target.closest<HTMLElement>('[data-field="block-rich"], [data-field="text-fill-in-rich"], [data-field="block-grid-rich"], [data-field="table-cell"]');
+      if (!editor) {
+        return;
+      }
+      if (handleBlockFieldInput(editor)) {
+        syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
+        getRefreshReaderPanels()();
+      }
+      return;
+    }
+
     if (field === 'component-list-reader-view' && target instanceof HTMLSelectElement) {
       const sectionKey = target.dataset.sectionKey;
       const blockId = target.dataset.blockId;

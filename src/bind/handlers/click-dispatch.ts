@@ -170,7 +170,10 @@ export function bindClickDispatch(app: HTMLElement): void {
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
             editable.focus();
           }
-          applyRichAction(action, editable, richButton.dataset.textLineStyleName);
+          applyRichAction(action, editable, richButton.dataset.textLineStyleName, {
+            sortValueKey: richButton.dataset.sortValueKey,
+            sortValueType: richButton.dataset.sortValueType,
+          });
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
           editable.focus({ preventScroll: true });
           richToolbarSelections.delete(editable);

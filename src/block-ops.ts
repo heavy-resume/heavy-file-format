@@ -1,13 +1,13 @@
 import type { TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
-import type { AppState } from './types';
+import type { AppState, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
-import { syncReusableTemplateForBlock } from './reusable';
+import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
@@ -26,6 +26,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
+import { findSortValueOwnerBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -275,9 +276,10 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
+    if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
       getRefreshReaderPanels()();
     }
     refreshMs = performance.now() - stepStartedAt;
@@ -300,7 +302,8 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     scheduleCompletedMultiSlotFillInBlur(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    if (!target.closest('.editor-tree, .hvy-ai-reader-surface')) {
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
+    if (sortValuesChanged || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
       getRefreshReaderPanels()();
     }
     return true;
@@ -389,6 +392,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.schema.componentListBlocks.forEach((itemBlock) => {
       itemBlock.schema.component = target.value;
       applyComponentDefaults(itemBlock.schema, target.value);
+      syncSortValuesForListItem(state.document.meta, itemBlock);
     });
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -470,9 +474,10 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncEditableTaskListMarkup(target, item.block.text);
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
+    if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
       getRefreshReaderPanels()();
     }
     refreshMs = performance.now() - stepStartedAt;
@@ -542,6 +547,10 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
         delete row.editorCreatedByEnter;
       }
       syncTableRowEmptyClass(target);
+      const sortValuesChanged = syncSortValuesForDocument(state.document);
+      if (sortValuesChanged) {
+        getRefreshReaderPanels()();
+      }
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -1118,9 +1127,20 @@ export function getComponentRenderHelpers(editorRenderer: {
   };
 }
 
-export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
+export function applyRichAction(
+  action: string,
+  editable: HTMLElement,
+  value?: string,
+  options: { sortValueKey?: string; sortValueType?: string } = {}
+): void {
   if (action === 'fill-in') {
     applyTextFillInSlot(editable);
+    return;
+  }
+  if (action === 'sort-value') {
+    if (applySortValueAnnotation(editable, options)) {
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
     return;
   }
   if (action === 'text-line-style') {
@@ -1194,6 +1214,64 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applySortValueAnnotation(
+  editable: HTMLElement,
+  options: { sortValueKey?: string; sortValueType?: string }
+): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed || range.toString().trim().length === 0) {
+    return false;
+  }
+  const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
+  const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
+  ensureSortValueDefinition(editable, key, type);
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-sort-value';
+  wrapper.dataset.hvySortValue = 'true';
+  wrapper.dataset.sortValueKey = key;
+  const fragment = range.extractContents();
+  wrapper.appendChild(fragment);
+  range.insertNode(wrapper);
+  selectElementContents(wrapper);
+  return true;
+}
+
+function inferSortValueKey(text: string, type: string | undefined): string {
+  if (type === 'number' || Number.isFinite(Number(text.trim()))) {
+    return 'Value';
+  }
+  return 'Name';
+}
+
+function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType): void {
+  const blockId = editable.dataset.blockId ?? '';
+  if (!blockId) {
+    return;
+  }
+  const sectionKey = editable.dataset.sectionKey ?? '';
+  const owner = getReusableNameFromSectionKey(sectionKey)
+    ? findReusableOwner(sectionKey, blockId)
+    : findSortValueOwnerBlock(state.document, blockId) ?? findBlockByIds(sectionKey, blockId);
+  const componentName = owner?.schema.component.trim() ?? '';
+  if (!componentName) {
+    return;
+  }
+  const defs = Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs : [];
+  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown> } =>
+    !!item && typeof item === 'object' && (item as { name?: unknown }).name === componentName
+  );
+  if (!definition) {
+    return;
+  }
+  const sortValueDefs = definition.sortValueDefs && typeof definition.sortValueDefs === 'object' && !Array.isArray(definition.sortValueDefs)
+    ? definition.sortValueDefs
+    : {};
+  if (!sortValueDefs[key]) {
+    sortValueDefs[key] = { type };
+    definition.sortValueDefs = sortValueDefs;
+  }
 }
 
 function isSelectionInsideQuoteBlock(editable: HTMLElement): boolean {

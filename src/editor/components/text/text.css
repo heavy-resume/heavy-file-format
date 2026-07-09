@@ -199,12 +199,19 @@
   }
 }
 
-.text-fill-in-selection-button {
+.text-use-as-selection {
   position: absolute;
   top: -0.95rem;
   right: 0.65rem;
-  z-index: 4;
+  z-index: 40;
   display: none;
+}
+
+.text-editor-shell.has-fill-in-selection .text-use-as-selection {
+  display: inline-block;
+}
+
+.text-use-as-button {
   min-height: 1.85rem;
   padding: 0.22rem 0.55rem;
   border-radius: 999px;
@@ -215,9 +222,86 @@
   box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
-.text-editor-shell.has-fill-in-selection .text-fill-in-selection-button {
+.text-use-as-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  display: none;
+  min-width: 10rem;
+  max-width: min(18rem, calc(100cqw - 1rem));
+  padding: 0.28rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--hvy-shadow) 48%, transparent);
+}
+
+.text-use-as-selection:hover .text-use-as-menu,
+.text-use-as-selection:focus-within .text-use-as-menu {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.text-use-as-selection:hover .text-use-as-button,
+.text-use-as-selection:focus-within .text-use-as-button {
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+}
+
+.text-use-as-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.45rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.text-use-as-menu-divider {
+  height: 1px;
+  margin: 0.15rem 0;
+  background: var(--hvy-border-translucent);
+}
+
+.hvy-sort-value {
   display: inline-flex;
+  max-width: 100%;
+  min-height: 1.55em;
   align-items: center;
+  vertical-align: baseline;
+  border-radius: 6px;
+  border: 1px solid var(--hvy-border-input);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 86%, var(--hvy-accent-2) 14%);
+  color: var(--hvy-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 55%, transparent);
+}
+
+.hvy-sort-value:not(select) {
+  padding: 0.04rem 0.35rem;
+}
+
+.hvy-sort-value-enum {
+  width: auto;
+  min-width: 7.5rem;
+  max-width: min(100%, 16rem);
+  padding: 0.12rem 1.7rem 0.12rem 0.45rem;
+  font: inherit;
+  line-height: 1.25;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.78rem) 50%,
+    calc(100% - 0.48rem) 50%;
+  background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+  background-repeat: no-repeat;
+}
+
+.hvy-sort-value-enum:focus-visible {
+  outline: 2px solid var(--hvy-focus);
+  outline-offset: 2px;
 }
 
 .text-fill-in-box {

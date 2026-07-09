@@ -42,7 +42,7 @@ export function bindShortcuts(_app: HTMLElement): void {
       }
       const key = event.key.toLowerCase();
       if (key === 'f' && !event.shiftKey) {
-        if (isModalOpen()) {
+        if (isModalOpen() || isRawEditorOpen(_app)) {
           return;
         }
         event.preventDefault();
@@ -77,6 +77,10 @@ export function bindShortcuts(_app: HTMLElement): void {
 
 function isModalOpen(): boolean {
   return Boolean(document.querySelector('.modal-root'));
+}
+
+function isRawEditorOpen(app: HTMLElement): boolean {
+  return Boolean(app.querySelector('.raw-editor-shell'));
 }
 
 export function isNativeUndoTarget(target: EventTarget | null): boolean {

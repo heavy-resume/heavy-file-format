@@ -71,6 +71,37 @@ component_defs:
   expect(expectedResult).toContain('"sortKeys":{"Strength":100}');
 });
 
+test('round-trips source-backed sort key metadata and plugin declarations', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    sortValueDefs:
+      Strength:
+        type: number
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"sortKeys":{"Strength":4},"derivedSortKeyNames":["Strength"]}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:plugin {"plugin":"example.skill-rating","pluginSortValues":{"Strength":4}}-->
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('"derivedSortKeyNames":["Strength"]');
+  expect(expectedResult).toContain('"pluginSortValues":{"Strength":4}');
+});
+
 test('serializes a single block fragment without document wrappers', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

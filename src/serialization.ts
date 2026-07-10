@@ -1398,6 +1398,9 @@ function serializeBlockSchema(
   if (Object.keys(schema.sortKeys).length > 0) {
     payload.sortKeys = schema.sortKeys;
   }
+  if (schema.derivedSortKeyNames.length > 0) {
+    payload.derivedSortKeyNames = schema.derivedSortKeyNames;
+  }
   if (Object.keys(schema.groupKeys).length > 0) {
     payload.groupKeys = schema.groupKeys;
   }
@@ -1454,6 +1457,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'plugin', schema.plugin, defaults.plugin);
     if (Object.keys(schema.pluginConfig).length > 0) {
       payload.pluginConfig = stripEditorStateFromSerializedValue(schema.pluginConfig) as JsonObject;
+    }
+    if (Object.keys(schema.pluginSortValues).length > 0) {
+      payload.pluginSortValues = schema.pluginSortValues;
     }
   }
   if (component === 'expandable') {

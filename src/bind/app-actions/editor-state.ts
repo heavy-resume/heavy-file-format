@@ -9,6 +9,7 @@ import { populateMissingDescriptions } from '../../descriptions/populate';
 import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
+import { syncSortValuesForDocument } from '../../sort-values';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -108,11 +109,14 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
+  const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
+    ? syncSortValuesForDocument(state.document)
+    : false;
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
   }
-  if (result === 'removed') {
+  if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
   if (result === 'closed' || result === 'removed') {

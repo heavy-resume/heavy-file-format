@@ -8,11 +8,13 @@ import { getHostPlugin } from './registry';
 import { createDefaultTextCaption, renderTextCaptionElement } from '../caption';
 import { createDefaultTextComponent, renderTextComponentElement } from '../text-component';
 import { mountPluginTextEditor } from './text-editor';
+import { findSortValueOwnerBlock, syncSortValuesForDocument } from '../sort-values';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
   HvyPlugin,
 } from './types';
+import type { VisualBlock } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 
 interface SavedFocus {
@@ -136,6 +138,23 @@ function buildContext(
     });
   };
 
+  const syncPluginSortValue = (mutate: (current: VisualBlock) => void): boolean => {
+    return runWithStateRuntime(runtime, () => {
+      const current = findBlockByIds(sectionKey, blockId);
+      if (!current) return false;
+      recordHistory(`plugin-sort-values:${plugin.id}:${sectionKey}:${blockId}`);
+      mutate(current);
+      const ownerBeforeSync = findSortValueOwnerBlock(state.document, current.id);
+      const sortValuesChanged = syncSortValuesForDocument(state.document);
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      if (state.currentView !== 'ai' && sortValuesChanged) {
+        getRefreshReaderPanels()();
+      }
+      refreshMountedPlugins(plugin.id, sectionKey, blockId);
+      return ownerBeforeSync !== null;
+    });
+  };
+
   return {
     mode,
     get editor() {
@@ -195,8 +214,28 @@ function buildContext(
     textEditor: {
       mount: (options) => runWithStateRuntime(runtime, () => mountPluginTextEditor(options)),
     },
+    sortValues: {
+      get: (key) => {
+        const current = findBlockByIds(sectionKey, blockId);
+        return current?.schema.pluginSortValues[String(key ?? '')];
+      },
+      set: (key, value) => syncPluginSortValue((current) => {
+        const normalizedKey = String(key ?? '').trim();
+        if (!normalizedKey || !isPluginSortValue(value)) return;
+        current.schema.pluginSortValues[normalizedKey] = value;
+      }),
+      clear: (key) => syncPluginSortValue((current) => {
+        const normalizedKey = String(key ?? '').trim();
+        if (!normalizedKey) return;
+        delete current.schema.pluginSortValues[normalizedKey];
+      }),
+    },
     requestRerender,
   };
+}
+
+function isPluginSortValue(value: unknown): value is VisualBlock['schema']['sortKeys'][string] {
+  return typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value));
 }
 
 export function refreshMountedPlugins(pluginId?: string, sectionKey?: string, blockId?: string): void {

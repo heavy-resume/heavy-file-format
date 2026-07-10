@@ -37,6 +37,7 @@ import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
+import { skillRatingExamplePlugin } from '../examples/plugins/skill-rating';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
@@ -74,6 +75,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
+  { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
@@ -1409,7 +1411,7 @@ initCallbacks({
 
 async function bootstrap(): Promise<void> {
   const savedSession = loadSessionState();
-  setHostPlugins([...builtInPlugins, resumeOutputGeneratorsPlugin]);
+  setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
   initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
   bindSessionPersistence();

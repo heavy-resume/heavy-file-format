@@ -1,0 +1,60 @@
+---
+hvy_version: 0.1
+title: Plugin Sort Values
+reader_max_width: 56rem
+plugins:
+  - id: example.skill-rating
+    source: example://skill-rating
+component_defs:
+  - name: skill-record
+    baseType: container
+    description: Skill item with plugin-backed rating
+    sortValueDefs:
+      Strength:
+        type: number
+    schema:
+      css: "margin: 0.5rem 0; padding: 0.65rem 0.8rem; border: 1px solid var(--hvy-border); background: var(--hvy-surface);"
+      containerExpanded: true
+      containerBlocks: []
+---
+
+<!--hvy: {"id":"plugin-sort-values","lock":false,"expanded":true,"highlight":false}-->
+#! Plugin Sort Values
+
+ <!--hvy:text {"id":"plugin-sort-values-intro","css":"margin: 0 0 0.75rem; color: var(--hvy-text-alt);"}-->
+  Skill ratings are plugin-owned controls. The selected rating is stored on each plugin block as `pluginSortValues`, then core sync materializes it onto the owning skill record's `sortKeys`.
+
+ <!--hvy:component-list {"id":"skill-ratings","componentListComponent":"skill-record","componentListItemLabel":"skill","componentListDefaultSortKey":"Strength","componentListDefaultSortDirection":"desc"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"id":"skill-typescript","sortKeys":{"Strength":5},"derivedSortKeyNames":["Strength"],"tags":"skill"}-->
+
+    <!--hvy:container:0 {}-->
+
+     <!--hvy:text {"id":"skill-typescript-name","css":"margin: 0 0 0.4rem;"}-->
+      ## TypeScript
+
+     <!--hvy:plugin {"id":"skill-typescript-rating","plugin":"example.skill-rating","pluginConfig":{"key":"Strength","label":"Strength","max":5},"pluginSortValues":{"Strength":5}}-->
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:skill-record {"id":"skill-python","sortKeys":{"Strength":4},"derivedSortKeyNames":["Strength"],"tags":"skill"}-->
+
+    <!--hvy:container:0 {}-->
+
+     <!--hvy:text {"id":"skill-python-name","css":"margin: 0 0 0.4rem;"}-->
+      ## Python
+
+     <!--hvy:plugin {"id":"skill-python-rating","plugin":"example.skill-rating","pluginConfig":{"key":"Strength","label":"Strength","max":5},"pluginSortValues":{"Strength":4}}-->
+
+  <!--hvy:component-list:2 {}-->
+
+   <!--hvy:skill-record {"id":"skill-rust","sortKeys":{"Strength":2},"derivedSortKeyNames":["Strength"],"tags":"skill"}-->
+
+    <!--hvy:container:0 {}-->
+
+     <!--hvy:text {"id":"skill-rust-name","css":"margin: 0 0 0.4rem;"}-->
+      ## Rust
+
+     <!--hvy:plugin {"id":"skill-rust-rating","plugin":"example.skill-rating","pluginConfig":{"key":"Strength","label":"Strength","max":5},"pluginSortValues":{"Strength":2}}-->

@@ -84,18 +84,33 @@ export function syncSortValuesForListItem(meta: Record<string, unknown> | null |
     return false;
   }
   let changed = false;
-  collectAnnotatedText(item).forEach((annotation) => {
-    const definition = defs[annotation.key];
-    const resolved = definition ? coerceSortValue(annotation.text, definition) : null;
+  const resolvedSources = collectSortValueSources(item, defs);
+  const nextDerivedKeys = new Set<string>();
+  resolvedSources.forEach((resolved, key) => {
     if (resolved === null) {
       return;
     }
-    if (Object.is(item.schema.sortKeys[annotation.key], resolved)) {
+    nextDerivedKeys.add(key);
+    if (Object.is(item.schema.sortKeys[key], resolved)) {
       return;
     }
-    item.schema.sortKeys[annotation.key] = resolved;
+    item.schema.sortKeys[key] = resolved;
     changed = true;
   });
+  item.schema.derivedSortKeyNames.forEach((key) => {
+    if (nextDerivedKeys.has(key)) {
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(item.schema.sortKeys, key)) {
+      delete item.schema.sortKeys[key];
+      changed = true;
+    }
+  });
+  const nextDerivedKeyNames = [...nextDerivedKeys].sort((left, right) => left.localeCompare(right));
+  if (!arraysEqual(item.schema.derivedSortKeyNames, nextDerivedKeyNames)) {
+    item.schema.derivedSortKeyNames = nextDerivedKeyNames;
+    changed = true;
+  }
   return changed;
 }
 
@@ -116,6 +131,48 @@ export function coerceSortValue(text: string, definition: SortValueDefinition): 
     return null;
   }
   return option.value;
+}
+
+function collectSortValueSources(
+  item: VisualBlock,
+  defs: Record<string, SortValueDefinition>
+): Map<string, SortKeyValue | null> {
+  const sources = new Map<string, SortKeyValue | null>();
+  collectAnnotatedText(item).forEach((annotation) => {
+    const definition = defs[annotation.key];
+    if (!definition) {
+      return;
+    }
+    sources.set(annotation.key, coerceSortValue(annotation.text, definition));
+  });
+  collectPluginSortValues(item).forEach(({ key, value }) => {
+    const definition = defs[key];
+    if (!definition) {
+      return;
+    }
+    sources.set(key, coerceSourceSortValue(value, definition));
+  });
+  return sources;
+}
+
+function coerceSourceSortValue(value: SortKeyValue, definition: SortValueDefinition): SortKeyValue | null {
+  if (definition.type === 'number' && typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (definition.type === 'text') {
+    return String(value).trim();
+  }
+  if (definition.type === 'enum') {
+    const matchingValue = (definition.options ?? []).find((candidate) => Object.is(candidate.value, value));
+    if (matchingValue) {
+      return matchingValue.value;
+    }
+  }
+  return coerceSortValue(String(value), definition);
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 export function normalizeSortValueDefs(value: unknown): Record<string, SortValueDefinition> {
@@ -411,6 +468,19 @@ function collectAnnotatedText(block: VisualBlock): SortValueAnnotation[] {
   }
   getNestedBlocks(block).forEach((child) => annotations.push(...collectAnnotatedText(child)));
   return annotations;
+}
+
+function collectPluginSortValues(block: VisualBlock): Array<{ key: string; value: SortKeyValue }> {
+  const values: Array<{ key: string; value: SortKeyValue }> = [];
+  if (block.schema.kind === 'plugin') {
+    Object.entries(block.schema.pluginSortValues).forEach(([key, value]) => {
+      if (key.trim().length > 0) {
+        values.push({ key, value });
+      }
+    });
+  }
+  getNestedBlocks(block).forEach((child) => values.push(...collectPluginSortValues(child)));
+  return values;
 }
 
 function getNestedBlocks(block: VisualBlock): VisualBlock[] {

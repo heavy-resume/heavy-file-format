@@ -27,6 +27,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     slot: 'center',
     css: DEFAULT_BLOCK_CSS,
     sortKeys: {},
+    derivedSortKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',
@@ -124,7 +125,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         encryptedError: '',
       } as unknown as BlockSchema;
     case 'plugin':
-      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
+      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {} } as unknown as BlockSchema;
     case 'xref-card':
       return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
     default:
@@ -351,6 +352,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     sortKeys: parseSortKeys(candidate.sortKeys),
+    derivedSortKeyNames: parseStringList(candidate.derivedSortKeyNames),
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
@@ -402,6 +404,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
       candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)
         ? (candidate.pluginConfig as JsonObject)
         : schema.pluginConfig;
+    schema.pluginSortValues = parseSortKeys(candidate.pluginSortValues);
   }
   if (schema.kind === 'expandable') {
     schema.expandableStubComponent =
@@ -522,6 +525,12 @@ function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
     }
   }
   return parsed;
+}
+
+function parseStringList(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? raw.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
 }
 
 function parseGroupKeys(raw: unknown): Record<string, string> {

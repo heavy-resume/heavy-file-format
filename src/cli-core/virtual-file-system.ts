@@ -923,6 +923,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     align: schema.align,
     slot: schema.slot,
     sortKeys: schema.sortKeys,
+    derivedSortKeyNames: schema.derivedSortKeyNames,
     groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
@@ -972,6 +973,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
   if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
     value.pluginConfig = schema.pluginConfig;
+    value.pluginSortValues = schema.pluginSortValues;
   }
   return value;
 }
@@ -1055,6 +1057,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
     schema.sortKeys = parseSortKeys(value.sortKeys);
   }
+  if (Array.isArray(value.derivedSortKeyNames)) {
+    schema.derivedSortKeyNames = parseStringList(value.derivedSortKeyNames);
+  }
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
@@ -1120,6 +1125,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;
+  }
+  if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
+    schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
   }
   if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
   if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;

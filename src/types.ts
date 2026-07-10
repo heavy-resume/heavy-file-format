@@ -417,6 +417,7 @@ export type SelectedExample =
   | 'crm'
   | 'study-tools'
   | 'video-demo'
+  | 'plugin-sort-values'
   | 'pdf-template'
   | 'resume-template'
   | 'resume-example'

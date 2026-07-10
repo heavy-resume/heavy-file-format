@@ -1,0 +1,3 @@
+Skill Rating example plugin
+
+Renders a compact rating control and declares the selected value as a source-backed sort value. Configure pluginConfig.key to name the sort value, pluginConfig.max for the scale, and pluginConfig.label for the visible label. The selected value is stored in pluginSortValues through ctx.sortValues.

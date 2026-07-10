@@ -282,7 +282,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
+    if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
       refreshReaderPanelsAroundActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
@@ -306,7 +306,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     scheduleCompletedMultiSlotFillInBlur(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     const sortValuesChanged = syncSortValuesForDocument(state.document);
-    if (sortValuesChanged || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
+    if ((state.currentView !== 'ai' && sortValuesChanged) || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
       refreshReaderPanelsAroundActiveEditor(target);
     }
     return true;
@@ -480,7 +480,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
+    if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
       refreshReaderPanelsAroundActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
@@ -551,7 +551,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
       }
       syncTableRowEmptyClass(target);
       const sortValuesChanged = syncSortValuesForDocument(state.document);
-      if (sortValuesChanged) {
+      if (state.currentView !== 'ai' && sortValuesChanged) {
         getRefreshReaderPanels()();
       }
     }

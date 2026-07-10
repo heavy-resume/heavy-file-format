@@ -164,6 +164,221 @@ test('syncs edited numeric sort value annotations to component-list item sort ke
   expect(item.schema.sortKeys.Strength).toBe(2);
 });
 
+test('syncs plugin-declared sort values to component-list item sort keys', () => {
+  const rating = block('plugin', '', 'plugin');
+  rating.schema.pluginSortValues = { Strength: 4 };
+  const item = block('skill-record', '', 'expandable');
+  item.schema.sortKeys = { Manual: 'keep' };
+  item.schema.expandableContentBlocks.children = [rating];
+  const list = block('component-list');
+  list.schema.componentListComponent = 'skill-record';
+  list.schema.componentListBlocks = [item];
+  const document: VisualDocument = {
+    extension: '.hvy',
+    attachments: [],
+    meta: {
+      component_defs: [{
+        name: 'skill-record',
+        baseType: 'expandable',
+        sortValueDefs: {
+          Strength: { type: 'number' },
+        },
+      }],
+    },
+    sections: [{
+      key: 'section',
+      customId: 'section',
+      customIdGenerated: false,
+      contained: true,
+      editorOnly: false,
+      lock: false,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Section',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      priority: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      hideIfUnmodified: false,
+      exclude_from_import: false,
+      protect_from_import: false,
+      blocks: [list],
+      children: [],
+    }],
+  };
+
+  expect(syncSortValuesForDocument(document)).toBe(true);
+  expect(item.schema.sortKeys).toEqual({ Manual: 'keep', Strength: 4 });
+  expect(item.schema.derivedSortKeyNames).toEqual(['Strength']);
+  expect(syncSortValuesForDocument(document)).toBe(false);
+});
+
+test('clears stale source-backed sort values without removing manual sort keys', () => {
+  const rating = block('plugin', '', 'plugin');
+  rating.schema.pluginSortValues = { Strength: 4 };
+  const item = block('skill-record', '', 'expandable');
+  item.schema.sortKeys = { Manual: 'keep' };
+  item.schema.expandableContentBlocks.children = [rating];
+  const list = block('component-list');
+  list.schema.componentListComponent = 'skill-record';
+  list.schema.componentListBlocks = [item];
+  const document: VisualDocument = {
+    extension: '.hvy',
+    attachments: [],
+    meta: {
+      component_defs: [{
+        name: 'skill-record',
+        baseType: 'expandable',
+        sortValueDefs: {
+          Strength: { type: 'number' },
+        },
+      }],
+    },
+    sections: [{
+      key: 'section',
+      customId: 'section',
+      customIdGenerated: false,
+      contained: true,
+      editorOnly: false,
+      lock: false,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Section',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      priority: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      hideIfUnmodified: false,
+      exclude_from_import: false,
+      protect_from_import: false,
+      blocks: [list],
+      children: [],
+    }],
+  };
+
+  syncSortValuesForDocument(document);
+  item.schema.expandableContentBlocks.children = [];
+
+  expect(syncSortValuesForDocument(document)).toBe(true);
+  expect(item.schema.sortKeys).toEqual({ Manual: 'keep' });
+  expect(item.schema.derivedSortKeyNames).toEqual([]);
+});
+
+test('clears stale source-backed sort values when the source becomes invalid', () => {
+  const rating = block('plugin', '', 'plugin');
+  rating.schema.pluginSortValues = { Strength: 4 };
+  const item = block('skill-record', '', 'expandable');
+  item.schema.expandableContentBlocks.children = [rating];
+  const list = block('component-list');
+  list.schema.componentListComponent = 'skill-record';
+  list.schema.componentListBlocks = [item];
+  const document: VisualDocument = {
+    extension: '.hvy',
+    attachments: [],
+    meta: {
+      component_defs: [{
+        name: 'skill-record',
+        baseType: 'expandable',
+        sortValueDefs: {
+          Strength: { type: 'number' },
+        },
+      }],
+    },
+    sections: [{
+      key: 'section',
+      customId: 'section',
+      customIdGenerated: false,
+      contained: true,
+      editorOnly: false,
+      lock: false,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Section',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      priority: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      hideIfUnmodified: false,
+      exclude_from_import: false,
+      protect_from_import: false,
+      blocks: [list],
+      children: [],
+    }],
+  };
+
+  syncSortValuesForDocument(document);
+  rating.schema.pluginSortValues = { Strength: 'not a number' };
+
+  expect(syncSortValuesForDocument(document)).toBe(true);
+  expect(item.schema.sortKeys).toEqual({});
+  expect(item.schema.derivedSortKeyNames).toEqual([]);
+});
+
+test('applies plugin-declared sort values after moving into a sortable item', () => {
+  const rating = block('plugin', '', 'plugin');
+  rating.schema.pluginSortValues = { Strength: 4 };
+  const item = block('skill-record', '', 'expandable');
+  const list = block('component-list');
+  list.schema.componentListComponent = 'skill-record';
+  list.schema.componentListBlocks = [item];
+  const document: VisualDocument = {
+    extension: '.hvy',
+    attachments: [],
+    meta: {
+      component_defs: [{
+        name: 'skill-record',
+        baseType: 'expandable',
+        sortValueDefs: {
+          Strength: { type: 'number' },
+        },
+      }],
+    },
+    sections: [{
+      key: 'section',
+      customId: 'section',
+      customIdGenerated: false,
+      contained: true,
+      editorOnly: false,
+      lock: false,
+      idEditorOpen: false,
+      isGhost: false,
+      title: 'Section',
+      level: 1,
+      expanded: true,
+      highlight: false,
+      priority: false,
+      css: '',
+      tags: '',
+      description: '',
+      location: 'main',
+      hideIfUnmodified: false,
+      exclude_from_import: false,
+      protect_from_import: false,
+      blocks: [rating, list],
+      children: [],
+    }],
+  };
+
+  expect(syncSortValuesForDocument(document)).toBe(false);
+  item.schema.expandableContentBlocks.children = [rating];
+  document.sections[0]!.blocks = [list];
+
+  expect(syncSortValuesForDocument(document)).toBe(true);
+  expect(item.schema.sortKeys).toEqual({ Strength: 4 });
+});
+
 test('resolves sort values when adding a reusable component-list item from a template', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

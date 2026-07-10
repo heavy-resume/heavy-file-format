@@ -68,6 +68,88 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('forward deleting selected heading text does not pass heading format to the next paragraph', async ({ page }) => {
+  await page.goto('/');
+
+  for (const shortcut of ['Delete', 'Control+Delete']) {
+    await page.getByRole('button', { name: 'Raw' }).click();
+    await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # SOME HEADER
+
+  some text
+`);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await page.getByRole('button', { name: 'Basic' }).click();
+
+    await page.locator('.editor-block-passive', { has: page.locator('#body') }).click();
+    const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+    await editor.locator('h1').evaluate((heading) => {
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    });
+
+    await page.keyboard.press(shortcut);
+    await expect(editor.locator('h1')).toHaveCount(0);
+    await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Raw' }).click();
+    await expect(page.locator('#rawEditor')).toContainText('some text');
+    await expect(page.locator('#rawEditor')).not.toContainText('# some text');
+  }
+});
+
+test('forward deleting at heading boundary does not pass heading format to the next paragraph', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # SOME HEADER
+
+  some text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('#body') }).click();
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.locator('h1').evaluate((heading) => {
+    (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press('Delete');
+  await expect(editor.locator('h1')).toHaveText('SOME HEADER');
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# SOME HEADER');
+  await expect(page.locator('#rawEditor')).toContainText('some text');
+  await expect(page.locator('#rawEditor')).not.toContainText('# SOME HEADERsome text');
+});
+
 test('image caption rich editor keeps italic and bold markers distinct', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeVisible();

@@ -2435,9 +2435,19 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return true;
   }
 
-  if ((event.key === 'Backspace' || event.key === 'Delete') && clearSelectedStyledBlock(editable)) {
+  if ((event.key === 'Backspace' || event.key === 'Delete') && clearSelectedFormatBlock(editable)) {
     event.preventDefault();
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (event.key === 'Delete' && preventForwardDeleteFormatBlockMerge(editable)) {
+    event.preventDefault();
+    if (editable.dataset.hvyFormatBlockMergeChanged === 'true') {
+      delete editable.dataset.hvyFormatBlockMergeChanged;
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
     updateRichToolbarState(editable);
     return true;
   }
@@ -4404,14 +4414,14 @@ function clearFullEditableSelection(editable: HTMLElement): boolean {
   return true;
 }
 
-function clearSelectedStyledBlock(editable: HTMLElement): boolean {
+function clearSelectedFormatBlock(editable: HTMLElement): boolean {
   const selection = window.getSelection();
   if (!selection?.rangeCount || selection.isCollapsed) {
     return false;
   }
   const range = selection.getRangeAt(0);
   const block = getSelectionBlockElement(editable);
-  if (!(block instanceof HTMLQuoteElement) || !isRangeInsideElement(block, range)) {
+  if (!block || !isFormatBlockWithOwnTypingContext(block) || !isRangeInsideElement(block, range)) {
     return false;
   }
   if (!doesRangeCoverElementContents(block, range) && !doesRangeCoverElementText(block, range)) {
@@ -4421,6 +4431,29 @@ function clearSelectedStyledBlock(editable: HTMLElement): boolean {
   paragraph.appendChild(document.createElement('br'));
   block.replaceWith(paragraph);
   placeCaretInside(paragraph);
+  return true;
+}
+
+function isFormatBlockWithOwnTypingContext(block: HTMLElement): boolean {
+  return block instanceof HTMLQuoteElement || /^H[1-6]$/.test(block.tagName);
+}
+
+function preventForwardDeleteFormatBlockMerge(editable: HTMLElement): boolean {
+  const block = getSelectionBlockElement(editable);
+  if (!block || !isFormatBlockWithOwnTypingContext(block) || !isCollapsedSelectionAtEndOf(block)) {
+    return false;
+  }
+  const nextBlock = block.nextElementSibling instanceof HTMLElement ? block.nextElementSibling : null;
+  if (!nextBlock) {
+    return false;
+  }
+  if (isEffectivelyEmptyBlock(block)) {
+    block.remove();
+    placeCaretAtStart(nextBlock);
+    editable.dataset.hvyFormatBlockMergeChanged = 'true';
+    return true;
+  }
+  placeCaretAtEnd(block);
   return true;
 }
 

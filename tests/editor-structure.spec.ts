@@ -36,6 +36,12 @@ async function countDocumentText(page: Page, text: string): Promise<number> {
   }, text);
 }
 
+async function useSelectionAsFillIn(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeVisible();
+  await page.getByRole('button', { name: 'Use as...' }).click();
+  await page.getByRole('menuitem', { name: 'Fill-in' }).click();
+}
+
 test('expandable editor keeps stub and expanded slots unlocked without lock controls', async ({ page }) => {
   await page.goto('/');
 
@@ -1960,7 +1966,8 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('#name') }).click();
+  await expect(page.locator('.editor-block-passive', { hasText: 'Name' })).toBeVisible();
+  await page.locator('.editor-block-passive', { hasText: 'Name' }).click();
   await page.locator('.rich-editor').evaluate((editable) => {
     const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
     if (!textNode?.textContent) return;
@@ -1971,11 +1978,12 @@ hvy_version: 0.1
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    (editable as HTMLElement).focus();
     document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
-  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeVisible();
+  await useSelectionAsFillIn(page);
 
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
   await expect(page.locator('#editorTree h1 .text-fill-in-box')).toBeVisible();
@@ -1987,6 +1995,87 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('# Ada Lovelace');
   await expect(page.locator('#rawEditor')).not.toContainText('<!-- value -->');
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
+});
+
+test('undo after browser-selected Use as Fill-in does not enter the fill-in or abort editing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('.editor-block-passive .editor-block-content[data-component-id="name"]')).toBeVisible();
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="name"]').click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.locator('.rich-editor h1').click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeVisible();
+  await useSelectionAsFillIn(page);
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock.locator('[data-field="text-fill-in-value"]')).toBeVisible();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock).toHaveCount(1);
+  await expect(activeBlock.locator('[data-field="text-fill-in-value"]')).toHaveCount(0);
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toContainText('Name');
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toBeFocused();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock).toHaveCount(1);
+  await expect(activeBlock.locator('[data-field="text-fill-in-value"]')).toHaveCount(0);
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toBeFocused();
+});
+
+test('undo while focused in a newly converted fill-in restores rich text editing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"name","align":"center","placeholder":"Name"}-->
+  # Name
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('.editor-block-passive .editor-block-content[data-component-id="name"]')).toBeVisible();
+  await page.locator('.editor-block-passive .editor-block-content[data-component-id="name"]').click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await activeBlock.locator('.rich-editor h1').click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await useSelectionAsFillIn(page);
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  const fillIn = activeBlock.locator('[data-field="text-fill-in-value"]');
+  await expect(fillIn).toBeVisible();
+  await fillIn.focus();
+  await expect(fillIn).toBeFocused();
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock).toHaveCount(1);
+  await expect(activeBlock.locator('[data-field="text-fill-in-value"]')).toHaveCount(0);
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toContainText('Name');
+  await expect(activeBlock.locator('.rich-editor[data-field="block-rich"]')).toBeFocused();
 });
 
 test('text toolbar fill-in uses selected text instead of stale placeholder', async ({ page }) => {
@@ -2020,7 +2109,7 @@ hvy_version: 0.1
     document.dispatchEvent(new Event('selectionchange'));
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
-  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await useSelectionAsFillIn(page);
 
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
   await expect(page.locator('[data-field="text-fill-in-value"]')).toHaveAttribute('data-placeholder', 'FILL ME IN');
@@ -2058,9 +2147,9 @@ hvy_version: 0.1
   });
   await richEditor.dispatchEvent('keyup');
 
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeVisible();
   await page.locator('.section-title-passive', { hasText: 'Header' }).click();
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeHidden();
 });
 
 test('text toolbar fill-in button clears after the selection collapses in the same editor', async ({ page }) => {
@@ -2096,7 +2185,7 @@ hvy_version: 0.1
   });
   await richEditor.dispatchEvent('keyup');
 
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeVisible();
   await richEditor.locator('h1').evaluate((heading) => {
     const textNode = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT).nextNode();
     if (!textNode?.textContent) return;
@@ -2110,10 +2199,10 @@ hvy_version: 0.1
     document.dispatchEvent(new Event('selectionchange'));
   });
   await richEditor.dispatchEvent('mouseup');
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeHidden();
 
   await richEditor.pressSequentially('New ');
-  await expect(page.getByRole('button', { name: 'Convert to Fill-in' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Use as...' })).toBeHidden();
 });
 
 test('text toolbar fill-in preserves heading syntax when the whole heading is selected', async ({ page }) => {
@@ -2144,7 +2233,7 @@ hvy_version: 0.1
     document.dispatchEvent(new Event('selectionchange'));
   });
   await richEditor.dispatchEvent('keyup');
-  await page.locator('.text-fill-in-selection-button').evaluate((button: HTMLButtonElement) => button.click());
+  await useSelectionAsFillIn(page);
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('# <!-- value {"placeholder":"Name"} -->');
@@ -2171,6 +2260,25 @@ hvy_version: 0.1
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="role"] .text-fill-in-box').click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   await expect(activeBlock.getByRole('button', { name: 'H3' })).toBeVisible();
+  const fillInShell = activeBlock.locator('.text-editor-shell.is-fill-in-editor');
+  await expect(fillInShell.locator('.text-editor-toolbar-slot > .rich-toolbar')).toHaveCount(2);
+  const fillInToolbarLayout = await fillInShell.evaluate((shell) => {
+    const bounds = shell.querySelector<HTMLElement>('.text-editor-toolbar-bounds');
+    const slot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const firstToolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    return {
+      boundsPosition: bounds ? getComputedStyle(bounds).position : '',
+      slotDisplay: slot ? getComputedStyle(slot).display : '',
+      slotHeight: slot?.offsetHeight ?? 0,
+      firstToolbarHeight: firstToolbar?.offsetHeight ?? 0,
+      spacerHeight: spacer?.offsetHeight ?? 0,
+    };
+  });
+  expect(fillInToolbarLayout.boundsPosition).toBe('absolute');
+  expect(fillInToolbarLayout.slotDisplay).toBe('grid');
+  expect(fillInToolbarLayout.slotHeight).toBeGreaterThan(fillInToolbarLayout.firstToolbarHeight);
+  expect(fillInToolbarLayout.spacerHeight).toBe(fillInToolbarLayout.slotHeight);
   await activeBlock.locator('[data-field="text-fill-in-value"]').evaluate((fillIn) => {
     const range = document.createRange();
     range.selectNode(fillIn);
@@ -2425,7 +2533,7 @@ hvy_version: 0.1
     selection?.addRange(range);
   });
   await page.locator('.rich-editor').dispatchEvent('keyup');
-  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await useSelectionAsFillIn(page);
   await expect(page.locator('[data-field="text-fill-in-value"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'Cancel' }).click();

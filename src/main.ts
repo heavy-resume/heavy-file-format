@@ -1247,7 +1247,9 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
     surface,
   });
-  void runPluginDocumentHooks('unknown');
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {

@@ -512,6 +512,174 @@ test('inline code autoformats from backticks and escapes with arrow or click', a
   await expect(editor.locator('p')).toContainText('clickme plain');
 });
 
+test('enum sort selector ArrowRight moves caret after selector for same-line typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+
+  Next line
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.length === 1 && state.document.sections[0]?.id === 'main';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first()).toBeVisible();
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(editor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+
+  await editor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('X');
+
+  await expect.poll(() => editor.evaluate((node) => node.querySelector('p')?.innerHTML ?? '')).toMatch(/<\/select>\u200b?X/);
+  await expect(editor.locator('p').nth(1)).toHaveText('Next line');
+});
+
+test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"intro"}-->
+  Main body.
+
+<!--hvy: {"id":"sidebar","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+
+  Core strength.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.some((section) => section.location === 'sidebar' && section.id === 'sidebar');
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+  const sidebarTab = page.locator('.editor-sidebar-tab');
+  if (await sidebarTab.getAttribute('aria-expanded') !== 'true') {
+    await sidebarTab.click();
+  }
+  await expect(page.locator('.editor-sidebar [data-action="activate-block"]')).toHaveCount(1);
+  await page.locator('.editor-sidebar [data-action="activate-block"]').first().dispatchEvent('click');
+
+  const activeEditor = page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(activeEditor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+  await activeEditor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('X');
+  await page.waitForTimeout(250);
+
+  await expect(page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"]')).toHaveCount(1);
+  await expect.poll(() => activeEditor.evaluate((node) => node.querySelector('p')?.innerHTML ?? '')).toMatch(/<\/select>\u200b?X/);
+  await expect(activeEditor.locator('p').nth(1)).toHaveText('Core strength.');
+  await expect(activeEditor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+});
+
+test('use as sort value survives deleting and retyping the selected value', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Name:
+        type: text
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"details"}-->
+  Temporary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'details';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Temporary' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.locator('p').evaluate((node) => {
+    const textNode = node.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.locator('.text-use-as-menu-item[data-sort-value-key="Name"]').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
+
+  const sortValue = editor.locator('.hvy-sort-value[data-sort-value-key="Name"]').first();
+  await expect(sortValue).toHaveText('Temporary');
+  await sortValue.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('A');
+
+  await expect(sortValue).toHaveText('A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('Replacement');
+
+  await expect(sortValue).toHaveText('Replacement');
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:sort-value {"key":"Name"}-->Replacement<!--/hvy:sort-value-->');
+});
+
 test('code button wraps selected text as inline code and preserves angle brackets', async ({ page }) => {
   await page.goto('/');
 

@@ -47,26 +47,31 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
         ></span>`
       );
     }
-    return `
-      ${richToolbar}
-      <div class="rich-toolbar text-fill-in-toolbar">
-        <div class="toolbar-segment" role="group" aria-label="Fill-in slot">
-          <button
-            type="button"
-            class="ghost"
-            data-action="remove-text-fill-in"
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-          >Remove Fill-in</button>
-        </div>
+    const removeFillInToolbar = `<div class="rich-toolbar text-fill-in-toolbar">
+      <div class="toolbar-segment" role="group" aria-label="Fill-in slot">
+        <button
+          type="button"
+          class="ghost"
+          data-action="remove-text-fill-in"
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+        >Remove Fill-in</button>
       </div>
-      <div
-        class="rich-editor text-fill-in-editor"
-        ${richEditorAttributes}
-        data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"
-        ${alignStyle}
-      >
-        ${html}
+    </div>`;
+    return `
+      <div class="text-editor-shell is-fill-in-editor">
+        <div class="text-editor-toolbar-bounds">
+          <div class="text-editor-toolbar-slot">${richToolbar}${removeFillInToolbar}</div>
+        </div>
+        <div class="text-editor-toolbar-spacer"></div>
+        <div
+          class="rich-editor text-fill-in-editor"
+          ${richEditorAttributes}
+          data-fill-parts="${helpers.escapeAttr(JSON.stringify(fillInParts))}"
+          ${alignStyle}
+        >
+          ${html}
+        </div>
       </div>
     `;
   }
@@ -241,7 +246,7 @@ function renderSortValueEditorControl(
     data-field="sort-value-enum"
     data-section-key="${helpers.escapeAttr(sectionKey)}"
     data-block-id="${helpers.escapeAttr(blockId)}"
-  >${options}</select>`;
+  >${options}</select>&#8203;`;
 }
 
 function isFillInEditorMode(sectionKey: string, blockId: string): boolean {

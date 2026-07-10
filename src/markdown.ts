@@ -112,7 +112,7 @@ turndown.addRule('hvy-sort-value', {
       ? Array.from(element.querySelectorAll('option')).find((option) => option.selected || option.hasAttribute('selected'))?.textContent?.trim()
         ?? element.getAttribute('value')?.trim()
         ?? content
-      : element.textContent?.trim() ?? content;
+      : (element.textContent ?? content).replaceAll('\u200b', '').trim();
     return formatSortValueAnnotation({ key }, label);
   },
 });

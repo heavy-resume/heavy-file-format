@@ -11,6 +11,7 @@ import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
 import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
+import { hasTextFillInMarker } from './text-fill-in';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -350,6 +351,14 @@ function restoreActiveEditorState(activeEditor: ActiveEditorRestoreState | null)
   state.activeEditorBlockPath = existingPath.length > 0 ? existingPath : [{ sectionKey, blockId }];
   state.activeEditorBlock = { sectionKey, blockId };
   state.activeTextEditorMode = activeEditor.activeTextEditorMode ? { ...activeEditor.activeTextEditorMode } : null;
+  const restoredBlock = findSnapshotBlockByIds(sectionKey, blockId);
+  if (
+    state.activeTextEditorMode?.mode === 'fill-in'
+    && restoredBlock
+    && (!restoredBlock.schema.fillIn || !hasTextFillInMarker(restoredBlock.text))
+  ) {
+    state.activeTextEditorMode = { sectionKey, blockId, mode: 'rich' };
+  }
   state.activeEditorBlockSnapshots = activeEditor.activeEditorBlockSnapshots.filter((snapshot) =>
     state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
   );

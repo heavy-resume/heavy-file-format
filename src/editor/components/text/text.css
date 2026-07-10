@@ -36,6 +36,11 @@
   pointer-events: none;
 }
 
+.text-editor-shell.is-fill-in-editor .text-editor-toolbar-slot {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .text-editor-toolbar-spacer {
   height: var(--text-editor-toolbar-height);
   margin-bottom: 0.4rem;
@@ -214,6 +219,7 @@
 .text-use-as-button {
   min-height: 1.85rem;
   padding: 0.22rem 0.55rem;
+  border: 1px solid var(--hvy-border-input);
   border-radius: 999px;
   background: var(--hvy-surface-alt);
   color: var(--hvy-text);
@@ -230,22 +236,20 @@
   min-width: 10rem;
   max-width: min(18rem, calc(100cqw - 1rem));
   padding: 0.28rem;
-  border: 1px solid var(--hvy-border-translucent);
+  border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
   background: var(--hvy-surface);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--hvy-shadow) 48%, transparent);
 }
 
-.text-use-as-selection:hover .text-use-as-menu,
-.text-use-as-selection:focus-within .text-use-as-menu {
+.text-use-as-selection.is-use-as-open .text-use-as-menu {
   display: grid;
   gap: 0.25rem;
 }
 
-.text-use-as-selection:hover .text-use-as-button,
-.text-use-as-selection:focus-within .text-use-as-button {
+.text-use-as-selection.is-use-as-open .text-use-as-button {
   background: var(--hvy-button-bg);
-  border-color: var(--hvy-button-bg);
+  border-color: var(--hvy-border-input);
   color: var(--hvy-button-text);
 }
 
@@ -261,10 +265,11 @@
 .text-use-as-menu-divider {
   height: 1px;
   margin: 0.15rem 0;
-  background: var(--hvy-border-translucent);
+  background: var(--hvy-border-input);
 }
 
 .hvy-sort-value {
+  position: relative;
   display: inline-flex;
   max-width: 100%;
   min-height: 1.55em;
@@ -274,11 +279,29 @@
   border: 1px solid var(--hvy-border-input);
   background: color-mix(in srgb, var(--hvy-surface-alt) 86%, var(--hvy-accent-2) 14%);
   color: var(--hvy-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 55%, transparent);
 }
 
 .hvy-sort-value:not(select) {
   padding: 0.04rem 0.35rem;
+}
+
+.text-editor-shell.is-use-as-open .hvy-sort-value:not(select)::before {
+  content: attr(data-sort-value-key);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.12rem);
+  max-width: 14rem;
+  padding: 0.08rem 0.28rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--hvy-shadow) 28%, transparent);
 }
 
 .hvy-sort-value-enum {

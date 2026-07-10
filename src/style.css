@@ -900,6 +900,8 @@ body {
 }
 
 .viewer-shell .reader-document {
+  position: relative;
+  z-index: 0;
   height: 100%;
   overflow: auto;
   padding-left: var(--hvy-sidebar-footprint);

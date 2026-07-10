@@ -3,7 +3,7 @@ import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
-import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp } from './state';
+import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
@@ -223,7 +223,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (shouldRefreshReaderPanelsAfterRichInput(richEditor)) {
-      getRefreshReaderPanels()();
+      refreshReaderPanelsAroundActiveEditor(richEditor);
     }
     return true;
   }
@@ -280,7 +280,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
     if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
-      getRefreshReaderPanels()();
+      refreshReaderPanelsAroundActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -304,7 +304,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     const sortValuesChanged = syncSortValuesForDocument(state.document);
     if (sortValuesChanged || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
-      getRefreshReaderPanels()();
+      refreshReaderPanelsAroundActiveEditor(target);
     }
     return true;
   }
@@ -478,7 +478,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
     if (sortValuesChanged || shouldRefreshReaderPanelsAfterRichInput(target)) {
-      getRefreshReaderPanels()();
+      refreshReaderPanelsAroundActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -603,7 +603,22 @@ function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock)
 }
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
-  return !target.closest('.editor-tree, .hvy-ai-reader-surface');
+  return !target.closest('.editor-tree, .editor-sidebar, .hvy-ai-reader-surface');
+}
+
+function refreshReaderPanelsAroundActiveEditor(target: HTMLElement): void {
+  const surface = getRefreshSurfaceOutsideActiveEditor(target);
+  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false });
+}
+
+function getRefreshSurfaceOutsideActiveEditor(target: HTMLElement): ReaderPanelRefreshSurface {
+  if (target.closest('.editor-sidebar, #readerSidebarSections, #aiSidebarSections')) {
+    return 'reader';
+  }
+  if (target.closest('#readerDocument, #aiReaderDocument')) {
+    return 'sidebar';
+  }
+  return 'all';
 }
 
 function refreshCaptionModalPreview(target: HTMLElement, caption: TextCaptionPayload | null): void {
@@ -1134,12 +1149,15 @@ export function applyRichAction(
   options: { sortValueKey?: string; sortValueType?: string } = {}
 ): void {
   if (action === 'fill-in') {
-    applyTextFillInSlot(editable);
+    if (applyTextFillInSlot(editable)) {
+      routeNextUndoToDocument();
+    }
     return;
   }
   if (action === 'sort-value') {
     if (applySortValueAnnotation(editable, options)) {
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
     }
     return;
   }
@@ -1232,10 +1250,37 @@ function applySortValueAnnotation(
   wrapper.dataset.hvySortValue = 'true';
   wrapper.dataset.sortValueKey = key;
   const fragment = range.extractContents();
+  unwrapSortValueAnnotations(fragment, key);
+  unwrapSortValueAnnotations(editable, key);
   wrapper.appendChild(fragment);
   range.insertNode(wrapper);
-  selectElementContents(wrapper);
+  moveCaretAfterElement(wrapper);
   return true;
+}
+
+function moveCaretAfterElement(element: HTMLElement): void {
+  const caretNode = document.createTextNode('\u200b');
+  element.after(caretNode);
+  const range = document.createRange();
+  range.setStart(caretNode, caretNode.data.length);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  element.closest<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true });
+}
+
+function unwrapSortValueAnnotations(root: ParentNode, key: string): void {
+  root.querySelectorAll<HTMLElement>(`[data-hvy-sort-value="true"][data-sort-value-key="${cssEscapeForSelector(key)}"]`).forEach((node) => {
+    const parent = node.parentNode;
+    if (!parent) {
+      return;
+    }
+    while (node.firstChild) {
+      parent.insertBefore(node.firstChild, node);
+    }
+    node.remove();
+  });
 }
 
 function inferSortValueKey(text: string, type: string | undefined): string {
@@ -1434,15 +1479,15 @@ function getAncestorElement(node: Node, boundary: HTMLElement, selector: string)
   return match && boundary.contains(match) ? match : null;
 }
 
-function applyTextFillInSlot(editable: HTMLElement): void {
+function applyTextFillInSlot(editable: HTMLElement): boolean {
   if (editable.dataset.field !== 'block-rich') {
-    return;
+    return false;
   }
   const context = resolveBlockContext(editable);
   const block = context?.block ?? null;
   const sectionKey = editable.dataset.sectionKey ?? '';
   if (!block || hasTextFillInMarker(block.text)) {
-    return;
+    return false;
   }
   const range = getEditableSelectionRange(editable);
   const selectedText = range && !range.collapsed
@@ -1463,6 +1508,7 @@ function applyTextFillInSlot(editable: HTMLElement): void {
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRefreshReaderPanels()();
   getRenderApp()();
+  return true;
 }
 
 function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
@@ -2179,6 +2225,9 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
     !textEditorShell.contains(document.activeElement)
   ) {
     textEditorShell?.classList.remove('has-fill-in-selection');
+    textEditorShell?.classList.remove('is-use-as-open');
+    textEditorShell?.querySelector<HTMLElement>('.text-use-as-selection')?.classList.remove('is-use-as-open');
+    textEditorShell?.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
     delete editable.dataset.fillInSelectionText;
   }
   const toolbars = [
@@ -2358,6 +2407,12 @@ function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): b
 }
 
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (event.key === 'ArrowRight' && moveCaretAfterFocusedSortValueControl(event, editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.key === 'ArrowRight' && exitInlineCodeAtEnd(editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
@@ -2583,6 +2638,24 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     return false;
   }
 
+  if (
+    (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward' || event.inputType === 'deleteByCut') &&
+    preserveSelectedSortValueAnnotationForReplacement(editable)
+  ) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (
+    (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') &&
+    preserveCollapsedSortValueAnnotationDeletion(editable, event.inputType)
+  ) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.inputType === 'deleteContentBackward') {
     if (!handleInlineCheckboxBackspace(editable)) {
       return false;
@@ -2598,6 +2671,12 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   if (isSelectionInsideCodeBlock(editable)) {
     insertTextInSelectionCodeBlock(editable, event.data);
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (replaceEmptySortValueAnnotationText(editable, event.data)) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
     return true;
   }
 
@@ -2653,6 +2732,90 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;
+}
+
+function preserveCollapsedSortValueAnnotationDeletion(editable: HTMLElement, inputType: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || !range.collapsed) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue || countVisibleSortValueCharacters(sortValue) !== 1) {
+    return false;
+  }
+  const offset = getTextOffset(sortValue, range.startContainer, range.startOffset);
+  if (offset === null) {
+    return false;
+  }
+  const text = sortValue.textContent ?? '';
+  if (inputType === 'deleteContentBackward' && countVisibleSortValueCharactersBefore(text, offset) !== 1) {
+    return false;
+  }
+  if (inputType === 'deleteContentForward' && countVisibleSortValueCharactersAfter(text, offset) !== 1) {
+    return false;
+  }
+  sortValue.replaceChildren(document.createTextNode('\u200b'));
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function preserveSelectedSortValueAnnotationForReplacement(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue) {
+    return false;
+  }
+  sortValue.replaceChildren(document.createTextNode('\u200b'));
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function replaceEmptySortValueAnnotationText(editable: HTMLElement, text: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue || !isSortValueAnnotationEmpty(sortValue)) {
+    return false;
+  }
+  sortValue.textContent = text;
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function getRangeSortValueTextElement(range: Range, editable: HTMLElement): HTMLElement | null {
+  const start = getSortValueTextElement(range.startContainer, editable);
+  const end = getSortValueTextElement(range.endContainer, editable);
+  return start && start === end ? start : null;
+}
+
+function getSortValueTextElement(node: Node, editable: HTMLElement): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const sortValue = element?.closest<HTMLElement>('[data-hvy-sort-value="true"]');
+  if (!sortValue || sortValue instanceof HTMLSelectElement || !editable.contains(sortValue)) {
+    return null;
+  }
+  return sortValue;
+}
+
+function isSortValueAnnotationEmpty(sortValue: HTMLElement): boolean {
+  return (sortValue.textContent ?? '').replaceAll('\u200b', '').trim().length === 0;
+}
+
+function countVisibleSortValueCharacters(sortValue: HTMLElement): number {
+  return (sortValue.textContent ?? '').replaceAll('\u200b', '').length;
+}
+
+function countVisibleSortValueCharactersBefore(text: string, offset: number): number {
+  return text.slice(0, offset).replaceAll('\u200b', '').length;
+}
+
+function countVisibleSortValueCharactersAfter(text: string, offset: number): number {
+  return text.slice(offset).replaceAll('\u200b', '').length;
 }
 
 export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElement): boolean {
@@ -3686,6 +3849,39 @@ function replaceInlineCodeInTextNode(textNode: Text): boolean {
     selection?.addRange(range);
   }
   return true;
+}
+
+function moveCaretAfterFocusedSortValueControl(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
+  }
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement) || !target.matches('[data-hvy-sort-value="true"]')) {
+    return false;
+  }
+  if (!editable.contains(target)) {
+    return false;
+  }
+  placeCaretAfterInlineElement(target, editable);
+  return true;
+}
+
+function placeCaretAfterInlineElement(element: HTMLElement, editable: HTMLElement): void {
+  const nextNode = element.nextSibling;
+  const textNode = nextNode instanceof Text ? nextNode : document.createTextNode('\u200b');
+  if (textNode !== nextNode) {
+    element.after(textNode);
+  }
+  const range = document.createRange();
+  range.setStart(textNode, 0);
+  range.collapse(true);
+  if (document.activeElement === element) {
+    element.blur();
+  }
+  editable.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 function exitInlineCodeAtEnd(editable: HTMLElement): boolean {

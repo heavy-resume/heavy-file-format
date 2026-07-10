@@ -62,6 +62,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
+    const useAsSelection = target.closest<HTMLElement>('.text-use-as-selection');
     logClickTrace(event, 'click-dispatch:mousedown:enter', {
       action: actionButton?.dataset.action ?? null,
       richAction: richButton?.dataset.richAction ?? null,
@@ -75,6 +76,14 @@ export function bindClickDispatch(app: HTMLElement): void {
       logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
         richAction: richButton.dataset.richAction ?? null,
       });
+      return;
+    }
+    if (useAsSelection) {
+      const editable = useAsSelection.closest<HTMLElement>('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+      if (editable) {
+        storeCurrentRichSelection(editable, { preserveExistingSelection: true });
+      }
+      event.preventDefault();
       return;
     }
     if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
@@ -103,6 +112,9 @@ export function bindClickDispatch(app: HTMLElement): void {
       return;
     }
     if (actionButton && isTableEditorActionButton(actionButton)) {
+      event.preventDefault();
+    }
+    if (actionButton?.dataset.action === 'remove-text-fill-in') {
       event.preventDefault();
     }
     if (actionButton?.dataset.action === 'set-editor-mode' || actionButton?.dataset.action === 'switch-view') {
@@ -134,6 +146,13 @@ export function bindClickDispatch(app: HTMLElement): void {
       logClickTrace(event, 'click-dispatch:bubble:skip', {
         skipReason: 'form-control-target',
       });
+      return;
+    }
+
+    const useAsButton = target.closest<HTMLElement>('.text-use-as-button');
+    if (useAsButton) {
+      event.preventDefault();
+      toggleUseAsMenu(app, useAsButton);
       return;
     }
 
@@ -174,12 +193,17 @@ export function bindClickDispatch(app: HTMLElement): void {
             sortValueKey: richButton.dataset.sortValueKey,
             sortValueType: richButton.dataset.sortValueType,
           });
+          closeUseAsMenus(app);
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
           editable.focus({ preventScroll: true });
           richToolbarSelections.delete(editable);
         }
       }
       return;
+    }
+
+    if (!target.closest('.text-use-as-selection')) {
+      closeUseAsMenus(app);
     }
 
     if (!actionButton) {
@@ -242,6 +266,29 @@ export function bindClickDispatch(app: HTMLElement): void {
       cancelBubbleAfter: event.cancelBubble,
       handled,
     });
+  });
+}
+
+function toggleUseAsMenu(app: HTMLElement, button: HTMLElement): void {
+  const selection = button.closest<HTMLElement>('.text-use-as-selection');
+  const shell = button.closest<HTMLElement>('.text-editor-shell');
+  if (!selection || !shell) {
+    return;
+  }
+  const shouldOpen = !selection.classList.contains('is-use-as-open');
+  closeUseAsMenus(app);
+  selection.classList.toggle('is-use-as-open', shouldOpen);
+  shell.classList.toggle('is-use-as-open', shouldOpen);
+  button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function closeUseAsMenus(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.text-use-as-selection.is-use-as-open').forEach((selection) => {
+    selection.classList.remove('is-use-as-open');
+    selection.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
+  });
+  root.querySelectorAll<HTMLElement>('.text-editor-shell.is-use-as-open').forEach((shell) => {
+    shell.classList.remove('is-use-as-open');
   });
 }
 

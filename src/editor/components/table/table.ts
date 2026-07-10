@@ -174,7 +174,7 @@ function renderTableSortValueEditorControl(
     data-field="sort-value-enum"
     data-section-key="${helpers.escapeAttr(sectionKey)}"
     data-block-id="${helpers.escapeAttr(blockId)}"
-  >${options}</select>`;
+  >${options}</select>&#8203;`;
 }
 
 export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {

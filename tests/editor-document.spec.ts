@@ -2448,6 +2448,51 @@ hvy_version: 0.1
   expect(result).toEqual(['load']);
 });
 
+test('reference editor sidebar rich input preserves focus per keystroke', async ({ page }) => {
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+  await page.locator('[data-action="switch-view"][data-view="editor"]').click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.waitForTimeout(350);
+
+  await page.locator('.editor-sidebar .editor-block-passive[data-block-id]').first().click();
+  const editor = page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-field="block-rich"]').first();
+  await expect(editor).toBeVisible();
+  await editor.focus();
+  await editor.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (window as Window & { testSidebarEditorNode?: Element }).testSidebarEditorNode = element;
+  });
+
+  await page.keyboard.type('Z');
+  await page.waitForTimeout(350);
+
+  const result = await page.evaluate(() => {
+    const previous = (window as Window & { testSidebarEditorNode?: Element }).testSidebarEditorNode;
+    const current = document.querySelector('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-field="block-rich"]');
+    return {
+      activeField: document.activeElement instanceof HTMLElement ? document.activeElement.dataset.field ?? null : null,
+      activeInsideEditor: current instanceof HTMLElement ? current.contains(document.activeElement) : false,
+      previousConnected: previous?.isConnected ?? false,
+      sameEditorNode: previous === current,
+      text: current?.textContent ?? '',
+    };
+  });
+
+  expect(result).toMatchObject({
+    activeField: 'block-rich',
+    activeInsideEditor: true,
+    previousConnected: true,
+    sameEditorNode: true,
+  });
+  expect(result.text).toContain('Z');
+});
+
 test('embedded editor rich input runs document hooks when edit is done', async ({ page }) => {
   await page.goto('/');
 

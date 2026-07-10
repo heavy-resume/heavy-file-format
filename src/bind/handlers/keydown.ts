@@ -6,6 +6,60 @@ import { handleEscapeKey } from './escape';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 
 export function bindKeydown(app: HTMLElement): void {
+  let pendingSortSelectExit: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
+  let lastFocusedSortSelect: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
+
+  app.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement) || !target.matches('[data-hvy-sort-value="true"]')) {
+      return;
+    }
+    const richTarget = getRichTarget(target);
+    if (richTarget) {
+      lastFocusedSortSelect = { select: target, richTarget };
+    }
+  }, { capture: true });
+
+  app.ownerDocument.addEventListener('keydown', (event) => {
+    if (!isPrintableKey(event)) {
+      return;
+    }
+    const activeSortSelect = app.ownerDocument.activeElement instanceof HTMLSelectElement && app.ownerDocument.activeElement.matches('[data-hvy-sort-value="true"]')
+      ? app.ownerDocument.activeElement
+      : null;
+    const activeRichTarget = activeSortSelect ? getRichTarget(activeSortSelect) : null;
+    const select = pendingSortSelectExit?.select ?? activeSortSelect ?? lastFocusedSortSelect?.select;
+    const richTarget = pendingSortSelectExit?.richTarget ?? activeRichTarget ?? lastFocusedSortSelect?.richTarget;
+    if (!select || !richTarget) {
+      return;
+    }
+    if (!select.isConnected || !richTarget.isConnected || !app.contains(richTarget)) {
+      pendingSortSelectExit = null;
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    insertTextAfterSortSelect(select, richTarget, event.key);
+    pendingSortSelectExit = null;
+    lastFocusedSortSelect = null;
+  }, { capture: true });
+
+  app.addEventListener('keydown', (event) => {
+    const target = event.target as HTMLElement;
+    if (!(target instanceof HTMLSelectElement) || !target.matches('[data-hvy-sort-value="true"]')) {
+      return;
+    }
+    const richTarget = getRichTarget(target);
+    if (!richTarget) {
+      return;
+    }
+    if (event.key === 'ArrowRight' && handleRichEditorKeydown(event, richTarget)) {
+      pendingSortSelectExit = { select: target, richTarget };
+      event.stopPropagation();
+      return;
+    }
+  }, { capture: true });
+
   app.addEventListener('keyup', (event) => {
     const target = event.target as HTMLElement;
     const richTarget = getRichTarget(target);
@@ -334,4 +388,25 @@ function getRichTarget(target: HTMLElement): HTMLElement | null {
     : target.closest<HTMLElement>(
         '[data-field="block-rich"], [data-field="block-grid-rich"], [data-field="table-details-rich"], [data-field="caption-rich"], [data-field="table-column"], [data-field="table-cell"]'
       );
+}
+
+function isPrintableKey(event: KeyboardEvent): boolean {
+  return event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey;
+}
+
+function insertTextAfterSortSelect(select: HTMLSelectElement, richTarget: HTMLElement, text: string): void {
+  const nextNode = select.nextSibling;
+  const textNode = nextNode instanceof Text ? nextNode : document.createTextNode('\u200b');
+  if (textNode !== nextNode) {
+    select.after(textNode);
+  }
+  textNode.data = `${text}${textNode.data}`;
+  const range = document.createRange();
+  range.setStart(textNode, text.length);
+  range.collapse(true);
+  richTarget.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  richTarget.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
 }

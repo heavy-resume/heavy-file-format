@@ -586,7 +586,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const removeButton = canRemove
       ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
     const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)

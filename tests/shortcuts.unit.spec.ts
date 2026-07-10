@@ -248,6 +248,21 @@ test('global undo shortcut handles pending document undo before rich editor nati
 
   expect(prevented).toBe(true);
   expect(undoStateMock).toHaveBeenCalledTimes(1);
+
+  prevented = false;
+  listener?.({
+    target: editable,
+    metaKey: false,
+    ctrlKey: true,
+    key: 'z',
+    shiftKey: false,
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+
+  expect(prevented).toBe(true);
+  expect(undoStateMock).toHaveBeenCalledTimes(1);
 });
 
 test('global undo shortcut still handles document-level undo', async () => {

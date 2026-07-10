@@ -3,6 +3,7 @@ import type { AppState } from './types';
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
   runVisibilityScripts?: boolean;
+  runDocumentHooks?: boolean;
   surface?: ReaderPanelRefreshSurface;
 }
 

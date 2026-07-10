@@ -217,6 +217,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     updateRichCodeBlockLanguageInput(target);
     removeNonTextContentFromRichEditor(richEditor);
+    normalizeSortValueAnnotationDom(richEditor);
     normalizeEditableListDom(richEditor);
     normalizeInlineCodeTextNodes(richEditor);
     const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(richEditor))));
@@ -230,6 +231,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
 
   if (field === 'caption-rich') {
     removeNonTextContentFromRichEditor(target);
+    normalizeSortValueAnnotationDom(target);
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
@@ -260,6 +262,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     removeNonTextContentFromRichEditor(target);
+    normalizeSortValueAnnotationDom(target);
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
@@ -2816,6 +2819,73 @@ function countVisibleSortValueCharactersBefore(text: string, offset: number): nu
 
 function countVisibleSortValueCharactersAfter(text: string, offset: number): number {
   return text.slice(offset).replaceAll('\u200b', '').length;
+}
+
+function normalizeSortValueAnnotationDom(root: ParentNode): void {
+  const sortValueBackground = getSortValuePresentationBackground(root);
+  root.querySelectorAll<HTMLElement>('.hvy-sort-value').forEach((element) => {
+    if (element instanceof HTMLSelectElement) {
+      return;
+    }
+    const isSortValue = element.getAttribute('data-hvy-sort-value') === 'true';
+    const key = element.getAttribute('data-sort-value-key')?.trim() ?? '';
+    if (isSortValue && key) {
+      return;
+    }
+    unwrapElement(element);
+  });
+  if (!sortValueBackground) {
+    return;
+  }
+  root.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    if (element.closest('[data-hvy-sort-value="true"]')) {
+      return;
+    }
+    if (isBrowserCopiedSortValuePresentation(element, sortValueBackground)) {
+      unwrapElement(element);
+    }
+  });
+}
+
+function unwrapElement(element: HTMLElement): void {
+  const parent = element.parentNode;
+  if (!parent) {
+    return;
+  }
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element);
+  }
+  element.remove();
+}
+
+function getSortValuePresentationBackground(root: ParentNode): string | null {
+  const rootNode = root as Node;
+  const ownerDocument = rootNode instanceof Document ? rootNode : rootNode.ownerDocument;
+  const host = root instanceof Element ? root : ownerDocument.body;
+  if (!host) {
+    return null;
+  }
+  const probe = ownerDocument.createElement('span');
+  probe.className = 'hvy-sort-value';
+  probe.dataset.hvySortValue = 'true';
+  probe.dataset.sortValueKey = '__probe__';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.textContent = '\u200b';
+  host.appendChild(probe);
+  const background = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return background && background !== 'rgba(0, 0, 0, 0)' ? background : null;
+}
+
+function isBrowserCopiedSortValuePresentation(element: HTMLElement, sortValueBackground: string): boolean {
+  if (element.tagName !== 'SPAN' || element.className || element.attributes.length !== 1 || !element.hasAttribute('style')) {
+    return false;
+  }
+  if (!element.style.backgroundColor) {
+    return false;
+  }
+  return getComputedStyle(element).backgroundColor === sortValueBackground;
 }
 
 export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElement): boolean {

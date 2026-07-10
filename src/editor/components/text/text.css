@@ -268,7 +268,7 @@
   background: var(--hvy-border-input);
 }
 
-.hvy-sort-value {
+.hvy-sort-value[data-hvy-sort-value="true"] {
   position: relative;
   display: inline-flex;
   max-width: 100%;
@@ -281,11 +281,11 @@
   color: var(--hvy-text);
 }
 
-.hvy-sort-value:not(select) {
+.hvy-sort-value[data-hvy-sort-value="true"]:not(select) {
   padding: 0.04rem 0.35rem;
 }
 
-.text-editor-shell.is-use-as-open .hvy-sort-value:not(select)::before {
+.text-editor-shell.is-use-as-open .hvy-sort-value[data-hvy-sort-value="true"]:not(select)::before {
   content: attr(data-sort-value-key);
   position: absolute;
   left: 0;

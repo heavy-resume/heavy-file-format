@@ -632,13 +632,14 @@ component_defs:
 <!--hvy: {"id":"main"}-->
 #! Main
 
- <!--hvy:text {"id":"details"}-->
+ <!--hvy:text {"id":"sort-delete-details"}-->
   Temporary
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.waitForFunction(async () => {
     const { state } = await import('/src/state.ts');
-    return state.document.sections[0]?.blocks[0]?.id === 'details';
+    return state.document.sections[0]?.blocks[0]?.id === 'sort-delete-details' &&
+      state.document.sections[0]?.blocks[0]?.text.includes('Temporary');
   }, null, { timeout: 1000 });
   await page.getByRole('button', { name: 'Basic' }).click();
 
@@ -678,6 +679,101 @@ component_defs:
   await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('<!--hvy:sort-value {"key":"Name"}-->Replacement<!--/hvy:sort-value-->');
+});
+
+test('orphan sort value presentation is cleared while typing plain text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"orphan-sort-presentation"}-->
+  Base
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'orphan-sort-presentation';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Base' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><span class="hvy-sort-value">Plain</span></p>';
+    const textNode = node.querySelector('.hvy-sort-value')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  const orphanBackground = await editor.locator('.hvy-sort-value').evaluate((node) =>
+    getComputedStyle(node as HTMLElement).backgroundColor
+  );
+  expect(orphanBackground).toBe('rgba(0, 0, 0, 0)');
+
+  await page.keyboard.type(' text');
+
+  await expect(editor.locator('.hvy-sort-value')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveText('Plain text');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Plain text');
+  await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
+});
+
+test('browser-copied sort value background is cleared after deleting the annotation element', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: number
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"copied-sort-background"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'copied-sort-background';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.locator('.hvy-sort-value[data-sort-value-key="Strength"]').evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNode(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('7');
+
+  await expect(editor.locator('[data-hvy-sort-value="true"]')).toHaveCount(0);
+  await expect(editor.locator('p span[style*="background"]')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveText('Strength: 7');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Strength: 7');
+  await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
 });
 
 test('code button wraps selected text as inline code and preserves angle brackets', async ({ page }) => {

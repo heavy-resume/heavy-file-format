@@ -10,6 +10,7 @@ import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeDocument } from '../../serialization';
+import { syncSortValuesForDocument } from '../../sort-values';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -278,6 +279,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   const flushIfMutated = () => {
     if (!mutated) return;
     mutated = false;
+    syncSortValuesForDocument(options.document);
     if (state?.document === options.document) {
       state.rawEditorText = serializeDocument(options.document);
       state.rawEditorError = null;

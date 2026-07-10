@@ -719,12 +719,12 @@ test('meeting minutes template uses reusable timestamped minute entries', async 
   expect(parsed.spec.scripts.add_entry).toContain('def note_to_markdown(value):');
   expect(parsed.spec.scripts.add_entry).toContain('output.append(line + "  ")');
   expect(parsed.spec.scripts.add_entry).toContain('sort_id = doc.time.now_unix_ms()');
-  expect(parsed.spec.scripts.add_entry).toContain('sort_time = doc.time.now_iso()');
+  expect(parsed.spec.scripts.add_entry).not.toContain('sort_time = doc.time.now_iso()');
   expect(parsed.spec.scripts.add_entry).toContain('display_time = doc.time.now_local()');
   expect(parsed.spec.scripts.add_entry).toContain('hvy:sort-value');
   expect(parsed.spec.scripts.add_entry).toContain('\\"key\\":\\"Time\\"');
   expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_id)');
-  expect(parsed.spec.scripts.add_entry).toContain('"sortKeys": {"Time": sort_time}');
+  expect(parsed.spec.scripts.add_entry).not.toContain('"sortKeys": {"Time": sort_time}');
   expect(parsed.spec.scripts.add_entry).toContain('entry.append_child(');
   expect(parsed.spec.scripts.add_entry).toContain('display_time + "<!--/hvy:sort-value-->**"');
   expect(parsed.spec.scripts.add_entry).toContain('"css": "margin: 0;"');

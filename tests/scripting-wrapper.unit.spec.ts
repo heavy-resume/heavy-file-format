@@ -16,6 +16,8 @@ import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
 import { deserializeDocument } from '../src/serialization';
+import { initCallbacks, initState } from '../src/state';
+import { createTestState } from './serialization-test-helpers';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -440,6 +442,58 @@ test('createScriptingRuntime exposes time helpers', () => {
   expect(runtime.doc.time.now_local()).not.toMatch(/^\d{4}-\d{2}-\d{2}T/);
   expect(runtime.doc.time.now_unix_ms()).toBe(expectedDate.getTime());
   expect(runtime.doc.time.today_iso()).toBe('2026-06-30');
+});
+
+test('createScriptingRuntime syncs script-created sort value annotations before rerender', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: minute-entry
+    baseType: container
+    sortValueDefs:
+      Time:
+        type: datetime
+    schema:
+      containerExpanded: true
+      containerBlocks: []
+---
+
+<!--hvy: {"id":"minutes"}-->
+#! Minutes
+
+ <!--hvy:component-list {"id":"minute-entries","componentListComponent":"minute-entry"}-->
+`, '.hvy');
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createTestState(document));
+  const runtime = createScriptingRuntime({ document });
+  const entries = (runtime.doc.tool('get_components', { component: 'component-list' }) as Array<{
+    append_child(component: string, config?: unknown, text?: string, slot?: string): {
+      append_child(component: string, config?: unknown, text?: string, slot?: string): unknown;
+    };
+  }>)[0]!;
+  const entry = entries.append_child(
+    'minute-entry',
+    { id: 'minute-entry-1', tags: 'meeting-minute' },
+    '',
+    'component-list'
+  );
+  entry.append_child(
+    'text',
+    {},
+    '<!--hvy:sort-value {"key":"Time"}-->July 8, 2026 at 9:15 AM PDT<!--/hvy:sort-value-->',
+    'container'
+  );
+
+  runtime.doc.rerender();
+
+  const expectedResult = document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.sortKeys;
+  expect(expectedResult).toEqual({ Time: '2026-07-08T16:15:00.000Z' });
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {

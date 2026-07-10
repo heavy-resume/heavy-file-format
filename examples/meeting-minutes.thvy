@@ -108,13 +108,11 @@ component_defs:
           raise RuntimeError("Minute entries list was not found.")
 
       sort_id = doc.time.now_unix_ms()
-      sort_time = doc.time.now_iso()
       display_time = doc.time.now_local()
       entry = entries.append_child(
           "minute-entry",
           {
               "id": "minute-entry-" + str(sort_id),
-              "sortKeys": {"Time": sort_time},
               "tags": "meeting-minute"
           },
           "",

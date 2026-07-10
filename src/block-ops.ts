@@ -2447,6 +2447,7 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     if (editable.dataset.hvyFormatBlockMergeChanged === 'true') {
       delete editable.dataset.hvyFormatBlockMergeChanged;
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
     }
     updateRichToolbarState(editable);
     return true;

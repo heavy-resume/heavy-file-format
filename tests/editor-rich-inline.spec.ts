@@ -88,7 +88,7 @@ hvy_version: 0.1
     await page.getByRole('button', { name: 'Apply' }).click();
     await page.getByRole('button', { name: 'Basic' }).click();
 
-    await page.locator('.editor-block-passive', { has: page.locator('#body') }).click();
+    await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
     const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
     await editor.locator('h1').evaluate((heading) => {
       const range = document.createRange();
@@ -128,7 +128,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('#body') }).click();
+  await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
   const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
   await editor.locator('h1').evaluate((heading) => {
     (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
@@ -148,6 +148,46 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('# SOME HEADER');
   await expect(page.locator('#rawEditor')).toContainText('some text');
   await expect(page.locator('#rawEditor')).not.toContainText('# SOME HEADERsome text');
+});
+
+test('forward deleting an empty heading restores with one document undo', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # 
+
+  some text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.locator('h1').evaluate((heading) => {
+    (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press('Delete');
+  await expect(editor.locator('h1')).toHaveCount(0);
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(editor.locator('h1')).toHaveCount(1);
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
 });
 
 test('image caption rich editor keeps italic and bold markers distinct', async ({ page }) => {

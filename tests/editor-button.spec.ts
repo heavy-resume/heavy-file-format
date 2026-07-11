@@ -591,6 +591,48 @@ test('embedded AI remains in document edit mode after switching from viewer to A
   await expect(firstDoc.locator('.chat-panel')).toHaveClass(/is-document-edit/);
 });
 
+test('search result highlights inside an active text editor without serializing marker markup', async ({ page }) => {
+  test.setTimeout(5_000);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+<!--hvy:text {"id":"body"}-->
+ Editable needle text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Editable needle text' }).click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible({ timeout: 1_000 });
+
+  await page.locator('.search-launcher').click();
+  await page.locator('[data-field="search-query"]').fill('needle');
+  await page.locator('#searchComposer').press('Enter');
+  await page.getByRole('button', { name: /Editable needle text/ }).click();
+
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await expect(activeEditor.locator('mark.search-match-marker')).toHaveText('needle', { timeout: 1_000 });
+  await activeEditor.evaluate((editor) => {
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.type('!');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Editable needle text!', { timeout: 1_000 });
+  await expect(page.locator('#rawEditor')).not.toContainText('search-match-marker', { timeout: 1_000 });
+});
+
 test('two embedded docs can switch example sources independently', async ({ page }) => {
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');

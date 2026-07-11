@@ -156,6 +156,9 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
 
 export function getRichEditorSerializableHtml(root: HTMLElement): string {
   const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll<HTMLElement>('mark.search-match-marker').forEach((marker) => {
+    marker.replaceWith(...Array.from(marker.childNodes));
+  });
   clone.querySelectorAll('.rich-code-language-control').forEach((control) => control.remove());
   clone.querySelectorAll<HTMLElement>('.rich-code-block-shell').forEach((shell) => {
     const pre = shell.querySelector(':scope > pre');

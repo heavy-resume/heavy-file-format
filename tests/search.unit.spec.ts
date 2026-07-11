@@ -15,6 +15,7 @@ import { renderSearchFloatingSurface } from '../src/search/surface-refresh';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
+import { highlightEditorSearchMatches } from '../src/block-ops';
 
 afterEach(() => {
   setReferenceAppConfig(null);
@@ -60,6 +61,21 @@ hvy_version: 0.1
   const expectedMarkup = renderSearchFloatingSurface();
 
   expect(expectedMarkup).toContain('data-search-surface="floating" class="search-floating-surface is-chat-open"');
+});
+
+test('editor rendering highlights submitted search matches', () => {
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy')));
+  state.search.submittedQuery = 'needle';
+
+  const expectedResult = highlightEditorSearchMatches('<p>Find this needle.</p>');
+
+  expect(expectedResult).toContain('<mark class="search-match-marker">needle</mark>');
 });
 
 test('built-in search respects match case', async () => {

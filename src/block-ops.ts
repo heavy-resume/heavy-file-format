@@ -27,6 +27,7 @@ import { inferComponentListItemLabel } from './editor/components/component-list/
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
 import { findSortValueOwnerBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
+import { highlightSearchHtml } from './search/highlight';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -1101,11 +1102,11 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
       codeLanguageInputAttrs,
-    }),
+    })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
@@ -1143,6 +1144,17 @@ export function getComponentRenderHelpers(editorRenderer: {
     isPdfDocument: () => isPdfDocument(state.document),
     getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
+}
+
+export function highlightEditorSearchMatches(html: string): string {
+  if (state.currentView !== 'editor') {
+    return html;
+  }
+  const query = state.search.submittedQuery.trim();
+  if (!query || state.search.filterEnabled) {
+    return html;
+  }
+  return highlightSearchHtml(html, query, state.search.caseSensitive);
 }
 
 export function applyRichAction(

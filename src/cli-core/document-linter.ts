@@ -11,6 +11,7 @@ import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-r
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { validateDocumentMetadata } from '../document-metadata';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -34,6 +35,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'text_line_styles',
   'heading_styles',
   'plugins',
+  'metadata',
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
 
@@ -174,6 +176,17 @@ function lintHeader(document: VisualDocument): HvyCliLintIssue[] {
         path: '/header.yaml',
         component: 'header',
         message: `header.yaml metadata key "${key}" is not used by HVY ${SUPPORTED_HVY_VERSION} or this editor. Remove it if it was accidental.`,
+      });
+    }
+  }
+  if (typeof document.meta.metadata !== 'undefined') {
+    const issue = validateDocumentMetadata(document.meta.metadata);
+    if (issue) {
+      issues.push({
+        key: `/header.yaml:invalid-document-metadata:${issue.path}`,
+        path: '/header.yaml',
+        component: 'header',
+        message: issue.message,
       });
     }
   }

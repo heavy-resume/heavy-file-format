@@ -2884,6 +2884,9 @@ function unwrapElement(element: HTMLElement): void {
 function getSortValuePresentationBackground(root: ParentNode): string | null {
   const rootNode = root as Node;
   const ownerDocument = rootNode instanceof Document ? rootNode : rootNode.ownerDocument;
+  if (!ownerDocument) {
+    return null;
+  }
   const host = root instanceof Element ? root : ownerDocument.body;
   if (!host) {
     return null;

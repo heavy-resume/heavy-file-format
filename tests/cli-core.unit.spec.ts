@@ -2648,6 +2648,27 @@ test('hvy lint accepts spec-defined importPreplan metadata', async () => {
   expect(result.output).not.toContain('importPreplan');
 });
 
+test('hvy lint accepts application metadata with two object levels', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    record_id: abc123
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const expectedResult = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(expectedResult.output).toBe('No lint issues.');
+});
+
 test('hvy lint warns on newer HVY versions before assuming unused metadata', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.2

@@ -1005,6 +1005,7 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
   if (metadata.dimensions !== undefined && (typeof metadata.dimensions !== 'number' || !Number.isFinite(metadata.dimensions))) {
     throw new Error('Embedding index attachment has invalid dimensions.');
   }
+  const dimensions = typeof metadata.dimensions === 'number' ? metadata.dimensions : undefined;
   const entries: Array<HvyEmbeddingVector & { textHash: string; chunk?: HvyEmbeddingIndexChunk }> = [];
   let offset = EMBEDDING_INDEX_HEADER_SIZE + metadataLength;
   const ids = metadata.ids as string[];
@@ -1027,7 +1028,7 @@ function parseEmbeddingIndexBinary(bytes: Uint8Array): EmbeddingIndexSnapshot {
   return {
     version: EMBEDDING_INDEX_VERSION,
     model: metadata.model,
-    ...(metadata.dimensions !== undefined ? { dimensions: Math.floor(metadata.dimensions) } : {}),
+    ...(dimensions !== undefined ? { dimensions: Math.floor(dimensions) } : {}),
     fingerprint: metadata.fingerprint,
     recordsHash: metadata.recordsHash,
     entries,

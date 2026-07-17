@@ -28,6 +28,7 @@ import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-cap
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
 import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
 import { classifyXrefTarget } from './workspace-links';
+import { validateDocumentMetadata } from './document-metadata';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -682,6 +683,12 @@ function escapeHvyJsonString(value: string): string {
 }
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  if (typeof document.meta.metadata !== 'undefined') {
+    const issue = validateDocumentMetadata(document.meta.metadata);
+    if (issue) {
+      diagnostics.push({ severity: 'error', code: 'invalid_document_metadata', message: issue.message });
+    }
+  }
   for (const section of document.sections) {
     validateSectionSemantics(section, document, diagnostics);
   }

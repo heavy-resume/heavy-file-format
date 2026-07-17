@@ -184,8 +184,11 @@ function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi
   };
 }
 
-function throwJsonParseError(result: { ok: false; message: string }): never {
-  throw new Error(result.message);
+function throwJsonParseError(result: unknown): never {
+  const message = result && typeof result === 'object' && 'message' in result
+    ? (result as { message?: unknown }).message
+    : undefined;
+  throw new Error(typeof message === 'string' ? message : 'Invalid JSON response.');
 }
 
 function addJsonObjectHelpers(value: unknown): unknown {

@@ -11,11 +11,10 @@
   },
   "include": [
     "src/**/*.ts",
+    "examples/plugins/**/*.ts",
     "proxy/**/*.ts",
     "vite.config.ts",
     "vitest.config.ts",
-    "playwright.config.ts",
-    "tests/**/*.ts",
-    "tests/**/*.d.ts"
+    "playwright.config.ts"
   ]
 }

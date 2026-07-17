@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,

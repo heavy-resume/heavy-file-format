@@ -55,7 +55,7 @@ function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbarSlot: HTMLEle
     const root = shell.ownerDocument.documentElement;
     pending.observer = new MutationObserver(() => {
       if (shell.isConnected) {
-        scheduleTextToolbarMeasurement(shell, toolbar, MAX_CONNECTED_MEASURE_RETRIES);
+        scheduleTextToolbarMeasurement(shell, toolbarSlot, MAX_CONNECTED_MEASURE_RETRIES);
       }
     });
     pending.observer.observe(root, { childList: true, subtree: true });
@@ -92,7 +92,7 @@ function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbarSlot: HTMLEle
     pending.retries -= 1;
     textToolbarPendingMeasurements.set(shell, pending);
     if (pending.retries > 0) {
-      scheduleTextToolbarMeasurement(shell, toolbar, pending.retries);
+      scheduleTextToolbarMeasurement(shell, toolbarSlot, pending.retries);
     } else if (shell.isConnected) {
       clearPendingTextToolbarMeasurement(shell);
     }

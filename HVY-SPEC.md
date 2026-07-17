@@ -162,6 +162,17 @@ Document identity metadata includes:
 - `description`: optional string summarizing the document for metadata surfaces such as hosted link previews.
 - `tags`: optional comma-separated string or string array for document-level classification.
 
+Application metadata may be stored in the optional `metadata` object. HVY core does not interpret its keys or values. Applications SHOULD use a stable namespace they control as the first-level key when the metadata may be shared with other applications.
+
+`metadata` has a fixed, non-recursive shape: its values MAY be YAML scalars or objects whose values are YAML scalars. Arrays and objects nested inside those child objects are not supported. Readers and authoring tools MUST preserve valid `metadata` values unchanged and MUST reject metadata that exceeds this two-object-level limit.
+
+```yaml
+metadata:
+  com.example.records:
+    record_id: abc123
+    revision: 7
+```
+
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import { markdownToReaderHtml } from '../src/markdown';
 import { getTextLineStylesFromMeta } from '../src/text-line-styles';
@@ -865,6 +865,47 @@ section_defaults:
 
   expect(output).toContain('section_defaults:');
   expect(output).toContain('css: "margin: 0.5rem 0;"');
+});
+
+test('preserves application metadata in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    record_id: abc123
+    revision: 7
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('metadata:');
+  expect(expectedResult).toContain('com.example.records:');
+  expect(expectedResult).toContain('record_id: abc123');
+  expect(expectedResult).toContain('revision: 7');
+});
+
+test('rejects application metadata deeper than two object levels', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    sync:
+      revision: 7
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  expect(expectedResult.diagnostics).toContainEqual({
+    severity: 'error',
+    code: 'invalid_document_metadata',
+    message: 'metadata.com.example.records.sync exceeds the two-object-level nesting limit.',
+  });
 });
 
 test('preserves text_line_styles in document front matter on round-trip', () => {

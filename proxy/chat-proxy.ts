@@ -707,7 +707,7 @@ async function requestOpenAiEmbeddings(
   body: ProxyEmbeddingRequest,
   env: Record<string, string | undefined>,
   signal: AbortSignal
-): Promise<unknown> {
+): Promise<Record<string, unknown>> {
   const apiKey = resolveProviderApiKey('openai', env);
   const upstreamRequest = {
     model: body.model,
@@ -724,7 +724,10 @@ async function requestOpenAiEmbeddings(
   if (!response.ok) {
     throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI embeddings request failed.')}`);
   }
-  return payload;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Provider request failed: OpenAI embeddings returned an invalid response.');
+  }
+  return payload as Record<string, unknown>;
 }
 
 function buildProviderHeaders(provider: ProxyChatRequest['provider'], apiKey: string): Record<string, string> {

@@ -7,11 +7,12 @@ import { closeAiEditPopover } from '../../ai-edit-popover';
 import { openAiEditPopover } from '../../ai-edit-popover';
 import { restoreCliViewAfterRender } from '../../cli-ui/focus';
 import { clearFilteringForTarget } from '../../search/actions';
-import { clearActiveEditorBlock, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
+import { clearActiveEditorBlock, findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import type { AppActionHandler } from './types';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySectionsAfterRegularSections } from '../../section-ops';
+import { capturePaneScroll } from '../../scroll';
 
 const undo: AppActionHandler = () => {
   undoState();
@@ -189,10 +190,17 @@ const editContextComponent: AppActionHandler = ({ app, event }) => {
   app.querySelector('.hvy-context-popover')?.remove();
   app.querySelector('.hvy-context-popover-backdrop')?.remove();
   state.aiModeTipDismissed = true;
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  const passiveBlock = app.querySelector<HTMLElement>(
+    `.reader-block[data-section-key="${CSS.escape(menu.sectionKey)}"][data-block-id="${CSS.escape(menu.blockId)}"]`
+  );
   setActiveEditorBlock(menu.sectionKey, menu.blockId, { targetOnly: true });
   setAiEditorHostBlock(menu.sectionKey, menu.blockId);
   if (state.pendingEditorActivation) {
-    state.pendingEditorActivation.immediateFocus = true;
+    const block = findBlockByIds(menu.sectionKey, menu.blockId);
+    state.pendingEditorActivation.suppressFocus = block?.schema.kind === 'table' || block?.schema.component === 'table';
+    state.pendingEditorActivation.immediateFocus = !state.pendingEditorActivation.suppressFocus;
+    state.pendingEditorActivation.passiveHeight = passiveBlock?.getBoundingClientRect().height;
   }
   getRenderApp()();
 };

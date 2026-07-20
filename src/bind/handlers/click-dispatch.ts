@@ -14,6 +14,7 @@ import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 import { logClickTrace } from '../click-trace';
+import { capturePaneScroll } from '../../scroll';
 
 interface RichToolbarSelection {
   range: Range;
@@ -29,7 +30,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     logClickTrace(event, 'click-dispatch:capture:enter', {
       currentView: state.currentView,
     });
-    handleAiReaderTextActivationClick(event);
+    handleAiReaderTextActivationClick(app, event);
   }, true);
 
   app.addEventListener('contextmenu', (event) => {
@@ -292,7 +293,7 @@ function closeUseAsMenus(root: ParentNode): void {
   });
 }
 
-function handleAiReaderTextActivationClick(event: MouseEvent): void {
+function handleAiReaderTextActivationClick(app: HTMLElement, event: MouseEvent): void {
   if (state.currentView !== 'ai' || event.defaultPrevented) {
     if (state.currentView === 'ai') {
       logAiReaderTextActivation(event, 'skip', { skipReason: 'default-prevented-before-capture' });
@@ -365,10 +366,13 @@ function handleAiReaderTextActivationClick(event: MouseEvent): void {
   event.stopPropagation();
   event.stopImmediatePropagation();
   state.aiModeTipDismissed = true;
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  const passiveHeight = textBlock.closest<HTMLElement>('.reader-block')?.getBoundingClientRect().height;
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
   setAiEditorHostBlock(sectionKey, blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
+    state.pendingEditorActivation.passiveHeight = passiveHeight;
   }
   getRenderApp()();
 }

@@ -305,7 +305,6 @@ function moveTableCellFocus(
   }
 
   syncReusableTemplateForBlock(sectionKey, context.block.id);
-  getRefreshReaderPanels()();
   focusTableCell(app, sectionKey, blockId, nextRowIndex, nextCellIndex);
 }
 

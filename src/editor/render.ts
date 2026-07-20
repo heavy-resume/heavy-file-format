@@ -147,6 +147,7 @@ interface EditorRenderState {
     clientY?: number;
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
+    passiveHeight?: number;
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
@@ -547,6 +548,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveFrame ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
+    const passiveHeightAttr = state.pendingEditorActivation?.sectionKey === sectionKey
+      && state.pendingEditorActivation.blockId === block.id
+      && typeof state.pendingEditorActivation.passiveHeight === 'number'
+      ? ` data-passive-block-height="${state.pendingEditorActivation.passiveHeight}"`
+      : '';
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
@@ -598,7 +604,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">

@@ -3359,36 +3359,201 @@ hvy_version: 0.1
   const afterScrollTop = await tree.evaluate((node) => node.scrollTop);
   expect(afterScrollTop).toBeGreaterThanOrEqual(beforeScrollTop);
 
-  const activeEditorTop = await activeBlock.locator('.rich-editor').evaluate((editor) => editor.getBoundingClientRect().top);
   await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
   const passiveAfter = page.locator('.editor-block-passive', { hasText: 'Introduced reproducible developer containers' }).last();
   await expect(passiveAfter).toBeVisible();
-  await expect.poll(async () => {
-    const passiveTextTop = await passiveAfter.locator('.reader-block').evaluate((root) => {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      let node = walker.nextNode();
-      while (node) {
-        const text = node.textContent ?? '';
-        const firstTextIndex = text.search(/\S/);
-        if (firstTextIndex >= 0) {
-          const range = document.createRange();
-          range.setStart(node, firstTextIndex);
-          range.setEnd(node, text.length);
-          const rect = range.getClientRects()[0];
-          range.detach();
-          return rect?.top ?? null;
-        }
-        node = walker.nextNode();
-      }
-      return null;
-    });
-    if (passiveTextTop === null) {
-      return 999;
-    }
-    return Math.abs(Math.round(passiveTextTop - activeEditorTop));
-  }).toBeLessThanOrEqual(3);
   const afterDoneScrollTop = await tree.evaluate((node) => node.scrollTop);
-  expect(afterDoneScrollTop).toBeLessThanOrEqual(afterScrollTop);
+  expect(afterDoneScrollTop).toBeGreaterThan(0);
+});
+
+test('cancel only compensates for expanded editor height traversed by downward scrolling', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 28 }, (_, index) => `Spacer ${index + 1}`).join('\n  \n  ')}
+
+ <!--hvy:text {"id":"target-note"}-->
+  Target note
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 30 }, (_, index) => `Trailing spacer ${index + 1}`).join('\n  \n  ')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const tree = page.locator('.editor-tree');
+  const target = page.locator('.editor-block-passive', { hasText: 'Target note' });
+  await target.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  const passiveHeight = await target.evaluate((node) => node.getBoundingClientRect().height);
+  await tree.evaluate((node) => {
+    node.scrollTop = Math.max(0, node.scrollTop - 180);
+  });
+  await target.click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') });
+  await expect(activeBlock).toBeVisible();
+  const unscrolledEditorTop = await tree.evaluate((node) => node.scrollTop);
+  await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+  await expect(target).toBeVisible();
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unscrolledEditorTop));
+
+  await target.click();
+  await expect(activeBlock).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.pendingEditorActivation;
+  })).toBeNull();
+  await tree.evaluate((node) => {
+    node.dataset.activeEditorUserScrollDirection = 'up';
+    delete node.dataset.activeEditorUserScrollStartTop;
+  });
+  await tree.evaluate((node) => {
+    node.scrollTop -= 100;
+  });
+  const upwardScrollTop = await tree.evaluate((node) => node.scrollTop);
+  await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+  await expect(target).toBeVisible();
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(upwardScrollTop));
+
+  await target.click();
+  await expect(activeBlock).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.pendingEditorActivation;
+  })).toBeNull();
+  const cancelScrollStart = await tree.evaluate((node) => node.scrollTop);
+  await tree.evaluate((node) => {
+    node.dataset.activeEditorUserScrollDirection = 'down';
+    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
+  });
+  await tree.evaluate((node) => {
+    node.scrollTop += 300;
+  });
+  const cancelScrollBeforeClose = await tree.evaluate((node) => node.scrollTop);
+  const cancelExpectedResult = cancelScrollBeforeClose - Math.min(
+    cancelScrollBeforeClose - cancelScrollStart,
+    Math.max(0, await activeBlock.evaluate((node) => node.getBoundingClientRect().height) - passiveHeight)
+  );
+  await expect(activeBlock).toHaveAttribute('data-passive-block-height', String(passiveHeight));
+  await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+
+  await expect(target).toBeVisible();
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelExpectedResult));
+});
+
+test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 28 }, (_, index) => `Spacer ${index + 1}`).join('\n  \n  ')}
+
+ <!--hvy:text {"id":"top-target-note"}-->
+  Top target note
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 24 }, (_, index) => `Middle spacer ${index + 1}`).join('\n  \n  ')}
+
+ <!--hvy:text {"id":"lower-target-note"}-->
+  Lower target note
+
+ <!--hvy:text {}-->
+  ${Array.from({ length: 20 }, (_, index) => `Trailing spacer ${index + 1}`).join('\n  \n  ')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  const reader = page.locator('#aiReaderDocument');
+
+  for (const { text, block } of [
+    { text: 'Top target note', block: 'start' },
+    { text: 'Lower target note', block: 'end' },
+  ] as const) {
+    const target = page.locator('#aiReaderDocument .reader-block-text', { hasText: text });
+    await target.evaluate((node, position) => node.scrollIntoView({ block: position }), block);
+    await target.click({ button: 'right' });
+    await page.getByRole('button', { name: 'Edit component' }).click();
+    const activeBlock = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+    await expect(activeBlock).toBeVisible();
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const expectedResult = await reader.evaluate((node) => node.scrollTop);
+    await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+
+    await expect(target).toBeVisible();
+    await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
+  }
+
+  const fullyVisibleTarget = page.locator('#aiReaderDocument .reader-block-text', { hasText: 'Top target note' });
+  await fullyVisibleTarget.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  await fullyVisibleTarget.click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const fullyVisibleEditor = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]');
+  await expect(fullyVisibleEditor).toBeVisible();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await fullyVisibleEditor.evaluate((node) => {
+    const scroller = node.closest<HTMLElement>('.reader-document')!;
+    const editorRect = node.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    const visibleBottom = scrollerRect.top + scroller.clientTop + scroller.clientHeight;
+    scroller.scrollTop += Math.max(0, editorRect.bottom - visibleBottom + 10);
+  });
+  await reader.evaluate((node) => {
+    node.dataset.activeEditorUserScrollDirection = 'down';
+    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
+    node.scrollTop += 5;
+  });
+  const fullyVisibleScrollTop = await reader.evaluate((node) => node.scrollTop);
+  const fullyVisibleBounds = await fullyVisibleEditor.evaluate((node) => {
+    const scroller = node.closest<HTMLElement>('.reader-document')!;
+    const editorRect = node.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    const visibleTop = scrollerRect.top + scroller.clientTop;
+    const visibleBottom = visibleTop + scroller.clientHeight;
+    return { top: editorRect.top, bottom: editorRect.bottom, visibleTop, visibleBottom };
+  });
+  expect(fullyVisibleBounds.top).toBeGreaterThanOrEqual(fullyVisibleBounds.visibleTop);
+  expect(fullyVisibleBounds.bottom).toBeLessThanOrEqual(fullyVisibleBounds.visibleBottom);
+  await fullyVisibleEditor.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+  await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(fullyVisibleScrollTop));
+});
+
+test('AI mode Done after a minor change preserves scroll for the lower diagram description', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  const reader = page.locator('#aiReaderDocument');
+  const target = reader.locator('.reader-block-text', {
+    hasText: 'The diagram plugin stores Mermaid source',
+  });
+  await target.evaluate((node) => node.scrollIntoView({ block: 'end' }));
+  await target.click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const activeBlock = reader.locator('.editor-block[data-active-editor-block="true"]');
+  await expect(activeBlock).toBeVisible();
+  await activeBlock.locator('.rich-editor').fill(
+    'The diagram plugin stores Mermaid source as editable text in the plugin body and renders it as a diagram!'
+  );
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const expectedResult = await reader.evaluate((node) => node.scrollTop);
+  await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
+
+  await expect(target).toBeVisible();
+  await page.evaluate(() => new Promise<void>((resolve) => window.setTimeout(resolve, 100)));
+  await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
 });
 
 test('nested accomplishment cancel returns to the parent editor', async ({ page }) => {

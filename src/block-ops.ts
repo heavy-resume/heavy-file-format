@@ -743,7 +743,9 @@ export function commitInlineTableEdit(target: HTMLElement): void {
     return;
   }
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', context.block.id);
-  getRefreshReaderPanels()();
+  if (state.currentView !== 'ai') {
+    getRefreshReaderPanels()();
+  }
 }
 
 export function getTagState(target: HTMLElement): string[] {
@@ -958,6 +960,17 @@ export function clearActiveEditorBlock(blockId?: string): void {
 }
 
 export type DeactivateEditorBlockResult = 'closed' | 'removed' | 'unchanged';
+
+export function hasActiveEditorBlockChanges(sectionKey: string, blockId: string): boolean {
+  if (state.activeEditorNewBlockIds.has(blockId)) {
+    return true;
+  }
+  const snapshot = state.activeEditorBlockSnapshots.find(
+    (candidate) => candidate.sectionKey === sectionKey && candidate.blockId === blockId
+  );
+  const block = findBlockByIds(sectionKey, blockId);
+  return !snapshot || !block || !visualBlocksEqual(block, snapshot.block);
+}
 
 export function deactivateEditorBlock(sectionKey: string, blockId: string): DeactivateEditorBlockResult {
   const index = state.activeEditorBlockPath.findIndex(

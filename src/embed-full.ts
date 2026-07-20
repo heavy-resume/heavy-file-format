@@ -546,8 +546,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const startedAt = nowMs();
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
-  const capturedScroll = captureRenderScroll(root, state.paneScroll);
+  const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
+  const capturedScroll = captureRenderScroll(root, state.paneScroll, pendingPaneScrollRestore);
   state.paneScroll = capturedScroll.paneScroll;
+  state.pendingPaneScrollRestore = null;
   applyTheme();
   const isEditor = state.currentView === 'editor';
   const isAi = state.currentView === 'ai';

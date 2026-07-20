@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
@@ -32,10 +32,11 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   if (state.currentView === 'ai') {
     setAiEditorHostBlock(sectionKey, blockId);
   }
-  if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
+  if (state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,
-      anchorTop: anchor.top,
+      ...(typeof anchor?.top === 'number' ? { anchorTop: anchor.top } : {}),
+      passiveHeight: passiveBlock?.getBoundingClientRect().height,
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,
@@ -108,6 +109,7 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);
+  const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
   const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
     ? syncSortValuesForDocument(state.document)
@@ -119,10 +121,10 @@ const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) 
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  if (result === 'closed' || result === 'removed') {
-    runDocumentEditHooksAfterCommit();
-  }
   getRenderApp()();
+  if ((result === 'closed' || result === 'removed') && (blockChanged || result === 'removed' || sortValuesChanged)) {
+    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app));
+  }
 };
 
 function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void {

@@ -781,6 +781,7 @@ body {
 
 .editor-tree,
 .reader-document {
+  overflow-anchor: none;
   display: grid;
   gap: 0.95rem;
   scrollbar-gutter: 0.5rem;

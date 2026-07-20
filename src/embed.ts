@@ -512,8 +512,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const root = currentRoot;
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
-  const capturedScroll = captureRenderScroll(root, state.paneScroll);
+  const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
+  const capturedScroll = captureRenderScroll(root, state.paneScroll, pendingPaneScrollRestore);
   state.paneScroll = capturedScroll.paneScroll;
+  state.pendingPaneScrollRestore = null;
   applyTheme();
   const readerWarningsHtml = renderer.renderWarnings();
   const readerSidebarSectionsHtml = renderer.renderSidebarSections(state.document.sections);

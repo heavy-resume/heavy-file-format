@@ -525,19 +525,21 @@ export interface AppState {
   pendingEditorDeactivation: {
     sectionKey: string;
     blockId: string;
-    anchorTop: number;
-    editableTag: string;
-    editableClass: string;
+    scrollAdjustment: number;
+    scrollSurface: 'editor' | 'editor-sidebar' | 'reader' | 'viewer-sidebar';
+    scrollTopBeforeClose: number;
   } | null;
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;
+    suppressFocus?: boolean;
     revealPath?: boolean;
     anchorTop?: number;
     clientX?: number;
     clientY?: number;
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
+    passiveHeight?: number;
   } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

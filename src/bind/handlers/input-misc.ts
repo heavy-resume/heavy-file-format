@@ -1,4 +1,4 @@
-import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
@@ -387,7 +387,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.containerTitle = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -417,7 +417,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (Number.isFinite(value) && value > 0) {
         context.block.schema.containerCollapsedPreviewRem = value;
         syncReusableTemplateForBlock(sectionKey, context.block.id);
-        getRefreshReaderPanels()();
+        refreshReaderPanelsOutsideActiveEditor(target);
       }
       return;
     }
@@ -429,7 +429,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.containerExpanded = target.checked;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -463,7 +463,7 @@ export function bindInputMisc(app: HTMLElement): void {
         version: target.value.trim() || SCRIPTING_PLUGIN_VERSION,
       };
       syncReusableTemplateForBlock(sectionKey, block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -585,12 +585,8 @@ export function bindInputMisc(app: HTMLElement): void {
         if (Number.isFinite(value) && value > 0) block.schema.buttonOutputCharLimit = value;
       }
       syncReusableTemplateForBlock(sectionKey, block.id);
-      getRefreshReaderPanels()();
-      if (field === 'block-button-position-target-id') {
-        getRenderApp()();
-      } else {
-        void runButtonVisibilityScripts(app);
-      }
+      refreshReaderPanelsOutsideActiveEditor(target);
+      void runButtonVisibilityScripts(app);
       return;
     }
 
@@ -601,7 +597,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableStubCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -627,7 +623,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableContentCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 

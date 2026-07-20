@@ -300,6 +300,10 @@ hvy_version: 0.1
   });
   expect(toolbarToEditorGap).toBeGreaterThanOrEqual(0);
   expect(toolbarToEditorGap).toBeLessThan(20);
+  const title = activeContainer.locator('[data-field="block-container-title"]');
+  await title.fill('Updated Note');
+  await expect(title).toBeFocused();
+  await expect(title).toHaveValue('Updated Note');
 });
 
 test('xref navigation aligns a tall target top near the reader center', async ({ page }) => {
@@ -412,6 +416,31 @@ hvy_version: 0.1
   await expect(caption).toHaveValue('Expected result caption');
   await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .hvy-carousel-caption')).toContainText('Expected result caption');
   expect(perfMessages).toHaveLength(0);
+});
+
+test('typing in an AI image editor preserves the active control', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:image {"id":"sample-image","imageFile":"","imageAlt":"Initial alt"}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const reader = page.locator('#aiReaderDocument');
+  await reader.locator('.reader-block-image').click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const alt = reader.locator('.editor-block[data-active-editor-block="true"] [data-field="image-alt"]');
+  await alt.fill('Updated alt');
+  await expect(alt).toBeFocused();
+  await expect(alt).toHaveValue('Updated alt');
 });
 
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {

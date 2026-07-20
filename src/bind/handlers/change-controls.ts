@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,
@@ -116,7 +116,7 @@ export function bindChangeControls(app: HTMLElement): void {
       }
       if (handleBlockFieldInput(editor)) {
         syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
-        getRefreshReaderPanels()();
+        refreshReaderPanelsOutsideActiveEditor(editor);
       }
       return;
     }

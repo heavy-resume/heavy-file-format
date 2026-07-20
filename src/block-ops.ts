@@ -225,7 +225,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (shouldRefreshReaderPanelsAfterRichInput(richEditor)) {
-      refreshReaderPanelsAroundActiveEditor(richEditor);
+      refreshReaderPanelsOutsideActiveEditor(richEditor);
     }
     return true;
   }
@@ -284,7 +284,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
     if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
-      refreshReaderPanelsAroundActiveEditor(target);
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -308,7 +308,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     const sortValuesChanged = syncSortValuesForDocument(state.document);
     if ((state.currentView !== 'ai' && sortValuesChanged) || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
-      refreshReaderPanelsAroundActiveEditor(target);
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     return true;
   }
@@ -337,8 +337,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     };
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -346,8 +345,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.text = target.value;
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -375,7 +373,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   if (field === 'block-xref-target-tag-filter' && target instanceof HTMLInputElement) {
     block.schema.xrefTargetTagFilter = target.value;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -408,7 +406,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.schema.gridColumns = coerceGridColumns(target.value);
     ensureGridItems(block.schema);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -417,7 +415,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
       ? DEFAULT_GRID_STACK_WIDTH
       : coerceGridStackWidth(target.value);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -482,7 +480,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
     if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
-      refreshReaderPanelsAroundActiveEditor(target);
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -499,13 +497,13 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   if (field === 'block-code-language' && target instanceof HTMLInputElement) {
     block.schema.codeLanguage = target.value;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
   if (field === 'block-code' && target instanceof HTMLTextAreaElement) {
     block.text = target.value;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -516,13 +514,13 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     block.schema.expandableAlwaysShowStub = target.checked;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
   if (field === 'table-show-header' && target instanceof HTMLInputElement) {
     block.schema.tableShowHeader = target.checked;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -610,7 +608,7 @@ function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
   return !target.closest('.editor-tree, .editor-sidebar, .hvy-ai-reader-surface');
 }
 
-function refreshReaderPanelsAroundActiveEditor(target: HTMLElement): void {
+export function refreshReaderPanelsOutsideActiveEditor(target: HTMLElement): void {
   const surface = getRefreshSurfaceOutsideActiveEditor(target);
   getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false });
 }

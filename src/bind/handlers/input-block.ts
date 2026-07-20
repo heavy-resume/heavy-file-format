@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, getThemeConfig, applyTheme, writeThemeConfig, colorValueToAlpha, colorValueToPickerHex, getThemeResetColor, mergeAlphaIntoCssColor, getComponentDefs, getSectionDefs, resolveBlockContext, recordHistory, persistChatSettings, getRawEditorDiagnostics } from './_imports';
 import { applyThemeModalFilter } from '../../theme-modal-filter';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { prepareKeywordChatContext } from '../../chat/chat-context';
@@ -666,7 +666,7 @@ export function bindInputBlock(app: HTMLElement): void {
       if (!block) return;
       recordHistory(`image-alt:${block.id}`);
       block.schema.imageAlt = target.value;
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 

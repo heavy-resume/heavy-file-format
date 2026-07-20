@@ -680,6 +680,46 @@ component_defs:
   await expect(editor.locator('p').nth(1)).toHaveText('Next line');
 });
 
+test('AI enum sort selector change preserves the active editor and focus', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const reader = page.locator('#aiReaderDocument');
+  await reader.locator('.reader-block-text', { hasText: 'Strength:' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const activeEditor = reader.locator('.editor-block[data-active-editor-block="true"]');
+  const selector = activeEditor.locator('[data-field="sort-value-enum"]');
+  await selector.focus();
+  await selector.selectOption('4');
+
+  await expect(selector).toBeFocused();
+  await expect(selector).toHaveValue('4');
+  await expect(activeEditor).toBeVisible();
+});
+
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
   await page.goto('/');
 

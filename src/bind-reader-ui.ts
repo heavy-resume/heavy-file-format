@@ -279,7 +279,7 @@ export function bindReaderUi(app: HTMLElement): void {
     }
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
-    if (expandable) {
+    if (expandable && nearestReaderAction === expandable) {
       logClickTrace(event, 'reader-area:expandable:candidate', {
         sectionKey: expandable.dataset.sectionKey ?? null,
         blockId: expandable.dataset.blockId ?? null,

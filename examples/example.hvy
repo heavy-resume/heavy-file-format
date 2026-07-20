@@ -80,7 +80,7 @@ Use the plugin block below as the working application table. The rendered rows s
 
  <!--hvy:expandable:content {}-->
 
-  <!--hvy:container {"css":"margin: 0;"}-->
+  <!--hvy:container {"id":"nested-container-demo","containerTitle":"Nested Collapsed Container","containerExpanded":false,"css":"margin: 0; border: 1px solid var(--hvy-border); border-radius: 8px; padding: 0.75rem;"}-->
 
    <!--hvy:container:0 {}-->
 

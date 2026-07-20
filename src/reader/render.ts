@@ -6,6 +6,7 @@ import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
 import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
+import { hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
@@ -458,9 +459,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockStyle = sanitizeReaderBlockCss(block.schema.css, options);
     const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
-    const renderBlockShell = (body: string): string => {
+    const renderBlockShell = (body: string, extraAttrs = ''): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
-      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
+      return `<div ${blockAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
     };
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
@@ -512,7 +513,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         : prioritized
         ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : block;
-      return renderNonEmptyBlockShell(renderContainerReader(section, readerBlock, helpers));
+      const body = renderContainerReader(section, readerBlock, helpers);
+      if (!body.trim()) {
+        return '';
+      }
+      const containerKey = `${section.key}:${block.id}`;
+      const expanded = helpers.getReaderContainerExpanded(containerKey, readerBlock.schema.containerExpanded);
+      const containerToggleAttrs = hasContainerBorderCss(readerBlock.schema.css) && !expanded
+        ? ` data-reader-action="toggle-container" data-container-key="${deps.escapeAttr(containerKey)}" aria-expanded="false"`
+        : '';
+      return renderBlockShell(body, containerToggleAttrs);
     }
     if (base === 'component-list') {
       const listHtml = renderComponentListReader(section, block, helpers);

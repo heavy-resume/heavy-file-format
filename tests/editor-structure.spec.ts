@@ -1192,6 +1192,65 @@ hvy_version: 0.1
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('nested collapsed container handles clicks without collapsing its expandable', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"id":"outer","expandableExpanded":true,"expandableAlwaysShowStub":false}-->
+
+  <!--hvy:expandable:stub {}-->
+
+   <!--hvy:text {}-->
+    Outer summary
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:container {"id":"inner","containerTitle":"Inner","containerExpanded":false,"css":"border: 1px solid var(--hvy-border);"}-->
+
+    <!--hvy:text {}-->
+     Inner details
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  for (const mode of ['Viewer', 'AI']) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    const reader = page.locator(mode === 'Viewer' ? '#readerDocument' : '#aiReaderDocument');
+    const expandable = reader.locator('.reader-block-expandable[data-component-id="outer"]');
+    const containerBlock = expandable.locator('.reader-block-container[data-component-id="inner"]');
+    const container = containerBlock.locator('.reader-container');
+
+    await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+    await expect(container).toHaveClass(/is-collapsed-preview/);
+    const containerTitle = container.locator('.reader-container-title');
+    await containerTitle.hover();
+    await expect(containerBlock).not.toHaveCSS('box-shadow', 'none');
+    await expect(expandable).toHaveCSS('box-shadow', 'none');
+    await containerTitle.click();
+    await expect(container).toHaveClass(/is-expanded/);
+    await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+
+    await container.getByRole('button', { name: 'Collapse container' }).click();
+    await expect(container).toHaveClass(/is-collapsed-preview/);
+    await container.getByRole('button', { name: 'Expand container' }).hover();
+    await expect(containerBlock).not.toHaveCSS('box-shadow', 'none');
+    await expect(expandable).toHaveCSS('box-shadow', 'none');
+    await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+
+    await containerBlock.evaluate((element) => element.click());
+    await expect(container).toHaveClass(/is-expanded/);
+    await expect(expandable).toHaveAttribute('aria-expanded', 'true');
+    await container.getByRole('button', { name: 'Collapse container' }).click();
+    await expect(container).toHaveClass(/is-collapsed-preview/);
+  }
+});
+
 test('viewer expands singleton grouped list expandable with one click', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());

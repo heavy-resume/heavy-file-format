@@ -1,6 +1,10 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
 import { getTextCaptionMarkdown } from '../caption';
-import { buildHvyVirtualFileSystem, findVirtualDirectoryForBlock, findVirtualDirectoryForSection } from '../cli-core/virtual-file-system';
+import {
+  buildHvyVirtualFileSystem,
+  buildVirtualDirectoryBlockLookup,
+  buildVirtualDirectorySectionLookup,
+} from '../cli-core/virtual-file-system';
 import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getSectionId } from '../section-ops';
@@ -135,6 +139,8 @@ export function buildSemanticFilterCandidates(
   const sectionCandidates: HvySemanticFilterCandidate[] = [];
   const blockCandidates: HvySemanticFilterCandidate[] = [];
   const targetRefs = buildSemanticTargetRefs(document);
+  const sectionPaths = reverseVirtualDirectoryLookup(buildVirtualDirectorySectionLookup(document));
+  const blockPaths = reverseVirtualDirectoryLookup(buildVirtualDirectoryBlockLookup(document));
   let documentOrder = 0;
 
   const visitSection = (section: VisualSection, ancestors: string[]): void => {
@@ -144,7 +150,7 @@ export function buildSemanticFilterCandidates(
     const sectionOrder = documentOrder;
     documentOrder += 1;
     const sectionLabel = section.title.trim() || getSectionId(section) || 'Untitled section';
-    const targetPath = findVirtualDirectoryForSection(document, section);
+    const targetPath = sectionPaths.get(section);
     const targetRef = targetPath ?? (getSectionId(section) || section.key);
     const sectionSummary = truncateSummary(buildSectionSummary(section), maxCandidateSummaryChars);
     sectionCandidates.push({
@@ -184,7 +190,7 @@ export function buildSemanticFilterCandidates(
     const baseComponent = resolveBaseComponentFromMeta(block.schema.component, document.meta);
     const label = getBlockLabel(block) || nearestLocationLabel;
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
-    const targetPath = findVirtualDirectoryForBlock(document, block);
+    const targetPath = blockPaths.get(block);
     const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
     const summaryResult = truncateSummary(buildBlockSummary(block, baseComponent), maxCandidateSummaryChars);
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
@@ -225,6 +231,10 @@ export function buildSemanticFilterCandidates(
     visitSection(section, []);
   }
   return [...sectionCandidates, ...blockCandidates];
+}
+
+function reverseVirtualDirectoryLookup<T extends object>(lookup: Map<string, T>): Map<T, string> {
+  return new Map([...lookup].map(([path, value]) => [value, path]));
 }
 
 function buildSemanticTargetRefs(document: VisualDocument): { componentRefsByPath: Map<string, string> } {

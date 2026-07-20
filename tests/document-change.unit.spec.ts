@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { createDefaultChatState } from '../src/chat/chat';
 import { createDefaultSearchState } from '../src/search/state';
 import { initCallbacks, initState, getActiveStateRuntime, state } from '../src/state';
+import type { VisualSection } from '../src/editor/types';
 import type { AppState, VisualDocument } from '../src/types';
 
 vi.mock('../src/serialization', async (importOriginal) => {
@@ -125,6 +126,28 @@ function createDocumentChangeTestState(): AppState {
   };
 }
 
+function createSection(key: string, title: string): VisualSection {
+  return {
+    key,
+    customId: key,
+    contained: false,
+    editorOnly: false,
+    lock: false,
+    idEditorOpen: false,
+    isGhost: false,
+    title,
+    level: 1,
+    expanded: true,
+    highlight: false,
+    css: '',
+    tags: '',
+    description: '',
+    location: 'main',
+    blocks: [],
+    children: [],
+  };
+}
+
 test('document change notifications use revisions without serializing document bytes', async () => {
   const { initDocumentChangeTracking, isDocumentDirty, markDocumentSaved, notifyDocumentMayHaveChanged } = await import('../src/document-change');
   const { serializeDocumentBytes } = await import('../src/serialization');
@@ -147,7 +170,12 @@ test('document change notifications use revisions without serializing document b
   await Promise.resolve();
 
   expect(serializeDocumentBytesMock).not.toHaveBeenCalled();
-  expect(expectedEvents.at(-1)).toEqual({ dirty: true, reason: 'before-title-input', source: 'editor' });
+  expect(expectedEvents.at(-1)).toEqual({
+    dirty: true,
+    reason: 'before-title-input',
+    source: 'editor',
+    changedSectionTitles: [],
+  });
 
   expect(isDocumentDirty(getActiveStateRuntime())).toBe(true);
   expect(serializeDocumentBytesMock).toHaveBeenCalledTimes(1);
@@ -155,5 +183,37 @@ test('document change notifications use revisions without serializing document b
   serializeDocumentBytesMock.mockClear();
   markDocumentSaved(getActiveStateRuntime());
   expect(serializeDocumentBytesMock).toHaveBeenCalledTimes(1);
-  expect(expectedEvents.at(-1)).toEqual({ dirty: false, reason: 'mark-saved' });
+  expect(expectedEvents.at(-1)).toEqual({ dirty: false, reason: 'mark-saved', changedSectionTitles: [] });
+});
+
+test('document change notifications accumulate changed section titles since save', async () => {
+  const { initDocumentChangeTracking, markDocumentSaved, notifyDocumentMayHaveChanged } = await import('../src/document-change');
+  initState(createDocumentChangeTestState());
+  state.document.sections = [createSection('summary-id', 'Summary'), createSection('skills-id', 'Skills')];
+  const expectedEvents: Array<{ dirty: boolean; changedSectionTitles: string[] }> = [];
+  initDocumentChangeTracking(getActiveStateRuntime(), (event) => expectedEvents.push(event));
+
+  state.document.sections[0].description = 'Changed summary';
+  notifyDocumentMayHaveChanged('summary-edit', 'editor');
+  await Promise.resolve();
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Summary']);
+
+  state.document.sections[1].description = 'Changed skills';
+  notifyDocumentMayHaveChanged('skills-edit', 'editor');
+  await Promise.resolve();
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Summary', 'Skills']);
+  expect(expectedEvents.at(-1)?.changedSectionTitles).not.toContain('summary-id');
+
+  markDocumentSaved(getActiveStateRuntime());
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual([]);
+
+  state.document.sections[1].title = 'Core Skills';
+  notifyDocumentMayHaveChanged('skills-title-edit', 'editor');
+  await Promise.resolve();
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Core Skills']);
+
+  state.document.sections.push(createSection('untitled-id', 'Unnamed Section'));
+  notifyDocumentMayHaveChanged('untitled-section-add', 'editor');
+  await Promise.resolve();
+  expect(expectedEvents.at(-1)?.changedSectionTitles).toEqual(['Core Skills', '']);
 });

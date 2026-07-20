@@ -458,7 +458,7 @@ const mount = HVY.mountHvy({
   document,
   mode: 'editor',
   onDocumentChange(event) {
-    console.log(event.dirty, event.source, event.reason);
+    console.log(event.dirty, event.source, event.reason, event.changedSectionTitles);
   },
 });
 
@@ -469,6 +469,11 @@ mount.markSaved();
 mount.undo();
 mount.redo();
 ```
+
+`changedSectionTitles` contains the user-facing titles of sections that differ
+from the last saved baseline. It accumulates across edits until `markSaved()`
+and never exposes internal section IDs. Untitled sections are reported as an
+empty string so the host can choose how to present them.
 
 Embedded editor/AI instances do not persist reconnect/reload session state by
 default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`

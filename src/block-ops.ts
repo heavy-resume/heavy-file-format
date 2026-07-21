@@ -1269,7 +1269,7 @@ function applySortValueAnnotation(
     return false;
   }
   const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
-  const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
+  const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'date' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
   ensureSortValueDefinition(editable, key, type);
   const wrapper = document.createElement('span');
   wrapper.className = 'hvy-sort-value';

@@ -1,6 +1,6 @@
 import type { SortKeyValue, VisualBlock } from './editor/types';
 import type { JsonObject } from './hvy/types';
-import type { ComponentDefinition, SortValueDefinition, SortValueEnumOption, VisualDocument } from './types';
+import type { ComponentDefinition, SortValueDateFormat, SortValueDefinition, SortValueEnumOption, VisualDocument } from './types';
 
 export interface SortValueAnnotation {
   key: string;
@@ -123,6 +123,9 @@ export function coerceSortValue(text: string, definition: SortValueDefinition): 
     const value = Number(trimmed);
     return Number.isFinite(value) ? value : null;
   }
+  if (definition.type === 'date') {
+    return coerceDateSortValue(trimmed, definition.format);
+  }
   if (definition.type === 'datetime') {
     return coerceDatetimeSortValue(trimmed);
   }
@@ -185,7 +188,7 @@ export function normalizeSortValueDefs(value: unknown): Record<string, SortValue
       return;
     }
     const source = raw as Record<string, unknown>;
-    const type = source.type === 'text' || source.type === 'number' || source.type === 'datetime' || source.type === 'enum' ? source.type : null;
+    const type = source.type === 'text' || source.type === 'number' || source.type === 'date' || source.type === 'datetime' || source.type === 'enum' ? source.type : null;
     if (!type) {
       return;
     }
@@ -195,9 +198,38 @@ export function normalizeSortValueDefs(value: unknown): Record<string, SortValue
     if (type === 'enum' && (!options || options.length === 0)) {
       return;
     }
-    result[key] = { type, ...(options ? { options } : {}) };
+    const format = type === 'date' ? normalizeDateFormat(source.format) : null;
+    if (type === 'date' && !format) {
+      return;
+    }
+    result[key] = { type, ...(format ? { format } : {}), ...(options ? { options } : {}) };
   });
   return result;
+}
+
+function normalizeDateFormat(value: unknown): SortValueDateFormat | null {
+  return value === 'YYYY-MM-DD' || value === 'MM/DD/YYYY' || value === 'DD/MM/YYYY' ? value : null;
+}
+
+function coerceDateSortValue(text: string, format: SortValueDateFormat | undefined): string | null {
+  if (!format) {
+    return null;
+  }
+  const pattern = format === 'YYYY-MM-DD'
+    ? /^(\d{4})-(\d{2})-(\d{2})$/
+    : /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const match = pattern.exec(text);
+  if (!match) {
+    return null;
+  }
+  const year = Number(format === 'YYYY-MM-DD' ? match[1] : match[3]);
+  const month = Number(format === 'MM/DD/YYYY' ? match[1] : match[2]);
+  const day = Number(format === 'YYYY-MM-DD' ? match[3] : format === 'MM/DD/YYYY' ? match[2] : match[1]);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() !== month - 1 || candidate.getUTCDate() !== day) {
+    return null;
+  }
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function coerceDatetimeSortValue(text: string): string | null {

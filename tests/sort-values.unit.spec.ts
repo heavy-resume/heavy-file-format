@@ -43,6 +43,40 @@ test('coerces sort value text, number, datetime, and enum definitions', () => {
   })).toBe(80);
 });
 
+test('coerces explicitly formatted dates without locale or timezone inference', () => {
+  expect(coerceSortValue('2026-03-27', { type: 'date', format: 'YYYY-MM-DD' })).toBe('2026-03-27');
+  expect(coerceSortValue('03/27/2026', { type: 'date', format: 'MM/DD/YYYY' })).toBe('2026-03-27');
+  expect(coerceSortValue('27/03/2026', { type: 'date', format: 'DD/MM/YYYY' })).toBe('2026-03-27');
+  expect(coerceSortValue('03/04/2026', { type: 'date', format: 'MM/DD/YYYY' })).toBe('2026-03-04');
+  expect(coerceSortValue('03/04/2026', { type: 'date', format: 'DD/MM/YYYY' })).toBe('2026-04-03');
+  expect(coerceSortValue('02/29/2025', { type: 'date', format: 'MM/DD/YYYY' })).toBeNull();
+  expect(coerceSortValue('3/27/2026', { type: 'date', format: 'MM/DD/YYYY' })).toBeNull();
+  expect(coerceSortValue('03/27/26', { type: 'date', format: 'MM/DD/YYYY' })).toBeNull();
+});
+
+test('syncs date annotations to canonical timezone-free sort keys', () => {
+  const details = block('text', 'Date: <!--hvy:sort-value {"key":"Date"}-->03/27/2026<!--/hvy:sort-value-->');
+  const item = block('application-entry', '', 'expandable');
+  item.schema.sortKeys = { Date: '2026-01-05' };
+  item.schema.expandableStubBlocks.children = [details];
+  const list = block('component-list');
+  list.schema.componentListBlocks = [item];
+  const document: VisualDocument = {
+    extension: '.hvy', attachments: [], meta: { component_defs: [{
+      name: 'application-entry', baseType: 'expandable', sortValueDefs: { Date: { type: 'date', format: 'MM/DD/YYYY' } },
+    }] }, sections: [{
+      key: 'section', customId: 'section', customIdGenerated: false, contained: true, editorOnly: false, lock: false,
+      idEditorOpen: false, isGhost: false, title: 'Section', level: 1, expanded: true, highlight: false, priority: false,
+      css: '', tags: '', description: '', location: 'main', hideIfUnmodified: false, exclude_from_import: false,
+      protect_from_import: false, blocks: [list], children: [],
+    }],
+  };
+
+  expect(syncSortValuesForDocument(document)).toBe(true);
+  expect(item.schema.sortKeys.Date).toBe('2026-03-27');
+  expect(item.schema.derivedSortKeyNames).toEqual(['Date']);
+});
+
 test('syncs nested sort value annotations to component-list item sort keys', () => {
   const nestedText = block('text', 'Name: <!--hvy:sort-value {"key":"Name"}-->TypeScript<!--/hvy:sort-value-->');
   const nestedTable = block('table');

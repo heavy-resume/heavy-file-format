@@ -446,7 +446,9 @@ export interface ComponentTemplateFlavor {
   template?: VisualBlock;
 }
 
-export type SortValueType = 'text' | 'number' | 'datetime' | 'enum';
+export type SortValueType = 'text' | 'number' | 'date' | 'datetime' | 'enum';
+
+export type SortValueDateFormat = 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY';
 
 export interface SortValueEnumOption {
   label: string;
@@ -455,6 +457,7 @@ export interface SortValueEnumOption {
 
 export interface SortValueDefinition {
   type: SortValueType;
+  format?: SortValueDateFormat;
   options?: SortValueEnumOption[];
 }
 

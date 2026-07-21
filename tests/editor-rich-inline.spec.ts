@@ -720,6 +720,68 @@ component_defs:
   await expect(activeEditor).toBeVisible();
 });
 
+test('Done points to an invalid formatted date sort value and closes after correction', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Date:
+        type: date
+        format: MM/DD/YYYY
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:component-list {"componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-one","sortKeys":{"Date":"2026-01-05"}}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Date: <!--hvy:sort-value {"key":"Date"}-->01/05/2026<!--/hvy:sort-value-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {}-->
+      Notes
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Date:' }).last().dispatchEvent('click');
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editedBlockId = await activeBlock.getAttribute('data-block-id');
+  const sortValue = activeBlock.locator('[data-hvy-sort-value="true"]');
+  await sortValue.evaluate((node) => {
+    node.textContent = '02/30/2026';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await expect(activeBlock).toBeVisible();
+  await expect(sortValue).toHaveAttribute('aria-invalid', 'true');
+  await expect(sortValue).toBeFocused();
+  await expect(activeBlock.getByRole('alert')).toHaveText('Date must be a valid date in MM/DD/YYYY format.');
+
+  await sortValue.evaluate((node) => {
+    node.textContent = '03/27/2026';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.schema.componentListBlocks[0]?.schema.sortKeys.Date;
+  })).toBe('2026-03-27');
+});
+
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
   await page.goto('/');
 

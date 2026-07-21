@@ -327,6 +327,26 @@
   outline-offset: 2px;
 }
 
+.hvy-sort-value.hvy-sort-value-invalid {
+  border-color: var(--hvy-danger);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-danger) 28%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-danger) 28%, transparent);
+}
+
+.hvy-sort-value-validation-popover {
+  width: fit-content;
+  max-width: min(28rem, 100%);
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--hvy-danger);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-danger) 12%);
+  color: var(--hvy-text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hvy-shadow) 36%, transparent);
+}
+
 .text-fill-in-box {
   display: inline-block;
   min-width: 7ch;

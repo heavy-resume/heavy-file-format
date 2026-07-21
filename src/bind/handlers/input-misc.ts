@@ -9,6 +9,7 @@ import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
+import { clearSortValueValidation } from '../../sort-value-validation';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -43,6 +44,10 @@ export function bindInputMisc(app: HTMLElement): void {
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
+    const validationBlock = rawTarget.closest<HTMLElement>('.editor-block');
+    if (validationBlock && rawTarget.closest('[data-hvy-sort-value="true"]')) {
+      clearSortValueValidation(validationBlock);
+    }
     if (isSearchQueryControl(target)) {
       const hadFocus = document.activeElement === target;
       state.search.queryDraft = target.value;

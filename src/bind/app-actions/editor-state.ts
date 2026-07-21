@@ -9,7 +9,8 @@ import { populateMissingDescriptions } from '../../descriptions/populate';
 import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
-import { syncSortValuesForDocument } from '../../sort-values';
+import { getSortValueDefsForBlock, syncSortValuesForDocument } from '../../sort-values';
+import { showInvalidSortValues } from '../../sort-value-validation';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -101,11 +102,16 @@ const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   getRenderApp()();
 };
 
-const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
+const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
+  const block = findBlockByIds(sectionKey, blockId);
+  const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
+  if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
+    return;
+  }
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);

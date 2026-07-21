@@ -323,6 +323,33 @@ RuntimeError: Import statements are not allowed in HVY scripts.`
   );
 });
 
+test('cleanScriptingErrorDetail removes host and generated runtime frames before the user script', () => {
+  expect(
+    cleanScriptingErrorDetail(
+      `Traceback (most recent call last):
+  File "application-tracking/example#script_123", line 79, in <module>
+    result = mount_hvy(sig_com, **kwargs)
+  File "http://localhost:8000/static/brython/reactpy_bridge.py", line 18, in wrapper
+    return result
+  File "http://localhost:8000/static/brython/heavy_resume_brython/_hvy_viewer.py", line 398, in attach_hvy_once
+    return mount
+  File "application-tracking/example#hvy-script-r2#hvy_script_r2", line 365, in <module>
+    __hvy_globals__.results['r2'] = __hvy_entrypoint__()
+  File "<application-week-settings:group_by_week:initial>", line 59, in __hvy_user_main__
+    if group_keys["Week"] != week_label:
+       ~~~~~~~~~~^^^^^^^^
+KeyError: 'Week'
+`
+    )
+  ).toBe(
+    `Traceback (most recent call last):
+  File "<application-week-settings:group_by_week:initial>", line 59, in __hvy_user_main__
+    if group_keys["Week"] != week_label:
+       ~~~~~~~~~~^^^^^^^^
+KeyError: 'Week'`
+  );
+});
+
 test('comparePluginVersions orders dot-separated versions numerically', () => {
   expect(comparePluginVersions('0.2', '0.1')).toBe(1);
   expect(comparePluginVersions('0.2', '0.10')).toBe(-1);

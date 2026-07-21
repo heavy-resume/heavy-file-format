@@ -16,6 +16,7 @@ import type { JsonObject } from '../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { getActiveStateRuntime, runWithStateRuntime } from '../state';
 import type { ChatMessage } from '../types';
+import { openScriptingErrorModal } from './scripting/error-modal';
 import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
@@ -450,6 +451,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let initialized = false;
   let statusText = '';
   let statusError = false;
+  let statusErrorDetail: string | null = null;
   let submitBusy = false;
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
@@ -557,11 +559,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;
+        statusErrorDetail = result.ok ? null : result.errorDetail ?? result.error ?? 'Unknown script error.';
         renderReader();
       })
       .catch((error) => {
         statusText = error instanceof Error ? error.message : 'Script failed.';
         statusError = true;
+        statusErrorDetail = error instanceof Error ? error.stack ?? error.message : String(error);
         renderReader();
       });
   };
@@ -578,6 +582,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     submitBusy = true;
     statusText = 'Preparing...';
     statusError = false;
+    statusErrorDetail = null;
     renderReader();
     runQueue = runQueue
       .then(async () => {
@@ -634,6 +639,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .catch((error) => {
         statusText = error instanceof Error ? error.message : 'AI submit failed.';
         statusError = true;
+        statusErrorDetail = error instanceof Error ? error.stack ?? error.message : String(error);
       })
       .finally(() => {
         submitBusy = false;
@@ -814,7 +820,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (statusText.length > 0) {
       const status = document.createElement('div');
       status.className = `hvy-form-status${statusError ? ' hvy-form-status-error' : ''}`;
-      status.textContent = statusText;
+      const statusMessage = document.createElement('span');
+      statusMessage.textContent = statusText;
+      status.appendChild(statusMessage);
+      if (statusError && statusErrorDetail) {
+        const tracebackButton = document.createElement('button');
+        tracebackButton.type = 'button';
+        tracebackButton.className = 'hvy-form-traceback-button';
+        tracebackButton.setAttribute('aria-label', 'Show script traceback');
+        tracebackButton.title = 'Show script traceback';
+        tracebackButton.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4.25v4.5M8 11.5v.25"/></svg>';
+        tracebackButton.addEventListener('click', () => openScriptingErrorModal(statusErrorDetail ?? statusText, tracebackButton));
+        status.appendChild(tracebackButton);
+      }
       root.appendChild(status);
     }
 

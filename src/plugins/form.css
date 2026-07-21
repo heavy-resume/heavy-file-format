@@ -170,6 +170,46 @@ label.hvy-form-field-checkbox .hvy-form-field-error {
   color: var(--hvy-muted);
 }
 
+.hvy-form-status-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hvy-form-plugin .hvy-form-traceback-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--hvy-danger) 55%, var(--hvy-border-input));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--hvy-danger) 10%, var(--hvy-surface));
+  color: var(--hvy-danger);
+  padding: 0;
+  cursor: pointer;
+}
+
+.hvy-form-plugin .hvy-form-traceback-button:hover {
+  background: color-mix(in srgb, var(--hvy-danger) 18%, var(--hvy-surface));
+  transform: translateY(-1px);
+}
+
+.hvy-form-plugin .hvy-form-traceback-button:focus-visible {
+  outline: 2px solid var(--hvy-focus-ring);
+  outline-offset: 2px;
+}
+
+.hvy-form-traceback-button svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
 .hvy-form-status-error,
 .hvy-form-error,
 .hvy-form-field-error {

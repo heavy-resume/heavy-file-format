@@ -518,6 +518,12 @@ export function cleanScriptingErrorDetail(rawError: string): string {
   }
 
   const lines = trimmed.split('\n');
+  const userFrameIndex = lines.findIndex((line) => /^\s*File "<[^"<>]+>", line \d+/.test(line));
+  if (userFrameIndex >= 0) {
+    const tracebackHeader = lines.find((line) => line.startsWith('Traceback '));
+    return [tracebackHeader, ...lines.slice(userFrameIndex)].filter((line): line is string => line !== undefined).join('\n').trim();
+  }
+
   const cleaned = lines.filter((line, index) => {
     const nextLine = lines[index + 1] ?? '';
     if (line.includes('File "#hvy_script_')) {

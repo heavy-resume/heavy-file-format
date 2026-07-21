@@ -154,6 +154,25 @@ theme:
   ```python
   doc.header.set("last_script_run", doc.time.now_local())
   ```
+
+  Enable the checked `datetime` library with `pluginConfig.libraries: ["datetime"]`, then perform timezone-naive date
+  arithmetic with familiar Python syntax:
+
+  ```python
+  from datetime import datetime, timedelta
+
+  value = datetime.fromisoformat("2026-12-31")
+  adjusted = value + timedelta(days=1) if starts_on_sunday else value
+  year, week, _ = adjusted.isocalendar()
+  group_key = f"{year}-W{week:02d}"
+
+  monday = adjusted - timedelta(days=adjusted.weekday())
+  week_start = monday - timedelta(days=1) if starts_on_sunday else monday
+  ```
+
+  The checked subset supports construction, `fromisoformat()`, numeric `strptime()`/`strftime()` directives,
+  `isoformat()`, `date()`, arithmetic, comparisons, `weekday()`, and `isocalendar()`. Timezones and locale-sensitive
+  formatting are not exposed.
 <!--hvy: {"id":"limits","lock":false,"expanded":false,"highlight":false}-->
 #! Limits and security
 

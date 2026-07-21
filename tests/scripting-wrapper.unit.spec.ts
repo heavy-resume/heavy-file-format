@@ -170,12 +170,14 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
 });
 
 test('buildPythonProgram preloads checked libraries', () => {
-  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're']);
+  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're', 'datetime']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re", "datetime"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
   expect(program).toContain('if root_name == "re":');
   expect(program).toContain('return __HvyReModule__()');
+  expect(program).toContain('if root_name == "datetime":');
+  expect(program).toContain('return __HvyDatetimeModule__()');
 });
 
 test('stripPythonImports replaces plain import statements with pass', () => {
@@ -207,6 +209,24 @@ items = [1, 2, 3]
 random.shuffle(items)
 `
   );
+});
+
+test('stripPythonImports allows checked datetime imports and aliases', () => {
+  expect(
+    stripPythonImports(
+      `import datetime as dt
+from datetime import datetime, timedelta as delta
+`,
+      ['datetime']
+    )
+  ).toBe(
+    `dt = datetime
+datetime = __import__("datetime").datetime
+delta = __import__("datetime").timedelta
+`
+  );
+
+  expect(stripPythonImports('from datetime import timedelta', [])).toContain('Import statements are not allowed');
 });
 
 test('stripPythonImports allows checked regex library imports', () => {

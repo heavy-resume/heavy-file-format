@@ -1402,8 +1402,11 @@ Plugin-specific rules:
   map.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
-  client-defined; this reference client supports `"random"` and `"re"`. Import statements
+  client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
+  The reference client's checked `"datetime"` library exposes the timezone-naive
+  `datetime` and `timedelta` classes for construction, ISO and numeric-format
+  parsing/formatting, arithmetic, comparisons, `weekday()`, and `isocalendar()`.
 - `pluginConfig.scriptStepBudget` MAY set a positive integer step budget for
   each form script run. Clients SHOULD default to 100000 steps.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.

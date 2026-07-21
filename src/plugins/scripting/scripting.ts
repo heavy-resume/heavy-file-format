@@ -365,7 +365,7 @@ export const scriptingPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
-    'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random` and `re` before the script runs.',
+    'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random`, `re`, and `datetime` before the script runs.',
     'Use `pluginConfig.maxSteps` to configure the runtime step budget.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',

@@ -349,6 +349,82 @@ doc.header.set("regex_result", f"{match.group(1)}|{','.join(found)}|{clean}|{dir
   await waitForDocumentMeta(page, 'regex_result', '42|1,2|a-b-c|bbb|0-8');
 });
 
+test('scripting checked datetime library supports safe calendar arithmetic and ISO weeks', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"datetime"}-->
+#! Datetime
+
+<!--hvy:plugin {"id":"datetime-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
+from datetime import datetime, timedelta
+
+value = datetime.strptime("2021-01-03 23:59:58.123456", "%Y-%m-%d %H:%M:%S.%f")
+monday_year, monday_week, _ = value.isocalendar()
+adjusted = value + timedelta(days=1)
+sunday_year, sunday_week, _ = adjusted.isocalendar()
+monday = adjusted - timedelta(days=adjusted.weekday())
+week_start = monday - timedelta(days=1)
+leap = datetime(2024, 2, 28) + timedelta(days=1, hours=2)
+rolled = datetime(2026, 12, 31, 23, 59, 59, 999999) + timedelta(microseconds=1)
+elapsed = rolled - datetime(2026, 12, 31, 23, 59, 59, 999999)
+parsed = datetime.fromisoformat("2026-07-21T10:11:12.345")
+
+invalid = "missed"
+try:
+    datetime(2025, 2, 29)
+except ValueError:
+    invalid = "blocked"
+
+doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_year}-W{sunday_week:02d}|{week_start.date().isoformat()}|{leap.isoformat()}|{rolled.isoformat()}|{elapsed.total_seconds()}|{parsed.strftime('%Y/%m/%d %H:%M:%S.%f')}|{invalid}|{timedelta(microseconds=-1).days}")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(
+    page,
+    'datetime_result',
+    '2020-W53|2021-W01|2021-01-03|2024-02-29T02:00:00|2027-01-01T00:00:00|1e-06|2026/07/21 10:11:12.345000|blocked|-1'
+  );
+});
+
+test('scripting checked datetime library does not expose runtime capabilities', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"datetime-sandbox"}-->
+#! Datetime Sandbox
+
+<!--hvy:plugin {"id":"datetime-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
+import datetime
+
+results = []
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":leaked")
+    except BaseException:
+        results.append(label + ":blocked")
+
+record("window", lambda: datetime.window)
+record("browser", lambda: datetime.browser)
+record("globals", lambda: datetime.datetime.__init__.__globals__)
+record("unchecked_time", lambda: __builtins__["__import__"]("time"))
+doc.header.set("datetime_sandbox", ",".join(results))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'datetime_sandbox', 'window:blocked,browser:blocked,globals:blocked,unchecked_time:blocked');
+});
+
 test('scripting checked regex library does not expose Brython re dependency modules', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();

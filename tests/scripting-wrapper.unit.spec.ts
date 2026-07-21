@@ -16,6 +16,7 @@ import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
 import { deserializeDocument } from '../src/serialization';
+import { syncSortValuesForDocument } from '../src/sort-values';
 import { initCallbacks, initState } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 
@@ -706,6 +707,50 @@ hvy_version: 0.1
     { id: 'history-acme-python', removed: false, target: 'tool-python' },
     { id: 'history-acme-typescript', removed: true, target: 'tool-typescript' },
   ]);
+});
+
+test('createScriptingRuntime ignores derived sort-value normalization when finding updated components', () => {
+  const source = `---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Date:
+        type: datetime
+---
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+<!--hvy:component-list {"componentListComponent":"application-entry"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:application-entry {"id":"application-one","sortKeys":{"Date":"2024-07-20"}}-->
+
+   <!--hvy:expandable:stub {}-->
+
+    <!--hvy:text {}-->
+     <!--hvy:sort-value {"key":"Date"}-->07/20/2024<!--/hvy:sort-value-->
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:application-entry {"id":"application-two","sortKeys":{"Date":"2024-07-21"}}-->
+
+   <!--hvy:expandable:stub {}-->
+
+    <!--hvy:text {}-->
+     <!--hvy:sort-value {"key":"Date"}-->07/21/2024<!--/hvy:sort-value-->
+`;
+  const previousDocument = deserializeDocument(source, '.hvy');
+  const document = deserializeDocument(source.replace('application-one\",\"sortKeys', 'application-one\",\"tags\":\"edited\",\"sortKeys'), '.hvy');
+  syncSortValuesForDocument(document);
+  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'application-entry' }) as Array<{ id: string }>;
+
+  expect(updated.map((component) => component.id)).toEqual(['application-one']);
 });
 
 test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {

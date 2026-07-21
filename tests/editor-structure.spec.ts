@@ -1724,6 +1724,62 @@ hvy_version: 0.1
   await page.locator('#editorTree .editor-block-passive', { hasText: 'maintenance script' }).click();
   await expect(page.locator('#editorTree .hvy-scripting-head')).toContainText('Python');
   await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
+  const scriptEditor = page.getByRole('textbox', { name: 'Python script' });
+  const highlightedScript = page.locator('#editorTree .hvy-scripting-highlight');
+  await expect(page.locator('#editorTree .hvy-scripting-highlight .hljs-built_in')).toHaveText('print');
+  await expect(scriptEditor).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  expect(await scriptEditor.evaluate((textarea) => {
+    const highlight = textarea.previousElementSibling;
+    if (!(highlight instanceof HTMLElement)) return null;
+    const editorStyle = getComputedStyle(textarea);
+    const highlightStyle = getComputedStyle(highlight);
+    const codeStyle = getComputedStyle(highlight.firstElementChild as HTMLElement);
+    return {
+      paddingAligned: editorStyle.padding === highlightStyle.padding,
+      fontAligned: editorStyle.font === highlightStyle.font && editorStyle.font === codeStyle.font,
+      whiteSpaceAligned: editorStyle.whiteSpace === codeStyle.whiteSpace,
+    };
+  })).toEqual({
+    paddingAligned: true,
+    fontAligned: true,
+    whiteSpaceAligned: true,
+  });
+  await scriptEditor.focus();
+  await scriptEditor.press('End');
+  await scriptEditor.type('\nif True:\n    print("updated")');
+  await expect(scriptEditor).toBeFocused();
+  await expect(highlightedScript).toContainText('updated');
+  await expect(page.locator('#editorTree .hvy-scripting-highlight .hljs-keyword')).toContainText('if');
+  await scriptEditor.fill(`print("${'long-script-line-'.repeat(20)}")`);
+  const sourceEditor = page.locator('#editorTree .hvy-scripting-source-editor');
+  expect(await sourceEditor.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeGreaterThan(32);
+  await sourceEditor.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+  expect(await sourceEditor.evaluate((element) => element.scrollWidth - element.clientWidth - element.scrollLeft))
+    .toBeLessThanOrEqual(1);
+  const trailingScrollRoom = await sourceEditor.evaluate((element) => {
+    const textarea = element.querySelector('textarea');
+    const code = element.querySelector('code');
+    if (!textarea || !code) return 0;
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    return textarea.getBoundingClientRect().right - range.getBoundingClientRect().right;
+  });
+  expect(trailingScrollRoom).toBeGreaterThanOrEqual(31);
+  await scriptEditor.press('End');
+  await scriptEditor.press('Shift+Home');
+  expect(await scriptEditor.evaluate((textarea) => {
+    const editor = textarea as HTMLTextAreaElement;
+    const selectionStyle = getComputedStyle(editor, '::selection');
+    return {
+      selectedText: editor.value.slice(editor.selectionStart, editor.selectionEnd),
+      backgroundColor: selectionStyle.backgroundColor,
+      color: selectionStyle.color,
+    };
+  })).toEqual({
+    selectedText: `print("${'long-script-line-'.repeat(20)}")`,
+    backgroundColor: expect.not.stringMatching(/^rgba\([^)]*, 0\)$/),
+    color: expect.not.stringMatching(/^rgba\([^)]*, 0\)$/),
+  });
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await expect(page.locator('#aiReaderDocument')).not.toContainText('maintenance script');
@@ -1947,6 +2003,42 @@ hvy_version: 0.1
   expect(expectedResult.serialized).not.toContain('"componentListDefaultSortDirection":"desc"');
   expect(expectedResult.direction).toBe('asc');
   expect(expectedResult.roundTrippedDirection).toBe('asc');
+});
+
+test('activating a sorted component-list item preserves authored editor order', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"items"}-->
+#! Items
+
+<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Rank","componentListDefaultSortDirection":"desc"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:text {"sortKeys":{"Rank":1}}-->
+   Authored first
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:text {"sortKeys":{"Rank":2}}-->
+   Authored second
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const items = page.locator('.reader-component-list > [data-block-id]');
+  await expect(items.nth(0)).toContainText('Authored first');
+  await expect(items.nth(1)).toContainText('Authored second');
+  await items.nth(0).click();
+
+  await expect(page.locator('.component-list-editor-blocks')).toHaveCSS('gap', '0px');
+  await expect(page.locator('.container-inner-blocks > .editor-block, .container-inner-blocks > .editor-block-passive').nth(0)).toContainText('Authored first');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()).toContainText('Authored first');
 });
 
 test('component-list reader controls hide unavailable sort and group controls', async ({ page }) => {

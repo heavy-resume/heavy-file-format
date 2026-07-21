@@ -381,13 +381,13 @@ try:
 except ValueError:
     invalid = "blocked"
 
-doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_year}-W{sunday_week:02d}|{week_start.date().isoformat()}|{leap.isoformat()}|{rolled.isoformat()}|{elapsed.total_seconds()}|{parsed.strftime('%Y/%m/%d %H:%M:%S.%f')}|{invalid}|{timedelta(microseconds=-1).days}")
+doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_year}-W{sunday_week:02d}|{week_start.date().isoformat()}|{leap.isoformat()}|{rolled.isoformat()}|{elapsed.total_seconds()}|{parsed.strftime('%Y/%m/%d %H:%M:%S.%f')}|{invalid}|{timedelta(microseconds=-1).days}|{parsed}|{timedelta(microseconds=-1)}")
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await waitForDocumentMeta(
     page,
     'datetime_result',
-    '2020-W53|2021-W01|2021-01-03|2024-02-29T02:00:00|2027-01-01T00:00:00|1e-06|2026/07/21 10:11:12.345000|blocked|-1'
+    '2020-W53|2021-W01|2021-01-03|2024-02-29T02:00:00|2027-01-01T00:00:00|1e-06|2026/07/21 10:11:12.345000|blocked|-1|2026-07-21 10:11:12.345000|-1 day, 23:59:59.999999'
   );
 });
 

@@ -158,7 +158,7 @@ export function saveSessionState(state: AppState): void {
     if (activeEditor) {
       payload.activeEditor = activeEditor;
     }
-    window.sessionStorage.setItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
+    setSessionStorageItem(getSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
     window.sessionStorage.removeItem(getChatSessionStorageKey(state.sessionStorageKey));
     removeLegacySessionState();
   } catch (error) {
@@ -180,7 +180,7 @@ export function saveChatSessionState(state: AppState): void {
       currentView: state.currentView,
       chat: createChatStatePayload(state),
     };
-    window.sessionStorage.setItem(getChatSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
+    setSessionStorageItem(getChatSessionStorageKey(state.sessionStorageKey), JSON.stringify(payload));
   } catch (error) {
     console.warn('[hvy:session] failed to save chat state', error);
   }
@@ -418,7 +418,83 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
   }
   const base64 = bytesToBase64(tailBytes);
   attachmentTailSessionCache.set(storageKey, { signature, base64 });
-  window.sessionStorage?.setItem(storageKey, base64);
+  setSessionStorageItem(storageKey, base64);
+}
+
+function setSessionStorageItem(key: string, value: string): void {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch (error) {
+    console.warn('[hvy:session] storage write diagnostic', createStorageWriteDiagnostic(key, value));
+    throw error;
+  }
+}
+
+function createStorageWriteDiagnostic(key: string, value: string): Record<string, unknown> {
+  const entries: Array<{ key: string; valueCharacters: number; estimatedUtf16Bytes: number }> = [];
+  let unreadableEntryCount = 0;
+  try {
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const entryKey = window.sessionStorage.key(index);
+      if (entryKey === null) {
+        continue;
+      }
+      try {
+        const entryValue = window.sessionStorage.getItem(entryKey) ?? '';
+        entries.push({
+          key: entryKey,
+          valueCharacters: entryValue.length,
+          estimatedUtf16Bytes: estimateStorageBytes(entryKey, entryValue),
+        });
+      } catch {
+        unreadableEntryCount += 1;
+      }
+    }
+  } catch {
+    unreadableEntryCount += 1;
+  }
+  entries.sort((left, right) => right.estimatedUtf16Bytes - left.estimatedUtf16Bytes);
+
+  return {
+    attemptedWrite: {
+      key,
+      valueCharacters: value.length,
+      estimatedUtf16Bytes: estimateStorageBytes(key, value),
+      payloadFields: describeJsonFieldSizes(value),
+    },
+    existingStorage: {
+      entryCount: entries.length,
+      unreadableEntryCount,
+      estimatedUtf16Bytes: entries.reduce((sum, entry) => sum + entry.estimatedUtf16Bytes, 0),
+      entries,
+    },
+    note: 'Byte counts estimate UTF-16 key and value storage; browser quota accounting may differ.',
+  };
+}
+
+function estimateStorageBytes(key: string, value: string): number {
+  return (key.length + value.length) * 2;
+}
+
+function describeJsonFieldSizes(value: string): Array<{ field: string; valueCharacters: number; estimatedUtf16Bytes: number }> | undefined {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+    return Object.entries(parsed)
+      .map(([field, fieldValue]) => {
+        const serializedValue = JSON.stringify(fieldValue) ?? '';
+        return {
+          field,
+          valueCharacters: serializedValue.length,
+          estimatedUtf16Bytes: serializedValue.length * 2,
+        };
+      })
+      .sort((left, right) => right.estimatedUtf16Bytes - left.estimatedUtf16Bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

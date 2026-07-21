@@ -744,6 +744,27 @@ class __HvyTimedelta__:
     def total_seconds(self):
         return self.__total_microseconds / 1000000
 
+    def __str__(self):
+        hours, remainder = divmod(self.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        clock = f"{hours}:{minutes:02d}:{seconds:02d}"
+        if self.microseconds:
+            clock += f".{self.microseconds:06d}"
+        if self.days == 0:
+            return clock
+        label = "day" if abs(self.days) == 1 else "days"
+        return f"{self.days} {label}, {clock}"
+
+    def __repr__(self):
+        parts = []
+        if self.days:
+            parts.append(f"days={self.days}")
+        if self.seconds:
+            parts.append(f"seconds={self.seconds}")
+        if self.microseconds:
+            parts.append(f"microseconds={self.microseconds}")
+        return "datetime.timedelta(" + (", ".join(parts) if parts else "0") + ")"
+
     def _total_microseconds_value(self):
         return self.__total_microseconds
 
@@ -804,6 +825,12 @@ class __HvyDate__:
 
     def isoformat(self):
         return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
+
+    def __str__(self):
+        return self.isoformat()
+
+    def __repr__(self):
+        return f"datetime.date({self.year}, {self.month}, {self.day})"
 
     def strftime(self, format):
         return __hvy_strftime__(self, str(format))
@@ -950,6 +977,17 @@ class __HvyDateTime__(__HvyDate__):
         elif timespec == "microseconds" or (timespec == "auto" and self.microsecond):
             output += f".{self.microsecond:06d}"
         return output
+
+    def __str__(self):
+        return self.isoformat(" ")
+
+    def __repr__(self):
+        values = [self.year, self.month, self.day, self.hour, self.minute]
+        if self.second or self.microsecond:
+            values.append(self.second)
+        if self.microsecond:
+            values.append(self.microsecond)
+        return "datetime.datetime(" + ", ".join(str(value) for value in values) + ")"
 
     def __add__(self, other):
         if not isinstance(other, __HvyTimedelta__):

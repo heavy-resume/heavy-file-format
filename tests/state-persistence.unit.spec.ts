@@ -432,6 +432,55 @@ test('saveSessionState skips persistence when sessionStorageKey is null', () => 
   expect(storage.size).toBe(0);
 });
 
+test('saveSessionState logs storage usage by key and payload field when a write exceeds quota', () => {
+  const storage = new Map<string, string>([
+    ['unrelated-large-entry', 'x'.repeat(200)],
+    ['unrelated-small-entry', 'y'.repeat(20)],
+  ]);
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.stubGlobal('window', {
+    sessionStorage: {
+      get length() {
+        return storage.size;
+      },
+      key: (index: number) => Array.from(storage.keys())[index] ?? null,
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: () => {
+        throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      },
+      removeItem: (key: string) => storage.delete(key),
+    },
+    localStorage: {
+      removeItem: vi.fn(),
+    },
+  });
+
+  saveSessionState(createPersistenceTestState('Quota Diagnostic', 'quota'));
+
+  expect(warn).toHaveBeenCalledTimes(2);
+  expect(warn.mock.calls[0]?.[0]).toBe('[hvy:session] storage write diagnostic');
+  expect(warn.mock.calls[0]?.[1]).toMatchObject({
+    attemptedWrite: {
+      key: 'hvy-editor-session-state-v1:quota',
+      valueCharacters: expect.any(Number),
+      estimatedUtf16Bytes: expect.any(Number),
+      payloadFields: expect.arrayContaining([
+        expect.objectContaining({ field: 'documentBase64', estimatedUtf16Bytes: expect.any(Number) }),
+        expect.objectContaining({ field: 'chat', estimatedUtf16Bytes: expect.any(Number) }),
+      ]),
+    },
+    existingStorage: {
+      entryCount: 2,
+      estimatedUtf16Bytes: expect.any(Number),
+      entries: [
+        expect.objectContaining({ key: 'unrelated-large-entry', valueCharacters: 200 }),
+        expect.objectContaining({ key: 'unrelated-small-entry', valueCharacters: 20 }),
+      ],
+    },
+  });
+  expect(warn.mock.calls[1]?.[0]).toBe('[hvy:session] failed to save state');
+});
+
 test('saveSessionState can persist keyed viewer UI state without storing document bytes', () => {
   const storage = new Map<string, string>();
   vi.stubGlobal('window', {

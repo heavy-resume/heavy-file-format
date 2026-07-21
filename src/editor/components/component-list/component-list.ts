@@ -157,7 +157,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
                 title: group.label,
                 blocks: group.blocks,
                 collapsedPreviewRem: resolved.display.groupCollapsedPreviewRem,
-                expanded: prioritized,
+                expanded: prioritized || block.schema.componentListGroupsExpanded,
                 useListOrdering: true,
               },
               helpers

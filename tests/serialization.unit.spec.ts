@@ -263,7 +263,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":4}-->
+<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupsExpanded":true,"componentListGroupCollapsedPreviewRem":4}-->
 
  <!--hvy:component-list:0 {}>
 
@@ -282,6 +282,7 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"componentListDefaultSortKey":"Job Match"');
   expect(expectedResult).toContain('"componentListDefaultSortDirection":"desc"');
   expect(expectedResult).toContain('"componentListDefaultGroupKey":"Category"');
+  expect(expectedResult).toContain('"componentListGroupsExpanded":true');
   expect(expectedResult).toContain('"componentListGroupCollapsedPreviewRem":4');
   expect(expectedResult).toContain('"sortKeys":{"Job Match":92}');
   expect(expectedResult).toContain('"groupKeys":{"Category":"Database"}');

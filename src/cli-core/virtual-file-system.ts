@@ -942,6 +942,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
     value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
     value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
+    value.componentListGroupsExpanded = schema.componentListGroupsExpanded;
     value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
   if (baseComponent === 'grid') {
@@ -1083,6 +1084,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
     schema.componentListDefaultSortDirection = value.componentListDefaultSortDirection;
   }
   if (typeof value.componentListDefaultGroupKey === 'string') schema.componentListDefaultGroupKey = value.componentListDefaultGroupKey;
+  if (typeof value.componentListGroupsExpanded === 'boolean') schema.componentListGroupsExpanded = value.componentListGroupsExpanded;
   if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
     schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
   }

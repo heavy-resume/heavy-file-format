@@ -314,6 +314,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'component-list-groups-expanded' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.componentListGroupsExpanded = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-sort-keys' && target instanceof HTMLTextAreaElement) {
       const context = resolveBlockContext(target);
       if (!context) {

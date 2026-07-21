@@ -1856,7 +1856,7 @@ hvy_version: 0.1
   await expect(page.locator('.expand-content')).toHaveCSS('animation-name', 'none');
 });
 
-test('component-list display defaults sort items into collapsed virtual groups', async ({ page }) => {
+test('component-list display defaults sort items into expanded virtual groups when configured', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1867,7 +1867,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":1}-->
+<!--hvy:component-list {"id":"skill-list","componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupsExpanded":true,"componentListGroupCollapsedPreviewRem":1}-->
 
  <!--hvy:component-list:0 {}-->
 
@@ -1908,7 +1908,7 @@ hvy_version: 0.1
   await expect(groups).toHaveCount(2);
   await expect(groups.nth(0).locator('.reader-container-title')).toHaveText('Language');
   await expect(groups.nth(1).locator('.reader-container-title')).toHaveText('Database');
-  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'true');
 
   await readerControls.locator('[data-reader-action="toggle-component-list-reverse"]').click();
   await expect(readerControls.locator('[data-reader-action="toggle-component-list-reverse"]')).toHaveAttribute('aria-label', 'Sort ascending');
@@ -1924,6 +1924,8 @@ hvy_version: 0.1
 
   await groups.nth(0).locator('.reader-container-toggle').click();
 
+  await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await groups.nth(0).locator('.reader-container-toggle').click();
   await expect(groups.nth(0).locator('.reader-container-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(groups.nth(0)).toContainText('PostgreSQL');
   await expect(groups.nth(0)).toContainText('SQLite');

@@ -1445,6 +1445,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'componentListDefaultSortKey', schema.componentListDefaultSortKey, defaults.componentListDefaultSortKey);
     addIfChanged(payload, 'componentListDefaultSortDirection', schema.componentListDefaultSortDirection, defaults.componentListDefaultSortDirection);
     addIfChanged(payload, 'componentListDefaultGroupKey', schema.componentListDefaultGroupKey, defaults.componentListDefaultGroupKey);
+    addIfChanged(payload, 'componentListGroupsExpanded', schema.componentListGroupsExpanded, defaults.componentListGroupsExpanded);
     addIfChanged(payload, 'componentListGroupCollapsedPreviewRem', schema.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem);
     if (!options.omitComponentListBlocks) {
       addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);

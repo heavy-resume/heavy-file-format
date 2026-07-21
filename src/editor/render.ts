@@ -1921,6 +1921,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
           />
         </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="component-list-groups-expanded"
+            ${block.schema.componentListGroupsExpanded ? 'checked' : ''}
+          />
+          <span>Groups Expanded by Default</span>
+        </label>
         <label>
           <span>Group Preview Height</span>
           <input

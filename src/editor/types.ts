@@ -91,6 +91,7 @@ export interface ComponentListBlockSchema extends BaseBlockSchema {
   componentListDefaultSortKey: string;
   componentListDefaultSortDirection: 'asc' | 'desc';
   componentListDefaultGroupKey: string;
+  componentListGroupsExpanded: boolean;
   componentListGroupCollapsedPreviewRem: number;
 }
 
@@ -208,6 +209,7 @@ interface RuntimeSchemaFieldAccess {
   componentListDefaultSortKey: string;
   componentListDefaultSortDirection: 'asc' | 'desc';
   componentListDefaultGroupKey: string;
+  componentListGroupsExpanded: boolean;
   componentListGroupCollapsedPreviewRem: number;
   gridColumns: number;
   gridStackWidth: string;

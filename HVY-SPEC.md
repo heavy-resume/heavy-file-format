@@ -432,14 +432,14 @@ Container children are emitted directly under the container directive:
 Component-list display defaults are optional reader defaults over the same source child list:
 
 ```markdown
-<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":5}-->
+<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupsExpanded":true,"componentListGroupCollapsedPreviewRem":5}-->
  <!--hvy:component-list:0 {}>
   <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92},"groupKeys":{"Category":"Database"}}-->
 ```
 
-`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned `groupKeys` key readers SHOULD group by; blank or omitted means `None`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `5`.
+`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned `groupKeys` key readers SHOULD group by; blank or omitted means `None`. `componentListGroupsExpanded` controls whether grouped virtual containers are expanded by default and defaults to `false`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `5`.
 
-When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. If grouping is active without sorting, group containers SHOULD be ordered alphabetically by group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. Reader UI MAY offer runtime sort, direction, and group selections derived from child item keys without rewriting the document.
+When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. If grouping is active without sorting, group containers SHOULD be ordered alphabetically by group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers use `componentListGroupsExpanded` as their default state and reveal or compact their members when activated. Reader UI MAY offer runtime sort, direction, and group selections derived from child item keys without rewriting the document.
 
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
@@ -542,7 +542,7 @@ Component-owned fields are:
 - `text`: `showCopy`
 - `code`: `codeLanguage`
 - `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
-- `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`
+- `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupsExpanded`, `componentListGroupCollapsedPreviewRem`
 - `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`

@@ -64,6 +64,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         componentListDefaultSortKey: '',
         componentListDefaultSortDirection: 'asc',
         componentListDefaultGroupKey: '',
+        componentListGroupsExpanded: false,
         componentListGroupCollapsedPreviewRem: 5,
       } as unknown as BlockSchema;
     case 'grid':
@@ -391,6 +392,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.componentListDefaultSortKey = typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : schema.componentListDefaultSortKey;
     schema.componentListDefaultSortDirection = candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc';
     schema.componentListDefaultGroupKey = typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : schema.componentListDefaultGroupKey;
+    schema.componentListGroupsExpanded = candidate.componentListGroupsExpanded === true;
     schema.componentListGroupCollapsedPreviewRem = parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, schema.componentListGroupCollapsedPreviewRem);
   }
   if (schema.kind === 'grid') {

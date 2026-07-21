@@ -6,6 +6,7 @@ Use doc helpers for document data, header metadata, attachments, database access
 Use doc.time.now_iso(), doc.time.now_local(), doc.time.now_unix_ms(), and doc.time.today_iso() for current client time.
 Use print(...) to write debugging notes to the script run log.
 Imports, network access, and direct DOM/window access are restricted by the scripting sandbox.
+Python's getattr, hasattr, setattr, and delattr builtins are available for public attributes; private scripting-runtime attributes are restricted.
 Checked script libraries in pluginConfig.libraries are imported before the script runs; this reference client supports random and re.
 pluginConfig.maxSteps controls the runtime step budget and defaults to 100000.
 Use form plugin scripts when the script is specifically attached to form state or submit behavior.

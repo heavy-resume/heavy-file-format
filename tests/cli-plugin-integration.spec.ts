@@ -231,6 +231,97 @@ doc.header.set("sandbox_dynamic", ",".join(results))
   });
 });
 
+test('scripting supports standard attribute lookup detection assignment and deletion', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"attribute-sandbox"}-->
+#! Attribute Sandbox
+
+<!--hvy:plugin {"id":"attribute-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+class Example:
+    pass
+
+item = Example()
+setattr(item, "answer", 42)
+assigned = getattr(item, "answer")
+detected_before = hasattr(item, "answer")
+delattr(item, "answer")
+detected_after = hasattr(item, "answer")
+
+doc.header.set("attribute_builtins", f"{assigned}|{detected_before}|{detected_after}")
+`);
+  const expectedResult = '42|True|False';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'attribute_builtins', expectedResult);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.document.meta.attribute_builtins;
+  });
+  expect(expectedState).toBe(expectedResult);
+});
+
+test('attribute builtins do not reach restricted browser capabilities', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"attribute-capability-sandbox"}-->
+#! Attribute Capability Sandbox
+
+<!--hvy:plugin {"id":"attribute-capability-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+results = []
+
+def record_restricted_capability(label, action):
+    try:
+        action()
+        results.append(label + ":reached")
+    except BaseException:
+        results.append(label + ":blocked")
+
+def browser_global(name):
+    js_doc = getattr(doc, "_HvyDocProxy__js_doc")
+    constructor = getattr(getattr(js_doc, "constructor"), "constructor")
+    return constructor("return " + name)()
+
+def wrapper_global(name):
+    bound_method = getattr(doc, "__getattr__")
+    function = getattr(bound_method, "__func__")
+    return getattr(function, "__globals__")[name]
+
+def hidden_doc_from_instance_dict():
+    instance_attributes = getattr(doc, "__dict__")
+    return instance_attributes["_HvyDocProxy__js_doc"]
+
+record_restricted_capability("direct_window", lambda: getattr(doc, "window"))
+record_restricted_capability("direct_document", lambda: getattr(doc, "document"))
+record_restricted_capability("window", lambda: browser_global("window"))
+record_restricted_capability("document", lambda: browser_global("document"))
+record_restricted_capability("scripting_runtime", lambda: browser_global("window.__HVY_SCRIPTING__"))
+record_restricted_capability("brython_runtime", lambda: browser_global("window.__BRYTHON__"))
+record_restricted_capability("hidden_js_doc", lambda: getattr(doc, "_HvyDocProxy__js_doc"))
+record_restricted_capability("instance_dict_js_doc", hidden_doc_from_instance_dict)
+record_restricted_capability("wrapper_window", lambda: getattr(wrapper_global("__hvy_window__"), "document"))
+record_restricted_capability("wrapper_runtime", lambda: getattr(wrapper_global("__hvy_window__"), "__HVY_SCRIPTING__"))
+record_restricted_capability("browser_import", lambda: __builtins__["__import__"]("browser"))
+
+doc.header.set("attribute_capabilities", ",".join(results))
+`);
+  const expectedResult = 'direct_window:blocked,direct_document:blocked,window:blocked,document:blocked,scripting_runtime:blocked,brython_runtime:blocked,hidden_js_doc:blocked,instance_dict_js_doc:blocked,wrapper_window:blocked,wrapper_runtime:blocked,browser_import:blocked';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'attribute_capabilities', expectedResult);
+});
+
 test('scripting checked regex library runs without Brython native re import', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -282,8 +373,8 @@ def record(label, action):
     except BaseException:
         results.append(label + ":blocked")
 
-record("re_python_re", lambda: getattr(re, "python_re"))
-record("re_enum", lambda: getattr(re, "enum"))
+record("re_python_re", lambda: re.python_re)
+record("re_enum", lambda: re.enum)
 try:
     from re import python_re
     results.append("from_python_re:leaked")
@@ -294,7 +385,7 @@ try:
     results.append("from_enum:leaked")
 except BaseException:
     results.append("from_enum:blocked")
-record("builtin_re_python_re", lambda: getattr(__builtins__["__import__"]("re"), "python_re"))
+record("builtin_re_python_re", lambda: __builtins__["__import__"]("re").python_re)
 record("builtin_python_re", lambda: __builtins__["__import__"]("python_re"))
 
 doc.header.set("regex_dependency_modules", ",".join(results))

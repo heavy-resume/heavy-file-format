@@ -616,6 +616,49 @@ def __hvy_blocked_import__(*args, **kwargs):
     raise RuntimeError("Import statements are not allowed in HVY scripts.")
 
 
+__hvy_private_attribute_names__ = (
+    '__dict__',
+    '__func__',
+    '__globals__',
+    '__getattr__',
+    '__getattribute__',
+    '_HvyDocProxy__js_doc',
+    '_HvyToolProxy__js_doc',
+)
+
+
+def __hvy_require_public_attribute__(name):
+    if str(name) in __hvy_private_attribute_names__:
+        raise AttributeError("HVY scripts cannot access private runtime attribute '" + str(name) + "'.")
+
+
+def __hvy_getattr__(value, name, *default):
+    __hvy_require_public_attribute__(name)
+    if len(default) > 1:
+        raise TypeError("getattr expected at most 3 arguments")
+    if len(default) == 1:
+        return getattr(value, name, default[0])
+    return getattr(value, name)
+
+
+def __hvy_hasattr__(value, name):
+    try:
+        __hvy_getattr__(value, name)
+        return True
+    except AttributeError:
+        return False
+
+
+def __hvy_setattr__(value, name, replacement):
+    __hvy_require_public_attribute__(name)
+    return setattr(value, name, replacement)
+
+
+def __hvy_delattr__(value, name):
+    __hvy_require_public_attribute__(name)
+    return delattr(value, name)
+
+
 def __hvy_script_import__(name, globals=None, locals=None, fromlist=(), level=0):
     root_name = str(name).split('.')[0]
     if level != 0 or root_name not in __hvy_allowed_libraries__:
@@ -781,6 +824,8 @@ __hvy_safe_builtins__ = {
     'dict': dict,
     'enumerate': enumerate,
     'float': float,
+    'getattr': __hvy_getattr__,
+    'hasattr': __hvy_hasattr__,
     'int': int,
     'isinstance': isinstance,
     'len': len,
@@ -793,8 +838,10 @@ __hvy_safe_builtins__ = {
     'set': set,
     'sorted': sorted,
     'str': str,
+    'setattr': __hvy_setattr__,
     'sum': sum,
     'tuple': tuple,
+    'delattr': __hvy_delattr__,
     'zip': zip,
     'BaseException': BaseException,
     'Exception': Exception,
@@ -906,7 +953,11 @@ try:
         '__builtins__': __hvy_safe_builtins__,
         'doc': __HvyDocProxy__(__hvy_runtime__.doc),
         'eval': __hvy_safe_eval__,
+        'getattr': __hvy_getattr__,
         'globals': __hvy_safe_globals__,
+        'hasattr': __hvy_hasattr__,
+        'setattr': __hvy_setattr__,
+        'delattr': __hvy_delattr__,
         '__name__': '__hvy_script__',
     }
     for __hvy_library__ in __hvy_allowed_libraries__:

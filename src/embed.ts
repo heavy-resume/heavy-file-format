@@ -94,6 +94,7 @@ import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, typ
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
+import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -1201,10 +1202,12 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
 }
 
 export {
+  applyHvyDocumentDelta,
   builtInPluginMap as plugins,
   builtInPlugins,
   createDocumentFilterSnapshot,
   createDocumentSearchSnapshot,
+  createHvyDocumentDelta,
   createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
@@ -1218,8 +1221,10 @@ export {
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  isHvyDocumentDelta,
   buildDocumentRichTextCopyPayload,
 };
+export type { HvyDocumentDeltaOptions } from './document-delta';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
@@ -1293,6 +1298,9 @@ declare global {
     HVY?: {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       deserializeDocumentBytesAsync: typeof deserializeDocumentBytesAsync;
+      applyHvyDocumentDelta: typeof applyHvyDocumentDelta;
+      createHvyDocumentDelta: typeof createHvyDocumentDelta;
+      isHvyDocumentDelta: typeof isHvyDocumentDelta;
       encryptDocumentBytes: typeof encryptDocumentBytes;
       exportDocumentSourceMarkdown: typeof exportDocumentSourceMarkdown;
       serializeDocument: typeof serializeDocument;
@@ -1321,8 +1329,11 @@ declare global {
 }
 
 window.HVY = {
+  applyHvyDocumentDelta,
+  createHvyDocumentDelta,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
+  isHvyDocumentDelta,
   encryptDocumentBytes,
   exportDocumentSourceMarkdown,
   serializeDocument,

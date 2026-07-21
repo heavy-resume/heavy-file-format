@@ -410,6 +410,24 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, se
 const bytes = await mount.serializeDocumentBytesAsync();
 ```
 
+Hosts can store compact, versioned document history with the `HVYD2` binary
+delta codec. Pass the newer bytes as the base and the older bytes as the target
+to create a reverse delta for rollback:
+
+```js
+const reverseDelta = HVY.createHvyDocumentDelta(currentBytes, previousBytes);
+
+// When a maxSizeRatio policy is supplied, null falls back to a full snapshot.
+const historyEntry = reverseDelta ?? previousBytes;
+const restoredBytes = HVY.isHvyDocumentDelta(historyEntry)
+  ? HVY.applyHvyDocumentDelta(currentBytes, historyEntry)
+  : historyEntry;
+```
+
+The codec does not impose a size cutoff. A host can supply `maxSizeRatio` as an
+optional storage policy, lowering it when it needs to reserve room for
+encryption or base64 overhead.
+
 Encrypted documents and encrypted components use Fernet keys supplied by the
 embedded host. Keys are addressed by UUID; the host should persist its own
 UUID-to-key map and pass it as a keyring when deserializing or mounting:

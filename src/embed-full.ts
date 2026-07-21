@@ -121,6 +121,7 @@ import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
 import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
+import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
@@ -1239,10 +1240,12 @@ export function mountHvyViewer(options: Omit<HvyMountOptions, 'mode'>): HvyMount
 }
 
 export {
+  applyHvyDocumentDelta,
   builtInPluginMap as plugins,
   builtInPlugins,
   createDocumentFilterSnapshot,
   createDocumentSearchSnapshot,
+  createHvyDocumentDelta,
   createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
@@ -1256,8 +1259,10 @@ export {
   serializeDocument,
   serializeDocumentBytes,
   serializeDocumentBytesAsync,
+  isHvyDocumentDelta,
   buildDocumentRichTextCopyPayload,
 };
+export type { HvyDocumentDeltaOptions } from './document-delta';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
@@ -1324,8 +1329,11 @@ export type {
 } from './search/types';
 
 window.HVY = {
+  applyHvyDocumentDelta,
+  createHvyDocumentDelta,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
+  isHvyDocumentDelta,
   encryptDocumentBytes,
   exportDocumentSourceMarkdown,
   serializeDocument,

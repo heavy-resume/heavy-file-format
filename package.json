@@ -27,6 +27,10 @@
       "types": "./src/rich-text-copy.ts",
       "default": "./src/rich-text-copy.ts"
     },
+    "./document-delta": {
+      "types": "./src/document-delta.ts",
+      "default": "./src/document-delta.ts"
+    },
     "./brython-minimal-vfs-plugin": {
       "types": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts",
       "default": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts"

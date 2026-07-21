@@ -453,6 +453,7 @@ function isSelectedExample(value: unknown): value is SelectedExample {
     || value === 'video-demo'
     || value === 'plugin-sort-values'
     || value === 'pdf-template'
+    || value === 'meeting-minutes-template'
     || value === 'resume-template'
     || value === 'resume-example'
     || value === 'import-reference'

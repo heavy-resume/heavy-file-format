@@ -419,6 +419,7 @@ export type SelectedExample =
   | 'video-demo'
   | 'plugin-sort-values'
   | 'pdf-template'
+  | 'meeting-minutes-template'
   | 'resume-template'
   | 'resume-example'
   | 'import-reference'
@@ -525,9 +526,12 @@ export interface AppState {
   pendingEditorDeactivation: {
     sectionKey: string;
     blockId: string;
+    anchorKind: 'block' | 'text';
+    anchorTop: number;
     scrollAdjustment: number;
     scrollSurface: 'editor' | 'editor-sidebar' | 'reader' | 'viewer-sidebar';
     scrollTopBeforeClose: number;
+    resolvedScrollTop?: number;
   } | null;
   pendingEditorActivation: {
     sectionKey: string;

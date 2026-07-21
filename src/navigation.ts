@@ -10,6 +10,7 @@ import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
 import { restoreVirtualizedSection } from './section-virtualizer';
 import type { VisualDocument } from './types';
+import { resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 
 const READER_SECTION_EXPANDED_STATE_PREFIX = 'reader-section-expanded:';
 
@@ -635,5 +636,6 @@ export function resetToBlankDocument(extension: VisualDocument['extension'] = '.
   clearChatConversation(state.chat);
   resetTransientUiState();
   saveSessionState(state);
+  resetReferenceDocumentDirtyBaseline();
   getRenderApp()();
 }

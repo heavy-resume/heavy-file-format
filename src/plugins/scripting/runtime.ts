@@ -132,6 +132,7 @@ export interface ScriptingRuntimeOptions {
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   now?: () => Date;
+  onMutationFlushed?: () => void;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -298,6 +299,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     } catch {
       // renderApp may not be ready yet during the very first load.
     }
+    options.onMutationFlushed?.();
   };
 
   const doc: ScriptingDocApi = {

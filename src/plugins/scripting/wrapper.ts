@@ -5,6 +5,8 @@ import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { hasDocumentDbTables } from '../db-table-model';
+import { notifyDocumentMayHaveChanged } from '../../document-change';
+import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -996,6 +998,12 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     };
   }
 
+  let stateRuntime: StateRuntime | null = null;
+  try {
+    stateRuntime = getActiveStateRuntime();
+  } catch {
+    // Standalone scripting tests and pre-bootstrap runs do not have an active state runtime.
+  }
   let dbMutated = false;
   let runtime: ScriptingRuntime | null = null;
   let scriptingDb: LoadedScriptingDbRuntime | null = null;
@@ -1026,6 +1034,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     form: options.form,
     db: scriptingDb?.api,
     exportRuleRecorder: options.exportRuleRecorder,
+    onMutationFlushed: () => {
+      if (!stateRuntime) {
+        return;
+      }
+      runWithStateRuntime(stateRuntime, () => {
+        notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
+      });
+    },
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();

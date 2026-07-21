@@ -57,6 +57,7 @@ import { virtualizeRenderedSections } from './section-virtualizer';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
+import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyIndicator } from './reference-document-dirty';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -77,6 +78,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
   { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
+  { id: 'meetingMinutesTemplateBtn', label: 'Meeting Minutes Template', selectedExample: 'meeting-minutes-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
@@ -920,6 +922,7 @@ function renderTopbar(): string {
             <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+          ${renderReferenceDocumentDirtyIndicator()}
           <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
           <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
           <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
@@ -1414,6 +1417,7 @@ async function bootstrap(): Promise<void> {
   setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
   initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
+  initializeReferenceDocumentDirtyTracking();
   bindSessionPersistence();
   saveSessionState(state);
   initColorModeSync();

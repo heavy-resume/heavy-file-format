@@ -52,9 +52,7 @@ import { recordHistory, redoState, undoState } from './history';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import {
-  initDocumentChangeTracking,
-  isDocumentDirty,
-  markDocumentSaved,
+  createDocumentChangeApi,
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
@@ -1040,7 +1038,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   }
   bindRuntimeActivation(options.root, runtime);
   ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
-  initDocumentChangeTracking(runtime, options.onDocumentChange);
+  const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
   void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
@@ -1117,10 +1115,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       });
     },
     markSaved() {
-      markDocumentSaved(runtime);
+      documentChangeApi.markSaved();
     },
     isDirty() {
-      return isDocumentDirty(runtime);
+      return documentChangeApi.isDirty();
     },
     undo() {
       runWithStateRuntime(runtime, () => undoState());

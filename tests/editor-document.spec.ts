@@ -111,6 +111,62 @@ test('reference app can load the import HVY reference document', async ({ page }
   await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
 });
 
+test('reference app can load the meeting minutes template', async ({ page }) => {
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Meeting Minutes Template');
+
+  await expect(page.locator('#downloadName')).toHaveValue('meeting-minutes.thvy');
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.getByRole('button', { name: 'Add minute' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Note' }).fill('Dirty-state reproduction minute');
+  await page.getByRole('button', { name: 'Add minute' }).click();
+  await expect(page.getByText('Dirty-state reproduction minute', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Unsaved');
+});
+
+test('embedded meeting minutes form script notifies the host after mutation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="meetingMount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const response = await fetch('/examples/meeting-minutes.thvy');
+    const root = document.querySelector<HTMLElement>('#meetingMount');
+    if (!root) throw new Error('Meeting mount missing.');
+    const testWindow = window as Window & {
+      meetingChangeEvents?: Array<{ dirty: boolean; source?: string }>;
+      meetingIsDirty?: () => boolean;
+    };
+    testWindow.meetingChangeEvents = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.thvy'),
+      mode: 'viewer',
+      onDocumentChange: (event) => testWindow.meetingChangeEvents?.push(event),
+    });
+    testWindow.meetingIsDirty = () => mount.isDirty();
+  });
+
+  await page.getByRole('textbox', { name: 'Note' }).fill('Embedded dirty-state minute');
+  await page.getByRole('button', { name: 'Add minute' }).click();
+  await expect(page.getByText('Embedded dirty-state minute', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as Window & {
+      meetingChangeEvents?: Array<{ dirty: boolean; source?: string }>;
+      meetingIsDirty?: () => boolean;
+    };
+    return {
+      dirty: testWindow.meetingIsDirty?.(),
+      event: testWindow.meetingChangeEvents?.at(-1),
+    };
+  })).toEqual({
+    dirty: true,
+    event: expect.objectContaining({ dirty: true, source: 'script' }),
+  });
+});
+
 test('reference app can load the scripting help document', async ({ page }) => {
   await page.route('**/api/scripting-help-document', async (route) => {
     if (route.request().method() === 'GET') {

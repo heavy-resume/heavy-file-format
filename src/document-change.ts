@@ -13,6 +13,11 @@ export interface HvyDocumentChangeEvent {
 
 export type HvyDocumentChangeCallback = (event: HvyDocumentChangeEvent) => void;
 
+export interface HvyDocumentChangeApi {
+  markSaved(): void;
+  isDirty(): boolean;
+}
+
 interface DocumentChangeTracker {
   baseline: Uint8Array;
   baselineSections: Map<string, SectionChangeSnapshot>;
@@ -33,6 +38,17 @@ interface SectionChangeSnapshot {
 }
 
 const trackersByRuntime = new WeakMap<StateRuntime, DocumentChangeTracker>();
+
+export function createDocumentChangeApi(
+  runtime: StateRuntime,
+  callback?: HvyDocumentChangeCallback
+): HvyDocumentChangeApi {
+  initDocumentChangeTracking(runtime, callback);
+  return {
+    markSaved: () => markDocumentSaved(runtime),
+    isDirty: () => isDocumentDirty(runtime),
+  };
+}
 
 export function initDocumentChangeTracking(runtime: StateRuntime, callback?: HvyDocumentChangeCallback): void {
   runWithStateRuntime(runtime, () => {

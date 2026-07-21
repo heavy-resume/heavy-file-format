@@ -3428,10 +3428,30 @@ hvy_version: 0.1
   await target.click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') });
   await expect(activeBlock).toBeVisible();
-  const unscrolledEditorTop = await tree.evaluate((node) => node.scrollTop);
+  const unscrolledEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unscrolledEditorTop));
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(Math.abs(Math.round(await target.evaluate((root) => {
+    const text = root.querySelector('.reader-block')?.firstChild;
+    if (!text) return Number.NaN;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    return range.getBoundingClientRect().top;
+  })) - Math.round(unscrolledEditorTop))).toBeLessThanOrEqual(2);
+
+  await target.click();
+  await expect(activeBlock).toBeVisible();
+  const unchangedDoneEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
+  await expect(target).toBeVisible();
+  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
+    const text = root.querySelector('.reader-block')?.firstChild;
+    if (!text) return Number.NaN;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    return range.getBoundingClientRect().top;
+  })) - Math.round(unchangedDoneEditorTop))).toBeLessThanOrEqual(2);
 
   await target.click();
   await expect(activeBlock).toBeVisible();
@@ -3446,10 +3466,16 @@ hvy_version: 0.1
   await tree.evaluate((node) => {
     node.scrollTop -= 100;
   });
-  const upwardScrollTop = await tree.evaluate((node) => node.scrollTop);
+  const upwardEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(upwardScrollTop));
+  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
+    const text = root.querySelector('.reader-block')?.firstChild;
+    if (!text) return Number.NaN;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    return range.getBoundingClientRect().top;
+  })) - Math.round(upwardEditorTop))).toBeLessThanOrEqual(2);
 
   await target.click();
   await expect(activeBlock).toBeVisible();

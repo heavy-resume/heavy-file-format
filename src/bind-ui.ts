@@ -5,6 +5,7 @@ import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
 import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
 import bundledPluginSortValuesHvy from '../examples/plugin-sort-values.hvy?raw';
 import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
+import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
@@ -53,6 +54,7 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
+import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -130,6 +132,7 @@ function replaceLoadedDocument(
     ...options.metaFilter,
   };
   saveSessionState(state);
+  resetReferenceDocumentDirtyBaseline();
   getRenderApp()();
 }
 
@@ -206,11 +209,13 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
       throw new Error(`Could not save ${sourceDocument.errorLabel}: ${response.status} ${response.statusText}`);
     }
     saveSessionState(state);
+    markReferenceDocumentSaved();
     getRenderApp()();
     return;
   }
   if (!currentFileHandle) {
     downloadBinaryFile(normalized, bytes);
+    markReferenceDocumentSaved();
     getRenderApp()();
     return;
   }
@@ -218,6 +223,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   await writable.write(bytes);
   await writable.close();
   saveSessionState(state);
+  markReferenceDocumentSaved();
   getRenderApp()();
 }
 
@@ -515,6 +521,11 @@ export function bindUi(app: HTMLElement): void {
     loadBundledTextDocument(bundledResumeThvy, 'resume.thvy', 'resume-template');
   });
 
+  const meetingMinutesTemplateBtn = app.querySelector<HTMLButtonElement>('#meetingMinutesTemplateBtn');
+  meetingMinutesTemplateBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledMeetingMinutesThvy, 'meeting-minutes.thvy', 'meeting-minutes-template');
+  });
+
   const resumeExampleBtn = app.querySelector<HTMLButtonElement>('#resumeExampleBtn');
   resumeExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledResumeHvy, 'resume.hvy', 'resume-example');
@@ -633,6 +644,7 @@ export function bindUi(app: HTMLElement): void {
     closeModal();
     resetTransientUiState();
     saveSessionState(state);
+    resetReferenceDocumentDirtyBaseline();
     getRenderApp()();
   });
 
@@ -648,6 +660,7 @@ export function bindUi(app: HTMLElement): void {
       await persistPreparedEmbeddingAttachments(state.document, state.attachmentHost);
       const bytes = serializeDocumentBytes(state.document);
       downloadBinaryFile(normalized, bytes);
+      markReferenceDocumentSaved();
       getRenderApp()();
     });
   });

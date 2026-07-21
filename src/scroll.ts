@@ -137,6 +137,11 @@ export function captureEditorDeactivationAnchor(
   const userScrollStartTop = Number(scrollContainer.dataset.activeEditorUserScrollStartTop);
   const passiveHeight = Number(block.dataset.passiveBlockHeight);
   const blockRect = block.getBoundingClientRect();
+  const activeTextEditor = block.querySelector<HTMLElement>(
+    '.rich-editor[data-field="block-rich"], .rich-editor.text-fill-in-editor'
+  );
+  const anchorKind = activeTextEditor ? 'text' : 'block';
+  const anchorTop = activeTextEditor?.getBoundingClientRect().top ?? blockRect.top;
   const scrollRect = scrollContainer.getBoundingClientRect();
   const visibleTop = scrollRect.top + scrollContainer.clientTop;
   const visibleBottom = visibleTop + scrollContainer.clientHeight;
@@ -147,6 +152,8 @@ export function captureEditorDeactivationAnchor(
   return {
     sectionKey,
     blockId,
+    anchorKind,
+    anchorTop,
     scrollSurface,
     scrollTopBeforeClose: scrollContainer.scrollTop,
     scrollAdjustment: editorIsClipped
@@ -190,7 +197,48 @@ function applyPendingEditorDeactivationScroll(
   if (!scrollContainer) {
     return;
   }
-  scrollContainer.scrollTop = Math.max(0, pending.scrollTopBeforeClose - pending.scrollAdjustment);
+  if (typeof pending.resolvedScrollTop !== 'number') {
+    const passiveBlock = app.querySelector<HTMLElement>(
+      `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
+    );
+    const passiveAnchorTop = passiveBlock
+      ? pending.anchorKind === 'text'
+        ? getFirstRenderedTextTop(passiveBlock.querySelector<HTMLElement>('.reader-block'))
+        : passiveBlock.getBoundingClientRect().top
+      : null;
+    const anchorAdjustment = pending.scrollAdjustment === 0 && passiveAnchorTop !== null
+      ? passiveAnchorTop - pending.anchorTop
+      : 0;
+    pending.resolvedScrollTop = Math.max(
+      0,
+      pending.scrollTopBeforeClose - pending.scrollAdjustment + anchorAdjustment
+    );
+  }
+  scrollContainer.scrollTop = pending.resolvedScrollTop;
+}
+
+function getFirstRenderedTextTop(root: HTMLElement | null): number | null {
+  if (!root) {
+    return null;
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent ?? '';
+    const firstTextIndex = text.search(/\S/);
+    if (firstTextIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, firstTextIndex);
+      range.setEnd(node, text.length);
+      const rect = range.getClientRects()[0];
+      range.detach();
+      if (rect) {
+        return rect.top;
+      }
+    }
+    node = walker.nextNode();
+  }
+  return null;
 }
 
 function getEditorScrollSurface(element: HTMLElement | null | undefined): NonNullable<typeof state.pendingEditorDeactivation>['scrollSurface'] | null {

@@ -1,5 +1,6 @@
 import { markdownToReaderHtml } from './markdown';
 import { isSectionHiddenByTemplateMarker } from './template-hide';
+import { removeTextFillInMarkers } from './text-fill-in';
 import type { VisualBlock, VisualSection } from './editor/types';
 import type { VisualDocument } from './types';
 
@@ -34,7 +35,7 @@ function renderBlock(block: VisualBlock): RichTextCopyPayload[] {
   }
   switch (block.schema.kind) {
     case 'text':
-      return [renderMarkdown(block.text)];
+      return [renderMarkdown(block.schema.fillIn ? removeTextFillInMarkers(block.text) : block.text)];
     case 'code':
       return [{
         plainText: block.text.trim(),

@@ -50,3 +50,23 @@ test('buildDocumentRichTextCopyPayload linearizes PDF-rendered PHVY content as h
   expect(payload.html).toContain('Caption <strong>text</strong>');
   expect(payload.html).not.toContain('Hidden');
 });
+
+test('buildDocumentRichTextCopyPayload omits invisible PHVY fill-in markers', () => {
+  const document = createBlankDocument('.phvy');
+  const section = createEmptySection(1);
+  const heading = createEmptyBlock('text');
+  heading.schema.fillIn = true;
+  heading.text = '**<!-- value {"placeholder":"A literal \"Accomplishments\" or \'\' if none given"} -->**';
+  const list = createEmptyBlock('text');
+  list.schema.fillIn = true;
+  list.text = '- <!-- value {"placeholder":"Accomplishments as bulleted list"} -->';
+  section.blocks = [heading, list];
+  document.sections = [section];
+
+  const payload = buildDocumentRichTextCopyPayload(document);
+
+  expect(payload.plainText).toBe('');
+  expect(payload.html).toContain('<ul>');
+  expect(payload.plainText).not.toContain('<!-- value');
+  expect(payload.html).not.toContain('<!-- value');
+});

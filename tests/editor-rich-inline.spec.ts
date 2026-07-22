@@ -782,6 +782,41 @@ component_defs:
   })).toBe('2026-03-27');
 });
 
+test('Done accepts the selected enum sort value', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Interviewing"
+            value: "interviewing"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-one"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Interviewing<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editedBlockId = await activeBlock.getAttribute('data-block-id');
+  await activeBlock.locator('[data-hvy-sort-value="true"]').selectOption({ label: 'Applied' });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await expect(activeBlock.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+});
+
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
   await page.goto('/');
 

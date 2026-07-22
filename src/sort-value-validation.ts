@@ -20,7 +20,10 @@ export function showInvalidSortValues(
   clearSortValueValidation(editorBlock);
   const invalid = [...editorBlock.querySelectorAll<HTMLElement>('[data-hvy-sort-value="true"]')]
     .map((node) => ({ node, key: node.dataset.sortValueKey?.trim() ?? '' }))
-    .filter(({ node, key }) => Boolean(definitions[key]) && coerceSortValue(node.textContent ?? '', definitions[key]!) === null);
+    .filter(({ node, key }) => {
+      const text = node instanceof HTMLSelectElement ? node.value : node.textContent ?? '';
+      return Boolean(definitions[key]) && coerceSortValue(text, definitions[key]!) === null;
+    });
   if (invalid.length === 0) {
     return false;
   }

@@ -30,6 +30,9 @@ scripts:
       submitScript: 'populate_food',
       submitLabel: 'Save lunch order',
       showSubmit: false,
+      formCss: 'display: grid;',
+      actionsCss: 'grid-column: 1 / -1;',
+      submitCss: 'justify-self: end;',
     });
 
     expect(parsed.error).toBeNull();
@@ -61,6 +64,9 @@ scripts:
     expect(parsed.spec.submitScript).toBe('populate_food');
     expect(parsed.spec.submitLabel).toBe('Save lunch order');
     expect(parsed.spec.showSubmit).toBe(false);
+    expect(parsed.spec.formCss).toBe('display: grid;');
+    expect(parsed.spec.actionsCss).toBe('grid-column: 1 / -1;');
+    expect(parsed.spec.submitCss).toBe('justify-self: end;');
   });
 
   test('reports invalid YAML without throwing', () => {
@@ -104,7 +110,17 @@ scripts:
     expect(expectedResult).toContain('css: "max-width: 24rem;"');
     expect(expectedResult).toContain('submit_form');
     expect(expectedResult).not.toContain('submitLabel');
-    expect(serializeFormConfig({ ...parsed.spec, submitLabel: 'Send details', submitScript: 'submit_form' })).toMatchObject({
+    expect(serializeFormConfig({
+      ...parsed.spec,
+      formCss: 'display: grid;',
+      actionsCss: 'grid-column: 1 / -1;',
+      submitCss: 'margin-inline-start: auto;',
+      submitLabel: 'Send details',
+      submitScript: 'submit_form',
+    })).toMatchObject({
+      formCss: 'display: grid;',
+      actionsCss: 'grid-column: 1 / -1;',
+      submitCss: 'margin-inline-start: auto;',
       submitLabel: 'Send details',
       submitScript: 'submit_form',
     });

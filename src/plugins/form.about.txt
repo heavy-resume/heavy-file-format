@@ -6,6 +6,11 @@ Fields use label as both visible text and the scripting key.
 Textarea fields can set rows to control their initial height.
 Named scripts live in plugin.txt under scripts and are also exposed as sibling .py files in the CLI.
 Form scripts run as sandboxed Brython/Python with doc and doc.form available.
+
+Form-level inline styling lives in pluginConfig: formCss styles the form,
+actionsCss styles the submit/action wrapper, and submitCss styles the submit
+button. Field wrapper styling remains in fields[].meta.css. All four values are
+sanitized before rendering.
 scriptLibraries can enable checked sandbox libraries such as random, re, and datetime for every script in the form.
 scriptStepBudget controls the maximum runtime steps for each form script run.
 Set submitAction to ai-generate to have the host call the configured chat model. submitSourceScript prepares the model input, and submitScript receives injected response and source values to apply generated output back to the document. Use doc.json.parse_array(response) or doc.json.parse_object(response) for structured JSON responses.

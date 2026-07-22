@@ -1367,6 +1367,12 @@ Plugin-specific rules:
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
   and any non-submit triggers.
+- Form-level presentation MAY be stored in `pluginConfig.formCss`,
+  `pluginConfig.actionsCss`, and `pluginConfig.submitCss`. These optional inline
+  CSS strings apply to the rendered `<form>`, submit/action wrapper, and submit
+  button respectively. Clients MUST sanitize each value like other
+  document-supplied inline CSS. These are general-purpose style controls; the
+  form contract does not define a grid-specific layout API.
 - `pluginConfig.submitAction` is optional and defaults to `"script"`. Supported
   values are `"script"` and `"ai-generate"`. For `"script"`, submitting the form
   runs `pluginConfig.submitScript`. For `"ai-generate"`, submitting the form

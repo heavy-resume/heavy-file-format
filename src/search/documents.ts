@@ -12,6 +12,7 @@ import type {
   SearchCategory,
 } from './types';
 import { builtInSearchProvider } from './search-provider';
+import { searchDocumentsByEmbedding } from '../chat/embedding-context';
 import {
   applySemanticCandidateBudget,
   buildSemanticFilterWindowRequest,
@@ -42,9 +43,13 @@ export async function searchDocuments(request: HvyDocumentSearchRequest): Promis
     };
   }
   throwIfAborted(request.signal);
-  return mode === 'semantic'
-    ? searchDocumentsSemantically(request, query)
-    : searchDocumentsByKeyword(request, query);
+  if (mode === 'semantic') {
+    return searchDocumentsSemantically(request, query);
+  }
+  if (mode === 'embedding') {
+    return searchDocumentsWithEmbeddings(request, query);
+  }
+  return searchDocumentsByKeyword(request, query);
 }
 
 async function searchDocumentsByKeyword(
@@ -129,6 +134,33 @@ async function searchDocumentsSemantically(
       results,
     }),
     candidateBudget: packet.candidateBudget,
+  };
+}
+
+async function searchDocumentsWithEmbeddings(
+  request: HvyDocumentSearchRequest,
+  query: string
+): Promise<HvyDocumentSearchResponse> {
+  const results = await searchDocumentsByEmbedding({
+    documents: normalizeSearchDocuments(request.documents),
+    query,
+    embeddingProvider: request.embeddingProvider ?? null,
+    ...(request.embeddingModel !== undefined ? { embeddingModel: request.embeddingModel } : {}),
+    ...(request.embeddingDimensions !== undefined ? { embeddingDimensions: request.embeddingDimensions } : {}),
+    ...(request.embeddingBatchSize !== undefined ? { embeddingBatchSize: request.embeddingBatchSize } : {}),
+    ...(request.maxResults !== undefined ? { maxResults: request.maxResults } : {}),
+    ...(request.embeddingMinScore !== undefined ? { minScore: request.embeddingMinScore } : {}),
+    ...(request.signal ? { signal: request.signal } : {}),
+  });
+  return {
+    query,
+    mode: 'embedding',
+    results,
+    snapshot: createDocumentSearchResponseSnapshot({
+      query,
+      mode: 'embedding',
+      results,
+    }),
   };
 }
 

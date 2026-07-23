@@ -111,6 +111,62 @@ test('reference app can load the import HVY reference document', async ({ page }
   await expect(page.locator('#downloadName')).toHaveValue('ai-import-hvy-format-reference.hvy');
 });
 
+test('reference app can load the meeting minutes template', async ({ page }) => {
+  await page.goto('/');
+
+  await selectDocumentMenuItem(page, 'Meeting Minutes Template');
+
+  await expect(page.locator('#downloadName')).toHaveValue('meeting-minutes.thvy');
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.getByRole('button', { name: 'Add minute' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Note' }).fill('Dirty-state reproduction minute');
+  await page.getByRole('button', { name: 'Add minute' }).click();
+  await expect(page.getByText('Dirty-state reproduction minute', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Unsaved');
+});
+
+test('embedded meeting minutes form script notifies the host after mutation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="meetingMount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const response = await fetch('/examples/meeting-minutes.thvy');
+    const root = document.querySelector<HTMLElement>('#meetingMount');
+    if (!root) throw new Error('Meeting mount missing.');
+    const testWindow = window as Window & {
+      meetingChangeEvents?: Array<{ dirty: boolean; source?: string }>;
+      meetingIsDirty?: () => boolean;
+    };
+    testWindow.meetingChangeEvents = [];
+    const mount = mountHvy({
+      root,
+      document: deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.thvy'),
+      mode: 'viewer',
+      onDocumentChange: (event) => testWindow.meetingChangeEvents?.push(event),
+    });
+    testWindow.meetingIsDirty = () => mount.isDirty();
+  });
+
+  await page.getByRole('textbox', { name: 'Note' }).fill('Embedded dirty-state minute');
+  await page.getByRole('button', { name: 'Add minute' }).click();
+  await expect(page.getByText('Embedded dirty-state minute', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const testWindow = window as Window & {
+      meetingChangeEvents?: Array<{ dirty: boolean; source?: string }>;
+      meetingIsDirty?: () => boolean;
+    };
+    return {
+      dirty: testWindow.meetingIsDirty?.(),
+      event: testWindow.meetingChangeEvents?.at(-1),
+    };
+  })).toEqual({
+    dirty: true,
+    event: expect.objectContaining({ dirty: true, source: 'script' }),
+  });
+});
+
 test('reference app can load the scripting help document', async ({ page }) => {
   await page.route('**/api/scripting-help-document', async (route) => {
     if (route.request().method() === 'GET') {
@@ -298,6 +354,26 @@ hvy_version: 0.1
 
   await expect(page.locator('.search-result')).toHaveCount(0);
   await expect(page.locator('.search-results-empty')).toContainText('Search results will appear here.');
+});
+
+test('raw HVY editor keeps native find and fills its surface', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+
+  await page.locator('#rawEditor').click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+F' : 'Control+F');
+
+  await expect(page.locator('.search-modal')).toHaveCount(0);
+  await expect(page.locator('#rawEditor')).toBeFocused();
+  await expect.poll(async () =>
+    page.locator('.raw-editor-shell').evaluate((shell) => {
+      const textarea = shell.querySelector<HTMLTextAreaElement>('#rawEditor');
+      if (!textarea) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(textarea.getBoundingClientRect().bottom - shell.getBoundingClientRect().bottom);
+    })
+  ).toBeLessThanOrEqual(16);
 });
 
 test('editor search opens sidebar for sidebar results', async ({ page }) => {
@@ -818,6 +894,79 @@ test('reader surface refresh preserves block and button visibility states separa
   });
 });
 
+test('reader block refresh normalizes table stripes inside the affected section', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div class="reader-section" data-section-key="section-a">
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-a">
+          <table class="reader-table">
+            <thead><tr><th>Title</th></tr></thead>
+            <tbody><tr class="table-main-row table-main-row-even"><td>Alpha</td></tr></tbody>
+          </table>
+        </div>
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-b">
+          <table class="reader-table">
+            <tbody><tr class="table-main-row table-main-row-odd"><td>Bravo</td></tr></tbody>
+          </table>
+        </div>
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-c">
+          <table class="reader-table">
+            <tbody><tr class="table-main-row table-main-row-odd"><td>Old Charlie</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const { refreshReaderBlockDom } = await import(/* @vite-ignore */ '/src/reader/block-refresh.ts');
+    state.document.sections = [
+      {
+        key: 'section-a',
+        blocks: [
+          { id: 'block-a', schema: {} },
+          { id: 'block-b', schema: {} },
+          { id: 'block-c', schema: {} },
+        ],
+      },
+    ];
+    const calls: string[] = [];
+    const refreshed = refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-c',
+      readerRenderer: {
+        renderReaderBlock: () => {
+          calls.push('block');
+          return `<div class="reader-block" data-section-key="section-a" data-block-id="block-c">
+            <table class="reader-table">
+              <tbody><tr class="table-main-row table-main-row-odd"><td>Charlie</td></tr></tbody>
+            </table>
+          </div>`;
+        },
+      },
+    });
+    return {
+      refreshed,
+      calls,
+      rowClasses: Array.from(document.querySelectorAll('.table-main-row')).map((row) => row.className),
+      rowText: Array.from(document.querySelectorAll('.table-main-row')).map((row) => row.textContent?.trim()),
+    };
+  });
+
+  expect(result).toEqual({
+    refreshed: true,
+    calls: ['block'],
+    rowClasses: [
+      'table-main-row table-main-row-even',
+      'table-main-row table-main-row-odd',
+      'table-main-row table-main-row-even',
+    ],
+    rowText: ['Alpha', 'Bravo', 'Charlie'],
+  });
+});
+
 test('reader surface refresh can target only sidebar sections', async ({ page }) => {
   await page.goto('/');
 
@@ -929,6 +1078,113 @@ hvy_version: 0.1
   expect(result.previewHref).toBe('/preview-card');
   expect(result.previewText).toBe('Preview: Preview link');
   expect(result.previewLabel).toBe('Ready');
+});
+
+test('embedded workspace links are disabled by default and not observed', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Other document](./other.hvy#details)
+ <!--hvy:xref-card {"xrefTitle":"Other card","xrefTarget":"./other.hvy#details"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: string[] = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      async linkObserver(link) {
+        seen.push(`${link.kind}:${link.href}`);
+        return null;
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    const textLink = root.querySelector<HTMLElement>('.reader-block-text .hvy-workspace-link-disabled');
+    const xref = root.querySelector<HTMLElement>('.reader-xref-card');
+    return {
+      seen,
+      textHref: textLink?.getAttribute('href') ?? null,
+      textDisabled: textLink?.getAttribute('aria-disabled') ?? '',
+      xrefTag: xref?.tagName ?? '',
+      xrefHref: xref?.getAttribute('href') ?? null,
+      xrefDisabled: xref?.getAttribute('aria-disabled') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual([]);
+  expect(result.textHref).toBeNull();
+  expect(result.textDisabled).toBe('true');
+  expect(result.xrefTag).toBe('DIV');
+  expect(result.xrefHref).toBeNull();
+  expect(result.xrefDisabled).toBe('true');
+});
+
+test('embedded workspace links are observed when cross-document links are enabled', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ [Other document](./other.hvy#details)
+ <!--hvy:xref-card {"xrefTitle":"Other card","xrefTarget":"/docs/other.hvy#details"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    const seen: Array<{ href: string; kind: string; crossDocument: boolean; xrefTarget?: string }> = [];
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      crossDocumentLinks: true,
+      async linkObserver(link) {
+        seen.push({
+          href: link.href,
+          kind: link.kind,
+          crossDocument: link.crossDocument,
+          xrefTarget: link.xrefTarget,
+        });
+        return {
+          attributes: { 'data-observed-workspace-link': link.kind },
+        };
+      },
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    return {
+      seen,
+      textObserved: root.querySelector<HTMLAnchorElement>('.reader-block-text a')?.getAttribute('data-observed-workspace-link') ?? '',
+      xrefObserved: root.querySelector<HTMLAnchorElement>('.reader-xref-card')?.getAttribute('data-observed-workspace-link') ?? '',
+    };
+  });
+
+  expect(result.seen).toEqual(
+    expect.arrayContaining([
+      { href: './other.hvy#details', kind: 'link', crossDocument: true, xrefTarget: undefined },
+      { href: '/docs/other.hvy#details', kind: 'xref-card', crossDocument: true, xrefTarget: '/docs/other.hvy#details' },
+    ])
+  );
+  expect(result.textObserved).toBe('link');
+  expect(result.xrefObserved).toBe('xref-card');
 });
 
 test('embedded plugin text renderer uses document link transforms', async ({ page }) => {
@@ -2246,6 +2502,51 @@ hvy_version: 0.1
   const result = await page.evaluate(() => (window as Window & { testHookReasons?: string[] }).testHookReasons);
 
   expect(result).toEqual(['load']);
+});
+
+test('reference editor sidebar rich input preserves focus per keystroke', async ({ page }) => {
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+  await page.locator('[data-action="switch-view"][data-view="editor"]').click();
+  await page.locator('.editor-sidebar-tab').click();
+  await page.waitForTimeout(350);
+
+  await page.locator('.editor-sidebar .editor-block-passive[data-block-id]').first().click();
+  const editor = page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-field="block-rich"]').first();
+  await expect(editor).toBeVisible();
+  await editor.focus();
+  await editor.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (window as Window & { testSidebarEditorNode?: Element }).testSidebarEditorNode = element;
+  });
+
+  await page.keyboard.type('Z');
+  await page.waitForTimeout(350);
+
+  const result = await page.evaluate(() => {
+    const previous = (window as Window & { testSidebarEditorNode?: Element }).testSidebarEditorNode;
+    const current = document.querySelector('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-field="block-rich"]');
+    return {
+      activeField: document.activeElement instanceof HTMLElement ? document.activeElement.dataset.field ?? null : null,
+      activeInsideEditor: current instanceof HTMLElement ? current.contains(document.activeElement) : false,
+      previousConnected: previous?.isConnected ?? false,
+      sameEditorNode: previous === current,
+      text: current?.textContent ?? '',
+    };
+  });
+
+  expect(result).toMatchObject({
+    activeField: 'block-rich',
+    activeInsideEditor: true,
+    previousConnected: true,
+    sameEditorNode: true,
+  });
+  expect(result.text).toContain('Z');
 });
 
 test('embedded editor rich input runs document hooks when edit is done', async ({ page }) => {

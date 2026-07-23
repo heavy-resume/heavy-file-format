@@ -3,7 +3,7 @@ import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
 import { hasDocumentDbTables } from '../plugins/db-table-model';
 import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
@@ -11,6 +11,7 @@ import {
   buildChatCliNativeToolDefinitions,
   buildChatCliInitialSimTurnState,
   runChatCliEditLoop,
+  type ChatCliMutationSummary,
   type ChatCliSelectedComponentFocus,
   type ChatCliSimTurnState,
 } from '../chat-cli/chat-cli-edit-loop';
@@ -60,6 +61,12 @@ export async function requestChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   question: string;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
+  allowDbQaTools?: boolean;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
   const nextMessages = appendUserChatMessage(params.messages, params.question);
@@ -80,7 +87,7 @@ export async function requestChatTurn(params: {
   let tokenUsage: ChatTokenUsage | null = null;
 
   try {
-    const answer = hasDocumentDbTables(params.document)
+    const answer = params.allowDbQaTools !== false && hasDocumentDbTables(params.document)
       ? await runQaToolLoop({
           settings: params.settings,
           document: params.document,
@@ -92,6 +99,12 @@ export async function requestChatTurn(params: {
           settings: params.settings,
           document: params.document,
           messages: nextMessages,
+          question: params.question,
+          chatContext: params.chatContext,
+          chatContextProvider: params.chatContextProvider,
+          chatSearchCache: params.chatSearchCache,
+          embeddingProvider: params.embeddingProvider,
+          onContextPreparation: params.onContextPreparation,
           onReasoningSummary: (summary) => {
             reasoningSummary = summary;
           },
@@ -190,7 +203,7 @@ export async function requestDocumentEditChatTurn(params: {
   messages: ChatMessage[];
   request: string;
   selectedComponent?: ChatCliSelectedComponentFocus;
-  onMutation?: (group?: string) => void;
+  onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {

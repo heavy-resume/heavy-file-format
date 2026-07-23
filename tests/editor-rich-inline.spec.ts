@@ -68,6 +68,128 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
   }
 });
 
+test('forward deleting selected heading text does not pass heading format to the next paragraph', async ({ page }) => {
+  await page.goto('/');
+
+  for (const shortcut of ['Delete', 'Control+Delete']) {
+    await page.getByRole('button', { name: 'Raw' }).click();
+    await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # SOME HEADER
+
+  some text
+`);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await page.getByRole('button', { name: 'Basic' }).click();
+
+    await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
+    const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+    await editor.locator('h1').evaluate((heading) => {
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    });
+
+    await page.keyboard.press(shortcut);
+    await expect(editor.locator('h1')).toHaveCount(0);
+    await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Raw' }).click();
+    await expect(page.locator('#rawEditor')).toContainText('some text');
+    await expect(page.locator('#rawEditor')).not.toContainText('# some text');
+  }
+});
+
+test('forward deleting at heading boundary does not pass heading format to the next paragraph', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # SOME HEADER
+
+  some text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.locator('h1').evaluate((heading) => {
+    (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press('Delete');
+  await expect(editor.locator('h1')).toHaveText('SOME HEADER');
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# SOME HEADER');
+  await expect(page.locator('#rawEditor')).toContainText('some text');
+  await expect(page.locator('#rawEditor')).not.toContainText('# SOME HEADERsome text');
+});
+
+test('forward deleting an empty heading restores with one document undo', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"body"}-->
+  # 
+
+  some text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="body"]') }).click();
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.locator('h1').evaluate((heading) => {
+    (heading.closest('.rich-editor') as HTMLElement | null)?.focus();
+    const range = document.createRange();
+    range.selectNodeContents(heading);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press('Delete');
+  await expect(editor.locator('h1')).toHaveCount(0);
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect(editor.locator('h1')).toHaveCount(1);
+  await expect(editor.locator('p').filter({ hasText: 'some text' })).toHaveCount(1);
+});
+
 test('image caption rich editor keeps italic and bold markers distinct', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeVisible();
@@ -510,6 +632,407 @@ test('inline code autoformats from backticks and escapes with arrow or click', a
   await page.keyboard.type(' plain');
   await expect(editor.locator('p code')).toHaveText('clickme');
   await expect(editor.locator('p')).toContainText('clickme plain');
+});
+
+test('enum sort selector ArrowRight moves caret after selector for same-line typing', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+
+  Next line
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.length === 1 && state.document.sections[0]?.id === 'main';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await expect(page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first()).toBeVisible();
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(editor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+
+  await editor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('X');
+
+  await expect.poll(() => editor.evaluate((node) => node.querySelector('p')?.innerHTML ?? '')).toMatch(/<\/select>\u200b?X/);
+  await expect(editor.locator('p').nth(1)).toHaveText('Next line');
+});
+
+test('AI enum sort selector change preserves the active editor and focus', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+
+  const reader = page.locator('#aiReaderDocument');
+  await reader.locator('.reader-block-text', { hasText: 'Strength:' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const activeEditor = reader.locator('.editor-block[data-active-editor-block="true"]');
+  const selector = activeEditor.locator('[data-field="sort-value-enum"]');
+  await selector.focus();
+  await selector.selectOption('4');
+
+  await expect(selector).toBeFocused();
+  await expect(selector).toHaveValue('4');
+  await expect(activeEditor).toBeVisible();
+});
+
+test('Done points to an invalid formatted date sort value and closes after correction', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Date:
+        type: date
+        format: MM/DD/YYYY
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:component-list {"componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-one","sortKeys":{"Date":"2026-01-05"}}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Date: <!--hvy:sort-value {"key":"Date"}-->01/05/2026<!--/hvy:sort-value-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {}-->
+      Notes
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Date:' }).last().dispatchEvent('click');
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editedBlockId = await activeBlock.getAttribute('data-block-id');
+  const sortValue = activeBlock.locator('[data-hvy-sort-value="true"]');
+  await sortValue.evaluate((node) => {
+    node.textContent = '02/30/2026';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await expect(activeBlock).toBeVisible();
+  await expect(sortValue).toHaveAttribute('aria-invalid', 'true');
+  await expect(sortValue).toBeFocused();
+  await expect(activeBlock.getByRole('alert')).toHaveText('Date must be a valid date in MM/DD/YYYY format.');
+
+  await sortValue.evaluate((node) => {
+    node.textContent = '03/27/2026';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.schema.componentListBlocks[0]?.schema.sortKeys.Date;
+  })).toBe('2026-03-27');
+});
+
+test('Done accepts the selected enum sort value', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Interviewing"
+            value: "interviewing"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-one"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Interviewing<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editedBlockId = await activeBlock.getAttribute('data-block-id');
+  await activeBlock.locator('[data-hvy-sort-value="true"]').selectOption({ label: 'Applied' });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await expect(activeBlock.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+});
+
+test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: "5"
+            value: 5
+          - label: "4"
+            value: 4
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"intro"}-->
+  Main body.
+
+<!--hvy: {"id":"sidebar","location":"sidebar"}-->
+#! Sidebar
+
+ <!--hvy:text {"id":"details"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+
+  Core strength.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.some((section) => section.location === 'sidebar' && section.id === 'sidebar');
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+  const sidebarTab = page.locator('.editor-sidebar-tab');
+  if (await sidebarTab.getAttribute('aria-expanded') !== 'true') {
+    await sidebarTab.click();
+  }
+  await expect(page.locator('.editor-sidebar [data-action="activate-block"]')).toHaveCount(1);
+  await page.locator('.editor-sidebar [data-action="activate-block"]').first().dispatchEvent('click');
+
+  const activeEditor = page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await expect(activeEditor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+  await activeEditor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('X');
+  await page.waitForTimeout(250);
+
+  await expect(page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"]')).toHaveCount(1);
+  await expect.poll(() => activeEditor.evaluate((node) => node.querySelector('p')?.innerHTML ?? '')).toMatch(/<\/select>\u200b?X/);
+  await expect(activeEditor.locator('p').nth(1)).toHaveText('Core strength.');
+  await expect(activeEditor.locator('[data-field="sort-value-enum"]')).toHaveCount(1);
+});
+
+test('use as sort value survives deleting and retyping the selected value', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Name:
+        type: text
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"sort-delete-details"}-->
+  Temporary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'sort-delete-details' &&
+      state.document.sections[0]?.blocks[0]?.text.includes('Temporary');
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Temporary' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.locator('p').evaluate((node) => {
+    const textNode = node.firstChild!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.locator('.text-use-as-menu-item[data-sort-value-key="Name"]').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
+
+  const sortValue = editor.locator('.hvy-sort-value[data-sort-value-key="Name"]').first();
+  await expect(sortValue).toHaveText('Temporary');
+  await sortValue.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('A');
+
+  await expect(sortValue).toHaveText('A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('Replacement');
+
+  await expect(sortValue).toHaveText('Replacement');
+  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:sort-value {"key":"Name"}-->Replacement<!--/hvy:sort-value-->');
+});
+
+test('orphan sort value presentation is cleared while typing plain text', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"orphan-sort-presentation"}-->
+  Base
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'orphan-sort-presentation';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Base' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><span class="hvy-sort-value">Plain</span></p>';
+    const textNode = node.querySelector('.hvy-sort-value')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, textNode!.textContent!.length);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+  });
+  const orphanBackground = await editor.locator('.hvy-sort-value').evaluate((node) =>
+    getComputedStyle(node as HTMLElement).backgroundColor
+  );
+  expect(orphanBackground).toBe('rgba(0, 0, 0, 0)');
+
+  await page.keyboard.type(' text');
+
+  await expect(editor.locator('.hvy-sort-value')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveText('Plain text');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Plain text');
+  await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
+});
+
+test('browser-copied sort value background is cleared after deleting the annotation element', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Strength:
+        type: number
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"copied-sort-background"}-->
+  Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.id === 'copied-sort-background';
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('[data-action="activate-block"]').filter({ hasText: 'Strength:' }).first().dispatchEvent('click');
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  await editor.locator('.hvy-sort-value[data-sort-value-key="Strength"]').evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNode(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('7');
+
+  await expect(editor.locator('[data-hvy-sort-value="true"]')).toHaveCount(0);
+  await expect(editor.locator('p span[style*="background"]')).toHaveCount(0);
+  await expect(editor.locator('p')).toHaveText('Strength: 7');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Strength: 7');
+  await expect(page.locator('#rawEditor')).not.toContainText('hvy:sort-value');
 });
 
 test('code button wraps selected text as inline code and preserves angle brackets', async ({ page }) => {

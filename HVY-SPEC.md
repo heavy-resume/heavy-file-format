@@ -61,7 +61,7 @@ Text components preserve standard Markdown unordered and ordered list syntax. Au
 
 Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
 
-Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, or internal fragment (`#id`) targets. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
 
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
@@ -161,6 +161,17 @@ Document identity metadata includes:
 - `title`: optional string naming the document.
 - `description`: optional string summarizing the document for metadata surfaces such as hosted link previews.
 - `tags`: optional comma-separated string or string array for document-level classification.
+
+Application metadata may be stored in the optional `metadata` object. HVY core does not interpret its keys or values. Applications SHOULD use a stable namespace they control as the first-level key when the metadata may be shared with other applications.
+
+`metadata` has a fixed, non-recursive shape: its values MAY be YAML scalars or objects whose values are YAML scalars. Arrays and objects nested inside those child objects are not supported. Readers and authoring tools MUST preserve valid `metadata` values unchanged and MUST reject metadata that exceeds this two-object-level limit.
+
+```yaml
+metadata:
+  com.example.records:
+    record_id: abc123
+    revision: 7
+```
 
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
@@ -285,7 +296,18 @@ Inline `css` strings are declaration-only values equivalent to an HTML `style` a
 `fillIn` is an optional boolean for text blocks. When true, authoring tools SHOULD treat each `<!-- value -->` or `<!-- value {"placeholder":"Label"} -->` marker in the text body as an editable fill-in region in basic editing modes. Text outside the markers is scaffold text and SHOULD NOT be edited by constrained/basic editors. Fill-in placeholder labels belong on the value marker, not on the block-level `placeholder` field; the block-level field remains reserved for whole-block empty-content hints. When all markers are filled or removed and no value marker remains, tools SHOULD treat the block like regular text again.
 `componentListItemLabel` is an optional human-readable singular label for items added to a `component-list`, such as `"skill"`, `"resume item"`, or `"tool / tech"`. Authoring tools SHOULD use it in add/edit prompts. When a `component-list` is configured with a non-default `componentListComponent`, authoring tools SHOULD write `componentListItemLabel` with the intended item label instead of relying on reader inference. If omitted, tools SHOULD derive a readable fallback from `componentListComponent` by converting separators to spaces and MAY drop generic suffixes such as `record`, `entry`, or `card` from machine-style component names such as `skill-record` or `tool-tech-xref-card`.
 `sortKeys` is an optional object on any block. Keys are human-readable sort names and MAY contain spaces. Values MUST be strings or finite numbers. Component-list views use these values for sorting without changing source document order.
+`derivedSortKeyNames` is an optional string array on component-list item blocks. It records which item `sortKeys` were materialized from source-backed sort values rather than manually authored metadata. Authoring tools use it to clear stale source-backed sort values when their source annotations or plugin declarations are removed or moved elsewhere. Reader-oriented renderers MAY ignore it and MUST continue to sort from `sortKeys`.
 `groupKeys` is an optional object on any block. Keys are human-readable grouping names and MAY contain spaces. Values MUST be strings. Component-list views use these values to create reader-only grouped displays.
+
+Visible text inside a component-list item MAY be marked as the source for an item `sortKeys` entry using a paired sort-value annotation:
+
+```markdown
+<!--hvy:sort-value {"key":"Strength"}-->Strong<!--/hvy:sort-value-->
+```
+
+The annotation payload MUST contain `key`, naming a sort value definition on the nearest reusable component definition that owns the component-list item. Authoring tools resolve the annotation against that reusable component's `sortValueDefs` entry and write the resolved value back to the owning component-list item's `sortKeys`, marking that key in `derivedSortKeyNames`. Reader-oriented renderers MUST render only the annotation body text and MUST NOT depend on scripts or annotation parsing for sorting; they use the resolved `sortKeys`.
+
+Sort-value annotations may appear in text components and table cells, including inside nested containers, grids, and expandable panes. Plugin components MAY declare local source-backed sort values using `pluginSortValues`, an object whose keys name sort value definitions on the owning component-list item and whose values MUST be strings or finite numbers. Authoring tools resolve plugin-declared sort values using the same `sortValueDefs` rules as visible annotations. If a key cannot be resolved, a value cannot be coerced, or an enum label is not one of the defined options, authoring tools SHOULD preserve the source marker or plugin declaration and leave manually authored key values unchanged. If a previously source-backed key no longer has a valid source inside the item, authoring tools SHOULD remove that key from `sortKeys` and `derivedSortKeyNames`.
 
 Section metadata also includes optional presentation keys such as:
 - `expanded`
@@ -410,14 +432,14 @@ Container children are emitted directly under the container directive:
 Component-list display defaults are optional reader defaults over the same source child list:
 
 ```markdown
-<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":5}-->
+<!--hvy:component-list {"componentListComponent":"xref-card","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupsExpanded":true,"componentListGroupCollapsedPreviewRem":5}-->
  <!--hvy:component-list:0 {}>
   <!--hvy:xref-card {"xrefTitle":"Postgres","xrefTarget":"skill-postgres","sortKeys":{"Job Match":92},"groupKeys":{"Category":"Database"}}-->
 ```
 
-`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned `groupKeys` key readers SHOULD group by; blank or omitted means `None`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `5`.
+`componentListDefaultSortKey` names the item-owned `sortKeys` key readers SHOULD sort by when no runtime reader override is supplied. Blank or omitted means `None`, so items render in source order. `componentListDefaultSortDirection` is `"asc"` or `"desc"` and defaults to `"asc"`. `componentListDefaultGroupKey` names the item-owned `groupKeys` key readers SHOULD group by; blank or omitted means `None`. `componentListGroupsExpanded` controls whether grouped virtual containers are expanded by default and defaults to `false`. `componentListGroupCollapsedPreviewRem` controls grouped virtual container preview height in `rem` units and defaults to `5`.
 
-When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. If grouping is active without sorting, group containers SHOULD be ordered alphabetically by group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers are collapsed by default and reveal their members when activated. Reader UI MAY offer runtime sort, direction, and group selections derived from child item keys without rewriting the document.
+When sorting is active, child blocks that have the selected sort key render before child blocks that do not. Keyed children are sorted by the selected direction; missing-key children keep source order after keyed children. Ties keep source order. If grouping is active, readers SHOULD create virtual container components for each group value. If grouping is active without sorting, group containers SHOULD be ordered alphabetically by group value. These virtual containers are reader-only and MUST NOT be serialized into `componentListBlocks`, slot directives, or child order files. Group containers use `componentListGroupsExpanded` as their default state and reveal or compact their members when activated. Reader UI MAY offer runtime sort, direction, and group selections derived from child item keys without rewriting the document.
 
 Cross-reference cards can be emitted as a block directive with all card data in metadata and no raw HTML body:
 
@@ -427,7 +449,8 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 
 Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
-- `xrefTarget` is RECOMMENDED. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+- `xrefTarget` is RECOMMENDED. It MUST be either a local target id (`section-id`), an internal fragment target (`#section-id`), or a host-gated HVY workspace path beginning with `./`, `../`, or `/` and optionally followed by a fragment target. URL/scheme targets such as `http:`, `https:`, `mailto:`, and `file:` are not valid `xrefTarget` values. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
+- Workspace-path xrefs are not filesystem paths. A leading `/` is relative to the host-defined HVY workspace root, not the host filesystem root. The reference implementation MUST NOT fetch, resolve, authorize, or traverse workspace-path xrefs; embedded hosts MAY explicitly enable cross-document links and handle enabled xrefs through the host link observer.
 - `xrefTargetTagFilter` is optional authoring metadata. When present, editors SHOULD filter target pickers to sections or components tagged with at least one listed tag. The value uses the same comma-separated tag syntax as `tags`; it does not affect rendering or link resolution.
 
 Reusable cross-reference card components can carry target picker filters:
@@ -519,7 +542,7 @@ Component-owned fields are:
 - `text`: `showCopy`
 - `code`: `codeLanguage`
 - `container`: `containerTitle`, `containerExpanded`, `containerCollapsedPreviewRem`, `containerBlocks`
-- `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupCollapsedPreviewRem`
+- `component-list`: `componentListComponent`, `componentListItemLabel`, `componentListBlocks`, `componentListDefaultSortKey`, `componentListDefaultSortDirection`, `componentListDefaultGroupKey`, `componentListGroupsExpanded`, `componentListGroupCollapsedPreviewRem`
 - `grid`: `gridColumns`, `gridStackWidth`, `gridItems`
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
@@ -632,6 +655,31 @@ Notes:
 - A component definition name can be used anywhere a block `component` value is accepted, including block directives, nested block schemas, and `componentListComponent`.
 - When a nested block array (e.g. `containerBlocks`, `expandableContentBlocks`) places a custom component, the shorthand form `{ component: name }` SHOULD be used instead of the full `{ schema: { component: name, ... } }` form. The component's template provides all other properties at instantiation time.
 - Implementations SHOULD render custom components according to `baseType` and preserve the custom component name for editing and round-tripping.
+- Component template definitions MAY include `sortValueDefs`, keyed by human-readable sort key. Each definition has `type` (`"text"`, `"number"`, `"date"`, `"datetime"`, or `"enum"`). `text` writes trimmed visible text. `number` parses trimmed visible text as a finite number. `date` requires an explicit `format` of `"YYYY-MM-DD"`, `"MM/DD/YYYY"`, or `"DD/MM/YYYY"`; implementations MUST parse that format exactly, MUST reject impossible calendar dates, and MUST write the timezone-free canonical `YYYY-MM-DD` value to `sortKeys`. Date formats MUST use a four-digit year and implementations MUST NOT infer field order from locale. `datetime` parses visible text with an explicit timezone (`Z`, a numeric offset such as `-07:00`, a `GMT-7` style offset, an IANA timezone such as `America/Los_Angeles`, or a short timezone abbreviation such as `PDT` when the runtime can resolve it to a single UTC offset for that date) and writes the equivalent UTC ISO-8601 timestamp string to `sortKeys`. `enum` requires `options`, an ordered list of `{label, value}` objects where `label` is the visible canonical text and `value` is a string or finite number written to `sortKeys`.
+
+Authoring tools SHOULD visibly identify source-backed sort values that fail coercion. An active component with invalid source-backed sort values SHOULD remain open when completion is requested, focus the first invalid source, and explain the expected type or configured date format. Readers and parsers MUST still open documents containing invalid source values; the invalid annotation remains source text and any manually authored `sortKeys` value is preserved as described above.
+
+Example sort-value enum on a reusable component:
+
+```yaml
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: Expert
+            value: 100
+          - label: Strong
+            value: 80
+          - label: Familiar
+            value: 50
+      Name:
+        type: text
+```
+
+For enum-backed values, authoring UIs SHOULD present a constrained themed picker using the reusable component's options. Selecting an option updates the visible annotation body and the owning component-list item's resolved key. Raw/advanced editors MAY expose the annotation text directly.
 
 Component templates MAY include value tokens in any string field. Tokens use Markdown-safe text and are replaced only when an authoring tool creates a component instance from the component template definition:
 
@@ -709,6 +757,8 @@ Notes:
 Leading whitespace determines nesting depth. Each level of nesting adds one space. This is semantic: a directive or content line at indent level N is a child of the nearest enclosing directive at indent level N-1. A decrease in indentation closes open blocks, exactly as Python uses indentation to delimit scopes.
 
 Parsers MUST use the leading whitespace count of a directive line to determine which open frames to close before processing that directive. When a directive at indent N is encountered, all open frames at indent >= N are closed first. Content lines (non-directive) inherit the indent of their enclosing block.
+
+Block directives such as `<!--hvy:expandable ...-->`, `<!--hvy:container ...-->`, `<!--hvy:grid ...-->`, and their slot directives do not use closing tags. Full-line structural closing comments such as `<!--/hvy:expandable-->` are not part of HVY and parsers SHOULD discard them. Inline annotations that define their own paired syntax, such as `<!--hvy:alt ...-->...<!--/hvy:alt-->` and `<!--hvy:nowrap-->...<!--/hvy:nowrap-->`, are the exception and remain inline text annotations.
 
 | Element | Indent |
 |---|---|
@@ -1212,6 +1262,23 @@ Rules:
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
 - Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
+Embedding retrieval caches MAY be stored as derived tail attachments with ids
+beginning `embedding-index:` and media type
+`application/vnd.hvy.embedding-index`. These attachments are optional cache
+data for clients that rank document chunks with embedding vectors. The payload
+SHOULD use a binary layout with a small header identifying cache schema version,
+metadata length, vector count, and vector dimensions; compact metadata SHOULD
+identify the embedding model, optional dimensions, stable chunk/content hashes,
+and chunk descriptors needed to route a match back to document content. Chunk
+descriptors SHOULD include the chunk id, text, text hash, target kind, section
+key, optional block id, target id, optional target ref/path, display labels, and
+document order. Vector data SHOULD be stored as contiguous little-endian float32
+values. Clients MUST treat embedding-index attachments as stale unless the model
+profile and chunk hashes match the current document-derived retrieval records.
+Deleting an embedding-index attachment MUST NOT change the document's authored
+content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
+embedding caches.
+
 ### 7.6 DB table plugin contract
 
 The first standardized plugin contract is `hvy.db-table`.
@@ -1300,6 +1367,12 @@ Plugin-specific rules:
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
   and any non-submit triggers.
+- Form-level presentation MAY be stored in `pluginConfig.formCss`,
+  `pluginConfig.actionsCss`, and `pluginConfig.submitCss`. These optional inline
+  CSS strings apply to the rendered `<form>`, submit/action wrapper, and submit
+  button respectively. Clients MUST sanitize each value like other
+  document-supplied inline CSS. These are general-purpose style controls; the
+  form contract does not define a grid-specific layout API.
 - `pluginConfig.submitAction` is optional and defaults to `"script"`. Supported
   values are `"script"` and `"ai-generate"`. For `"script"`, submitting the form
   runs `pluginConfig.submitScript`. For `"ai-generate"`, submitting the form
@@ -1337,8 +1410,11 @@ Plugin-specific rules:
   map.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
-  client-defined; this reference client supports `"random"` and `"re"`. Import statements
+  client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
+  The reference client's checked `"datetime"` library exposes the timezone-naive
+  `datetime` and `timedelta` classes for construction, ISO and numeric-format
+  parsing/formatting, arithmetic, comparisons, `weekday()`, and `isocalendar()`.
 - `pluginConfig.scriptStepBudget` MAY set a positive integer step budget for
   each form script run. Clients SHOULD default to 100000 steps.
 - Field `triggers` MAY define `input`, `change`, and `blur` script references.

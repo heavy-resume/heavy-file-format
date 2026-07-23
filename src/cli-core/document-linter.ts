@@ -5,10 +5,13 @@ import { findFormFieldTypeIssues, parseFormSpec, serializeFormSpec } from '../pl
 import { DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { visitBlocks } from '../section-ops';
 import type { VisualDocument } from '../types';
+import { runHvyDocumentBlockLinter } from './document-block-linter';
+import type { HvyCliLintIssue } from './lint-types';
 import { getHvyCliPluginCommandRegistrationByPluginId } from './plugin-command-registry';
 import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSystem } from './virtual-file-system';
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { validateDocumentMetadata } from '../document-metadata';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -32,18 +35,11 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'text_line_styles',
   'heading_styles',
   'plugins',
+  'metadata',
 ]);
 const DATABASE_SCHEMA_HEADER_KEYS = new Set(['tables', 'database', 'schema', 'columns']);
 
-export interface HvyCliLintIssue {
-  key: string;
-  path: string;
-  component: string;
-  message: string;
-}
-
-export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliLintIssue[]> {
-  const fs = buildHvyVirtualFileSystem(document);
+export async function runHvyCliLinter(document: VisualDocument, fs: HvyVirtualFileSystem = buildHvyVirtualFileSystem(document)): Promise<HvyCliLintIssue[]> {
   const componentJsonFiles = [...fs.entries.values()]
     .filter((entry): entry is HvyVirtualEntry & { kind: 'file' } => isLintableComponentJsonPath(fs, entry))
     .filter((entry) => !isFlattenedComponentListAlias(fs, entry.path));
@@ -53,6 +49,7 @@ export async function runHvyCliLinter(document: VisualDocument): Promise<HvyCliL
     ...lintHeader(document),
     ...lintHeaderCssValues(document),
     ...lintSections(fs),
+    ...runHvyDocumentBlockLinter(document),
     ...componentIssues.flat(),
   ];
 }
@@ -182,6 +179,17 @@ function lintHeader(document: VisualDocument): HvyCliLintIssue[] {
       });
     }
   }
+  if (typeof document.meta.metadata !== 'undefined') {
+    const issue = validateDocumentMetadata(document.meta.metadata);
+    if (issue) {
+      issues.push({
+        key: `/header.yaml:invalid-document-metadata:${issue.path}`,
+        path: '/header.yaml',
+        component: 'header',
+        message: issue.message,
+      });
+    }
+  }
   return issues;
 }
 
@@ -242,6 +250,7 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
         && candidatePath !== `${sectionPath}/section-info.txt`
         && candidatePath !== `${sectionPath}/about-section.txt`
         && candidatePath !== `${sectionPath}/children-order.json`
+        && !isRawEditHelperPath(candidatePath)
       );
     })
     .map((entry) => {
@@ -254,6 +263,11 @@ function lintSections(fs: HvyVirtualFileSystem): HvyCliLintIssue[] {
       };
     }));
   return issues;
+}
+
+function isRawEditHelperPath(path: string): boolean {
+  const filename = path.split('/').pop() ?? '';
+  return filename === 'raw.hvy' || filename === 'raw-preview.hvy.txt' || filename === 'raw.wip.hvy';
 }
 
 function lintCoreComponent(params: { path: string; component: string; baseComponent: string; config: JsonObject; body: string }): HvyCliLintIssue[] {

@@ -8,6 +8,7 @@ import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFro
 import { getTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
+import { normalizeSortValueDefs } from './sort-values';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
@@ -26,6 +27,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     slot: 'center',
     css: DEFAULT_BLOCK_CSS,
     sortKeys: {},
+    derivedSortKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',
@@ -62,6 +64,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         componentListDefaultSortKey: '',
         componentListDefaultSortDirection: 'asc',
         componentListDefaultGroupKey: '',
+        componentListGroupsExpanded: false,
         componentListGroupCollapsedPreviewRem: 5,
       } as unknown as BlockSchema;
     case 'grid':
@@ -123,7 +126,7 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         encryptedError: '',
       } as unknown as BlockSchema;
     case 'plugin':
-      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {} } as unknown as BlockSchema;
+      return { ...base, kind: 'plugin', plugin: '', pluginConfig: {}, pluginSortValues: {} } as unknown as BlockSchema;
     case 'xref-card':
       return { ...base, kind: 'xref-card', xrefTarget: '', xrefTargetTagFilter: '' } as unknown as BlockSchema;
     default:
@@ -295,6 +298,12 @@ export function normalizeReusableComponentDefinitions(meta: JsonObject): void {
         name,
         baseType,
       };
+      const sortValueDefs = normalizeSortValueDefs(raw.sortValueDefs);
+      if (Object.keys(sortValueDefs).length > 0) {
+        normalized.sortValueDefs = sortValueDefs;
+      } else {
+        delete normalized.sortValueDefs;
+      }
       if (raw.schema && typeof raw.schema === 'object' && !Array.isArray(raw.schema)) {
         normalized.schema = schemaFromUnknown({ ...(raw.schema as JsonObject), component: name || baseType }, new WeakSet<object>(), meta);
       }
@@ -344,6 +353,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     slot: coerceSlot(typeof candidate.slot === 'string' ? candidate.slot : 'center'),
     css: typeof candidate.css === 'string' ? candidate.css : defaults.css,
     sortKeys: parseSortKeys(candidate.sortKeys),
+    derivedSortKeyNames: parseStringList(candidate.derivedSortKeyNames),
     groupKeys: parseGroupKeys(candidate.groupKeys),
     tags: typeof candidate.tags === 'string' ? candidate.tags : defaults.tags,
     description: typeof candidate.description === 'string' ? candidate.description : defaults.description,
@@ -382,6 +392,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.componentListDefaultSortKey = typeof candidate.componentListDefaultSortKey === 'string' ? candidate.componentListDefaultSortKey : schema.componentListDefaultSortKey;
     schema.componentListDefaultSortDirection = candidate.componentListDefaultSortDirection === 'desc' ? 'desc' : 'asc';
     schema.componentListDefaultGroupKey = typeof candidate.componentListDefaultGroupKey === 'string' ? candidate.componentListDefaultGroupKey : schema.componentListDefaultGroupKey;
+    schema.componentListGroupsExpanded = candidate.componentListGroupsExpanded === true;
     schema.componentListGroupCollapsedPreviewRem = parsePositiveNumber(candidate.componentListGroupCollapsedPreviewRem, schema.componentListGroupCollapsedPreviewRem);
   }
   if (schema.kind === 'grid') {
@@ -395,6 +406,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
       candidate.pluginConfig && typeof candidate.pluginConfig === 'object' && !Array.isArray(candidate.pluginConfig)
         ? (candidate.pluginConfig as JsonObject)
         : schema.pluginConfig;
+    schema.pluginSortValues = parseSortKeys(candidate.pluginSortValues);
   }
   if (schema.kind === 'expandable') {
     schema.expandableStubComponent =
@@ -515,6 +527,12 @@ function parseSortKeys(raw: unknown): Record<string, SortKeyValue> {
     }
   }
   return parsed;
+}
+
+function parseStringList(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? raw.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
 }
 
 function parseGroupKeys(raw: unknown): Record<string, string> {

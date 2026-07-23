@@ -99,6 +99,10 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
   if (!pending) {
     return;
   }
+  if (pending.suppressFocus) {
+    state.pendingEditorActivation = null;
+    return;
+  }
   if (pending.immediateFocus) {
     focusPendingEditorActivation(app, pending);
     return;
@@ -122,16 +126,45 @@ export function captureEditorDeactivationAnchor(
   const block = app.querySelector<HTMLElement>(
     `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
   );
-  const target = block ? getPrimaryEditorActivationTarget(block) : null;
-  if (!target) {
+  const scrollContainer = block?.closest<HTMLElement>(
+    '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
+  const scrollSurface = getEditorScrollSurface(scrollContainer);
+  if (!block || !scrollContainer || !scrollSurface) {
     return null;
   }
+  const userScrollDirection = scrollContainer.dataset.activeEditorUserScrollDirection;
+  const userScrollStartTop = Number(scrollContainer.dataset.activeEditorUserScrollStartTop);
+  const passiveHeight = Number(block.dataset.passiveBlockHeight);
+  const blockRect = block.getBoundingClientRect();
+  const activeTextEditor = block.querySelector<HTMLElement>(
+    '.rich-editor[data-field="block-rich"], .rich-editor.text-fill-in-editor'
+  );
+  const anchorKind = activeTextEditor ? 'text' : 'block';
+  const anchorTop = activeTextEditor?.getBoundingClientRect().top ?? blockRect.top;
+  const scrollRect = scrollContainer.getBoundingClientRect();
+  const visibleTop = scrollRect.top + scrollContainer.clientTop;
+  const visibleBottom = visibleTop + scrollContainer.clientHeight;
+  const editorIsClipped = blockRect.top < visibleTop || blockRect.bottom > visibleBottom;
+  const expandedHeight = Number.isFinite(passiveHeight)
+    ? Math.max(0, blockRect.height - passiveHeight)
+    : 0;
   return {
     sectionKey,
     blockId,
-    anchorTop: target.getBoundingClientRect().top,
-    editableTag: target.tagName.toLowerCase(),
-    editableClass: target.className,
+    anchorKind,
+    anchorTop,
+    scrollSurface,
+    scrollTopBeforeClose: scrollContainer.scrollTop,
+    scrollAdjustment: editorIsClipped
+      && userScrollDirection === 'down'
+      && Number.isFinite(userScrollStartTop)
+      && Number.isFinite(passiveHeight)
+      ? Math.min(
+          Math.max(0, scrollContainer.scrollTop - userScrollStartTop),
+          expandedHeight
+        )
+      : 0,
   };
 }
 
@@ -140,13 +173,18 @@ export function scrollPendingEditorDeactivation(app: HTMLElement): void {
   if (!pending) {
     return;
   }
+  applyPendingEditorDeactivationScroll(app, pending);
   window.requestAnimationFrame(() => {
+    if (state.pendingEditorDeactivation !== pending) {
+      return;
+    }
+    applyPendingEditorDeactivationScroll(app, pending);
     window.requestAnimationFrame(() => {
-      const current = state.pendingEditorDeactivation;
-      if (!current || current.sectionKey !== pending.sectionKey || current.blockId !== pending.blockId) {
+      if (state.pendingEditorDeactivation !== pending) {
         return;
       }
       applyPendingEditorDeactivationScroll(app, pending);
+      state.pendingEditorDeactivation = null;
     });
   });
 }
@@ -155,20 +193,67 @@ function applyPendingEditorDeactivationScroll(
   app: HTMLElement,
   pending: NonNullable<typeof state.pendingEditorDeactivation>
 ): void {
-  state.pendingEditorDeactivation = null;
-  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
-  const passiveBlock = app.querySelector<HTMLElement>(
-    `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
-  );
-  const passiveContent = passiveBlock?.querySelector<HTMLElement>('.reader-block') ?? null;
-  const passiveAnchor = passiveContent ? getFirstTextAnchor(passiveContent) : null;
-  if (!editorTree || !passiveBlock || !passiveAnchor) {
+  const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(pending.scrollSurface));
+  if (!scrollContainer) {
     return;
   }
-  const pulledUpBy = pending.anchorTop - passiveAnchor.top;
-  if (pulledUpBy > 0) {
-    editorTree.scrollTop = Math.max(0, editorTree.scrollTop - pulledUpBy);
+  if (typeof pending.resolvedScrollTop !== 'number') {
+    const passiveBlock = app.querySelector<HTMLElement>(
+      `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
+    );
+    const passiveAnchorTop = passiveBlock
+      ? pending.anchorKind === 'text'
+        ? getFirstRenderedTextTop(passiveBlock.querySelector<HTMLElement>('.reader-block'))
+        : passiveBlock.getBoundingClientRect().top
+      : null;
+    const anchorAdjustment = pending.scrollAdjustment === 0 && passiveAnchorTop !== null
+      ? passiveAnchorTop - pending.anchorTop
+      : 0;
+    pending.resolvedScrollTop = Math.max(
+      0,
+      pending.scrollTopBeforeClose - pending.scrollAdjustment + anchorAdjustment
+    );
   }
+  scrollContainer.scrollTop = pending.resolvedScrollTop;
+}
+
+function getFirstRenderedTextTop(root: HTMLElement | null): number | null {
+  if (!root) {
+    return null;
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent ?? '';
+    const firstTextIndex = text.search(/\S/);
+    if (firstTextIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, firstTextIndex);
+      range.setEnd(node, text.length);
+      const rect = range.getClientRects()[0];
+      range.detach();
+      if (rect) {
+        return rect.top;
+      }
+    }
+    node = walker.nextNode();
+  }
+  return null;
+}
+
+function getEditorScrollSurface(element: HTMLElement | null | undefined): NonNullable<typeof state.pendingEditorDeactivation>['scrollSurface'] | null {
+  if (element?.matches('.editor-shell .editor-tree')) return 'editor';
+  if (element?.matches('.editor-sidebar-panel')) return 'editor-sidebar';
+  if (element?.matches('.reader-document')) return 'reader';
+  if (element?.matches('.viewer-sidebar-panel')) return 'viewer-sidebar';
+  return null;
+}
+
+function getEditorScrollSurfaceSelector(surface: NonNullable<typeof state.pendingEditorDeactivation>['scrollSurface']): string {
+  if (surface === 'editor') return '.editor-shell .editor-tree';
+  if (surface === 'editor-sidebar') return '.editor-sidebar-panel';
+  if (surface === 'reader') return '.reader-document';
+  return '.viewer-sidebar-panel';
 }
 
 function focusPendingEditorActivation(
@@ -183,8 +268,8 @@ function focusPendingEditorActivation(
     return;
   }
   const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
+  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
   if (typeof pending.anchorTop === 'number') {
-    const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
     const editableTop = fallbackTarget.getBoundingClientRect().top;
     const pushedDownBy = editableTop - pending.anchorTop;
     if (editorTree && pushedDownBy > 0) {
@@ -248,40 +333,6 @@ function isUsableEditorActivationTarget(target: HTMLElement): boolean {
   }
   const rect = target.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
-}
-
-type TextAnchor = {
-  top: number;
-  parentTag: string | null;
-  parentClass: string | null;
-  textPreview: string;
-};
-
-function getFirstTextAnchor(root: HTMLElement): TextAnchor | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode();
-  while (node) {
-    const text = node.textContent ?? '';
-    const firstTextIndex = text.search(/\S/);
-    if (firstTextIndex >= 0) {
-      const range = document.createRange();
-      range.setStart(node, firstTextIndex);
-      range.setEnd(node, text.length);
-      const rect = range.getClientRects()[0];
-      range.detach();
-      if (rect) {
-        const parent = node.parentElement;
-        return {
-          top: rect.top,
-          parentTag: parent?.tagName.toLowerCase() ?? null,
-          parentClass: parent?.className ?? null,
-          textPreview: text.slice(firstTextIndex).replace(/\s+/g, ' ').trim().slice(0, 80),
-        };
-      }
-    }
-    node = walker.nextNode();
-  }
-  return null;
 }
 
 function focusEditorActivationTarget(target: HTMLElement, clientX?: number, clientY?: number): void {

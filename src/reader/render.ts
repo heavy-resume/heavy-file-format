@@ -6,6 +6,7 @@ import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
 import { getComponentListAddLabel, hasComponentListItems } from '../editor/components/component-list/component-list-labels';
 import { renderContainerReader } from '../editor/components/container/container';
+import { hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
 import { renderGridReader } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
@@ -33,6 +34,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
 import { visitBlocks } from '../section-ops';
+import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
@@ -85,6 +87,7 @@ interface ReaderRenderState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerDeferredSectionBodies?: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
   search: SearchState;
@@ -318,8 +321,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
-    const autoExpanded = !modifiers.has('collapse') && !section.expanded && shouldAutoExpandAuthoringSection(section);
-    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : section.expanded;
+    const authoredOrNavigationExpanded = getReaderSectionExpandedOverride(section) ?? section.expanded;
+    const autoExpanded = !modifiers.has('collapse') && !authoredOrNavigationExpanded && shouldAutoExpandAuthoringSection(section);
+    const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : authoredOrNavigationExpanded;
     const classList = [
       'reader-section',
       section.contained ? '' : 'is-uncontained',
@@ -338,10 +342,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const contentClass = modifiers.has('collapse') || section.contained
       ? (sectionExpanded ? 'reader-section-content' : 'reader-section-content reader-section-preview')
       : 'reader-section-content';
-    const blocksHtml = renderReaderBlocks(section, section.blocks);
-    const childrenHtml = orderReaderSections(
-      section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
-    ).map((child) => renderReaderSection(child)).join('');
+    const deferExpandedBody = state.readerDeferredSectionBodies?.[section.key] === true;
+    const renderCheapPreview = shouldRenderCheapSectionBody(sectionExpanded, deferExpandedBody, searchContext);
+    const blocksHtml = renderCheapPreview
+      ? renderReaderPreviewBlocks(section, section.blocks)
+      : renderReaderBlocks(section, section.blocks);
+    const childrenHtml = renderCheapPreview
+      ? ''
+      : orderReaderSections(
+        section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
+      ).map((child) => renderReaderSection(child)).join('');
     if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
       return '';
     }
@@ -378,6 +388,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         ${content}
       </section>
     `;
+  }
+
+  function shouldRenderCheapSectionBody(sectionExpanded: boolean, deferExpandedBody: boolean, searchContext: SearchFilterContext): boolean {
+    return state.currentView === 'viewer' && !searchContext.active && (!sectionExpanded || deferExpandedBody);
   }
 
   function shouldAutoExpandAuthoringSection(section: VisualSection): boolean {
@@ -445,9 +459,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockStyle = sanitizeReaderBlockCss(block.schema.css, options);
     const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
-    const renderBlockShell = (body: string): string => {
+    const renderBlockShell = (body: string, extraAttrs = ''): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
-      return `<div ${blockAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
+      return `<div ${blockAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
     };
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
@@ -499,7 +513,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         : prioritized
         ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
         : block;
-      return renderNonEmptyBlockShell(renderContainerReader(section, readerBlock, helpers));
+      const body = renderContainerReader(section, readerBlock, helpers);
+      if (!body.trim()) {
+        return '';
+      }
+      const containerKey = `${section.key}:${block.id}`;
+      const expanded = helpers.getReaderContainerExpanded(containerKey, readerBlock.schema.containerExpanded);
+      const containerToggleAttrs = hasContainerBorderCss(readerBlock.schema.css) && !expanded
+        ? ` data-reader-action="toggle-container" data-container-key="${deps.escapeAttr(containerKey)}" aria-expanded="false"`
+        : '';
+      return renderBlockShell(body, containerToggleAttrs);
     }
     if (base === 'component-list') {
       const listHtml = renderComponentListReader(section, block, helpers);
@@ -607,6 +630,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
     return orderReaderBlocks(blocks)
       .filter((block) => !isAnchoredReaderButton(section, block))
+      .map((block) => renderReaderBlock(section, block))
+      .join('');
+  }
+
+  function renderReaderPreviewBlocks(section: VisualSection, blocks: VisualBlock[]): string {
+    return orderReaderBlocks(blocks)
+      .filter((block) => !isAnchoredReaderButton(section, block))
+      .slice(0, 3)
       .map((block) => renderReaderBlock(section, block))
       .join('');
   }

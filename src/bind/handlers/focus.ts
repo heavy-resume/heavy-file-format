@@ -27,15 +27,17 @@ export function bindFocus(app: HTMLElement): void {
       const editor = target.closest<HTMLElement>('.text-fill-in-editor');
       const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
       const movingWithinFillInEditor = Boolean(editor && nextTarget && editor.contains(nextTarget));
-      const passiveFillInAlreadyCommitted = Boolean(target.closest('.editor-block-passive'))
-        && context?.block.schema.fillIn === false;
-      if (!passiveFillInAlreadyCommitted && !movingWithinFillInEditor) {
+      const fillInAlreadyCommitted = context?.block.schema.fillIn === false;
+      if (!fillInAlreadyCommitted && !movingWithinFillInEditor) {
         commitTextFillInElement(target, 'focusout', { migrateFillInPlaceholders: Boolean(nextTarget) });
+      }
+      if (fillInAlreadyCommitted) {
+        return;
       }
       if (movingWithinFillInEditor) {
         return;
       }
-      if (nextTarget?.closest('[data-action="set-editor-mode"], [data-action="switch-view"]')) {
+      if (nextTarget?.closest('[data-action="set-editor-mode"], [data-action="switch-view"], [data-action="remove-text-fill-in"]')) {
         return;
       }
       const sectionKey = target.dataset.sectionKey ?? '';

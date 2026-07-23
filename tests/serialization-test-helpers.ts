@@ -14,6 +14,7 @@ export function createTestState(document: VisualDocument): AppState {
     editorMode: 'basic',
     responsivePreview: 'full',
     attachmentHost: null,
+    crossDocumentLinksEnabled: false,
     chat: createDefaultChatState(),
     search: createDefaultSearchState(),
     metaFilter: {
@@ -67,6 +68,7 @@ export function createTestState(document: VisualDocument): AppState {
     activeEditorSectionTitleKey: null,
     clearSectionTitleOnFocusKey: null,
     modalSectionKey: null,
+    captionTextModal: null,
     newDocumentModalOpen: false,
     reusableSaveModal: null,
     reusableTemplateModal: null,
@@ -96,6 +98,7 @@ export function createTestState(document: VisualDocument): AppState {
     expandableEditorPanels: {},
     readerExpandableState: {},
     readerContainerState: {},
+    readerDeferredSectionBodies: {},
     readerView: {},
     readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
@@ -106,6 +109,7 @@ export function createTestState(document: VisualDocument): AppState {
     lastHistoryGroup: null,
     lastHistoryAt: 0,
     pendingEditorCenterSectionKey: null,
+    imageAttachmentReductionStatus: null,
     transientNotice: null,
   };
 }

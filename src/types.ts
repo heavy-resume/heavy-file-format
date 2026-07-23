@@ -2,7 +2,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from './editor/types';
 import type { JsonObject } from './hvy/types';
 import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
-import type { ProxyChatMode } from './chat/chat';
+import type { ProxyChatMode } from './chat/chat-provider-payload';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
 import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
@@ -96,12 +96,143 @@ export interface ChatState {
   draft: string;
   messages: ChatMessage[];
   isSending: boolean;
+  status: string | null;
   error: string | null;
   panelOpen: boolean;
   requestNonce: number;
   abortController: AbortController | null;
   cliSimEnabled: boolean;
   cliSim: ChatCliSimState | null;
+}
+
+export type HvyChatContextMode = 'full-document' | 'keyword-retrieval' | 'embedding-retrieval';
+
+export interface HvyChatContextOptions {
+  mode?: HvyChatContextMode;
+  maxContextChars?: number;
+  maxResults?: number;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  embeddingBatchSize?: number;
+  embeddingMinScore?: number;
+  persistEmbeddingsToAttachments?: boolean;
+  onEmbeddingIndexPrepared?: () => void | Promise<void>;
+}
+
+export interface HvyChatContextRequest {
+  document: VisualDocument;
+  question: string;
+  messages: ChatMessage[];
+  maxContextChars: number;
+  mode: 'qa';
+  onProgress?: HvyChatContextPreparationProgressCallback;
+  signal?: AbortSignal;
+}
+
+export type HvyChatContextPreparationPhase = 'preparing-context' | 'context-ready';
+
+export interface HvyChatContextPreparationProgress {
+  totalChunks: number;
+  reusedChunks: number;
+  missingChunks: number;
+  embeddedChunks: number;
+}
+
+export type HvyChatContextPreparationProgressCallback = (
+  progress: HvyChatContextPreparationProgress
+) => Promise<void> | void;
+
+export interface HvyChatContextPreparationEvent {
+  phase: HvyChatContextPreparationPhase;
+  cached?: boolean;
+  progress?: HvyChatContextPreparationProgress;
+}
+
+export type HvyChatContextPreparationCallback = (
+  event: HvyChatContextPreparationEvent
+) => Promise<void> | void;
+
+export interface HvyChatEvidence {
+  label: string;
+  contextLabel?: string;
+  targetKind?: 'section' | 'block';
+  targetId?: string;
+  targetRef?: string;
+  targetPath?: string;
+  sectionKey?: string;
+  blockId?: string;
+  score?: number;
+  source?: string;
+}
+
+export interface HvyChatContextResult {
+  context: string;
+  evidence?: HvyChatEvidence[];
+  budget: {
+    maxContextChars: number;
+    usedContextChars: number;
+    truncated: boolean;
+  };
+}
+
+export interface HvyChatContextProvider {
+  buildContext(request: HvyChatContextRequest): Promise<HvyChatContextResult> | HvyChatContextResult;
+}
+
+export interface HvyEmbeddingInput {
+  id: string;
+  text: string;
+}
+
+export interface HvyEmbeddingProviderRequest {
+  model: string;
+  inputs: HvyEmbeddingInput[];
+  dimensions?: number;
+  signal?: AbortSignal;
+}
+
+export interface HvyEmbeddingVector {
+  id: string;
+  vector: number[];
+}
+
+export type HvyEmbeddingProvider = (
+  request: HvyEmbeddingProviderRequest
+) => Promise<HvyEmbeddingVector[]> | HvyEmbeddingVector[];
+
+export interface HvyChatSearchIndexKey {
+  documentId: string;
+  fingerprint: string;
+}
+
+export interface HvyChatSearchIndexRecord {
+  key: string;
+  targetKind: 'section' | 'block';
+  sectionKey: string;
+  blockId?: string;
+  targetId: string;
+  targetRef?: string;
+  targetPath?: string;
+  documentTitle?: string;
+  aiContext?: string;
+  label: string;
+  contextLabel?: string;
+  tags: string[];
+  description: string;
+  componentType?: string;
+  text: string;
+  documentOrder: number;
+}
+
+export interface HvyChatSearchIndexSnapshot {
+  version: 1;
+  records: HvyChatSearchIndexRecord[];
+}
+
+export interface HvyChatSearchCache {
+  getIndex(key: HvyChatSearchIndexKey): Promise<HvyChatSearchIndexSnapshot | null> | HvyChatSearchIndexSnapshot | null;
+  putIndex(key: HvyChatSearchIndexKey, snapshot: HvyChatSearchIndexSnapshot): Promise<void> | void;
+  deleteIndex?(key: HvyChatSearchIndexKey): Promise<void> | void;
 }
 
 export interface PdfExportPlanModalState {
@@ -286,7 +417,9 @@ export type SelectedExample =
   | 'crm'
   | 'study-tools'
   | 'video-demo'
+  | 'plugin-sort-values'
   | 'pdf-template'
+  | 'meeting-minutes-template'
   | 'resume-template'
   | 'resume-example'
   | 'import-reference'
@@ -298,6 +431,7 @@ export interface ComponentDefinition {
   baseType: string;
   tags?: string;
   description?: string;
+  sortValueDefs?: Record<string, SortValueDefinition>;
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
@@ -310,6 +444,21 @@ export interface ComponentTemplateFlavor {
   templateVariables?: Record<string, { label?: string; generator?: string; generatorLabel?: string }>;
   schema?: BlockSchema;
   template?: VisualBlock;
+}
+
+export type SortValueType = 'text' | 'number' | 'date' | 'datetime' | 'enum';
+
+export type SortValueDateFormat = 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY';
+
+export interface SortValueEnumOption {
+  label: string;
+  value: string | number;
+}
+
+export interface SortValueDefinition {
+  type: SortValueType;
+  format?: SortValueDateFormat;
+  options?: SortValueEnumOption[];
 }
 
 export interface SectionDefinition {
@@ -340,6 +489,11 @@ export interface AppState {
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
   encryption?: HvyEncryptionOptions | null;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  crossDocumentLinksEnabled?: boolean;
   chat: ChatState;
   aiEdit: AiEditState;
   aiModeTipDismissed: boolean;
@@ -375,19 +529,24 @@ export interface AppState {
   pendingEditorDeactivation: {
     sectionKey: string;
     blockId: string;
+    anchorKind: 'block' | 'text';
     anchorTop: number;
-    editableTag: string;
-    editableClass: string;
+    scrollAdjustment: number;
+    scrollSurface: 'editor' | 'editor-sidebar' | 'reader' | 'viewer-sidebar';
+    scrollTopBeforeClose: number;
+    resolvedScrollTop?: number;
   } | null;
   pendingEditorActivation: {
     sectionKey: string;
     blockId: string;
+    suppressFocus?: boolean;
     revealPath?: boolean;
     anchorTop?: number;
     clientX?: number;
     clientY?: number;
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
+    passiveHeight?: number;
   } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
@@ -432,6 +591,7 @@ export interface AppState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  readerDeferredSectionBodies: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
   componentListReaderViews: Record<string, string>;

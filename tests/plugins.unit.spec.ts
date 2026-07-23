@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from 'vitest';
+import { describe, expect, test, beforeEach, vi } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
 import { serializeDocument } from '../src/serialization';
@@ -17,8 +17,11 @@ import {
   VIDEO_PLUGIN_ID,
 } from '../src/plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
-import { initState } from '../src/state';
+import { initCallbacks, initState, state } from '../src/state';
 import type { AppState } from '../src/types';
+import { createTestState } from './serialization-test-helpers';
+import { editorStateActions } from '../src/bind/app-actions/editor-state';
+import { syncSortValuesForDocument } from '../src/sort-values';
 
 function bootstrapState(hvy: string): void {
   const document = deserializeDocument(hvy, '.hvy');
@@ -207,5 +210,71 @@ describe('plugin block selector swap', () => {
     expect(reserialized).toContain('"plugin":"hvy.progress-bar"');
     expect(reserialized).not.toContain('SELECT * FROM work');
     expect(reserialized).not.toContain('"table":"work"');
+  });
+});
+
+describe('plugin sort values in AI mode', () => {
+  test('sort sync materializes plugin-declared values before Done without requiring resort', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: container
+    sortValueDefs:
+      Strength:
+        type: number
+    schema:
+      containerBlocks: []
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"id":"skill-list","componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"id":"skill-alpha"}-->
+
+    <!--hvy:container:0 {}-->
+
+     <!--hvy:plugin {"id":"rating-alpha","plugin":"example.skill-rating","pluginSortValues":{"Strength":4}}-->
+`, '.hvy');
+    initCallbacks({
+      renderApp: () => {},
+      refreshReaderPanels: () => {},
+      refreshModalPreview: () => {},
+      componentRenderHelpers: null,
+      readerRenderer: null,
+    });
+    initState(createTestState(document));
+    state.currentView = 'ai';
+    const sectionKey = document.sections[0]!.key;
+    const item = document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!;
+    state.activeEditorBlock = { sectionKey, blockId: item.id };
+    state.activeEditorBlockPath = [{ sectionKey, blockId: item.id }];
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    vi.stubGlobal('HTMLElement', class {});
+    vi.stubGlobal('document', { activeElement: null });
+
+    expect(item.schema.sortKeys).toEqual({});
+    // Simulates the backend sync that ctx.sortValues.set performs in AI mode
+    // without requiring a reader-panel refresh/reorder.
+    expect(syncSortValuesForDocument(document)).toBe(true);
+    expect(item.schema.sortKeys).toEqual({ Strength: 4 });
+
+    editorStateActions['deactivate-block']({
+      app: { querySelector: () => null } as unknown as HTMLElement,
+      event: { stopPropagation: () => {} } as Event,
+      sectionKey,
+      blockId: item.id,
+      section: document.sections[0]!,
+      actionButton: {} as HTMLElement,
+      reusableName: null,
+    });
+
+    expect(item.schema.sortKeys).toEqual({ Strength: 4 });
+    expect(item.schema.derivedSortKeyNames).toEqual(['Strength']);
+    vi.unstubAllGlobals();
   });
 });

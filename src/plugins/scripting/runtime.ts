@@ -9,7 +9,8 @@ import { executeHvyCliCommandSync, writeHvyVirtualFileSync } from '../../cli-cor
 import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
-import { serializeDocument } from '../../serialization';
+import { serializeBlockFragment, serializeDocument } from '../../serialization';
+import { syncSortValuesForDocument } from '../../sort-values';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -131,6 +132,7 @@ export interface ScriptingRuntimeOptions {
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   now?: () => Date;
+  onMutationFlushed?: () => void;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -183,8 +185,11 @@ function createExportApi(recorder: HvyPdfExportRuleRecorder): ScriptingExportApi
   };
 }
 
-function throwJsonParseError(result: { ok: false; message: string }): never {
-  throw new Error(result.message);
+function throwJsonParseError(result: unknown): never {
+  const message = result && typeof result === 'object' && 'message' in result
+    ? (result as { message?: unknown }).message
+    : undefined;
+  throw new Error(typeof message === 'string' ? message : 'Invalid JSON response.');
 }
 
 function addJsonObjectHelpers(value: unknown): unknown {
@@ -278,6 +283,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   const flushIfMutated = () => {
     if (!mutated) return;
     mutated = false;
+    syncSortValuesForDocument(options.document);
     if (state?.document === options.document) {
       state.rawEditorText = serializeDocument(options.document);
       state.rawEditorError = null;
@@ -293,6 +299,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     } catch {
       // renderApp may not be ready yet during the very first load.
     }
+    options.onMutationFlushed?.();
   };
 
   const doc: ScriptingDocApi = {
@@ -592,10 +599,7 @@ class ScriptingComponentHandle {
   }
 
   fingerprint(): string {
-    return JSON.stringify({
-      text: this.location.block.text,
-      schema: this.location.block.schema,
-    });
+    return serializeBlockFragment(this.location.block, this.document.meta);
   }
 
   remove_children_by_tag(tag: string, slot = 'expandable-content'): number {
@@ -696,6 +700,10 @@ function getUpdatedScriptingComponentHandles(
   if (!previousDocument) {
     return current;
   }
+  // Derived sort values are synchronized across the document during edits. Normalize
+  // the prior snapshot too so that this maintenance pass is not reported as a user
+  // update to every component in a list.
+  syncSortValuesForDocument(previousDocument);
   const previous = getScriptingComponentHandles(previousDocument, component, () => {}, true);
   const previousById = new Map(previous.map((handle) => [handle.id, handle]));
   const currentIds = new Set(current.map((handle) => handle.id).filter(Boolean));

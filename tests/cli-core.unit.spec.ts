@@ -2496,6 +2496,46 @@ fields:
   expect(result.output).toContain('[plugin] /body/quality/passive-form - form has a submit button but no submitScript.');
 });
 
+test('hvy lint reports wrapper expandables that only contain nested expandables', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"id":"actual-main-points"}-->
+
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    Main points from "Actual"
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"id":"actual-1"}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {}-->
+      1) Alleged push-through of a disc golf course despite process concerns
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {}-->
+      - King County Parks & Rec is described as pushing a disc golf course in Petrovitsky Park.
+
+   <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"id":"actual-2"}-->
+    <!--hvy:expandable:stub {}-->
+     <!--hvy:text {}-->
+      2) Criticism of the survey/public-support claim
+    <!--hvy:expandable:content {}-->
+     <!--hvy:text {}-->
+      - Parks & Rec is accused of using a flawed survey method.
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(result.output).toContain('Lint issues: 1');
+  expect(result.output).toContain('[expandable] /body/summary/actual-main-points - expandable content contains only nested expandables. Use sibling expandables or a component-list instead of an empty wrapper expandable.');
+});
+
 test('hvy lint reports database schemas stored in header metadata', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -2606,6 +2646,27 @@ test('hvy lint accepts spec-defined importPreplan metadata', async () => {
   const result = await executeHvyCliCommand(document, session, 'hvy lint');
 
   expect(result.output).not.toContain('importPreplan');
+});
+
+test('hvy lint accepts application metadata with two object levels', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    record_id: abc123
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const expectedResult = await executeHvyCliCommand(document, session, 'hvy lint');
+
+  expect(expectedResult.output).toBe('No lint issues.');
 });
 
 test('hvy lint warns on newer HVY versions before assuming unused metadata', async () => {

@@ -42,6 +42,7 @@ export interface ComponentRenderHelpers {
   getXrefTargetOptions: (tagFilter?: string) => XrefTargetOption[];
   isXrefTargetValid: (target: string, tagFilter?: string) => boolean;
   getEffectiveXrefTargetTagFilter?: (block: VisualBlock) => string;
+  isCrossDocumentLinksEnabled?: () => boolean;
   getTableColumns: (schema: BlockSchema) => string[];
   ensureContainerBlocks: (block: VisualBlock) => void;
   ensureComponentListBlocks: (block: VisualBlock) => void;

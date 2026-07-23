@@ -3,10 +3,10 @@ import { state } from './state';
 import { flattenSections, formatSectionTitle, getSectionId } from './section-ops';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from './component-defs';
 import type { VisualDocument } from './types';
+import { classifyXrefTarget, normalizeLocalXrefTarget } from './workspace-links';
 
 export function normalizeXrefTarget(target: unknown): string {
-  const trimmed = readXrefString(target);
-  return trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  return normalizeLocalXrefTarget(target);
 }
 
 export interface XrefTargetOption {
@@ -15,6 +15,8 @@ export interface XrefTargetOption {
   title: string;
   detail: string;
 }
+
+const XREF_TARGET_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function getXrefTargetOptions(tagFilter = ''): XrefTargetOption[] {
   return getXrefTargetOptionsForDocument(state.document, tagFilter);
@@ -47,11 +49,14 @@ export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFil
 }
 
 export function isXrefTargetValid(target: string, tagFilter = ''): boolean {
-  const normalized = normalizeXrefTarget(target);
-  if (normalized.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(normalized)) {
+  const classified = classifyXrefTarget(target);
+  if (classified.kind === 'empty' || classified.kind === 'workspace') {
     return true;
   }
-  return getXrefTargetOptions(tagFilter).some((option) => option.value === normalized);
+  if (classified.kind === 'invalid') {
+    return false;
+  }
+  return getXrefTargetOptions(tagFilter).some((option) => option.value === classified.target);
 }
 
 export function getXrefTargetTagFilterForComponent(document: VisualDocument, componentName: string): string {
@@ -185,8 +190,8 @@ function compareXrefTargetOptions(
   left: { value: string; title: string; detail: string; label: string },
   right: { value: string; title: string; detail: string; label: string }
 ): number {
-  return left.title.localeCompare(right.title, undefined, { numeric: true, sensitivity: 'base' })
-    || left.value.localeCompare(right.value, undefined, { numeric: true, sensitivity: 'base' });
+  return XREF_TARGET_OPTION_COLLATOR.compare(left.title, right.title)
+    || XREF_TARGET_OPTION_COLLATOR.compare(left.value, right.value);
 }
 
 function normalizeTagFilter(tagFilter: string): string[] {

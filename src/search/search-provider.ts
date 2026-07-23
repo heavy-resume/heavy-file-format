@@ -104,7 +104,6 @@ function visitBlocks(
         section,
         block,
         targetId: block.schema.id.trim(),
-        targetPath: findVirtualDirectoryForBlock(request.document, block) ?? undefined,
         label,
         locationLabel: blockLocationLabel,
         contextLabel: getContextLabel(contextTrail, label),
@@ -175,6 +174,7 @@ function addMatches(options: {
     return;
   }
   const firstMatch = matches[0]!;
+  const targetPath = options.targetPath ?? (options.block ? findVirtualDirectoryForBlock(options.request.document, options.block) ?? undefined : undefined);
   options.results.push({
     id: `search-${options.results.length + 1}`,
     category: options.category,
@@ -182,7 +182,7 @@ function addMatches(options: {
     sectionKey: options.section.key,
     ...(options.block ? { blockId: options.block.id } : {}),
     targetId: options.targetId,
-    ...(options.targetPath ? { targetPath: options.targetPath } : {}),
+    ...(targetPath ? { targetPath } : {}),
     label: options.label,
     ...(options.locationLabel?.trim() ? { locationLabel: options.locationLabel.trim() } : {}),
     contextLabel: options.contextLabel,

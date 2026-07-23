@@ -5,15 +5,17 @@ import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
 import { renderSearchModal } from '../src/search/render';
-import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows } from '../src/search/semantic-candidates';
+import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, clearFilteringForTarget, stopSearchRequest } from '../src/search/actions';
+import { renderSearchFloatingSurface } from '../src/search/surface-refresh';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
+import { highlightEditorSearchMatches } from '../src/block-ops';
 
 afterEach(() => {
   setReferenceAppConfig(null);
@@ -40,6 +42,40 @@ hvy_version: 0.1
   });
 
   expect(expectedResult.map((result) => result.category)).toEqual(['tags', 'contents', 'description']);
+});
+
+test('floating search surface hides launcher while chat panel is open', () => {
+  initCallbacks({
+    renderApp: vi.fn(),
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: {},
+  });
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.chat.panelOpen = true;
+
+  const expectedMarkup = renderSearchFloatingSurface();
+
+  expect(expectedMarkup).toContain('data-search-surface="floating" class="search-floating-surface is-chat-open"');
+});
+
+test('editor rendering highlights submitted search matches', () => {
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy')));
+  state.search.submittedQuery = 'needle';
+
+  const expectedResult = highlightEditorSearchMatches('<p>Find this needle.</p>');
+
+  expect(expectedResult).toContain('<mark class="search-match-marker">needle</mark>');
 });
 
 test('built-in search respects match case', async () => {
@@ -1390,6 +1426,75 @@ hvy_version: 0.1
     'two',
     'three',
   ]);
+});
+
+test('semantic retrieval chunks merge leaves by section and split large sections at the target size', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"small"}-->
+#! Small
+
+<!--hvy:text {"id":"small-one"}-->
+ small one
+
+<!--hvy:text {"id":"small-two"}-->
+ small two
+
+<!--hvy: {"id":"large"}-->
+#! Large
+
+<!--hvy:text {"id":"large-one"}-->
+ ${'large one '.repeat(30)}
+
+<!--hvy:text {"id":"large-two"}-->
+ ${'large two '.repeat(30)}
+
+<!--hvy:text {"id":"large-three"}-->
+ ${'large three '.repeat(30)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, { targetChunkChars: 500 });
+  const smallChunks = expectedResult.filter((chunk) => chunk.sectionKey === document.sections[0]!.key);
+  const largeChunks = expectedResult.filter((chunk) => chunk.sectionKey === document.sections[1]!.key);
+
+  expect(smallChunks).toHaveLength(1);
+  expect(smallChunks[0]!.sourceCandidateIds).toEqual(['component:small-one', 'component:small-two']);
+  expect(largeChunks.length).toBeGreaterThan(1);
+  expect([...new Set(largeChunks.flatMap((chunk) => chunk.sourceCandidateIds))]).toEqual([
+    'component:large-one',
+    'component:large-two',
+    'component:large-three',
+  ]);
+  for (const chunk of largeChunks) {
+    expect(chunk.summary.length).toBeLessThanOrEqual(500);
+  }
+});
+
+test('semantic retrieval chunks use configurable overlap and continuation markers for oversized leaves', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"large"}-->
+#! Large
+
+<!--hvy:text {"id":"long-note"}-->
+ ${'alpha '.repeat(140)}needle ${'omega '.repeat(140)}
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, { targetChunkChars: 500, overlapChars: 200 });
+
+  expect(expectedResult.length).toBeGreaterThan(1);
+  expect(expectedResult.some((chunk) => chunk.summary.startsWith('...') || chunk.summary.includes('\n\n...'))).toBe(true);
+  expect(expectedResult.some((chunk) => chunk.summary.endsWith('...'))).toBe(true);
+  expect(expectedResult.some((chunk, index) =>
+    index > 0 && expectedResult[index - 1]!.summary.slice(-80).includes(chunk.summary.replace(/^\.\.\./, '').slice(0, 20))
+  )).toBe(true);
+  for (const chunk of expectedResult) {
+    expect(chunk.summary.length).toBeLessThanOrEqual(500);
+  }
 });
 
 test('semantic filter provider matches become normal filter results', async () => {

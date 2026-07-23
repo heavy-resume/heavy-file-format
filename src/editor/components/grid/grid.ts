@@ -95,7 +95,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
               sectionKey
             )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
               item.id
-            )}" aria-label="Remove grid component" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>
+            )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
           </div>
           <div class="grid-item-controls">
             ${

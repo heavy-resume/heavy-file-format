@@ -5,10 +5,13 @@ import { saveSessionState } from './state-persistence';
 import { applyTheme } from './theme';
 import { savePaletteOverrideId } from './palettes/palette-preferences';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from './document-change';
+import { markKeywordChatContextDocumentChanged } from './chat/chat-context';
+import { invalidateHvyCliSessionVirtualFileSystem } from './cli-core/commands';
 import { DB_ATTACHMENT_ID, getAttachment, removeAttachment, setAttachment } from './attachments';
 import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
 import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
+import { hasTextFillInMarker } from './text-fill-in';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -93,6 +96,8 @@ export function recordHistory(group?: string): void {
   if (state.isRestoring) {
     return;
   }
+  markKeywordChatContextDocumentChanged(state.document);
+  invalidateHvyCliSessionVirtualFileSystem(state.cliSession);
   const changeSource = inferDocumentChangeSource(group);
   const recordId = incrementRecordHistoryCount();
   const startedAt = performance.now();
@@ -346,6 +351,14 @@ function restoreActiveEditorState(activeEditor: ActiveEditorRestoreState | null)
   state.activeEditorBlockPath = existingPath.length > 0 ? existingPath : [{ sectionKey, blockId }];
   state.activeEditorBlock = { sectionKey, blockId };
   state.activeTextEditorMode = activeEditor.activeTextEditorMode ? { ...activeEditor.activeTextEditorMode } : null;
+  const restoredBlock = findSnapshotBlockByIds(sectionKey, blockId);
+  if (
+    state.activeTextEditorMode?.mode === 'fill-in'
+    && restoredBlock
+    && (!restoredBlock.schema.fillIn || !hasTextFillInMarker(restoredBlock.text))
+  ) {
+    state.activeTextEditorMode = { sectionKey, blockId, mode: 'rich' };
+  }
   state.activeEditorBlockSnapshots = activeEditor.activeEditorBlockSnapshots.filter((snapshot) =>
     state.activeEditorBlockPath.some((active) => active.sectionKey === snapshot.sectionKey && active.blockId === snapshot.blockId)
   );

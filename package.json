@@ -27,6 +27,10 @@
       "types": "./src/rich-text-copy.ts",
       "default": "./src/rich-text-copy.ts"
     },
+    "./document-delta": {
+      "types": "./src/document-delta.ts",
+      "default": "./src/document-delta.ts"
+    },
     "./brython-minimal-vfs-plugin": {
       "types": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts",
       "default": "./src/plugins/scripting/brython-minimal-vfs-plugin.ts"
@@ -48,6 +52,7 @@
     "preview": "vite preview",
     "browser:start": "node scripts/browser-harness.mjs start",
     "browser:smoke": "node scripts/browser-harness.mjs smoke",
+    "browser:chat-perf": "node scripts/browser-harness.mjs chat-perf",
     "browser:stop": "node scripts/browser-harness.mjs stop",
     "test:unit": "vitest run",
     "test:e2e": "playwright test"

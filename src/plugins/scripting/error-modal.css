@@ -1,0 +1,21 @@
+.hvy-scripting-error-modal,
+.hvy-document .hvy-scripting-error-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(760px, calc(100% - 2rem));
+}
+
+.hvy-scripting-error-modal-detail {
+  min-height: 8rem;
+  max-height: min(65vh, 36rem);
+  overflow: auto;
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  padding: 0.9rem 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.5 var(--hvy-mono, ui-monospace, monospace);
+}

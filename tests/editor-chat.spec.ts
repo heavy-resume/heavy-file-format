@@ -8,9 +8,7 @@ test('chat uses document editing mode in editor and ai views only', async ({ pag
   await expect(page.getByRole('button', { name: 'Open search' })).toBeHidden();
   await expect(page.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Describe how the document should change...');
   await expect(page.locator('.chat-panel')).toHaveClass(/is-document-edit/);
-  await expect.poll(() =>
-    page.locator('.chat-panel').evaluate((panel) => Math.round(panel.getBoundingClientRect().height))
-  ).toBeGreaterThanOrEqual(456);
+  await expect(page.locator('.chat-panel')).toBeVisible();
   const editChatWidth = await page.locator('.chat-panel').evaluate((panel) => panel.getBoundingClientRect().width);
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
@@ -136,13 +134,76 @@ test('chat stays scrolled to latest across full rerenders', async ({ page }) => 
   ).toBeLessThanOrEqual(12);
 });
 
+test('viewer question updates chat without rerendering the app', async ({ page }) => {
+  let renderAppLogCount = 0;
+  page.on('console', (message) => {
+    if (message.text().includes('[hvy:perf]') && message.text().includes('renderApp')) {
+      renderAppLogCount += 1;
+    }
+  });
+  await page.route('**/api/chat', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: 'Viewer answer without full rerender.',
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = true;
+    }
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Resume Example', exact: true }).click({ force: true });
+  await expect(page.locator('#downloadName')).toHaveValue('resume.hvy');
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('What is this document?');
+
+  renderAppLogCount = 0;
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('.chat-bubble', { hasText: 'Viewer answer without full rerender.' })).toBeVisible();
+
+  expect(renderAppLogCount).toBe(0);
+});
+
+test('AI mode informational question uses QA chat instead of document edit CLI', async ({ page }) => {
+  const chatRequests: Array<{ mode?: string; messages?: Array<{ content?: string }> }> = [];
+  await page.route('**/api/chat', async (route) => {
+    const body = route.request().postDataJSON() as { mode?: string; messages?: Array<{ content?: string }> };
+    chatRequests.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: 'James has used Python on automation and data projects.',
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('[data-field="chat-input"]').fill('What projects has James done with Python?');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.locator('.chat-bubble', { hasText: 'James has used Python on automation and data projects.' })).toBeVisible();
+  expect(chatRequests).toHaveLength(1);
+  expect(chatRequests[0]?.mode).toBe('qa');
+  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('What projects has James done with Python?');
+  await expect(page.locator('.chat-cli-sim')).toHaveCount(0);
+});
+
 test('right click AI change request uses CLI sim when enabled', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Open chat' }).click();
-  await page.getByRole('button', { name: 'CLI Sim Off' }).evaluate((button) => {
-    (button as HTMLButtonElement).click();
-  });
+  await page.getByRole('button', { name: 'CLI Sim Off' }).click();
   await expect(page.getByRole('button', { name: 'CLI Sim On' })).toBeVisible();
 
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();

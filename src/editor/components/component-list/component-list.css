@@ -2,6 +2,10 @@
   display: grid;
 }
 
+.container-inner-blocks.component-list-editor-blocks {
+  gap: 0;
+}
+
 .reader-component-list.is-grouped-view {
   gap: 0.5rem;
 }

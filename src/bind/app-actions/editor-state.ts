@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
-import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit } from '../../block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
 import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
 import type { AppActionHandler } from './types';
@@ -9,6 +9,8 @@ import { populateMissingDescriptions } from '../../descriptions/populate';
 import { openRemoveConfirmationModal } from '../handlers/remove-confirmation-modal';
 import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
+import { getSortValueDefsForBlock, syncSortValuesForDocument } from '../../sort-values';
+import { showInvalidSortValues } from '../../sort-value-validation';
 
 let descriptionPopulateAbortController: AbortController | null = null;
 
@@ -31,10 +33,11 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   if (state.currentView === 'ai') {
     setAiEditorHostBlock(sectionKey, blockId);
   }
-  if (typeof anchor?.top === 'number' && state.pendingEditorActivation) {
+  if (state.pendingEditorActivation) {
     state.pendingEditorActivation = {
       ...state.pendingEditorActivation,
-      anchorTop: anchor.top,
+      ...(typeof anchor?.top === 'number' ? { anchorTop: anchor.top } : {}),
+      passiveHeight: passiveBlock?.getBoundingClientRect().height,
       clientX: event.clientX,
       clientY: event.clientY,
       preferTextFocus: true,
@@ -99,26 +102,51 @@ const activateSectionTitle: AppActionHandler = ({ event, sectionKey }) => {
   getRenderApp()();
 };
 
-const deactivateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
+const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
+  const block = findBlockByIds(sectionKey, blockId);
+  const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
+  if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
+    return;
+  }
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
   commitActiveTextFillIn('deactivate-block');
+  commitActiveInlineTableEdit(sectionKey, blockId);
+  const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
+  const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
+    ? syncSortValuesForDocument(state.document)
+    : false;
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
   }
-  if (result === 'removed') {
+  if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  if (result === 'closed' || result === 'removed') {
-    runDocumentEditHooksAfterCommit();
-  }
   getRenderApp()();
+  if ((result === 'closed' || result === 'removed') && (blockChanged || result === 'removed' || sortValuesChanged)) {
+    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app));
+  }
 };
+
+function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return;
+  }
+  const field = activeElement.dataset.field;
+  if (field !== 'table-cell' && field !== 'table-column') {
+    return;
+  }
+  if (activeElement.dataset.sectionKey !== sectionKey || activeElement.dataset.blockId !== blockId) {
+    return;
+  }
+  commitInlineTableEdit(activeElement);
+}
 
 const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
   if (!blockId) {

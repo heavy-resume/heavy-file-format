@@ -30,6 +30,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { applyWorkspaceLinkRendering } from '../workspace-links';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
@@ -146,11 +147,13 @@ interface EditorRenderState {
     clientY?: number;
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
+    passiveHeight?: number;
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
+  crossDocumentLinksEnabled?: boolean;
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   mobileAdjustmentMode: boolean;
   editingReusableDefinition?: boolean;
@@ -545,6 +548,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       && activationPathIndex >= 0;
     const activationStyle = isActivatingPath ? ` style="--editor-activation-delay: ${activationPathIndex * 150}ms;"` : '';
     const activationAttrs = isActiveFrame ? ` data-active-editor-block="true" data-active-block-id="${deps.escapeAttr(block.id)}"` : '';
+    const passiveHeightAttr = state.pendingEditorActivation?.sectionKey === sectionKey
+      && state.pendingEditorActivation.blockId === block.id
+      && typeof state.pendingEditorActivation.passiveHeight === 'number'
+      ? ` data-passive-block-height="${state.pendingEditorActivation.passiveHeight}"`
+      : '';
     const anchorAttrs = renderButtonAnchorAttrs(sectionKey, block, rootSections ?? []);
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
@@ -584,7 +592,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const removeButton = canRemove
       ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
         sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component" data-tooltip="Delete component">${closeIcon()}</button>`
+      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component">${closeIcon()}</button>`
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
     const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
@@ -596,7 +604,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     return `
       ${insertAboveGhost}
-      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}>
+      <div class="editor-block${isActivatingPath ? ' is-activating-path' : ''}${isPlacementSource ? ' is-placement-source' : ''}" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"${activationStyle}${activationAttrs}${passiveHeightAttr}>
         ${componentMetaActions}
         ${frameRemoveButton}
         <div class="editor-block-head">
@@ -845,11 +853,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const hasExpandedContent = contentHtml.trim().length > 0;
       const stubBody = hasStubContent ? stubHtml : '<div class="expandable-passive-empty-ghost">Empty stub</div>';
       const contentBody = hasExpandedContent ? contentHtml : '<div class="expandable-passive-empty-ghost">Empty expanded content</div>';
-      const stubToggle = `<div class="expandable-pane expandable-pane-stub"><div class="expand-stub-toggle" style="${stubPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+      const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub"><div class="expand-stub-toggle" style="${stubPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="${expanded ? 'true' : 'false'}"><div class="expand-stub">${stubBody}</div></div></div>`;
-      const expandedPanel = `<div class="expandable-pane expandable-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentBody}</div></div>`;
-      const collapsedContentPreview = `<div class="expandable-pane expandable-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
+      const expandedPanel = `<div class="expandable-reader-pane expandable-reader-pane-expanded"><div class="expand-content" style="${contentPaneStyle}">${contentBody}</div></div>`;
+      const collapsedContentPreview = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview"><div class="expand-content" style="${contentPaneStyle}" data-action="toggle-editor-expandable" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}" aria-expanded="false">${contentBody}</div></div>`;
       const body = !hasStubContent && !hasExpandedContent
@@ -1913,6 +1921,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
           />
         </label>
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            data-section-key="${deps.escapeAttr(sectionKey)}"
+            data-block-id="${deps.escapeAttr(block.id)}"
+            data-field="component-list-groups-expanded"
+            ${block.schema.componentListGroupsExpanded ? 'checked' : ''}
+          />
+          <span>Groups Expanded by Default</span>
+        </label>
         <label>
           <span>Group Preview Height</span>
           <input
@@ -2141,7 +2159,8 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
-    })), deps.escapeHtml));
+      crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
+    }), state.crossDocumentLinksEnabled === true), deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {
@@ -2411,7 +2430,7 @@ function unwrapSingleParagraph(html: string): string {
   return inner;
 }
 
-function addExternalLinkTargets(html: string): string {
+function addExternalLinkTargets(html: string, crossDocumentLinksEnabled: boolean): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
@@ -2421,5 +2440,6 @@ function addExternalLinkTargets(html: string): string {
       anchor.setAttribute('rel', 'noopener noreferrer');
     }
   });
+  applyWorkspaceLinkRendering(template.content, crossDocumentLinksEnabled === true);
   return template.innerHTML;
 }

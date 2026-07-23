@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import type { HvyLinkKind } from './workspace-links';
 
 export interface HvyLinkObserverRequest {
   href: string;
@@ -6,6 +7,9 @@ export interface HvyLinkObserverRequest {
   html: string;
   attributes: Record<string, string>;
   external: boolean;
+  kind: HvyLinkKind;
+  crossDocument: boolean;
+  xrefTarget?: string;
 }
 
 export interface HvyLinkObserverResponse {
@@ -70,12 +74,17 @@ function buildLinkObserverRequest(anchor: HTMLAnchorElement, href: string): HvyL
   [...anchor.attributes].forEach((attr) => {
     attributes[attr.name] = attr.value;
   });
+  const kind = anchor.dataset.hvyLinkKind === 'xref-card' ? 'xref-card' : 'link';
+  const xrefTarget = anchor.dataset.hvyXrefTarget;
   return {
     href,
     text: anchor.textContent ?? '',
     html: anchor.innerHTML,
     attributes,
     external: /^https?:\/\//i.test(href),
+    kind,
+    crossDocument: anchor.dataset.hvyCrossDocument === 'true',
+    ...(kind === 'xref-card' && typeof xrefTarget === 'string' ? { xrefTarget } : {}),
   };
 }
 

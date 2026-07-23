@@ -5,15 +5,21 @@ import { bindInputMisc } from './bind/handlers/input-misc';
 import { bindKeydown } from './bind/handlers/keydown';
 import { bindScrollHandler } from './bind/handlers/scroll';
 import { bindSubmit } from './bind/handlers/submit';
-import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  parseComponentListRuntimeView,
+  persistComponentListDisplayState,
+} from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, runWithStateRuntime, state } from './state';
+import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
 const readerAppControlRuntimes = new WeakMap<HTMLElement, ReturnType<typeof getActiveStateRuntime>>();
@@ -74,13 +80,32 @@ export function bindReaderUi(app: HTMLElement): void {
     if (!sectionKey || !blockId) {
       return;
     }
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block) {
+      return;
+    }
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
-    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+    const nextView = encodeComponentListRuntimeView({
       sortKey: current.sortKeyOverride ? current.sortKey : viewId,
       sortKeyOverride: current.sortKeyOverride || !!viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
+    });
+    persistComponentListDisplayState(block, getComponentListDisplayState(block, nextView));
+    syncReusableTemplateForBlock(sectionKey, blockId);
+    delete state.componentListReaderViews[key];
+  };
+
+  const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
+    window.requestAnimationFrame(() => {
+      if (!state.readerDeferredSectionBodies[sectionKey]) {
+        return;
+      }
+      delete state.readerDeferredSectionBodies[sectionKey];
+      if (!getRefreshReaderSection()(app, sectionKey)) {
+        getRefreshReaderPanels()();
+      }
     });
   };
 
@@ -237,13 +262,24 @@ export function bindReaderUi(app: HTMLElement): void {
         sectionKey,
         willExpand: !section.expanded,
       });
-      section.expanded = !section.expanded;
-      getRefreshReaderPanels()();
+      const willExpand = !section.expanded;
+      section.expanded = willExpand;
+      if (willExpand) {
+        state.readerDeferredSectionBodies[sectionKey] = true;
+      } else {
+        delete state.readerDeferredSectionBodies[sectionKey];
+      }
+      if (!getRefreshReaderSection()(app, sectionKey)) {
+        getRefreshReaderPanels()();
+      }
+      if (willExpand) {
+        scheduleReaderSectionBodyHydration(sectionKey);
+      }
       return;
     }
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
-    if (expandable) {
+    if (expandable && nearestReaderAction === expandable) {
       logClickTrace(event, 'reader-area:expandable:candidate', {
         sectionKey: expandable.dataset.sectionKey ?? null,
         blockId: expandable.dataset.blockId ?? null,

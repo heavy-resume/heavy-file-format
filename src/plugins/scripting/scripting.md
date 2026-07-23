@@ -41,9 +41,21 @@ expressions during `compile(...)`.
 
 The loader uses `createBrythonMinimalVfsPlugin()` to provide Brython with a tiny
 virtual filesystem containing only `browser` and `sys`. Keep checked libraries
-such as `random` and `re` in `wrapper.ts` shims instead of bundling Brython's
+such as `random`, `re`, and `datetime` in `wrapper.ts` shims instead of bundling Brython's
 real stdlib modules such as `re`, `python_re`, or `enum`; otherwise checked
 imports can expose a larger module object graph than the sandbox intends.
+
+Brython can resolve standard builtins even when the executed globals contain a
+restricted `__builtins__` dictionary. The runtime therefore includes guarded
+versions of `getattr`, `hasattr`, `setattr`, and `delattr` explicitly in
+`__hvy_safe_builtins__`; merely omitting their names would not disable them.
+Concrete browser-capability access chains are covered in
+`tests/cli-plugin-integration.spec.ts`.
+
+The guards preserve ordinary public attribute operations while blocking the
+private runtime attributes that unwrap the `doc` proxy or expose a bound
+method's function globals. Access to `__class__` or ordinary attribute mutation
+alone is not classified as an escape.
 
 Brython also emits a noisy console line in some failure paths:
 

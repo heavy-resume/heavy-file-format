@@ -1,5 +1,5 @@
 import type { VisualBlock, VisualSection } from '../editor/types';
-import type { VisualDocument } from '../types';
+import type { HvyEmbeddingProvider, VisualDocument } from '../types';
 
 export type SearchCategory = 'tags' | 'contents' | 'description';
 export type SearchResultCategory = SearchCategory | 'semantic';
@@ -52,6 +52,7 @@ export interface HvySemanticFilterCandidate {
   documentId?: string;
   documentTitle?: string;
   targetKind: SearchTargetKind;
+  parentCandidateId?: string;
   sectionKey: string;
   blockId?: string;
   targetId: string;
@@ -62,6 +63,7 @@ export interface HvySemanticFilterCandidate {
   contextLabel?: string;
   tags: string[];
   description: string;
+  componentType?: string;
   summary: string;
   documentOrder: number;
   truncated: boolean;
@@ -71,6 +73,11 @@ export interface HvySemanticFilterCandidate {
     start: number;
     end: number;
   };
+}
+
+export interface HvyRetrievalChunk extends HvySemanticFilterCandidate {
+  chunkId: string;
+  sourceCandidateIds: string[];
 }
 
 export interface HvySemanticFilterCandidateBudget {
@@ -117,7 +124,7 @@ export interface HvyDocumentSearchDocument {
   document: VisualDocument;
 }
 
-export type HvyDocumentSearchMode = 'keyword' | 'semantic';
+export type HvyDocumentSearchMode = 'keyword' | 'semantic' | 'embedding';
 
 export interface HvyDocumentSearchRequest {
   documents: HvyDocumentSearchDocument[];
@@ -127,6 +134,12 @@ export interface HvyDocumentSearchRequest {
   categories?: SearchCategory[];
   searchProvider?: HvySearchProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
+  embeddingBatchSize?: number;
+  embeddingMinScore?: number;
+  maxResults?: number;
   maxCandidateSummaryChars?: number;
   maxTotalCandidateChars?: number;
   signal?: AbortSignal;

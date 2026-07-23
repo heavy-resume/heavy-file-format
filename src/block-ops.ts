@@ -1,15 +1,15 @@
 import type { TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
-import type { AppState } from './types';
+import type { AppState, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
-import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp } from './state';
+import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
-import { syncReusableTemplateForBlock } from './reusable';
+import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
-import { getTableColumns, setTableColumns } from './table-ops';
+import { getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
@@ -26,6 +26,8 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
+import { findSortValueOwnerBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
+import { highlightSearchHtml } from './search/highlight';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -216,19 +218,21 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     updateRichCodeBlockLanguageInput(target);
     removeNonTextContentFromRichEditor(richEditor);
+    normalizeSortValueAnnotationDom(richEditor);
     normalizeEditableListDom(richEditor);
     normalizeInlineCodeTextNodes(richEditor);
     const editedMarkdown = normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(richEditor))));
     block.text = state.editorMode === 'mobile-adjustment' ? applyMobileAltAdjustment(block.text, editedMarkdown) : editedMarkdown;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     if (shouldRefreshReaderPanelsAfterRichInput(richEditor)) {
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(richEditor);
     }
     return true;
   }
 
   if (field === 'caption-rich') {
     removeNonTextContentFromRichEditor(target);
+    normalizeSortValueAnnotationDom(target);
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
@@ -259,6 +263,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     let refreshMs = 0;
     let stepStartedAt = performance.now();
     removeNonTextContentFromRichEditor(target);
+    normalizeSortValueAnnotationDom(target);
     normalizeEditableListDom(target);
     convertInlineCodeInsertedShortcut(target);
     normalizeInlineCodeTextNodes(target);
@@ -275,10 +280,11 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
-      getRefreshReaderPanels()();
+    if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -300,8 +306,9 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     scheduleCompletedMultiSlotFillInBlur(target, block);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    if (!target.closest('.editor-tree, .hvy-ai-reader-surface')) {
-      getRefreshReaderPanels()();
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
+    if ((state.currentView !== 'ai' && sortValuesChanged) || !target.closest('.editor-tree, .hvy-ai-reader-surface')) {
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     return true;
   }
@@ -330,8 +337,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     };
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -339,8 +345,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.text = target.value;
     resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -368,7 +373,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   if (field === 'block-xref-target-tag-filter' && target instanceof HTMLInputElement) {
     block.schema.xrefTargetTagFilter = target.value;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -389,6 +394,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.schema.componentListBlocks.forEach((itemBlock) => {
       itemBlock.schema.component = target.value;
       applyComponentDefaults(itemBlock.schema, target.value);
+      syncSortValuesForListItem(state.document.meta, itemBlock);
     });
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
@@ -400,7 +406,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     block.schema.gridColumns = coerceGridColumns(target.value);
     ensureGridItems(block.schema);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -409,7 +415,7 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
       ? DEFAULT_GRID_STACK_WIDTH
       : coerceGridStackWidth(target.value);
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -470,10 +476,11 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncEditableTaskListMarkup(target, item.block.text);
     stepStartedAt = performance.now();
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    const sortValuesChanged = syncSortValuesForDocument(state.document);
     syncMs = performance.now() - stepStartedAt;
     stepStartedAt = performance.now();
-    if (shouldRefreshReaderPanelsAfterRichInput(target)) {
-      getRefreshReaderPanels()();
+    if ((state.currentView !== 'ai' && sortValuesChanged) || shouldRefreshReaderPanelsAfterRichInput(target)) {
+      refreshReaderPanelsOutsideActiveEditor(target);
     }
     refreshMs = performance.now() - stepStartedAt;
     console.debug('[hvy:perf] handleBlockFieldInput', {
@@ -490,13 +497,13 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   if (field === 'block-code-language' && target instanceof HTMLInputElement) {
     block.schema.codeLanguage = target.value;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
   if (field === 'block-code' && target instanceof HTMLTextAreaElement) {
     block.text = target.value;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -507,13 +514,13 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     }
     block.schema.expandableAlwaysShowStub = target.checked;
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
   if (field === 'table-show-header' && target instanceof HTMLInputElement) {
     block.schema.tableShowHeader = target.checked;
-    getRefreshReaderPanels()();
+    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -538,7 +545,14 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const row = block.schema.tableRows[rowIndex];
     if (row && !Number.isNaN(cellIndex)) {
       row.cells[cellIndex] = getInlineEditableMarkdown(target, { preserveLineBreaks: true });
+      if (row.editorCreatedByEnter && !isEmptyTableRow(row, getTableColumns(block.schema).length)) {
+        delete row.editorCreatedByEnter;
+      }
       syncTableRowEmptyClass(target);
+      const sortValuesChanged = syncSortValuesForDocument(state.document);
+      if (state.currentView !== 'ai' && sortValuesChanged) {
+        getRefreshReaderPanels()();
+      }
     }
     console.debug('[hvy:perf] handleBlockFieldInput', {
       field,
@@ -591,7 +605,22 @@ function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock)
 }
 
 function shouldRefreshReaderPanelsAfterRichInput(target: HTMLElement): boolean {
-  return !target.closest('.editor-tree, .hvy-ai-reader-surface');
+  return !target.closest('.editor-tree, .editor-sidebar, .hvy-ai-reader-surface');
+}
+
+export function refreshReaderPanelsOutsideActiveEditor(target: HTMLElement): void {
+  const surface = getRefreshSurfaceOutsideActiveEditor(target);
+  getRefreshReaderPanels()({ ...(surface === 'all' ? {} : { surface }), runDocumentHooks: false });
+}
+
+function getRefreshSurfaceOutsideActiveEditor(target: HTMLElement): ReaderPanelRefreshSurface {
+  if (target.closest('.editor-sidebar, #readerSidebarSections, #aiSidebarSections')) {
+    return 'reader';
+  }
+  if (target.closest('#readerDocument, #aiReaderDocument')) {
+    return 'sidebar';
+  }
+  return 'all';
 }
 
 function refreshCaptionModalPreview(target: HTMLElement, caption: TextCaptionPayload | null): void {
@@ -712,7 +741,9 @@ export function commitInlineTableEdit(target: HTMLElement): void {
     return;
   }
   syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', context.block.id);
-  getRefreshReaderPanels()();
+  if (state.currentView !== 'ai') {
+    getRefreshReaderPanels()();
+  }
 }
 
 export function getTagState(target: HTMLElement): string[] {
@@ -928,6 +959,17 @@ export function clearActiveEditorBlock(blockId?: string): void {
 
 export type DeactivateEditorBlockResult = 'closed' | 'removed' | 'unchanged';
 
+export function hasActiveEditorBlockChanges(sectionKey: string, blockId: string): boolean {
+  if (state.activeEditorNewBlockIds.has(blockId)) {
+    return true;
+  }
+  const snapshot = state.activeEditorBlockSnapshots.find(
+    (candidate) => candidate.sectionKey === sectionKey && candidate.blockId === blockId
+  );
+  const block = findBlockByIds(sectionKey, blockId);
+  return !snapshot || !block || !visualBlocksEqual(block, snapshot.block);
+}
+
 export function deactivateEditorBlock(sectionKey: string, blockId: string): DeactivateEditorBlockResult {
   const index = state.activeEditorBlockPath.findIndex(
     (active) => active.sectionKey === sectionKey && active.blockId === blockId
@@ -936,6 +978,9 @@ export function deactivateEditorBlock(sectionKey: string, blockId: string): Deac
     return 'unchanged';
   }
   const block = findBlockByIds(sectionKey, blockId);
+  if (block?.schema.kind === 'table' && pruneEmptyKeyboardInsertedTableRows(block.schema)) {
+    syncReusableTemplateForBlock(sectionKey, blockId);
+  }
   if (block && shouldRemoveXrefOnEditorExit(block)) {
     const rootBlocks = getEditorRootBlocks(sectionKey);
     if (rootBlocks && removeBlockFromList(rootBlocks, blockId)) {
@@ -1068,11 +1113,11 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
       codeLanguageInputAttrs,
-    }),
+    })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
@@ -1095,6 +1140,7 @@ export function getComponentRenderHelpers(editorRenderer: {
     getXrefTargetOptions,
     isXrefTargetValid,
     getEffectiveXrefTargetTagFilter: (block) => getEffectiveXrefTargetTagFilter(state.document, block),
+    isCrossDocumentLinksEnabled: () => state.crossDocumentLinksEnabled === true,
     getTableColumns,
     ensureContainerBlocks,
     ensureComponentListBlocks,
@@ -1111,9 +1157,34 @@ export function getComponentRenderHelpers(editorRenderer: {
   };
 }
 
-export function applyRichAction(action: string, editable: HTMLElement, value?: string): void {
+export function highlightEditorSearchMatches(html: string): string {
+  if (state.currentView !== 'editor') {
+    return html;
+  }
+  const query = state.search.submittedQuery.trim();
+  if (!query || state.search.filterEnabled) {
+    return html;
+  }
+  return highlightSearchHtml(html, query, state.search.caseSensitive);
+}
+
+export function applyRichAction(
+  action: string,
+  editable: HTMLElement,
+  value?: string,
+  options: { sortValueKey?: string; sortValueType?: string } = {}
+): void {
   if (action === 'fill-in') {
-    applyTextFillInSlot(editable);
+    if (applyTextFillInSlot(editable)) {
+      routeNextUndoToDocument();
+    }
+    return;
+  }
+  if (action === 'sort-value') {
+    if (applySortValueAnnotation(editable, options)) {
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+    }
     return;
   }
   if (action === 'text-line-style') {
@@ -1187,6 +1258,91 @@ export function applyRichAction(action: string, editable: HTMLElement, value?: s
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applySortValueAnnotation(
+  editable: HTMLElement,
+  options: { sortValueKey?: string; sortValueType?: string }
+): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed || range.toString().trim().length === 0) {
+    return false;
+  }
+  const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
+  const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'date' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
+  ensureSortValueDefinition(editable, key, type);
+  const wrapper = document.createElement('span');
+  wrapper.className = 'hvy-sort-value';
+  wrapper.dataset.hvySortValue = 'true';
+  wrapper.dataset.sortValueKey = key;
+  const fragment = range.extractContents();
+  unwrapSortValueAnnotations(fragment, key);
+  unwrapSortValueAnnotations(editable, key);
+  wrapper.appendChild(fragment);
+  range.insertNode(wrapper);
+  moveCaretAfterElement(wrapper);
+  return true;
+}
+
+function moveCaretAfterElement(element: HTMLElement): void {
+  const caretNode = document.createTextNode('\u200b');
+  element.after(caretNode);
+  const range = document.createRange();
+  range.setStart(caretNode, caretNode.data.length);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  element.closest<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true });
+}
+
+function unwrapSortValueAnnotations(root: ParentNode, key: string): void {
+  root.querySelectorAll<HTMLElement>(`[data-hvy-sort-value="true"][data-sort-value-key="${cssEscapeForSelector(key)}"]`).forEach((node) => {
+    const parent = node.parentNode;
+    if (!parent) {
+      return;
+    }
+    while (node.firstChild) {
+      parent.insertBefore(node.firstChild, node);
+    }
+    node.remove();
+  });
+}
+
+function inferSortValueKey(text: string, type: string | undefined): string {
+  if (type === 'number' || Number.isFinite(Number(text.trim()))) {
+    return 'Value';
+  }
+  return 'Name';
+}
+
+function ensureSortValueDefinition(editable: HTMLElement, key: string, type: SortValueType): void {
+  const blockId = editable.dataset.blockId ?? '';
+  if (!blockId) {
+    return;
+  }
+  const sectionKey = editable.dataset.sectionKey ?? '';
+  const owner = getReusableNameFromSectionKey(sectionKey)
+    ? findReusableOwner(sectionKey, blockId)
+    : findSortValueOwnerBlock(state.document, blockId) ?? findBlockByIds(sectionKey, blockId);
+  const componentName = owner?.schema.component.trim() ?? '';
+  if (!componentName) {
+    return;
+  }
+  const defs = Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs : [];
+  const definition = defs.find((item): item is { name: string; sortValueDefs?: Record<string, unknown> } =>
+    !!item && typeof item === 'object' && (item as { name?: unknown }).name === componentName
+  );
+  if (!definition) {
+    return;
+  }
+  const sortValueDefs = definition.sortValueDefs && typeof definition.sortValueDefs === 'object' && !Array.isArray(definition.sortValueDefs)
+    ? definition.sortValueDefs
+    : {};
+  if (!sortValueDefs[key]) {
+    sortValueDefs[key] = { type };
+    definition.sortValueDefs = sortValueDefs;
+  }
 }
 
 function isSelectionInsideQuoteBlock(editable: HTMLElement): boolean {
@@ -1349,15 +1505,15 @@ function getAncestorElement(node: Node, boundary: HTMLElement, selector: string)
   return match && boundary.contains(match) ? match : null;
 }
 
-function applyTextFillInSlot(editable: HTMLElement): void {
+function applyTextFillInSlot(editable: HTMLElement): boolean {
   if (editable.dataset.field !== 'block-rich') {
-    return;
+    return false;
   }
   const context = resolveBlockContext(editable);
   const block = context?.block ?? null;
   const sectionKey = editable.dataset.sectionKey ?? '';
   if (!block || hasTextFillInMarker(block.text)) {
-    return;
+    return false;
   }
   const range = getEditableSelectionRange(editable);
   const selectedText = range && !range.collapsed
@@ -1378,6 +1534,7 @@ function applyTextFillInSlot(editable: HTMLElement): void {
   syncReusableTemplateForBlock(sectionKey, block.id);
   getRefreshReaderPanels()();
   getRenderApp()();
+  return true;
 }
 
 function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
@@ -2094,6 +2251,9 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
     !textEditorShell.contains(document.activeElement)
   ) {
     textEditorShell?.classList.remove('has-fill-in-selection');
+    textEditorShell?.classList.remove('is-use-as-open');
+    textEditorShell?.querySelector<HTMLElement>('.text-use-as-selection')?.classList.remove('is-use-as-open');
+    textEditorShell?.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
     delete editable.dataset.fillInSelectionText;
   }
   const toolbars = [
@@ -2273,6 +2433,12 @@ function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): b
 }
 
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (event.key === 'ArrowRight' && moveCaretAfterFocusedSortValueControl(event, editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.key === 'ArrowRight' && exitInlineCodeAtEnd(editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
@@ -2292,9 +2458,20 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     return true;
   }
 
-  if ((event.key === 'Backspace' || event.key === 'Delete') && clearSelectedStyledBlock(editable)) {
+  if ((event.key === 'Backspace' || event.key === 'Delete') && clearSelectedFormatBlock(editable)) {
     event.preventDefault();
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (event.key === 'Delete' && preventForwardDeleteFormatBlockMerge(editable)) {
+    event.preventDefault();
+    if (editable.dataset.hvyFormatBlockMergeChanged === 'true') {
+      delete editable.dataset.hvyFormatBlockMergeChanged;
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      routeNextUndoToDocument();
+    }
     updateRichToolbarState(editable);
     return true;
   }
@@ -2498,6 +2675,24 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     return false;
   }
 
+  if (
+    (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward' || event.inputType === 'deleteByCut') &&
+    preserveSelectedSortValueAnnotationForReplacement(editable)
+  ) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
+  if (
+    (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') &&
+    preserveCollapsedSortValueAnnotationDeletion(editable, event.inputType)
+  ) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.inputType === 'deleteContentBackward') {
     if (!handleInlineCheckboxBackspace(editable)) {
       return false;
@@ -2513,6 +2708,12 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   if (isSelectionInsideCodeBlock(editable)) {
     insertTextInSelectionCodeBlock(editable, event.data);
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    return true;
+  }
+
+  if (replaceEmptySortValueAnnotationText(editable, event.data)) {
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    updateRichToolbarState(editable);
     return true;
   }
 
@@ -2568,6 +2769,160 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
   updateRichToolbarState(editable);
   editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
   return true;
+}
+
+function preserveCollapsedSortValueAnnotationDeletion(editable: HTMLElement, inputType: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || !range.collapsed) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue || countVisibleSortValueCharacters(sortValue) !== 1) {
+    return false;
+  }
+  const offset = getTextOffset(sortValue, range.startContainer, range.startOffset);
+  if (offset === null) {
+    return false;
+  }
+  const text = sortValue.textContent ?? '';
+  if (inputType === 'deleteContentBackward' && countVisibleSortValueCharactersBefore(text, offset) !== 1) {
+    return false;
+  }
+  if (inputType === 'deleteContentForward' && countVisibleSortValueCharactersAfter(text, offset) !== 1) {
+    return false;
+  }
+  sortValue.replaceChildren(document.createTextNode('\u200b'));
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function preserveSelectedSortValueAnnotationForReplacement(editable: HTMLElement): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range || range.collapsed) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue) {
+    return false;
+  }
+  sortValue.replaceChildren(document.createTextNode('\u200b'));
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function replaceEmptySortValueAnnotationText(editable: HTMLElement, text: string): boolean {
+  const range = getEditableSelectionRange(editable);
+  if (!range) {
+    return false;
+  }
+  const sortValue = getRangeSortValueTextElement(range, editable);
+  if (!sortValue || !isSortValueAnnotationEmpty(sortValue)) {
+    return false;
+  }
+  sortValue.textContent = text;
+  placeCaretAtEnd(sortValue);
+  return true;
+}
+
+function getRangeSortValueTextElement(range: Range, editable: HTMLElement): HTMLElement | null {
+  const start = getSortValueTextElement(range.startContainer, editable);
+  const end = getSortValueTextElement(range.endContainer, editable);
+  return start && start === end ? start : null;
+}
+
+function getSortValueTextElement(node: Node, editable: HTMLElement): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const sortValue = element?.closest<HTMLElement>('[data-hvy-sort-value="true"]');
+  if (!sortValue || sortValue instanceof HTMLSelectElement || !editable.contains(sortValue)) {
+    return null;
+  }
+  return sortValue;
+}
+
+function isSortValueAnnotationEmpty(sortValue: HTMLElement): boolean {
+  return (sortValue.textContent ?? '').replaceAll('\u200b', '').trim().length === 0;
+}
+
+function countVisibleSortValueCharacters(sortValue: HTMLElement): number {
+  return (sortValue.textContent ?? '').replaceAll('\u200b', '').length;
+}
+
+function countVisibleSortValueCharactersBefore(text: string, offset: number): number {
+  return text.slice(0, offset).replaceAll('\u200b', '').length;
+}
+
+function countVisibleSortValueCharactersAfter(text: string, offset: number): number {
+  return text.slice(offset).replaceAll('\u200b', '').length;
+}
+
+function normalizeSortValueAnnotationDom(root: ParentNode): void {
+  const sortValueBackground = getSortValuePresentationBackground(root);
+  root.querySelectorAll<HTMLElement>('.hvy-sort-value').forEach((element) => {
+    if (element instanceof HTMLSelectElement) {
+      return;
+    }
+    const isSortValue = element.getAttribute('data-hvy-sort-value') === 'true';
+    const key = element.getAttribute('data-sort-value-key')?.trim() ?? '';
+    if (isSortValue && key) {
+      return;
+    }
+    unwrapElement(element);
+  });
+  if (!sortValueBackground) {
+    return;
+  }
+  root.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    if (element.closest('[data-hvy-sort-value="true"]')) {
+      return;
+    }
+    if (isBrowserCopiedSortValuePresentation(element, sortValueBackground)) {
+      unwrapElement(element);
+    }
+  });
+}
+
+function unwrapElement(element: HTMLElement): void {
+  const parent = element.parentNode;
+  if (!parent) {
+    return;
+  }
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element);
+  }
+  element.remove();
+}
+
+function getSortValuePresentationBackground(root: ParentNode): string | null {
+  const rootNode = root as Node;
+  const ownerDocument = rootNode instanceof Document ? rootNode : rootNode.ownerDocument;
+  if (!ownerDocument) {
+    return null;
+  }
+  const host = root instanceof Element ? root : ownerDocument.body;
+  if (!host) {
+    return null;
+  }
+  const probe = ownerDocument.createElement('span');
+  probe.className = 'hvy-sort-value';
+  probe.dataset.hvySortValue = 'true';
+  probe.dataset.sortValueKey = '__probe__';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.textContent = '\u200b';
+  host.appendChild(probe);
+  const background = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return background && background !== 'rgba(0, 0, 0, 0)' ? background : null;
+}
+
+function isBrowserCopiedSortValuePresentation(element: HTMLElement, sortValueBackground: string): boolean {
+  if (element.tagName !== 'SPAN' || element.className || element.attributes.length !== 1 || !element.hasAttribute('style')) {
+    return false;
+  }
+  if (!element.style.backgroundColor) {
+    return false;
+  }
+  return getComputedStyle(element).backgroundColor === sortValueBackground;
 }
 
 export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElement): boolean {
@@ -3603,6 +3958,39 @@ function replaceInlineCodeInTextNode(textNode: Text): boolean {
   return true;
 }
 
+function moveCaretAfterFocusedSortValueControl(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
+  }
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement) || !target.matches('[data-hvy-sort-value="true"]')) {
+    return false;
+  }
+  if (!editable.contains(target)) {
+    return false;
+  }
+  placeCaretAfterInlineElement(target, editable);
+  return true;
+}
+
+function placeCaretAfterInlineElement(element: HTMLElement, editable: HTMLElement): void {
+  const nextNode = element.nextSibling;
+  const textNode = nextNode instanceof Text ? nextNode : document.createTextNode('\u200b');
+  if (textNode !== nextNode) {
+    element.after(textNode);
+  }
+  const range = document.createRange();
+  range.setStart(textNode, 0);
+  range.collapse(true);
+  if (document.activeElement === element) {
+    element.blur();
+  }
+  editable.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 function exitInlineCodeAtEnd(editable: HTMLElement): boolean {
   const range = getEditableSelectionRange(editable);
   if (!range || !range.collapsed) {
@@ -4053,14 +4441,14 @@ function clearFullEditableSelection(editable: HTMLElement): boolean {
   return true;
 }
 
-function clearSelectedStyledBlock(editable: HTMLElement): boolean {
+function clearSelectedFormatBlock(editable: HTMLElement): boolean {
   const selection = window.getSelection();
   if (!selection?.rangeCount || selection.isCollapsed) {
     return false;
   }
   const range = selection.getRangeAt(0);
   const block = getSelectionBlockElement(editable);
-  if (!(block instanceof HTMLQuoteElement) || !isRangeInsideElement(block, range)) {
+  if (!block || !isFormatBlockWithOwnTypingContext(block) || !isRangeInsideElement(block, range)) {
     return false;
   }
   if (!doesRangeCoverElementContents(block, range) && !doesRangeCoverElementText(block, range)) {
@@ -4070,6 +4458,29 @@ function clearSelectedStyledBlock(editable: HTMLElement): boolean {
   paragraph.appendChild(document.createElement('br'));
   block.replaceWith(paragraph);
   placeCaretInside(paragraph);
+  return true;
+}
+
+function isFormatBlockWithOwnTypingContext(block: HTMLElement): boolean {
+  return block instanceof HTMLQuoteElement || /^H[1-6]$/.test(block.tagName);
+}
+
+function preventForwardDeleteFormatBlockMerge(editable: HTMLElement): boolean {
+  const block = getSelectionBlockElement(editable);
+  if (!block || !isFormatBlockWithOwnTypingContext(block) || !isCollapsedSelectionAtEndOf(block)) {
+    return false;
+  }
+  const nextBlock = block.nextElementSibling instanceof HTMLElement ? block.nextElementSibling : null;
+  if (!nextBlock) {
+    return false;
+  }
+  if (isEffectivelyEmptyBlock(block)) {
+    block.remove();
+    placeCaretAtStart(nextBlock);
+    editable.dataset.hvyFormatBlockMergeChanged = 'true';
+    return true;
+  }
+  placeCaretAtEnd(block);
   return true;
 }
 

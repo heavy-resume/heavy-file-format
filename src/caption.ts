@@ -23,6 +23,7 @@ export function createDefaultTextCaption(text = ''): TextCaptionPayload {
     slot: 'center',
     css: 'margin: 0.5rem 0;',
     sortKeys: {},
+    derivedSortKeyNames: [],
     groupKeys: {},
     tags: '',
     description: '',

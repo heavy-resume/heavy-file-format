@@ -9,6 +9,9 @@ import { SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
 import { deserializeDocument, serializeDocument } from '../../serialization';
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js/lib/core';
+import python from 'highlight.js/lib/languages/python';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
@@ -18,8 +21,41 @@ import './scripting.css';
 
 interface EditorHandles {
   textarea: HTMLTextAreaElement;
+  highlightedCode: HTMLElement;
   status: HTMLDivElement;
   logDetail: HTMLPreElement;
+}
+
+hljs.registerLanguage('python', python);
+
+function highlightPython(source: string): string {
+  if (source.length === 0) {
+    return '';
+  }
+  return DOMPurify.sanitize(hljs.highlight(source, { language: 'python' }).value);
+}
+
+function refreshHighlightedSource(textarea: HTMLTextAreaElement, highlightedCode: HTMLElement): void {
+  highlightedCode.innerHTML = highlightPython(textarea.value);
+  // A final line break does not otherwise occupy a line in a <code> element.
+  if (textarea.value.endsWith('\n')) {
+    highlightedCode.appendChild(document.createTextNode('\u200b'));
+  }
+  const style = getComputedStyle(textarea);
+  const measuringCanvas = document.createElement('canvas');
+  const measuringContext = measuringCanvas.getContext('2d');
+  if (measuringContext) {
+    measuringContext.font = style.font;
+    const longestLineWidth = textarea.value.split('\n').reduce(
+      (width, line) => Math.max(width, measuringContext.measureText(line).width),
+      0
+    );
+    const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+    const editorWidth = Math.ceil(longestLineWidth + horizontalPadding + 32);
+    textarea.style.width = `max(100%, ${editorWidth}px)`;
+    highlightedCode.parentElement?.style.setProperty('width', `max(100%, ${editorWidth}px)`);
+  }
+  highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
 }
 
 interface ReaderHandles {
@@ -62,6 +98,17 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   head.appendChild(title);
   head.appendChild(headActions);
 
+  const sourceEditor = document.createElement('div');
+  sourceEditor.className = 'hvy-scripting-source-editor reader-code-block';
+
+  const highlightedSource = document.createElement('pre');
+  highlightedSource.className = 'hvy-scripting-highlight';
+  highlightedSource.setAttribute('aria-hidden', 'true');
+
+  const highlightedCode = document.createElement('code');
+  highlightedCode.className = 'hljs language-python';
+  highlightedSource.appendChild(highlightedCode);
+
   const textarea = document.createElement('textarea');
   textarea.className = 'code-editor hvy-scripting-textarea';
   textarea.dataset.field = 'block-code';
@@ -69,6 +116,14 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   textarea.dataset.blockId = ctx.block.id;
   textarea.spellcheck = false;
   textarea.placeholder = '# Python — runs on document load. Press Help for the API.';
+  textarea.setAttribute('aria-label', 'Python script');
+  textarea.addEventListener('input', () => refreshHighlightedSource(textarea, highlightedCode));
+  textarea.addEventListener('scroll', () => {
+    highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
+  });
+
+  sourceEditor.appendChild(highlightedSource);
+  sourceEditor.appendChild(textarea);
 
   const status = document.createElement('div');
   status.className = 'hvy-scripting-status';
@@ -77,11 +132,11 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   logDetail.className = 'hvy-scripting-log-detail';
 
   root.appendChild(head);
-  root.appendChild(textarea);
+  root.appendChild(sourceEditor);
   root.appendChild(status);
   root.appendChild(logDetail);
 
-  return { root, handles: { textarea, status, logDetail } };
+  return { root, handles: { textarea, highlightedCode, status, logDetail } };
 }
 
 function buildReaderDom(): { root: HTMLDivElement; handles: ReaderHandles } {
@@ -217,6 +272,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (handles.textarea !== active && handles.textarea.value !== ctx.block.text) {
       handles.textarea.value = ctx.block.text;
     }
+    refreshHighlightedSource(handles.textarea, handles.highlightedCode);
     const cached = getFreshScriptingResult(root, ctx.sectionKey, ctx.block.id, ctx.block.text);
     if (cached?.lastResult) {
       setScriptingResult(root, cached.lastResult);
@@ -365,7 +421,7 @@ export const scriptingPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
-    'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random` and `re` before the script runs.',
+    'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random`, `re`, and `datetime` before the script runs.',
     'Use `pluginConfig.maxSteps` to configure the runtime step budget.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',

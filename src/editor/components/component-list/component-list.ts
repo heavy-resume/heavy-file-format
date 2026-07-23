@@ -12,11 +12,12 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const hasItems = (block.schema.componentListBlocks ?? []).length > 0;
   const listComponent = block.schema.componentListComponent || 'text';
-  const editorResolved = resolveComponentListItems(block);
-  const editorBlocks = editorResolved.kind === 'items'
-    ? editorResolved.blocks
-    : [...editorResolved.groups.flatMap((group) => group.blocks), ...editorResolved.missingBlocks];
-  const editorBlockList = renderComponentListPlacementBlockList(sectionKey, block, editorBlocks, helpers);
+  const editorBlockList = renderComponentListPlacementBlockList(
+    sectionKey,
+    block,
+    block.schema.componentListBlocks ?? [],
+    helpers
+  );
   const placementMode = editorBlockList.length > 0 && editorBlockList.includes('component-placement-target');
   const addControl = locked
     || pdfDocument
@@ -42,7 +43,7 @@ export const renderComponentListEditor: ComponentEditorRenderer = (sectionKey, b
         </label>`
     }
     ${renderComponentListDefaultDisplayEditor(sectionKey, block, helpers)}
-    <div class="container-inner-blocks">
+    <div class="container-inner-blocks component-list-editor-blocks">
       ${editorBlockList}
     </div>
     ${addControl}
@@ -157,7 +158,7 @@ export const renderComponentListReader: ComponentReaderRenderer = (section, bloc
                 title: group.label,
                 blocks: group.blocks,
                 collapsedPreviewRem: resolved.display.groupCollapsedPreviewRem,
-                expanded: prioritized,
+                expanded: prioritized || block.schema.componentListGroupsExpanded,
                 useListOrdering: true,
               },
               helpers

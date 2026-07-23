@@ -14,6 +14,25 @@ export function bindChangeRaw(app: HTMLElement): void {
       getRenderApp()();
       return;
     }
+    if (target instanceof HTMLSelectElement && target.dataset.field === 'chat-context-mode') {
+      if (state.chat.isSending) {
+        return;
+      }
+      const mode = target.value === 'full-document'
+        ? 'full-document'
+        : target.value === 'embedding-retrieval'
+        ? 'embedding-retrieval'
+        : 'keyword-retrieval';
+      state.chatContext = {
+        ...(state.chatContext ?? {}),
+        mode,
+        ...(mode === 'embedding-retrieval' && !state.chatContext?.embeddingModel ? { embeddingModel: 'text-embedding-ada-002' } : {}),
+      };
+      state.chat.error = null;
+      state.chat.status = null;
+      getRenderApp()();
+      return;
+    }
     if (target instanceof HTMLSelectElement && (target.dataset.field === 'chat-provider' || target.dataset.field === 'ai-provider')) {
       if (state.chat.isSending || state.aiEdit.isSending) {
         return;

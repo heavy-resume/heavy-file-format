@@ -7,7 +7,7 @@ vi.mock('dompurify', () => ({
 }));
 
 vi.mock('../src/markdown', () => ({
-  markdownToEditorHtml: (value: string) => value,
+  markdownToReaderHtml: (value: string) => value,
   normalizeMarkdownLists: (value: string) => value,
 }));
 
@@ -68,10 +68,79 @@ hvy_version: 0.1
 #! Summary
 `, '.hvy');
 
-  const html = renderChatPanel(chat, document, deps, 'document-edit');
+  const html = renderChatPanel(chat, document, deps, 'document-edit', true);
 
+  expect(html).toContain('<article class="chat-bubble chat-bubble-assistant has-token-usage"');
   expect(html).toContain('<div class="chat-token-usage">Tokens: input 120 / output 30</div>');
+  expect(html).toContain('<summary class="chat-copy-menu-toggle"');
+  expect(html).not.toContain('<summary class="ghost chat-copy-menu-toggle"');
+  expect(html).toContain('aria-label="Copy response options"');
+  expect(html.indexOf('>Copy response</button>')).toBeLessThan(html.indexOf('>Copy as new section</button>'));
   expect(html).toContain('Last tokens: input 120 / output 30');
+});
+
+test('renderChatPanel gives HVY response expandables a visible disclosure cue', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: `<!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+ <!--hvy:expandable:stub {}-->
+  <!--hvy:text {"id":"details-summary"}-->
+   Short answer
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"details-body"}-->
+   Longer answer`,
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub"');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview" hidden');
+  expect(html).not.toContain('expandable-pane-stub');
+  expect(html).toContain('class="expandable-reader-cue" aria-hidden="true"');
+  expect(html).toContain('data-chat-action="toggle-expandable" aria-expanded="false"');
+});
+
+test('renderChatPanel does not show a blank expandable stub for content-only HVY response expandables', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  chat.messages = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: `<!--hvy:expandable {"id":"details","expandableExpanded":false}-->
+ <!--hvy:expandable:stub {}-->
+ <!--hvy:expandable:content {}-->
+  <!--hvy:text {"id":"details-body"}-->
+   Key points of Actual grouped`,
+    },
+  ];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa');
+
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content" hidden');
+  expect(html).toContain('class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview"');
+  expect(html).not.toContain('expandable-pane-expanded');
+  expect(html).toContain('Key points of Actual grouped');
+  expect(html).toContain('class="expandable-reader-cue" aria-hidden="true"');
 });
 
 test('renderChatPanel hides the change request input while document edits are running', () => {
@@ -135,6 +204,48 @@ hvy_version: 0.1
   expect(html).not.toContain('data-field="chat-model"');
   expect(html).not.toContain('data-field="chat-compaction-provider"');
   expect(html).not.toContain('data-field="chat-compaction-model"');
+});
+
+test('renderChatPanel shows reusable context controls for document questions', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+#! Summary
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'qa', false, 'reference', {
+    chatContext: { mode: 'embedding-retrieval', embeddingModel: 'text-embedding-ada-002' },
+    embeddingAvailable: true,
+    canPersistEmbeddingCache: true,
+  });
+
+  expect(html).toContain('data-field="chat-context-mode"');
+  expect(html).toContain('value="embedding-retrieval" selected');
+  expect(html).toContain('data-field="chat-embedding-model"');
+  expect(html).toContain('data-action="build-chat-embeddings"');
+  expect(html).toContain('Build Embeddings</button>');
+});
+
+test('renderChatPanel shows context controls for document editing question fallback', () => {
+  const chat = createDefaultChatState();
+  chat.panelOpen = true;
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy');
+
+  const html = renderChatPanel(chat, document, deps, 'document-edit', false, 'reference', {
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingAvailable: true,
+    canPersistEmbeddingCache: true,
+  });
+
+  expect(html).toContain('data-field="chat-context-mode"');
+  expect(html).toContain('value="embedding-retrieval" selected');
+  expect(html).toContain('data-action="build-chat-embeddings"');
 });
 
 test('renderAiEditPopover shows provider and model controls together in the reference surface', () => {

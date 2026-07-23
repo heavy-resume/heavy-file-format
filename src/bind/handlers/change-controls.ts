@@ -1,5 +1,10 @@
-import { state, getRenderApp, getRefreshReaderPanels, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock } from './_imports';
-import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from '../../editor/components/component-list/component-list-view';
+import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  parseComponentListRuntimeView,
+  persistComponentListDisplayState,
+} from '../../editor/components/component-list/component-list-view';
 import type { JsonObject } from '../../hvy/types';
 import { PDF_DOCUMENT_PAGE_SIZE_OPTIONS, readPdfPageMetaObject } from '../../pdf-page-settings';
 import { findPdfStylePreset } from '../../pdf-style-presets';
@@ -104,19 +109,39 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'sort-value-enum' && target instanceof HTMLSelectElement) {
+      const editor = target.closest<HTMLElement>('[data-field="block-rich"], [data-field="text-fill-in-rich"], [data-field="block-grid-rich"], [data-field="table-cell"]');
+      if (!editor) {
+        return;
+      }
+      if (handleBlockFieldInput(editor)) {
+        syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
+        refreshReaderPanelsOutsideActiveEditor(editor);
+      }
+      return;
+    }
+
     if (field === 'component-list-reader-view' && target instanceof HTMLSelectElement) {
       const sectionKey = target.dataset.sectionKey;
       const blockId = target.dataset.blockId;
       if (!sectionKey || !blockId) {
         return;
       }
-      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
-      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const key = `${sectionKey}:${blockId}`;
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? '');
+      const nextView = encodeComponentListRuntimeView({
         sortKey: target.value,
         sortKeyOverride: true,
         reversed: current.reversed,
         groupKey: current.groupKey,
       });
+      persistComponentListDisplayState(context.block, getComponentListDisplayState(context.block, nextView));
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      delete state.componentListReaderViews[key];
       getRefreshReaderPanels()();
       return;
     }
@@ -127,13 +152,21 @@ export function bindChangeControls(app: HTMLElement): void {
       if (!sectionKey || !blockId) {
         return;
       }
-      const current = parseComponentListRuntimeView(state.componentListReaderViews[`${sectionKey}:${blockId}`] ?? '');
-      state.componentListReaderViews[`${sectionKey}:${blockId}`] = encodeComponentListRuntimeView({
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      const key = `${sectionKey}:${blockId}`;
+      const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? '');
+      const nextView = encodeComponentListRuntimeView({
         sortKey: current.sortKeyOverride ? current.sortKey : target.dataset.viewId || '',
         sortKeyOverride: current.sortKeyOverride || !!target.dataset.viewId,
         reversed: current.reversed,
         groupKey: target.value,
       });
+      persistComponentListDisplayState(context.block, getComponentListDisplayState(context.block, nextView));
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      delete state.componentListReaderViews[key];
       getRefreshReaderPanels()();
       return;
     }

@@ -1,15 +1,16 @@
 import type { VisualDocument } from '../types';
+import type { HvyVirtualFileSystem } from './virtual-file-system';
 import {
   formatHvyCliLintIssueLine,
   runHvyCliLinter,
-  type HvyCliLintIssue,
 } from './document-linter';
+import type { HvyCliLintIssue } from './lint-types';
 
 export type HvyCliDiagnosticIssue = HvyCliLintIssue;
 
-export async function collectHvyCliDiagnostics(document: VisualDocument): Promise<HvyCliDiagnosticIssue[]> {
+export async function collectHvyCliDiagnostics(document: VisualDocument, fs?: HvyVirtualFileSystem): Promise<HvyCliDiagnosticIssue[]> {
   return [
-    ...await runHvyCliLinter(document),
+    ...await runHvyCliLinter(document, fs),
   ];
 }
 

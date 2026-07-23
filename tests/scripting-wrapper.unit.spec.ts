@@ -16,6 +16,9 @@ import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
 import { deserializeDocument } from '../src/serialization';
+import { syncSortValuesForDocument } from '../src/sort-values';
+import { initCallbacks, initState } from '../src/state';
+import { createTestState } from './serialization-test-helpers';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
   expect(
@@ -135,6 +138,13 @@ test('buildPythonProgram executes user code with restricted builtins', () => {
   expect(program).toContain("'__builtins__': __hvy_safe_builtins__");
   expect(program).toContain("'__import__': __hvy_script_import__");
   expect(program).toContain("'print': __hvy_print__");
+  expect(program).toContain("'getattr': __hvy_getattr__");
+  expect(program).toContain("'hasattr': __hvy_hasattr__");
+  expect(program).toContain("'setattr': __hvy_setattr__");
+  expect(program).toContain("'delattr': __hvy_delattr__");
+  expect(program).toContain("'__func__',");
+  expect(program).toContain("'__globals__',");
+  expect(program).toContain("'getattr': __hvy_getattr__,\n        'globals': __hvy_safe_globals__");
   expect(program).toContain('__hvy_runtime__.doc.log_json(__hvy_to_json__([text]))');
   expect(program).toContain('raise RuntimeError("Custom eval globals are not allowed in HVY scripts.")');
 });
@@ -161,12 +171,14 @@ test('buildPythonProgram uses the component id in tracebacks when available', ()
 });
 
 test('buildPythonProgram preloads checked libraries', () => {
-  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're']);
+  const program = buildPythonProgram('r7', 'library-example-script', {}, ['random', 're', 'datetime']);
 
-  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re"]');
+  expect(program).toContain('__hvy_allowed_libraries__ = ["random", "re", "datetime"]');
   expect(program).toContain("__hvy_user_globals__[__hvy_library__] = __hvy_script_import__(__hvy_library__)");
   expect(program).toContain('if root_name == "re":');
   expect(program).toContain('return __HvyReModule__()');
+  expect(program).toContain('if root_name == "datetime":');
+  expect(program).toContain('return __HvyDatetimeModule__()');
 });
 
 test('stripPythonImports replaces plain import statements with pass', () => {
@@ -198,6 +210,24 @@ items = [1, 2, 3]
 random.shuffle(items)
 `
   );
+});
+
+test('stripPythonImports allows checked datetime imports and aliases', () => {
+  expect(
+    stripPythonImports(
+      `import datetime as dt
+from datetime import datetime, timedelta as delta
+`,
+      ['datetime']
+    )
+  ).toBe(
+    `dt = datetime
+datetime = __import__("datetime").datetime
+delta = __import__("datetime").timedelta
+`
+  );
+
+  expect(stripPythonImports('from datetime import timedelta', [])).toContain('Import statements are not allowed');
 });
 
 test('stripPythonImports allows checked regex library imports', () => {
@@ -321,6 +351,33 @@ RuntimeError: Import statements are not allowed in HVY scripts.`
   );
 });
 
+test('cleanScriptingErrorDetail removes host and generated runtime frames before the user script', () => {
+  expect(
+    cleanScriptingErrorDetail(
+      `Traceback (most recent call last):
+  File "application-tracking/example#script_123", line 79, in <module>
+    result = mount_hvy(sig_com, **kwargs)
+  File "http://localhost:8000/static/brython/reactpy_bridge.py", line 18, in wrapper
+    return result
+  File "http://localhost:8000/static/brython/heavy_resume_brython/_hvy_viewer.py", line 398, in attach_hvy_once
+    return mount
+  File "application-tracking/example#hvy-script-r2#hvy_script_r2", line 365, in <module>
+    __hvy_globals__.results['r2'] = __hvy_entrypoint__()
+  File "<application-week-settings:group_by_week:initial>", line 59, in __hvy_user_main__
+    if group_keys["Week"] != week_label:
+       ~~~~~~~~~~^^^^^^^^
+KeyError: 'Week'
+`
+    )
+  ).toBe(
+    `Traceback (most recent call last):
+  File "<application-week-settings:group_by_week:initial>", line 59, in __hvy_user_main__
+    if group_keys["Week"] != week_label:
+       ~~~~~~~~~~^^^^^^^^
+KeyError: 'Week'`
+  );
+});
+
 test('comparePluginVersions orders dot-separated versions numerically', () => {
   expect(comparePluginVersions('0.2', '0.1')).toBe(1);
   expect(comparePluginVersions('0.2', '0.10')).toBe(-1);
@@ -440,6 +497,58 @@ test('createScriptingRuntime exposes time helpers', () => {
   expect(runtime.doc.time.now_local()).not.toMatch(/^\d{4}-\d{2}-\d{2}T/);
   expect(runtime.doc.time.now_unix_ms()).toBe(expectedDate.getTime());
   expect(runtime.doc.time.today_iso()).toBe('2026-06-30');
+});
+
+test('createScriptingRuntime syncs script-created sort value annotations before rerender', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: minute-entry
+    baseType: container
+    sortValueDefs:
+      Time:
+        type: datetime
+    schema:
+      containerExpanded: true
+      containerBlocks: []
+---
+
+<!--hvy: {"id":"minutes"}-->
+#! Minutes
+
+ <!--hvy:component-list {"id":"minute-entries","componentListComponent":"minute-entry"}-->
+`, '.hvy');
+  initCallbacks({
+    renderApp: () => {},
+    refreshReaderPanels: () => {},
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createTestState(document));
+  const runtime = createScriptingRuntime({ document });
+  const entries = (runtime.doc.tool('get_components', { component: 'component-list' }) as Array<{
+    append_child(component: string, config?: unknown, text?: string, slot?: string): {
+      append_child(component: string, config?: unknown, text?: string, slot?: string): unknown;
+    };
+  }>)[0]!;
+  const entry = entries.append_child(
+    'minute-entry',
+    { id: 'minute-entry-1', tags: 'meeting-minute' },
+    '',
+    'component-list'
+  );
+  entry.append_child(
+    'text',
+    {},
+    '<!--hvy:sort-value {"key":"Time"}-->July 8, 2026 at 9:15 AM PDT<!--/hvy:sort-value-->',
+    'container'
+  );
+
+  runtime.doc.rerender();
+
+  const expectedResult = document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.sortKeys;
+  expect(expectedResult).toEqual({ Time: '2026-07-08T16:15:00.000Z' });
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {
@@ -598,6 +707,50 @@ hvy_version: 0.1
     { id: 'history-acme-python', removed: false, target: 'tool-python' },
     { id: 'history-acme-typescript', removed: true, target: 'tool-typescript' },
   ]);
+});
+
+test('createScriptingRuntime ignores derived sort-value normalization when finding updated components', () => {
+  const source = `---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Date:
+        type: datetime
+---
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+<!--hvy:component-list {"componentListComponent":"application-entry"}-->
+
+ <!--hvy:component-list:0 {}-->
+
+  <!--hvy:application-entry {"id":"application-one","sortKeys":{"Date":"2024-07-20"}}-->
+
+   <!--hvy:expandable:stub {}-->
+
+    <!--hvy:text {}-->
+     <!--hvy:sort-value {"key":"Date"}-->07/20/2024<!--/hvy:sort-value-->
+
+ <!--hvy:component-list:1 {}-->
+
+  <!--hvy:application-entry {"id":"application-two","sortKeys":{"Date":"2024-07-21"}}-->
+
+   <!--hvy:expandable:stub {}-->
+
+    <!--hvy:text {}-->
+     <!--hvy:sort-value {"key":"Date"}-->07/21/2024<!--/hvy:sort-value-->
+`;
+  const previousDocument = deserializeDocument(source, '.hvy');
+  const document = deserializeDocument(source.replace('application-one\",\"sortKeys', 'application-one\",\"tags\":\"edited\",\"sortKeys'), '.hvy');
+  syncSortValuesForDocument(document);
+  const runtime = createScriptingRuntime({ document, previousDocument, changeReason: 'edit' });
+
+  const updated = runtime.doc.tool('get_updated_components', { component: 'application-entry' }) as Array<{ id: string }>;
+
+  expect(updated.map((component) => component.id)).toEqual(['application-one']);
 });
 
 test('createScriptingRuntime points db-table SQL callers at doc.db instead of cli', () => {

@@ -169,7 +169,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       if (ctx.isCurrentDocument()) {
         hookState.lastHookDocument = document;
         hookState.lastHookSignature = serializeDocument(document);
-        notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script');
+        notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
       }
     });
     logPerfTrace('plugin-document-hooks:end', {

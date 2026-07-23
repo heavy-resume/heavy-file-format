@@ -718,12 +718,15 @@ test('meeting minutes template uses reusable timestamped minute entries', async 
   expect(parsed.spec.submitScript).toBe('add_entry');
   expect(parsed.spec.scripts.add_entry).toContain('def note_to_markdown(value):');
   expect(parsed.spec.scripts.add_entry).toContain('output.append(line + "  ")');
-  expect(parsed.spec.scripts.add_entry).toContain('sort_time = doc.time.now_unix_ms()');
+  expect(parsed.spec.scripts.add_entry).toContain('sort_id = doc.time.now_unix_ms()');
+  expect(parsed.spec.scripts.add_entry).not.toContain('sort_time = doc.time.now_iso()');
   expect(parsed.spec.scripts.add_entry).toContain('display_time = doc.time.now_local()');
-  expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_time)');
-  expect(parsed.spec.scripts.add_entry).toContain('"sortKeys": {"Time": sort_time}');
+  expect(parsed.spec.scripts.add_entry).toContain('hvy:sort-value');
+  expect(parsed.spec.scripts.add_entry).toContain('\\"key\\":\\"Time\\"');
+  expect(parsed.spec.scripts.add_entry).toContain('"id": "minute-entry-" + str(sort_id)');
+  expect(parsed.spec.scripts.add_entry).not.toContain('"sortKeys": {"Time": sort_time}');
   expect(parsed.spec.scripts.add_entry).toContain('entry.append_child(');
-  expect(parsed.spec.scripts.add_entry).toContain('"**" + display_time + "**"');
+  expect(parsed.spec.scripts.add_entry).toContain('display_time + "<!--/hvy:sort-value-->**"');
   expect(parsed.spec.scripts.add_entry).toContain('"css": "margin: 0;"');
   expect(parsed.spec.scripts.add_entry).toContain('note_to_markdown(note)');
   expect(parsed.spec.scripts.add_entry).toContain('"minute-entry-note"');
@@ -861,6 +864,35 @@ hvy_version: 0.1
   );
 });
 
+test('deserialization discards structural hvy closing comments from LLM responses', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:expandable {"expandableAlwaysShowStub":true,"expandableExpanded":false,"id":"actual-main-points"}-->
+
+  <!--hvy:expandable:stub {}-->
+   <!--hvy:text {}-->
+    **Summary of "Actual" (main points)**
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {}-->
+    1. First point
+
+<!--/hvy:expandable-->
+`, '.hvy');
+
+  const expandable = document.sections[0]?.blocks[0];
+  expect(expandable?.schema.component).toBe('expandable');
+  expect(expandable?.schema.expandableContentBlocks.children).toHaveLength(1);
+  expect(expandable?.schema.expandableContentBlocks.children[0]?.text).toBe('1. First point');
+  expect(document.sections[0]?.blocks).toHaveLength(1);
+});
+
 test('xref-card missing title is an error and missing target is a warning', () => {
   const result = deserializeDocumentWithDiagnostics(`---
 hvy_version: 0.1
@@ -892,5 +924,33 @@ hvy_version: 0.1
   );
   expect(getHvyDiagnosticUsageHint(targetDiagnostic!)).toBe(
     'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.'
+  );
+});
+
+test('xref-card URL scheme targets are invalid while workspace paths are valid', () => {
+  const result = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"links"}-->
+#! Links
+
+ <!--hvy:xref-card {"xrefTitle":"Remote","xrefTarget":"https://example.com/doc.hvy"}-->
+ <!--hvy:xref-card {"xrefTitle":"Relative","xrefTarget":"./other.hvy#summary"}-->
+ <!--hvy:xref-card {"xrefTitle":"Root","xrefTarget":"/docs/other.hvy"}-->
+`, '.hvy');
+
+  expect(result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'xref_card_invalid_target',
+      }),
+    ])
+  );
+  expect(result.diagnostics.filter((entry) => entry.code === 'xref_card_invalid_target')).toHaveLength(1);
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'xref_card_invalid_target');
+  expect(getHvyDiagnosticUsageHint(diagnostic!)).toBe(
+    'Use a local id, `#id`, `./relative.hvy`, `../relative.hvy`, or `/workspace/path.hvy`; URL schemes are not valid xref targets.'
   );
 });

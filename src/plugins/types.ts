@@ -1,5 +1,5 @@
 import type { JsonObject } from '../hvy/types';
-import type { Align, VisualBlock } from '../editor/types';
+import type { Align, SortKeyValue, VisualBlock } from '../editor/types';
 import type { TextCaptionPayload } from '../editor/types';
 import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
@@ -92,6 +92,11 @@ export interface HvyPluginContext {
   };
   textEditor: {
     mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;
+  };
+  sortValues: {
+    get(key: string): SortKeyValue | undefined;
+    set(key: string, value: SortKeyValue): boolean;
+    clear(key: string): boolean;
   };
   // Ask the host to re-render. Use sparingly for structural shell changes only;
   // setConfig/setText already refresh the mounted plugin and reader panels.

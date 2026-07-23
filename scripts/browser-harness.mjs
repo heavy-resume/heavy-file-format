@@ -9,6 +9,7 @@ const SCRATCH_DIR = resolve(ROOT, 'scratch');
 const PID_FILE = resolve(SCRATCH_DIR, 'browser-harness.pid');
 const LOG_FILE = resolve(SCRATCH_DIR, 'browser-harness.log');
 const SMOKE_FILE = resolve(SCRATCH_DIR, 'browser-smoke.mjs');
+const CHAT_PERF_FILE = resolve(ROOT, 'scripts/chat-performance-harness.mjs');
 const HOST = '127.0.0.1';
 const PORT = 5174;
 const BASE_URL = `http://${HOST}:${PORT}/`;
@@ -24,6 +25,8 @@ if (command === 'start') {
 } else if (command === 'smoke') {
   await ensureSmokeFile();
   await runSmoke();
+} else if (command === 'chat-perf') {
+  await runScript(CHAT_PERF_FILE, 'scripts/chat-performance-harness.mjs');
 } else {
   console.error(`Unknown browser harness command: ${command}`);
   process.exitCode = 1;
@@ -95,12 +98,16 @@ async function ensureSmokeFile() {
 }
 
 async function runSmoke() {
+  await runScript(SMOKE_FILE, 'scratch/browser-smoke.mjs');
+}
+
+async function runScript(scriptFile, label) {
   await waitForServer();
-  const smokeUrl = pathToFileURL(SMOKE_FILE);
+  const smokeUrl = pathToFileURL(scriptFile);
   smokeUrl.searchParams.set('t', String(Date.now()));
   const smoke = await import(smokeUrl.href);
   if (typeof smoke.default !== 'function') {
-    throw new Error('scratch/browser-smoke.mjs must export a default async function.');
+    throw new Error(`${label} must export a default async function.`);
   }
   await smoke.default({ chromium, baseUrl: BASE_URL });
 }

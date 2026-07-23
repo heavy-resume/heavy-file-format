@@ -1,0 +1,70 @@
+.hvy-skill-rating {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--hvy-text);
+}
+
+.hvy-skill-rating-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-skill-rating-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--hvy-text-muted);
+}
+
+.hvy-skill-rating-controls {
+  display: grid;
+  grid-template-columns: repeat(var(--hvy-skill-rating-count, 5), minmax(0, 1fr));
+  gap: 0.25rem;
+  max-width: 22rem;
+}
+
+.hvy-skill-rating-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 6px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.hvy-skill-rating-reader .hvy-skill-rating-button {
+  cursor: default;
+}
+
+.hvy-skill-rating-button.is-active {
+  border-color: color-mix(in srgb, var(--hvy-accent-1) 70%, var(--hvy-border-input));
+  background: color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-surface));
+  color: var(--hvy-text);
+}
+
+.hvy-skill-rating-button.is-selected {
+  border-color: var(--hvy-accent-1);
+  background: var(--hvy-accent-1);
+  color: var(--hvy-accent-1-text);
+  transform: translateY(-1px);
+}
+
+.hvy-skill-rating-editor .hvy-skill-rating-button:hover,
+.hvy-skill-rating-editor .hvy-skill-rating-button:focus-visible {
+  border-color: var(--hvy-accent-1);
+  outline: none;
+}

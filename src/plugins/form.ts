@@ -16,6 +16,7 @@ import type { JsonObject } from '../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { getActiveStateRuntime, runWithStateRuntime } from '../state';
 import type { ChatMessage } from '../types';
+import { openScriptingErrorModal } from './scripting/error-modal';
 import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
@@ -67,6 +68,9 @@ export interface FormFieldDefinition {
 export interface FormSpec {
   fields: FormFieldDefinition[];
   scripts: Record<string, string>;
+  formCss: string;
+  actionsCss: string;
+  submitCss: string;
   initialScript: string;
   submitAction: FormSubmitAction;
   submitSourceScript: string;
@@ -95,6 +99,9 @@ function defaultFormSpec(): FormSpec {
   return {
     fields: [],
     scripts: {},
+    formCss: '',
+    actionsCss: '',
+    submitCss: '',
     initialScript: '',
     submitAction: 'script',
     submitSourceScript: '',
@@ -283,8 +290,11 @@ function coerceReturnedText(value: unknown): string {
   return String(value).trim();
 }
 
-function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actionsCss' | 'submitCss' | 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
   return {
+    formCss: typeof config?.formCss === 'string' ? config.formCss : '',
+    actionsCss: typeof config?.actionsCss === 'string' ? config.actionsCss : '',
+    submitCss: typeof config?.submitCss === 'string' ? config.submitCss : '',
     initialScript: typeof config?.initialScript === 'string' ? config.initialScript.trim() : '',
     submitAction: normalizeSubmitAction(config?.submitAction),
     submitSourceScript: typeof config?.submitSourceScript === 'string' ? config.submitSourceScript.trim() : '',
@@ -302,6 +312,9 @@ function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'initialScript' | 
 export function serializeFormConfig(spec: FormSpec): JsonObject {
   return {
     version: FORM_PLUGIN_VERSION,
+    formCss: spec.formCss,
+    actionsCss: spec.actionsCss,
+    submitCss: spec.submitCss,
     initialScript: spec.initialScript,
     submitAction: spec.submitAction,
     submitSourceScript: spec.submitSourceScript,
@@ -450,6 +463,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let initialized = false;
   let statusText = '';
   let statusError = false;
+  let statusErrorDetail: string | null = null;
   let submitBusy = false;
   let runQueue = Promise.resolve();
   let forceEditorRender = false;
@@ -557,11 +571,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .then((result) => {
         statusText = resultText(result);
         statusError = !result.ok;
+        statusErrorDetail = result.ok ? null : result.errorDetail ?? result.error ?? 'Unknown script error.';
         renderReader();
       })
       .catch((error) => {
         statusText = error instanceof Error ? error.message : 'Script failed.';
         statusError = true;
+        statusErrorDetail = error instanceof Error ? error.stack ?? error.message : String(error);
         renderReader();
       });
   };
@@ -578,6 +594,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     submitBusy = true;
     statusText = 'Preparing...';
     statusError = false;
+    statusErrorDetail = null;
     renderReader();
     runQueue = runQueue
       .then(async () => {
@@ -634,6 +651,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       .catch((error) => {
         statusText = error instanceof Error ? error.message : 'AI submit failed.';
         statusError = true;
+        statusErrorDetail = error instanceof Error ? error.stack ?? error.message : String(error);
       })
       .finally(() => {
         submitBusy = false;
@@ -756,6 +774,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       <label><span>Script Step Budget</span><input type="number" min="1" data-form-top-number="scriptStepBudget" value="${spec.scriptStepBudget}"></label>
       <label><span>Submit Label</span><input data-form-top-text="submitLabel" value="${escapeAttr(spec.submitLabel)}"></label>
       <label class="hvy-form-checkbox-label"><span>Show Submit</span><input type="checkbox" data-form-top-checkbox="showSubmit" ${spec.showSubmit ? 'checked' : ''}></label>
+      <label><span>Form CSS</span><textarea rows="4" data-form-top-text="formCss" placeholder="display: grid; gap: 0.75rem;">${escapeHtml(spec.formCss)}</textarea></label>
+      <label><span>Actions CSS</span><textarea rows="4" data-form-top-text="actionsCss" placeholder="grid-column: 1 / -1;">${escapeHtml(spec.actionsCss)}</textarea></label>
+      <label><span>Submit CSS</span><textarea rows="4" data-form-top-text="submitCss" placeholder="justify-self: end;">${escapeHtml(spec.submitCss)}</textarea></label>
       <fieldset class="hvy-form-library-fieldset">
         <legend>Script Libraries</legend>
         ${SCRIPTING_LIBRARY_OPTIONS.map((library) => `
@@ -797,15 +818,24 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const form = document.createElement('form');
     form.className = 'hvy-form-reader-form';
     form.noValidate = false;
+    if (spec.formCss.trim().length > 0) {
+      form.setAttribute('style', sanitizeInlineCss(spec.formCss));
+    }
     spec.fields.forEach((field) => form.appendChild(renderReaderField(field)));
     if (spec.showSubmit) {
       const actions = document.createElement('div');
       actions.className = 'hvy-form-actions';
+      if (spec.actionsCss.trim().length > 0) {
+        actions.setAttribute('style', sanitizeInlineCss(spec.actionsCss));
+      }
       const submit = document.createElement('button');
       submit.type = 'submit';
       submit.className = 'secondary';
       submit.textContent = submitBusy ? 'Generating...' : spec.submitLabel || 'Submit';
       submit.disabled = submitBusy;
+      if (spec.submitCss.trim().length > 0) {
+        submit.setAttribute('style', sanitizeInlineCss(spec.submitCss));
+      }
       actions.appendChild(submit);
       form.appendChild(actions);
     }
@@ -814,7 +844,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (statusText.length > 0) {
       const status = document.createElement('div');
       status.className = `hvy-form-status${statusError ? ' hvy-form-status-error' : ''}`;
-      status.textContent = statusText;
+      const statusMessage = document.createElement('span');
+      statusMessage.textContent = statusText;
+      status.appendChild(statusMessage);
+      if (statusError && statusErrorDetail) {
+        const tracebackButton = document.createElement('button');
+        tracebackButton.type = 'button';
+        tracebackButton.className = 'hvy-form-traceback-button';
+        tracebackButton.setAttribute('aria-label', 'Show script traceback');
+        tracebackButton.title = 'Show script traceback';
+        tracebackButton.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4.25v4.5M8 11.5v.25"/></svg>';
+        tracebackButton.addEventListener('click', () => openScriptingErrorModal(statusErrorDetail ?? statusText, tracebackButton));
+        status.appendChild(tracebackButton);
+      }
       root.appendChild(status);
     }
 
@@ -1002,8 +1044,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       commitBehavior(spec);
       return;
     }
-    if (target.dataset.formTopText === 'submitLabel' || target.dataset.formTopText === 'submitPrompt') {
-      const key = target.dataset.formTopText as 'submitLabel' | 'submitPrompt';
+    if (target.dataset.formTopText === 'submitLabel' || target.dataset.formTopText === 'submitPrompt' || target.dataset.formTopText === 'formCss' || target.dataset.formTopText === 'actionsCss' || target.dataset.formTopText === 'submitCss') {
+      const key = target.dataset.formTopText as 'submitLabel' | 'submitPrompt' | 'formCss' | 'actionsCss' | 'submitCss';
       spec[key] = target.value;
       commitBehavior(spec);
       return;
@@ -1209,11 +1251,12 @@ export const formPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
-    'Form-level behavior keys live in pluginConfig: `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
+    'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
+    '`formCss`, `actionsCss`, `submitCss`, and field `meta.css` are sanitized inline CSS applied to the form, action wrapper, submit button, and field wrapper respectively.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',
-    '`scriptLibraries` enables checked sandbox libraries such as `random` and `re` for every form script.',
+    '`scriptLibraries` enables checked sandbox libraries such as `random`, `re`, and `datetime` for every form script.',
     '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',

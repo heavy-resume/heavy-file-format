@@ -28,6 +28,8 @@ import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendi
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
+import { createProxyEmbeddingProvider } from './chat/embedding-provider';
+import { bindChatThreadUi, captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { loadSessionState, saveSessionState } from './state-persistence';
 import { setHostPlugins } from './plugins/registry';
@@ -35,10 +37,12 @@ import { reconcilePluginMounts, capturePluginFocus } from './plugins/mount';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import { builtInPlugins } from 'virtual:hvy-built-in-plugins';
 import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators';
+import { skillRatingExamplePlugin } from '../examples/plugins/skill-rating';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
-import { centerSearchResultLenses, renderCollapsedSearchBar, renderSearchLauncher, renderSearchModal } from './search/render';
+import { centerSearchResultLenses } from './search/render';
+import { refreshSearchSurface, renderSearchCollapsedSurface, renderSearchFloatingSurface } from './search/surface-refresh';
 import { createDefaultSearchState } from './search/state';
 import { applySearchFilter, submitSearch } from './search/actions';
 import { chatSemanticFilterProvider } from './search/semantic-provider';
@@ -46,13 +50,14 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom } from './reader/block-refresh';
+import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
+import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyIndicator } from './reference-document-dirty';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -71,7 +76,9 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
+  { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
+  { id: 'meetingMinutesTemplateBtn', label: 'Meeting Minutes Template', selectedExample: 'meeting-minutes-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },
   { id: 'importReferenceBtn', label: 'Import Reference', selectedExample: 'import-reference' },
@@ -100,6 +107,11 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     currentView: 'editor',
     editorMode: 'basic',
     responsivePreview: 'full',
+    chatContext: { mode: 'keyword-retrieval' },
+    chatContextProvider: null,
+    chatSearchCache: null,
+    embeddingProvider: createProxyEmbeddingProvider(),
+    crossDocumentLinksEnabled: false,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -186,6 +198,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     expandableEditorPanels: {},
     readerExpandableState: {},
     readerContainerState: {},
+    readerDeferredSectionBodies: {},
     readerView: {},
     readerViewActivatedTargets: new Set<string>(),
     componentListReaderViews: {},
@@ -460,6 +473,9 @@ editorRenderer = createEditorRenderer(
     get currentView() {
       return state.currentView;
     },
+    get crossDocumentLinksEnabled() {
+      return state.crossDocumentLinksEnabled;
+    },
     get responsivePreview() {
       return state.responsivePreview;
     },
@@ -606,6 +622,9 @@ readerRenderer = createReaderRenderer(
     get readerContainerState() {
       return state.readerContainerState;
     },
+    get readerDeferredSectionBodies() {
+      return state.readerDeferredSectionBodies;
+    },
     get readerView() {
       return state.readerView;
     },
@@ -712,7 +731,7 @@ function renderApp(): void {
           })}
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
-          ${isCliEditor || isDocumentMetaView ? '' : renderCollapsedSearchBar(state.search, { escapeHtml })}
+          ${isCliEditor || isDocumentMetaView ? '' : renderSearchCollapsedSurface()}
           ${
             isEditorView
               ? `${isRawEditor
@@ -801,10 +820,15 @@ function renderApp(): void {
                   state.document,
                   { escapeAttr, escapeHtml },
                   isViewerView ? 'qa' : 'document-edit',
-                  state.currentView === 'editor' || state.currentView === 'ai'
+                  state.currentView === 'editor' || state.currentView === 'ai',
+                  'reference',
+                  {
+                    chatContext: state.chatContext,
+                    embeddingAvailable: Boolean(state.embeddingProvider),
+                    canPersistEmbeddingCache: state.document.extension === '.hvy',
+                  }
                 )}
-                ${renderSearchLauncher(state.search)}
-                ${renderSearchModal(state.search, state.document, { escapeAttr, escapeHtml, readerRenderer })}`
+                ${renderSearchFloatingSurface()}`
           }
         </div>
       </section>
@@ -898,6 +922,7 @@ function renderTopbar(): string {
             <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
           <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+          ${renderReferenceDocumentDirtyIndicator()}
           <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
           <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
           <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
@@ -905,6 +930,57 @@ function renderTopbar(): string {
       </div>
     </header>
   `;
+}
+
+function refreshChatSurface(): boolean {
+  const dock = app.querySelector<HTMLElement>('.chat-dock');
+  const backdrop = app.querySelector<HTMLElement>('.chat-backdrop');
+  const searchSurface = app.querySelector<HTMLElement>('[data-search-surface="floating"]');
+  const host = dock?.parentElement ?? searchSurface?.parentElement;
+  if (!host) {
+    return false;
+  }
+  const capturedScroll = captureChatThreadScroll(app);
+
+  const template = document.createElement('template');
+  template.innerHTML = renderChatPanel(
+    state.chat,
+    state.document,
+    { escapeAttr, escapeHtml },
+    state.currentView === 'viewer' ? 'qa' : 'document-edit',
+    state.currentView === 'editor' || state.currentView === 'ai',
+    'reference',
+    {
+      chatContext: state.chatContext,
+      embeddingAvailable: Boolean(state.embeddingProvider),
+      canPersistEmbeddingCache: state.document.extension === '.hvy',
+    }
+  );
+  const nextBackdrop = template.content.querySelector<HTMLElement>('.chat-backdrop');
+  const nextDock = template.content.querySelector<HTMLElement>('.chat-dock');
+  if (!nextDock) {
+    return false;
+  }
+
+  backdrop?.remove();
+  if (nextBackdrop) {
+    host.insertBefore(nextBackdrop, dock ?? searchSurface ?? null);
+  }
+  if (dock) {
+    dock.replaceWith(nextDock);
+  } else {
+    host.insertBefore(nextDock, searchSurface ?? null);
+  }
+  if (searchSurface) {
+    searchSurface.classList.toggle('is-chat-open', state.chat.panelOpen);
+  }
+  bindChatThreadUi(
+    nextDock.querySelector<HTMLDivElement>('.chat-thread'),
+    nextDock.querySelector<HTMLDivElement>('[data-chat-scroll-container]'),
+    nextDock.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]')
+  );
+  restoreChatThreadScroll(app, capturedScroll);
+  return true;
 }
 
 function renderDocumentMenu(): string {
@@ -1176,7 +1252,9 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
     surface,
   });
-  void runPluginDocumentHooks('unknown');
+  if (options.runDocumentHooks !== false) {
+    void runPluginDocumentHooks('unknown');
+  }
 }
 
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
@@ -1200,6 +1278,33 @@ function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: strin
   logPerfTrace('refreshReaderBlock', {
     sectionKey,
     blockId,
+    refreshed,
+    elapsedMs: elapsedMs(startedAt),
+    currentView: state.currentView,
+    visibilityScriptsSkipped: options.runVisibilityScripts === false,
+  });
+  return refreshed;
+}
+
+function refreshReaderSection(root: ParentNode, sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const startedAt = nowMs();
+  const refreshed = refreshReaderSectionDom({
+    root,
+    readerRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element);
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  logPerfTrace('refreshReaderSection', {
+    sectionKey,
     refreshed,
     elapsedMs: elapsedMs(startedAt),
     currentView: state.currentView,
@@ -1296,7 +1401,10 @@ function getReaderHighlightGlowRoots(root: ParentNode): HTMLElement[] {
 // Initialize late-bound callbacks so all modules can access renderApp/refreshReaderPanels
 initCallbacks({
   renderApp,
+  refreshChatSurface,
+  refreshSearchSurface,
   refreshReaderPanels,
+  refreshReaderSection,
   refreshReaderBlock,
   refreshModalPreview,
   observeLinks: () => {},
@@ -1306,9 +1414,10 @@ initCallbacks({
 
 async function bootstrap(): Promise<void> {
   const savedSession = loadSessionState();
-  setHostPlugins([...builtInPlugins, resumeOutputGeneratorsPlugin]);
+  setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
   initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
+  initializeReferenceDocumentDirtyTracking();
   bindSessionPersistence();
   saveSessionState(state);
   initColorModeSync();

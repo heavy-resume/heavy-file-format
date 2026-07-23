@@ -1,6 +1,6 @@
 import type { ReaderRenderer } from './render';
 import type { VisualSection } from '../editor/types';
-import { elapsedMs, nowMs } from '../perf-trace';
+import { elapsedMs, nowMs, recordMeasurement } from '../perf-trace';
 
 export interface ReaderSurfaceRefreshResult {
   warningsMs: number;
@@ -73,16 +73,19 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     let phaseStartedAt = nowMs();
     const sidebarHtml = options.readerRenderer.renderSidebarSections(options.sections);
     sidebarRenderMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.sidebar.render', sidebarRenderMs, { sections: options.sections.length });
     phaseStartedAt = nowMs();
     sidebarSections.innerHTML = sidebarHtml;
     sidebarSections.scrollTop = scrollTop;
     sidebarSections.scrollLeft = scrollLeft;
     restoreVisibilityStates(sidebarSections, previousVisibility);
     sidebarDomMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.sidebar.dom', sidebarDomMs, {});
     phaseStartedAt = nowMs();
     options.reconcilePluginMounts?.(sidebarSections);
     void options.runButtonVisibilityScripts?.(sidebarSections);
     sidebarPostMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.sidebar.post', sidebarPostMs, {});
     readerMs += performance.now() - stepStartedAt;
   }
   if (reader) {
@@ -94,16 +97,19 @@ export function refreshReaderSurfaces(options: ReaderSurfaceRefreshOptions): Rea
     let phaseStartedAt = nowMs();
     const readerHtml = options.readerRenderer.renderReaderSections(options.sections);
     readerRenderMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.reader.render', readerRenderMs, { sections: options.sections.length });
     phaseStartedAt = nowMs();
     reader.innerHTML = readerHtml;
     reader.scrollTop = scrollTop;
     reader.scrollLeft = scrollLeft;
     restoreVisibilityStates(reader, previousVisibility);
     readerDomMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.reader.dom', readerDomMs, {});
     phaseStartedAt = nowMs();
     options.reconcilePluginMounts?.(reader);
     void options.runButtonVisibilityScripts?.(reader);
     readerPostMs = elapsedMs(phaseStartedAt);
+    recordMeasurement('refreshReader.reader.post', readerPostMs, {});
     readerMs = performance.now() - stepStartedAt;
   }
 

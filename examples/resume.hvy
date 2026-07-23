@@ -1389,6 +1389,11 @@ component_defs:
   - name: skill-record
     baseType: expandable
     description: Skill details
+    sortValueDefs:
+      Strength:
+        type: number
+      Name:
+        type: text
     templateVariables:
       skill:
         label: Skill
@@ -1592,7 +1597,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:skill-record {"id":"skill-software-engineering","xrefTitle":"Software Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":98},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-software-engineering","xrefTitle":"Software Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Software Engineering","Strength":5},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1605,11 +1610,12 @@ component_defs:
       ^detail-heading^ #### Description
       ^detail-body^ Designing, building, and maintaining software systems with a focus on reliability, maintainability, and developer experience.
       ^detail-heading^ #### Notes
+      ^detail-body^ Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
       ^detail-body^ Core strength. Approaches engineering as a systems discipline — prioritizing clear APIs, testable boundaries, and incremental delivery over clever solutions.
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:skill-record {"id":"skill-reverse-engineering","xrefTitle":"Reverse Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":87},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-reverse-engineering","xrefTitle":"Reverse Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Reverse Engineering","Strength":4},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1622,11 +1628,12 @@ component_defs:
       ^detail-heading^ #### Description
       ^detail-body^ Analyzing existing systems, file formats, or tool internals to understand structure and behavior without access to original specifications.
       ^detail-heading^ #### Notes
+      ^detail-body^ Strength: <!--hvy:sort-value {"key":"Strength"}-->4<!--/hvy:sort-value-->
       ^detail-body^ Applied primarily to understand undocumented formats and third-party tool internals for building compatible tooling.
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:skill-record {"id":"skill-library-development","xrefTitle":"Library Development","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":93},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-library-development","xrefTitle":"Library Development","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Library Development","Strength":5},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1639,11 +1646,12 @@ component_defs:
       ^detail-heading^ #### Description
       ^detail-body^ Designing and maintaining reusable software packages intended for use across multiple applications or by other developers.
       ^detail-heading^ #### Notes
+      ^detail-body^ Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
       ^detail-body^ Built shared TypeScript platform packages that reduced duplicated code across products and improved consistency of internal tooling.
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","xrefTitle":"LLM Prompt Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":91},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-llm-prompt-engineering","xrefTitle":"LLM Prompt Engineering","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"LLM Prompt Engineering","Strength":5},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1656,11 +1664,12 @@ component_defs:
       ^detail-heading^ #### Description
       ^detail-body^ Designing and iterating on prompts and workflows that direct large language model behavior toward reliable, useful outputs in product contexts.
       ^detail-heading^ #### Notes
+      ^detail-body^ Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->
       ^detail-body^ Used to design AI-assisted editor workflows and autonomous agent pipelines. Focuses on structured output, fallback handling, and iterative refinement.
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:skill-record {"id":"skill-project-management","xrefTitle":"Project Management","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":84},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:skill-record {"id":"skill-project-management","xrefTitle":"Project Management","tags":"skill","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Project Management","Strength":4},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1673,6 +1682,7 @@ component_defs:
       ^detail-heading^ #### Description
       ^detail-body^ Coordinating people, timelines, and deliverables to move work from idea to shipped with clear ownership and minimal ceremony.
       ^detail-heading^ #### Notes
+      ^detail-body^ Strength: <!--hvy:sort-value {"key":"Strength"}-->4<!--/hvy:sort-value-->
       ^detail-body^ Lightweight approach — async-first communication and clear ownership over process overhead. Comfortable leading small cross-functional efforts.
 
 <!--hvy: {"id":"tools-technologies","lock":true,"expanded":false,"location":"sidebar","description":"Tools and technologies reference list"}-->
@@ -1685,7 +1695,7 @@ component_defs:
 
   <!--hvy:component-list:0 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-typescript","xrefTitle":"TypeScript","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":96},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-typescript","xrefTitle":"TypeScript","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"TypeScript","Strength":5},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1702,7 +1712,7 @@ component_defs:
 
   <!--hvy:component-list:1 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-python","xrefTitle":"Python","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":91},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-python","xrefTitle":"Python","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Python","Strength":5},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1719,7 +1729,7 @@ component_defs:
 
   <!--hvy:component-list:2 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-c-cpp","xrefTitle":"C/C++","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":72},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-c-cpp","xrefTitle":"C/C++","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"C/C++","Strength":3.5},"groupKeys":{"Category":"Programming Languages"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1736,7 +1746,7 @@ component_defs:
 
   <!--hvy:component-list:3 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-developer-containers","xrefTitle":"Developer Containers","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":89},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-developer-containers","xrefTitle":"Developer Containers","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"Developer Containers","Strength":4.5},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1753,7 +1763,7 @@ component_defs:
 
   <!--hvy:component-list:4 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-openai-api","xrefTitle":"OpenAI API","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":86},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-openai-api","xrefTitle":"OpenAI API","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"OpenAI API","Strength":4},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1770,7 +1780,7 @@ component_defs:
 
   <!--hvy:component-list:5 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-github-codespaces","xrefTitle":"GitHub Codespaces","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":82},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-github-codespaces","xrefTitle":"GitHub Codespaces","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"GitHub Codespaces","Strength":4},"groupKeys":{"Category":"Development Environments"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 
@@ -1787,7 +1797,7 @@ component_defs:
 
   <!--hvy:component-list:6 {}-->
 
-   <!--hvy:tool-tech-record {"id":"tool-superagi","xrefTitle":"SuperAGI","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":76},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
+   <!--hvy:tool-tech-record {"id":"tool-superagi","xrefTitle":"SuperAGI","tags":"tool","css":"margin: 0.35rem 0; border: 1px solid var(--hvy-border); border-radius: 4px; padding: 0.35rem 0.5rem; background: var(--hvy-surface);","sortKeys":{"Name":"SuperAGI","Strength":3.5},"groupKeys":{"Category":"AI / Agent Tooling"},"expandableAlwaysShowStub":true,"expandableExpanded":false}-->
 
     <!--hvy:expandable:stub {}-->
 

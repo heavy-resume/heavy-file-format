@@ -27,6 +27,8 @@ import {
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
 import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
+import { classifyXrefTarget } from './workspace-links';
+import { validateDocumentMetadata } from './document-metadata';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -199,6 +201,8 @@ export function getHvyDiagnosticUsageHint(diagnostic: HvyDiagnostic): string {
       return 'An xref-card needs `xrefTitle`, for example `<!--hvy:xref-card {"xrefTitle":"Label"}-->`.';
     case 'xref_card_missing_target':
       return 'Add `xrefTarget`, for example `<!--hvy:xref-card {"xrefTarget":"section-id"}-->`.';
+    case 'xref_card_invalid_target':
+      return 'Use a local id, `#id`, `./relative.hvy`, `../relative.hvy`, or `/workspace/path.hvy`; URL schemes are not valid xref targets.';
     default:
       return 'Return valid HVY with proper section and component directives.';
   }
@@ -496,6 +500,10 @@ function parseBlocks(
       return;
     }
 
+    if (isStructuralHvyClosingComment(line)) {
+      return;
+    }
+
     const match = line.trim().match(directivePattern);
     if (!match) {
       currentText.push(line);
@@ -636,6 +644,10 @@ function parseBlocks(
   }));
 }
 
+function isStructuralHvyClosingComment(line: string): boolean {
+  return /^<!--\s*\/\s*hvy:(?!(?:alt|nowrap)\b)[a-z][a-z0-9-]*(?::[a-z0-9-]+)*\s*-->$/i.test(line.trim());
+}
+
 function mapParserErrorToDiagnostic(message: string): HvyDiagnostic {
   const lineMatch = message.match(/^Line (\d+):\s*(.*)$/);
   const linePrefix = lineMatch ? `Line ${lineMatch[1]}: ` : '';
@@ -671,6 +683,12 @@ function escapeHvyJsonString(value: string): string {
 }
 
 function validateDocumentSemantics(document: VisualDocument, diagnostics: HvyDiagnostic[]): void {
+  if (typeof document.meta.metadata !== 'undefined') {
+    const issue = validateDocumentMetadata(document.meta.metadata);
+    if (issue) {
+      diagnostics.push({ severity: 'error', code: 'invalid_document_metadata', message: issue.message });
+    }
+  }
   for (const section of document.sections) {
     validateSectionSemantics(section, document, diagnostics);
   }
@@ -723,11 +741,19 @@ function validateBlockSemantics(block: VisualBlock, sectionLabel: string, docume
         message: `Section "${sectionLabel}": xref-card is missing xrefTitle.`,
       });
     }
-    if (block.schema.xrefTarget.trim().length === 0) {
+    const xrefTarget = block.schema.xrefTarget.trim();
+    const classifiedTarget = classifyXrefTarget(xrefTarget);
+    if (xrefTarget.length === 0) {
       diagnostics.push({
         severity: 'warning',
         code: 'xref_card_missing_target',
         message: `Section "${sectionLabel}": xref-card is missing xrefTarget and will be disabled.`,
+      });
+    } else if (classifiedTarget.kind === 'invalid') {
+      diagnostics.push({
+        severity: 'error',
+        code: 'xref_card_invalid_target',
+        message: `Section "${sectionLabel}": xref-card has invalid xrefTarget "${escapeHvyJsonString(xrefTarget)}".`,
       });
     }
   }
@@ -1379,6 +1405,9 @@ function serializeBlockSchema(
   if (Object.keys(schema.sortKeys).length > 0) {
     payload.sortKeys = schema.sortKeys;
   }
+  if (schema.derivedSortKeyNames.length > 0) {
+    payload.derivedSortKeyNames = schema.derivedSortKeyNames;
+  }
   if (Object.keys(schema.groupKeys).length > 0) {
     payload.groupKeys = schema.groupKeys;
   }
@@ -1416,6 +1445,7 @@ function serializeBlockSchema(
     addIfChanged(payload, 'componentListDefaultSortKey', schema.componentListDefaultSortKey, defaults.componentListDefaultSortKey);
     addIfChanged(payload, 'componentListDefaultSortDirection', schema.componentListDefaultSortDirection, defaults.componentListDefaultSortDirection);
     addIfChanged(payload, 'componentListDefaultGroupKey', schema.componentListDefaultGroupKey, defaults.componentListDefaultGroupKey);
+    addIfChanged(payload, 'componentListGroupsExpanded', schema.componentListGroupsExpanded, defaults.componentListGroupsExpanded);
     addIfChanged(payload, 'componentListGroupCollapsedPreviewRem', schema.componentListGroupCollapsedPreviewRem, defaults.componentListGroupCollapsedPreviewRem);
     if (!options.omitComponentListBlocks) {
       addBlockArrayIfPresent(payload, 'componentListBlocks', schema.componentListBlocks, documentMeta);
@@ -1435,6 +1465,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'plugin', schema.plugin, defaults.plugin);
     if (Object.keys(schema.pluginConfig).length > 0) {
       payload.pluginConfig = stripEditorStateFromSerializedValue(schema.pluginConfig) as JsonObject;
+    }
+    if (Object.keys(schema.pluginSortValues).length > 0) {
+      payload.pluginSortValues = schema.pluginSortValues;
     }
   }
   if (component === 'expandable') {

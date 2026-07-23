@@ -6,13 +6,13 @@ import {
 } from '../cli-core/document-diagnostics';
 import type { ChatMessage, ChatSettings, ChatTokenUsage, VisualDocument } from '../types';
 import { getDocumentAiContext } from '../document-ai-context';
-import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
 import { createChatCliTraceRunId, writeChatCliCommandTrace, writeChatCliFailedCommandTrace, writeChatCliUserQueryTrace } from './chat-cli-dev-trace';
 import { createChatCliInterface } from './chat-cli-interface';
 import { buildChatCliPersistentInstructions } from './chat-cli-instructions';
-import { getHvyCliPreferredCommandSummary, type HvyCliSession } from '../cli-core/commands';
+import { getHvyCliPreferredCommandSummary, getHvyCliSessionVirtualFileSystem, type HvyCliSession } from '../cli-core/commands';
+import type { HvyVirtualPathNamingState } from '../cli-core/virtual-file-system';
 import {
   appendProviderToolResultsToState,
   buildInitialProviderToolState,
@@ -22,6 +22,7 @@ import {
   type ProviderToolTurn,
   type ProviderToolState,
 } from '../chat/provider-tools';
+import { measureAsyncPhase, measurePhase } from '../perf-trace';
 
 const CHAT_CLI_MAX_STEPS = 30;
 const CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS = 3;
@@ -43,6 +44,13 @@ export interface ChatCliEditTurnResult {
   summary: string;
   tokenUsage?: ChatTokenUsage;
   asked?: boolean;
+}
+
+export interface ChatCliMutationSummary {
+  paths?: string[];
+  refreshSectionPaths?: string[];
+  virtualPathNaming?: HvyVirtualPathNamingState;
+  requiresFullRefresh?: boolean;
 }
 
 export interface ChatCliInitialTurnRequest {
@@ -68,6 +76,7 @@ export interface ChatCliSimTurnState extends ChatCliInitialTurnRequest {
 export interface ChatCliSimAdvanceResult extends ChatCliSimTurnState {
   commandResultMessage: string;
   mutated: boolean;
+  mutationSummary?: ChatCliMutationSummary;
   batchHadSuccess?: boolean;
   batchHadError?: boolean;
   lastFailedCommand?: string;
@@ -92,15 +101,16 @@ export async function runChatCliEditLoop(params: {
   request: string;
   priorMessages?: ChatMessage[];
   selectedComponent?: ChatCliSelectedComponentFocus;
-  onMutation?: (group?: string) => void;
+  onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (content: string) => void;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
+  return measureAsyncPhase('chatCli.loop.run', { sections: params.document.sections.length }, async () => {
   const traceRunId = createChatCliTraceRunId();
-  await writeChatCliUserQueryTrace(traceRunId, params.request, params.signal);
-  const initial = await buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true });
+  await measureAsyncPhase('chatCli.trace.userQuery', {}, () => writeChatCliUserQueryTrace(traceRunId, params.request, params.signal));
+  const initial = await measureAsyncPhase('chatCli.initial.build', {}, () => buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true }));
   let turnState: ChatCliSimTurnState = {
     messages: initial.messages,
     context: initial.context,
@@ -126,7 +136,7 @@ export async function runChatCliEditLoop(params: {
   for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
     throwIfAborted(params.signal);
     let currentInputTokens: number | undefined;
-    const nativeTurn = await requestProxyToolTurn({
+    const nativeTurn = await measureAsyncPhase('chatCli.model.toolTurn', { step: step + 1 }, () => requestProxyToolTurn({
       settings: params.settings,
       messages: turnState.messages,
       context: turnState.context,
@@ -143,9 +153,9 @@ export async function runChatCliEditLoop(params: {
         params.onTokenUsage?.(usage);
       },
       signal: params.signal,
-    });
+    }));
     const advanced = nativeTurn.toolCalls.length > 0
-      ? await advanceChatCliNativeToolTurnState({
+      ? await measureAsyncPhase('chatCli.advance.nativeToolTurn', { step: step + 1, toolCalls: nativeTurn.toolCalls.length }, () => advanceChatCliNativeToolTurnState({
           settings: params.settings,
           document: params.document,
           state: turnState,
@@ -155,8 +165,8 @@ export async function runChatCliEditLoop(params: {
           traceRunId,
           writeTrace: true,
           lastInputTokens: currentInputTokens,
-        })
-      : await advanceChatCliTurnState({
+        }))
+      : await measureAsyncPhase('chatCli.advance.textTurn', { step: step + 1 }, () => advanceChatCliTurnState({
       settings: params.settings,
       document: params.document,
       state: turnState,
@@ -166,7 +176,7 @@ export async function runChatCliEditLoop(params: {
       traceRunId,
       writeTrace: true,
       lastInputTokens: currentInputTokens,
-    });
+    }));
     turnState = advanced;
     if (advanced.commandResultMessage) {
       if (advanced.batchHadSuccess) {
@@ -183,7 +193,11 @@ export async function runChatCliEditLoop(params: {
         }
       }
       if (advanced.mutated) {
-        params.onMutation?.('chat-cli');
+        if (advanced.mutationSummary) {
+          params.onMutation?.('chat-cli', advanced.mutationSummary);
+        } else {
+          params.onMutation?.('chat-cli');
+        }
       }
     }
     if (!advanced.terminalSummary && !advanced.askedQuestion) {
@@ -205,6 +219,7 @@ export async function runChatCliEditLoop(params: {
     summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
     ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
   };
+  });
 }
 
 export async function buildChatCliInitialProxyTurnRequest(params: {
@@ -283,6 +298,9 @@ async function advanceChatCliNativeToolTurnState(params: {
   let mutated = false;
   let batchHadSuccess = false;
   let batchHadError = false;
+  let mutatedPaths: string[] | undefined;
+  let refreshSectionPaths: string[] | undefined;
+  let mutationRequiresFullRefresh = false;
   let lastFailedCommand = '';
   let lastCommandError = '';
   let terminalSummary = '';
@@ -330,10 +348,15 @@ async function advanceChatCliNativeToolTurnState(params: {
       if (/^\s*ask(?:\s|$)/.test(command)) {
         throw new Error('Native tool mode uses ask_user({ question }), not run_hvy_cli with ask.');
       }
-      const execution = await cli.run(command);
+      const execution = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
       stdout = execution.output;
       commandMutated = execution.mutated && !isSessionOnlyCommand(command);
       mutated = mutated || commandMutated;
+      if (commandMutated) {
+        mutatedPaths = mergeChatCliMutationPaths(mutatedPaths, execution.mutatedPaths);
+        refreshSectionPaths = mergeChatCliMutationPaths(refreshSectionPaths, execution.refreshSectionPaths);
+        mutationRequiresFullRefresh = mutationRequiresFullRefresh || Boolean(execution.requiresFullRefresh || (!execution.mutatedPaths?.length && !execution.refreshSectionPaths?.length));
+      }
       batchHadSuccess = true;
       commandOutputs.push({ command, output: formatOutputForModel(stdout, CHAT_CLI_MODEL_OUTPUT_MAX_LINES) });
       if (params.writeTrace && params.traceRunId) {
@@ -365,7 +388,10 @@ async function advanceChatCliNativeToolTurnState(params: {
   }
 
   if (terminalSummary) {
-    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.finish', {}, () => collectHvyCliDiagnostics(
+      params.document,
+      getHvyCliSessionVirtualFileSystem(params.document, params.state.session)
+    ));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -427,6 +453,7 @@ async function advanceChatCliNativeToolTurnState(params: {
 
   return {
     ...buildSimAdvanceResult({ ...params, assistantOutput: params.turn.output }, messages, commandResultMessage, mutated, urgency, params.state.diagnostics),
+    mutationSummary: buildChatCliMutationSummary(mutatedPaths, refreshSectionPaths, params.state.session, mutationRequiresFullRefresh),
     batchHadSuccess,
     batchHadError,
     lastFailedCommand,
@@ -434,6 +461,38 @@ async function advanceChatCliNativeToolTurnState(params: {
     toolTurn: params.turn,
     toolState,
   };
+}
+
+function buildChatCliMutationSummary(
+  paths: string[] | undefined,
+  refreshSectionPaths: string[] | undefined,
+  session: HvyCliSession,
+  requiresFullRefresh: boolean
+): ChatCliMutationSummary | undefined {
+  if (!paths && !refreshSectionPaths && !session.virtualPathNaming && !requiresFullRefresh) {
+    return undefined;
+  }
+  return {
+    ...(paths ? { paths } : {}),
+    ...(refreshSectionPaths ? { refreshSectionPaths } : {}),
+    ...(session.virtualPathNaming ? { virtualPathNaming: session.virtualPathNaming } : {}),
+    ...(requiresFullRefresh ? { requiresFullRefresh } : {}),
+  };
+}
+
+function mergeChatCliMutationPaths(...groups: Array<string[] | undefined>): string[] | undefined {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const path of group ?? []) {
+      if (seen.has(path)) {
+        continue;
+      }
+      seen.add(path);
+      paths.push(path);
+    }
+  }
+  return paths.length > 0 ? paths : undefined;
 }
 
 function getStringToolArg(call: ProviderToolCall, key: string): string {
@@ -466,7 +525,10 @@ async function advanceChatCliTurnState(params: {
     return buildSimAdvanceResult(params, messages, action.message, false, params.state.urgency, params.state.diagnostics);
   }
   if (action.kind === 'done') {
-    const diagnostics = await collectHvyCliDiagnostics(params.document);
+    const diagnostics = await measureAsyncPhase('chatCli.diagnostics.done', {}, () => collectHvyCliDiagnostics(
+      params.document,
+      getHvyCliSessionVirtualFileSystem(params.document, params.state.session)
+    ));
     recordIntroducedDiagnostics(params.document, params.state.diagnostics, diagnostics);
     syncIntroducedDiagnostics(params.document, diagnostics);
     const introducedIssues = getIntroducedDiagnostics(params.document);
@@ -527,7 +589,7 @@ async function advanceChatCliTurnState(params: {
     params.onProgress?.(executableCommands.length > 1 ? `$ [${commandIndex + 1}/${executableCommands.length}] ${command}` : `$ ${command}`);
     let result: Awaited<ReturnType<typeof cli.run>>;
     try {
-      result = await cli.run(command);
+      result = await measureAsyncPhase('chatCli.command.run', { command }, () => cli.run(command));
       batchHadSuccess = true;
       mutated = mutated || (result.mutated && !isSessionOnlyCommand(command));
     } catch (error) {
@@ -631,14 +693,15 @@ function buildSimAdvanceResult(
   return {
     ...baseState,
     messages,
-    context: buildChatCliLoopContext(
+    context: measurePhase('chatCli.context.loop', {}, () => buildChatCliLoopContext(
       cli.snapshot(),
       params.document,
+      params.state.session,
       params.state.request,
       params.state.priorMessages,
       params.state.priorConversation,
       params.state.selectedComponent
-    ),
+    )),
     systemInstructions: buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary),
     diagnostics,
     urgency,
@@ -667,7 +730,7 @@ async function buildChatCliInitialTurnRequest(params: {
     cli.session.cwd = params.selectedComponent.path;
   }
   const runInitialCommand = async (explanation: string, command: string) => {
-    const output = await cli.run(command);
+    const output = await measureAsyncPhase('chatCli.initial.command', { command }, () => cli.run(command));
     if (params.writeTrace) {
       await writeChatCliCommandTrace(params.traceRunId, output.command, output.output, params.signal);
     }
@@ -685,7 +748,10 @@ async function buildChatCliInitialTurnRequest(params: {
     'I am getting the component structure so I can identify sections, component template types, and likely edit surfaces.',
     'hvy request_structure --collapse'
   );
-  const diagnostics = await collectHvyCliDiagnostics(params.document);
+  const diagnostics = await measureAsyncPhase('chatCli.initial.diagnostics', {}, () => collectHvyCliDiagnostics(
+    params.document,
+    getHvyCliSessionVirtualFileSystem(params.document, cli.session)
+  ));
   const initialSearch = await runInitialCommand(
     'I am searching for the most likely locations related to the user request so I can avoid blind grep-and-edit behavior.',
     `hvy search ${quoteChatCliShellArg(params.request)} --max 5`
@@ -713,14 +779,15 @@ async function buildChatCliInitialTurnRequest(params: {
     },
     ...formatInitialChatCliCommandMessages(initialOutputs, cli.snapshot()),
   ];
-  const context = buildChatCliLoopContext(
+  const context = measurePhase('chatCli.context.initial', {}, () => buildChatCliLoopContext(
     cli.snapshot(),
     params.document,
+    cli.session,
     params.request,
     params.priorMessages ?? [],
     priorConversation,
     params.selectedComponent
-  );
+  ));
   const systemInstructions = buildChatCliLoopSystemInstructions(cli.snapshot().commandSummary);
   const provider = params.settings?.provider ?? 'openai';
   const toolState = buildInitialChatCliToolState({
@@ -845,6 +912,7 @@ function buildSyntheticChatCliToolTurn(provider: ChatSettings['provider'], callI
 function buildChatCliLoopContext(
   snapshot: ReturnType<ReturnType<typeof createChatCliInterface>['snapshot']>,
   document: VisualDocument,
+  session: HvyCliSession,
   request: string,
   priorMessages: ChatMessage[],
   priorConversation: ChatMessage[],
@@ -852,7 +920,7 @@ function buildChatCliLoopContext(
 ): string {
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   const documentAiContext = getDocumentAiContext(document);
-  const cwdComponentContext = formatHvyComponentDescriptionHistory(document, buildHvyVirtualFileSystem(document), snapshot.cwd);
+  const cwdComponentContext = formatHvyComponentDescriptionHistory(document, getHvyCliSessionVirtualFileSystem(document, session), snapshot.cwd);
   return [
     'Current request:',
     request,

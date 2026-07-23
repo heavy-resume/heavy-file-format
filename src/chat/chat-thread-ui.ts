@@ -5,6 +5,7 @@ let lastBoundChatMessageSignature = '';
 let lastChatScrollTop = 0;
 let wasChatNearBottom = true;
 const openChatWorkDetails = new Set<string>();
+const chatExpandableBoundThreads = new WeakSet<HTMLElement>();
 
 export type ChatThreadScrollState = {
   scrollTop: number;
@@ -59,6 +60,8 @@ export function bindChatThreadUi(
     }
     return;
   }
+
+  bindChatExpandableToggles(chatThread);
 
   const updateScrollButton = (): void => {
     const distanceFromBottom = chatScrollContainer.scrollHeight - chatScrollContainer.scrollTop - chatScrollContainer.clientHeight;
@@ -118,6 +121,51 @@ export function bindChatThreadUi(
       lastBoundChatMessageCount = state.chat.messages.length;
       lastBoundChatMessageSignature = nextSignature;
     });
+  });
+}
+
+function bindChatExpandableToggles(chatThread: HTMLElement): void {
+  if (typeof chatThread.addEventListener !== 'function') {
+    return;
+  }
+  if (chatExpandableBoundThreads.has(chatThread)) {
+    return;
+  }
+  chatExpandableBoundThreads.add(chatThread);
+  chatThread.addEventListener('click', (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const expandable = target?.closest<HTMLElement>('[data-chat-action="toggle-expandable"]');
+    if (!expandable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
+    if (!readerEl) {
+      return;
+    }
+
+    const nextExpanded = expandable.getAttribute('aria-expanded') !== 'true';
+    const hasStub = readerEl.dataset.chatExpandableHasStub === 'true';
+    const alwaysShowStub = readerEl.dataset.chatExpandableAlwaysShowStub === 'true';
+
+    readerEl.classList.toggle('is-expanded', nextExpanded);
+    readerEl.classList.toggle('is-collapsed', !nextExpanded);
+    readerEl.querySelectorAll<HTMLElement>('[data-chat-action="toggle-expandable"]').forEach((element) => {
+      element.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+    });
+
+    setChatExpandablePaneVisible(readerEl, 'stub', nextExpanded ? alwaysShowStub && hasStub : hasStub);
+    setChatExpandablePaneVisible(readerEl, 'content', nextExpanded);
+    setChatExpandablePaneVisible(readerEl, 'preview', !nextExpanded && !hasStub);
+  });
+}
+
+function setChatExpandablePaneVisible(readerEl: HTMLElement, pane: 'stub' | 'content' | 'preview', visible: boolean): void {
+  readerEl.querySelectorAll<HTMLElement>(`[data-chat-expandable-pane="${pane}"]`).forEach((element) => {
+    element.hidden = !visible;
   });
 }
 

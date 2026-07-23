@@ -1,8 +1,8 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, VisualDocument } from '../types';
+import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
-import { markdownToEditorHtml, normalizeMarkdownLists } from '../markdown';
+import { markdownToReaderHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
 import type { VisualBlock, VisualSection } from '../editor/types';
 import type { ComponentRenderHelpers } from '../editor/component-helpers';
@@ -16,8 +16,12 @@ import { getDocumentComponentDefaultCss } from '../document-component-defaults';
 import { getTextLineStylesFromMeta } from '../text-line-styles';
 import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
+import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
+import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
+import type { ProxyChatMode } from './chat-provider-payload';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
-import { closeIcon } from '../icons';
+import { closeIcon, copyIcon } from '../icons';
+import { measureAsyncPhase, measurePhase } from '../perf-trace';
 
 const CHAT_STORAGE_KEY = 'hvy-chat-settings';
 const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
@@ -28,11 +32,18 @@ export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
 export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 20_000;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
+const ENABLE_CHAT_PROXY_DEBUG_LOGS = import.meta.env?.VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS === 'true';
 export type ChatControlSurface = 'reference' | 'embedded';
 
 interface RenderChatPanelDeps {
   escapeAttr: (value: string) => string;
   escapeHtml: (value: string) => string;
+}
+
+export interface RenderChatContextControlsOptions {
+  chatContext?: HvyChatContextOptions | null;
+  embeddingAvailable?: boolean;
+  canPersistEmbeddingCache?: boolean;
 }
 
 interface ProxyChatMessage {
@@ -41,8 +52,6 @@ interface ProxyChatMessage {
   content: string;
   error?: boolean;
 }
-
-export type ProxyChatMode = 'qa' | 'component-edit' | 'document-edit' | 'pdf-template-import';
 
 interface ProxyChatRequest {
   provider: ChatSettings['provider'];
@@ -153,6 +162,7 @@ export function createDefaultChatState(): ChatState {
     draft: '',
     messages: [],
     isSending: false,
+    status: null,
     error: null,
     panelOpen: false,
     requestNonce: 0,
@@ -166,6 +176,7 @@ export function clearChatConversation(chat: ChatState): void {
   chat.draft = '';
   chat.messages = [];
   chat.isSending = false;
+  chat.status = null;
   chat.error = null;
   chat.abortController?.abort();
   chat.abortController = null;
@@ -181,6 +192,7 @@ export function stopChatRequest(chat: ChatState): boolean {
   chat.abortController?.abort();
   chat.abortController = null;
   chat.isSending = false;
+  chat.status = null;
   chat.requestNonce += 1;
   chat.error = null;
   chat.messages = [
@@ -276,15 +288,16 @@ export function renderChatPanel(
   deps: RenderChatPanelDeps,
   mode: 'qa' | 'document-edit' = 'qa',
   canCopyToHvy = false,
-  surface: ChatControlSurface = 'reference'
+  surface: ChatControlSurface = 'reference',
+  contextControls: RenderChatContextControlsOptions = {}
 ): string {
-  const context = buildChatDocumentContext(document);
   const hasDraft = chat.draft.trim().length > 0;
   const missingModel = chat.settings.model.trim().length === 0;
   const hostManagedChat = hasHostChatClient();
   const showProviderControls = !hostManagedChat && shouldRenderChatProviderControls(surface);
   const isDocumentEdit = mode === 'document-edit';
-  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || context.trim().length > 0);
+  const hasQaDocumentContent = document.sections.length > 0;
+  const canSend = !chat.isSending && (hostManagedChat || !missingModel) && (isDocumentEdit || hasQaDocumentContent);
   const showCliSimControls = isDocumentEdit && ENABLE_CHAT_CLI_SIM;
   const cliSimHtml = showCliSimControls && chat.cliSim ? renderChatCliSimHtml(chat.cliSim, deps) : '';
   const latestTokenUsage = getLatestChatTokenUsage(chat.messages);
@@ -295,7 +308,7 @@ export function renderChatPanel(
     isSending: chat.isSending,
     hasDraft,
     missingModel,
-    contextLength: context.trim().length,
+    contextLength: hasQaDocumentContent ? 'available' : 0,
     messageCount: chat.messages.length,
   });
   const title = isDocumentEdit ? 'Edit This Document' : 'Ask This Document';
@@ -360,9 +373,14 @@ export function renderChatPanel(
          </label>
        </div>`
     : '';
+  const contextControlsHtml = renderChatContextControls(chat, deps, {
+    chatContext: contextControls.chatContext,
+    embeddingAvailable: contextControls.embeddingAvailable === true,
+    canPersistEmbeddingCache: contextControls.canPersistEmbeddingCache === true && document.extension === '.hvy',
+  });
   const composerHtml = chat.isSending
     ? `<div class="chat-busy-footer">
-         <span class="chat-composer-status">Working through the request...</span>
+         <span class="chat-composer-status">${deps.escapeHtml(chat.status ?? 'Working through the request...')}</span>
          <button type="button" class="danger" data-action="cancel-chat-request">Stop</button>
        </div>`
     : `<form id="chatComposer" class="chat-composer">
@@ -410,6 +428,7 @@ export function renderChatPanel(
                </div>
                <div class="chat-panel-body" data-chat-scroll-container>
                  ${providerControlsHtml}
+                 ${contextControlsHtml}
 
                  ${chat.error ? `<div class="chat-error" role="alert">${deps.escapeHtml(chat.error)}</div>` : ''}
                  ${cliSimHtml}
@@ -437,6 +456,60 @@ export function renderChatPanel(
       }
       <button type="button" class="hvy-floating-launcher chat-launcher" data-action="toggle-chat-panel" aria-expanded="${chat.panelOpen ? 'true' : 'false'}" aria-label="${chat.panelOpen ? 'Close chat' : 'Open chat'}">?</button>
     </div>
+  `;
+}
+
+function renderChatContextControls(
+  chat: ChatState,
+  deps: RenderChatPanelDeps,
+  options: RenderChatContextControlsOptions
+): string {
+  const mode = options.chatContext?.mode ?? 'full-document';
+  const embeddingModel = options.chatContext?.embeddingModel?.trim() || 'text-embedding-ada-002';
+  const embeddingSelected = mode === 'embedding-retrieval';
+  const embeddingAvailable = options.embeddingAvailable === true;
+  const canPersistEmbeddingCache = options.canPersistEmbeddingCache === true;
+  const buildDisabled = chat.isSending || !embeddingSelected || !embeddingAvailable || !canPersistEmbeddingCache;
+  const buildTitle = !embeddingSelected
+    ? 'Select embedding retrieval before building embeddings.'
+    : !embeddingAvailable
+    ? 'Embedding provider is not configured.'
+    : !canPersistEmbeddingCache
+    ? 'Embedding caches can only be attached to .hvy documents.'
+    : 'Build embedding cache for the next save';
+  return `
+    <section class="chat-context-controls" aria-label="Chat context">
+      <label class="chat-setting chat-setting-wide">
+        <span>Context method</span>
+        <select data-field="chat-context-mode" aria-label="Chat context method" ${chat.isSending ? 'disabled' : ''}>
+          <option value="keyword-retrieval"${mode === 'keyword-retrieval' ? ' selected' : ''}>Keyword retrieval</option>
+          <option value="embedding-retrieval"${embeddingSelected ? ' selected' : ''}>Embedding retrieval</option>
+          <option value="full-document"${mode === 'full-document' ? ' selected' : ''}>Full document</option>
+        </select>
+      </label>
+      <div class="chat-embedding-controls${embeddingSelected ? '' : ' is-hidden'}">
+        <label class="chat-setting">
+          <span>Embedding model</span>
+          <input
+            type="text"
+            data-field="chat-embedding-model"
+            value="${deps.escapeAttr(embeddingModel)}"
+            placeholder="text-embedding-ada-002"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Embedding model"
+            ${chat.isSending ? 'disabled' : ''}
+          />
+        </label>
+        <button type="button" class="secondary" data-action="build-chat-embeddings" title="${deps.escapeAttr(buildTitle)}"${buildDisabled ? ' disabled' : ''}>Build Embeddings</button>
+      </div>
+      ${
+        chat.status && !chat.isSending
+          ? `<p class="chat-context-status">${deps.escapeHtml(chat.status)}</p>`
+          : ''
+      }
+    </section>
   `;
 }
 
@@ -496,11 +569,28 @@ export async function requestChatCompletion(params: {
   settings: ChatSettings;
   document: VisualDocument;
   messages: ChatMessage[];
+  question?: string;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
   signal?: AbortSignal;
 }): Promise<string> {
-  const context = buildChatDocumentContext(params.document);
+  const context = await buildQaChatContext({
+    document: params.document,
+    messages: params.messages,
+    question: params.question ?? params.messages.filter((message) => message.role === 'user').at(-1)?.content ?? '',
+    settings: params.settings,
+    chatContext: params.chatContext,
+    chatContextProvider: params.chatContextProvider,
+    chatSearchCache: params.chatSearchCache,
+    embeddingProvider: params.embeddingProvider,
+    onContextPreparation: params.onContextPreparation,
+    signal: params.signal,
+  });
   if (context.trim().length === 0) {
     throw new Error('The document body is empty after removing front matter and comments.');
   }
@@ -514,8 +604,92 @@ export async function requestChatCompletion(params: {
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
     onTokenUsage: params.onTokenUsage,
+    maxContextChars: params.chatContext?.maxContextChars,
     signal: params.signal,
   });
+}
+
+async function buildQaChatContext(params: {
+  document: VisualDocument;
+  messages: ChatMessage[];
+  question: string;
+  settings: ChatSettings;
+  chatContext?: HvyChatContextOptions | null;
+  chatContextProvider?: HvyChatContextProvider | null;
+  chatSearchCache?: HvyChatSearchCache | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
+  onContextPreparation?: HvyChatContextPreparationCallback;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const maxContextChars = params.chatContext?.maxContextChars ?? params.settings.maxContextChars ?? MAX_PROXY_COMPLETION_CONTEXT_CHARS;
+  let result: HvyChatContextResult | null = null;
+  let contextStartedCached = false;
+  let contextPreparationReported = false;
+  if (params.chatContextProvider) {
+    contextPreparationReported = true;
+    await params.onContextPreparation?.({ phase: 'preparing-context', cached: false });
+    result = await params.chatContextProvider.buildContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      ...(params.signal ? { signal: params.signal } : {}),
+    });
+  } else if (params.chatContext?.mode === 'keyword-retrieval') {
+    contextStartedCached = isKeywordChatContextPrepared(params.document);
+    contextPreparationReported = true;
+    await params.onContextPreparation?.({ phase: 'preparing-context', cached: contextStartedCached });
+    result = await buildKeywordChatContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      ...(params.signal ? { signal: params.signal } : {}),
+    }, params.chatContext, params.chatSearchCache ?? null);
+  } else if (params.chatContext?.mode === 'embedding-retrieval') {
+    contextStartedCached = isEmbeddingChatContextPrepared(params.document, params.chatContext);
+    let embeddedMissingChunks = false;
+    result = await buildEmbeddingChatContext({
+      document: params.document,
+      question: params.question,
+      messages: params.messages,
+      maxContextChars,
+      mode: 'qa',
+      onProgress: (progress) => {
+        embeddedMissingChunks = embeddedMissingChunks || progress.missingChunks > 0;
+        contextPreparationReported = true;
+        return params.onContextPreparation?.({
+          phase: 'preparing-context',
+          cached: false,
+          progress,
+        });
+      },
+      ...(params.signal ? { signal: params.signal } : {}),
+    }, params.chatContext, params.embeddingProvider ?? null);
+    if (embeddedMissingChunks) {
+      await params.chatContext.onEmbeddingIndexPrepared?.();
+    }
+  }
+  if (result && contextPreparationReported) {
+    await params.onContextPreparation?.({ phase: 'context-ready', cached: contextStartedCached });
+  }
+  if (!result) {
+    return buildChatDocumentContext(params.document);
+  }
+  return trimChatContextToCap(result.context, maxContextChars);
+}
+
+function trimChatContextToCap(context: string, maxContextChars: number): string {
+  const trimmed = context.trim();
+  if (trimmed.length <= maxContextChars) {
+    return trimmed;
+  }
+  if (maxContextChars <= 3) {
+    return trimmed.slice(0, Math.max(0, maxContextChars));
+  }
+  return `${trimmed.slice(0, maxContextChars - 3).trimEnd()}...`;
 }
 
 export async function requestProxyCompletion(params: ProxyCompletionParams): Promise<string> {
@@ -532,13 +706,13 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   });
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
-  console.debug(`[hvy:${debugLabel}] client request`, {
+  logChatProxyDebug(debugLabel, 'client request', () => ({
     provider: requestPayload.provider,
     model: requestPayload.model,
     messages: requestPayload.messages,
     contextLength: requestPayload.context.length,
     hostManaged: !!hostClient,
-  });
+  }));
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
@@ -571,11 +745,11 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   });
 
   const payload = await readJsonResponse(response);
-  console.debug(`[hvy:${debugLabel}] client response`, {
+  logChatProxyDebug(debugLabel, 'client response', () => ({
     ok: response.ok,
     status: response.status,
     payload,
-  });
+  }));
   if (!response.ok) {
     throw new Error(extractProxyError(payload, 'Chat request failed.'));
   }
@@ -595,14 +769,16 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
   if (usage) {
     params.onTokenUsage?.(usage);
   }
-  console.debug(`[hvy:${debugLabel}] client extracted output`, output);
+  logChatProxyDebug(debugLabel, 'client extracted output', () => output);
   return output;
 }
 
 export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise<ProxyToolTurn> {
   const debugLabel = params.debugLabel?.trim() || 'chat-tools';
-  assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
-  const requestPayload = buildProxyChatRequest({
+  measurePhase('chat.proxyTool.contextLimit', { debugLabel }, () => {
+    assertProxyContextWithinLimit(params.context, debugLabel, params.maxContextChars ?? params.settings.maxContextChars);
+  });
+  const requestPayload = measurePhase('chat.proxyTool.buildPayload', { debugLabel }, () => buildProxyChatRequest({
     provider: params.settings.provider,
     model: params.settings.model,
     messages: params.messages,
@@ -612,16 +788,16 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     traceRunId: params.traceRunId,
     tools: params.tools,
     toolState: params.toolState,
-  });
+  }));
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
-  console.debug(`[hvy:${debugLabel}] client native tool request`, {
+  logChatProxyDebug(debugLabel, 'client native tool request', () => ({
     provider: requestPayload.provider,
     model: requestPayload.model,
     toolCount: params.tools.length,
     hasToolState: !!params.toolState,
     hostManaged: !!hostClient,
-  });
+  }));
   await params.beforeRequest?.(debugLabel);
 
   if (hostClient) {
@@ -648,21 +824,22 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     };
   }
 
-  const response = await fetch('/api/chat', {
+  const requestBody = measurePhase('chat.proxyTool.stringify', { debugLabel }, () => JSON.stringify(requestPayload));
+  const response = await measureAsyncPhase('chat.proxyTool.fetch', { debugLabel, requestChars: requestBody.length }, () => fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(requestPayload),
+    body: requestBody,
     signal: params.signal,
-  });
+  }));
 
-  const payload = await readJsonResponse(response);
-  console.debug(`[hvy:${debugLabel}] client native tool response`, {
+  const payload = await measureAsyncPhase('chat.proxyTool.readJson', { debugLabel }, () => readJsonResponse(response));
+  logChatProxyDebug(debugLabel, 'client native tool response', () => ({
     ok: response.ok,
     status: response.status,
     payload,
-  });
+  }));
   if (!response.ok) {
     throw new Error(extractProxyError(payload, 'Chat tool request failed.'));
   }
@@ -671,23 +848,33 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   if (!typed?.toolState || !Array.isArray(typed.toolCalls) || !Array.isArray(typed.nativeMessages)) {
     throw new Error('Proxy returned an invalid native tool turn.');
   }
-  const output = typeof typed.output === 'string' ? typed.output.trim() : '';
-  const reasoningSummary = typeof typed.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
-  if (reasoningSummary) {
-    params.onReasoningSummary?.(reasoningSummary);
+  const responsePayload = measurePhase('chat.proxyTool.normalize', { debugLabel }, () => {
+    const output = typeof typed.output === 'string' ? typed.output.trim() : '';
+    const reasoningSummary = typeof typed.reasoningSummary === 'string' ? typed.reasoningSummary.trim() : '';
+    const usage = normalizeProxyTokenUsage(typed.usage);
+    return { output, reasoningSummary, usage };
+  });
+  if (responsePayload.reasoningSummary) {
+    params.onReasoningSummary?.(responsePayload.reasoningSummary);
   }
-  const usage = normalizeProxyTokenUsage(typed.usage);
-  if (usage) {
-    params.onTokenUsage?.(usage);
+  if (responsePayload.usage) {
+    params.onTokenUsage?.(responsePayload.usage);
   }
   return {
-    output,
-    reasoningSummary,
-    ...(usage ? { usage } : {}),
+    output: responsePayload.output,
+    reasoningSummary: responsePayload.reasoningSummary,
+    ...(responsePayload.usage ? { usage: responsePayload.usage } : {}),
     toolCalls: typed.toolCalls,
     nativeMessages: typed.nativeMessages,
     toolState: typed.toolState,
   };
+}
+
+function logChatProxyDebug(debugLabel: string, event: string, details: () => unknown): void {
+  if (!ENABLE_CHAT_PROXY_DEBUG_LOGS) {
+    return;
+  }
+  console.debug(`[hvy:${debugLabel}] ${event}`, details());
 }
 
 function assertProxyContextWithinLimit(context: string, debugLabel: string, maxContextChars = MAX_PROXY_COMPLETION_CONTEXT_CHARS): void {
@@ -935,23 +1122,50 @@ function formatChatTokenUsage(usage: ChatTokenUsage): string {
 }
 
 function renderChatMessageHtml(message: ChatMessage, deps: RenderChatPanelDeps, canCopyToHvy: boolean): string {
+  const tokenUsage = getChatMessageDisplayTokenUsage(message);
+  const canCopyMessage = canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress;
   const classes = [
     'chat-bubble',
     `chat-bubble-${message.role}`,
     message.error ? 'chat-bubble-error' : '',
     message.progress ? 'chat-bubble-progress' : '',
     message.work ? 'chat-bubble-work' : '',
+    tokenUsage ? 'has-token-usage' : '',
   ].filter(Boolean).join(' ');
   return `
     <article class="${classes}" data-chat-role="${deps.escapeAttr(message.role)}" data-chat-message-id="${deps.escapeAttr(message.id)}">
       <div class="chat-bubble-role">${deps.escapeHtml(formatChatBubbleRole(message))}</div>
+      ${tokenUsage || canCopyMessage ? renderChatBubbleMetaHtml(message, deps, tokenUsage, canCopyMessage) : ''}
       ${message.work ? renderChatWorkMessageHtml(message, deps) : renderStandardChatMessageHtml(message, deps)}
-      ${
-        canCopyToHvy && message.role === 'assistant' && !message.error && !message.progress
-          ? `<div class="chat-bubble-actions"><button type="button" class="ghost" data-action="copy-chat-response-to-hvy" data-message-id="${deps.escapeAttr(message.id)}">Copy to HVY</button></div>`
-          : ''
-      }
     </article>
+  `;
+}
+
+function getChatMessageDisplayTokenUsage(message: ChatMessage): ChatTokenUsage | null {
+  return message.tokenUsage ?? message.work?.tokenUsage ?? null;
+}
+
+function renderChatBubbleMetaHtml(message: ChatMessage, deps: RenderChatPanelDeps, tokenUsage: ChatTokenUsage | null, canCopyMessage: boolean): string {
+  return `
+    <div class="chat-bubble-meta">
+      ${tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(tokenUsage))}</div>` : ''}
+      ${canCopyMessage ? renderChatCopyMenuHtml(message, deps) : ''}
+    </div>
+  `;
+}
+
+function renderChatCopyMenuHtml(message: ChatMessage, deps: RenderChatPanelDeps): string {
+  const messageId = deps.escapeAttr(message.id);
+  return `
+    <details class="chat-copy-menu">
+      <summary class="chat-copy-menu-toggle" aria-label="Copy options" title="Copy options" data-tooltip="Copy options">
+        ${copyIcon()}
+      </summary>
+      <div class="chat-copy-menu-popover" role="menu" aria-label="Copy response options">
+        <button type="button" data-action="copy-chat-response-text" data-message-id="${messageId}" role="menuitem">Copy response</button>
+        <button type="button" data-action="copy-chat-response-to-hvy" data-message-id="${messageId}" role="menuitem">Copy as new section</button>
+      </div>
+    </details>
   `;
 }
 
@@ -977,7 +1191,6 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
         ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
         : ''
     }
-    ${message.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage))}</div>` : ''}
   `;
 }
 
@@ -995,7 +1208,6 @@ function renderChatWorkMessageHtml(message: ChatMessage, deps: RenderChatPanelDe
       ${isRunning ? `<span class="chat-work-pulse" aria-hidden="true"></span><span>${summary}</span>` : summary}
     </div>
     ${renderChatWorkDetails(work, deps, message.id)}
-    ${message.tokenUsage || work.tokenUsage ? `<div class="chat-token-usage">${deps.escapeHtml(formatChatTokenUsage(message.tokenUsage ?? work.tokenUsage!))}</div>` : ''}
   `;
 }
 
@@ -1027,7 +1239,7 @@ function renderAssistantMessageHtml(markdown: string): string {
   if (hvyHtml !== null) {
     return hvyHtml;
   }
-  return markdownToEditorHtml(normalizeMarkdownLists(markdown));
+  return renderChatMarkdown(markdown);
 }
 
 function renderAssistantHvyHtml(source: string): string | null {
@@ -1076,20 +1288,39 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
     const stubHtml = block.schema.expandableStubBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const contentHtml = block.schema.expandableContentBlocks.children.map((child) => renderChatHvyBlock(child, documentMeta)).join('');
     const expanded = block.schema.expandableExpanded;
+    const alwaysShowStub = block.schema.expandableAlwaysShowStub;
+    const hasStubContent = stubHtml.trim().length > 0;
     const stubPaneStyle = block.schema.expandableStubCss ? ` style="${escapeChatAttr(block.schema.expandableStubCss)}"` : '';
     const contentPaneStyle = block.schema.expandableContentCss ? ` style="${escapeChatAttr(block.schema.expandableContentCss)}"` : '';
     const toggleAttrs = `data-chat-action="toggle-expandable" aria-expanded="${expanded ? 'true' : 'false'}"`;
-    return `<div class="expandable-reader is-interactive chat-expandable-reader${expanded ? ' is-expanded' : ' is-collapsed'}" data-expandable-id="${escapeChatAttr(block.id)}">
-      <div class="expandable-reader-body">
-        <div class="expandable-reader-pane expandable-reader-pane-stub">
-          <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>
-            <div class="expand-stub">${stubHtml}</div>
-          </div>
-        </div>
-        <div class="expandable-reader-pane expandable-reader-pane-expanded"${expanded ? '' : ' style="display: none;"'}>
-          <div class="expand-content"${contentPaneStyle} ${toggleAttrs}>${contentHtml}</div>
-        </div>
+    const stubVisible = expanded ? alwaysShowStub && hasStubContent : hasStubContent;
+    const contentVisible = expanded;
+    const previewVisible = !expanded && !hasStubContent;
+    const stubToggle = `<div class="expandable-reader-pane expandable-reader-pane-stub" data-chat-expandable-pane="stub"${stubVisible ? '' : ' hidden'}>
+      <div class="expand-stub-toggle"${stubPaneStyle} ${toggleAttrs}>
+        <span class="expandable-reader-cue" aria-hidden="true"></span>
+        <div class="expand-stub">${stubHtml}</div>
       </div>
+    </div>`;
+    const contentPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded" data-chat-expandable-pane="content"${contentVisible ? '' : ' hidden'}>
+      <div class="expand-content"${contentPaneStyle} ${toggleAttrs}>${contentHtml}</div>
+    </div>`;
+    const previewPane = `<div class="expandable-reader-pane expandable-reader-pane-expanded expandable-reader-pane-content-preview" data-chat-expandable-pane="preview"${previewVisible ? '' : ' hidden'}>
+      <div class="expand-content"${contentPaneStyle} data-chat-action="toggle-expandable" aria-expanded="false"><span class="expandable-reader-cue" aria-hidden="true"></span>${contentHtml}</div>
+    </div>`;
+    const className = [
+      'expandable-reader',
+      'is-interactive',
+      'chat-expandable-reader',
+      expanded ? 'is-expanded' : 'is-collapsed',
+      hasStubContent ? '' : 'has-empty-stub',
+    ].filter(Boolean).join(' ');
+    return `<div class="${escapeChatAttr(className)}" data-expandable-id="${escapeChatAttr(block.id)}" data-chat-expandable-has-stub="${hasStubContent ? 'true' : 'false'}" data-chat-expandable-always-show-stub="${alwaysShowStub ? 'true' : 'false'}">
+      <div class="expandable-reader-body">
+        ${stubToggle}
+        ${contentPane}
+        ${previewPane}
+        </div>
     </div>`;
   }
 
@@ -1111,11 +1342,15 @@ function renderChatHvyBlock(block: VisualBlock, documentMeta: VisualDocument['me
     return renderGridReader(getChatReaderSection(), block, helpers);
   }
 
-  return `<div class="chat-hvy-text">${markdownToEditorHtml(normalizeMarkdownLists(block.text))}</div>`;
+  return `<div class="chat-hvy-text">${renderChatMarkdown(block.text)}</div>`;
 }
 
 function looksLikeHvyResponse(source: string): boolean {
   return /<!--hvy:(?:[a-z]|subsection|doc|css)/i.test(source);
+}
+
+function renderChatMarkdown(markdown: string): string {
+  return markdownToReaderHtml(normalizeMarkdownLists(markdown));
 }
 
 function getChatReaderSection(): VisualSection {
@@ -1144,7 +1379,7 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
   return {
     escapeAttr: escapeChatAttr,
     escapeHtml: escapeChatHtml,
-    markdownToEditorHtml,
+    markdownToEditorHtml: renderChatMarkdown,
     renderRichToolbar: () => '',
     renderEditorBlock: () => '',
     renderPassiveEditorBlock: () => '',
@@ -1154,8 +1389,8 @@ function getChatReaderHelpers(documentMeta: VisualDocument['meta']): ComponentRe
     orderReaderBlocks: (blocks: VisualBlock[]) => blocks,
     orderReaderListBlocks: (blocks: VisualBlock[]) => blocks,
     isReaderViewPrioritizedBlock: () => false,
-    renderTextFragment: (content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
-    renderComponentFragment: (_componentName: string, content: string) => markdownToEditorHtml(normalizeMarkdownLists(content)),
+    renderTextFragment: renderChatMarkdown,
+    renderComponentFragment: (_componentName: string, content: string) => renderChatMarkdown(content),
     renderComponentOptions: () => '',
     renderAddComponentPicker: () => '',
     renderComponentPlacementTarget: () => '',

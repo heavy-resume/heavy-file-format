@@ -110,3 +110,10 @@ Plugins shouldn't define their own color scheme.
 Under no circumstance does, "This feature has a bug" mean "Remove the bugged feature instead of fixing it"
 
 Don't put things back as if some magic fairies changed them.
+
+When addressing issues look for existing scripts / instrumentation / etc that would reproduce them first so you can validate you've fixed it.
+
+Before adding something see if it already exists first.
+
+Don't make changes that would possibly undo a performance refactor. We are no longer at the point
+where we want lazily thought out changes quickly and need quality changes now.

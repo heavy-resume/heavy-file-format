@@ -1,4 +1,5 @@
-import { wrapHvyFragmentAsDocument } from '../serialization';
+import { buildDocumentRichTextCopyPayload, type RichTextCopyPayload } from '../rich-text-copy';
+import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import type { JsonObject } from '../hvy/types';
 
 export const CHAT_RESPONSE_DOCUMENT_META: JsonObject = {
@@ -15,4 +16,13 @@ export function wrapChatResponseAsDocument(source: string): string {
     title: 'Response',
     meta: CHAT_RESPONSE_DOCUMENT_META,
   });
+}
+
+export function buildChatResponseRichTextCopyPayload(source: string): RichTextCopyPayload | null {
+  const parsed = deserializeDocumentWithDiagnostics(wrapChatResponseAsDocument(source), '.hvy');
+  if (parsed.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+    return null;
+  }
+  const payload = buildDocumentRichTextCopyPayload(parsed.document);
+  return payload.plainText || payload.html ? payload : null;
 }

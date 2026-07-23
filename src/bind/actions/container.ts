@@ -8,6 +8,7 @@ import { openReusableTemplateModalIfNeeded } from './reusable-template';
 import { assignAutoBlockId } from '../../auto-block-id';
 import { isPdfAllowedComponentInstance, isPdfDocument } from '../../pdf-document-capabilities';
 import type { ActionHandler } from './types';
+import { syncSortValuesForListItem } from '../../sort-values';
 
 const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId) {
@@ -31,6 +32,7 @@ const addComponentListItem: ActionHandler = ({ actionButton, sectionKey, blockId
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
   }
   assignAutoBlockId(newBlock, { document: state.document, inheritedTags: block.schema.tags });
+  syncSortValuesForListItem(state.document.meta, newBlock);
   block.schema.componentListBlocks.push(newBlock);
   syncReusableTemplateForBlock(sectionKey, block.id);
   const aiHost = state.currentView === 'ai' ? state.aiEditorHostBlock : null;

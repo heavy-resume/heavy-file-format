@@ -4,6 +4,7 @@ import { handleBlockFieldInput } from '../src/block-ops';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { renderGridEditor, renderGridReader } from '../src/editor/components/grid/grid';
+import { renderTableEditor } from '../src/editor/components/table/table';
 import { renderTextEditor } from '../src/editor/components/text/text';
 import { initCallbacks, initState, state } from '../src/state';
 import type { VisualDocument } from '../src/types';
@@ -135,6 +136,52 @@ test('text editor omits inline style for default-left alignment', () => {
   const expectedResult = renderTextEditor('section-summary', block, createHelpers());
 
   expect(expectedResult).not.toContain('text-align: left');
+});
+
+test('expected result: text enum sort selector renders a trailing caret anchor', () => {
+  state.document.meta.component_defs = [
+    {
+      name: 'text',
+      sortValueDefs: {
+        Strength: {
+          type: 'enum',
+          options: [{ label: '5', value: 5 }, { label: '4', value: 4 }],
+        },
+      },
+    },
+  ];
+  const block = createEmptyBlock('text');
+  block.text = 'Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->';
+
+  const expectedResult = renderTextEditor('section-summary', block, createHelpers());
+
+  expect(expectedResult).toContain('data-field="sort-value-enum"');
+  expect(expectedResult).toContain('</select>&#8203;');
+});
+
+test('expected result: table enum sort selector renders a trailing caret anchor', () => {
+  state.document.meta.component_defs = [
+    {
+      name: 'table',
+      sortValueDefs: {
+        Strength: {
+          type: 'enum',
+          options: [{ label: '5', value: 5 }, { label: '4', value: 4 }],
+        },
+      },
+    },
+  ];
+  const block = createEmptyBlock('table');
+  block.schema.tableRows = [
+    {
+      cells: ['Strength: <!--hvy:sort-value {"key":"Strength"}-->5<!--/hvy:sort-value-->'],
+    },
+  ];
+
+  const expectedResult = renderTableEditor('section-summary', block, createHelpers());
+
+  expect(expectedResult).toContain('data-field="sort-value-enum"');
+  expect(expectedResult).toContain('</select>&#8203;');
 });
 
 test('grid blank item component switch creates a complete schema for the selected component', () => {

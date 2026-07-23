@@ -15,6 +15,7 @@ import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { measurePhase } from '../perf-trace';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -44,6 +45,21 @@ export type HvyVirtualBlockInsertionTarget =
   | { kind: 'grid'; insert: (block: VisualBlock, index?: number) => void };
 
 export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
+  return measurePhase('cli.fs.build', { sections: document.sections.length }, () => buildHvyVirtualFileSystemUnmeasured(document, naming));
+}
+
+export function buildHvyVirtualBlockSubtreeFileSystem(
+  meta: JsonObject,
+  block: VisualBlock,
+  blockPath: string,
+  naming?: HvyVirtualPathNamingState
+): HvyVirtualFileSystem {
+  const entries = new Map<string, HvyVirtualEntry>();
+  addBlock(entries, meta, block, blockPath, naming);
+  return { entries };
+}
+
+function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: HvyVirtualPathNamingState): HvyVirtualFileSystem {
   const entries = new Map<string, HvyVirtualEntry>();
   const addDir = (path: string) => entries.set(path, { kind: 'dir', path });
   const addFile = (path: string, read: () => string, write?: (content: string) => void) =>
@@ -71,9 +87,16 @@ export function buildHvyVirtualFileSystem(document: VisualDocument, naming?: Hvy
     }
   );
 
-  addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body', naming);
-  addDocsDirectory(entries, document.meta);
-  addIdAliasEntries(entries, collectCanonicalIdAliases(document));
+  measurePhase('cli.fs.build.sections', {}, () => {
+    addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body', naming);
+  });
+  measurePhase('cli.fs.build.docs', {}, () => {
+    addDocsDirectory(entries, document.meta);
+  });
+  const aliases = measurePhase('cli.fs.build.aliasCollect', {}, () => collectCanonicalIdAliases(document));
+  measurePhase('cli.fs.build.aliasEntries', { aliases: aliases.length, entriesBefore: entries.size }, () => {
+    addIdAliasEntries(entries, aliases);
+  });
 
   document.attachments.forEach((attachment, index) => {
     const filename = uniqueName(`${sanitizePathSegment(attachment.id) || `attachment-${index}`}.json`, entries, '/attachments');
@@ -205,6 +228,44 @@ export function findVirtualDirectoryForBlock(document: VisualDocument, targetBlo
   return null;
 }
 
+export function buildVirtualDirectorySectionLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
+  const entries = new Map<string, HvyVirtualEntry>();
+  const sections = new Map<string, VisualSection>();
+  entries.set('/', { kind: 'dir', path: '/' });
+  entries.set('/body', { kind: 'dir', path: '/body' });
+  document.sections
+    .filter((section) => !section.isGhost)
+    .forEach((section, index) => addSectionLookup(entries, sections, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  return sections;
+}
+
+export function buildVirtualDirectorySectionLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualSection> {
+  const sections = buildVirtualDirectorySectionLookup(document, naming);
+  const idEntries = new Map<string, HvyVirtualEntry>();
+  idEntries.set('/id', { kind: 'dir', path: '/id' });
+  const canonicalSections = [...sections.entries()];
+  const aliasRootsBySourcePath = new Map<string, string[]>();
+  for (const alias of collectCanonicalIdAliases(document)) {
+    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
+    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
+    roots.push(aliasRoot);
+    aliasRootsBySourcePath.set(alias.sourcePath, roots);
+  }
+  for (const [sourcePath, section] of canonicalSections) {
+    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
+      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
+      if (!aliasRoots) {
+        continue;
+      }
+      for (const aliasRoot of aliasRoots) {
+        sections.set(`${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`, section);
+      }
+    }
+  }
+  return sections;
+}
+
 export function buildVirtualDirectoryBlockLookup(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
   const entries = new Map<string, HvyVirtualEntry>();
   const blocks = new Map<string, VisualBlock>();
@@ -213,6 +274,33 @@ export function buildVirtualDirectoryBlockLookup(document: VisualDocument, namin
   document.sections
     .filter((section) => !section.isGhost)
     .forEach((section, index) => addSectionBlockLookup(document.meta, entries, blocks, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+  return blocks;
+}
+
+export function buildVirtualDirectoryBlockLookupWithAliases(document: VisualDocument, naming?: HvyVirtualPathNamingState): Map<string, VisualBlock> {
+  const blocks = buildVirtualDirectoryBlockLookup(document, naming);
+  const idEntries = new Map<string, HvyVirtualEntry>();
+  idEntries.set('/id', { kind: 'dir', path: '/id' });
+  const canonicalBlocks = [...blocks.entries()];
+  const aliasRootsBySourcePath = new Map<string, string[]>();
+  for (const alias of collectCanonicalIdAliases(document)) {
+    const aliasRoot = `/id/${uniqueName(alias.id, idEntries, '/id')}`;
+    idEntries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
+    roots.push(aliasRoot);
+    aliasRootsBySourcePath.set(alias.sourcePath, roots);
+  }
+  for (const [sourcePath, block] of canonicalBlocks) {
+    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
+      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
+      if (!aliasRoots) {
+        continue;
+      }
+      for (const aliasRoot of aliasRoots) {
+        blocks.set(`${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`, block);
+      }
+    }
+  }
   return blocks;
 }
 
@@ -231,16 +319,18 @@ function addSectionLookup(
 }
 
 export function findBlockInsertionTargetForVirtualDirectory(document: VisualDocument, path: string, naming?: HvyVirtualPathNamingState): HvyVirtualBlockInsertionTarget | null {
-  const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
-  const entries = new Map<string, HvyVirtualEntry>();
-  const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
-  entries.set('/', { kind: 'dir', path: '/' });
-  entries.set('/body', { kind: 'dir', path: '/body' });
-  targets.set('/body', { kind: 'blocks', insert: () => {} });
-  document.sections
-    .filter((section) => !section.isGhost)
-    .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
-  return targets.get(normalized) ?? null;
+  return measurePhase('cli.fs.findBlockInsertionTargetForVirtualDirectory', { path }, () => {
+    const normalized = resolveIdAliasPath(document, normalizeVirtualPath('/', path));
+    const entries = new Map<string, HvyVirtualEntry>();
+    const targets = new Map<string, HvyVirtualBlockInsertionTarget>();
+    entries.set('/', { kind: 'dir', path: '/' });
+    entries.set('/body', { kind: 'dir', path: '/body' });
+    targets.set('/body', { kind: 'blocks', insert: () => {} });
+    document.sections
+      .filter((section) => !section.isGhost)
+      .forEach((section, index) => addSectionInsertionTargets(document.meta, entries, targets, section, `/body/${uniqueName(sectionDirectoryName(section, index), entries, '/body')}`, naming));
+    return targets.get(normalized) ?? null;
+  });
 }
 
 export function normalizeVirtualPath(cwd: string, input = '.'): string {
@@ -469,16 +559,40 @@ function collectCanonicalIdAliases(document: VisualDocument): VirtualIdAlias[] {
 function addIdAliasEntries(entries: Map<string, HvyVirtualEntry>, aliases: VirtualIdAlias[]): void {
   entries.set('/id', { kind: 'dir', path: '/id' });
   const canonicalEntries = [...entries.entries()];
+  const aliasRootsBySourcePath = new Map<string, string[]>();
   for (const alias of aliases) {
     const aliasRoot = `/id/${uniqueName(alias.id, entries, '/id')}`;
-    for (const [sourcePath, entry] of canonicalEntries) {
-      if (sourcePath !== alias.sourcePath && !sourcePath.startsWith(`${alias.sourcePath}/`)) {
+    entries.set(aliasRoot, { kind: 'dir', path: aliasRoot });
+    const roots = aliasRootsBySourcePath.get(alias.sourcePath) ?? [];
+    roots.push(aliasRoot);
+    aliasRootsBySourcePath.set(alias.sourcePath, roots);
+  }
+  for (const [sourcePath, entry] of canonicalEntries) {
+    for (const aliasSourcePath of enumerateVirtualPathAncestors(sourcePath)) {
+      const aliasRoots = aliasRootsBySourcePath.get(aliasSourcePath);
+      if (!aliasRoots) {
         continue;
       }
-      const aliasPath = `${aliasRoot}${sourcePath.slice(alias.sourcePath.length)}`;
-      entries.set(aliasPath, { ...entry, path: aliasPath });
+      for (const aliasRoot of aliasRoots) {
+        const aliasPath = `${aliasRoot}${sourcePath.slice(aliasSourcePath.length)}`;
+        entries.set(aliasPath, { ...entry, path: aliasPath });
+      }
     }
   }
+}
+
+function enumerateVirtualPathAncestors(path: string): string[] {
+  const ancestors: string[] = [];
+  let current = path;
+  while (current && current !== '/') {
+    ancestors.push(current);
+    const next = current.replace(/\/[^/]+$/, '') || '/';
+    if (next === current) {
+      break;
+    }
+    current = next;
+  }
+  return ancestors;
 }
 
 function resolveIdAliasPath(document: VisualDocument, normalizedPath: string): string {
@@ -809,6 +923,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     align: schema.align,
     slot: schema.slot,
     sortKeys: schema.sortKeys,
+    derivedSortKeyNames: schema.derivedSortKeyNames,
     groupKeys: schema.groupKeys,
     tags: schema.tags,
     description: schema.description,
@@ -827,6 +942,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.componentListDefaultSortKey = schema.componentListDefaultSortKey;
     value.componentListDefaultSortDirection = schema.componentListDefaultSortDirection;
     value.componentListDefaultGroupKey = schema.componentListDefaultGroupKey;
+    value.componentListGroupsExpanded = schema.componentListGroupsExpanded;
     value.componentListGroupCollapsedPreviewRem = schema.componentListGroupCollapsedPreviewRem;
   }
   if (baseComponent === 'grid') {
@@ -858,6 +974,7 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
   if (baseComponent === 'plugin') {
     value.plugin = schema.plugin;
     value.pluginConfig = schema.pluginConfig;
+    value.pluginSortValues = schema.pluginSortValues;
   }
   return value;
 }
@@ -941,6 +1058,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (value.sortKeys && typeof value.sortKeys === 'object' && !Array.isArray(value.sortKeys)) {
     schema.sortKeys = parseSortKeys(value.sortKeys);
   }
+  if (Array.isArray(value.derivedSortKeyNames)) {
+    schema.derivedSortKeyNames = parseStringList(value.derivedSortKeyNames);
+  }
   if (value.groupKeys && typeof value.groupKeys === 'object' && !Array.isArray(value.groupKeys)) {
     schema.groupKeys = parseGroupKeys(value.groupKeys);
   }
@@ -964,6 +1084,7 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
     schema.componentListDefaultSortDirection = value.componentListDefaultSortDirection;
   }
   if (typeof value.componentListDefaultGroupKey === 'string') schema.componentListDefaultGroupKey = value.componentListDefaultGroupKey;
+  if (typeof value.componentListGroupsExpanded === 'boolean') schema.componentListGroupsExpanded = value.componentListGroupsExpanded;
   if (typeof value.componentListGroupCollapsedPreviewRem === 'number' && Number.isFinite(value.componentListGroupCollapsedPreviewRem) && value.componentListGroupCollapsedPreviewRem > 0) {
     schema.componentListGroupCollapsedPreviewRem = value.componentListGroupCollapsedPreviewRem;
   }
@@ -1006,6 +1127,9 @@ function applyBlockSchemaJson(schema: BlockSchema, component: string, value: Jso
   if (typeof value.plugin === 'string') schema.plugin = value.plugin;
   if (value.pluginConfig && typeof value.pluginConfig === 'object' && !Array.isArray(value.pluginConfig)) {
     schema.pluginConfig = value.pluginConfig as JsonObject;
+  }
+  if (value.pluginSortValues && typeof value.pluginSortValues === 'object' && !Array.isArray(value.pluginSortValues)) {
+    schema.pluginSortValues = parseSortKeys(value.pluginSortValues);
   }
   if (typeof value.expandableStubDescription === 'string') schema.expandableStubDescription = value.expandableStubDescription;
   if (typeof value.expandableContentDescription === 'string') schema.expandableContentDescription = value.expandableContentDescription;

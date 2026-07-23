@@ -3,6 +3,7 @@ import type { AppState } from './types';
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
   runVisibilityScripts?: boolean;
+  runDocumentHooks?: boolean;
   surface?: ReaderPanelRefreshSurface;
 }
 
@@ -41,7 +42,10 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 // Late-bound callbacks to avoid circular imports
 type RuntimeCallbacks = {
   renderApp: () => void;
+  refreshChatSurface: () => boolean;
+  refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
+  refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
@@ -59,7 +63,10 @@ export interface StateRuntime {
 function createUninitializedCallbacks(): RuntimeCallbacks {
   return {
     renderApp: () => { throw new Error('renderApp not initialized'); },
+    refreshChatSurface: () => false,
+    refreshSearchSurface: () => false,
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
+    refreshReaderSection: () => false,
     refreshReaderBlock: () => false,
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
     observeLinks: () => {},
@@ -69,7 +76,10 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 }
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
+let _refreshChatSurface: () => boolean = () => false;
+let _refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
+let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
@@ -77,7 +87,10 @@ let _observeLinks: (root: ParentNode) => void = () => {};
 let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
+export function getRefreshChatSurface(): () => boolean { return _refreshChatSurface; }
+export function getRefreshSearchSurface(): (root: ParentNode, options?: { focusInput?: boolean }) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
+export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
@@ -99,7 +112,10 @@ export function getReaderRenderer(): any {
 
 export function initCallbacks(callbacks: {
   renderApp: () => void;
+  refreshChatSurface?: () => boolean;
+  refreshSearchSurface?: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
+  refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;
@@ -116,6 +132,9 @@ export function initCallbacks(callbacks: {
   }
   activeRuntime.callbacks = {
     ...callbacks,
+    refreshChatSurface: callbacks.refreshChatSurface ?? (() => false),
+    refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
+    refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
   };
@@ -156,7 +175,10 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   activeRuntime = runtime;
   state = runtime.state;
   _renderApp = runtime.callbacks.renderApp;
+  _refreshChatSurface = runtime.callbacks.refreshChatSurface;
+  _refreshSearchSurface = runtime.callbacks.refreshSearchSurface;
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
+  _refreshReaderSection = runtime.callbacks.refreshReaderSection;
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
   _observeLinks = runtime.callbacks.observeLinks;

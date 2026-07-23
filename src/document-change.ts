@@ -1,5 +1,6 @@
 import { serializeDocumentBytes } from './serialization';
 import { getActiveStateRuntime, runWithStateRuntime, state, type StateRuntime } from './state';
+import type { VisualSection } from './editor/types';
 
 export type HvyDocumentChangeSource = 'editor' | 'ai' | 'script' | 'import';
 
@@ -7,12 +8,19 @@ export interface HvyDocumentChangeEvent {
   dirty: boolean;
   reason?: string;
   source?: HvyDocumentChangeSource;
+  changedSectionTitles: string[];
 }
 
 export type HvyDocumentChangeCallback = (event: HvyDocumentChangeEvent) => void;
 
+export interface HvyDocumentChangeApi {
+  markSaved(): void;
+  isDirty(): boolean;
+}
+
 interface DocumentChangeTracker {
   baseline: Uint8Array;
+  baselineSections: Map<string, SectionChangeSnapshot>;
   baselineRevision: number;
   currentRevision: number;
   lastNotifiedRevision: number;
@@ -24,13 +32,30 @@ interface DocumentChangeTracker {
   callback?: HvyDocumentChangeCallback;
 }
 
+interface SectionChangeSnapshot {
+  title: string;
+  fingerprint: string;
+}
+
 const trackersByRuntime = new WeakMap<StateRuntime, DocumentChangeTracker>();
+
+export function createDocumentChangeApi(
+  runtime: StateRuntime,
+  callback?: HvyDocumentChangeCallback
+): HvyDocumentChangeApi {
+  initDocumentChangeTracking(runtime, callback);
+  return {
+    markSaved: () => markDocumentSaved(runtime),
+    isDirty: () => isDocumentDirty(runtime),
+  };
+}
 
 export function initDocumentChangeTracking(runtime: StateRuntime, callback?: HvyDocumentChangeCallback): void {
   runWithStateRuntime(runtime, () => {
     const signature = getCurrentDocumentSignature();
     trackersByRuntime.set(runtime, {
       baseline: signature,
+      baselineSections: snapshotSections(state.document.sections),
       baselineRevision: 0,
       currentRevision: 0,
       lastNotifiedRevision: 0,
@@ -50,6 +75,7 @@ export function markDocumentSaved(runtime: StateRuntime): void {
   runWithStateRuntime(runtime, () => {
     const signature = getCurrentDocumentSignature();
     tracker.baseline = signature;
+    tracker.baselineSections = snapshotSections(state.document.sections);
     tracker.baselineRevision = tracker.currentRevision;
     tracker.lastNotifiedRevision = tracker.currentRevision;
     tracker.pendingAuthoritative = false;
@@ -57,7 +83,7 @@ export function markDocumentSaved(runtime: StateRuntime): void {
     const wasDirty = tracker.lastDirty;
     tracker.lastDirty = false;
     if (wasDirty) {
-      tracker.callback?.({ dirty: false, reason: 'mark-saved' });
+      tracker.callback?.({ dirty: false, reason: 'mark-saved', changedSectionTitles: [] });
     }
   });
 }
@@ -148,7 +174,52 @@ function flushDocumentChangeTracker(runtime: StateRuntime): void {
   }
   tracker.lastNotifiedRevision = tracker.currentRevision;
   tracker.lastDirty = dirty;
-  tracker.callback?.({ dirty, reason, source });
+  tracker.callback?.({
+    dirty,
+    reason,
+    source,
+    changedSectionTitles: dirty ? getChangedSectionTitles(tracker.baselineSections, state.document.sections) : [],
+  });
+}
+
+function snapshotSections(sections: VisualSection[]): Map<string, SectionChangeSnapshot> {
+  const snapshots = new Map<string, SectionChangeSnapshot>();
+  const visit = (nodes: VisualSection[], parentKey: string | null): void => {
+    nodes.forEach((section, index) => {
+      const { children: _children, ...sectionContent } = section;
+      snapshots.set(section.key, {
+        title: formatChangedSectionTitle(section.title),
+        fingerprint: JSON.stringify({ parentKey, index, ...sectionContent }),
+      });
+      visit(section.children, section.key);
+    });
+  };
+  visit(sections, null);
+  return snapshots;
+}
+
+function getChangedSectionTitles(
+  baseline: Map<string, SectionChangeSnapshot>,
+  sections: VisualSection[]
+): string[] {
+  const current = snapshotSections(sections);
+  const changedTitles: string[] = [];
+  current.forEach((section, key) => {
+    if (baseline.get(key)?.fingerprint !== section.fingerprint) {
+      changedTitles.push(section.title);
+    }
+  });
+  baseline.forEach((section, key) => {
+    if (!current.has(key)) {
+      changedTitles.push(section.title);
+    }
+  });
+  return [...new Set(changedTitles)];
+}
+
+function formatChangedSectionTitle(title: string): string {
+  const trimmed = title.trim();
+  return trimmed === 'Unnamed Section' ? '' : trimmed;
 }
 
 function getCurrentDocumentSignature(): Uint8Array {

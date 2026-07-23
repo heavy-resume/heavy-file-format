@@ -1,4 +1,4 @@
-import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, incrementInputEventCount, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, handleTagEditorInput, findSectionByKey, getReusableNameFromSectionKey, resolveBlockContext, handleBlockFieldInput, refreshRichToolbarState, recordHistory, syncReusableTemplateForBlock, sanitizeOptionalId, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { SCRIPTING_PLUGIN_ID } from '../../plugins/registry';
 import { SCRIPTING_PLUGIN_VERSION } from '../../plugins/scripting/version';
 import { SCRIPTING_LIBRARY_OPTIONS } from '../../plugins/scripting/wrapper';
@@ -9,6 +9,7 @@ import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
+import { clearSortValueValidation } from '../../sort-value-validation';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -36,13 +37,17 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
         return;
       }
-      void submitSearch();
+      void submitSearch(app);
     }, 120);
   });
 
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
+    const validationBlock = rawTarget.closest<HTMLElement>('.editor-block');
+    if (validationBlock && rawTarget.closest('[data-hvy-sort-value="true"]')) {
+      clearSortValueValidation(validationBlock);
+    }
     if (isSearchQueryControl(target)) {
       const hadFocus = document.activeElement === target;
       state.search.queryDraft = target.value;
@@ -314,6 +319,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'component-list-groups-expanded' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.componentListGroupsExpanded = target.checked;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'block-sort-keys' && target instanceof HTMLTextAreaElement) {
       const context = resolveBlockContext(target);
       if (!context) {
@@ -387,7 +403,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.containerTitle = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -417,7 +433,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (Number.isFinite(value) && value > 0) {
         context.block.schema.containerCollapsedPreviewRem = value;
         syncReusableTemplateForBlock(sectionKey, context.block.id);
-        getRefreshReaderPanels()();
+        refreshReaderPanelsOutsideActiveEditor(target);
       }
       return;
     }
@@ -429,7 +445,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.containerExpanded = target.checked;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -463,7 +479,7 @@ export function bindInputMisc(app: HTMLElement): void {
         version: target.value.trim() || SCRIPTING_PLUGIN_VERSION,
       };
       syncReusableTemplateForBlock(sectionKey, block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -585,12 +601,8 @@ export function bindInputMisc(app: HTMLElement): void {
         if (Number.isFinite(value) && value > 0) block.schema.buttonOutputCharLimit = value;
       }
       syncReusableTemplateForBlock(sectionKey, block.id);
-      getRefreshReaderPanels()();
-      if (field === 'block-button-position-target-id') {
-        getRenderApp()();
-      } else {
-        void runButtonVisibilityScripts(app);
-      }
+      refreshReaderPanelsOutsideActiveEditor(target);
+      void runButtonVisibilityScripts(app);
       return;
     }
 
@@ -601,7 +613,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableStubCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 
@@ -627,7 +639,7 @@ export function bindInputMisc(app: HTMLElement): void {
       }
       context.block.schema.expandableContentCss = target.value;
       syncReusableTemplateForBlock(sectionKey, context.block.id);
-      getRefreshReaderPanels()();
+      refreshReaderPanelsOutsideActiveEditor(target);
       return;
     }
 

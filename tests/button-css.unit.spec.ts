@@ -13,12 +13,15 @@ test('floating launchers share one explicit reset class', () => {
   const chatSource = readFileSync(new URL('../src/chat/chat.ts', import.meta.url), 'utf8');
   const searchSource = readFileSync(new URL('../src/search/render.ts', import.meta.url), 'utf8');
   const searchCssSource = readFileSync(new URL('../src/search/search.css', import.meta.url), 'utf8');
+  const hoverRule = styleSource.match(/\.hvy-floating-launcher:not\(:disabled\):hover\s*\{[^}]*\}/)?.[0] ?? '';
 
   expect(styleSource).toContain('.hvy-floating-launcher');
   expect(chatSource).toContain('class="hvy-floating-launcher chat-launcher"');
   expect(searchSource).toContain('class="hvy-floating-launcher search-launcher');
   expect(searchCssSource).not.toContain('.hvy-embed-layout .search-launcher');
   expect(searchCssSource.match(/\.search-launcher\s*\{[^}]*\}/)?.[0] ?? '').not.toContain('!important');
+  expect(hoverRule).toContain('var(--hvy-button-bg) 74%');
+  expect(hoverRule).not.toContain('var(--hvy-button-hover-bg');
 });
 
 test('embed link hover styling only applies to anchors with href values', () => {

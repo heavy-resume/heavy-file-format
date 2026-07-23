@@ -2,7 +2,7 @@ import { builtInSearchProvider } from './search-provider';
 import { createDocumentFilterSnapshot } from './document-filter';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
-import { state, getRenderApp, getRefreshReaderPanels } from '../state';
+import { state, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
 import type {
   HvySearchResult,
   SearchCategory,
@@ -20,18 +20,16 @@ export function openSearch(app: HTMLElement): void {
   state.search.open = true;
   state.search.resultsCollapsed = false;
   state.search.error = null;
-  getRenderApp()();
-  focusSearchInput(app);
+  refreshSearchUi(app, { focusInput: true });
 }
 
 export function expandSearchResults(app: HTMLElement): void {
   state.search.open = true;
   state.search.resultsCollapsed = false;
-  getRenderApp()();
-  focusSearchInput(app);
+  refreshSearchUi(app, { focusInput: true });
 }
 
-export function closeSearch(): void {
+export function closeSearch(app?: HTMLElement): void {
   const keepFilter = state.search.filterEnabled && isSearchFilterActive();
   state.search.open = false;
   state.search.resultsCollapsed = false;
@@ -49,7 +47,7 @@ export function closeSearch(): void {
   state.search.requestNonce += 1;
   state.search.isLoading = false;
   state.search.semanticProgress = null;
-  getRenderApp()();
+  refreshSearchUi(app);
 }
 
 export function stopSearch(): void {
@@ -87,10 +85,10 @@ export function stopSearchRequest(): void {
   state.search.isLoading = false;
   state.search.semanticProgress = null;
   state.search.error = null;
-  getRenderApp()();
+  refreshSearchUi();
 }
 
-export async function submitSearch(): Promise<void> {
+export async function submitSearch(app?: ParentNode): Promise<void> {
   const query = state.search.queryDraft.trim();
   state.search.submittedQuery = query;
   state.search.submittedFilterQueryMode = 'keyword';
@@ -106,7 +104,7 @@ export async function submitSearch(): Promise<void> {
     state.search.results = [];
     state.search.navigationResultIds = [];
     state.search.isLoading = false;
-    getRenderApp()();
+    refreshSearchUi(app);
     return;
   }
 
@@ -116,7 +114,7 @@ export async function submitSearch(): Promise<void> {
     state.search.navigationResultIds = [];
     state.search.error = 'Choose at least one category.';
     state.search.isLoading = false;
-    getRenderApp()();
+    refreshSearchUi(app);
     return;
   }
 
@@ -126,7 +124,7 @@ export async function submitSearch(): Promise<void> {
   state.search.abortController = abortController;
   state.search.isLoading = true;
   state.search.semanticProgress = null;
-  getRenderApp()();
+  refreshSearchUi(app);
 
   try {
     const provider = getReferenceAppConfig().searchProvider ?? builtInSearchProvider;
@@ -147,6 +145,7 @@ export async function submitSearch(): Promise<void> {
     state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
     if (state.search.filterEnabled && state.currentView === 'editor') {
       state.currentView = 'viewer';
+      app = undefined;
     }
     state.search.error = null;
   } catch (error) {
@@ -163,7 +162,7 @@ export async function submitSearch(): Promise<void> {
     state.search.isLoading = false;
     state.search.semanticProgress = null;
     state.search.abortController = null;
-    getRenderApp()();
+    refreshSearchUi(app);
   }
 }
 
@@ -307,20 +306,20 @@ export function setSearchCategory(category: SearchCategory, enabled: boolean): v
   state.search.categories[category] = enabled;
 }
 
-export function setSearchTab(tab: typeof state.search.activeTab): void {
+export function setSearchTab(tab: typeof state.search.activeTab, app?: HTMLElement): void {
   state.search.activeTab = tab;
-  getRenderApp()();
+  refreshSearchUi(app, { focusInput: true });
 }
 
-export function setSearchFilterMode(mode: typeof state.search.filterMode): void {
+export function setSearchFilterMode(mode: typeof state.search.filterMode, app?: HTMLElement): void {
   state.search.filterMode = mode;
-  getRenderApp()();
+  refreshSearchUi(app);
 }
 
-export function setSearchFilterQueryMode(mode: SearchFilterQueryMode): void {
+export function setSearchFilterQueryMode(mode: SearchFilterQueryMode, app?: HTMLElement): void {
   state.search.filterQueryMode = mode;
   state.search.error = null;
-  getRenderApp()();
+  refreshSearchUi(app, { focusInput: true });
 }
 
 export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
@@ -394,6 +393,16 @@ export function refreshSearchFilterButton(app: ParentNode): void {
   filterButton.setAttribute('aria-pressed', applied ? 'true' : 'false');
   filterButton.disabled = noResults;
   filterButton.textContent = noResults ? 'No results' : applied ? 'Turn off filter' : 'Filter';
+}
+
+function refreshSearchUi(app?: ParentNode, options: { focusInput?: boolean } = {}): void {
+  if (app && getRefreshSearchSurface()(app, options)) {
+    return;
+  }
+  getRenderApp()();
+  if (options.focusInput && app) {
+    focusSearchInput(app);
+  }
 }
 
 async function submitSemanticFilter(): Promise<void> {

@@ -18,9 +18,11 @@ import {
   type ProviderToolState,
   type ToolProvider,
 } from '../src/chat/provider-tools';
-import { getHvyDiagnosticUsageHint, getHvyResponseDiagnostics, type HvyDiagnostic } from '../src/serialization';
+import { runHvyDocumentBlockLinter } from '../src/cli-core/document-block-linter';
+import { deserializeDocumentWithDiagnostics, getHvyDiagnosticUsageHint, type HvyDiagnostic, wrapHvyFragmentAsDocument } from '../src/serialization';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
+const OPENAI_EMBEDDINGS_API_URL = 'https://api.openai.com/v1/embeddings';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const QWEN_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -70,6 +72,12 @@ interface ProxyChatRequest {
   toolState?: ProviderToolState;
 }
 
+interface ProxyEmbeddingRequest {
+  model: string;
+  input: string[];
+  dimensions?: number;
+}
+
 interface ProviderCompletion {
   output: string;
   reasoningSummary: string;
@@ -77,6 +85,13 @@ interface ProviderCompletion {
   toolCalls?: unknown[];
   nativeMessages?: unknown[];
   toolState?: ProviderToolState;
+}
+
+interface HvyResponseLintIssue {
+  key: string;
+  path: string;
+  component: string;
+  message: string;
 }
 
 interface ProviderTokenUsage {
@@ -115,6 +130,37 @@ export function buildChatProxyMiddleware(env: Record<string, string | undefined>
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid trace payload.';
         sendJson(res, 400, { error: message });
+      }
+      return;
+    }
+
+    if (req.url?.startsWith('/api/embeddings')) {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'Method not allowed. Use POST /api/embeddings.' });
+        return;
+      }
+      const upstreamAbort = new AbortController();
+      let completed = false;
+      const abortUpstream = () => {
+        if (!completed) {
+          upstreamAbort.abort();
+        }
+      };
+      req.on('aborted', abortUpstream);
+      res.on('close', abortUpstream);
+      try {
+        const body = validateProxyEmbeddingRequest(await readRequestJson(req));
+        const payload = await requestOpenAiEmbeddings(body, env, upstreamAbort.signal);
+        completed = true;
+        sendJson(res, 200, payload);
+      } catch (error) {
+        if (isAbortError(error) || upstreamAbort.signal.aborted) {
+          return;
+        }
+        completed = true;
+        const message = error instanceof Error ? error.message : 'Proxy embedding request failed.';
+        const status = message.startsWith('Provider request failed:') ? 502 : 400;
+        sendJson(res, status, { error: message });
       }
       return;
     }
@@ -305,7 +351,7 @@ async function requestProviderWithRepair(
   if (body.mode === 'document-edit' || body.mode === 'pdf-template-import') {
     return initialCompletion;
   }
-  const diagnostics = getHvyResponseDiagnostics(initialCompletion.output);
+  const diagnostics = await getHvyResponseRepairDiagnostics(initialCompletion.output);
   if (diagnostics.length === 0) {
     return initialCompletion;
   }
@@ -334,9 +380,26 @@ async function requestProviderWithRepair(
   };
 
   const repairedCompletion = await requestProviderOnce(repairRequest, env, signal, runId);
-  const repairedDiagnostics = getHvyResponseDiagnostics(repairedCompletion.output);
+  const repairedDiagnostics = await getHvyResponseRepairDiagnostics(repairedCompletion.output);
   console.debug('[hvy:chat-proxy] repaired response diagnostics', repairedDiagnostics);
   return repairedCompletion;
+}
+
+async function getHvyResponseRepairDiagnostics(source: string): Promise<HvyDiagnostic[]> {
+  const parsed = deserializeDocumentWithDiagnostics(wrapHvyFragmentAsDocument(source), '.hvy');
+  const lintIssues = runHvyDocumentBlockLinter(parsed.document);
+  return [
+    ...parsed.diagnostics,
+    ...lintIssues.map(lintIssueToDiagnostic),
+  ];
+}
+
+function lintIssueToDiagnostic(issue: HvyResponseLintIssue): HvyDiagnostic {
+  return {
+    severity: 'warning',
+    code: `lint:${issue.key}`,
+    message: `[${issue.component}] ${issue.path} - ${issue.message}`,
+  };
 }
 
 async function requestProviderOnce(
@@ -361,7 +424,7 @@ export function buildRepairPrompt(diagnostics: HvyDiagnostic[]): string {
   const uniqueDiagnostics = diagnostics
     .map((diagnostic) => ({
       message: diagnostic.message,
-      hint: getHvyDiagnosticUsageHint(diagnostic),
+      hint: getRepairDiagnosticHint(diagnostic),
     }))
     .filter(
       (entry, index, all) =>
@@ -382,6 +445,13 @@ Issues:
 ${issues}
 
 Return the full corrected HVY response body only. Do not add commentary outside the HVY response.`;
+}
+
+function getRepairDiagnosticHint(diagnostic: HvyDiagnostic): string {
+  if (diagnostic.code.startsWith('lint:')) {
+    return 'Fix this HVY lint issue before returning the response.';
+  }
+  return getHvyDiagnosticUsageHint(diagnostic);
 }
 
 async function requestOpenAi(
@@ -633,6 +703,33 @@ function resolveProviderApiUrl(provider: ProxyChatRequest['provider']): string {
   return OPENAI_API_URL;
 }
 
+async function requestOpenAiEmbeddings(
+  body: ProxyEmbeddingRequest,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal
+): Promise<Record<string, unknown>> {
+  const apiKey = resolveProviderApiKey('openai', env);
+  const upstreamRequest = {
+    model: body.model,
+    input: body.input,
+    ...(body.dimensions !== undefined ? { dimensions: body.dimensions } : {}),
+  };
+  const response = await fetch(OPENAI_EMBEDDINGS_API_URL, {
+    method: 'POST',
+    headers: buildProviderHeaders('openai', apiKey),
+    body: JSON.stringify(upstreamRequest),
+    signal,
+  });
+  const payload = await readJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(`Provider request failed: ${extractProviderError(payload, 'OpenAI embeddings request failed.')}`);
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Provider request failed: OpenAI embeddings returned an invalid response.');
+  }
+  return payload as Record<string, unknown>;
+}
+
 function buildProviderHeaders(provider: ProxyChatRequest['provider'], apiKey: string): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -703,6 +800,33 @@ function validateProxyChatRequest(payload: unknown): ProxyChatRequest {
   }
   if (record.toolState && typeof record.toolState === 'object') {
     request.toolState = record.toolState as ProviderToolState;
+  }
+  return request;
+}
+
+function validateProxyEmbeddingRequest(payload: unknown): ProxyEmbeddingRequest {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid embedding payload.');
+  }
+  const record = payload as Partial<ProxyEmbeddingRequest>;
+  if (typeof record.model !== 'string' || record.model.trim().length === 0) {
+    throw new Error('Embedding model is required.');
+  }
+  if (!Array.isArray(record.input) || record.input.length === 0) {
+    throw new Error('Embedding input is required.');
+  }
+  const input = record.input.map((value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error('Embedding input entries must be non-empty strings.');
+    }
+    return value;
+  });
+  const request: ProxyEmbeddingRequest = {
+    model: record.model.trim(),
+    input,
+  };
+  if (typeof record.dimensions === 'number' && Number.isFinite(record.dimensions)) {
+    request.dimensions = Math.max(1, Math.floor(record.dimensions));
   }
   return request;
 }

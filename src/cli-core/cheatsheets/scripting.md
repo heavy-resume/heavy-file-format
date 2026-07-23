@@ -34,6 +34,13 @@ doc.tool.request_structure()
 
 `doc.time.now_iso()` returns the current client timestamp, `doc.time.now_local()` returns a human-readable date/time with the computer's local timezone label, `doc.time.now_unix_ms()` returns Unix milliseconds, and `doc.time.today_iso()` returns the client-local date as `YYYY-MM-DD`.
 
+Checked libraries are opt-in through `pluginConfig.libraries`. The `datetime` library provides a safe timezone-naive subset:
+
+```python
+from datetime import datetime, timedelta
+next_day = datetime.fromisoformat("2026-07-21") + timedelta(days=1)
+```
+
 Use tool help for exact `doc.tool` call shapes:
 
 ```shell

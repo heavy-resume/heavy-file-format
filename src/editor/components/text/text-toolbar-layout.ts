@@ -12,8 +12,8 @@ export function syncTextToolbarLayout(root: ParentNode): void {
     ? [root, ...Array.from(root.querySelectorAll<HTMLElement>('.text-editor-shell'))]
     : Array.from(root.querySelectorAll<HTMLElement>('.text-editor-shell'));
   shells.forEach((shell) => {
-    const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
-    if (!toolbar) {
+    const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    if (!toolbarSlot) {
       clearPendingTextToolbarMeasurement(shell);
       textToolbarResizeObservers.get(shell)?.disconnect();
       textToolbarResizeObservers.delete(shell);
@@ -21,25 +21,25 @@ export function syncTextToolbarLayout(root: ParentNode): void {
       return;
     }
 
-    updateTextToolbarHeight(shell, toolbar);
+    updateTextToolbarHeight(shell, toolbarSlot);
     if (typeof ResizeObserver !== 'function' || textToolbarResizeObservers.has(shell)) {
       return;
     }
-    const observer = new ResizeObserver(() => updateTextToolbarHeight(shell, toolbar));
-    observer.observe(toolbar);
+    const observer = new ResizeObserver(() => updateTextToolbarHeight(shell, toolbarSlot));
+    observer.observe(toolbarSlot);
     textToolbarResizeObservers.set(shell, observer);
   });
 }
 
-function updateTextToolbarHeight(shell: HTMLElement, toolbar: HTMLElement): void {
-  if (!shell.isConnected || !toolbar.isConnected) {
-    scheduleTextToolbarMeasurement(shell, toolbar, MAX_CONNECTED_MEASURE_RETRIES);
+function updateTextToolbarHeight(shell: HTMLElement, toolbarSlot: HTMLElement): void {
+  if (!shell.isConnected || !toolbarSlot.isConnected) {
+    scheduleTextToolbarMeasurement(shell, toolbarSlot, MAX_CONNECTED_MEASURE_RETRIES);
     return;
   }
 
-  const height = toolbar.offsetHeight;
+  const height = toolbarSlot.offsetHeight;
   if (height <= 0) {
-    scheduleTextToolbarMeasurement(shell, toolbar, MAX_CONNECTED_MEASURE_RETRIES);
+    scheduleTextToolbarMeasurement(shell, toolbarSlot, MAX_CONNECTED_MEASURE_RETRIES);
     return;
   }
 
@@ -47,7 +47,7 @@ function updateTextToolbarHeight(shell: HTMLElement, toolbar: HTMLElement): void
   shell.style.setProperty('--text-editor-toolbar-height', `${height}px`);
 }
 
-function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbar: HTMLElement, retries: number): void {
+function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbarSlot: HTMLElement, retries: number): void {
   const pending = textToolbarPendingMeasurements.get(shell) ?? { frame: null, observer: null, retries };
   pending.retries = Math.max(pending.retries, retries);
 
@@ -55,7 +55,7 @@ function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbar: HTMLElement
     const root = shell.ownerDocument.documentElement;
     pending.observer = new MutationObserver(() => {
       if (shell.isConnected) {
-        scheduleTextToolbarMeasurement(shell, toolbar, MAX_CONNECTED_MEASURE_RETRIES);
+        scheduleTextToolbarMeasurement(shell, toolbarSlot, MAX_CONNECTED_MEASURE_RETRIES);
       }
     });
     pending.observer.observe(root, { childList: true, subtree: true });
@@ -68,21 +68,21 @@ function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbar: HTMLElement
 
   pending.frame = requestAnimationFrame(() => {
     pending.frame = null;
-    const currentToolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
-    if (currentToolbar !== toolbar) {
+    const currentToolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    if (currentToolbarSlot !== toolbarSlot) {
       clearPendingTextToolbarMeasurement(shell);
-      if (currentToolbar) {
-        updateTextToolbarHeight(shell, currentToolbar);
+      if (currentToolbarSlot) {
+        updateTextToolbarHeight(shell, currentToolbarSlot);
       }
       return;
     }
 
-    if (!shell.isConnected || !toolbar.isConnected) {
+    if (!shell.isConnected || !toolbarSlot.isConnected) {
       textToolbarPendingMeasurements.set(shell, pending);
       return;
     }
 
-    const height = toolbar.offsetHeight;
+    const height = toolbarSlot.offsetHeight;
     if (height > 0) {
       clearPendingTextToolbarMeasurement(shell);
       shell.style.setProperty('--text-editor-toolbar-height', `${height}px`);
@@ -92,7 +92,7 @@ function scheduleTextToolbarMeasurement(shell: HTMLElement, toolbar: HTMLElement
     pending.retries -= 1;
     textToolbarPendingMeasurements.set(shell, pending);
     if (pending.retries > 0) {
-      scheduleTextToolbarMeasurement(shell, toolbar, pending.retries);
+      scheduleTextToolbarMeasurement(shell, toolbarSlot, pending.retries);
     } else if (shell.isConnected) {
       clearPendingTextToolbarMeasurement(shell);
     }

@@ -231,6 +231,97 @@ doc.header.set("sandbox_dynamic", ",".join(results))
   });
 });
 
+test('scripting supports standard attribute lookup detection assignment and deletion', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"attribute-sandbox"}-->
+#! Attribute Sandbox
+
+<!--hvy:plugin {"id":"attribute-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+class Example:
+    pass
+
+item = Example()
+setattr(item, "answer", 42)
+assigned = getattr(item, "answer")
+detected_before = hasattr(item, "answer")
+delattr(item, "answer")
+detected_after = hasattr(item, "answer")
+
+doc.header.set("attribute_builtins", f"{assigned}|{detected_before}|{detected_after}")
+`);
+  const expectedResult = '42|True|False';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'attribute_builtins', expectedResult);
+
+  const expectedState = await page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.document.meta.attribute_builtins;
+  });
+  expect(expectedState).toBe(expectedResult);
+});
+
+test('attribute builtins do not reach restricted browser capabilities', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"attribute-capability-sandbox"}-->
+#! Attribute Capability Sandbox
+
+<!--hvy:plugin {"id":"attribute-capability-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+results = []
+
+def record_restricted_capability(label, action):
+    try:
+        action()
+        results.append(label + ":reached")
+    except BaseException:
+        results.append(label + ":blocked")
+
+def browser_global(name):
+    js_doc = getattr(doc, "_HvyDocProxy__js_doc")
+    constructor = getattr(getattr(js_doc, "constructor"), "constructor")
+    return constructor("return " + name)()
+
+def wrapper_global(name):
+    bound_method = getattr(doc, "__getattr__")
+    function = getattr(bound_method, "__func__")
+    return getattr(function, "__globals__")[name]
+
+def hidden_doc_from_instance_dict():
+    instance_attributes = getattr(doc, "__dict__")
+    return instance_attributes["_HvyDocProxy__js_doc"]
+
+record_restricted_capability("direct_window", lambda: getattr(doc, "window"))
+record_restricted_capability("direct_document", lambda: getattr(doc, "document"))
+record_restricted_capability("window", lambda: browser_global("window"))
+record_restricted_capability("document", lambda: browser_global("document"))
+record_restricted_capability("scripting_runtime", lambda: browser_global("window.__HVY_SCRIPTING__"))
+record_restricted_capability("brython_runtime", lambda: browser_global("window.__BRYTHON__"))
+record_restricted_capability("hidden_js_doc", lambda: getattr(doc, "_HvyDocProxy__js_doc"))
+record_restricted_capability("instance_dict_js_doc", hidden_doc_from_instance_dict)
+record_restricted_capability("wrapper_window", lambda: getattr(wrapper_global("__hvy_window__"), "document"))
+record_restricted_capability("wrapper_runtime", lambda: getattr(wrapper_global("__hvy_window__"), "__HVY_SCRIPTING__"))
+record_restricted_capability("browser_import", lambda: __builtins__["__import__"]("browser"))
+
+doc.header.set("attribute_capabilities", ",".join(results))
+`);
+  const expectedResult = 'direct_window:blocked,direct_document:blocked,window:blocked,document:blocked,scripting_runtime:blocked,brython_runtime:blocked,hidden_js_doc:blocked,instance_dict_js_doc:blocked,wrapper_window:blocked,wrapper_runtime:blocked,browser_import:blocked';
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'attribute_capabilities', expectedResult);
+});
+
 test('scripting checked regex library runs without Brython native re import', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -258,6 +349,82 @@ doc.header.set("regex_result", f"{match.group(1)}|{','.join(found)}|{clean}|{dir
   await waitForDocumentMeta(page, 'regex_result', '42|1,2|a-b-c|bbb|0-8');
 });
 
+test('scripting checked datetime library supports safe calendar arithmetic and ISO weeks', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"datetime"}-->
+#! Datetime
+
+<!--hvy:plugin {"id":"datetime-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
+from datetime import datetime, timedelta
+
+value = datetime.strptime("2021-01-03 23:59:58.123456", "%Y-%m-%d %H:%M:%S.%f")
+monday_year, monday_week, _ = value.isocalendar()
+adjusted = value + timedelta(days=1)
+sunday_year, sunday_week, _ = adjusted.isocalendar()
+monday = adjusted - timedelta(days=adjusted.weekday())
+week_start = monday - timedelta(days=1)
+leap = datetime(2024, 2, 28) + timedelta(days=1, hours=2)
+rolled = datetime(2026, 12, 31, 23, 59, 59, 999999) + timedelta(microseconds=1)
+elapsed = rolled - datetime(2026, 12, 31, 23, 59, 59, 999999)
+parsed = datetime.fromisoformat("2026-07-21T10:11:12.345")
+
+invalid = "missed"
+try:
+    datetime(2025, 2, 29)
+except ValueError:
+    invalid = "blocked"
+
+doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_year}-W{sunday_week:02d}|{week_start.date().isoformat()}|{leap.isoformat()}|{rolled.isoformat()}|{elapsed.total_seconds()}|{parsed.strftime('%Y/%m/%d %H:%M:%S.%f')}|{invalid}|{timedelta(microseconds=-1).days}|{parsed}|{timedelta(microseconds=-1)}")
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(
+    page,
+    'datetime_result',
+    '2020-W53|2021-W01|2021-01-03|2024-02-29T02:00:00|2027-01-01T00:00:00|1e-06|2026/07/21 10:11:12.345000|blocked|-1|2026-07-21 10:11:12.345000|-1 day, 23:59:59.999999'
+  );
+});
+
+test('scripting checked datetime library does not expose runtime capabilities', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"datetime-sandbox"}-->
+#! Datetime Sandbox
+
+<!--hvy:plugin {"id":"datetime-sandbox-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["datetime"]}}-->
+import datetime
+
+results = []
+
+def record(label, action):
+    try:
+        action()
+        results.append(label + ":leaked")
+    except BaseException:
+        results.append(label + ":blocked")
+
+record("window", lambda: datetime.window)
+record("browser", lambda: datetime.browser)
+record("globals", lambda: datetime.datetime.__init__.__globals__)
+record("unchecked_time", lambda: __builtins__["__import__"]("time"))
+doc.header.set("datetime_sandbox", ",".join(results))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(page, 'datetime_sandbox', 'window:blocked,browser:blocked,globals:blocked,unchecked_time:blocked');
+});
+
 test('scripting checked regex library does not expose Brython re dependency modules', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -282,8 +449,8 @@ def record(label, action):
     except BaseException:
         results.append(label + ":blocked")
 
-record("re_python_re", lambda: getattr(re, "python_re"))
-record("re_enum", lambda: getattr(re, "enum"))
+record("re_python_re", lambda: re.python_re)
+record("re_enum", lambda: re.enum)
 try:
     from re import python_re
     results.append("from_python_re:leaked")
@@ -294,7 +461,7 @@ try:
     results.append("from_enum:leaked")
 except BaseException:
     results.append("from_enum:blocked")
-record("builtin_re_python_re", lambda: getattr(__builtins__["__import__"]("re"), "python_re"))
+record("builtin_re_python_re", lambda: __builtins__["__import__"]("re").python_re)
 record("builtin_python_re", lambda: __builtins__["__import__"]("python_re"))
 
 doc.header.set("regex_dependency_modules", ",".join(results))

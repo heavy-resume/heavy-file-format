@@ -3,7 +3,9 @@ import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
 import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
+import bundledPluginSortValuesHvy from '../examples/plugin-sort-values.hvy?raw';
 import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
+import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
 import bundledGuideHvy from '../hvy-guide.hvy?raw';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
@@ -13,6 +15,7 @@ import {
   getRenderApp,
   getRefreshReaderBlock,
   getRefreshReaderPanels,
+  getRefreshReaderSection,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
 } from './state';
@@ -25,6 +28,7 @@ import { exportCurrentDocumentPdf } from './pdf-export/action';
 import { bindModal } from './bind-modal';
 import { bindLinkInlineModal } from './bind-link-modal';
 import { clearChatConversation } from './chat/chat';
+import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
@@ -37,13 +41,20 @@ import { createDefaultSearchState } from './search/state';
 import { externalSearchSnapshotToDocumentState } from './search/snapshot';
 import { traceSemanticFilterEvent } from './search/semantic-trace';
 import type { HvySearchSnapshot } from './search/types';
-import { encodeComponentListRuntimeView, parseComponentListRuntimeView } from './editor/components/component-list/component-list-view';
+import {
+  encodeComponentListRuntimeView,
+  getComponentListDisplayState,
+  parseComponentListRuntimeView,
+  persistComponentListDisplayState,
+} from './editor/components/component-list/component-list-view';
 import { getAiEditorDoubleClickDelayMs } from './reference-config';
 import { isAiEditablePlaceholderTextBlock } from './ai-placeholder';
 import { logClickTrace } from './bind/click-trace';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
+import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
+import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -121,6 +132,7 @@ function replaceLoadedDocument(
     ...options.metaFilter,
   };
   saveSessionState(state);
+  resetReferenceDocumentDirtyBaseline();
   getRenderApp()();
 }
 
@@ -182,6 +194,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
   downloadName.value = normalized;
+  await persistPreparedEmbeddingAttachments(state.document, state.attachmentHost);
   const bytes = serializeDocumentBytes(state.document);
   const sourceDocument = state.selectedExample ? SOURCE_DOCUMENTS_BY_EXAMPLE[state.selectedExample] : undefined;
   if (sourceDocument) {
@@ -196,11 +209,13 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
       throw new Error(`Could not save ${sourceDocument.errorLabel}: ${response.status} ${response.statusText}`);
     }
     saveSessionState(state);
+    markReferenceDocumentSaved();
     getRenderApp()();
     return;
   }
   if (!currentFileHandle) {
     downloadBinaryFile(normalized, bytes);
+    markReferenceDocumentSaved();
     getRenderApp()();
     return;
   }
@@ -208,6 +223,7 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   await writable.write(bytes);
   await writable.close();
   saveSessionState(state);
+  markReferenceDocumentSaved();
   getRenderApp()();
 }
 
@@ -259,6 +275,20 @@ export function bindUi(app: HTMLElement): void {
         action();
       });
     }, getAiEditorDoubleClickDelayMs());
+  };
+
+  const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
+    window.requestAnimationFrame(() => {
+      runInBoundRuntime(() => {
+        if (!state.readerDeferredSectionBodies[sectionKey]) {
+          return;
+        }
+        delete state.readerDeferredSectionBodies[sectionKey];
+        if (!getRefreshReaderSection()(app, sectionKey)) {
+          getRefreshReaderPanels()();
+        }
+      });
+    });
   };
 
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
@@ -476,6 +506,11 @@ export function bindUi(app: HTMLElement): void {
     loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
   });
 
+  const pluginSortValuesExampleBtn = app.querySelector<HTMLButtonElement>('#pluginSortValuesExampleBtn');
+  pluginSortValuesExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledPluginSortValuesHvy, 'plugin-sort-values.hvy', 'plugin-sort-values');
+  });
+
   const pdfTemplateExampleBtn = app.querySelector<HTMLButtonElement>('#pdfTemplateExampleBtn');
   pdfTemplateExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledPdfTemplatePhvy, 'pdf-template.phvy', 'pdf-template');
@@ -484,6 +519,11 @@ export function bindUi(app: HTMLElement): void {
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');
   resumeTemplateBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledResumeThvy, 'resume.thvy', 'resume-template');
+  });
+
+  const meetingMinutesTemplateBtn = app.querySelector<HTMLButtonElement>('#meetingMinutesTemplateBtn');
+  meetingMinutesTemplateBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledMeetingMinutesThvy, 'meeting-minutes.thvy', 'meeting-minutes-template');
   });
 
   const resumeExampleBtn = app.querySelector<HTMLButtonElement>('#resumeExampleBtn');
@@ -556,6 +596,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerDeferredSectionBodies = {};
     state.currentView = state.currentView === 'editor' ? 'viewer' : state.currentView;
     saveSessionState(state);
     getRenderApp()();
@@ -580,6 +621,7 @@ export function bindUi(app: HTMLElement): void {
     state.readerViewActivatedTargets = new Set<string>();
     state.readerContainerState = {};
     state.readerExpandableState = {};
+    state.readerDeferredSectionBodies = {};
     saveSessionState(state);
     getRenderApp()();
   });
@@ -602,6 +644,7 @@ export function bindUi(app: HTMLElement): void {
     closeModal();
     resetTransientUiState();
     saveSessionState(state);
+    resetReferenceDocumentDirtyBaseline();
     getRenderApp()();
   });
 
@@ -611,11 +654,15 @@ export function bindUi(app: HTMLElement): void {
   });
 
   downloadBtn.addEventListener('click', () => {
-    const normalized = normalizeFilename(state.filename || 'document.hvy');
-    state.filename = normalized;
-    const bytes = serializeDocumentBytes(state.document);
-    downloadBinaryFile(normalized, bytes);
-    getRenderApp()();
+    void runInBoundRuntimeAsync(async () => {
+      const normalized = normalizeFilename(state.filename || 'document.hvy');
+      state.filename = normalized;
+      await persistPreparedEmbeddingAttachments(state.document, state.attachmentHost);
+      const bytes = serializeDocumentBytes(state.document);
+      downloadBinaryFile(normalized, bytes);
+      markReferenceDocumentSaved();
+      getRenderApp()();
+    });
   });
 
   exportPdfBtn?.addEventListener('click', () => {
@@ -638,14 +685,21 @@ export function bindUi(app: HTMLElement): void {
     if (!sectionKey || !blockId) {
       return;
     }
+    const block = findBlockByIds(sectionKey, blockId);
+    if (!block) {
+      return;
+    }
     const key = `${sectionKey}:${blockId}`;
     const current = parseComponentListRuntimeView(state.componentListReaderViews[key] ?? viewId);
-    state.componentListReaderViews[key] = encodeComponentListRuntimeView({
+    const nextView = encodeComponentListRuntimeView({
       sortKey: current.sortKeyOverride ? current.sortKey : viewId,
       sortKeyOverride: current.sortKeyOverride || !!viewId,
       reversed: !current.reversed,
       groupKey: current.groupKey,
     });
+    persistComponentListDisplayState(block, getComponentListDisplayState(block, nextView));
+    syncReusableTemplateForBlock(sectionKey, blockId);
+    delete state.componentListReaderViews[key];
   };
 
   const handleCollapsedListControlPointerDown = (event: Event) => {
@@ -817,15 +871,26 @@ export function bindUi(app: HTMLElement): void {
           sectionKey,
           willExpand: !section.expanded,
         });
-        section.expanded = !section.expanded;
-        getRefreshReaderPanels()();
+        const willExpand = !section.expanded;
+        section.expanded = willExpand;
+        if (willExpand) {
+          state.readerDeferredSectionBodies[sectionKey] = true;
+        } else {
+          delete state.readerDeferredSectionBodies[sectionKey];
+        }
+        if (!getRefreshReaderSection()(app, sectionKey)) {
+          getRefreshReaderPanels()();
+        }
+        if (willExpand) {
+          scheduleReaderSectionBodyHydration(sectionKey);
+        }
       });
       return;
       }
     }
 
     const expandable = target.closest<HTMLElement>('[data-reader-action="toggle-expandable"]');
-    if (expandable) {
+    if (expandable && nearestReaderAction === expandable) {
       logClickTrace(event, 'reader-area:expandable:candidate', {
         sectionKey: expandable.dataset.sectionKey ?? null,
         blockId: expandable.dataset.blockId ?? null,
@@ -1045,48 +1110,16 @@ export function bindUi(app: HTMLElement): void {
 
   chatThread?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-
     const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
-    if (anchor) {
-      const id = anchor.getAttribute('href')?.slice(1) ?? '';
-      if (id) {
-        event.preventDefault();
-        navigateToSection(id, app);
-        return;
-      }
-    }
-
-    const expandable = target.closest<HTMLElement>('[data-chat-action="toggle-expandable"]');
-    if (!expandable) {
+    if (!anchor) {
       return;
     }
-
+    const id = anchor.getAttribute('href')?.slice(1) ?? '';
+    if (!id) {
+      return;
+    }
     event.preventDefault();
-    event.stopPropagation();
-
-    const readerEl = expandable.closest<HTMLElement>('[data-expandable-id]');
-    if (!readerEl) {
-      return;
-    }
-
-    const currentlyExpanded = expandable.getAttribute('aria-expanded') === 'true';
-    const nextExpanded = !currentlyExpanded;
-
-    readerEl.querySelectorAll<HTMLElement>('[data-chat-action="toggle-expandable"]').forEach((element) => {
-      element.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
-    });
-
-    const expandedPane = readerEl.querySelector<HTMLElement>('.expandable-reader-pane-expanded');
-    if (nextExpanded) {
-      if (expandedPane) {
-        expandedPane.style.display = '';
-      }
-      return;
-    }
-
-    if (expandedPane) {
-      expandedPane.style.display = 'none';
-    }
+    navigateToSection(id, app);
   });
 
   readerNav?.addEventListener('click', (event) => {

@@ -204,6 +204,28 @@ hvy_version: 0.1
   await expect(secondCell).toBeFocused();
 });
 
+test('AI static table activation preserves scroll and Tab advances to the next cell', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  const reader = page.locator('#aiReaderDocument');
+  const table = reader.locator('.reader-table', { hasText: 'Applied' });
+  await table.click({ button: 'right' });
+  const expectedResult = await reader.evaluate((node) => node.scrollTop);
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const firstCell = reader.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  const secondCell = reader.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="1"]');
+  await expect(firstCell).toBeVisible();
+  await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
+  await firstCell.click();
+  await expect(firstCell).toBeFocused();
+  await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
+  await page.keyboard.press('Tab');
+  await expect(secondCell).toBeFocused();
+  await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
+});
+
 test('active table editor Enter advances rows and Shift Enter inserts a cell line break', async ({ page }) => {
   await page.goto('/');
 
@@ -241,4 +263,48 @@ hvy_version: 0.1
   await expect(firstCell).toContainText('Second line');
   await page.keyboard.type('Beta');
   await expect(addedRowFirstCell).toContainText('Beta');
+});
+
+test('static table Done does not persist untouched Enter-created rows', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-enter-prune-test"}-->
+#! Table Enter Prune Test
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+  const firstCell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await firstCell.click();
+  await expect(firstCell).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  const untouchedAddedRowFirstCell = page.locator('[data-field="table-cell"][data-row-index="1"][data-cell-index="0"]');
+  await expect(untouchedAddedRowFirstCell).toBeFocused();
+
+  const doneButton = page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Done' });
+  await doneButton.scrollIntoViewIfNeeded();
+  const doneButtonBox = await doneButton.boundingBox();
+  expect(doneButtonBox).not.toBeNull();
+  const expectedResult = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim() ?? '',
+    { x: doneButtonBox!.x + doneButtonBox!.width / 2, y: doneButtonBox!.y + doneButtonBox!.height / 2 }
+  );
+  expect(expectedResult).toBe('Done');
+  await page.mouse.click(doneButtonBox!.x + doneButtonBox!.width / 2, doneButtonBox!.y + doneButtonBox!.height / 2);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Alpha' }).first();
+  await expect(passiveTable.locator('.reader-table tbody tr')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toHaveValue(/"tableRows":\[\{"cells":\["Alpha","Open"\]\}\]/);
+  await expect(page.locator('#rawEditor')).not.toHaveValue(/"cells":\["",""\]/);
 });

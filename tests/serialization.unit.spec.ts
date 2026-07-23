@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { deserializeDocument, deserializeDocumentBytes, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
+import { deserializeDocument, deserializeDocumentBytes, deserializeDocumentWithDiagnostics, HVY_TAIL_SENTINEL, serializeBlockFragment, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, wrapHvyFragmentAsDocument } from '../src/serialization';
 import { ensureDocumentAttachmentStore, getAttachmentDescriptors } from '../src/attachment-store';
 import { markdownToReaderHtml } from '../src/markdown';
 import { getTextLineStylesFromMeta } from '../src/text-line-styles';
@@ -37,6 +37,69 @@ hvy_version: 0.1
 `, '.hvy');
 
   expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
+});
+
+test('round-trips sort value annotations in text content', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: text
+    sortValueDefs:
+      Strength:
+        type: enum
+        options:
+          - label: Expert
+            value: 100
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}>
+
+   <!--hvy:skill-record {"sortKeys":{"Strength":100}}-->
+    Strength: <!--hvy:sort-value {"key":"Strength"}-->Expert<!--/hvy:sort-value-->
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('sortValueDefs:');
+  expect(expectedResult).toContain('<!--hvy:sort-value {"key":"Strength"}-->Expert<!--/hvy:sort-value-->');
+  expect(expectedResult).toContain('"sortKeys":{"Strength":100}');
+});
+
+test('round-trips source-backed sort key metadata and plugin declarations', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: skill-record
+    baseType: expandable
+    sortValueDefs:
+      Strength:
+        type: number
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+ <!--hvy:component-list {"componentListComponent":"skill-record"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:skill-record {"sortKeys":{"Strength":4},"derivedSortKeyNames":["Strength"]}-->
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:plugin {"plugin":"example.skill-rating","pluginSortValues":{"Strength":4}}-->
+`, '.hvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('"derivedSortKeyNames":["Strength"]');
+  expect(expectedResult).toContain('"pluginSortValues":{"Strength":4}');
 });
 
 test('serializes a single block fragment without document wrappers', () => {
@@ -200,7 +263,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"skills"}-->
 #! Skills
 
-<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupCollapsedPreviewRem":4}-->
+<!--hvy:component-list {"componentListComponent":"text","componentListDefaultSortKey":"Job Match","componentListDefaultSortDirection":"desc","componentListDefaultGroupKey":"Category","componentListGroupsExpanded":true,"componentListGroupCollapsedPreviewRem":4}-->
 
  <!--hvy:component-list:0 {}>
 
@@ -219,6 +282,7 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"componentListDefaultSortKey":"Job Match"');
   expect(expectedResult).toContain('"componentListDefaultSortDirection":"desc"');
   expect(expectedResult).toContain('"componentListDefaultGroupKey":"Category"');
+  expect(expectedResult).toContain('"componentListGroupsExpanded":true');
   expect(expectedResult).toContain('"componentListGroupCollapsedPreviewRem":4');
   expect(expectedResult).toContain('"sortKeys":{"Job Match":92}');
   expect(expectedResult).toContain('"groupKeys":{"Category":"Database"}');
@@ -802,6 +866,47 @@ section_defaults:
 
   expect(output).toContain('section_defaults:');
   expect(output).toContain('css: "margin: 0.5rem 0;"');
+});
+
+test('preserves application metadata in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    record_id: abc123
+    revision: 7
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  const expectedResult = serializeWithState(document);
+
+  expect(expectedResult).toContain('metadata:');
+  expect(expectedResult).toContain('com.example.records:');
+  expect(expectedResult).toContain('record_id: abc123');
+  expect(expectedResult).toContain('revision: 7');
+});
+
+test('rejects application metadata deeper than two object levels', () => {
+  const expectedResult = deserializeDocumentWithDiagnostics(`---
+hvy_version: 0.1
+metadata:
+  com.example.records:
+    sync:
+      revision: 7
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`, '.hvy');
+
+  expect(expectedResult.diagnostics).toContainEqual({
+    severity: 'error',
+    code: 'invalid_document_metadata',
+    message: 'metadata.com.example.records.sync exceeds the two-object-level nesting limit.',
+  });
 });
 
 test('preserves text_line_styles in document front matter on round-trip', () => {

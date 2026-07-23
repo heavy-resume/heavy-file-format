@@ -115,6 +115,117 @@ Notes:
 - API keys are consumed by the isolated local proxy in [`proxy/chat-proxy.ts`](proxy/chat-proxy.ts).
 - `VITE_OPENAI_API_KEY` / `VITE_ANTHROPIC_API_KEY` are still accepted as a dev fallback, but `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are preferred so keys are not exposed to the client bundle.
 
+The reference app's Ask This Document panel can switch between full-document,
+keyword retrieval, and embedding retrieval context. Choose Embedding retrieval,
+optionally edit the embedding model, then click Build Embeddings to prepare an
+embedding cache that will be attached the next time the current `.hvy` file is
+saved.
+
+Embedded hosts can use the same embedding-based RAG path instead of the built-in
+keyword retrieval. Hosts may provide any embedding provider callback; if they
+expose an OpenAI-compatible `/api/embeddings` endpoint, they can reuse HVY's
+proxy provider helper. HVY builds document chunks, ranks vectors in JavaScript,
+and packs the retrieved evidence into the chat context:
+
+```js
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'viewer',
+  chatClient,
+  chatContext: {
+    mode: 'embedding-retrieval',
+    embeddingModel: 'text-embedding-ada-002',
+    maxResults: 8,
+    persistEmbeddingsToAttachments: true,
+  },
+  embeddingProvider: HVY.createProxyEmbeddingProvider(),
+});
+```
+
+When `persistEmbeddingsToAttachments` is true, HVY keeps the prepared cache in
+memory until the document is explicitly saved or serialized through the mount
+save API. At that point HVY treats the embedding index like any other derived
+attachment: if an `attachmentStore` is mounted, HVY calls
+`attachmentStore.store(id, bytes, meta)` and keeps the returned descriptor in
+the document; otherwise it writes the optional cache into the `.hvy` tail. The
+cache records the model profile, dimensions, stable chunk hashes, and contiguous
+float32 vectors in a binary `application/vnd.hvy.embedding-index` attachment.
+Changed chunks are re-embedded by chunk ID and hash, unchanged chunks reuse
+their stored vectors, and stale or deleted chunks are ignored. The attachment
+can be deleted without changing document content. `.thvy` files should not
+persist tail attachments.
+
+Hosts can also call `HVY.prepareEmbeddingChatContext(document, options,
+embeddingProvider)` directly to build the same cache without asking a chat
+question.
+
+Desktop or workspace hosts that store embeddings outside HVY can use the
+headless planner instead. The planner parses the current document structure into
+section-scoped embedding chunks and compares them against vectors from the
+host's own store:
+
+```js
+const document = HVY.deserializeDocumentBytes(bytes, '.hvy');
+const existingVectors = await vectorDb.loadForFile(fileId);
+
+const plan = HVY.planEmbeddingIndexUpdate({
+  document,
+  embeddingModel: 'text-embedding-ada-002',
+  existingVectors,
+});
+
+const embedded = await embeddingProvider({
+  model: plan.model,
+  inputs: plan.inputsToEmbed,
+});
+const inputsById = new Map(plan.inputsToEmbed.map((input) => [input.id, input]));
+
+await vectorDb.upsert(fileId, [
+  ...plan.reused,
+  ...embedded.flatMap((entry) => {
+    const input = inputsById.get(entry.id);
+    if (!input) return [];
+    return {
+      id: entry.id,
+      textHash: input.textHash,
+      vector: entry.vector,
+      model: plan.model,
+      dimensions: plan.dimensions,
+    };
+  }),
+]);
+await vectorDb.remove(fileId, plan.removed);
+```
+
+`plan.inputsToEmbed` contains only missing or stale chunks. A stored vector is
+reused when its model, dimensions, chunk id, and chunk text hash still match.
+This lets a desktop app index unopened `.hvy` files by loading them headlessly,
+while keeping ownership of the vector database and file discovery.
+
+If a `.hvy` file already contains an embedding cache attachment, hosts can read
+that stored index directly from serialized bytes without deserializing the
+document:
+
+```js
+const indexes = HVY.readEmbeddingIndexFromDocumentBytes(bytes, '.hvy', {
+  embeddingModel: 'text-embedding-ada-002',
+});
+
+await vectorDb.upsert(fileId, indexes.flatMap((index) =>
+  index.vectors.map((vector, entryIndex) => ({
+    ...vector,
+    chunk: index.chunks[entryIndex],
+  }))
+));
+```
+
+This byte-level reader returns existing vectors plus their chunk metadata. It is
+useful for reusing file-stored caches as a cross-document search substrate. To
+validate whether those vectors are still current for edited document content,
+deserialize headlessly and run `HVY.planEmbeddingIndexUpdate(...)` against the
+host's stored vectors.
+
 ### Run In VS Code
 
 VS Code configuration is included:
@@ -299,6 +410,24 @@ const mount = HVY.mountHvy({ root, document, mode: 'editor', attachmentStore, se
 const bytes = await mount.serializeDocumentBytesAsync();
 ```
 
+Hosts can store compact, versioned document history with the `HVYD2` binary
+delta codec. Pass the newer bytes as the base and the older bytes as the target
+to create a reverse delta for rollback:
+
+```js
+const reverseDelta = HVY.createHvyDocumentDelta(currentBytes, previousBytes);
+
+// When a maxSizeRatio policy is supplied, null falls back to a full snapshot.
+const historyEntry = reverseDelta ?? previousBytes;
+const restoredBytes = HVY.isHvyDocumentDelta(historyEntry)
+  ? HVY.applyHvyDocumentDelta(currentBytes, historyEntry)
+  : historyEntry;
+```
+
+The codec does not impose a size cutoff. A host can supply `maxSizeRatio` as an
+optional storage policy, lowering it when it needs to reserve room for
+encryption or base64 overhead.
+
 Encrypted documents and encrypted components use Fernet keys supplied by the
 embedded host. Keys are addressed by UUID; the host should persist its own
 UUID-to-key map and pass it as a keyring when deserializing or mounting:
@@ -347,7 +476,7 @@ const mount = HVY.mountHvy({
   document,
   mode: 'editor',
   onDocumentChange(event) {
-    console.log(event.dirty, event.source, event.reason);
+    console.log(event.dirty, event.source, event.reason, event.changedSectionTitles);
   },
 });
 
@@ -358,6 +487,11 @@ mount.markSaved();
 mount.undo();
 mount.redo();
 ```
+
+`changedSectionTitles` contains the user-facing titles of sections that differ
+from the last saved baseline. It accumulates across edits until `markSaved()`
+and never exposes internal section IDs. Untitled sections are reported as an
+empty string so the host can choose how to present them.
 
 Embedded editor/AI instances do not persist reconnect/reload session state by
 default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`
@@ -409,6 +543,24 @@ HVY.mountHvyViewer({
 
 Return `{ html }` to replace the rendered link with sanitized HTML, or return
 `null` / `undefined` to keep the default rendering.
+
+Cross-document HVY workspace links are disabled by default. Hosts can enable
+workspace paths in text links and xref cards with `crossDocumentLinks: true`;
+the embedded client still does not resolve or load the path. Enabled workspace
+links are reported to `linkObserver` with `crossDocument: true` and, for xref
+cards, `kind: 'xref-card'` plus `xrefTarget`.
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  crossDocumentLinks: true,
+  async linkObserver(link) {
+    if (!link.crossDocument) return null;
+    return { href: `/workspace-link?target=${encodeURIComponent(link.href)}` };
+  },
+});
+```
 
 Embedded hosts can also enable semantic filtering by providing a callback that
 selects candidate IDs from the AI-friendly request packet:
@@ -483,6 +635,29 @@ const mount = HVY.mountHvyViewer({
 
 // Or apply a later meta-app selection without remounting the document.
 mount.setSearchSnapshot(selectedSnapshot);
+```
+
+Embedding mode uses the same document candidates, but ranks them locally with
+vectors returned by the host-provided embedding provider. This path is useful
+when a host already has an embedding endpoint or wants to reuse cached vectors
+for multi-file search:
+
+```js
+const response = await HVY.searchDocuments({
+  query: 'Find implementation experience',
+  mode: 'embedding',
+  embeddingModel: 'text-embedding-ada-002',
+  embeddingProvider: HVY.createProxyEmbeddingProvider(),
+  documents: [
+    { documentId: 'resume', documentTitle: 'Resume', document: resumeDocument },
+    { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
+  ],
+  maxResults: 20,
+});
+
+for (const result of response.results) {
+  console.log(result.documentId, result.score, result.targetRef);
+}
 ```
 
 Embedded hosts can run AI import as a reviewable two-stage flow. First build a

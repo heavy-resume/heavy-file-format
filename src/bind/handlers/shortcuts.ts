@@ -1,7 +1,7 @@
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
 import { undoState, redoState } from './_imports';
 import { openSearch } from '../../search/actions';
-import { consumeNextUndoTargetsDocument } from '../../edit-command-routing';
+import { consumeNextNativeUndoSuppressed, consumeNextRedoTargetsDocument, consumeNextUndoTargetsDocument, routeNextRedoToDocument, routeNextUndoToDocument, suppressNextNativeUndo } from '../../edit-command-routing';
 
 const shortcutRoots = new WeakSet<HTMLElement>();
 const shortcutRootRuntimes = new WeakMap<HTMLElement, StateRuntime | null>();
@@ -42,7 +42,7 @@ export function bindShortcuts(_app: HTMLElement): void {
       }
       const key = event.key.toLowerCase();
       if (key === 'f' && !event.shiftKey) {
-        if (isModalOpen()) {
+        if (isModalOpen() || isRawEditorOpen(_app)) {
           return;
         }
         event.preventDefault();
@@ -51,19 +51,29 @@ export function bindShortcuts(_app: HTMLElement): void {
       }
       if (key === 'z' && !event.shiftKey) {
         const routeToDocument = consumeNextUndoTargetsDocument();
+        if (!routeToDocument && isNativeUndoTarget(event.target) && consumeNextNativeUndoSuppressed()) {
+          event.preventDefault();
+          return;
+        }
         if (!routeToDocument && isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'undo')) {
           return;
         }
         event.preventDefault();
         undoState();
+        if (routeToDocument) {
+          suppressNextNativeUndo();
+        }
+        routeNextRedoToDocument();
         return;
       }
       if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        if (isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'redo')) {
+        const routeToDocument = consumeNextRedoTargetsDocument();
+        if (!routeToDocument && isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'redo')) {
           return;
         }
         event.preventDefault();
         redoState();
+        routeNextUndoToDocument();
       }
     };
     const runtime = shortcutRootRuntimes.get(_app) ?? null;
@@ -77,6 +87,10 @@ export function bindShortcuts(_app: HTMLElement): void {
 
 function isModalOpen(): boolean {
   return Boolean(document.querySelector('.modal-root'));
+}
+
+function isRawEditorOpen(app: HTMLElement): boolean {
+  return Boolean(app.querySelector('.raw-editor-shell'));
 }
 
 export function isNativeUndoTarget(target: EventTarget | null): boolean {

@@ -44,12 +44,66 @@
   white-space: nowrap;
 }
 
-.hvy-scripting-textarea {
+.hvy-scripting-source-editor {
+  display: grid;
+  min-height: 12rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-highlight,
+.hvy-scripting-source-editor > .hvy-scripting-textarea {
+  grid-area: 1 / 1;
   width: 100%;
   min-height: 12rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0.9rem 1rem;
+  overflow: auto;
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
   resize: vertical;
   white-space: pre;
   tab-size: 4;
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-highlight {
+  pointer-events: none;
+  resize: none;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-highlight > code {
+  display: block;
+  min-width: max-content;
+  padding: 0;
+  background: transparent;
+  color: var(--hvy-code-text);
+  font: inherit;
+  white-space: inherit;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-textarea {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--hvy-code-text);
+  -webkit-text-fill-color: transparent;
+  overflow-x: hidden;
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-textarea:focus {
+  outline: none;
+}
+
+.hvy-scripting-source-editor > .hvy-scripting-textarea::selection {
+  background: color-mix(in srgb, var(--hvy-accent-1) 58%, transparent);
+  color: var(--hvy-accent-1-text);
+  -webkit-text-fill-color: var(--hvy-accent-1-text);
 }
 
 .hvy-scripting-status {

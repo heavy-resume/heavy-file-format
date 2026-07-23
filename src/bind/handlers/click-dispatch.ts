@@ -14,6 +14,7 @@ import { openRemoveConfirmationModal } from './remove-confirmation-modal';
 import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, findSectionPath } from '../../template-hide';
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 import { logClickTrace } from '../click-trace';
+import { capturePaneScroll } from '../../scroll';
 
 interface RichToolbarSelection {
   range: Range;
@@ -29,7 +30,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     logClickTrace(event, 'click-dispatch:capture:enter', {
       currentView: state.currentView,
     });
-    handleAiReaderTextActivationClick(event);
+    handleAiReaderTextActivationClick(app, event);
   }, true);
 
   app.addEventListener('contextmenu', (event) => {
@@ -62,6 +63,7 @@ export function bindClickDispatch(app: HTMLElement): void {
     const target = event.target as HTMLElement;
     const actionButton = target.closest<HTMLElement>('[data-action]');
     const richButton = target.closest<HTMLElement>('[data-rich-action]');
+    const useAsSelection = target.closest<HTMLElement>('.text-use-as-selection');
     logClickTrace(event, 'click-dispatch:mousedown:enter', {
       action: actionButton?.dataset.action ?? null,
       richAction: richButton?.dataset.richAction ?? null,
@@ -75,6 +77,14 @@ export function bindClickDispatch(app: HTMLElement): void {
       logClickTrace(event, 'click-dispatch:mousedown:rich-selection-preserved', {
         richAction: richButton.dataset.richAction ?? null,
       });
+      return;
+    }
+    if (useAsSelection) {
+      const editable = useAsSelection.closest<HTMLElement>('.text-editor-shell')?.querySelector<HTMLElement>('.rich-editor');
+      if (editable) {
+        storeCurrentRichSelection(editable, { preserveExistingSelection: true });
+      }
+      event.preventDefault();
       return;
     }
     if (actionButton && isParagraphStyleToolbarAction(actionButton.dataset.action ?? '')) {
@@ -93,7 +103,19 @@ export function bindClickDispatch(app: HTMLElement): void {
       event.preventDefault();
       logClickTrace(event, 'click-dispatch:mousedown:set-block-align-prevent-default');
     }
+    if (actionButton && isTableEditorCompletionButton(actionButton)) {
+      event.preventDefault();
+      const handled = executeActionButton(app, actionButton, event);
+      if (handled) {
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
     if (actionButton && isTableEditorActionButton(actionButton)) {
+      event.preventDefault();
+    }
+    if (actionButton?.dataset.action === 'remove-text-fill-in') {
       event.preventDefault();
     }
     if (actionButton?.dataset.action === 'set-editor-mode' || actionButton?.dataset.action === 'switch-view') {
@@ -125,6 +147,13 @@ export function bindClickDispatch(app: HTMLElement): void {
       logClickTrace(event, 'click-dispatch:bubble:skip', {
         skipReason: 'form-control-target',
       });
+      return;
+    }
+
+    const useAsButton = target.closest<HTMLElement>('.text-use-as-button');
+    if (useAsButton) {
+      event.preventDefault();
+      toggleUseAsMenu(app, useAsButton);
       return;
     }
 
@@ -161,13 +190,21 @@ export function bindClickDispatch(app: HTMLElement): void {
           if (!editable.contains(document.activeElement) && !hasSelectionInside(editable)) {
             editable.focus();
           }
-          applyRichAction(action, editable, richButton.dataset.textLineStyleName);
+          applyRichAction(action, editable, richButton.dataset.textLineStyleName, {
+            sortValueKey: richButton.dataset.sortValueKey,
+            sortValueType: richButton.dataset.sortValueType,
+          });
+          closeUseAsMenus(app);
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
           editable.focus({ preventScroll: true });
           richToolbarSelections.delete(editable);
         }
       }
       return;
+    }
+
+    if (!target.closest('.text-use-as-selection')) {
+      closeUseAsMenus(app);
     }
 
     if (!actionButton) {
@@ -233,7 +270,30 @@ export function bindClickDispatch(app: HTMLElement): void {
   });
 }
 
-function handleAiReaderTextActivationClick(event: MouseEvent): void {
+function toggleUseAsMenu(app: HTMLElement, button: HTMLElement): void {
+  const selection = button.closest<HTMLElement>('.text-use-as-selection');
+  const shell = button.closest<HTMLElement>('.text-editor-shell');
+  if (!selection || !shell) {
+    return;
+  }
+  const shouldOpen = !selection.classList.contains('is-use-as-open');
+  closeUseAsMenus(app);
+  selection.classList.toggle('is-use-as-open', shouldOpen);
+  shell.classList.toggle('is-use-as-open', shouldOpen);
+  button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function closeUseAsMenus(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.text-use-as-selection.is-use-as-open').forEach((selection) => {
+    selection.classList.remove('is-use-as-open');
+    selection.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
+  });
+  root.querySelectorAll<HTMLElement>('.text-editor-shell.is-use-as-open').forEach((shell) => {
+    shell.classList.remove('is-use-as-open');
+  });
+}
+
+function handleAiReaderTextActivationClick(app: HTMLElement, event: MouseEvent): void {
   if (state.currentView !== 'ai' || event.defaultPrevented) {
     if (state.currentView === 'ai') {
       logAiReaderTextActivation(event, 'skip', { skipReason: 'default-prevented-before-capture' });
@@ -306,10 +366,13 @@ function handleAiReaderTextActivationClick(event: MouseEvent): void {
   event.stopPropagation();
   event.stopImmediatePropagation();
   state.aiModeTipDismissed = true;
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  const passiveHeight = textBlock.closest<HTMLElement>('.reader-block')?.getBoundingClientRect().height;
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: true });
   setAiEditorHostBlock(sectionKey, blockId);
   if (state.pendingEditorActivation) {
     state.pendingEditorActivation.immediateFocus = true;
+    state.pendingEditorActivation.passiveHeight = passiveHeight;
   }
   getRenderApp()();
 }
@@ -409,6 +472,22 @@ function isTableEditorActionButton(actionButton: HTMLElement): boolean {
     || action === 'add-table-row'
     || action === 'add-table-column')
     && Boolean(actionButton.closest('.table-editor'));
+}
+
+function isTableEditorCompletionButton(actionButton: HTMLElement): boolean {
+  const action = actionButton.dataset.action ?? '';
+  if (action !== 'deactivate-block' && action !== 'cancel-block-edit') {
+    return false;
+  }
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return false;
+  }
+  const activeField = activeElement.dataset.field;
+  if (activeField !== 'table-cell' && activeField !== 'table-column') {
+    return false;
+  }
+  return Boolean(actionButton.closest('.editor-block')?.contains(activeElement));
 }
 
 function executeActionButton(app: HTMLElement, actionButton: HTMLElement, event: Event | null = null, confirmedRemoveReady = false): boolean {

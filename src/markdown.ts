@@ -3,6 +3,8 @@ import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } from './text-line-styles';
 import { createTextFillInMarker } from './text-fill-in';
+import { renderWorkspaceLinksInHtml } from './workspace-links';
+import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -98,10 +100,28 @@ turndown.addRule('hvy-text-fill-in-marker', {
   replacement: (_content, node) => createTextFillInMarker((node as Element).getAttribute('data-placeholder') ?? ''),
 });
 
+turndown.addRule('hvy-sort-value', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-sort-value') === 'true',
+  replacement: (content, node) => {
+    const element = node as HTMLElement;
+    const key = element.getAttribute('data-sort-value-key')?.trim() ?? '';
+    if (!key) {
+      return content;
+    }
+    const label = element.nodeName.toUpperCase() === 'SELECT'
+      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected || option.hasAttribute('selected'))?.textContent?.trim()
+        ?? element.getAttribute('value')?.trim()
+        ?? content
+      : (element.textContent ?? content).replaceAll('\u200b', '').trim();
+    return formatSortValueAnnotation({ key }, label);
+  },
+});
+
 export interface MarkdownRenderOptions {
   textLineStyles?: TextLineStyles;
   textLineStyleMode?: 'viewer' | 'editor';
   codeLanguageInputAttrs?: Record<string, string>;
+  crossDocumentLinksEnabled?: boolean;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
@@ -136,6 +156,9 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
 
 export function getRichEditorSerializableHtml(root: HTMLElement): string {
   const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll<HTMLElement>('mark.search-match-marker').forEach((marker) => {
+    marker.replaceWith(...Array.from(marker.childNodes));
+  });
   clone.querySelectorAll('.rich-code-language-control').forEach((control) => control.remove());
   clone.querySelectorAll<HTMLElement>('.rich-code-block-shell').forEach((shell) => {
     const pre = shell.querySelector(':scope > pre');
@@ -181,7 +204,10 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'viewer',
   });
-  return wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens));
+  return renderWorkspaceLinksInHtml(
+    wrapInlineCheckboxLines(restoreResponsiveAnnotationTokens(html, annotations.tokens)),
+    options.crossDocumentLinksEnabled === true
+  );
 }
 
 function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRenderOptions, 'textLineStyles' | 'textLineStyleMode'>>): string {
@@ -341,7 +367,14 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
   const withNowrap = withAlt.replace(/<!--hvy:nowrap-->([\s\S]*?)<!--\/hvy:nowrap-->/g, (_match, text) =>
     makeToken(renderNowrapAnnotationHtml(text))
   );
-  return { markdown: options.editable ? withNowrap : replaceInlineCheckboxMarkers(withNowrap, makeToken), tokens };
+  const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
+    makeToken(options.editable ? renderSortValueAnnotationHtml(annotation.key, annotation.text) : escapeHtml(annotation.text))
+  );
+  return { markdown: options.editable ? withSortValues : replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
+}
+
+function renderSortValueAnnotationHtml(key: string, text: string): string {
+  return `<span data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
 function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {
@@ -581,7 +614,10 @@ export function normalizeMarkdownIndentation(markdown: string): string {
   return lines.map((line) => (line.startsWith(prefix) ? line.slice(minIndent) : line)).join('\n');
 }
 
-export function addExternalLinkTargets(html: string): string {
+export function addExternalLinkTargets(html: string, options: { crossDocumentLinksEnabled?: boolean } = {}): string {
+  if (typeof document === 'undefined') {
+    return renderWorkspaceLinksInHtml(addExternalLinkTargetsWithoutDom(html), options.crossDocumentLinksEnabled === true);
+  }
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
@@ -591,7 +627,16 @@ export function addExternalLinkTargets(html: string): string {
       anchor.setAttribute('rel', 'noopener noreferrer');
     }
   });
-  return template.innerHTML;
+  return renderWorkspaceLinksInHtml(template.innerHTML, options.crossDocumentLinksEnabled === true);
+}
+
+function addExternalLinkTargetsWithoutDom(html: string): string {
+  return html.replace(/<a\b([^>]*?)\bhref="(https?:\/\/[^"]*)"([^>]*)>/gi, (match, before, href, after) => {
+    const withTarget = /\btarget=/.test(match) ? match : `<a${before}href="${href}"${after} target="_blank">`;
+    return /\brel=/.test(withTarget)
+      ? withTarget
+      : withTarget.replace(/>$/, ' rel="noopener noreferrer">');
+  });
 }
 
 export function escapeRawHtml(markdown: string): string {

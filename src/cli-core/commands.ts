@@ -51,6 +51,7 @@ export interface HvyCliSession {
   modifiedContentByPath?: Record<string, string>;
   virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
+  searchHvyDocument?: (args: string[]) => Promise<string>;
 }
 
 export interface HvyCliExecution {
@@ -136,6 +137,29 @@ export function getHvyCliSessionVirtualFileSystem(document: VisualDocument, sess
   return buildSessionVirtualFileSystem(document, session);
 }
 
+export function writeHvyCliSessionVirtualFile(
+  document: VisualDocument,
+  session: HvyCliSession,
+  path: string,
+  content: string
+): HvyCliExecution {
+  const fs = buildSessionVirtualFileSystem(document, session);
+  addSessionFiles(fs, document, session);
+  const result = writeVirtualFile({ fs, cwd: session.cwd, session }, path, content, false, 'apply_hvy_patch');
+  if (shouldInvalidateVirtualFileSystem(result)) {
+    invalidateHvyCliSessionVirtualFileSystem(session);
+  }
+  return {
+    cwd: session.cwd,
+    output: result.output,
+    mutated: result.mutated,
+    invalidatesVirtualFileSystem: result.invalidatesVirtualFileSystem,
+    mutatedPaths: result.mutatedPaths,
+    refreshSectionPaths: result.refreshSectionPaths,
+    requiresFullRefresh: result.requiresFullRefresh,
+  };
+}
+
 export function getHvyCliCommandSummary(): string {
   return helpFor('');
 }
@@ -192,6 +216,13 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   const args = tokenizeCommand(expandedInput);
   if (args.length === 0) {
     return { cwd: session.cwd, output: '', mutated: false };
+  }
+  if (args[0] === 'hvy' && args[1] === 'search' && session.searchHvyDocument) {
+    return {
+      cwd: session.cwd,
+      output: truncateCliOutput(await session.searchHvyDocument(args.slice(2))),
+      mutated: false,
+    };
   }
 
   const pipelines = parseMiniShell(args);

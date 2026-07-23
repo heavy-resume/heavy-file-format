@@ -1,8 +1,9 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import { buildChatCliPersistentInstructions } from '../src/chat-cli/chat-cli-instructions';
 import { createChatCliInterface } from '../src/chat-cli/chat-cli-interface';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
+import type { HvyEmbeddingProvider } from '../src/types';
 
 function createChatCliTestDocument() {
   return deserializeDocument(`---
@@ -28,6 +29,8 @@ test('chat cli persistent instructions stay model-facing', () => {
   expect(instructions).toContain('Do not use /scratchpad.txt to report completion');
   expect(instructions).toContain('CSS values are inline declaration strings');
   expect(instructions).toContain('Use hvy request_structure');
+  expect(instructions).toContain('localized, exhaustive, or a searchable batch');
+  expect(instructions).toContain('semantic search does not prove completeness');
   expect(instructions).toContain('man/help');
   expect(instructions).not.toContain('HVY quick reference');
   expect(instructions).not.toContain('ai_cli_log.txt');
@@ -73,4 +76,31 @@ test('chat cli runs commands against the document filesystem and persists mutati
   expect((await cli.run('cat /chores/note/text.txt')).output).toBe('Weekly chore plan\n');
   expect(cli.snapshot().cwd).toBe('/body/chores/note');
   expect(serializeDocument(document)).toContain('Weekly chore plan');
+});
+
+test('expected result: chat CLI hvy search uses embeddings when embedding retrieval is enabled', async () => {
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({
+      id: input.id,
+      vector: input.id === 'query' || /existing content|intro/i.test(input.text)
+        ? [1, 0]
+        : [0, 1],
+    }))
+  );
+  const cli = createChatCliInterface(createChatCliTestDocument(), undefined, {
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingProvider,
+  });
+
+  const expectedResult = await cli.run('hvy search "intro content" --max 5 --json');
+  const parsed = JSON.parse(expectedResult.output);
+
+  expect(parsed.mode).toBe('embeddings');
+  expect(parsed.results[0]).toEqual(expect.objectContaining({
+    path: '/body/summary/intro',
+    kind: 'component',
+    type: 'text',
+  }));
+  expect(expectedResult.output).not.toContain('"score"');
+  expect(embeddingProvider).toHaveBeenCalled();
 });

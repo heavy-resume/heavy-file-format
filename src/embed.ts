@@ -95,6 +95,7 @@ import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
+import { createHvyAgentTools } from './agent-tools';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -1223,7 +1224,15 @@ export {
   serializeDocumentBytesAsync,
   isHvyDocumentDelta,
   buildDocumentRichTextCopyPayload,
+  createHvyAgentTools,
 };
+export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
+export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
+export type {
+  ProviderToolCall,
+  ProviderToolDefinition,
+  ProviderToolState,
+} from './chat/provider-tools';
 export type { HvyDocumentDeltaOptions } from './document-delta';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
@@ -1314,6 +1323,7 @@ declare global {
       createDocumentSearchSnapshot: typeof createDocumentSearchSnapshot;
       createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       createProxyEmbeddingProvider: typeof createProxyEmbeddingProvider;
+      createHvyAgentTools: typeof createHvyAgentTools;
       planEmbeddingIndexUpdate: typeof planEmbeddingIndexUpdate;
       prepareEmbeddingChatContext: typeof prepareEmbeddingChatContext;
       readEmbeddingIndexFromDocumentBytes: typeof readEmbeddingIndexFromDocumentBytes;
@@ -1347,6 +1357,7 @@ window.HVY = {
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   createProxyEmbeddingProvider,
+  createHvyAgentTools,
   planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,
   readEmbeddingIndexFromDocumentBytes,

@@ -10,6 +10,10 @@ A subset of that metadata is the css styling. When making changes always conside
 CSS values are inline declaration strings.
 Components may have body text. If you edit body text consider whether you're forgetting the styling.
 Use hvy request_structure, hvy search, man/help, cheatsheets, recipes, and component hints to choose edit targets.
+Before editing, decide whether the request is localized, exhaustive, or a searchable batch.
+For localized work, use the CLI to inspect and edit the relevant component or section.
+For exhaustive work, traverse the complete relevant scope in bounded batches; semantic search does not prove completeness.
+For a searchable batch, search for candidates, inspect uncertain results, then apply the coordinated changes.
 Use hvy lint to validate when you think the edit is ready to finish.
 Use hvy commands to create/remove components; use shell commands to inspect and edit writable files.
 User instructions are often poorly phrased. "Another section" might just be a group of components.

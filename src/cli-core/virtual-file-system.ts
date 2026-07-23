@@ -88,7 +88,7 @@ function buildHvyVirtualFileSystemUnmeasured(document: VisualDocument, naming?: 
   );
 
   measurePhase('cli.fs.build.sections', {}, () => {
-    addSectionList(entries, document.meta, document.sections.filter((section) => !section.isGhost), '/body', naming);
+    addSectionList(entries, document.meta, document.sections, '/body', naming);
   });
   measurePhase('cli.fs.build.docs', {}, () => {
     addDocsDirectory(entries, document.meta);
@@ -407,17 +407,20 @@ function addSection(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sec
     read: () => formatSectionAbout(section),
   });
   addBlockList(entries, meta, section.blocks, sectionPath, naming);
-  addSectionList(entries, meta, section.children.filter((child) => !child.isGhost), sectionPath, naming);
+  addSectionList(entries, meta, section.children, sectionPath, naming);
 }
 
 function addSectionList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, sections: VisualSection[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
+  const visibleSections = sections.filter((section) => !section.isGhost);
   const keys: string[] = [];
-  sections.forEach((section, index) => {
+  visibleSections.forEach((section, index) => {
     const key = uniqueName(sectionDirectoryName(section, index), entries, parentPath);
     keys.push(key);
     addSection(entries, meta, section, `${parentPath}/${key}`, naming);
   });
-  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) => reorderByKeys(sections, keys, nextKeys));
+  addOrderFile(entries, `${parentPath}/children-order.json`, keys, (nextKeys) =>
+    reorderVisibleByKeys(sections, visibleSections, keys, nextKeys)
+  );
 }
 
 function addBlockList(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, blocks: VisualBlock[], parentPath: string, naming?: HvyVirtualPathNamingState): void {
@@ -681,6 +684,18 @@ function readOrderFileKeys(content: string, path: string, currentKeys: string[])
 function reorderByKeys<T>(items: T[], currentKeys: string[], nextKeys: string[]): void {
   const byKey = new Map(currentKeys.map((key, index) => [key, items[index]]));
   items.splice(0, items.length, ...nextKeys.map((key) => byKey.get(key)).filter((item): item is T => item !== undefined));
+}
+
+function reorderVisibleByKeys<T>(items: T[], visibleItems: T[], currentKeys: string[], nextKeys: string[]): void {
+  const reordered = [...visibleItems];
+  reorderByKeys(reordered, currentKeys, nextKeys);
+  let visibleIndex = 0;
+  for (let index = 0; index < items.length; index += 1) {
+    if (visibleItems.includes(items[index]!)) {
+      items[index] = reordered[visibleIndex]!;
+      visibleIndex += 1;
+    }
+  }
 }
 
 function addSectionBlockLookup(

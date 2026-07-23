@@ -53,7 +53,7 @@ interface ProxyChatMessage {
   error?: boolean;
 }
 
-interface ProxyChatRequest {
+export interface ProxyChatRequest {
   provider: ChatSettings['provider'];
   model: string;
   messages: ProxyChatMessage[];
@@ -69,7 +69,7 @@ interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
   systemInstructions?: string;
 }
 
-interface ProxyChatResponse {
+export interface ProxyChatResponse {
   output: string;
   reasoningSummary?: string;
   usage?: ChatTokenUsage;

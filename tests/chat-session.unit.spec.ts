@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
-import type { ChatMessage, ChatSettings } from '../src/types';
+import type { ChatMessage, ChatSettings, HvyEmbeddingProvider } from '../src/types';
 
 const { requestChatCompletionMock, requestProxyCompletionMock, requestProxyToolTurnMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliFailedCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
   requestChatCompletionMock: vi.fn(),
@@ -313,8 +313,6 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Recipes:\n- db-and-form\n- form-backed-table\n- populate-form-options-from-db\n- scripting') }),
     expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy request_structure --collapse\n```') }),
     expect.objectContaining({ role: 'user', content: expect.stringContaining('Components:') }),
-    expect.objectContaining({ role: 'assistant', content: expect.stringContaining('```shell\nhvy search "Add a chore section." --max 5\n```') }),
-    expect.objectContaining({ role: 'user', content: expect.stringContaining('Next response: Write one concise What / Why / Unsure note block') }),
   ]);
   expect(firstMessages?.at(-1)?.role).toBe('user');
   expect(firstMessages?.at(-1)?.content).toContain('Current directory: /');
@@ -339,12 +337,12 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
     expect.stringContaining('Components:'),
     undefined,
   ]);
-  expect(writeChatCliCommandTraceMock.mock.calls[3]).toEqual([
-    'chat-cli-test',
-    'hvy search "Add a chore section." --max 5',
-    expect.stringContaining('Search results for: "Add a chore section.":'),
-    undefined,
+  expect(writeChatCliCommandTraceMock.mock.calls.slice(0, 3).map((call) => call[1])).toEqual([
+    'ls /',
+    'hvy --help',
+    'hvy request_structure --collapse',
   ]);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('hvy search "Add a chore section." --max 5');
   expect(result.messages.at(-1)).toEqual(expect.objectContaining({
     role: 'assistant',
     content: 'Created the chore section.',
@@ -547,7 +545,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('messages');
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
-  expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'finish_task', 'ask_user']);
+  expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'search_hvy_document', 'apply_hvy_patch', 'finish_task', 'ask_user']);
   expect(payload.tools?.[0]?.description).toContain('Valid command names: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.tools?.[0]?.parameters?.properties?.command?.description).toContain('Start with one of: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.input).toEqual([
@@ -560,8 +558,6 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
     expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_2', output: expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE') }),
     { type: 'function_call', call_id: 'startup_call_3', name: 'run_hvy_cli', arguments: '{"command":"hvy request_structure --collapse"}' },
     expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_3', output: expect.stringContaining('Components:') }),
-    { type: 'function_call', call_id: 'startup_call_4', name: 'run_hvy_cli', arguments: '{"command":"hvy search \\"Add a chore section.\\" --max 5"}' },
-    expect.objectContaining({ type: 'function_call_output', call_id: 'startup_call_4', output: expect.stringContaining('Search results for: \\"Add a chore section.\\":') }),
   ]);
   expect(result.requestJson).not.toContain('### CMD RESULT ###');
   expect(result.requestJson).not.toContain('```shell\\nls /\\n```');
@@ -598,7 +594,6 @@ section_defs:
 
   expect(result.requestJson).toContain('Reusable section templates:');
   expect(result.requestJson).toContain('Certifications key=resume-certifications available - Certifications section template');
-  expect(result.requestJson).toContain('/section_defs/resume-certifications id=resume-certifications kind=section-template type=section-template');
   expect(result.requestJson).toContain('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY');
 });
 
@@ -729,6 +724,252 @@ component_defs:
   expect(serializeDocument(document)).toContain('<!--hvy:history-record {"id":"history-new"');
   expect(serializeDocument(document)).toMatch(/history-new[\s\S]*history-existing/);
   expect(result.commandResultMessage).toContain('Current directory: /body/history/history-list/history-new');
+});
+
+test('expected result: CLI simulation runs embedding search through the real native tool dispatcher', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({
+      id: input.id,
+      vector: input.id === 'query' || /quickly|fast development/i.test(input.text)
+        ? [1, 0]
+        : [0, 1],
+    }))
+  );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Known for moving software from idea to production quickly.
+
+<!--hvy:text {"id":"mentoring"}-->
+Mentors engineers and supports their long-term growth.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Find claims that I develop software unusually fast.',
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingProvider,
+  });
+
+  const expectedResult = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: '',
+    toolTurn: {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'search_call',
+        name: 'search_hvy_document',
+        arguments: {
+          query: 'references to fast development',
+          limit: 5,
+        },
+      }],
+      nativeMessages: [{
+        type: 'function_call',
+        call_id: 'search_call',
+        name: 'search_hvy_document',
+        arguments: '{"query":"references to fast development","limit":5}',
+      }],
+      toolState: initial.turnState.toolState!,
+    },
+  });
+
+  expect(expectedResult.mutated).toBe(false);
+  expect(expectedResult.commandResultMessage).toContain('search_hvy_document');
+  expect(expectedResult.commandResultMessage).toContain('"mode": "embeddings"');
+  expect(expectedResult.commandResultMessage).toContain('/body/summary/delivery');
+  expect(expectedResult.commandResultMessage).not.toContain('"score"');
+  expect(expectedResult.requestJson).toContain('\\"mode\\":\\"embeddings\\"');
+  expect(embeddingProvider).toHaveBeenCalled();
+});
+
+test('expected result: CLI simulation applies a multi-file patch and reports mutation when finishing in the same turn', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Alpha speed claim.
+
+<!--hvy:text {"id":"mentoring"}-->
+Beta mentoring claim.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Update both claims.',
+  });
+
+  const expectedResult = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: '',
+    toolTurn: {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [
+        {
+          id: 'patch_call',
+          name: 'apply_hvy_patch',
+          arguments: {
+            patch: `*** Begin Patch
+*** Update File: /body/summary/delivery/text.txt
+@@
+-Alpha speed claim.
++Alpha delivery claim.
+*** Update File: /body/summary/mentoring/text.txt
+@@
+-Beta mentoring claim.
++Beta coaching claim.
+*** End Patch`,
+          },
+        },
+        {
+          id: 'finish_call',
+          name: 'finish_task',
+          arguments: { summary: 'Updated both claims.' },
+        },
+      ],
+      nativeMessages: [],
+      toolState: initial.turnState.toolState!,
+    },
+  });
+
+  expect(expectedResult.mutated).toBe(true);
+  expect(expectedResult.terminalSummary).toBe('Updated both claims.');
+  expect(serializeDocument(document)).toContain('Alpha delivery claim.');
+  expect(serializeDocument(document)).toContain('Beta coaching claim.');
+});
+
+test('expected result: CLI simulation accepts a text-encoded structured patch call', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'text-only-model' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Alpha speed claim.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Update the delivery claim.',
+  });
+
+  const expectedResult = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: JSON.stringify({
+      tool: 'apply_hvy_patch',
+      arguments: {
+        patch: `*** Begin Patch
+*** Update File: /body/summary/delivery/text.txt
+@@
+-Alpha speed claim.
++Alpha delivery claim.
+*** End Patch`,
+      },
+    }),
+  });
+
+  expect(expectedResult.mutated).toBe(true);
+  expect(expectedResult.commandResultMessage).toContain('"appliedFileCount": 1');
+  expect(serializeDocument(document)).toContain('Alpha delivery claim.');
+});
+
+test('expected result: a failed text-encoded patch returns a repairable tool error', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'text-only-model' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Alpha delivery claim.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Update the delivery claim.',
+  });
+
+  const expectedResult = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: JSON.stringify({
+      tool: 'apply_hvy_patch',
+      arguments: {
+        patch: `*** Update File: /body/summary/delivery/text.txt
+@@
+-Alpha delivery claim.
++Updated claim.`,
+      },
+    }),
+  });
+
+  expect(expectedResult.mutated).toBe(false);
+  expect(expectedResult.turnState.batchHadError).toBe(true);
+  expect(expectedResult.commandResultMessage).toContain('"error"');
+  expect(expectedResult.turnState.messages.at(-1)?.role).toBe('user');
+  expect(serializeDocument(document)).toContain('Alpha delivery claim.');
+});
+
+test('expected result: CLI simulation accepts a text-encoded structured search call', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'text-only-model' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Alpha delivery claim.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Find the delivery claim.',
+  });
+
+  const expectedResult = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: `\`\`\`json
+{"tool":"search_hvy_document","arguments":{"query":"delivery claim","limit":5}}
+\`\`\``,
+  });
+
+  expect(expectedResult.mutated).toBe(false);
+  expect(expectedResult.commandResultMessage).toContain('search_hvy_document result');
+  expect(expectedResult.commandResultMessage).toContain('/body/summary/delivery');
 });
 
 test('advanceDocumentEditCliSimStep rejects done through run_hvy_cli in native tool mode', async () => {
@@ -1409,7 +1650,6 @@ true
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    'hvy search "Try too many commands." --max 5',
     'pwd\nls /\ncat /header.yaml\nhvy lint',
   ]);
 });
@@ -1833,8 +2073,11 @@ test('requestDocumentEditChatTurn treats continue as chronological context inste
   expect(context).toContain('Current request:\ncontinue');
   expect(context).not.toContain('Use the chronological chat messages and terminal results to infer the active task.');
   expect(context).not.toContain('Task goal:');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toContain('hvy search "continue" --max 5');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).not.toContain('hvy search "Create a chore chart with forms and a leaderboard\ncontinue" --max 5');
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual([
+    'ls /',
+    'hvy --help',
+    'hvy request_structure --collapse',
+  ]);
   expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages.slice(0, 3)).toEqual([
     expect.objectContaining({ role: 'user', content: 'Create a chore chart with forms and a leaderboard' }),
     expect.objectContaining({ role: 'assistant', content: 'Unclosed quote in command.', error: true }),
@@ -1863,7 +2106,7 @@ test('requestDocumentEditChatTurn treats prose and dangling fences as retryable 
   expect(onProgress).not.toHaveBeenCalled();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
   expect(requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.at(-1)?.content).toContain('Expected concise notes plus fenced ```shell commands');
-  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse', 'hvy search "Use command format." --max 5']);
+  expect(writeChatCliCommandTraceMock.mock.calls.map((call) => call[1])).toEqual(['ls /', 'hvy --help', 'hvy request_structure --collapse']);
 });
 
 test('requestDocumentEditChatTurn preserves multiline quoted shell commands', async () => {
@@ -2008,7 +2251,6 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     expect.stringContaining('dir  body'),
     expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE'),
     expect.stringContaining('Components:'),
-    expect.any(String),
     'Unknown command "not-a-command". Try "help".',
     'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     expect.stringContaining('No such file: /missing.txt'),
@@ -2043,7 +2285,6 @@ test('requestDocumentEditChatTurn warns when scratchpad writes exceed the note l
     'ls /',
     'hvy --help',
     'hvy request_structure --collapse',
-    `hvy search "Use a very long scratchpad." --max 5`,
     `echo "${'x'.repeat(900)}" > scratchpad.txt`,
     'pwd',
     'echo "short notes" > scratchpad.txt',

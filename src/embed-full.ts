@@ -69,6 +69,7 @@ import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
+import { createHvyAgentTools } from './agent-tools';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -1285,7 +1286,14 @@ export type {
   ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
-export { createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes };
+export { createHvyAgentTools, createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes };
+export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
+export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
+export type {
+  ProviderToolCall,
+  ProviderToolDefinition,
+  ProviderToolState,
+} from './chat/provider-tools';
 export type {
   HvyEmbeddingIndexChunk,
   HvyEmbeddingIndexUpdatePlan,
@@ -1344,6 +1352,7 @@ window.HVY = {
   createPdfExportPlanFromPrompt,
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
+  createHvyAgentTools,
   createProxyEmbeddingProvider,
   planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,

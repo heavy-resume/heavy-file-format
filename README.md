@@ -160,6 +160,33 @@ Hosts can also call `HVY.prepareEmbeddingChatContext(document, options,
 embeddingProvider)` directly to build the same cache without asking a chat
 question.
 
+Agent hosts, MCP servers, and custom chat integrations can use the same search
+and patch implementations as the built-in chat loop:
+
+```js
+import { createHvyAgentTools } from 'heavy-file-format-ref-impl/agent-tools';
+
+const tools = createHvyAgentTools({
+  document,
+  embeddingProvider,
+  chatContext: { mode: 'embedding-retrieval' },
+});
+
+const candidates = await tools.search({
+  query: 'references to unusually fast development',
+  limit: 5,
+});
+
+const result = tools.applyPatch(patchText);
+```
+
+The factory keeps one CLI session so successive patches share virtual paths and
+failed structured-write sidecars. In browser embeds the same factory is
+available as `HVY.createHvyAgentTools(...)`. A custom `chatClient.toolTurn`
+receives the built-in tool definitions in `request.tools`; it can translate
+those definitions and return normalized `toolCalls` without reimplementing
+search or patch execution.
+
 Desktop or workspace hosts that store embeddings outside HVY can use the
 headless planner instead. The planner parses the current document structure into
 section-scoped embedding chunks and compares them against vectors from the

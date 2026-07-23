@@ -15,6 +15,22 @@ export async function runHvyCliOnFile(request) {
   return runner.runHvyCliOnFile(normalizeRequest(request));
 }
 
+export async function searchHvyFile(request) {
+  const runner = await loadBundledRunner();
+  if (typeof request?.filePath !== 'string' || typeof request?.query !== 'string') {
+    throw new Error('searchHvyFile requires filePath and query.');
+  }
+  return runner.searchHvyFile(request);
+}
+
+export async function applyHvyPatchOnFile(request) {
+  const runner = await loadBundledRunner();
+  if (typeof request?.filePath !== 'string' || typeof request?.patch !== 'string') {
+    throw new Error('applyHvyPatchOnFile requires filePath and patch.');
+  }
+  return runner.applyHvyPatchOnFile(request);
+}
+
 function normalizeRequest(request) {
   const filePath = typeof request?.filePath === 'string' ? request.filePath : '';
   const cwd = typeof request?.cwd === 'string' && request.cwd ? request.cwd : '/';
@@ -37,6 +53,7 @@ async function buildBundledRunner() {
     import { readFileSync, writeFileSync } from 'node:fs';
     import { extname } from 'node:path';
     import { createHvyCliSession, executeHvyCliCommand } from './src/cli-core/commands.ts';
+    import { createHvyAgentTools } from './src/agent-tools.ts';
     import { deserializeDocument, serializeDocument } from './src/serialization.ts';
 
     const HVY_TAIL_SENTINEL = '--HVY-TAIL--';
@@ -77,6 +94,41 @@ async function buildBundledRunner() {
         cwd: session.cwd,
         mutated,
         results,
+      };
+    }
+
+    export async function searchHvyFile(request) {
+      const { document } = readDocument(request.filePath);
+      return createHvyAgentTools({
+        document,
+        embeddingProvider: request.embeddingProvider,
+        chatContext: request.chatContext,
+      }).search({
+        query: request.query,
+        limit: request.limit,
+        cursor: request.cursor,
+      });
+    }
+
+    export function applyHvyPatchOnFile(request) {
+      const source = readDocument(request.filePath);
+      const result = createHvyAgentTools({ document: source.document }).applyPatch(request.patch);
+      if (result.appliedFileCount > 0) {
+        writeFileSync(request.filePath, appendOpaqueTailBytes(serializeDocument(source.document), source.tailBytes));
+      }
+      return result;
+    }
+
+    function readDocument(filePath) {
+      const extension = extname(filePath).toLowerCase();
+      if (!['.hvy', '.thvy', '.phvy', '.md', '.markdown'].includes(extension)) {
+        throw new Error('Expected .hvy, .thvy, .phvy, .md, or .markdown input.');
+      }
+      const documentExtension = extension === '.markdown' ? '.md' : extension;
+      const source = splitEditableHvyBytes(readFileSync(filePath));
+      return {
+        document: deserializeDocument(source.text, documentExtension),
+        tailBytes: source.tailBytes,
       };
     }
 

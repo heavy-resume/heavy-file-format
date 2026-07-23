@@ -23,6 +23,10 @@
       "types": "./src/cli-core/index.ts",
       "default": "./src/cli-core/index.ts"
     },
+    "./agent-tools": {
+      "types": "./src/agent-tools.ts",
+      "default": "./src/agent-tools.ts"
+    },
     "./rich-text-copy": {
       "types": "./src/rich-text-copy.ts",
       "default": "./src/rich-text-copy.ts"

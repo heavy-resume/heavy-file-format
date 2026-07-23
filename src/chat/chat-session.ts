@@ -202,6 +202,8 @@ export async function requestDocumentEditChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   request: string;
+  chatContext?: HvyChatContextOptions | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   selectedComponent?: ChatCliSelectedComponentFocus;
   onMutation?: (group?: string, mutation?: ChatCliMutationSummary) => void;
   onProgress?: (message: ChatMessage) => void;
@@ -239,6 +241,8 @@ export async function requestDocumentEditChatTurn(params: {
       document: params.document,
       request: params.request,
       priorMessages: params.messages,
+      chatContext: params.chatContext,
+      embeddingProvider: params.embeddingProvider,
       selectedComponent: params.selectedComponent,
       onMutation: params.onMutation,
       onProgress: (content) =>
@@ -310,6 +314,8 @@ export async function buildDocumentEditCliSimRequest(params: {
   messages: ChatMessage[];
   request: string;
   selectedComponent?: ChatCliSelectedComponentFocus;
+  chatContext?: HvyChatContextOptions | null;
+  embeddingProvider?: HvyEmbeddingProvider | null;
   signal?: AbortSignal;
 }): Promise<DocumentEditCliSimRequest> {
   const initial = await buildChatCliInitialSimTurnState({
@@ -317,6 +323,8 @@ export async function buildDocumentEditCliSimRequest(params: {
     request: params.request,
     priorMessages: params.messages,
     selectedComponent: params.selectedComponent,
+    ...(params.chatContext ? { chatContext: params.chatContext } : {}),
+    ...(params.embeddingProvider ? { embeddingProvider: params.embeddingProvider } : {}),
     signal: params.signal,
   });
   const requestPayload = buildProxyChatRequest({

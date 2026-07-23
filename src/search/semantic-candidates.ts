@@ -88,7 +88,7 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 
 export function buildSemanticRetrievalChunks(
   document: VisualDocument,
-  options: { targetChunkChars?: number; overlapChars?: number } = {}
+  options: { targetChunkChars?: number; overlapChars?: number; preserveLeafTargets?: boolean } = {}
 ): HvyRetrievalChunk[] {
   const targetChunkChars = Math.max(1, Math.floor(options.targetChunkChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS));
   const overlapChars = normalizeOverlapChars(options.overlapChars, RETRIEVAL_CHUNK_OVERLAP_CHARS);
@@ -107,9 +107,33 @@ export function buildSemanticRetrievalChunks(
     leaves.push(candidate);
     leavesBySectionKey.set(candidate.sectionKey, leaves);
   }
+  if (options.preserveLeafTargets) {
+    return [...leavesBySectionKey.values()].flatMap((leaves) =>
+      leaves.flatMap((leaf) => buildLeafRetrievalChunks(leaf, targetChunkChars, overlapChars))
+    );
+  }
   return [...leavesBySectionKey.entries()].flatMap(([sectionKey, leaves]) =>
     buildSectionRetrievalChunks(sectionsByKey.get(sectionKey), leaves, targetChunkChars, overlapChars)
   );
+}
+
+function buildLeafRetrievalChunks(
+  leaf: HvySemanticFilterCandidate,
+  targetChunkChars: number,
+  overlapChars: number
+): HvyRetrievalChunk[] {
+  const pieces = buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars)
+    .flatMap((chunk) => splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk), targetChunkChars));
+  return pieces.map((piece, index): HvyRetrievalChunk => ({
+    ...piece.candidate,
+    chunkId: pieces.length === 1 ? piece.candidate.candidateId : `${piece.candidate.candidateId}#chunk:${index + 1}`,
+    sourceCandidateIds: [piece.candidate.candidateId],
+    summary: piece.text,
+    truncated: pieces.length > 1 || piece.candidate.truncated,
+    ...(pieces.length > 1
+      ? { windowChunk: { index, count: pieces.length, start: 0, end: piece.text.length } }
+      : { windowChunk: undefined }),
+  }));
 }
 
 export function buildSemanticFilterWindowRequest(

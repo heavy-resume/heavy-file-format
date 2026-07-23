@@ -1497,6 +1497,42 @@ hvy_version: 0.1
   }
 });
 
+test('expected result: semantic retrieval chunks can preserve editable component targets', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"delivery"}-->
+Known for moving software from idea to production quickly.
+
+<!--hvy:text {"id":"mentoring"}-->
+Mentors engineers and supports their long-term growth.
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, {
+    targetChunkChars: 2_000,
+    preserveLeafTargets: true,
+  });
+
+  expect(expectedResult).toEqual([
+    expect.objectContaining({
+      targetPath: '/body/summary/delivery',
+      targetKind: 'block',
+      componentType: 'text',
+      sourceCandidateIds: ['component:delivery'],
+    }),
+    expect.objectContaining({
+      targetPath: '/body/summary/mentoring',
+      targetKind: 'block',
+      componentType: 'text',
+      sourceCandidateIds: ['component:mentoring'],
+    }),
+  ]);
+});
+
 test('semantic filter provider matches become normal filter results', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

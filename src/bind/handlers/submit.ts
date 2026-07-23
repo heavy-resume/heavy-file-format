@@ -92,6 +92,8 @@ export function bindSubmit(app: HTMLElement): void {
             document: state.document,
             messages: state.chat.messages,
             request: question,
+            chatContext: state.chatContext,
+            embeddingProvider: state.embeddingProvider,
           });
           state.chat.cliSim = {
             requestPayload: result.requestPayload,
@@ -206,6 +208,8 @@ export function bindSubmit(app: HTMLElement): void {
                 document: state.document,
                 messages: previousMessages,
                 request: question,
+                chatContext: state.chatContext,
+                embeddingProvider: state.embeddingProvider,
                 onMutation: recordDocumentEditMutation,
                 onProgress: (message) => {
                   if (requestNonce !== state.chat.requestNonce || abortController.signal.aborted) {

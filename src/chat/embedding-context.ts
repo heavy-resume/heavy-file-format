@@ -407,6 +407,77 @@ export async function searchDocumentsByEmbedding(options: {
     }));
 }
 
+export async function searchHvyDocumentByEmbedding(options: {
+  document: VisualDocument;
+  query: string;
+  embeddingProvider: HvyEmbeddingProvider;
+  chatContext?: HvyChatContextOptions;
+  maxResults?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}): Promise<HvyDocumentSearchResult[]> {
+  const query = options.query.trim();
+  if (!query) {
+    return [];
+  }
+  const chatContext = options.chatContext ?? {};
+  const index = await getEmbeddingIndex(
+    options.document,
+    chatContext,
+    options.embeddingProvider,
+    options.signal
+  );
+  if (index.records.length === 0) {
+    return [];
+  }
+  const queryVector = await embedSingleText({
+    provider: options.embeddingProvider,
+    model: index.profile.model,
+    text: query,
+    ...(index.profile.dimensions !== undefined ? { dimensions: index.profile.dimensions } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+  throwIfAborted(options.signal);
+  const maxResults = Math.max(1, Math.floor(options.maxResults ?? DEFAULT_MAX_RESULTS));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const seenTargets = new Set<string>();
+  return rankEmbeddingRecords(index.records, index.vectors, queryVector)
+    .filter((result) => {
+      const target = result.record.targetPath || result.record.targetRef || result.record.targetId;
+      if (seenTargets.has(target)) {
+        return false;
+      }
+      seenTargets.add(target);
+      return true;
+    })
+    .slice(offset, offset + maxResults)
+    .map((result, resultIndex): HvyDocumentSearchResult => ({
+      id: `current-document:embedding-${resultIndex + 1}`,
+      documentId: 'current-document',
+      category: 'semantic',
+      targetKind: result.record.targetKind,
+      sectionKey: result.record.sectionKey,
+      ...(result.record.blockId ? { blockId: result.record.blockId } : {}),
+      targetId: result.record.targetId,
+      ...(result.record.targetRef ? { targetRef: result.record.targetRef } : {}),
+      ...(result.record.targetPath ? { targetPath: result.record.targetPath } : {}),
+      label: result.record.label,
+      ...(result.record.contextLabel ? { contextLabel: result.record.contextLabel } : {}),
+      preview: result.record.text,
+      matchedText: query,
+      sourceField: 'Embedding match',
+      ...(result.record.componentType ? { sourceFile: result.record.componentType } : {}),
+      matches: [{
+        field: 'embedding',
+        label: 'Embedding match',
+        preview: result.record.text,
+        matchedText: query,
+      }],
+      documentOrder: result.record.documentOrder,
+      score: result.score,
+    }));
+}
+
 async function getEmbeddingIndex(
   document: VisualDocument,
   options: HvyChatContextOptions,
@@ -445,11 +516,12 @@ async function getEmbeddingIndex(
     ...(signal ? { signal } : {}),
   });
   pendingRuntimeIndexes.set(document, { documentRevision, profileKey, promise });
-  void promise.finally(() => {
+  const clearPending = (): void => {
     if (pendingRuntimeIndexes.get(document)?.promise === promise) {
       pendingRuntimeIndexes.delete(document);
     }
-  });
+  };
+  void promise.then(clearPending, clearPending);
   return promise;
 }
 
@@ -538,6 +610,7 @@ function buildEmbeddingRecords(
   return buildSemanticRetrievalChunks(document, {
     targetChunkChars: options.targetChunkChars ?? MAX_RECORD_TEXT_CHARS,
     ...(options.overlapChars !== undefined ? { overlapChars: options.overlapChars } : {}),
+    preserveLeafTargets: true,
   })
     .map((candidate): EmbeddingRecord => {
       const text = truncateText(candidate.summary, MAX_RECORD_TEXT_CHARS);

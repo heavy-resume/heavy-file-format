@@ -6,6 +6,7 @@ const loadDbTableRuntime = () => import('./plugins/db-table');
 
 type QaToolRequest =
   | { tool: 'answer'; answer: string }
+  | { tool: 'inspect_document'; query: string }
   | { tool: 'query_db_table'; table_name?: string; query?: string; limit?: number; reason?: string };
 
 export function buildQaToolLoopFormatInstructions(dbTableNames: string[]): string {
@@ -16,13 +17,15 @@ export function buildQaToolLoopFormatInstructions(dbTableNames: string[]): strin
     '',
     'Reply with exactly one JSON object and nothing else. Do not wrap it in Markdown.',
     'Choose one tool at a time.',
-    'Valid tools are: `query_db_table`, `answer`.',
+    'Valid tools are: `query_db_table`, `inspect_document`, `answer`.',
     'Use `query_db_table` when you need live row data before answering. Provide `table_name` when more than one table exists, or provide a full SQL `query` (SELECT only). `limit` is optional and is capped for concise tool output.',
+    'Use `inspect_document` when the user asks you to check, verify, confirm, inspect, search, review, or look again and the supplied evidence is insufficient. Resolve conversational references and provide a self-contained inspection query.',
     'Use `answer` to return the final HVY-formatted response to the user. The `answer` value must follow the HVY response formatting rules below.',
     '',
     'Tool shapes:',
     '{"tool":"query_db_table","table_name":"work_items","limit":10,"reason":"optional"}',
     '{"tool":"query_db_table","query":"SELECT company, status FROM work_items WHERE status != \\"Rejected\\" ORDER BY company","limit":10,"reason":"optional"}',
+    '{"tool":"inspect_document","query":"FAKE_INSPECTION_QUERY"}',
     '{"tool":"answer","answer":"<HVY-formatted response as a JSON string>"}',
     '',
     '--- HVY response formatting rules (apply to the `answer` field) ---',
@@ -41,6 +44,9 @@ export function parseQaToolRequest(source: string): { ok: true; value: QaToolReq
     if (tool === 'answer' && typeof parsed.answer === 'string') {
       return { ok: true, value: { tool: 'answer', answer: parsed.answer } };
     }
+    if (tool === 'inspect_document' && typeof parsed.query === 'string' && parsed.query.trim()) {
+      return { ok: true, value: { tool: 'inspect_document', query: parsed.query.trim() } };
+    }
     if (tool === 'query_db_table') {
       return {
         ok: true,
@@ -53,7 +59,7 @@ export function parseQaToolRequest(source: string): { ok: true; value: QaToolReq
         },
       };
     }
-    return { ok: false, message: 'Tool must be `query_db_table` or `answer`.' };
+    return { ok: false, message: 'Tool must be `query_db_table`, `inspect_document`, or `answer`.' };
   } catch {
     return { ok: false, message: 'Response was not valid JSON.' };
   }
@@ -140,6 +146,9 @@ export async function runQaToolLoop(params: {
 
     if (parsed.value.tool === 'answer') {
       return parsed.value.answer.trim();
+    }
+    if (parsed.value.tool === 'inspect_document') {
+      return `inspect_document ${parsed.value.query}`;
     }
 
     let toolResult: string;

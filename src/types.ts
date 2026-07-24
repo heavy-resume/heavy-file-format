@@ -68,6 +68,11 @@ export interface ToolLoopCompactionOptions {
   toolResultChatChars?: number;
 }
 
+export interface ChatScratchpadOptions {
+  warningChars?: number;
+  maxChars?: number;
+}
+
 export interface ChatCliSimState {
   requestPayload: unknown | null;
   requestJson: string;
@@ -89,6 +94,7 @@ export interface ChatSettings {
   compactionModel?: string;
   maxContextChars?: number;
   toolLoopCompaction?: ToolLoopCompactionOptions;
+  scratchpad?: ChatScratchpadOptions;
 }
 
 export interface ChatState {

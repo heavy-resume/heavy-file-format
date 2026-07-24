@@ -216,7 +216,11 @@ export function buildSemanticFilterCandidates(
     const locationLabel = (block.schema.description ?? '').trim() || nearestLocationLabel;
     const targetPath = blockPaths.get(block);
     const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
-    const summaryResult = truncateSummary(buildBlockSummary(block, baseComponent), maxCandidateSummaryChars);
+    const summaryResult = truncateSummary(
+      buildBlockSummary(block, baseComponent),
+      maxCandidateSummaryChars,
+      baseComponent === 'plugin'
+    );
     const contextLabel = contextTrail.filter((part) => part && part !== label).slice(-3).join(' / ');
     blockCandidates.push({
       candidateId: `component:${targetRef}`,
@@ -668,6 +672,25 @@ function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
   const childSummary = shouldSummarizeChildContent(baseComponent, block)
     ? getNestedBlockSummaryText(block)
     : '';
+  if (baseComponent === 'plugin') {
+    return [
+      block.schema.plugin ? `Plugin: ${block.schema.plugin}` : '',
+      Object.keys(block.schema.pluginConfig).length > 0
+        ? `Plugin parameters: ${JSON.stringify(block.schema.pluginConfig)}`
+        : '',
+      Object.keys(block.schema.pluginSortValues).length > 0
+        ? `Plugin sort values: ${JSON.stringify(block.schema.pluginSortValues)}`
+        : '',
+      childSummary,
+      ...(block.text.trim().length > 0
+        ? [
+            '--- begin plugin text ---',
+            block.text.trim(),
+            '--- end plugin text ---',
+          ]
+        : []),
+    ].filter(Boolean).join('\n');
+  }
   return cleanText([
     block.schema.component,
     block.schema.tags ?? '',
@@ -775,8 +798,10 @@ function cleanText(value: string): string {
     .trim();
 }
 
-function truncateSummary(value: string, maxChars: number): { summary: string; truncated: boolean } {
-  const clean = cleanText(value);
+function truncateSummary(value: string, maxChars: number, preserveLines = false): { summary: string; truncated: boolean } {
+  const clean = preserveLines
+    ? value.replace(/\r\n?/g, '\n').trim()
+    : cleanText(value);
   if (clean.length <= maxChars) {
     return { summary: clean, truncated: false };
   }

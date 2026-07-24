@@ -13,6 +13,7 @@ Use hvy request_structure, hvy search, man/help, cheatsheets, recipes, and compo
 Before editing, decide whether the request is localized, exhaustive, or a searchable batch.
 For localized work, use the CLI to inspect and edit the relevant component or section.
 For exhaustive work, traverse the complete relevant scope in bounded batches; semantic search does not prove completeness.
+Use walk_hvy_document for exhaustive review of user-visible content, following nextCursor until it is absent. Record concise findings in /scratchpad.txt and finish the read pass before structural edits so cursor order stays stable.
 For a searchable batch, search for candidates, inspect uncertain results, then apply the coordinated changes.
 Use hvy lint to validate when you think the edit is ready to finish.
 Use hvy commands to create/remove components; use shell commands to inspect and edit writable files.

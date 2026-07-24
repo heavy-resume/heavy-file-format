@@ -125,6 +125,34 @@ test('requestChatTurn returns assistant answer on success', async () => {
   );
 });
 
+test('requestChatTurn escalates an ambiguous verification follow-up to document inspection', async () => {
+  requestChatCompletionMock.mockResolvedValue(
+    'inspect_document Verify whether TypeScript still appears anywhere in the resume.'
+  );
+  requestProxyCompletionMock.mockResolvedValue('done TypeScript still appears in the Top Skills section.');
+
+  const result = await requestChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Top Skills\n\nTypeScript\n', '.hvy'),
+    messages: [
+      { id: 'u1', role: 'user', content: 'Did you remove TypeScript everywhere?' },
+      { id: 'a1', role: 'assistant', content: 'Yes, it is gone.' },
+    ],
+    question: 'Can you check again?',
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.messages.at(-1)?.content).toBe('TypeScript still appears in the Top Skills section.');
+  expect(requestProxyCompletionMock).toHaveBeenCalled();
+  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ role: 'user', content: 'Can you check again?' }),
+    expect.objectContaining({
+      role: 'user',
+      content: expect.stringContaining('Verify whether TypeScript still appears anywhere in the resume.'),
+    }),
+  ]));
+});
+
 test('requestChatTurn refuses document changes in viewer mode without calling the provider', async () => {
   requestChatCompletionMock.mockResolvedValue('Should not be called.');
 
@@ -550,7 +578,7 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('messages');
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
-  expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'search_hvy_document', 'apply_hvy_patch', 'finish_task', 'ask_user']);
+  expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'search_hvy_document', 'walk_hvy_document', 'apply_hvy_patch', 'finish_task', 'ask_user']);
   expect(payload.tools?.find((tool) => tool.name === 'search_hvy_document')?.parameters).toMatchObject({
     properties: {
       query: { type: 'string' },
@@ -642,6 +670,27 @@ test('buildDocumentEditCliSimRequest displays the provider request derived from 
   }));
 });
 
+test('buildDocumentEditCliSimRequest applies chat scratchpad settings to the agent session', async () => {
+  const result = await buildDocumentEditCliSimRequest({
+    settings: {
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      scratchpad: {
+        warningChars: 2_000,
+        maxChars: 4_000,
+      },
+    },
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy'),
+    messages: [],
+    request: 'Review the document.',
+  });
+
+  expect(result.turnState.session.scratchpadLimits).toEqual({
+    warningChars: 2_000,
+    maxChars: 4_000,
+  });
+});
+
 test('advanceDocumentEditCliSimStep executes the response and prepares the next chronological request payload', async () => {
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -700,6 +749,50 @@ test('advanceDocumentEditCliSimStep executes the response and prepares the next 
     output: expect.stringContaining('"stdout":"/"'),
   }));
   expect(result.requestJson).not.toContain('### CMD RESULT ###');
+});
+
+test('advanceDocumentEditCliSimStep walks visible document content with the native read-only tool', async () => {
+  const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+ Review this visible introduction.
+`, '.hvy');
+  const initial = await buildDocumentEditCliSimRequest({
+    settings,
+    document,
+    messages: [],
+    request: 'Review the whole document.',
+  });
+
+  const result = await advanceDocumentEditCliSimStep({
+    settings,
+    document,
+    turnState: initial.turnState,
+    assistantOutput: '',
+    toolTurn: {
+      output: '',
+      reasoningSummary: '',
+      toolCalls: [{
+        id: 'call_walk',
+        name: 'walk_hvy_document',
+        arguments: { limit: 8, cursor: null },
+      }],
+      nativeMessages: [{ type: 'function_call', call_id: 'call_walk', name: 'walk_hvy_document', arguments: '{"limit":8,"cursor":null}' }],
+      toolState: initial.turnState.toolState ?? { provider: 'openai', input: [] },
+    },
+  });
+
+  expect(result.mutated).toBe(false);
+  expect(result.commandResultMessage).toContain('walk_hvy_document');
+  expect(result.commandResultMessage).toContain('/body/summary/intro');
+  expect(result.commandResultMessage).toContain('Review this visible introduction.');
+  expect(result.commandResultMessage).toContain('"totalItems": 1');
 });
 
 test('advanceDocumentEditCliSimStep mutates the same document for insert commands', async () => {

@@ -1414,6 +1414,24 @@ test('cli warns when scratchpad writes exceed the note limit', async () => {
   expect((await executeHvyCliCommand(document, session, 'echo "short" > scratchpad.txt')).output).toBe('/scratchpad.txt: written');
 });
 
+test('cli applies per-session scratchpad warning and maximum sizes', async () => {
+  const document = createResumeCliTestDocument();
+  const session = createHvyCliSession({
+    scratchpadWarningChars: 100,
+    scratchpadMaxChars: 200,
+  });
+
+  // BEFORE
+  expect(session.scratchpadLimits).toEqual({ warningChars: 100, maxChars: 200 });
+
+  // TOOL CALL
+  const warning = await executeHvyCliCommand(document, session, `echo "${'x'.repeat(250)}" > scratchpad.txt`);
+
+  // AFTER
+  expect(session.scratchpadContent).toHaveLength(200);
+  expect(warning.output).toContain('scratchpad.txt is 200 characters, which is over the 100 character working limit.');
+});
+
 test('cli exposes resume component-list items by stable section paths', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

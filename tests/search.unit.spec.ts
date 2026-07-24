@@ -1533,6 +1533,43 @@ Mentors engineers and supports their long-term growth.
   ]);
 });
 
+test('expected result: semantic retrieval includes plugin identity, text, parameters, and sort values', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"equipment"}-->
+#! Equipment
+
+<!--hvy:plugin {"id":"grill-rating","plugin":"example.skill-info","pluginConfig":{"scope":"current-record","targetId":"tool-grillbox"},"pluginSortValues":{"Strength":3.5}}-->
+Self-assessed equipment proficiency.
+
+Useful for testing paragraph boundaries.
+`, '.hvy');
+
+  const expectedResult = buildSemanticRetrievalChunks(document, {
+    targetChunkChars: 2_000,
+    preserveLeafTargets: true,
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.summary).toContain('Component: plugin');
+  expect(expectedResult[0]!.summary).toContain('Plugin: example.skill-info');
+  expect(expectedResult[0]!.summary).toContain([
+    '--- begin plugin text ---',
+    'Self-assessed equipment proficiency.',
+    '',
+    'Useful for testing paragraph boundaries.',
+    '--- end plugin text ---',
+  ].join('\n'));
+  expect(expectedResult[0]!.summary).toContain('Plugin parameters: {"scope":"current-record","targetId":"tool-grillbox"}');
+  expect(expectedResult[0]!.summary).toContain('Plugin sort values: {"Strength":3.5}');
+  expect(expectedResult[0]!.summary.indexOf('Plugin sort values:')).toBeLessThan(
+    expectedResult[0]!.summary.indexOf('--- begin plugin text ---')
+  );
+  expect(expectedResult[0]!.summary.endsWith('--- end plugin text ---')).toBe(true);
+});
+
 test('semantic filter provider matches become normal filter results', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

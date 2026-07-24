@@ -57,13 +57,25 @@ hvy_version: 0.1
   Plain doc.
 `;
 
-test('buildQaToolLoopFormatInstructions advertises query_db_table and answer tools', () => {
+test('buildQaToolLoopFormatInstructions advertises query, inspection, and answer tools', () => {
   const instructions = buildQaToolLoopFormatInstructions(['work_items', 'notes']);
 
   expect(instructions).toContain('`query_db_table`');
+  expect(instructions).toContain('`inspect_document`');
   expect(instructions).toContain('`answer`');
   expect(instructions).toContain('work_items, notes');
   expect(instructions).toContain('read-only');
+});
+
+test('parseQaToolRequest accepts a document inspection escalation', () => {
+  const parsed = parseQaToolRequest('{"tool":"inspect_document","query":"Verify the current status values."}');
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) {
+    expect(parsed.value).toEqual({
+      tool: 'inspect_document',
+      query: 'Verify the current status values.',
+    });
+  }
 });
 
 test('parseQaToolRequest accepts an answer tool call', () => {

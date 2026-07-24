@@ -599,7 +599,17 @@ export async function requestChatCompletion(params: {
     settings: params.settings,
     messages: params.messages,
     context,
-    responseInstructions: HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    responseInstructions: [
+      'Answer the user from the supplied document evidence when that evidence is sufficient.',
+      'If the user asks you to check, verify, confirm, inspect, search, review, or look again and fresh document inspection is needed, do not guess or merely repeat the prior answer.',
+      'To request fresh document inspection, return exactly one line.',
+      'Begin with the exact command `inspect_document`, add one space, then add a self-contained query derived from the user request and recent conversation.',
+      'Resolve references such as "that", "it", and "again" from the recent conversation when writing the inspection query.',
+      'Do not copy placeholder text. Do not add Markdown fences, JSON, labels, or explanation.',
+      'Otherwise, answer normally using the HVY response formatting rules below.',
+      '',
+      HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS,
+    ].join('\n'),
     mode: 'qa',
     debugLabel: 'chat',
     onReasoningSummary: params.onReasoningSummary,
@@ -1005,6 +1015,7 @@ function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
     maxContextChars: normalizeOptionalPositiveInteger(settings?.maxContextChars ?? defaults.maxContextChars),
     toolLoopCompaction: settings?.toolLoopCompaction ?? defaults.toolLoopCompaction,
+    scratchpad: normalizeScratchpadSettings(settings?.scratchpad ?? defaults.scratchpad),
   };
 }
 
@@ -1019,7 +1030,22 @@ export function mergeChatSettings(settings: Partial<ChatSettings> | null | undef
       : defaults.compactionModel ?? DEFAULT_OPENAI_COMPACTION_MODEL,
     ...(sanitized.maxContextChars ? { maxContextChars: sanitized.maxContextChars } : {}),
     ...(sanitized.toolLoopCompaction ? { toolLoopCompaction: sanitized.toolLoopCompaction } : {}),
+    ...(sanitized.scratchpad ? { scratchpad: sanitized.scratchpad } : {}),
   };
+}
+
+function normalizeScratchpadSettings(settings: ChatSettings['scratchpad']): ChatSettings['scratchpad'] {
+  if (!settings) {
+    return undefined;
+  }
+  const warningChars = normalizeOptionalPositiveInteger(settings.warningChars);
+  const maxChars = normalizeOptionalPositiveInteger(settings.maxChars);
+  return warningChars || maxChars
+    ? {
+        ...(warningChars ? { warningChars } : {}),
+        ...(maxChars ? { maxChars } : {}),
+      }
+    : undefined;
 }
 
 function normalizeOptionalPositiveInteger(value: unknown): number | undefined {

@@ -29,8 +29,9 @@ import { measureAsyncPhase, measurePhase, recordMeasurement, isMeasurementEnable
 
 const loadDbTableRuntime = () => import('../plugins/db-table');
 
-const SCRATCHPAD_SOFT_MAX_CHARS = 600;
-const SCRATCHPAD_HARD_MAX_CHARS = 800;
+const DEFAULT_SCRATCHPAD_WARNING_CHARS = 600;
+const DEFAULT_SCRATCHPAD_MAX_CHARS = 800;
+const MAX_CONFIGURABLE_SCRATCHPAD_CHARS = 32_000;
 const FIND_MAX_RESULTS = 100;
 const CLI_OUTPUT_MAX_LINES = 200;
 const COMPONENT_PREVIEW_MAX_LINES = 100;
@@ -52,6 +53,17 @@ export interface HvyCliSession {
   virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
   searchHvyDocument?: (args: string[]) => Promise<string>;
+  scratchpadLimits?: HvyCliScratchpadLimits;
+}
+
+export interface HvyCliScratchpadLimits {
+  warningChars: number;
+  maxChars: number;
+}
+
+export interface HvyCliSessionOptions {
+  scratchpadWarningChars?: number;
+  scratchpadMaxChars?: number;
 }
 
 export interface HvyCliExecution {
@@ -93,8 +105,13 @@ type HvyMiniShellProcess = {
 const sessionVirtualFileSystems = new WeakMap<HvyCliSession, ReturnType<typeof buildHvyVirtualFileSystem>>();
 const virtualFileSystemsWithRawSessionFiles = new WeakSet<ReturnType<typeof buildHvyVirtualFileSystem>>();
 
-export function createHvyCliSession(): HvyCliSession {
-  return { cwd: '/', scratchpadContent: defaultScratchpadContent(), virtualPathNaming: { anonymousBlockNamesById: {} } };
+export function createHvyCliSession(options: HvyCliSessionOptions = {}): HvyCliSession {
+  return {
+    cwd: '/',
+    scratchpadContent: defaultScratchpadContent(),
+    scratchpadLimits: normalizeScratchpadLimits(options),
+    virtualPathNaming: { anonymousBlockNamesById: {} },
+  };
 }
 
 export function invalidateHvyCliSessionVirtualFileSystem(session: HvyCliSession): void {
@@ -209,7 +226,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     const output = truncateCliOutput(outputs.join('\n'));
     const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
     if (scratchpadTouched && isScratchpadTooLong(session)) {
-      return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+      return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
     }
     return result;
   }
@@ -277,7 +294,7 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
   const output = truncateCliOutput(rawOutput, { preserveFindWarning: true });
   const result = { cwd: session.cwd, output, mutated, invalidatesVirtualFileSystem, mutatedPaths, refreshSectionPaths, requiresFullRefresh };
   if (scratchpadTouched && isScratchpadTooLong(session)) {
-    return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '')}` };
+    return { ...result, output: `${result.output}\n\n${buildScratchpadTooLongMessage(session.scratchpadContent ?? '', getScratchpadLimits(session).warningChars)}` };
   }
   return result;
 }
@@ -1415,23 +1432,44 @@ function defaultScratchpadContent(): string {
 }
 
 function enforceScratchpadHardCap(session: HvyCliSession): void {
-  if ((session.scratchpadContent ?? '').length > SCRATCHPAD_HARD_MAX_CHARS) {
-    session.scratchpadContent = (session.scratchpadContent ?? '').slice(0, SCRATCHPAD_HARD_MAX_CHARS);
+  const limits = getScratchpadLimits(session);
+  if ((session.scratchpadContent ?? '').length > limits.maxChars) {
+    session.scratchpadContent = (session.scratchpadContent ?? '').slice(0, limits.maxChars);
   }
 }
 
 function isScratchpadTooLong(session: HvyCliSession): boolean {
-  return (session.scratchpadContent ?? '').length > SCRATCHPAD_SOFT_MAX_CHARS;
+  return (session.scratchpadContent ?? '').length > getScratchpadLimits(session).warningChars;
 }
 
-function buildScratchpadTooLongMessage(scratchpad: string): string {
+function buildScratchpadTooLongMessage(scratchpad: string, warningChars: number): string {
   return [
-    `scratchpad.txt is ${scratchpad.length} characters, which is over the ${SCRATCHPAD_SOFT_MAX_CHARS} character working limit.`,
+    `scratchpad.txt is ${scratchpad.length} characters, which is over the ${warningChars} character working limit.`,
     'Rewrite scratchpad.txt shorter before adding more notes.',
     '',
     'scratchpad.txt:',
     scratchpad,
   ].join('\n');
+}
+
+function getScratchpadLimits(session: HvyCliSession): HvyCliScratchpadLimits {
+  session.scratchpadLimits ??= normalizeScratchpadLimits({});
+  return session.scratchpadLimits;
+}
+
+function normalizeScratchpadLimits(options: HvyCliSessionOptions): HvyCliScratchpadLimits {
+  const maxChars = normalizeScratchpadLimit(options.scratchpadMaxChars, DEFAULT_SCRATCHPAD_MAX_CHARS);
+  const warningChars = Math.min(
+    normalizeScratchpadLimit(options.scratchpadWarningChars, DEFAULT_SCRATCHPAD_WARNING_CHARS),
+    maxChars
+  );
+  return { warningChars, maxChars };
+}
+
+function normalizeScratchpadLimit(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.min(MAX_CONFIGURABLE_SCRATCHPAD_CHARS, Math.floor(value))
+    : fallback;
 }
 
 function commandCat(ctx: HvyCliCommandContext, args: string[]): string {

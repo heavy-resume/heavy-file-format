@@ -113,6 +113,34 @@ export async function requestChatTurn(params: {
           },
           signal: params.signal,
         });
+    const inspection = parseDocumentInspectionEscalation(answer);
+    if (inspection) {
+      const inspected = await runChatCliEditLoop({
+        settings: params.settings,
+        document: params.document,
+        request: [
+          'Read-only document inspection request. Do not change, create, remove, move, or rewrite anything.',
+          `Inspect the document using search and read commands, then answer the user: ${inspection.query}`,
+        ].join('\n'),
+        priorMessages: nextMessages,
+        chatContext: params.chatContext,
+        embeddingProvider: params.embeddingProvider,
+        signal: params.signal,
+      });
+      return {
+        messages: [
+          ...nextMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: inspected.summary,
+            ...(inspected.tokenUsage ? { tokenUsage: inspected.tokenUsage } : {}),
+          },
+        ],
+        error: null,
+        awaitingUser: inspected.asked,
+      };
+    }
     return {
       messages: [
         ...nextMessages,
@@ -141,6 +169,16 @@ export async function requestChatTurn(params: {
       error: message,
     };
   }
+}
+
+function parseDocumentInspectionEscalation(source: string): { query: string } | null {
+  const prefix = 'inspect_document ';
+  const cleaned = source.trim();
+  if (!cleaned.startsWith(prefix)) {
+    return null;
+  }
+  const query = cleaned.slice(prefix.length).trim();
+  return query && !query.includes('\n') ? { query } : null;
 }
 
 function isLikelyViewerChangeRequest(question: string): boolean {
@@ -319,6 +357,7 @@ export async function buildDocumentEditCliSimRequest(params: {
   signal?: AbortSignal;
 }): Promise<DocumentEditCliSimRequest> {
   const initial = await buildChatCliInitialSimTurnState({
+    settings: params.settings,
     document: params.document,
     request: params.request,
     priorMessages: params.messages,

@@ -449,6 +449,7 @@ Cross-reference cards can be emitted as a block directive with all card data in 
 
 Cross-reference card requirements:
 - `xrefTitle` is REQUIRED.
+- `xrefDetail` is optional supporting text. An explicit empty string suppresses supporting text; readers MUST NOT replace an empty value with detail from the referenced target.
 - `xrefTarget` is RECOMMENDED. It MUST be either a local target id (`section-id`), an internal fragment target (`#section-id`), or a host-gated HVY workspace path beginning with `./`, `../`, or `/` and optionally followed by a fragment target. URL/scheme targets such as `http:`, `https:`, `mailto:`, and `file:` are not valid `xrefTarget` values. If omitted, implementations SHOULD preserve the card, treat it as disabled/non-navigable, and surface a warning to authors.
 - Workspace-path xrefs are not filesystem paths. A leading `/` is relative to the host-defined HVY workspace root, not the host filesystem root. The reference implementation MUST NOT fetch, resolve, authorize, or traverse workspace-path xrefs; embedded hosts MAY explicitly enable cross-document links and handle enabled xrefs through the host link observer.
 - `xrefTargetTagFilter` is optional authoring metadata. When present, editors SHOULD filter target pickers to sections or components tagged with at least one listed tag. The value uses the same comma-separated tag syntax as `tags`; it does not affect rendering or link resolution.

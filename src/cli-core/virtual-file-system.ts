@@ -1,5 +1,5 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { BlockSchema, GridItem, VisualBlock, VisualSection } from '../editor/types';
+import type { BlockSchema, BuiltinComponentName, GridItem, VisualBlock, VisualSection } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
 import type { VisualDocument } from '../types';
 import { getSectionId } from '../section-ops';
@@ -16,6 +16,7 @@ import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
 import { measurePhase } from '../perf-trace';
+import { defaultBlockSchema } from '../document-factory';
 
 export interface HvyVirtualFile {
   kind: 'file';
@@ -441,7 +442,12 @@ function addBlock(entries: Map<string, HvyVirtualEntry>, meta: JsonObject, block
     kind: 'file',
     path: componentFile,
     read: () => `${JSON.stringify(blockSchemaToCliJson(block.schema, meta), null, 2)}\n`,
-    write: (content) => applyBlockSchemaJson(block.schema, componentNameFromPath(componentFile), parseJsonObject(content, componentFile)),
+    write: (content) => applyBlockSchemaJson(
+      block.schema,
+      componentNameFromPath(componentFile),
+      baseComponent as BuiltinComponentName,
+      parseJsonObject(content, componentFile)
+    ),
   });
   const componentName = sanitizePathSegment(block.schema.component) || 'component';
   entries.set(`${blockPath}/${componentName}.css`, {
@@ -1063,8 +1069,65 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
   return lines;
 }
 
-function applyBlockSchemaJson(schema: BlockSchema, component: string, value: JsonObject): void {
+function applyBlockSchemaJson(
+  schema: BlockSchema,
+  component: string,
+  baseComponent: BuiltinComponentName,
+  value: JsonObject
+): void {
+  const defaults = defaultBlockSchema(component, baseComponent);
   schema.component = component;
+  schema.id = defaults.id;
+  schema.css = defaults.css;
+  schema.lock = defaults.lock;
+  schema.align = defaults.align;
+  schema.slot = defaults.slot;
+  schema.sortKeys = defaults.sortKeys;
+  schema.derivedSortKeyNames = defaults.derivedSortKeyNames;
+  schema.groupKeys = defaults.groupKeys;
+  schema.tags = defaults.tags;
+  schema.description = defaults.description;
+  schema.hideIfYes = defaults.hideIfYes;
+  schema.placeholder = defaults.placeholder;
+  schema.fillIn = defaults.fillIn;
+  schema.xrefTitle = defaults.xrefTitle;
+  schema.xrefDetail = defaults.xrefDetail;
+  if (baseComponent === 'container') {
+    schema.containerTitle = defaults.containerTitle;
+    schema.containerExpanded = defaults.containerExpanded;
+    schema.containerCollapsedPreviewRem = defaults.containerCollapsedPreviewRem;
+  } else if (baseComponent === 'component-list') {
+    schema.componentListComponent = defaults.componentListComponent;
+    schema.componentListItemLabel = defaults.componentListItemLabel;
+    schema.componentListDefaultSortKey = defaults.componentListDefaultSortKey;
+    schema.componentListDefaultSortDirection = defaults.componentListDefaultSortDirection;
+    schema.componentListDefaultGroupKey = defaults.componentListDefaultGroupKey;
+    schema.componentListGroupsExpanded = defaults.componentListGroupsExpanded;
+    schema.componentListGroupCollapsedPreviewRem = defaults.componentListGroupCollapsedPreviewRem;
+  } else if (baseComponent === 'grid') {
+    schema.gridColumns = defaults.gridColumns;
+    schema.gridStackWidth = defaults.gridStackWidth;
+  } else if (baseComponent === 'xref-card') {
+    schema.xrefTarget = defaults.xrefTarget;
+    schema.xrefTargetTagFilter = defaults.xrefTargetTagFilter;
+  } else if (baseComponent === 'table') {
+    schema.tableShowHeader = defaults.tableShowHeader;
+  } else if (baseComponent === 'image') {
+    schema.imageFile = defaults.imageFile;
+    schema.imageAlt = defaults.imageAlt;
+    schema.caption = defaults.caption;
+  } else if (baseComponent === 'carousel') {
+    schema.carouselImages = defaults.carouselImages;
+    schema.carouselDurationMs = defaults.carouselDurationMs;
+    schema.carouselPauseOnHover = defaults.carouselPauseOnHover;
+    schema.carouselShowControls = defaults.carouselShowControls;
+    schema.carouselShowIndicators = defaults.carouselShowIndicators;
+    schema.carouselShowFrame = defaults.carouselShowFrame;
+  } else if (baseComponent === 'plugin') {
+    schema.plugin = defaults.plugin;
+    schema.pluginConfig = defaults.pluginConfig;
+    schema.pluginSortValues = defaults.pluginSortValues;
+  }
   if (typeof value.id === 'string') schema.id = value.id;
   if (typeof value.css === 'string') {
     assertCssValueIsDeclarationString(value.css, `${component}.json css`);

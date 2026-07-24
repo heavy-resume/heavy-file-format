@@ -43,7 +43,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
       data-field="block-xref-detail"
       data-placeholder="Optional"
       ${hasTarget ? '' : 'aria-disabled="true"'}
-    >${helpers.escapeHtml(detailOverride ? block.schema.xrefDetail : hasTarget ? getDisplayDetail(block, helpers) : '')}</span>
+    >${helpers.escapeHtml(detailOverride ? block.schema.xrefDetail : hasTarget ? getDisplayDetail(block) : '')}</span>
   </div>
 `;
 };
@@ -51,7 +51,7 @@ export const renderXrefCardEditor: ComponentEditorRenderer = (sectionKey, block,
 export const renderXrefCardReader: ComponentReaderRenderer = (_section, block, helpers) =>
   renderXrefCardPreview(
     getDisplayTitle(block, helpers),
-    getDisplayDetail(block, helpers),
+    getDisplayDetail(block),
     block.schema.xrefTarget,
     helpers,
     `reader-xref-card ${helpers.isXrefTargetValid(block.schema.xrefTarget, getEffectiveTargetTagFilter(block, helpers)) ? '' : 'is-invalid-target'}`
@@ -106,8 +106,8 @@ function getDisplayTitle(block: Parameters<ComponentEditorRenderer>[1], helpers:
   return block.schema.xrefTitle.trim() || getTargetOption(block, helpers)?.title || 'Untitled';
 }
 
-function getDisplayDetail(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers): string {
-  return block.schema.xrefDetail.trim() || getTargetOption(block, helpers)?.detail || '';
+function getDisplayDetail(block: Parameters<ComponentEditorRenderer>[1]): string {
+  return block.schema.xrefDetail;
 }
 
 function getTargetOption(block: Parameters<ComponentEditorRenderer>[1], helpers: ComponentRenderHelpers) {

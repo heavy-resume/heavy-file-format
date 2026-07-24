@@ -522,11 +522,16 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
       name: string;
       description?: string;
       parameters?: {
-        properties?: {
+        properties: {
           command?: {
             description?: string;
           };
+          query?: { type?: string };
+          limit?: { type?: string[] };
+          cursor?: { type?: string[] };
         };
+        required?: string[];
+        additionalProperties?: boolean;
       };
     }>;
     input: Array<
@@ -546,6 +551,15 @@ test('buildDocumentEditCliSimRequest exposes the exact provider-facing CLI reque
   expect(payload).not.toHaveProperty('responseInstructions');
   expect(payload).not.toHaveProperty('systemInstructions');
   expect(payload.tools?.map((tool) => tool.name)).toEqual(['run_hvy_cli', 'search_hvy_document', 'apply_hvy_patch', 'finish_task', 'ask_user']);
+  expect(payload.tools?.find((tool) => tool.name === 'search_hvy_document')?.parameters).toMatchObject({
+    properties: {
+      query: { type: 'string' },
+      limit: { type: ['number', 'null'] },
+      cursor: { type: ['string', 'null'] },
+    },
+    required: ['query', 'limit', 'cursor'],
+    additionalProperties: false,
+  });
   expect(payload.tools?.[0]?.description).toContain('Valid command names: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.tools?.[0]?.parameters?.properties?.command?.description).toContain('Start with one of: hvy, nl, rg, find, sed, printf, echo, cat, ls, pwd, cd, cp, mv, rm, grep, sort, uniq, wc, tr, xargs, head, tail, true.');
   expect(payload.input).toEqual([

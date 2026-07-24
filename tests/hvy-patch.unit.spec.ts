@@ -187,3 +187,32 @@ Details.
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/delivery/text.json')).output).toContain('"css": "color: blue;"');
   expect((await executeHvyCliCommand(document, session, 'cat /body/summary/facts/tableRows.json')).output).toContain('"Deliberate"');
 });
+
+test('expected result: removing a component JSON property resets the exposed field instead of preserving it', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"featured"}-->
+#! Featured
+
+<!--hvy:xref-card {"id":"typescript-card","xrefTitle":"TypeScript","xrefDetail":"Primary language","xrefTarget":"tool-typescript"}-->
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  const expectedResult = applyHvyPatch(document, session, `*** Begin Patch
+*** Update File: /body/featured/typescript-card/xref-card.json
+@@
+   "xrefTitle": "TypeScript",
+-  "xrefDetail": "Primary language",
+   "xrefTarget": "tool-typescript",
+*** End Patch`);
+
+  expect(expectedResult).toEqual(expect.objectContaining({
+    appliedFileCount: 1,
+    failedFileCount: 0,
+  }));
+  expect((await executeHvyCliCommand(document, session, 'cat /body/featured/typescript-card/xref-card.json')).output)
+    .toContain('"xrefDetail": ""');
+  expect(document.sections[0]?.blocks[0]?.schema.xrefDetail).toBe('');
+});

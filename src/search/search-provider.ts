@@ -3,6 +3,11 @@ import type { VisualSection } from '../editor/types';
 import { findVirtualDirectoryForBlock } from '../cli-core/virtual-file-system';
 import { getSectionId } from '../section-ops';
 import { getTextCaptionMarkdown } from '../caption';
+import {
+  getPluginVisualDescription,
+  PLUGIN_VISUAL_DESCRIPTION_FIELD,
+  PLUGIN_VISUAL_DESCRIPTION_LABEL,
+} from '../plugins/visual-description';
 import type { HvySearchMatch, HvySearchProvider, HvySearchRequest, HvySearchResult, SearchCategory } from './types';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
@@ -19,6 +24,7 @@ const FIELD_LABELS: Record<string, string> = {
   tableColumns: 'Table',
   tableCells: 'Table',
   pluginConfig: 'Plugin',
+  [PLUGIN_VISUAL_DESCRIPTION_FIELD]: PLUGIN_VISUAL_DESCRIPTION_LABEL,
 };
 
 export const builtInSearchProvider: HvySearchProvider = (request) => {
@@ -94,7 +100,7 @@ function visitBlocks(
     const label = getBlockLabel(block, section);
     const blockLocationLabel = getBlockLocationLabel(block) || nearestLocationLabel;
     for (const category of categories) {
-      const candidates = getBlockCandidates(block, category);
+      const candidates = getBlockCandidates(request.document, block, category);
       addMatches({
         request,
         results,
@@ -229,7 +235,7 @@ function getSectionCandidates(section: VisualSection, category: SearchCategory):
   return [{ field: 'title', label: FIELD_LABELS.title, value: section.title }];
 }
 
-function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
+function getBlockCandidates(document: HvySearchRequest['document'], block: VisualBlock, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
   if (category === 'tags') {
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags ?? '' }];
   }
@@ -250,6 +256,11 @@ function getBlockCandidates(block: VisualBlock, category: SearchCategory): Array
     { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
     { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },
+    {
+      field: PLUGIN_VISUAL_DESCRIPTION_FIELD,
+      label: FIELD_LABELS[PLUGIN_VISUAL_DESCRIPTION_FIELD],
+      value: getPluginVisualDescription(document, block),
+    },
   ];
 }
 

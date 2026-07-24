@@ -1158,8 +1158,21 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
   selector for new `plugin` blocks);
 - one or more renderable component factories that produce plugin instances bound to specific blocks;
 - one or more output generators that produce text directly or produce prompts for a host LLM/chat client;
+- a visual-description capability that synchronously describes user-visible
+  rendered output for search indexing and agent-facing CLI display;
 - a PDF/static render capability that resolves a plugin block to ordinary
   PDF-compatible HVY blocks for export.
+
+A visual-description capability receives the current plugin block and document
+and returns optional plain text describing rendered output that is not otherwise
+represented by ordinary HVY block text. Hosts MAY index this text and expose it
+through read-only CLI document displays. Hosts MUST label or delimit it as
+rendered output rather than serialized document content when presenting it to
+an AI agent. The returned description is derived, MUST NOT be serialized into
+the HVY document, and MUST NOT be presented as an editable block field. The
+reference CLI exposes a non-empty description as the read-only
+`plugin.visual-description.txt` file in that plugin component's virtual directory and
+includes it in `hvy search` indexing and `hvy preview` output.
 
 An output generator has a globally unique plugin-qualified key, an optional
 human-readable label, optional required template variable names, and a generate

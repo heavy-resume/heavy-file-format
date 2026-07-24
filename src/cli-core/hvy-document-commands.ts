@@ -619,7 +619,7 @@ function formatCreatedComponentDirectory(
     ? componentPath
     : `/body${componentPath.startsWith('/') ? componentPath : `/${componentPath}`}`;
   const fs = createdBlock && !options.returnStructureOnCreation
-    ? buildHvyVirtualBlockSubtreeFileSystem(document.meta, createdBlock, normalizedComponentPath, pathNaming)
+    ? buildHvyVirtualBlockSubtreeFileSystem(document, createdBlock, normalizedComponentPath, pathNaming)
     : buildHvyVirtualFileSystem(document, pathNaming);
   const entry = fs.entries.get(normalizedComponentPath);
   if (!entry || entry.kind !== 'dir') {

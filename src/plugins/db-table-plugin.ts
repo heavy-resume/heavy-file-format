@@ -4,7 +4,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from './types';
-import { resetDbTableViewState } from './db-table-model';
+import { getDbTableRenderedVisualDescription, resetDbTableViewState } from './db-table-model';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { getCachedComponentRenderHelpers } from '../state';
@@ -201,6 +201,9 @@ export const dbTablePlugin: HvyPlugin = {
       'Set `pluginConfig.table` to a backend table or view.',
       'Put an optional SELECT query in the component body.',
     ].join(' ');
+  },
+  visualDescription: {
+    describe: ({ block }) => getDbTableRenderedVisualDescription(block),
   },
   create: dbTablePluginFactory,
 };

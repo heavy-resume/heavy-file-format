@@ -26,6 +26,7 @@ import { parseAiBlockEditResponse } from '../ai-component-edit-common';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { removeTextFillInMarkers } from '../text-fill-in';
 import { measureAsyncPhase, measurePhase, recordMeasurement, isMeasurementEnabled } from '../perf-trace';
+import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 
 const loadDbTableRuntime = () => import('../plugins/db-table');
 
@@ -85,7 +86,7 @@ type HvyCliCommandContext = {
 };
 
 type HvyMiniShellPipeline = {
-  operator: 'first' | '&&' | '||';
+  operator: 'first' | '&&' | '||' | ';';
   commands: string[][];
   tokens: string[];
 };
@@ -282,7 +283,11 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
       outputParts.push(lastProcess.stdout);
     }
 
-    if (lastProcess.status !== 0 && pipelines[index + 1]?.operator !== '||') {
+    if (
+      lastProcess.status !== 0
+      && pipelines[index + 1]?.operator !== '||'
+      && pipelines[index + 1]?.operator !== ';'
+    ) {
       throw new Error(lastProcess.stderr || lastProcess.stdout || 'Command failed.');
     }
   }
@@ -1525,6 +1530,9 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
   }
   const fragment = serializeBlockFragment(block, ctx.document.meta);
   const lines = fragment.split('\n');
+  const visualDescription = formatPluginVisualDescriptionForAgent(
+    getPluginVisualDescription(ctx.document, block)
+  );
   if (lines.length > COMPONENT_PREVIEW_MAX_LINES) {
     const componentId = block.schema.id.trim();
     const command = componentId
@@ -1536,12 +1544,14 @@ function formatComponentRawPreview(ctx: HvyCliCommandContext, directoryPath: str
       `Component preview switched to request_structure because raw HVY is ${lines.length} lines.`,
       ...structureLines.slice(0, COMPONENT_PREVIEW_MAX_LINES),
       ...(structureLines.length > COMPONENT_PREVIEW_MAX_LINES ? [`... ${structureLines.length - COMPONENT_PREVIEW_MAX_LINES} more lines`] : []),
+      ...(visualDescription ? ['', visualDescription] : []),
     ].join('\n');
   }
   return [
     `Preview command: hvy preview ${directoryPath}`,
     `Component preview (raw HVY, first ${COMPONENT_PREVIEW_MAX_LINES} lines):`,
     ...lines,
+    ...(visualDescription ? ['', visualDescription] : []),
   ].join('\n');
 }
 
@@ -3169,7 +3179,7 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
   const normalizedArgs = normalizeMiniShellArgs(args);
   const pipelines: HvyMiniShellPipeline[] = [];
   let current: string[] = [];
-  let operator: 'first' | '&&' | '||' = 'first';
+  let operator: 'first' | '&&' | '||' | ';' = 'first';
   for (let index = 0; index < normalizedArgs.length; index += 1) {
     const arg = normalizedArgs[index] ?? '';
     if (
@@ -3189,7 +3199,7 @@ function parseMiniShell(args: string[]): HvyMiniShellPipeline[] {
       }
       continue;
     }
-    if (arg === '&&' || arg === '||') {
+    if (arg === '&&' || arg === '||' || arg === ';') {
       if (current.length > 0) {
         pipelines.push({ operator, commands: splitPipeline(current), tokens: current });
         current = [];
@@ -3776,6 +3786,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   if (filename === 'section-info.txt') {
     return 'summary of this section and its metadata';
   }
+  if (filename === 'plugin.visual-description.txt') {
+    return 'derived plugin-rendered output for search and AI inspection; not serialized into the HVY document';
+  }
   if (filename === 'about-section.txt') {
     return 'section documentation';
   }
@@ -3914,7 +3927,7 @@ export function tokenizeCommand(input: string): string[] {
       index += 1;
       continue;
     }
-    if (!quote && (char === '|' || char === '>')) {
+    if (!quote && (char === '|' || char === '>' || char === ';')) {
       if (current) {
         tokens.push(current);
         current = '';
@@ -3924,6 +3937,11 @@ export function tokenizeCommand(input: string): string[] {
     }
     if (char === '\\' && index + 1 < input.length) {
       const next = input[index + 1] ?? '';
+      if (!quote && next === ';') {
+        current += '\\;';
+        index += 1;
+        continue;
+      }
       if (next === '\\' || next === quote || (!quote && /\s/.test(next))) {
         current += next;
         index += 1;

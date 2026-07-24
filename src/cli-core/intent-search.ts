@@ -15,6 +15,7 @@ export interface HvyIntentSearchResult {
   score: number;
   reason: string;
   description?: string;
+  visualDescription?: string;
   tags?: string;
 }
 
@@ -26,6 +27,7 @@ interface SemanticRecord {
   type: string;
   title: string;
   description: string;
+  visualDescription?: string;
   tags: string;
   body: string;
   roleHints: string[];
@@ -49,6 +51,7 @@ export function formatHvySearch(document: VisualDocument, fs: HvyVirtualFileSyst
     ...results.map((result, index) => [
       `${index + 1}. ${result.path} id=${result.id} kind=${result.kind} type=${result.type} score=${result.score}`,
       ...(result.description ? [`   description: ${result.description}`] : []),
+      ...(result.visualDescription ? [`   visual description (derived rendered output): ${result.visualDescription}`] : []),
       ...(result.tags ? [`   tags: ${result.tags}`] : []),
     ].join('\n')),
   ].join('\n');
@@ -135,6 +138,10 @@ function buildSemanticRecords(document: VisualDocument, fs: HvyVirtualFileSystem
     const id = stringField(config.id) || componentPath.split('/').pop() || componentPath;
     const baseType = resolveBaseComponentFromMeta(type, document.meta);
     const roleHints = roleHintsForPath(componentPath, baseType, type, config);
+    const visualDescriptionEntry = fs.entries.get(`${componentPath}/plugin.visual-description.txt`);
+    const visualDescription = visualDescriptionEntry?.kind === 'file'
+      ? stripPluginVisualDescriptionBoundary(visualDescriptionEntry.read())
+      : '';
     records.push(makeRecord({
       key: `component:${componentPath}`,
       path: componentPath,
@@ -143,6 +150,7 @@ function buildSemanticRecords(document: VisualDocument, fs: HvyVirtualFileSystem
       type,
       title: [stringField(config.xrefTitle), stringField(config.xrefDetail)].filter(Boolean).join(' '),
       description: stringField(config.description),
+      visualDescription,
       tags: stringField(config.tags),
       body: textEntry.read(),
       roleHints,
@@ -197,6 +205,7 @@ function makeRecord(record: Omit<SemanticRecord, 'searchText'>): SemanticRecord 
     record.type,
     record.title,
     record.description,
+    record.visualDescription ?? '',
     record.tags,
     record.customTypeDescription,
     ...record.roleHints,
@@ -209,6 +218,7 @@ function scoreSemanticRecord(record: SemanticRecord, queryTokens: string[], flag
   let score = flexMatched ? 8 : 0;
   const reasons: string[] = [];
   score += scoreField(queryTokens, record.description, 24, 8, 'matched description', 'partial description match', reasons);
+  score += scoreField(queryTokens, record.visualDescription ?? '', 24, 8, 'matched visual description', 'partial visual description match', reasons);
   score += scoreField(queryTokens, record.tags, 18, 6, 'matched tags', 'partial tags match', reasons);
   score += scoreField(queryTokens, record.title, 10, 3, 'matched title', 'partial title match', reasons);
   score += scoreField(queryTokens, record.id, 3, 1, 'matched id token', 'partial id match', reasons);
@@ -249,8 +259,16 @@ function scoreSemanticRecord(record: SemanticRecord, queryTokens: string[], flag
     score,
     reason: reasons.length > 0 ? [...new Set(reasons)].slice(0, 3).join('; ') : 'matched indexed content',
     ...(record.description ? { description: truncatePreview(record.description, 160) } : {}),
+    ...(record.visualDescription ? { visualDescription: truncatePreview(record.visualDescription, 240) } : {}),
     ...(record.tags ? { tags: truncatePreview(record.tags, 160) } : {}),
   };
+}
+
+function stripPluginVisualDescriptionBoundary(value: string): string {
+  return value
+    .replace(/^--- begin plugin visual description \(rendered output; not serialized document text\) ---\s*/u, '')
+    .replace(/\s*--- end plugin visual description ---\s*$/u, '')
+    .trim();
 }
 
 function scoreField(

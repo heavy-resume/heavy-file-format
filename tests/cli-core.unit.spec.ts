@@ -1744,6 +1744,36 @@ test('cli supports shell-style || command chaining', async () => {
   expect(skipped.output).toBe('Hello world');
 });
 
+test('cli supports shell-style semicolon command chaining', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const chained = await executeHvyCliCommand(
+    document,
+    session,
+    'cat /missing.txt; sed s/world/there/ /body/summary/intro/text.txt; echo "answer; complete"'
+  );
+
+  expect(chained.mutated).toBe(true);
+  expect(chained.output).toBe('/body/summary/intro/text.txt: updated\nanswer; complete');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+});
+
+test('cli preserves escaped semicolons as find -exec terminators', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  const result = await executeHvyCliCommand(
+    document,
+    session,
+    'find /body -type f -name text.txt -exec sed -i s/world/there/ {} \\; ; cat /body/summary/intro/text.txt'
+  );
+
+  expect(result.mutated).toBe(true);
+  expect(result.output).toContain('Hello there');
+  expect(document.sections[0]?.blocks[0]?.text).toBe('Hello there');
+});
+
 test('cli supports find -exec with sed -i -E for shell-like batch edits', async () => {
   const document = createCliTestDocument();
   const session = createHvyCliSession();

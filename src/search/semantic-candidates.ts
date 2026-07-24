@@ -8,6 +8,7 @@ import {
 import { collectHvyComponentStructureReferences } from '../cli-core/request-structure';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { getSectionId } from '../section-ops';
+import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 import type {
   HvyRetrievalChunk,
   HvySemanticFilterCandidate,
@@ -217,7 +218,7 @@ export function buildSemanticFilterCandidates(
     const targetPath = blockPaths.get(block);
     const targetRef = (targetPath ? targetRefs.componentRefsByPath.get(targetPath) : undefined) ?? (block.schema.id.trim() || block.id);
     const summaryResult = truncateSummary(
-      buildBlockSummary(block, baseComponent),
+      buildBlockSummary(document, block, baseComponent),
       maxCandidateSummaryChars,
       baseComponent === 'plugin'
     );
@@ -668,11 +669,12 @@ function buildSectionSummary(section: VisualSection): string {
   ].join('\n'));
 }
 
-function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
+function buildBlockSummary(document: VisualDocument, block: VisualBlock, baseComponent: string): string {
   const childSummary = shouldSummarizeChildContent(baseComponent, block)
     ? getNestedBlockSummaryText(block)
     : '';
   if (baseComponent === 'plugin') {
+    const visualDescription = formatPluginVisualDescriptionForAgent(getPluginVisualDescription(document, block));
     return [
       block.schema.plugin ? `Plugin: ${block.schema.plugin}` : '',
       Object.keys(block.schema.pluginConfig).length > 0
@@ -681,6 +683,7 @@ function buildBlockSummary(block: VisualBlock, baseComponent: string): string {
       Object.keys(block.schema.pluginSortValues).length > 0
         ? `Plugin sort values: ${JSON.stringify(block.schema.pluginSortValues)}`
         : '',
+      visualDescription,
       childSummary,
       ...(block.text.trim().length > 0
         ? [

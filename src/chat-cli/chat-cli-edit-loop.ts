@@ -115,56 +115,56 @@ export async function runChatCliEditLoop(params: {
   signal?: AbortSignal;
 }): Promise<ChatCliEditTurnResult> {
   return measureAsyncPhase('chatCli.loop.run', { sections: params.document.sections.length }, async () => {
-  const traceRunId = createChatCliTraceRunId();
-  await measureAsyncPhase('chatCli.trace.userQuery', {}, () => writeChatCliUserQueryTrace(traceRunId, params.request, params.signal));
-  const initial = await measureAsyncPhase('chatCli.initial.build', {}, () => buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true }));
-  let turnState: ChatCliSimTurnState = {
-    messages: initial.messages,
-    context: initial.context,
-    systemInstructions: initial.systemInstructions,
-    traceRunId,
-    request: params.request,
-    settings: params.settings,
-    priorMessages: params.priorMessages ?? [],
-    priorConversation: initial.priorConversation,
-    session: initial.cli.session,
-    diagnostics: initial.diagnostics,
-    urgency: 0,
-    ...(params.chatContext ? { chatContext: params.chatContext } : {}),
-    ...(params.embeddingProvider ? { embeddingProvider: params.embeddingProvider } : {}),
-    ...(initial.toolState ? { toolState: initial.toolState } : {}),
-    ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
-  };
-  if ((params.priorMessages ?? []).some((message) => message.role === 'assistant' && message.work)) {
-    recordIntroducedDiagnostics(params.document, [], turnState.diagnostics);
-  }
-  syncIntroducedDiagnostics(params.document, turnState.diagnostics);
-  let consecutiveCommandErrors = 0;
-  let latestTokenUsage: ChatTokenUsage | null = null;
-
-  for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
-    throwIfAborted(params.signal);
-    let currentInputTokens: number | undefined;
-    const nativeTurn = await measureAsyncPhase('chatCli.model.toolTurn', { step: step + 1 }, () => requestProxyToolTurn({
-      settings: params.settings,
-      messages: turnState.messages,
-      context: turnState.context,
-      systemInstructions: turnState.systemInstructions,
-      mode: 'document-edit',
-      debugLabel: `chat-cli-edit:${step + 1}`,
+    const traceRunId = createChatCliTraceRunId();
+    await measureAsyncPhase('chatCli.trace.userQuery', {}, () => writeChatCliUserQueryTrace(traceRunId, params.request, params.signal));
+    const initial = await measureAsyncPhase('chatCli.initial.build', {}, () => buildChatCliInitialTurnRequest({ ...params, traceRunId, writeTrace: true }));
+    let turnState: ChatCliSimTurnState = {
+      messages: initial.messages,
+      context: initial.context,
+      systemInstructions: initial.systemInstructions,
       traceRunId,
-      tools: buildChatCliNativeToolDefinitions(),
-      ...(turnState.toolState ? { toolState: turnState.toolState } : {}),
-      onReasoningSummary: params.onReasoningSummary,
-      onTokenUsage: (usage) => {
-        latestTokenUsage = usage;
-        currentInputTokens = usage.inputTokens;
-        params.onTokenUsage?.(usage);
-      },
-      signal: params.signal,
-    }));
-    const advanced = nativeTurn.toolCalls.length > 0
-      ? await measureAsyncPhase('chatCli.advance.nativeToolTurn', { step: step + 1, toolCalls: nativeTurn.toolCalls.length }, () => advanceChatCliNativeToolTurnState({
+      request: params.request,
+      settings: params.settings,
+      priorMessages: params.priorMessages ?? [],
+      priorConversation: initial.priorConversation,
+      session: initial.cli.session,
+      diagnostics: initial.diagnostics,
+      urgency: 0,
+      ...(params.chatContext ? { chatContext: params.chatContext } : {}),
+      ...(params.embeddingProvider ? { embeddingProvider: params.embeddingProvider } : {}),
+      ...(initial.toolState ? { toolState: initial.toolState } : {}),
+      ...(params.selectedComponent ? { selectedComponent: params.selectedComponent } : {}),
+    };
+    if ((params.priorMessages ?? []).some((message) => message.role === 'assistant' && message.work)) {
+      recordIntroducedDiagnostics(params.document, [], turnState.diagnostics);
+    }
+    syncIntroducedDiagnostics(params.document, turnState.diagnostics);
+    let consecutiveCommandErrors = 0;
+    let latestTokenUsage: ChatTokenUsage | null = null;
+
+    for (let step = 0; step < CHAT_CLI_MAX_STEPS; step += 1) {
+      throwIfAborted(params.signal);
+      let currentInputTokens: number | undefined;
+      const nativeTurn = await measureAsyncPhase('chatCli.model.toolTurn', { step: step + 1 }, () => requestProxyToolTurn({
+        settings: params.settings,
+        messages: turnState.messages,
+        context: turnState.context,
+        systemInstructions: turnState.systemInstructions,
+        mode: 'document-edit',
+        debugLabel: `chat-cli-edit:${step + 1}`,
+        traceRunId,
+        tools: buildChatCliNativeToolDefinitions(),
+        ...(turnState.toolState ? { toolState: turnState.toolState } : {}),
+        onReasoningSummary: params.onReasoningSummary,
+        onTokenUsage: (usage) => {
+          latestTokenUsage = usage;
+          currentInputTokens = usage.inputTokens;
+          params.onTokenUsage?.(usage);
+        },
+        signal: params.signal,
+      }));
+      const advanced = nativeTurn.toolCalls.length > 0
+        ? await measureAsyncPhase('chatCli.advance.nativeToolTurn', { step: step + 1, toolCalls: nativeTurn.toolCalls.length }, () => advanceChatCliNativeToolTurnState({
           settings: params.settings,
           document: params.document,
           state: turnState,
@@ -177,59 +177,59 @@ export async function runChatCliEditLoop(params: {
           chatContext: params.chatContext,
           embeddingProvider: params.embeddingProvider,
         }))
-      : await measureAsyncPhase('chatCli.advance.textTurn', { step: step + 1 }, () => advanceChatCliTurnState({
-      settings: params.settings,
-      document: params.document,
-      state: turnState,
-      assistantOutput: nativeTurn.output,
-      signal: params.signal,
-      onProgress: params.onProgress,
-      traceRunId,
-      writeTrace: true,
-      lastInputTokens: currentInputTokens,
-    }));
-    turnState = advanced;
-    if (advanced.commandResultMessage) {
-      if (advanced.batchHadSuccess) {
-        consecutiveCommandErrors = 0;
-      } else if (advanced.batchHadError) {
-        consecutiveCommandErrors += 1;
-        if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
-          throw new ChatCliCommandFailureError({
-            request: params.request,
-            command: advanced.lastFailedCommand ?? '',
-            error: advanced.lastCommandError ?? '',
-            scratchpad: formatScratchpadForModel(createChatCliInterface(params.document, turnState.session).snapshot()),
-          });
+        : await measureAsyncPhase('chatCli.advance.textTurn', { step: step + 1 }, () => advanceChatCliTurnState({
+          settings: params.settings,
+          document: params.document,
+          state: turnState,
+          assistantOutput: nativeTurn.output,
+          signal: params.signal,
+          onProgress: params.onProgress,
+          traceRunId,
+          writeTrace: true,
+          lastInputTokens: currentInputTokens,
+        }));
+      turnState = advanced;
+      if (advanced.commandResultMessage) {
+        if (advanced.batchHadSuccess) {
+          consecutiveCommandErrors = 0;
+        } else if (advanced.batchHadError) {
+          consecutiveCommandErrors += 1;
+          if (consecutiveCommandErrors >= CHAT_CLI_MAX_CONSECUTIVE_COMMAND_ERRORS) {
+            throw new ChatCliCommandFailureError({
+              request: params.request,
+              command: advanced.lastFailedCommand ?? '',
+              error: advanced.lastCommandError ?? '',
+              scratchpad: formatScratchpadForModel(createChatCliInterface(params.document, turnState.session).snapshot()),
+            });
+          }
+        }
+        if (advanced.mutated) {
+          if (advanced.mutationSummary) {
+            params.onMutation?.('chat-cli', advanced.mutationSummary);
+          } else {
+            params.onMutation?.('chat-cli');
+          }
         }
       }
-      if (advanced.mutated) {
-        if (advanced.mutationSummary) {
-          params.onMutation?.('chat-cli', advanced.mutationSummary);
-        } else {
-          params.onMutation?.('chat-cli');
-        }
+      if (!advanced.terminalSummary && !advanced.askedQuestion) {
+        continue;
+      }
+      if (advanced.terminalSummary) {
+        params.onProgress?.('Finished CLI edit loop.');
+        return {
+          summary: advanced.terminalSummary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
+          ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
+        };
+      }
+      if (advanced.askedQuestion) {
+        return { summary: advanced.askedQuestion, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
       }
     }
-    if (!advanced.terminalSummary && !advanced.askedQuestion) {
-      continue;
-    }
-    if (advanced.terminalSummary) {
-      params.onProgress?.('Finished CLI edit loop.');
-      return {
-        summary: advanced.terminalSummary || `Finished after ${step + 1} step${step === 0 ? '' : 's'}.`,
-        ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
-      };
-    }
-    if (advanced.askedQuestion) {
-      return { summary: advanced.askedQuestion, asked: true, ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}) };
-    }
-  }
 
-  return {
-    summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
-    ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
-  };
+    return {
+      summary: `Stopped after ${CHAT_CLI_MAX_STEPS} CLI command steps. Send another request to continue.`,
+      ...(latestTokenUsage ? { tokenUsage: latestTokenUsage } : {}),
+    };
   });
 }
 
@@ -1104,9 +1104,9 @@ async function buildChatCliInitialTurnRequest(params: {
   ));
   const initialSelectedPreview = params.selectedComponent?.path
     ? await runInitialCommand(
-        'I am previewing the selected component because the request started from a specific place in the document.',
-        `hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`
-      )
+      'I am previewing the selected component because the request started from a specific place in the document.',
+      `hvy preview ${quoteChatCliShellArg(params.selectedComponent.path)}`
+    )
     : null;
   const priorConversation = selectChatCliPriorMessages(params.priorMessages ?? []);
   const initialOutputs = [
@@ -1314,12 +1314,12 @@ function formatInitialChatCliCommandMessages(
       role: 'user' as const,
       content: index === outputs.length - 1
         ? formatCommandResultForModel({
-            output: output.output,
-            hints: '',
-            scratchpad: formatScratchpadForModel(snapshot),
-            urgency: formatChatCliUrgency(0),
-            cwd: snapshot.cwd,
-          })
+          output: output.output,
+          hints: '',
+          scratchpad: formatScratchpadForModel(snapshot),
+          urgency: formatChatCliUrgency(0),
+          cwd: snapshot.cwd,
+        })
         : formatCommandResultForModel(output.output),
     },
   ]);
@@ -1413,7 +1413,7 @@ export function buildChatCliNativeToolDefinitions(): ProviderToolDefinition[] {
   return [
     {
       name: 'run_hvy_cli',
-      description: `Run exactly one command in the limited HVY virtual CLI. This is not the host OS shell. Valid command names: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Use ask_user and finish_task instead of ask or done.`,
+      description: `Run exactly one command in the limited HVY virtual CLI. A short, closely related command chain may use pipes, &&, ||, or ; when needed; do not batch many commands into one call. This is not the host OS shell. Valid command names: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Use ask_user and finish_task instead of ask or done.`,
       strict: true,
       inputSchema: {
         type: 'object',

@@ -12,12 +12,14 @@ import { closeIcon, plusIcon } from '../icons';
 import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../history';
 import {
   clampDbTableOffset,
+  clearDbTableRenderedVisualState,
   clearDbTableViewState,
   DB_TABLE_ESTIMATED_ROW_HEIGHT,
   DB_TABLE_MAX_QUERY_ROWS,
   DB_TABLE_WINDOW_SIZE,
   getDbTableQueryDynamicWindow,
   getDbTableQueryLimit,
+  setDbTableRenderedVisualState,
   getDbTableViewState,
   getDocumentDbTableNames,
   getPluginConfigValue,
@@ -163,24 +165,29 @@ function renderDbTablePluginContent(
 ): string {
   const runtime = getSqliteRuntime();
   if (tableName.trim().length === 0) {
+    setDbTableRenderedVisualState(block, { error: 'Choose a table name to start working with this DB table.' });
     return '<div class="plugin-placeholder">Choose a table name to start working with this DB table.</div>';
   }
   const tableNameError = validateDbTableObjectName(tableName);
   if (tableNameError) {
+    setDbTableRenderedVisualState(block, { error: tableNameError });
     return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(tableNameError)}</div>`;
   }
 
   if (runtime.loadError) {
+    setDbTableRenderedVisualState(block, { error: runtime.loadError });
     return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(runtime.loadError)}</div>`;
   }
 
   if (runtime.loading || !runtime.db) {
+    clearDbTableRenderedVisualState(block);
     return '<div class="plugin-placeholder">Loading database table…</div>';
   }
 
   try {
     const objectType = getDbObjectType(runtime.db, tableName);
     if (!objectType) {
+      setDbTableRenderedVisualState(block, { error: `Table or view "${tableName}" does not exist.` });
       if (readOnly) {
         return `<div class="plugin-placeholder">DB table error: table or view "${helpers.escapeHtml(tableName)}" does not exist.</div>`;
       }
@@ -196,12 +203,17 @@ function renderDbTablePluginContent(
       sortColumn: viewState.sortColumn,
       sortDirection: viewState.sortDirection,
     });
+    setDbTableRenderedVisualState(block, {
+      columns: snapshot.columns,
+      rows: snapshot.rows,
+    });
     if (readOnly) {
       return renderReadOnlyTable(sectionKey, block.id, tableName, snapshot, helpers);
     }
     return renderEditableTable(sectionKey, block.id, tableName, snapshot, helpers);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error.';
+    setDbTableRenderedVisualState(block, { error: message });
     return `<div class="plugin-placeholder">DB table error: ${helpers.escapeHtml(message)}</div>`;
   }
 }

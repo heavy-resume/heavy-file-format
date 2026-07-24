@@ -171,6 +171,20 @@ export interface HvyPluginPdfCapability {
   renderStatic(ctx: HvyPluginPdfStaticRenderContext): Promise<HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined> | HvyPluginPdfStaticRenderResult | VisualBlock[] | VisualBlock | null | undefined;
 }
 
+export interface HvyPluginVisualDescriptionContext {
+  block: VisualBlock;
+  rawDocument: VisualDocument;
+}
+
+export interface HvyPluginVisualDescriptionCapability {
+  // Describe user-visible rendered output that is not otherwise represented by
+  // ordinary HVY block text. The host uses this for search indexing and
+  // agent-facing CLI display, not as authored or editable document content.
+  // This capability is synchronous so document indexes and CLI walks remain
+  // deterministic snapshots of the current in-memory document.
+  describe(ctx: HvyPluginVisualDescriptionContext): string | null | undefined;
+}
+
 export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
@@ -213,6 +227,10 @@ export interface HvyPlugin {
   // invokes this at export time and replaces the plugin block with the returned
   // PDF-compatible HVY blocks in the export clone.
   pdf?: HvyPluginPdfCapability;
+  // Optional searchable description of what the plugin renders for this block.
+  // Agent-facing consumers label it as rendered output so it is not confused
+  // with literal serialized HVY text.
+  visualDescription?: HvyPluginVisualDescriptionCapability;
   // Optional guidance included in the AI document outline for plugin blocks.
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.

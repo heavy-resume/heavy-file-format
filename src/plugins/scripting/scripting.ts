@@ -174,6 +174,49 @@ function getScriptingResultCacheKey(sectionKey: string, blockId: string): string
   return `${sectionKey}|${blockId}`;
 }
 
+function getScriptingVisualDescription(
+  document: HvyPluginContext['rawDocument'],
+  block: HvyPluginContext['block']
+): string {
+  const sectionKey = findSectionKeyForScriptingBlock(document.sections, block);
+  if (!sectionKey) {
+    return '';
+  }
+  const cached = scriptingResultCache.get(getScriptingResultCacheKey(sectionKey, block.id));
+  const result = cached?.sourceSignature === block.text ? cached.lastResult : null;
+  if (!result || result.ok) {
+    return '';
+  }
+  const logs = result.logs ?? [];
+  return [
+    `Script error: ${result.error ?? 'unknown error'}`,
+    ...(logs.length > 0 ? ['Logs:', ...logs.map((entry, index) => `${index + 1}: ${entry}`)] : []),
+    ...(result.errorDetail && result.errorDetail !== result.error ? [`Details: ${result.errorDetail}`] : []),
+  ].join('\n');
+}
+
+function findSectionKeyForScriptingBlock(
+  sections: HvyPluginContext['rawDocument']['sections'],
+  target: HvyPluginContext['block']
+): string {
+  for (const section of sections) {
+    let found = false;
+    visitBlocksInList(section.blocks, (candidate) => {
+      if (candidate === target) {
+        found = true;
+      }
+    });
+    if (found) {
+      return section.key;
+    }
+    const nested = findSectionKeyForScriptingBlock(section.children, target);
+    if (nested) {
+      return nested;
+    }
+  }
+  return '';
+}
+
 export function storeScriptingResult(
   sectionKey: string,
   blockId: string,
@@ -426,6 +469,9 @@ export const scriptingPlugin: HvyPlugin = {
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',
   ].join(' '),
+  visualDescription: {
+    describe: ({ block, rawDocument }) => getScriptingVisualDescription(rawDocument, block),
+  },
   create: scriptingPluginFactory,
   hooks: {
     documentLoad: scriptingDocumentHook,

@@ -35,6 +35,8 @@ export function getPdfDocumentViewerThemeVariables(document: Pick<VisualDocument
     '--hvy-text': textColor,
     '--hvy-text-alt': textAlt,
     '--hvy-text-muted': textMuted,
+    '--hvy-link-color': textColor,
+    '--hvy-link-hover-color': textColor,
   };
 }
 

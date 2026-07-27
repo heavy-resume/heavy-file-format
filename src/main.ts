@@ -29,7 +29,7 @@ import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
 import { createDefaultChatState, renderChatPanel } from './chat/chat';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
-import { bindChatThreadUi, captureChatThreadScroll, restoreChatThreadScroll } from './chat/chat-thread-ui';
+import { refreshRenderedChatSurface } from './chat/chat-thread-ui';
 import { renderAiEditPopover, renderAiModeHint } from './ai-mode-ui';
 import { loadSessionState, saveSessionState } from './state-persistence';
 import { setHostPlugins } from './plugins/registry';
@@ -935,17 +935,7 @@ function renderTopbar(): string {
 }
 
 function refreshChatSurface(): boolean {
-  const dock = app.querySelector<HTMLElement>('.chat-dock');
-  const backdrop = app.querySelector<HTMLElement>('.chat-backdrop');
-  const searchSurface = app.querySelector<HTMLElement>('[data-search-surface="floating"]');
-  const host = dock?.parentElement ?? searchSurface?.parentElement;
-  if (!host) {
-    return false;
-  }
-  const capturedScroll = captureChatThreadScroll(app);
-
-  const template = document.createElement('template');
-  template.innerHTML = renderChatPanel(
+  return refreshRenderedChatSurface(app, renderChatPanel(
     state.chat,
     state.document,
     { escapeAttr, escapeHtml },
@@ -957,32 +947,7 @@ function refreshChatSurface(): boolean {
       embeddingAvailable: Boolean(state.embeddingProvider),
       canPersistEmbeddingCache: state.document.extension === '.hvy',
     }
-  );
-  const nextBackdrop = template.content.querySelector<HTMLElement>('.chat-backdrop');
-  const nextDock = template.content.querySelector<HTMLElement>('.chat-dock');
-  if (!nextDock) {
-    return false;
-  }
-
-  backdrop?.remove();
-  if (nextBackdrop) {
-    host.insertBefore(nextBackdrop, dock ?? searchSurface ?? null);
-  }
-  if (dock) {
-    dock.replaceWith(nextDock);
-  } else {
-    host.insertBefore(nextDock, searchSurface ?? null);
-  }
-  if (searchSurface) {
-    searchSurface.classList.toggle('is-chat-open', state.chat.panelOpen);
-  }
-  bindChatThreadUi(
-    nextDock.querySelector<HTMLDivElement>('.chat-thread'),
-    nextDock.querySelector<HTMLDivElement>('[data-chat-scroll-container]'),
-    nextDock.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]')
-  );
-  restoreChatThreadScroll(app, capturedScroll);
-  return true;
+  ));
 }
 
 function renderDocumentMenu(): string {

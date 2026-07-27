@@ -141,7 +141,9 @@ export function bindSubmit(app: HTMLElement): void {
       const abortController = new AbortController();
       state.chat.abortController = abortController;
       const isDocumentEditChat = state.currentView !== 'viewer';
-      const answerDocumentEditChatAsQuestion = isDocumentEditChat && isLikelyInformationalAnswerRequest(question);
+      const answerDocumentEditChatAsQuestion = isDocumentEditChat
+        && pendingAttachments.length === 0
+        && isLikelyInformationalAnswerRequest(question);
       const useDocumentEditTurn = isDocumentEditChat && !answerDocumentEditChatAsQuestion;
       state.chat.status = useDocumentEditTurn ? 'Working through the request...' : 'Waiting for answer...';
       const saveChatOrSessionState = (): void => {
@@ -195,15 +197,15 @@ export function bindSubmit(app: HTMLElement): void {
           requestNonce,
           mode: useDocumentEditTurn ? 'document-edit' : 'qa',
         });
+        const documentBeforeEditTurn = useDocumentEditTurn
+          ? serializeDocument(state.document)
+          : null;
+        let documentEditMutationReported = false;
         let recordedDocumentEditMutation = false;
         const recordDocumentEditMutation = (_group?: string, mutation?: ChatCliMutationSummary): void => {
           documentEditMutationNeedsRender = true;
           mergePendingDocumentEditMutation(pendingDocumentEditMutation, mutation);
-          if (recordedDocumentEditMutation) {
-            return;
-          }
-          recordedDocumentEditMutation = true;
-          recordHistory(`ai-document-edit:${requestNonce}`);
+          documentEditMutationReported = true;
         };
         const result =
           useDocumentEditTurn
@@ -265,6 +267,14 @@ export function bindSubmit(app: HTMLElement): void {
                 },
                 signal: abortController.signal,
               });
+        if (
+          documentEditMutationReported
+          && documentBeforeEditTurn !== null
+          && serializeDocument(state.document) !== documentBeforeEditTurn
+        ) {
+          recordedDocumentEditMutation = true;
+          recordHistory(`ai-document-edit:${requestNonce}`);
+        }
         console.debug('[hvy:chat-submit] chat turn resolved', {
           requestNonce,
           currentNonce: state.chat.requestNonce,

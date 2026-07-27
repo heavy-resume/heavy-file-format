@@ -232,6 +232,125 @@ test('AI mode informational question uses QA chat instead of document edit CLI',
   await expect(page.locator('.chat-cli-sim')).toHaveCount(0);
 });
 
+test('AI mode informational question with a chat attachment uses the attachment-capable CLI loop', async ({ page }) => {
+  const rawJobDescription = `Job description\n${'Restaurant service requirement. '.repeat(80)}`;
+  const chatRequests: Array<{
+    mode?: string;
+    context?: string;
+    messages?: Array<{ content?: string }>;
+  }> = [];
+  await page.route('**/api/chat', async (route) => {
+    chatRequests.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        output: 'done Compared the resume with the attached job description.',
+        reasoningSummary: '',
+        toolCalls: [],
+        nativeMessages: [],
+        toolState: { provider: 'openai', input: [] },
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  const prompt = page.locator('[data-field="chat-input"]');
+  await prompt.fill('Does this fit the job description?');
+  await prompt.evaluate((element, pastedText) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', pastedText);
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+  }, rawJobDescription);
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.locator('.chat-bubble', { hasText: 'Compared the resume with the attached job description.' })).toBeVisible();
+  expect(chatRequests).toHaveLength(1);
+  expect(chatRequests[0]?.mode).toBe('document-edit');
+  expect(chatRequests[0]?.context).toContain('Chat attachments:');
+  expect(chatRequests[0]?.context).toContain('/chat-attachments/');
+  expect(JSON.stringify(chatRequests[0])).not.toContain(rawJobDescription);
+});
+
+test('document edit CLI does not record history when a reported mutation leaves the document unchanged', async ({ page }) => {
+  let chatRequestCount = 0;
+  let recordHistoryLogCount = 0;
+  let resolveSecondChatRequest!: () => void;
+  const secondChatRequest = new Promise<void>((resolve) => {
+    resolveSecondChatRequest = resolve;
+  });
+  page.on('console', (message) => {
+    if (message.text().includes('[hvy:perf] recordHistory')) {
+      recordHistoryLogCount += 1;
+    }
+  });
+  await page.route('**/api/chat', async (route) => {
+    chatRequestCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(chatRequestCount === 1 ? {
+        output: 'What: Check whether the requested section exists.\nWhy: The removal is safe when the path is absent.\nUnsure: Nothing.',
+        reasoningSummary: '',
+        toolCalls: [{
+          id: 'call_remove_missing',
+          name: 'run_hvy_cli',
+          arguments: { command: 'rm -rf /body/missing-section' },
+        }],
+        nativeMessages: [{
+          type: 'function_call',
+          call_id: 'call_remove_missing',
+          name: 'run_hvy_cli',
+          arguments: '{"command":"rm -rf /body/missing-section"}',
+        }],
+        toolState: { provider: 'openai', input: [] },
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      } : {
+        output: 'done No document change was needed.',
+        reasoningSummary: '',
+        toolCalls: [],
+        nativeMessages: [],
+        toolState: { provider: 'openai', input: [] },
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      }),
+    });
+    if (chatRequestCount === 2) {
+      resolveSecondChatRequest();
+    }
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New' }).click();
+  await page.getByRole('button', { name: 'HVY Document' }).click();
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  const documentBefore = await page.evaluate(async () => {
+    const [{ state }, { serializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    return serializeDocument(state.document);
+  });
+
+  recordHistoryLogCount = 0;
+  await page.locator('[data-field="chat-input"]').fill('Remove the missing section if it exists.');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await secondChatRequest;
+  await expect(page.locator('.chat-bubble', { hasText: 'rm -rf /body/missing-section' })).toBeVisible();
+  await expect(page.locator('.chat-bubble', { hasText: 'No document change was needed.' })).toBeVisible();
+  expect(await page.evaluate(async () => {
+    const [{ state }, { serializeDocument }] = await Promise.all([
+      import(/* @vite-ignore */ '/src/state.ts'),
+      import(/* @vite-ignore */ '/src/serialization.ts'),
+    ]);
+    return serializeDocument(state.document);
+  })).toBe(documentBefore);
+  expect(recordHistoryLogCount).toBe(0);
+});
+
 test('right click AI change request uses CLI sim when enabled', async ({ page }) => {
   await page.goto('/');
 

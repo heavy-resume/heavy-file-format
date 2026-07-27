@@ -48,6 +48,42 @@ export function restoreChatThreadScroll(root: ParentNode, captured: ChatThreadSc
   });
 }
 
+export function refreshRenderedChatSurface(root: ParentNode, html: string): boolean {
+  const dock = root.querySelector<HTMLElement>('.chat-dock');
+  const backdrop = root.querySelector<HTMLElement>('.chat-backdrop');
+  const searchSurface = root.querySelector<HTMLElement>('[data-search-surface="floating"]');
+  const host = dock?.parentElement ?? searchSurface?.parentElement;
+  if (!host) {
+    return false;
+  }
+  const capturedScroll = captureChatThreadScroll(root);
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const nextBackdrop = template.content.querySelector<HTMLElement>('.chat-backdrop');
+  const nextDock = template.content.querySelector<HTMLElement>('.chat-dock');
+  if (!nextDock) {
+    return false;
+  }
+
+  backdrop?.remove();
+  if (nextBackdrop) {
+    host.insertBefore(nextBackdrop, dock ?? searchSurface ?? null);
+  }
+  if (dock) {
+    dock.replaceWith(nextDock);
+  } else {
+    host.insertBefore(nextDock, searchSurface ?? null);
+  }
+  searchSurface?.classList.toggle('is-chat-open', state.chat.panelOpen);
+  bindChatThreadUi(
+    nextDock.querySelector<HTMLDivElement>('.chat-thread'),
+    nextDock.querySelector<HTMLDivElement>('[data-chat-scroll-container]'),
+    nextDock.querySelector<HTMLButtonElement>('[data-action="chat-scroll-bottom"]')
+  );
+  restoreChatThreadScroll(root, capturedScroll);
+  return true;
+}
+
 export function bindChatThreadUi(
   chatThread: HTMLDivElement | null,
   chatScrollContainer: HTMLDivElement | null,

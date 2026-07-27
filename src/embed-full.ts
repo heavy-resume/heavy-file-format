@@ -66,7 +66,7 @@ import type { HvyPlugin } from './plugins/types';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
-import { bindChatThreadUi } from './chat/chat-thread-ui';
+import { bindChatThreadUi, refreshRenderedChatSurface } from './chat/chat-thread-ui';
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { createHvyAgentTools } from './agent-tools';
@@ -994,6 +994,19 @@ function ensureEmbedRuntime(
       setThemeRoot(root);
       renderApp();
     }),
+    refreshChatSurface: () => runWithStateRuntime(runtime, () => refreshRenderedChatSurface(root, renderChatPanel(
+      state.chat,
+      state.document,
+      { escapeAttr, escapeHtml },
+      state.currentView === 'viewer' ? 'qa' : 'document-edit',
+      state.currentView === 'editor' || state.currentView === 'ai',
+      'embedded',
+      {
+        chatContext: state.chatContext,
+        embeddingAvailable: Boolean(state.embeddingProvider),
+        canPersistEmbeddingCache: state.document.extension === '.hvy',
+      }
+    ))),
     refreshSearchSurface: (target, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();

@@ -763,6 +763,46 @@ component_defs:
   expect(result.plusClassName).toContain('ghost-plus-small');
 });
 
+test('embedded large chat paste refreshes only the chat surface', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+Embedded reader remains mounted.
+`), '.hvy'),
+      mode: 'ai',
+    });
+  });
+
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.locator('#aiReaderDocument').evaluate((reader) => reader.setAttribute('data-reader-instance', 'before-paste'));
+  const prompt = page.locator('[data-field="chat-input"]');
+  await prompt.fill('Update from this source.');
+  await prompt.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', 'A'.repeat(2_000));
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+  });
+
+  await expect(page.locator('.chat-attachment-chip')).toContainText('Pasted text 1.txt');
+  await expect(prompt).toBeFocused();
+  await expect(page.locator('#aiReaderDocument')).toHaveAttribute('data-reader-instance', 'before-paste');
+});
+
 test('reader UI binding handles AI sidebar reader surfaces', async ({ page }) => {
   await page.goto('/');
 

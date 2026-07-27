@@ -1,6 +1,6 @@
 import './chat.css';
 import { getActiveStateRuntime, type StateRuntime } from '../state';
-import type { ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachmentReference, ChatMessage, ChatSettings, ChatState, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatContextResult, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { deserializeDocument, serializeDocument } from '../serialization';
 import { markdownToReaderHtml, normalizeMarkdownLists } from '../markdown';
 import aiResponseFormatInstructions from '../../AI-RESPONSE-FORMAT.md?raw';
@@ -160,6 +160,8 @@ export function createDefaultChatState(): ChatState {
   return {
     settings: loadChatSettings(),
     draft: '',
+    attachments: [],
+    pendingAttachmentIds: [],
     messages: [],
     isSending: false,
     status: null,
@@ -174,6 +176,8 @@ export function createDefaultChatState(): ChatState {
 
 export function clearChatConversation(chat: ChatState): void {
   chat.draft = '';
+  chat.attachments = [];
+  chat.pendingAttachmentIds = [];
   chat.messages = [];
   chat.isSending = false;
   chat.status = null;
@@ -384,6 +388,7 @@ export function renderChatPanel(
          <button type="button" class="danger" data-action="cancel-chat-request">Stop</button>
        </div>`
     : `<form id="chatComposer" class="chat-composer">
+         ${renderPendingChatAttachmentsHtml(chat, deps)}
          <label class="chat-composer-field">
            <span>${promptLabel}</span>
            <textarea data-field="chat-input" rows="5" placeholder="${deps.escapeAttr(promptPlaceholder)}">${deps.escapeHtml(chat.draft)}</textarea>
@@ -1212,11 +1217,56 @@ function renderStandardChatMessageHtml(message: ChatMessage, deps: RenderChatPan
         ? renderAssistantMessageHtml(message.content)
         : deps.escapeHtml(message.content).replace(/\n/g, '<br />')
     }</div>
+    ${renderSentChatAttachmentsHtml(message.attachments ?? [], deps)}
     ${
       message.reasoning
         ? `<details class="chat-reasoning"><summary>Reasoning Summary</summary><div>${deps.escapeHtml(message.reasoning).replace(/\n/g, '<br />')}</div></details>`
         : ''
     }
+  `;
+}
+
+function renderPendingChatAttachmentsHtml(chat: ChatState, deps: RenderChatPanelDeps): string {
+  const pending = chat.pendingAttachmentIds
+    .map((id) => chat.attachments.find((attachment) => attachment.id === id))
+    .filter((attachment): attachment is NonNullable<typeof attachment> => Boolean(attachment));
+  return `
+    <div class="chat-composer-attachments"${pending.length === 0 ? ' hidden' : ''}>
+      ${pending.map((attachment) => renderChatAttachmentChipHtml(attachment, deps, true)).join('')}
+    </div>
+  `;
+}
+
+function renderSentChatAttachmentsHtml(attachments: ChatAttachmentReference[], deps: RenderChatPanelDeps): string {
+  if (attachments.length === 0) {
+    return '';
+  }
+  return `<div class="chat-message-attachments">${attachments.map((attachment) => renderChatAttachmentChipHtml(attachment, deps, false)).join('')}</div>`;
+}
+
+function renderChatAttachmentChipHtml(
+  attachment: ChatAttachmentReference,
+  deps: RenderChatPanelDeps,
+  pending: boolean
+): string {
+  const id = deps.escapeAttr(attachment.id);
+  const detail = `${attachment.characterCount.toLocaleString()} characters · ${attachment.lineCount.toLocaleString()} lines`;
+  return `
+    <span class="chat-attachment-chip" data-chat-attachment-id="${id}">
+      <span class="chat-attachment-mark" aria-hidden="true"></span>
+      <span class="chat-attachment-copy">
+        <strong>${deps.escapeHtml(attachment.name)}</strong>
+        <small>${deps.escapeHtml(detail)}</small>
+      </span>
+      ${
+        pending
+          ? `<span class="chat-attachment-actions">
+               <button type="button" class="ghost" data-action="restore-chat-attachment" data-attachment-id="${id}">Restore as text</button>
+               <button type="button" class="ghost chat-attachment-remove" data-action="remove-chat-attachment" data-attachment-id="${id}" aria-label="Remove ${deps.escapeAttr(attachment.name)}">${closeIcon()}</button>
+             </span>`
+          : ''
+      }
+    </span>
   `;
 }
 

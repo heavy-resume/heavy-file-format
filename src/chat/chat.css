@@ -647,6 +647,91 @@
   max-width: 100%;
 }
 
+.chat-composer-attachments,
+.chat-message-attachments {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.chat-composer-attachments[hidden] {
+  display: none;
+}
+
+.chat-message-attachments {
+  margin-top: 0.6rem;
+}
+
+.chat-attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-accent-2) 42%, var(--hvy-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-accent-2) 9%, var(--hvy-bg-alt));
+  color: var(--hvy-text);
+}
+
+.chat-attachment-mark {
+  flex: 0 0 auto;
+  width: 0.7rem;
+  height: 1rem;
+  border: 1.5px solid var(--hvy-accent-2);
+  border-radius: 2px;
+  box-shadow: inset 0 -0.25rem 0 color-mix(in srgb, var(--hvy-accent-2) 24%, transparent);
+}
+
+.chat-attachment-copy {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.chat-attachment-copy strong,
+.chat-attachment-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-attachment-copy strong {
+  font-size: 0.8rem;
+}
+
+.chat-attachment-copy small {
+  margin-top: 0.18rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.7rem;
+}
+
+.chat-attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.chat-attachment-actions button {
+  min-height: 1.8rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.7rem;
+}
+
+.chat-attachment-actions .chat-attachment-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  min-width: 1.8rem;
+  padding: 0;
+}
+
+.chat-attachment-remove .hvy-ui-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
 .chat-composer textarea {
   display: block;
   width: 100%;

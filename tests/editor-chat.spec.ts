@@ -25,6 +25,39 @@ test('chat uses document editing mode in editor and ai views only', async ({ pag
   await expect(page.getByRole('button', { name: 'Open search' })).toBeVisible();
 });
 
+test('large chat paste becomes a restorable session attachment without losing focus', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  const prompt = page.locator('[data-field="chat-input"]');
+  await prompt.fill('Update this document.');
+
+  await prompt.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', 'S'.repeat(1_999));
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+  });
+  await expect(page.locator('.chat-attachment-chip')).toHaveCount(0);
+
+  await prompt.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', `${'A'.repeat(1_999)}\nB`);
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+  });
+
+  await expect(page.locator('.chat-attachment-chip')).toContainText('Pasted text 1.txt');
+  await expect(page.locator('.chat-attachment-chip')).toContainText('2,001 characters');
+  await expect(prompt).toBeFocused();
+  await expect(prompt).toHaveValue('Update this document.');
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Edit This Document' })).toBeVisible();
+  await expect(page.locator('.chat-attachment-chip')).toContainText('Pasted text 1.txt');
+  await page.getByRole('button', { name: 'Restore as text' }).click();
+  await expect(prompt).toBeFocused();
+  await expect(prompt).toHaveValue(/A{20}/);
+  await expect(page.locator('.chat-attachment-chip')).toHaveCount(0);
+});
+
 test('chat panel stays compact in phone viewer preview', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 620 });
   await page.goto('/');

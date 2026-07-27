@@ -3,7 +3,7 @@ import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
 import { hasDocumentDbTables } from '../plugins/db-table-model';
 import { runQaToolLoop } from '../ai-qa';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
@@ -45,13 +45,18 @@ export interface DocumentEditCliSimAdvance {
   askedQuestion?: string;
 }
 
-export function appendUserChatMessage(messages: ChatMessage[], question: string): ChatMessage[] {
+export function appendUserChatMessage(
+  messages: ChatMessage[],
+  question: string,
+  attachments: ChatAttachmentReference[] = []
+): ChatMessage[] {
   return [
     ...messages,
     {
       id: crypto.randomUUID(),
       role: 'user',
       content: question,
+      ...(attachments.length > 0 ? { attachments } : {}),
     },
   ];
 }
@@ -240,6 +245,8 @@ export async function requestDocumentEditChatTurn(params: {
   document: VisualDocument;
   messages: ChatMessage[];
   request: string;
+  attachments?: ChatAttachment[];
+  messageAttachments?: ChatAttachment[];
   chatContext?: HvyChatContextOptions | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   selectedComponent?: ChatCliSelectedComponentFocus;
@@ -247,7 +254,8 @@ export async function requestDocumentEditChatTurn(params: {
   onProgress?: (message: ChatMessage) => void;
   signal?: AbortSignal;
 }): Promise<ChatTurnResult> {
-  const nextMessages = appendUserChatMessage(params.messages, params.request);
+  const attachmentReferences = (params.messageAttachments ?? params.attachments ?? []).map(({ text: _text, ...attachment }) => attachment);
+  const nextMessages = appendUserChatMessage(params.messages, params.request, attachmentReferences);
   const workMessageId = crypto.randomUUID();
   const workState: ChatWorkState = {
     status: 'running',
@@ -278,6 +286,7 @@ export async function requestDocumentEditChatTurn(params: {
       settings: params.settings,
       document: params.document,
       request: params.request,
+      attachments: params.attachments,
       priorMessages: params.messages,
       chatContext: params.chatContext,
       embeddingProvider: params.embeddingProvider,

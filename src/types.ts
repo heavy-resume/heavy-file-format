@@ -34,10 +34,22 @@ export interface ImageAttachmentMaxDimensions {
 
 export type ChatProvider = 'openai' | 'anthropic' | 'qwen';
 
+export interface ChatAttachmentReference {
+  id: string;
+  name: string;
+  characterCount: number;
+  lineCount: number;
+}
+
+export interface ChatAttachment extends ChatAttachmentReference {
+  text: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachmentReference[];
   reasoning?: string;
   tokenUsage?: ChatTokenUsage;
   error?: boolean;
@@ -100,6 +112,8 @@ export interface ChatSettings {
 export interface ChatState {
   settings: ChatSettings;
   draft: string;
+  attachments: ChatAttachment[];
+  pendingAttachmentIds: string[];
   messages: ChatMessage[];
   isSending: boolean;
   status: string | null;

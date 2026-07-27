@@ -107,6 +107,23 @@ test('cli can navigate and read virtual component files', async () => {
   expect((await executeHvyCliCommand(document, session, 'man ls')).output).toContain('stable entries include pipe-delimited descriptions.');
 });
 
+test('expected result: CLI session read-only files reuse normal virtual file commands', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession({
+    readOnlyFiles: {
+      '/chat-attachments/pasted-text-1.txt': 'First fact\nSecond fact\nThird fact',
+    },
+  });
+
+  expect((await executeHvyCliCommand(document, session, 'ls /')).output).toContain('chat-attachments');
+  expect((await executeHvyCliCommand(document, session, 'wc -l /chat-attachments/pasted-text-1.txt')).output).toContain('3');
+  expect((await executeHvyCliCommand(document, session, 'sed -n 2,3p /chat-attachments/pasted-text-1.txt')).output).toBe('Second fact\nThird fact');
+  expect((await executeHvyCliCommand(document, session, 'rg "Second" /chat-attachments')).output).toContain('Second fact');
+  await expect(
+    executeHvyCliCommand(document, session, 'echo changed > /chat-attachments/pasted-text-1.txt')
+  ).rejects.toThrow('read-only');
+});
+
 test('cli ls expands virtual path globs', async () => {
   const document = createResumeCliTestDocument();
   const session = createHvyCliSession();

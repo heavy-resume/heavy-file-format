@@ -1,5 +1,5 @@
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
-import type { AppState, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
+import type { AppState, ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, HvyCliHistoryEntry, HvyCliSessionState, SelectedExample, VisualDocument } from './types';
 import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 import { detectExtension } from './utils';
@@ -31,6 +31,8 @@ interface SessionStatePayload {
   chat: {
     settings: ChatSettings;
     draft: string;
+    attachments: ChatAttachment[];
+    pendingAttachmentIds: string[];
     messages: ChatMessage[];
     panelOpen: boolean;
   };
@@ -141,6 +143,8 @@ export function saveSessionState(state: AppState): void {
       chat: {
         settings: state.chat.settings,
         draft: state.chat.draft,
+        attachments: state.chat.attachments,
+        pendingAttachmentIds: state.chat.pendingAttachmentIds,
         messages: state.chat.messages,
         panelOpen: state.chat.panelOpen,
       },
@@ -334,6 +338,8 @@ function createChatStatePayload(state: AppState): SessionStatePayload['chat'] {
   return {
     settings: state.chat.settings,
     draft: state.chat.draft,
+    attachments: state.chat.attachments,
+    pendingAttachmentIds: state.chat.pendingAttachmentIds,
     messages: state.chat.messages,
     panelOpen: state.chat.panelOpen,
   };
@@ -343,6 +349,12 @@ function normalizeSavedChatState(chat: Partial<SessionStatePayload['chat']> | un
   return {
     settings: normalizeChatSettings(chat?.settings),
     draft: typeof chat?.draft === 'string' ? chat.draft : '',
+    attachments: Array.isArray(chat?.attachments)
+      ? chat.attachments.map(normalizeChatAttachment).filter((attachment): attachment is ChatAttachment => Boolean(attachment))
+      : [],
+    pendingAttachmentIds: Array.isArray(chat?.pendingAttachmentIds)
+      ? chat.pendingAttachmentIds.filter((id): id is string => typeof id === 'string')
+      : [],
     messages: Array.isArray(chat?.messages)
       ? chat.messages.map(normalizeChatMessage).filter((message): message is ChatMessage => Boolean(message))
       : [],
@@ -608,12 +620,48 @@ function normalizeChatMessage(value: unknown): ChatMessage | null {
     content: wasRunning && !message.content.trim()
       ? 'Interrupted by page reload.'
       : message.content,
+    ...(Array.isArray(message.attachments)
+      ? {
+          attachments: message.attachments
+            .map(normalizeChatAttachmentReference)
+            .filter((attachment): attachment is ChatAttachmentReference => Boolean(attachment)),
+        }
+      : {}),
     ...(typeof message.reasoning === 'string' ? { reasoning: message.reasoning } : {}),
     ...(isChatTokenUsage(message.tokenUsage) ? { tokenUsage: message.tokenUsage } : {}),
     ...(message.error || wasRunning ? { error: true } : {}),
     ...(message.progress && !wasRunning ? { progress: message.progress } : {}),
     ...(work ? { work: wasRunning ? { ...work, status: 'error' } : work } : {}),
   };
+}
+
+function normalizeChatAttachmentReference(value: unknown): ChatAttachmentReference | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const attachment = value as Partial<ChatAttachmentReference>;
+  if (
+    typeof attachment.id !== 'string'
+    || typeof attachment.name !== 'string'
+    || typeof attachment.characterCount !== 'number'
+    || typeof attachment.lineCount !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    id: attachment.id,
+    name: attachment.name,
+    characterCount: attachment.characterCount,
+    lineCount: attachment.lineCount,
+  };
+}
+
+function normalizeChatAttachment(value: unknown): ChatAttachment | null {
+  const reference = normalizeChatAttachmentReference(value);
+  if (!reference || typeof (value as Partial<ChatAttachment>).text !== 'string') {
+    return null;
+  }
+  return { ...reference, text: (value as ChatAttachment).text };
 }
 
 function normalizeCliSession(value: unknown): HvyCliSessionState {

@@ -377,6 +377,40 @@ test('requestDocumentEditChatTurn runs the CLI edit loop for document chat', asy
   }));
 });
 
+test('expected result: document edit exposes raw chat attachment text only through the virtual CLI', async () => {
+  const rawAttachmentText = 'Alpha source fact\nBeta source fact';
+  requestProxyCompletionMock.mockResolvedValueOnce('done Reviewed the attachment.');
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+
+  const result = await requestDocumentEditChatTurn({
+    settings: { provider: 'openai', model: 'gpt-5-mini' },
+    document,
+    messages: [],
+    request: 'Update the document from the attached facts.',
+    attachments: [{
+      id: 'facts',
+      name: 'Pasted text 1.txt',
+      text: rawAttachmentText,
+      characterCount: rawAttachmentText.length,
+      lineCount: 2,
+    }],
+  });
+
+  expect(result.error).toBeNull();
+  const firstRequest = requestProxyCompletionMock.mock.calls[0]?.[0];
+  expect(firstRequest.context).toContain('These are request source files, not HVY document attachments.');
+  expect(firstRequest.context).toContain('review every listed file completely');
+  expect(firstRequest.context).toContain('/chat-attachments/facts-Pasted-text-1.txt');
+  expect(firstRequest.context).not.toContain(rawAttachmentText);
+  expect(JSON.stringify(firstRequest.messages)).not.toContain(rawAttachmentText);
+  expect(firstRequest.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      role: 'user',
+      content: expect.stringContaining('chat-attachments'),
+    }),
+  ]));
+});
+
 test('requestDocumentEditChatTurn can run native provider tool calls', async () => {
   requestProxyCompletionMock.mockReset();
   requestProxyToolTurnMock

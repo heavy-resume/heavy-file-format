@@ -165,6 +165,8 @@ function createDefaultChatState(): AppState['chat'] {
       model: 'gpt-5.4-mini',
     },
     draft: '',
+    attachments: [],
+    pendingAttachmentIds: [],
     messages: [],
     isSending: false,
     status: null,

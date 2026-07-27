@@ -233,6 +233,8 @@ function applySessionState(initial: AppState, savedSession: ReturnType<typeof lo
       ...initial.chat,
       settings: savedSession.chat.settings,
       draft: savedSession.chat.draft,
+      attachments: savedSession.chat.attachments,
+      pendingAttachmentIds: savedSession.chat.pendingAttachmentIds,
       messages: savedSession.chat.messages,
       panelOpen: savedSession.chat.panelOpen,
     },

@@ -7,6 +7,7 @@ import type { VisualBlock, VisualSection } from '../../editor/types';
 import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
 import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
+import { getPendingChatAttachments } from '../../chat/chat-attachments';
 
 interface PendingDocumentEditMutation {
   requiresFullRefresh: boolean;
@@ -126,10 +127,13 @@ export function bindSubmit(app: HTMLElement): void {
       }
 
       const previousMessages = state.chat.messages;
-      const nextMessages = appendUserChatMessage(previousMessages, question);
+      const pendingAttachments = getPendingChatAttachments(state.chat);
+      const attachmentReferences = pendingAttachments.map(({ text: _text, ...attachment }) => attachment);
+      const nextMessages = appendUserChatMessage(previousMessages, question, attachmentReferences);
 
       state.chat.messages = nextMessages;
       state.chat.draft = '';
+      state.chat.pendingAttachmentIds = [];
       state.chat.error = null;
       state.chat.isSending = true;
       state.chat.requestNonce += 1;
@@ -208,6 +212,8 @@ export function bindSubmit(app: HTMLElement): void {
                 document: state.document,
                 messages: previousMessages,
                 request: question,
+                attachments: state.chat.attachments,
+                messageAttachments: pendingAttachments,
                 chatContext: state.chatContext,
                 embeddingProvider: state.embeddingProvider,
                 onMutation: recordDocumentEditMutation,

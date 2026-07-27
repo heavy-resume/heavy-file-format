@@ -17,7 +17,7 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatAttachment, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
@@ -130,6 +130,8 @@ export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 export interface HvyChatSessionState {
   settings?: ChatSettings;
   draft?: string;
+  attachments?: ChatAttachment[];
+  pendingAttachmentIds?: string[];
   messages?: ChatMessage[];
   panelOpen?: boolean;
 }
@@ -336,6 +338,8 @@ function applyEmbeddedSessionState(initial: AppState, savedSession: ReturnType<t
       ...initial.chat,
       settings: savedSession.chat.settings,
       draft: savedSession.chat.draft,
+      attachments: savedSession.chat.attachments,
+      pendingAttachmentIds: savedSession.chat.pendingAttachmentIds,
       messages: savedSession.chat.messages,
       panelOpen: savedSession.chat.panelOpen,
     },
@@ -361,6 +365,8 @@ function createChatSessionState(state: AppState): HvyChatSessionState {
   return {
     settings: { ...state.chat.settings },
     draft: state.chat.draft,
+    attachments: state.chat.attachments.map((attachment) => ({ ...attachment })),
+    pendingAttachmentIds: [...state.chat.pendingAttachmentIds],
     messages: state.chat.messages.map((message) => ({ ...message })),
     panelOpen: state.chat.panelOpen,
   };
@@ -375,6 +381,12 @@ function applyChatSessionState(state: AppState, chatState: HvyChatSessionState |
   }
   if (typeof chatState.draft === 'string') {
     state.chat.draft = chatState.draft;
+  }
+  if (Array.isArray(chatState.attachments)) {
+    state.chat.attachments = chatState.attachments.map((attachment) => ({ ...attachment }));
+  }
+  if (Array.isArray(chatState.pendingAttachmentIds)) {
+    state.chat.pendingAttachmentIds = chatState.pendingAttachmentIds.filter((id) => typeof id === 'string');
   }
   if (Array.isArray(chatState.messages)) {
     state.chat.messages = chatState.messages

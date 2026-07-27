@@ -4,7 +4,7 @@ import {
   formatHvyCliDiagnosticIssueLine,
   type HvyCliDiagnosticIssue,
 } from '../cli-core/document-diagnostics';
-import type { ChatMessage, ChatSettings, ChatTokenUsage, HvyChatContextOptions, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachment, ChatMessage, ChatSettings, ChatTokenUsage, HvyChatContextOptions, HvyEmbeddingProvider, VisualDocument } from '../types';
 import { getDocumentAiContext } from '../document-ai-context';
 import { formatHvyComponentDescriptionHistory } from '../cli-core/component-description-history';
 import { buildChatCliComponentHints } from './chat-cli-component-hints';
@@ -104,6 +104,7 @@ export async function runChatCliEditLoop(params: {
   settings: ChatSettings;
   document: VisualDocument;
   request: string;
+  attachments?: ChatAttachment[];
   priorMessages?: ChatMessage[];
   selectedComponent?: ChatCliSelectedComponentFocus;
   chatContext?: HvyChatContextOptions | null;
@@ -1061,6 +1062,7 @@ async function buildChatCliInitialTurnRequest(params: {
   settings?: ChatSettings;
   document: VisualDocument;
   request: string;
+  attachments?: ChatAttachment[];
   priorMessages?: ChatMessage[];
   selectedComponent?: ChatCliSelectedComponentFocus;
   signal?: AbortSignal;
@@ -1075,6 +1077,7 @@ async function buildChatCliInitialTurnRequest(params: {
   const cli = createChatCliInterface(params.document, createHvyCliSession({
     scratchpadWarningChars: params.settings?.scratchpad?.warningChars,
     scratchpadMaxChars: params.settings?.scratchpad?.maxChars,
+    readOnlyFiles: buildChatAttachmentVirtualFiles(params.attachments ?? []),
   }));
   if (params.selectedComponent?.path) {
     cli.session.cwd = params.selectedComponent.path;
@@ -1266,13 +1269,41 @@ function buildChatCliLoopContext(
   const omittedMessageCount = priorMessages.filter((message) => !message.progress).length - priorConversation.length;
   const documentAiContext = getDocumentAiContext(document);
   const cwdComponentContext = formatHvyComponentDescriptionHistory(document, getHvyCliSessionVirtualFileSystem(document, session), snapshot.cwd);
+  const chatAttachmentManifest = formatChatAttachmentManifest(session.readOnlyFiles ?? {});
   return [
     'Current request:',
     request,
+    ...(chatAttachmentManifest ? ['', chatAttachmentManifest] : []),
     ...(documentAiContext ? ['', 'Document context:', documentAiContext] : []),
     ...(omittedMessageCount > 0 ? ['', `Earlier chat omitted: ${omittedMessageCount} message${omittedMessageCount === 1 ? '' : 's'}.`] : []),
     ...(selectedComponent ? ['', 'Selected component focus:', formatSelectedComponentFocus(selectedComponent)] : []),
     ...(cwdComponentContext ? ['', cwdComponentContext] : []),
+  ].join('\n');
+}
+
+function buildChatAttachmentVirtualFiles(attachments: ChatAttachment[]): Record<string, string> {
+  return Object.fromEntries(attachments.map((attachment) => [
+    chatAttachmentVirtualPath(attachment),
+    attachment.text,
+  ]));
+}
+
+function chatAttachmentVirtualPath(attachment: ChatAttachment): string {
+  const safeId = attachment.id.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'attachment';
+  const safeName = attachment.name.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'pasted-text.txt';
+  return `/chat-attachments/${safeId}-${safeName}`;
+}
+
+function formatChatAttachmentManifest(files: Record<string, string>): string {
+  const entries = Object.entries(files).filter(([path]) => path.startsWith('/chat-attachments/'));
+  if (entries.length === 0) {
+    return '';
+  }
+  return [
+    'Chat attachments:',
+    'These are request source files, not HVY document attachments. Before planning or changing the document, review every listed file completely.',
+    'Use wc -l first, then bounded sed -n reads when normal CLI output would truncate the file. Keep concise source findings in /scratchpad.txt when useful.',
+    ...entries.map(([path, text]) => `- ${path} (${text.length} characters, ${text.split(/\r\n|\r|\n/).length} lines)`),
   ].join('\n');
 }
 

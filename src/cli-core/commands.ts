@@ -55,6 +55,7 @@ export interface HvyCliSession {
   now?: Date;
   searchHvyDocument?: (args: string[]) => Promise<string>;
   scratchpadLimits?: HvyCliScratchpadLimits;
+  readOnlyFiles?: Record<string, string>;
 }
 
 export interface HvyCliScratchpadLimits {
@@ -65,6 +66,7 @@ export interface HvyCliScratchpadLimits {
 export interface HvyCliSessionOptions {
   scratchpadWarningChars?: number;
   scratchpadMaxChars?: number;
+  readOnlyFiles?: Record<string, string>;
 }
 
 export interface HvyCliExecution {
@@ -112,6 +114,7 @@ export function createHvyCliSession(options: HvyCliSessionOptions = {}): HvyCliS
     scratchpadContent: defaultScratchpadContent(),
     scratchpadLimits: normalizeScratchpadLimits(options),
     virtualPathNaming: { anonymousBlockNamesById: {} },
+    ...(options.readOnlyFiles ? { readOnlyFiles: { ...options.readOnlyFiles } } : {}),
   };
 }
 
@@ -878,9 +881,28 @@ function inferComponentNameForDirectory(fs: ReturnType<typeof buildHvyVirtualFil
 function addSessionFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, document: VisualDocument, session: HvyCliSession): void {
   measurePhase('cli.sessionFiles.add', { entriesBefore: fs.entries.size }, () => {
     addSessionScratchpadFile(fs, session);
+    addSessionReadOnlyFiles(fs, session);
     addSessionRawHvyFiles(fs, document, session);
     addSessionModifiedFiles(fs, session);
   });
+}
+
+function addSessionReadOnlyFiles(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {
+  for (const [path, content] of Object.entries(session.readOnlyFiles ?? {})) {
+    if (!path.startsWith('/') || path === '/') {
+      continue;
+    }
+    const parts = path.split('/').filter(Boolean);
+    for (let index = 1; index < parts.length; index += 1) {
+      const directoryPath = `/${parts.slice(0, index).join('/')}`;
+      if (!fs.entries.has(directoryPath)) {
+        fs.entries.set(directoryPath, { kind: 'dir', path: directoryPath });
+      }
+    }
+    if (!fs.entries.has(path)) {
+      fs.entries.set(path, { kind: 'file', path, read: () => content });
+    }
+  }
 }
 
 function addSessionScratchpadFile(fs: ReturnType<typeof buildHvyVirtualFileSystem>, session: HvyCliSession): void {

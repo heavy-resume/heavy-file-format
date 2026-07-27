@@ -1,4 +1,5 @@
-import { handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste } from './_imports';
+import { getRefreshChatSurface, handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste, saveSessionState, state } from './_imports';
+import { CHAT_PASTE_ATTACHMENT_THRESHOLD, createPastedChatAttachment } from '../../chat/chat-attachments';
 
 export function bindBeforeinput(app: HTMLElement): void {
   app.addEventListener('copy', (event) => {
@@ -11,6 +12,33 @@ export function bindBeforeinput(app: HTMLElement): void {
   });
 
   app.addEventListener('paste', (event) => {
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement
+      && target.dataset.field === 'chat-input'
+      && state.currentView !== 'viewer'
+    ) {
+      const pastedText = event.clipboardData?.getData('text/plain') ?? '';
+      if (pastedText.length >= CHAT_PASTE_ATTACHMENT_THRESHOLD) {
+        event.preventDefault();
+        const selectionStart = target.selectionStart ?? target.value.length;
+        const selectionEnd = target.selectionEnd ?? selectionStart;
+        const attachment = createPastedChatAttachment(state.chat, pastedText);
+        state.chat.attachments.push(attachment);
+        state.chat.pendingAttachmentIds.push(attachment.id);
+        state.chat.error = null;
+        saveSessionState(state);
+        getRefreshChatSurface()();
+        window.setTimeout(() => {
+          const prompt = app.querySelector<HTMLTextAreaElement>('[data-field="chat-input"]');
+          if (prompt) {
+            prompt.focus();
+            prompt.setSelectionRange(selectionStart, selectionEnd);
+          }
+        }, 0);
+      }
+      return;
+    }
     const editable = getRichEditable(event.target as HTMLElement);
     if (!editable || !consumePendingPlainPaste(editable)) {
       return;

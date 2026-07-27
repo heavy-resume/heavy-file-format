@@ -496,6 +496,11 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(visibleScriptBox).not.toBeNull();
   expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
+
+  await page.getByRole('button', { name: 'Meta' }).click();
+  await expect(page.locator('#modalRoot')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#modalRoot')).toHaveCount(0);
 });
 
 test('embedded editor and viewer keep independent document state', async ({ page }) => {

@@ -335,6 +335,8 @@ test('PHVY viewer paper colors default to white and black', () => {
 
   expect(expectedResult).toContain('--hvy-bg: #ffffff;');
   expect(expectedResult).toContain('--hvy-text: #000000;');
+  expect(expectedResult).toContain('--hvy-link-color: #000000;');
+  expect(expectedResult).toContain('--hvy-link-hover-color: #000000;');
   expect(expectedResult).toContain('--hvy-surface: #ffffff;');
   expect(expectedResult).toContain('--hvy-pdf-page-width: 612;');
   expect(expectedResult).toContain('--hvy-pdf-page-height: 792;');
@@ -445,6 +447,8 @@ test('PHVY viewer paper colors use document theme overrides', () => {
     colors: {
       '--hvy-bg': '#f8fafc',
       '--hvy-text': '#020617',
+      '--hvy-link-color': '#2563eb',
+      '--hvy-link-hover-color': '#1d4ed8',
     },
   };
 
@@ -452,6 +456,10 @@ test('PHVY viewer paper colors use document theme overrides', () => {
 
   expect(expectedResult).toContain('--hvy-bg: #f8fafc;');
   expect(expectedResult).toContain('--hvy-text: #020617;');
+  expect(expectedResult).toContain('--hvy-link-color: #020617;');
+  expect(expectedResult).toContain('--hvy-link-hover-color: #020617;');
+  expect(expectedResult).not.toContain('--hvy-link-color: #2563eb;');
+  expect(expectedResult).not.toContain('--hvy-link-hover-color: #1d4ed8;');
   expect(expectedResult).toContain('--hvy-surface: #f8fafc;');
 });
 

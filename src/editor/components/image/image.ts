@@ -432,7 +432,7 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
   const filename = block.schema.imageFile.trim();
   const alt = block.schema.imageAlt || filename || 'Image';
   if (!filename) {
-    return '<div class="image-empty muted">No image attached.</div>';
+    return '<div class="image-empty muted">No image</div>';
   }
   const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
   const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
@@ -497,8 +497,10 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             <input type="file" accept="${IMAGE_ATTACHMENT_ACCEPT}" data-field="image-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" />
             <span class="image-pick-button">choose a file</span>
           </label>
-          <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
           ${filename && downloadUrl ? `<a class="image-download-link" href="${helpers.escapeAttr(downloadUrl)}" download="${helpers.escapeAttr(filename)}">download</a>` : ''}
+        </div>
+        <div class="image-camera-row">
+          <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
         </div>
         <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
       </div>

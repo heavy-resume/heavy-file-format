@@ -176,6 +176,7 @@ metadata:
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
 
@@ -287,7 +288,7 @@ Common block metadata fields include:
 
 `id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
 `css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
-Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. Responsive author CSS belongs in fenced HVY CSS blocks.
+Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. A declaration MAY use a surface-responsive prefix before its property: `md:order: 2;` applies `order: 2` when the outer HVY surface is at least the `md` breakpoint, while `max-md:order: 2;` applies it below `md`. Unprefixed declarations apply at every surface size. Renderers MUST evaluate these variants against the named `hvy-surface` query container, not the browser viewport or an HVY `container` component. Responsive selectors or rules that cannot be expressed as declarations belong in fenced HVY CSS blocks.
 `hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
 `editorOnly` is an optional boolean on sections and blocks. When true, the section or block exists in editor surfaces and document AI editing mode, but MUST NOT be rendered in the viewer, viewer navigation/sidebar, or viewer-oriented reader views/search results. Use it for authoring controls such as generation buttons that should not become part of the finished document.
@@ -397,7 +398,7 @@ Grid blocks can be emitted with specialized directives so grid item content rema
 
 Grid item `id` metadata is optional. Authoring clients MAY generate transient item ids for editing controls, but MUST NOT serialize generated ids back into inline `gridItems` or `hvy:grid:N` metadata when the author did not provide an id.
 
-Grid slot directives MAY include `id`. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
+Grid slot directives MAY include `id` and `css`. Slot `css` applies to the rendered grid cell wrapper, while child-block `css` applies to the child component wrapper. This distinction allows cell layout declarations such as `max-md:order: 1;` to reorder cells based on the outer HVY surface width. Use the child block's `css` or `align` metadata for alignment inside a grid cell.
 
 Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
 

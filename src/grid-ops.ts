@@ -43,7 +43,7 @@ export function createGridItem(
   _columns: number,
   createBlock: (component: string, skip: boolean) => VisualBlock
 ): GridItem {
-  return { id: makeId('griditem'), idGenerated: true, block: createBlock('text', true) };
+  return { id: makeId('griditem'), idGenerated: true, css: '', block: createBlock('text', true) };
 }
 
 export function parseGridItems(
@@ -64,6 +64,7 @@ export function parseGridItems(
       items.push({
         id: authoredId || makeId('griditem'),
         idGenerated: !authoredId,
+        css: typeof item.css === 'string' ? item.css : '',
         block: item.block ? parseBlock(item.block) : (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -84,6 +85,7 @@ export function parseGridItems(
       items.push({
         id: makeId('griditem'),
         idGenerated: true,
+        css: typeof item.css === 'string' ? item.css : '',
         block: (() => {
           const block = createBlock(typeof item.component === 'string' ? item.component : 'text', true);
           block.text = typeof item.content === 'string' ? item.content : '';
@@ -107,6 +109,7 @@ export function parseGridItems(
     items.push({
       id: makeId('griditem'),
       idGenerated: true,
+      css: '',
       block: (() => {
         const block = createBlock('text', true);
         block.text = typeof legacyValues[key] === 'string' ? (legacyValues[key] as string) : '';

@@ -455,6 +455,16 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return true;
   }
 
+  if (field === 'block-grid-item-css' && target instanceof HTMLTextAreaElement) {
+    const item = block.schema.gridItems.find((candidate) => candidate.id === target.dataset.gridItemId);
+    if (item) {
+      item.css = target.value;
+      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+      refreshReaderPanelsOutsideActiveEditor(target);
+    }
+    return true;
+  }
+
   if (field === 'block-grid-rich') {
     let turndownMs = 0;
     let syncMs = 0;

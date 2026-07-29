@@ -12,6 +12,36 @@ import {
 
 registerSerializationTestState();
 
+test('preserves responsive grid slot CSS through deserialize and serialize', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+responsive_breakpoints:
+  md: 46rem
+---
+
+<!--hvy: {"id":"profile"}-->
+#! Profile
+
+ <!--hvy:grid {"id":"profile-layout","gridColumns":2}-->
+
+  <!--hvy:grid:0 {"id":"details","css":"max-md:order: 2;"}-->
+
+   <!--hvy:text {}-->
+    Details
+
+  <!--hvy:grid:1 {"id":"photo","css":"max-md:order: 1;"}-->
+
+   <!--hvy:text {}-->
+    Photo
+`, '.hvy');
+
+  expect(document.meta.responsive_breakpoints).toEqual({ md: '46rem' });
+  expect(document.sections[0]?.blocks[0]?.schema.gridItems[0]?.css).toBe('max-md:order: 2;');
+  expect(serializeDocument(document)).toContain(
+    '<!--hvy:grid:1 {"id":"photo","css":"max-md:order: 1;"}-->'
+  );
+});
+
 test('does not serialize generated section ids into directives', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

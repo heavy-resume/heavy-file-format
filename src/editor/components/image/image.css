@@ -61,6 +61,12 @@
   color: var(--hvy-link-color);
 }
 
+.image-camera-row {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
 .image-camera-button {
   display: inline-flex;
   align-items: center;
@@ -74,6 +80,7 @@
   font: inherit;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
   text-decoration: none;
   box-shadow: 0 0.28rem 0.75rem color-mix(in srgb, var(--hvy-button-bg) 18%, transparent);
   transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
@@ -109,6 +116,21 @@
 .image-reader img,
 .image-empty {
   max-width: 100%;
+}
+
+.image-empty-editable {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.image-empty-edit-button {
+  flex: 0 0 auto;
 }
 
 .image-reader img {

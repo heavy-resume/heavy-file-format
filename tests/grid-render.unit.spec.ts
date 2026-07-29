@@ -19,6 +19,7 @@ class TestInputElement {
   dataset: Record<string, string> = {};
   value = '';
   checked = false;
+  closest = () => null;
 }
 
 function createHelpers(): ComponentRenderHelpers {
@@ -291,6 +292,25 @@ test('grid reader renders grid cells without slot alignment metadata', () => {
 
   expect(expectedResult).toContain('grid-column: 2 / span 1;');
   expect(expectedResult).not.toContain('text-align: right;');
+});
+
+test('expected result: grid reader applies slot CSS and surface-responsive order to the cell', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'photo',
+    css: 'padding: 1rem; max-md:order: 1;',
+    block: createEmptyBlock('image'),
+  });
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: () => '<img alt="Profile">',
+  });
+
+  expect(expectedResult).toContain('data-grid-item-id="photo"');
+  expect(expectedResult).toContain('padding: 1rem');
+  expect(expectedResult).toContain('@container hvy-surface (inline-size < 48rem)');
+  expect(expectedResult).toContain('order: 1;');
 });
 
 test('grid reader uses default stack behavior without generated CSS', () => {

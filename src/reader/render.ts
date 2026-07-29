@@ -31,6 +31,7 @@ import { highlightSearchHtml } from '../search/highlight';
 import { getDocumentSectionDefaultCss, mergeDocumentCss } from '../document-section-defaults';
 import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../heading-styles';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { compileSurfaceResponsiveCss, getSurfaceResponsiveClass } from '../surface-responsive-css';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
 import { visitBlocks } from '../section-ops';
@@ -434,8 +435,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
+    const responsiveClass = getSurfaceResponsiveClass(section.key, block.id);
+    const responsiveCss = compileSurfaceResponsiveCss(block.schema.css, `.${responsiveClass}`, state.documentMeta);
     const blockClass = [
       'reader-block',
+      responsiveClass,
       `reader-block-${base}`,
       block.schema.align === 'left' ? '' : `align-${block.schema.align}`,
       `slot-${block.schema.slot}`,
@@ -456,12 +460,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const anchor = getReaderButtonAnchor(section, block);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
-    const blockStyle = sanitizeReaderBlockCss(block.schema.css, options);
+    const blockStyle = sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
     const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string, extraAttrs = ''): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
-      return `<div ${blockAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
+      return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div ${blockAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
     };
     const renderMaybeCollapsedBlockShell = (body: string): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
@@ -623,6 +627,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         block.schema.componentListBlocks = [];
       }
       return !hasComponentListItems(block);
+    }
+    if (base === 'image') {
+      return block.schema.imageFile.trim().length === 0;
     }
     return false;
   }

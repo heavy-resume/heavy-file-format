@@ -3,6 +3,8 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { GridItem, VisualBlock } from '../../types';
 import { closeIcon } from '../../../icons';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../../../grid-ops';
+import { state } from '../../../state';
+import { compileSurfaceResponsiveCss } from '../../../surface-responsive-css';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
@@ -78,7 +80,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             placement: 'after',
             targetGridItemId: item.id,
           });
-          return `<div class="grid-field-row">
+          const responsiveClass = getGridItemResponsiveClass(block.id, item.id);
+          const responsiveCss = compileSurfaceResponsiveCss(item.css, `.${responsiveClass}`, state.document.meta);
+          return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="grid-field-row ${helpers.escapeAttr(responsiveClass)}"${responsiveCss.inlineCss ? ` style="${helpers.escapeAttr(responsiveCss.inlineCss)}"` : ''}>
           ${beforePlacementTarget}
           <div class="grid-field-head">
             <div class="section-drag-title">
@@ -107,6 +111,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                   </select>`
                 : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
             }
+            <label>
+              <span>Cell CSS</span>
+              <textarea data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+                block.id
+              )}" data-field="block-grid-item-css" data-grid-item-id="${helpers.escapeAttr(item.id)}" spellcheck="false">${helpers.escapeHtml(
+                item.css ?? ''
+              )}</textarea>
+            </label>
           </div>
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
@@ -158,10 +170,13 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     .map((item, index) => {
       const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
       const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+      const responsiveClass = getGridItemResponsiveClass(block.id, item.item.id);
+      const responsiveCss = compileSurfaceResponsiveCss(item.item.css, `.${responsiveClass}`, state.document.meta);
       const cellStyle = [
         `grid-column: ${gridColumn};`,
+        responsiveCss.inlineCss,
       ].filter(Boolean).join(' ');
-      return `<div class="reader-grid-cell" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
+      return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="reader-grid-cell ${helpers.escapeAttr(responsiveClass)}" data-grid-item-id="${helpers.escapeAttr(item.item.id)}" style="${helpers.escapeAttr(cellStyle)}">${item.html}</div>`;
     })
     .join('');
   if (!cells.trim()) {
@@ -179,6 +194,10 @@ function renderGridStackCss(className: string, stackWidth: string, helpers: Para
 
 function getGridStackClass(blockId: string, stackWidth: string): string {
   return `grid-stack-${hashGridStackKey(`${blockId}:${stackWidth}`)}`;
+}
+
+function getGridItemResponsiveClass(blockId: string, itemId: string): string {
+  return `grid-item-responsive-${hashGridStackKey(`${blockId}:${itemId}`)}`;
 }
 
 function getGridStackWidthInputValue(stackWidth: string): string {

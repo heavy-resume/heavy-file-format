@@ -416,6 +416,7 @@ function parseBlocks(
       attach.parent.schema.gridItems.push({
         id: authoredId || makeId('griditem'),
         idGenerated: !authoredId,
+        css: typeof attach.meta.css === 'string' ? attach.meta.css : '',
         block,
       });
       return;
@@ -1457,6 +1458,7 @@ function serializeBlockSchema(
     if (!options.omitGridItems && schema.gridItems.length > 0) {
       payload.gridItems = schema.gridItems.map((item) => ({
         ...(item.idGenerated ? {} : { id: item.id }),
+        ...(item.css?.trim() ? { css: item.css } : {}),
         block: serializeVisualBlock(item.block, documentMeta),
       }));
     }
@@ -1716,7 +1718,10 @@ function serializeExpandablePart(
 function serializeGridItemBlock(item: GridItem, index: number, indent: number, documentMeta: JsonObject | null): string {
   return serializeSlotWithChild(
     `grid:${index}`,
-    item.idGenerated ? {} : { id: item.id },
+    {
+      ...(item.idGenerated ? {} : { id: item.id }),
+      ...(item.css?.trim() ? { css: item.css } : {}),
+    },
     item.block,
     indent,
     documentMeta

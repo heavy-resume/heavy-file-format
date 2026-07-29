@@ -69,6 +69,7 @@ describe('image editor render controls', () => {
     const expectedResult = renderImageEditor('profile', block, helpers);
 
     expect(expectedResult).toContain('data-action="image-take-photo"');
+    expect(expectedResult).toMatch(/<div class="image-camera-row">\s*<button[^>]+data-action="image-take-photo"/);
     expect(expectedResult).toContain('data-action="image-use-existing"');
     expect(expectedResult).toContain('Use an attached image');
     expect(expectedResult).toContain('Use image');

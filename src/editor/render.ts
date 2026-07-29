@@ -30,6 +30,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
+import { compileSurfaceResponsiveCss } from '../surface-responsive-css';
 import { applyWorkspaceLinkRendering } from '../workspace-links';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
@@ -933,8 +934,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map((item, index) => {
           const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
+          const responsiveClass = `grid-item-passive-${block.id.replace(/[^a-z0-9_-]/gi, '-')}-${item.id.replace(/[^a-z0-9_-]/gi, '-')}`;
+          const responsiveCss = compileSurfaceResponsiveCss(item.css, `.${responsiveClass}`, state.documentMeta);
           const cellStyle = [
             `grid-column: ${gridColumn};`,
+            responsiveCss.inlineCss,
           ].filter(Boolean).join(' ');
           const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
@@ -946,7 +950,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               targetGridItemId: item.id,
             })
             : '';
-          return `<div class="reader-grid-cell is-passive-grid-cell" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
+          return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="reader-grid-cell is-passive-grid-cell ${deps.escapeAttr(responsiveClass)}" data-grid-item-id="${deps.escapeAttr(item.id)}" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections
@@ -967,6 +971,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       const targetId = block.schema.buttonPositionTargetId.trim();
       const targetSummary = targetId ? ` anchored to ${targetId}` : ' inline';
       return `<div class="editor-passive-empty-text">Button: ${deps.escapeHtml(block.schema.buttonLabel || 'Generate')}${deps.escapeHtml(targetSummary)}</div>`;
+    }
+
+    if (base === 'image' && !block.schema.imageFile.trim()) {
+      return `<div class="image-reader">
+        <div class="image-empty image-empty-editable muted">
+          <span>No image</span>
+          <button type="button" class="ghost image-empty-edit-button" data-action="activate-block" data-section-key="${deps.escapeAttr(
+            sectionKey
+          )}" data-block-id="${deps.escapeAttr(block.id)}">Edit</button>
+        </div>
+      </div>`;
     }
 
     if (base === 'text' && block.text.trim().length === 0) {

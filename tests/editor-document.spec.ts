@@ -3031,7 +3031,7 @@ hvy_version: 0.1
   expect(Number.parseFloat(componentMetaWidth)).toBeCloseTo(640, 0);
   await mount.locator('.component-meta-modal [data-modal-action="close"]').click();
 
-  await mount.locator('.editor-block-passive', { hasText: 'No image attached.' }).click();
+  await mount.locator('.editor-block-passive', { hasText: 'No image' }).click();
   await mount.locator('[data-action="image-take-photo"]').click();
   const cameraStyles = await mount.locator('.image-camera-modal').evaluate((modal) => {
     const root = modal.closest<HTMLElement>('.image-camera-modal-root');
@@ -3126,6 +3126,51 @@ hvy_version: 0.1
   await expect(page.locator('.ai-edit-popover')).toContainText('Request changes');
   await expect(page.locator('.ai-edit-popover [data-field="ai-provider"]')).toHaveCount(0);
   await expect(page.locator('.ai-edit-popover [data-field="ai-model"]')).toHaveCount(0);
+});
+
+test('blank image offers its image editor in AI mode but not viewer mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="ai-mount"></div><div id="viewer-mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"photos"}-->
+#! Photos
+
+<!--hvy:image {"id":"portrait","css":"width: 12rem; aspect-ratio: 1 / 1; border: 1px solid var(--hvy-border);"}-->
+`;
+    const documentBytes = new TextEncoder().encode(source);
+    const aiRoot = document.querySelector<HTMLElement>('#ai-mount');
+    const viewerRoot = document.querySelector<HTMLElement>('#viewer-mount');
+    if (!aiRoot || !viewerRoot) {
+      throw new Error('Mount root missing.');
+    }
+    mountHvy({
+      root: aiRoot,
+      document: deserializeDocumentBytes(documentBytes, '.hvy'),
+      mode: 'ai',
+    });
+    mountHvy({
+      root: viewerRoot,
+      document: deserializeDocumentBytes(documentBytes, '.hvy'),
+      mode: 'viewer',
+    });
+  });
+
+  const aiBlankImage = page.locator('#ai-mount .editor-block-passive[data-block-id]');
+  await expect(aiBlankImage).toContainText('No image');
+  await expect(aiBlankImage.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await aiBlankImage.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.locator('#ai-mount .editor-block[data-active-editor-block="true"] .image-editor')).toBeVisible();
+
+  const viewerBlankImage = page.locator('#viewer-mount .reader-block-image');
+  await expect(viewerBlankImage).toContainText('No image');
+  await expect(viewerBlankImage.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
 });
 
 test('embedded importFromText runs mocked LLM import and reports diagnostics', async ({ page }) => {

@@ -19,6 +19,7 @@ export type SortKeyValue = number | string;
 export interface GridItem {
   id: string;
   idGenerated?: boolean;
+  css?: string;
   block: VisualBlock;
 }
 

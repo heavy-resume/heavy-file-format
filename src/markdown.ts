@@ -109,7 +109,7 @@ turndown.addRule('hvy-sort-value', {
       return content;
     }
     const label = element.nodeName.toUpperCase() === 'SELECT'
-      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected || option.hasAttribute('selected'))?.textContent?.trim()
+      ? Array.from(element.querySelectorAll('option')).find((option) => option.selected)?.textContent?.trim()
         ?? element.getAttribute('value')?.trim()
         ?? content
       : (element.textContent ?? content).replaceAll('\u200b', '').trim();

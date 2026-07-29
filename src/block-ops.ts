@@ -1,7 +1,7 @@
 import type { TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
-import type { AppState, SortValueType } from './types';
+import type { AppState, SortValueDefinition, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
@@ -26,7 +26,7 @@ import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } f
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
 import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } from './caption';
 import type { TextCaptionPayload } from './editor/types';
-import { findSortValueOwnerBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
+import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
 import { highlightSearchHtml } from './search/highlight';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
@@ -1275,11 +1275,18 @@ function applySortValueAnnotation(
   options: { sortValueKey?: string; sortValueType?: string }
 ): boolean {
   const range = getEditableSelectionRange(editable);
-  if (!range || range.collapsed || range.toString().trim().length === 0) {
+  if (!range) {
     return false;
   }
   const key = (options.sortValueKey ?? '').trim() || inferSortValueKey(range.toString(), options.sortValueType);
   const type: SortValueType = options.sortValueType === 'number' || options.sortValueType === 'date' || options.sortValueType === 'datetime' || options.sortValueType === 'enum' ? options.sortValueType : 'text';
+  const definition = getEditableSortValueDefinition(editable, key);
+  if (definition?.type === 'enum') {
+    return applyEnumSortValueControl(editable, range, key, definition);
+  }
+  if (range.collapsed || range.toString().trim().length === 0) {
+    return false;
+  }
   ensureSortValueDefinition(editable, key, type);
   const wrapper = document.createElement('span');
   wrapper.className = 'hvy-sort-value';
@@ -1292,6 +1299,46 @@ function applySortValueAnnotation(
   range.insertNode(wrapper);
   moveCaretAfterElement(wrapper);
   return true;
+}
+
+function applyEnumSortValueControl(
+  editable: HTMLElement,
+  range: Range,
+  key: string,
+  definition: SortValueDefinition
+): boolean {
+  const options = definition.options ?? [];
+  if (options.length === 0) {
+    return false;
+  }
+  const selectedText = range.toString().trim();
+  const selectedOption = options.find((option) => option.label.trim() === selectedText) ?? options[0];
+  range.deleteContents();
+  unwrapSortValueAnnotations(editable, key);
+  const select = document.createElement('select');
+  select.className = 'hvy-sort-value hvy-sort-value-enum';
+  select.contentEditable = 'false';
+  select.dataset.hvySortValue = 'true';
+  select.dataset.sortValueKey = key;
+  select.dataset.field = 'sort-value-enum';
+  select.dataset.sectionKey = editable.dataset.sectionKey ?? '';
+  select.dataset.blockId = editable.dataset.blockId ?? '';
+  options.forEach((option) => {
+    const optionElement = document.createElement('option');
+    optionElement.value = option.label;
+    optionElement.textContent = option.label;
+    optionElement.selected = option === selectedOption;
+    optionElement.toggleAttribute('selected', option === selectedOption);
+    select.appendChild(optionElement);
+  });
+  range.insertNode(select);
+  moveCaretAfterElement(select);
+  return true;
+}
+
+function getEditableSortValueDefinition(editable: HTMLElement, key: string): SortValueDefinition | undefined {
+  const block = findBlockByIds(editable.dataset.sectionKey ?? '', editable.dataset.blockId ?? '');
+  return block ? getSortValueDefsForBlock(state.document, block)[key] : undefined;
 }
 
 function moveCaretAfterElement(element: HTMLElement): void {
@@ -1310,6 +1357,10 @@ function unwrapSortValueAnnotations(root: ParentNode, key: string): void {
   root.querySelectorAll<HTMLElement>(`[data-hvy-sort-value="true"][data-sort-value-key="${cssEscapeForSelector(key)}"]`).forEach((node) => {
     const parent = node.parentNode;
     if (!parent) {
+      return;
+    }
+    if (node instanceof HTMLSelectElement) {
+      node.remove();
       return;
     }
     while (node.firstChild) {

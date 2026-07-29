@@ -815,6 +815,59 @@ component_defs:
 
   await expect(activeBlock.getByRole('alert')).toHaveCount(0);
   await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()
+    .locator('[data-hvy-sort-value="true"]')).toHaveValue('Applied');
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks[0]?.text;
+  })).toBe('Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->');
+});
+
+test('enum sort value can be removed and reinserted from Use as', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-status"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  const editor = activeBlock.locator('.rich-editor');
+  await editor.locator('[data-field="sort-value-enum"]').focus();
+  await page.keyboard.press('Backspace');
+  await expect(editor.locator('[data-field="sort-value-enum"]')).toHaveCount(0);
+
+  await activeBlock.locator('.text-use-as-menu-item[data-sort-value-key="Status"]').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+  });
+  const reinserted = editor.locator('[data-field="sort-value-enum"]');
+  await expect(reinserted).toHaveValue('Applied');
+  await reinserted.selectOption({ label: 'Rejected' });
+  await activeBlock.getByRole('button', { name: 'Done' }).click();
+
+  await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()
+    .locator('[data-field="sort-value-enum"]')).toHaveValue('Rejected');
 });
 
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {

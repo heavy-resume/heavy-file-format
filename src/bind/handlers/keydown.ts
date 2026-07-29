@@ -53,6 +53,23 @@ export function bindKeydown(app: HTMLElement): void {
     if (!richTarget) {
       return;
     }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const caretNode = app.ownerDocument.createTextNode('\u200b');
+      target.replaceWith(caretNode);
+      const range = app.ownerDocument.createRange();
+      range.setStart(caretNode, 0);
+      range.collapse(true);
+      const selection = app.ownerDocument.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      richTarget.focus({ preventScroll: true });
+      richTarget.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+      lastFocusedSortSelect = null;
+      pendingSortSelectExit = null;
+      return;
+    }
     if (event.key === 'ArrowRight' && handleRichEditorKeydown(event, richTarget)) {
       pendingSortSelectExit = { select: target, richTarget };
       event.stopPropagation();

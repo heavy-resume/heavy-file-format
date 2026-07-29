@@ -114,6 +114,9 @@ export function bindChangeControls(app: HTMLElement): void {
       if (!editor) {
         return;
       }
+      Array.from(target.options).forEach((option) => {
+        option.toggleAttribute('selected', option.selected);
+      });
       if (handleBlockFieldInput(editor)) {
         syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
         refreshReaderPanelsOutsideActiveEditor(editor);

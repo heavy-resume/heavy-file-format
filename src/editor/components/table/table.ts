@@ -3,10 +3,9 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../com
 import type { TableRow } from '../../types';
 import { closeIcon, plusIcon } from '../../../icons';
 import { renderAltAnnotationsAsFullText, renderAltAnnotationsAsMobileText } from '../../../markdown';
-import { getComponentSortValueDefs, getSortValueDefsForBlock, replaceSortValueAnnotations } from '../../../sort-values';
+import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { state } from '../../../state';
-import { getReusableNameFromSectionKey } from '../../../component-defs';
 import { findReusableOwner } from '../../../reusable';
 
 let readerTableStripeIndex = 0;
@@ -50,15 +49,12 @@ function getSortValueDefsForTableBlock(sectionKey: string, block: Parameters<Com
     if (!state?.document) {
       return {};
     }
-    if (getReusableNameFromSectionKey(sectionKey)) {
-      const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
-      if (Object.keys(direct).length > 0) {
-        return direct;
-      }
-      const owner = findReusableOwner(sectionKey, block.id);
-      return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    if (Object.keys(direct).length > 0) {
+      return direct;
     }
-    return getSortValueDefsForBlock(state.document, block);
+    const owner = findReusableOwner(sectionKey, block.id);
+    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
   } catch {
     return {};
   }

@@ -913,6 +913,64 @@ component_defs:
   )).toBe(1);
 });
 
+test('nested custom component enum opens as a dropdown in the text editor', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLSelectElement.prototype, 'showPicker', {
+      configurable: true,
+      value() {
+        (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount =
+          ((window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0) + 1;
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: sample-entry
+    baseType: expandable
+    sortValueDefs:
+      Outcome:
+        type: enum
+        options:
+          - label: "Active"
+            value: "active"
+          - label: "Closed"
+            value: "closed"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:sample-entry {"id":"sample","expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+  <!--hvy:expandable:content {}-->
+
+   <!--hvy:text {"id":"outcome"}-->
+    Outcome: <!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.waitForFunction(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks.some((block) => block.id === 'sample') ?? false;
+  }, null, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive [data-sort-value-key="Outcome"]').click();
+
+  const expectedResult = page.locator(
+    '.editor-block[data-active-editor-block="true"] select[data-sort-value-key="Outcome"]'
+  );
+  await expect(expectedResult).toBeFocused();
+  await expect(expectedResult).toHaveValue('Active');
+  await expect(expectedResult).toHaveCSS('padding-top', '0.64px');
+  await expect(expectedResult).toHaveCSS('min-width', '72px');
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0
+  )).toBe(1);
+});
+
 test('changing an enum in AI mode updates a scripting-derived annotation before Done', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

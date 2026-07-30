@@ -2,9 +2,8 @@ import './text.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
-import { getComponentSortValueDefs, getSortValueDefsForBlock, replaceSortValueAnnotations } from '../../../sort-values';
+import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
-import { getReusableNameFromSectionKey } from '../../../component-defs';
 import { findReusableOwner } from '../../../reusable';
 
 const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
@@ -205,15 +204,12 @@ function getSortValueDefsForEditorBlock(sectionKey: string, block: Parameters<Co
     if (!state?.document) {
       return {};
     }
-    if (getReusableNameFromSectionKey(sectionKey)) {
-      const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
-      if (Object.keys(direct).length > 0) {
-        return direct;
-      }
-      const owner = findReusableOwner(sectionKey, block.id);
-      return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
+    const direct = getComponentSortValueDefs(state.document.meta, block.schema.component);
+    if (Object.keys(direct).length > 0) {
+      return direct;
     }
-    return getSortValueDefsForBlock(state.document, block);
+    const owner = findReusableOwner(sectionKey, block.id);
+    return owner ? getComponentSortValueDefs(state.document.meta, owner.schema.component) : {};
   } catch {
     return {};
   }

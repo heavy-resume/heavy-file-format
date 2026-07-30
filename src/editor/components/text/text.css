@@ -304,11 +304,11 @@
   box-shadow: 0 4px 10px color-mix(in srgb, var(--hvy-shadow) 28%, transparent);
 }
 
-.hvy-sort-value-enum {
+.hvy-sort-value.hvy-sort-value-enum {
   width: auto;
-  min-width: 7.5rem;
+  min-width: 4.5rem;
   max-width: min(100%, 16rem);
-  padding: 0.12rem 1.7rem 0.12rem 0.45rem;
+  padding: 0.04rem 1.35rem 0.04rem 0.35rem;
   font: inherit;
   line-height: 1.25;
   appearance: none;

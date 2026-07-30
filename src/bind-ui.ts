@@ -57,6 +57,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
+import { setPowerScriptAcceptanceCallbacks } from './plugins/power-scripting/power-scripting-policy';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -78,6 +79,7 @@ const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: st
   'import-reference': IMPORT_REFERENCE_SOURCE_DOCUMENT,
   'scripting-help': SCRIPTING_HELP_SOURCE_DOCUMENT,
 };
+const acceptedPowerScriptFingerprints = new Set<string>();
 
 interface HvyFileSystemFileHandle {
   name: string;
@@ -344,6 +346,13 @@ export function bindUi(app: HTMLElement): void {
     }
     await saveCurrentDocumentInPlace(downloadName, { rerender: false });
     return 'saved';
+  }, runtime);
+  setPowerScriptAcceptanceCallbacks({
+    getAcceptance: ({ fingerprint }) => acceptedPowerScriptFingerprints.has(fingerprint),
+    onAcceptanceChanged: ({ fingerprint, accepted }) => {
+      if (accepted) acceptedPowerScriptFingerprints.add(fingerprint);
+      else acceptedPowerScriptFingerprints.delete(fingerprint);
+    },
   }, runtime);
 
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);

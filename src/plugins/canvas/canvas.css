@@ -110,6 +110,37 @@
   height: 1rem;
 }
 
+.hvy-canvas-tool-picker,
+.hvy-canvas-size-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.hvy-canvas-action.is-active,
+.hvy-canvas-size-choice.is-active {
+  border-color: var(--hvy-accent-1);
+  color: var(--hvy-accent-1);
+  background: color-mix(in srgb, var(--hvy-accent-1) 16%, var(--hvy-surface));
+}
+
+.hvy-canvas-size-choice {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border-radius: 0.55rem;
+}
+
+.hvy-canvas-size-choice span {
+  display: block;
+  max-width: 1.25rem;
+  max-height: 1.25rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .hvy-canvas-frame {
   position: relative;
   overflow: hidden;
@@ -141,4 +172,27 @@
 
 .hvy-canvas-surface.is-drawing {
   cursor: none;
+}
+
+.hvy-canvas-cursor-preview {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--hvy-text);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--hvy-accent-1) 14%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 70%, transparent);
+  pointer-events: none;
+  will-change: transform, width, height;
+}
+
+.hvy-canvas-cursor-preview.is-eraser {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--hvy-surface) 55%, transparent);
+}
+
+.hvy-canvas-cursor-preview[hidden] {
+  display: none;
 }

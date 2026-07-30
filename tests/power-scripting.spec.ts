@@ -99,11 +99,50 @@ window.__programmaticRuns = (window.__programmaticRuns || 0) + 1;
   expect(result).toEqual({ runs: 1, hidden: true });
 });
 
+test('embedded hosts own power-script acceptance across remounts', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="acceptanceMount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"acceptance-demo"}-->
+#! Acceptance
+
+<!--hvy:plugin {"id":"accepted-code","plugin":"hvy.power-scripting"}-->
+window.__acceptedRuns = (window.__acceptedRuns || 0) + 1;
+`;
+    const accepted = new Set<string>();
+    const options = {
+      root: document.querySelector<HTMLElement>('#acceptanceMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer' as const,
+      getPowerScriptAcceptance: ({ fingerprint }: { fingerprint: string }) => accepted.has(fingerprint),
+      onPowerScriptAcceptanceChanged: ({ fingerprint, accepted: value }: { fingerprint: string; accepted: boolean }) => {
+        if (value) accepted.add(fingerprint);
+        else accepted.delete(fingerprint);
+      },
+    };
+    const testWindow = window as Window & { __acceptanceMount?: ReturnType<typeof mountHvy>; __acceptanceRemount?: () => void };
+    testWindow.__acceptanceRemount = () => {
+      testWindow.__acceptanceMount?.destroy();
+      testWindow.__acceptanceMount = mountHvy({ ...options, document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy') });
+    };
+    testWindow.__acceptanceMount = mountHvy(options);
+  });
+
+  await page.getByRole('button', { name: 'Enable power script' }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __acceptedRuns?: number }).__acceptedRuns)).toBe(1);
+  await page.evaluate(() => (window as Window & { __acceptanceRemount?: () => void }).__acceptanceRemount?.());
+  await expect(page.getByRole('button', { name: 'Enable power script' })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as Window & { __acceptedRuns?: number }).__acceptedRuns)).toBe(2);
+});
+
 test('Asteroids example launches on the canvas and initializes its SQL high-score table', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.document-menu').evaluate((menu) => {
-    if (menu instanceof HTMLDetailsElement) menu.open = true;
-  });
+  await page.locator('.document-menu summary').click();
   await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('.hvy-canvas-toolbar:visible')).toHaveCount(0);
@@ -140,6 +179,82 @@ test('Asteroids example launches on the canvas and initializes its SQL high-scor
       .filter((block) => block.schema.component === 'plugin')
       .map((block) => block.schema.plugin);
   })).toEqual(['hvy.power-scripting', 'hvy.canvas']);
+
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Default Example', exact: true }).click({ force: true });
+  await expect(page.locator('#downloadName')).toHaveValue('example.hvy');
+  await page.locator('.document-menu summary').click();
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
+
+  await expect(page.getByRole('button', { name: 'Enable power script' })).toHaveCount(0);
+  await expect(page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas')).toBeVisible();
+});
+
+test('canvas editor has square brush tools, quick sizes, and vector erasing', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.document-menu summary').click();
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Asteroids', exact: true }).click({ force: true });
+  await page.getByRole('button', { name: 'Editor' }).click();
+
+  const brush = page.getByRole('button', { name: 'Brush', exact: true });
+  const eraser = page.getByRole('button', { name: 'Eraser', exact: true });
+  await expect(brush).toBeVisible();
+  await expect(eraser).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Fill canvas', exact: true })).toBeVisible();
+  const dimensions = await brush.evaluate((button) => {
+    const bounds = button.getBoundingClientRect();
+    return { width: bounds.width, height: bounds.height };
+  });
+  expect(Math.abs(dimensions.width - dimensions.height)).toBeLessThan(1);
+
+  await eraser.click();
+  await expect(eraser).toHaveAttribute('aria-pressed', 'true');
+  const largeSize = page.getByRole('button', { name: 'Brush size 16' });
+  await largeSize.click();
+  await expect(largeSize).toHaveAttribute('aria-pressed', 'true');
+  const canvas = page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas');
+  await canvas.hover({ position: { x: 200, y: 120 } });
+  await expect(page.locator('.hvy-canvas-cursor-preview')).toBeVisible();
+  const cursorDimensions = await page.locator('.hvy-canvas-cursor-preview').evaluate((cursor) => {
+    const bounds = cursor.getBoundingClientRect();
+    return { width: bounds.width, height: bounds.height };
+  });
+  expect(cursorDimensions.width).toBeGreaterThan(2);
+  expect(Math.abs(cursorDimensions.width - cursorDimensions.height)).toBeLessThan(1);
+
+  expect(await canvas.evaluate((surface) => {
+    const root = surface.closest<HTMLElement>('[data-hvy-canvas-id]');
+    if (!root?.hvyCanvas) throw new Error('Canvas API missing.');
+    root.hvyCanvas.addStroke({
+      color: '#123456',
+      width: 4,
+      points: [{ x: 10, y: 10 }, { x: 20, y: 20 }],
+    });
+    let renderCount = 0;
+    root.addEventListener('hvy:canvas:render', () => {
+      renderCount += 1;
+    });
+    root.hvyCanvas.undo();
+    return renderCount;
+  })).toBe(1);
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const block = state.document.sections
+      .flatMap((section) => section.blocks)
+      .find((candidate) => candidate.schema.id === 'asteroids-canvas');
+    const attachment = state.document.attachments.find((candidate) => candidate.id === 'canvas:asteroids-canvas');
+    return {
+      text: block?.text,
+      mediaType: attachment?.meta.mediaType,
+      drawing: attachment ? JSON.parse(new TextDecoder().decode(attachment.bytes)) : null,
+    };
+  })).toEqual({
+    text: 'Asteroids game surface. The power script renders gameplay here in Viewer mode.',
+    mediaType: 'application/vnd.hvy.canvas+json',
+    drawing: { version: 1, strokes: [] },
+  });
 });
 
 test('power-script prompts render inside the HVY surface without browser dialogs and save requests require a host', async ({ page }) => {
@@ -247,6 +362,8 @@ window.__referenceSaveStatus = await doc.save.request({ reason: \`\${pilot} upda
   await page.getByRole('button', { name: 'Enable power script' }).click();
   await page.getByRole('button', { name: 'Save score' }).click();
 
+  await expect(page.getByText('Trusted JavaScript enabled')).toHaveCount(0);
+  await expect(page.getByText('Power script running.')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (window as Window & { __referenceSaveReached?: boolean }).__referenceSaveReached)).toBe(true);
   await expect(page.getByRole('heading', { name: 'Download updated document?' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download updated file' })).toBeVisible();

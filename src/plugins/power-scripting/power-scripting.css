@@ -38,28 +38,6 @@
   tab-size: 2;
 }
 
-.hvy-power-script-enabled {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid var(--hvy-success);
-  border-radius: 999px;
-  padding: 0.3rem 0.65rem;
-  color: var(--hvy-success);
-  background: color-mix(in srgb, var(--hvy-success) 10%, var(--hvy-surface));
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.hvy-power-script-enabled::before {
-  content: '';
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 0.6rem currentColor;
-}
-
 .hvy-power-script [data-power-script-status] {
   overflow: auto;
   margin: 0.6rem 0 0;

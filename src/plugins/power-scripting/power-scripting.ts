@@ -7,7 +7,7 @@ import { createScriptingDbRuntime, resetDbTableRuntimeForDocument } from '../db-
 import { DB_TABLE_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
 import { createScriptingRuntime, type ScriptingDocApi, type ScriptingRuntime } from '../scripting/runtime';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
-import { getPowerScriptingMode } from './power-scripting-policy';
+import { getPowerScriptingModeForDocument, setPowerScriptAccepted } from './power-scripting-policy';
 import { getSaveRequestHandler, type HvySaveStatus } from './power-save-request';
 import powerScriptingDocumentation from './about-power-scripting.txt?raw';
 import './power-scripting.css';
@@ -284,7 +284,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const runtime = getActiveStateRuntime();
   let running: RunningProgram | null = null;
   let startingSource: string | null = null;
-  let sessionChoice: 'prompt' | 'enabled' | 'hidden' = getPowerScriptingMode(runtime);
+  let sessionChoice: 'prompt' | 'enabled' | 'hidden' = getPowerScriptingModeForDocument(ctx.rawDocument, runtime);
   let startNonce = 0;
 
   const stop = () => {
@@ -309,6 +309,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   const status = (message: string, error = false) => {
     let output = root.querySelector<HTMLElement>('[data-power-script-status]');
+    if (!error) {
+      output?.remove();
+      return;
+    }
     if (!output) {
       output = document.createElement('pre');
       output.dataset.powerScriptStatus = 'true';
@@ -352,6 +356,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     enable.textContent = 'Enable power script';
     enable.addEventListener('click', () => {
       sessionChoice = 'enabled';
+      setPowerScriptAccepted(ctx.rawDocument, true, runtime);
       renderViewer();
     });
     const hide = document.createElement('button');
@@ -383,10 +388,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return;
     }
     root.replaceChildren();
-    const badge = document.createElement('div');
-    badge.className = 'hvy-power-script-enabled';
-    badge.textContent = 'Trusted JavaScript enabled';
-    root.appendChild(badge);
     execute();
   };
 

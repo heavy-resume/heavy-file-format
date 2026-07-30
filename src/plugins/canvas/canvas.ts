@@ -13,6 +13,7 @@ export interface CanvasStroke {
   points: CanvasPoint[];
   color: string;
   width: number;
+  mode?: 'draw' | 'erase' | 'fill';
 }
 
 export interface CanvasDrawing {
@@ -46,6 +47,11 @@ interface CanvasConfig {
 }
 
 const EMPTY_DRAWING: CanvasDrawing = { version: 1, strokes: [] };
+const CANVAS_DRAWING_MEDIA_TYPE = 'application/vnd.hvy.canvas+json';
+
+export function getCanvasDrawingAttachmentId(blockId: string): string {
+  return `canvas:${blockId}`;
+}
 
 function finiteNumber(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
@@ -87,6 +93,7 @@ export function normalizeCanvasDrawing(value: unknown): CanvasDrawing {
         points,
         color: typeof raw.color === 'string' && raw.color.trim() ? raw.color : '#1f2937',
         width: finiteNumber(raw.width, 4, 1, 64),
+        ...(raw.mode === 'erase' || raw.mode === 'fill' ? { mode: raw.mode } : {}),
       }];
     }),
   };
@@ -111,6 +118,7 @@ function cloneDrawing(drawing: CanvasDrawing): CanvasDrawing {
     strokes: drawing.strokes.map((stroke) => ({
       color: stroke.color,
       width: stroke.width,
+      ...(stroke.mode === 'erase' || stroke.mode === 'fill' ? { mode: stroke.mode } : {}),
       points: stroke.points.map((point) => ({ ...point })),
     })),
   };
@@ -125,6 +133,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-canvas-plugin hvy-canvas-plugin-${ctx.mode}`;
   root.dataset.hvyCanvasId = ctx.block.schema.id || ctx.block.id;
+  const drawingAttachmentId = getCanvasDrawingAttachmentId(ctx.block.schema.id || ctx.block.id);
 
   const toolbar = document.createElement('div');
   toolbar.className = 'hvy-canvas-toolbar';
@@ -135,14 +144,20 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   canvas.className = 'hvy-canvas-surface';
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', 'Drawable canvas');
-  canvasFrame.appendChild(canvas);
+  const cursorPreview = document.createElement('div');
+  cursorPreview.className = 'hvy-canvas-cursor-preview';
+  cursorPreview.setAttribute('aria-hidden', 'true');
+  canvasFrame.append(canvas, cursorPreview);
   root.append(toolbar, canvasFrame);
 
-  let drawing = parseCanvasDrawing(ctx.block.text);
+  let drawing = parseCanvasDrawing(new TextDecoder().decode(
+    ctx.attachments.get(drawingAttachmentId)?.bytes ?? new Uint8Array()
+  ));
   let activeStroke: CanvasStroke | null = null;
+  let activeTool: 'brush' | 'eraser' | 'fill' = 'brush';
   let resizeObserver: ResizeObserver | null = null;
 
-  const isDrawingAllowed = () => ctx.mode === 'editor' || readCanvasConfig(ctx.block.schema.pluginConfig).viewerDrawing;
+  const isDrawingAllowed = () => ctx.view === 'editor' || readCanvasConfig(ctx.block.schema.pluginConfig).viewerDrawing;
 
   const redraw = () => {
     const config = readCanvasConfig(ctx.block.schema.pluginConfig);
@@ -160,8 +175,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (!context) return;
     context.setTransform(dpr * cssWidth / config.width, 0, 0, dpr * cssHeight / config.height, 0, 0);
     context.clearRect(0, 0, config.width, config.height);
-    for (const stroke of drawing.strokes) drawStroke(context, stroke);
-    if (activeStroke) drawStroke(context, activeStroke);
+    for (const stroke of drawing.strokes) drawStroke(context, stroke, config.width, config.height);
+    if (activeStroke) drawStroke(context, activeStroke, config.width, config.height);
     root.dispatchEvent(new CustomEvent('hvy:canvas:render', {
       bubbles: true,
       detail: { api, context, width: config.width, height: config.height },
@@ -169,7 +184,15 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 
   const persist = () => {
-    ctx.setText(serializeCanvasDrawing(drawing));
+    ctx.attachments.set(
+      drawingAttachmentId,
+      {
+        plugin: CANVAS_PLUGIN_ID,
+        blockId: ctx.block.schema.id || ctx.block.id,
+        mediaType: CANVAS_DRAWING_MEDIA_TYPE,
+      },
+      new TextEncoder().encode(serializeCanvasDrawing(drawing))
+    );
     root.dispatchEvent(new CustomEvent('hvy:canvas:change', {
       bubbles: true,
       detail: { api, drawing: cloneDrawing(drawing) },
@@ -219,22 +242,39 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const onPointerDown = (event: PointerEvent) => {
     if (!isDrawingAllowed() || event.button !== 0) return;
     const config = readCanvasConfig(ctx.block.schema.pluginConfig);
+    if (activeTool === 'fill') {
+      drawing.strokes.push({
+        points: [{ x: 0, y: 0 }],
+        color: resolvedStrokeColor(root, config.strokeColor),
+        width: 1,
+        mode: 'fill',
+      });
+      redraw();
+      persist();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     activeStroke = {
       points: [pointFromEvent(event)],
       color: resolvedStrokeColor(root, config.strokeColor),
       width: config.strokeWidth,
+      ...(activeTool === 'eraser' ? { mode: 'erase' as const } : {}),
     };
     canvas.setPointerCapture(event.pointerId);
     canvas.classList.add('is-drawing');
     event.preventDefault();
+    event.stopPropagation();
   };
   const onPointerMove = (event: PointerEvent) => {
     if (!activeStroke || !canvas.hasPointerCapture(event.pointerId)) return;
+    event.stopPropagation();
     activeStroke.points.push(pointFromEvent(event));
     redraw();
   };
   const finishStroke = (event: PointerEvent) => {
     if (!activeStroke) return;
+    event.stopPropagation();
     activeStroke.points.push(pointFromEvent(event));
     drawing.strokes.push(activeStroke);
     activeStroke = null;
@@ -247,6 +287,28 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', finishStroke);
   canvas.addEventListener('pointercancel', finishStroke);
+  canvas.addEventListener('click', (event) => {
+    if (isDrawingAllowed()) event.stopPropagation();
+  });
+  const updateCursorPreview = (event: PointerEvent) => {
+    if (!isDrawingAllowed() || activeTool === 'fill') {
+      cursorPreview.hidden = true;
+      return;
+    }
+    const config = readCanvasConfig(ctx.block.schema.pluginConfig);
+    const bounds = canvas.getBoundingClientRect();
+    const diameter = Math.max(2, config.strokeWidth * bounds.width / config.width);
+    cursorPreview.hidden = false;
+    cursorPreview.style.width = `${diameter}px`;
+    cursorPreview.style.height = `${diameter}px`;
+    cursorPreview.style.transform = `translate(${event.clientX - bounds.left - diameter / 2}px, ${event.clientY - bounds.top - diameter / 2}px)`;
+    cursorPreview.classList.toggle('is-eraser', activeTool === 'eraser');
+  };
+  canvas.addEventListener('pointerenter', updateCursorPreview);
+  canvas.addEventListener('pointermove', updateCursorPreview);
+  canvas.addEventListener('pointerleave', () => {
+    cursorPreview.hidden = true;
+  });
 
   const rebuildToolbar = () => {
     toolbar.replaceChildren();
@@ -254,16 +316,21 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const drawingAllowed = isDrawingAllowed();
     canvas.classList.toggle('is-enabled', drawingAllowed);
     canvasFrame.classList.toggle('is-readonly', !drawingAllowed);
-    if (ctx.mode !== 'editor') {
+    if (ctx.view !== 'editor') {
       toolbar.hidden = true;
       return;
     }
     toolbar.hidden = false;
+    const toolPicker = makeToolPicker(activeTool, (tool) => {
+      activeTool = tool;
+      rebuildToolbar();
+    });
     toolbar.append(
       makeNumberControl('Width', config.width, 100, 4096, (width) => ctx.setConfig({ width })),
       makeNumberControl('Height', config.height, 100, 4096, (height) => ctx.setConfig({ height })),
+      toolPicker,
       makeColorControl(config.strokeColor || resolvedStrokeColor(root, ''), (strokeColor) => ctx.setConfig({ strokeColor })),
-      makeNumberControl('Brush', config.strokeWidth, 1, 64, (strokeWidth) => ctx.setConfig({ strokeWidth })),
+      makeSizePicker(config.strokeWidth, (strokeWidth) => ctx.setConfig({ strokeWidth })),
       makeToggleControl('Viewer drawing', config.viewerDrawing, (viewerDrawing) => ctx.setConfig({ viewerDrawing })),
       makeActionButton('Undo', undoIcon(), () => api.undo()),
       makeActionButton('Clear', closeIcon(), () => api.clear(), true),
@@ -271,9 +338,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 
   const refresh = () => {
-    const serialized = serializeCanvasDrawing(parseCanvasDrawing(ctx.block.text));
+    const serialized = serializeCanvasDrawing(parseCanvasDrawing(new TextDecoder().decode(
+      ctx.attachments.get(drawingAttachmentId)?.bytes ?? new Uint8Array()
+    )));
     if (serialized !== serializeCanvasDrawing(drawing) && !activeStroke) {
-      drawing = parseCanvasDrawing(ctx.block.text);
+      drawing = parseCanvasDrawing(new TextDecoder().decode(
+        ctx.attachments.get(drawingAttachmentId)?.bytes ?? new Uint8Array()
+      ));
     }
     rebuildToolbar();
     redraw();
@@ -297,9 +368,23 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 }
 
-function drawStroke(context: CanvasRenderingContext2D, stroke: CanvasStroke): void {
+function drawStroke(
+  context: CanvasRenderingContext2D,
+  stroke: CanvasStroke,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
   const first = stroke.points[0];
   if (!first) return;
+  context.save();
+  if (stroke.mode === 'fill') {
+    context.globalCompositeOperation = 'source-over';
+    context.fillStyle = stroke.color;
+    context.fillRect(0, 0, canvasWidth, canvasHeight);
+    context.restore();
+    return;
+  }
+  context.globalCompositeOperation = stroke.mode === 'erase' ? 'destination-out' : 'source-over';
   context.beginPath();
   context.strokeStyle = stroke.color;
   context.fillStyle = stroke.color;
@@ -310,10 +395,64 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: CanvasStroke): vo
   if (stroke.points.length === 1) {
     context.arc(first.x, first.y, stroke.width / 2, 0, Math.PI * 2);
     context.fill();
+    context.restore();
     return;
   }
   for (const point of stroke.points.slice(1)) context.lineTo(point.x, point.y);
   context.stroke();
+  context.restore();
+}
+
+function makeToolPicker(
+  selected: 'brush' | 'eraser' | 'fill',
+  commit: (tool: 'brush' | 'eraser' | 'fill') => void
+): HTMLDivElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'hvy-canvas-control';
+  const caption = document.createElement('span');
+  caption.textContent = 'Tool';
+  const choices = document.createElement('div');
+  choices.className = 'hvy-canvas-tool-picker';
+  choices.append(
+    makeToolButton('Brush', brushIcon(), selected === 'brush', () => commit('brush')),
+    makeToolButton('Eraser', eraserIcon(), selected === 'eraser', () => commit('eraser')),
+    makeToolButton('Fill canvas', fillIcon(), selected === 'fill', () => commit('fill')),
+  );
+  wrapper.append(caption, choices);
+  return wrapper;
+}
+
+function makeToolButton(label: string, icon: string, selected: boolean, commit: () => void): HTMLButtonElement {
+  const button = makeActionButton(label, icon, commit);
+  button.classList.toggle('is-active', selected);
+  button.setAttribute('aria-pressed', String(selected));
+  return button;
+}
+
+function makeSizePicker(value: number, commit: (value: number) => void): HTMLDivElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'hvy-canvas-control';
+  const caption = document.createElement('span');
+  caption.textContent = 'Size';
+  const choices = document.createElement('div');
+  choices.className = 'hvy-canvas-size-picker';
+  [2, 4, 8, 16, 32].forEach((size) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost hvy-canvas-size-choice';
+    button.title = `${size}px`;
+    button.setAttribute('aria-label', `Brush size ${size}`);
+    button.setAttribute('aria-pressed', String(value === size));
+    button.classList.toggle('is-active', value === size);
+    const dot = document.createElement('span');
+    dot.style.width = `${Math.max(3, Math.sqrt(size) * 2.2)}px`;
+    dot.style.height = dot.style.width;
+    button.appendChild(dot);
+    button.addEventListener('click', () => commit(size));
+    choices.appendChild(button);
+  });
+  wrapper.append(caption, choices);
+  return wrapper;
 }
 
 function makeNumberControl(label: string, value: number, min: number, max: number, commit: (value: number) => void): HTMLLabelElement {
@@ -374,16 +513,28 @@ function undoIcon(): string {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M5 12h8a6 6 0 0 1 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 
+function brushIcon(): string {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4-4 4 4-4 4M13 7l4 4-8.5 8.5c-1.5 1.5-4.2 1.7-6.5.5 1.2-2.3 1-5 2.5-6.5L13 7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function eraserIcon(): string {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 4.5 5 5a2 2 0 0 1 0 2.8l-7.2 7.2H7.5l-3-3a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0ZM9 19.5l-4-4M12.5 19.5H21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function fillIcon(): string {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3 10 10-6.5 6.5a2.2 2.2 0 0 1-3 0l-4-4a2.2 2.2 0 0 1 0-3L13 3M5 11h12M19 17.5s-2 2.2-2 3.3a2 2 0 0 0 4 0c0-1.1-2-3.3-2-3.3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
 export const canvasPluginFactory: HvyPluginFactory = build;
 
 export const canvasPlugin: HvyPlugin = {
   id: CANVAS_PLUGIN_ID,
   displayName: 'Canvas',
   documentation: { filename: 'about-canvas.txt', text: canvasDocumentation },
-  aiHint: 'Drawable canvas. Dimensions and viewerDrawing live in pluginConfig; versioned stroke data lives in plugin.txt.',
-  aiHelp: `Use \`<!--hvy:plugin {"plugin":"${CANVAS_PLUGIN_ID}","pluginConfig":{"width":800,"height":450,"viewerDrawing":false}}-->\`. The body is a JSON CanvasDrawing object.`,
+  aiHint: 'Drawable canvas. Dimensions and viewerDrawing live in pluginConfig; vector drawing data lives in a tail attachment.',
+  aiHelp: `Use \`<!--hvy:plugin {"plugin":"${CANVAS_PLUGIN_ID}","pluginConfig":{"width":800,"height":450,"viewerDrawing":false}}-->\`. Keep the body as a short description; the client stores vector drawing data in the canvas attachment.`,
   visualDescription: {
-    describe: ({ block }) => `${parseCanvasDrawing(block.text).strokes.length} drawn stroke(s) on a canvas.`,
+    describe: () => 'Drawable canvas with vector data stored in its HVY tail attachment.',
   },
   create: canvasPluginFactory,
 };

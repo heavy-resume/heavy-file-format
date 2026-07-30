@@ -434,7 +434,7 @@ plugins:
  });
 
 <!--hvy:plugin {"id":"asteroids-canvas","plugin":"hvy.canvas","pluginConfig":{"width":900,"height":560,"viewerDrawing":false,"strokeWidth":3},"css":"max-width: 980px; margin: 0 auto;"}-->
-{"version":1,"strokes":[]}
+Asteroids game surface. The power script renders gameplay here in Viewer mode.
 
 <!--hvy: {"id":"asteroids-high-scores","expanded":true}-->
 #! High scores

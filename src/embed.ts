@@ -56,7 +56,14 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
-import { clearPowerScriptingMode, setPowerScriptingMode, type HvyPowerScriptingMode } from './plugins/power-scripting/power-scripting-policy';
+import {
+  clearPowerScriptingMode,
+  setPowerScriptAcceptanceCallbacks,
+  setPowerScriptingMode,
+  type HvyGetPowerScriptAcceptance,
+  type HvyPowerScriptAcceptanceChanged,
+  type HvyPowerScriptingMode,
+} from './plugins/power-scripting/power-scripting-policy';
 import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
@@ -128,6 +135,8 @@ export interface HvyMountOptions {
   encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
   powerScripts?: HvyPowerScriptingMode;
+  getPowerScriptAcceptance?: HvyGetPowerScriptAcceptance;
+  onPowerScriptAcceptanceChanged?: HvyPowerScriptAcceptanceChanged;
   onSaveRequest?: HvySaveRequestHandler;
 }
 
@@ -1021,6 +1030,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.crossDocumentLinks === true
   ));
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
+  setPowerScriptAcceptanceCallbacks({
+    getAcceptance: options.getPowerScriptAcceptance ?? null,
+    onAcceptanceChanged: options.onPowerScriptAcceptanceChanged ?? null,
+  }, runtime);
   setSaveRequestHandler(options.onSaveRequest
     ? (request) => options.onSaveRequest?.({
         ...request,

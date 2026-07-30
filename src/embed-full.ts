@@ -63,7 +63,14 @@ import {
   builtInPlugins,
 } from 'virtual:hvy-built-in-plugins';
 import type { HvyPlugin } from './plugins/types';
-import { clearPowerScriptingMode, setPowerScriptingMode, type HvyPowerScriptingMode } from './plugins/power-scripting/power-scripting-policy';
+import {
+  clearPowerScriptingMode,
+  setPowerScriptAcceptanceCallbacks,
+  setPowerScriptingMode,
+  type HvyGetPowerScriptAcceptance,
+  type HvyPowerScriptAcceptanceChanged,
+  type HvyPowerScriptingMode,
+} from './plugins/power-scripting/power-scripting-policy';
 import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
@@ -167,6 +174,8 @@ export interface HvyMountOptions {
   encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
   powerScripts?: HvyPowerScriptingMode;
+  getPowerScriptAcceptance?: HvyGetPowerScriptAcceptance;
+  onPowerScriptAcceptanceChanged?: HvyPowerScriptAcceptanceChanged;
   onSaveRequest?: HvySaveRequestHandler;
 }
 
@@ -1081,6 +1090,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   runtimeState.embeddingProvider = options.embeddingProvider ?? null;
   const runtime = createStateRuntime(runtimeState);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
+  setPowerScriptAcceptanceCallbacks({
+    getAcceptance: options.getPowerScriptAcceptance ?? null,
+    onAcceptanceChanged: options.onPowerScriptAcceptanceChanged ?? null,
+  }, runtime);
   setSaveRequestHandler(options.onSaveRequest
     ? (request) => options.onSaveRequest?.({
         ...request,

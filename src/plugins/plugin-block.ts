@@ -35,7 +35,7 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
     : nextId === QR_CODE_PLUGIN_ID
       ? QR_CODE_PLUGIN_DEFAULT_TEXT
     : nextId === CANVAS_PLUGIN_ID
-      ? '{"version":1,"strokes":[]}'
+      ? 'Canvas drawing. Vector artwork is stored in the HVY tail attachment.'
       : '';
   if (nextId === QR_CODE_PLUGIN_ID) {
     block.schema.css = QR_CODE_DEFAULT_CSS;

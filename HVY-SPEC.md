@@ -1621,7 +1621,7 @@ plugins:
 ---
 
 <!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
-{"version":1,"strokes":[]}
+Sketching surface. Vector artwork is stored in the HVY tail attachment.
 ```
 
 Normative configuration and data:
@@ -1635,13 +1635,18 @@ Normative configuration and data:
   SHOULD derive the brush color from the shared document text theme role.
 - `pluginConfig.strokeWidth` is an optional positive number in logical canvas
   units and SHOULD default to `4`.
-- The plugin text body MUST be interpreted as a JSON object with `version: 1`
-  and a `strokes` array. Each stroke contains a `color` string, positive `width`
-  number, and one or more `{x, y}` logical coordinate points. Clients MUST
-  preserve valid drawing data across responsive resizing.
+- The plugin text body SHOULD contain only a concise human/AI-facing
+  description. Drawing data MUST be stored in the tail attachment named
+  `canvas:<block-id>` with media type `application/vnd.hvy.canvas+json`.
+- The attachment payload MUST be interpreted as a JSON object with `version:
+  1` and a `strokes` array. Each stroke contains a `color` string, positive `width`
+  number, and one or more `{x, y}` logical coordinate points. An optional
+  `mode` is `erase` for a vector erase path or `fill` for a full-canvas color
+  layer; absent mode means a brush path. Clients MUST preserve valid drawing
+  data across responsive resizing and MUST replay operations in array order.
 - The plugin surface SHOULD expose a script API for retrieving and replacing
   drawing data, adding strokes, clearing, undoing, redrawing, and exporting the
-  rendered bitmap. Script-driven mutations MUST update the plugin text body.
+  rendered bitmap. Script-driven mutations MUST update the drawing attachment.
 - Clients SHOULD emit lifecycle/change/render notifications so other installed
   scripts can discover the surface and draw non-persistent overlays. Document
   content itself MUST NOT be executed as script.
@@ -1696,6 +1701,11 @@ Power scripts have a deliberately different trust and lifecycle model:
 Because power scripts are unrestricted, the sandbox guarantees of
 `hvy.scripting` do not apply. Merely opening or editing a document MUST NOT be
 treated as authorization to run them.
+
+Clients MAY persist a viewer's acceptance outside the document. Persisted
+acceptance SHOULD be keyed to a collision-resistant digest of the ordered
+identities and source of all power scripts so that adding, removing, renaming,
+reordering, or editing trusted code requires a new approval.
 
 ## 8. Security & Runtime Constraints
 

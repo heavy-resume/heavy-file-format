@@ -1,9 +1,14 @@
 Canvas plugin (hvy.canvas)
 
-The canvas stores a versioned JSON drawing in the plugin text body. Its
-pluginConfig supports width, height, strokeColor, strokeWidth, and
-viewerDrawing. Editors can pre-draw. Readers can draw only when viewerDrawing
-is true.
+The canvas stores its versioned JSON vector drawing in the HVY tail attachment
+named canvas:<block id>. The plugin text body remains a short human/AI-facing
+description. pluginConfig supports width, height, strokeColor, strokeWidth,
+and viewerDrawing. Editors can pre-draw. Readers can draw only when
+viewerDrawing is true.
+
+Brush and eraser marks remain vector paths. Fill-canvas operations remain
+ordered vector layers and can be undone like strokes. They are rasterized only
+for display and image export.
 
 Scripts can find an instance with [data-hvy-canvas-id="<block id>"] and use the
 element's hvyCanvas API: getDrawing, setDrawing, addStroke, clear, undo, redraw,

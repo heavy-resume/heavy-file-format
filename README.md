@@ -160,6 +160,27 @@ HVY.mountHvy({
 Power-script trust is supplied by the embedding host or viewer session; it is
 never read from document metadata.
 
+Hosts that unload and later remount documents can preserve viewer acceptance
+with `getPowerScriptAcceptance` and `onPowerScriptAcceptanceChanged`.
+Acceptance is keyed to a SHA-256 fingerprint of
+the ordered power-script ids and source, so adding, removing, renaming,
+reordering, or editing trusted code requires a new approval:
+
+```js
+const acceptedPowerScripts = new Set();
+
+HVY.mountHvyViewer({
+  root,
+  document,
+  getPowerScriptAcceptance: ({ fingerprint }) =>
+    acceptedPowerScripts.has(fingerprint),
+  onPowerScriptAcceptanceChanged: ({ fingerprint, accepted }) => {
+    if (accepted) acceptedPowerScripts.add(fingerprint);
+    else acceptedPowerScripts.delete(fingerprint);
+  },
+});
+```
+
 Power scripts should prefer `doc.dialog.alert(...)`,
 `doc.dialog.confirm(...)`, and `doc.dialog.prompt(...)` over blocking browser
 dialogs. These themed asynchronous dialogs render inside the mounted HVY

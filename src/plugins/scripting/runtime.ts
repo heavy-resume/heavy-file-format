@@ -15,6 +15,7 @@ import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
+import type { ScriptingPluginsApi } from './plugin-apis';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -53,6 +54,7 @@ export interface ScriptingDocApi {
   time: ScriptingTimeApi;
   export: ScriptingExportApi;
   cli: ScriptingCliApi;
+  plugins: ScriptingPluginsApi;
   rerender: () => void;
 }
 
@@ -132,6 +134,7 @@ export interface ScriptingRuntimeOptions {
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
+  plugins?: ScriptingPluginsApi;
   now?: () => Date;
   onMutationFlushed?: () => void;
 }
@@ -332,6 +335,14 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     tool_json: (name, argsJson) => {
       const parsed = JSON.parse(String(argsJson || '{}')) as Record<string, unknown>;
       return doc.tool(name, parsed);
+    },
+    plugins: options.plugins ?? {
+      call: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
+      call_json: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
     },
     component: {
       get_text: (id) => findComponentBySchemaId(options.document, String(id ?? ''))?.block.text ?? '',

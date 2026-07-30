@@ -6,6 +6,7 @@ import type { HvyCanvasApi } from '../canvas/canvas';
 import { createScriptingDbRuntime, resetDbTableRuntimeForDocument } from '../db-table';
 import { DB_TABLE_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
 import { createScriptingRuntime, type ScriptingDocApi, type ScriptingRuntime } from '../scripting/runtime';
+import { createScriptingPluginsApi } from '../scripting/plugin-apis';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
 import { getPowerScriptingModeForDocument, setPowerScriptAccepted } from './power-scripting-policy';
 import { getSaveRequestHandler, type HvySaveStatus } from './power-save-request';
@@ -245,6 +246,11 @@ async function startProgram(
   runtime = runWithStateRuntime(stateRuntime, () => createScriptingRuntime({
     document: ctx.rawDocument,
     db: database?.api,
+    plugins: createScriptingPluginsApi(ctx.rawDocument, {
+      allowAsync: true,
+      requireDocumentPermission: false,
+      onMutation: () => runtime?.markMutated(),
+    }),
     renderOnMutation: false,
   }));
   const doc = buildPowerDoc(ctx, dialogRoot, runtime, stateRuntime, registerCleanup);

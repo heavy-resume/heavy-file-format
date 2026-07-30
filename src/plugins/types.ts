@@ -187,6 +187,26 @@ export interface HvyPluginVisualDescriptionCapability {
   describe(ctx: HvyPluginVisualDescriptionContext): string | null | undefined;
 }
 
+export interface HvyPluginScriptingContext {
+  pluginId: string;
+  rawDocument: VisualDocument;
+  // Call after directly mutating rawDocument so the scripting runtime performs
+  // its normal sort-value synchronization and render refresh.
+  markMutated(): void;
+}
+
+export type HvyPluginScriptingMethod = (
+  args: JsonObject,
+  ctx: HvyPluginScriptingContext
+) => unknown | Promise<unknown>;
+
+export interface HvyPluginScriptingCapability {
+  // Methods are exposed through doc.plugins.call(pluginId, method, args).
+  // Sandboxed Python scripts may call only synchronous methods. Trusted power
+  // scripts may await either synchronous or asynchronous methods.
+  methods: Record<string, HvyPluginScriptingMethod>;
+}
+
 export type HvyPluginHookChangeReason = 'load' | 'edit' | 'raw-edit' | 'ai-edit' | 'plugin-edit' | 'unknown';
 
 export interface HvyDocumentHookContext {
@@ -233,6 +253,10 @@ export interface HvyPlugin {
   // Agent-facing consumers label it as rendered output so it is not confused
   // with literal serialized HVY text.
   visualDescription?: HvyPluginVisualDescriptionCapability;
+  // Optional callable API for document scripting. Sandboxed scripts require
+  // the plugin declaration to include the "scripting" permission. Authorized
+  // power scripts may call APIs from any installed plugin.
+  scripting?: HvyPluginScriptingCapability;
   // Optional guidance included in the AI document outline for plugin blocks.
   // Keep this short and action-oriented; it helps the document-edit loop know
   // which serialized fields to patch when users report plugin-rendered errors.

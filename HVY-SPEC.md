@@ -1114,6 +1114,12 @@ Recommended fields:
 - `integrity`
 - `permissions` (declared capabilities)
 
+The standardized `scripting` permission allows sandboxed `hvy.scripting`
+blocks to call the installed plugin's scripting API. A plugin declaration does
+not install code or grant access by itself: the host MUST also have installed
+that plugin implementation. Clients MUST deny sandboxed calls when either the
+installed scripting capability or this document permission is absent.
+
 ### 7.2 Plugin metadata at section level
 
 Sections can request plugin behavior with metadata:
@@ -1163,6 +1169,17 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
   rendered output for search indexing and agent-facing CLI display;
 - a PDF/static render capability that resolves a plugin block to ordinary
   PDF-compatible HVY blocks for export.
+- a scripting API capability whose named methods can be called through
+  `doc.plugins.call(pluginId, method, args)`.
+
+Plugin scripting method arguments MUST be an object and results SHOULD be
+structured-clone-compatible values. Sandboxed `hvy.scripting` calls MUST be
+synchronous and require the plugin declaration's `scripting` permission.
+Asynchronous methods, including host-approved network calls, MUST reject from
+the sandboxed runtime and MAY be awaited by an explicitly authorized
+`hvy.power-scripting` block. Power-script authorization is the applicable trust
+boundary because power scripts already have unrestricted page and network
+access; installed plugin APIs do not weaken that boundary.
 
 A visual-description capability receives the current plugin block and document
 and returns optional plain text describing rendered output that is not otherwise

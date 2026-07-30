@@ -1,5 +1,6 @@
 import { loadBrython, getBrython } from './brython-loader';
 import { createScriptingRuntime, type ScriptingDbApi, type ScriptingFormApi, type ScriptingRuntime } from './runtime';
+import { createScriptingPluginsApi } from './plugin-apis';
 import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
 import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
@@ -1301,11 +1302,26 @@ class __HvyToolProxy__:
             raise TypeError("doc.tool.NAME accepts at most one positional args dict")
         return __hvy_named_tool__
 
+class __HvyPluginsProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+
+    def call(self, plugin_id, method, args=None, **kwargs):
+        if args is None:
+            merged = {}
+        elif isinstance(args, dict):
+            merged = dict(args)
+        else:
+            raise TypeError("doc.plugins.call args must be a dict when provided")
+        merged.update(kwargs)
+        return self.__js_doc.plugins.call_json(plugin_id, method, __hvy_to_json__(merged))
+
 
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
         self.tool = __HvyToolProxy__(js_doc)
+        self.plugins = __HvyPluginsProxy__(js_doc)
 
     def __getattr__(self, name):
         return getattr(self.__js_doc, name)
@@ -1475,6 +1491,11 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     renderOnMutation: options.renderOnMutation,
     form: options.form,
     db: scriptingDb?.api,
+    plugins: createScriptingPluginsApi(options.document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+      onMutation: () => runtime?.markMutated(),
+    }),
     exportRuleRecorder: options.exportRuleRecorder,
     onMutationFlushed: () => {
       if (!stateRuntime) {

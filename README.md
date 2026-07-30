@@ -615,6 +615,30 @@ HVY.mountHvy({
 });
 ```
 
+Plugins can also publish named methods to the document scripting layer:
+
+```js
+const lookupPlugin = {
+  id: 'com.example.lookup',
+  displayName: 'Lookup',
+  scripting: {
+    methods: {
+      find: async ({ query }) => {
+        const response = await fetch(`/api/lookup?q=${encodeURIComponent(String(query))}`);
+        return response.json();
+      },
+    },
+  },
+};
+```
+
+An authorized power script can call asynchronous methods with
+`await doc.plugins.call('com.example.lookup', 'find', { query: 'sample' })`.
+Sandboxed `hvy.scripting` blocks can call synchronous methods only, and the
+matching front-matter plugin declaration must include
+`permissions: [scripting]`. Installing a plugin remains a host decision; a
+document declaration cannot install executable code.
+
 Embedded hosts can observe rendered reader links asynchronously and return how
 the link should be rendered. Use this for URL validation, safe-link
 interstitials, previews, or host-specific routing:

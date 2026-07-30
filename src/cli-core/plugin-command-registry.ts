@@ -416,6 +416,8 @@ registerHvyCliPluginCommands({
     'doc.header.get/set/remove/keys reads and writes front matter.',
     'doc.attachments.list/read/write/remove works with document attachments.',
     'doc.db.query(sql, params) and doc.db.execute(sql, params) access the current document SQL backend when available.',
+    'doc.plugins.call(plugin_id, method, args) calls a synchronous installed plugin API when that plugin declaration grants the scripting permission.',
+    'Asynchronous plugin APIs, including network-backed calls, require an authorized power script.',
     'doc.cli.run(command) runs one synchronous virtual CLI command and returns stdout; use doc.db for SQL.',
     'doc.json.parse(response), doc.json.parse_array(response), and doc.json.parse_object(response) extract structured JSON from LLM responses, including fenced JSON or wrapper prose.',
     'doc.time.now_iso(), doc.time.now_local(), doc.time.now_unix_ms(), and doc.time.today_iso() read the current client time.',

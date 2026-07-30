@@ -22,6 +22,7 @@ import type { AppState } from '../src/types';
 import { createTestState } from './serialization-test-helpers';
 import { editorStateActions } from '../src/bind/app-actions/editor-state';
 import { syncSortValuesForDocument } from '../src/sort-values';
+import { createScriptingPluginsApi } from '../src/plugins/scripting/plugin-apis';
 
 function bootstrapState(hvy: string): void {
   const document = deserializeDocument(hvy, '.hvy');
@@ -103,6 +104,113 @@ describe('plugin host registry', () => {
     bootstrapState(`---\nhvy_version: 1.0\n---\n`);
 
     expect(getAvailableDocumentPlugins().map((plugin) => plugin.id)).toEqual([PROGRESS_BAR_PLUGIN_ID]);
+  });
+});
+
+describe('plugin scripting APIs', () => {
+  test('before, plugin call, after: permitted sandbox call reaches the installed synchronous method', () => {
+    const document = deserializeDocument(`---
+hvy_version: 1.0
+plugins:
+  - id: com.example.lookup
+    source: builtin://lookup
+    permissions:
+      - scripting
+---
+`, '.hvy');
+    let mutated = false;
+    registerHostPlugin({
+      id: 'com.example.lookup',
+      displayName: 'Lookup',
+      scripting: {
+        methods: {
+          find: (args, ctx) => {
+            ctx.markMutated();
+            return { value: `found:${String(args.key)}` };
+          },
+        },
+      },
+    });
+
+    const before = document.meta.plugins;
+    const expectedResult = createScriptingPluginsApi(document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+      onMutation: () => {
+        mutated = true;
+      },
+    }).call('com.example.lookup', 'find', { key: 'alpha' });
+    const after = document.meta.plugins;
+
+    expect(before).toBe(after);
+    expect(mutated).toBe(true);
+    expect(expectedResult).toEqual({ value: 'found:alpha' });
+  });
+
+  test('before, plugin call, after: sandbox rejects a call without document permission', () => {
+    const document = deserializeDocument(`---
+hvy_version: 1.0
+plugins:
+  - id: com.example.lookup
+    source: builtin://lookup
+---
+`, '.hvy');
+    registerHostPlugin({
+      id: 'com.example.lookup',
+      displayName: 'Lookup',
+      scripting: { methods: { find: () => 'found' } },
+    });
+
+    const api = createScriptingPluginsApi(document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+    });
+
+    expect(() => api.call('com.example.lookup', 'find')).toThrow(
+      'Plugin "com.example.lookup" requires the "scripting" document permission.'
+    );
+  });
+
+  test('before, plugin call, after: sandbox rejects an asynchronous plugin method', async () => {
+    const document = deserializeDocument(`---
+hvy_version: 1.0
+plugins:
+  - id: com.example.network
+    source: builtin://network
+    permissions:
+      - scripting
+---
+`, '.hvy');
+    registerHostPlugin({
+      id: 'com.example.network',
+      displayName: 'Network',
+      scripting: { methods: { request: async () => ({ ok: true }) } },
+    });
+
+    const api = createScriptingPluginsApi(document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+    });
+
+    expect(() => api.call('com.example.network', 'request')).toThrow(
+      'Plugin scripting method "com.example.network.request" is asynchronous; call it from an authorized power script.'
+    );
+  });
+
+  test('before, plugin call, after: trusted power call awaits an asynchronous plugin method', async () => {
+    const document = deserializeDocument('---\nhvy_version: 1.0\n---\n', '.hvy');
+    registerHostPlugin({
+      id: 'com.example.network',
+      displayName: 'Network',
+      scripting: { methods: { request: async (args) => ({ status: 200, path: args.path }) } },
+    });
+
+    const expectedResult = await createScriptingPluginsApi(document, {
+      allowAsync: true,
+      requireDocumentPermission: false,
+    }).call('com.example.network', 'request', { path: '/status' });
+
+    expect(expectedResult).toEqual({ status: 200, path: '/status' });
   });
 });
 

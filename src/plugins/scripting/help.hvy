@@ -13,7 +13,7 @@ theme:
 
  <!--hvy:text {}-->
   # Introduction
-  
+
   Give your HVY document advanced functionality with scripting.
   
   The intended use for most people is to have AI write code for you instead of writing it yourself. Simply ask the AI to
@@ -103,6 +103,11 @@ theme:
   
   `edit_component`, `view_rendered_component`, `query_db_table`, `execute_sql`, and other async tools are not exposed
   through `doc.tool`.
+
+  Installed plugins may expose synchronous methods through
+  `doc.plugins.call(plugin_id, method, args)`. The document's plugin declaration
+  must include the `scripting` permission. Asynchronous methods, including
+  network-backed calls, require an authorized `hvy.power-scripting` block.
 <!--hvy: {"id":"execution-model","lock":false,"expanded":false,"highlight":false}-->
 #! Execution model
 

@@ -86,6 +86,9 @@ test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
   const expectedResult = buildPythonProgram('runtime-doc-json-test');
 
   expect(expectedResult).toContain('class __HvyDocProxy__:');
+  expect(expectedResult).toContain('class __HvyPluginsProxy__:');
+  expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
+  expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
   expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
 });
 

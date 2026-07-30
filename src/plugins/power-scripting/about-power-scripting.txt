@@ -16,6 +16,7 @@ attachment, SQL database, JSON, time, CLI, and rerender APIs plus:
 - doc.dialog.confirm(message, options?)
 - doc.dialog.prompt(message, options?)
 - await doc.save.request({ reason, filename? })
+- await doc.plugins.call(pluginId, method, args?) for installed plugin APIs
 
 Return a cleanup function or register cleanups through doc.onCleanup. Managed
 animation and event helpers are stopped automatically when the block reruns,

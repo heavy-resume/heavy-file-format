@@ -37,6 +37,37 @@ export function findSortValueAnnotations(markdown: string): SortValueAnnotation[
   return annotations;
 }
 
+export function setSortValueAnnotationText(block: VisualBlock, key: string, text: string): number {
+  const normalizedKey = key.trim();
+  if (!normalizedKey) {
+    return 0;
+  }
+  let replacements = 0;
+  const replaceInMarkdown = (markdown: string): string => markdown.replace(
+    SORT_VALUE_ANNOTATION_PATTERN,
+    (match, rawJson: string) => {
+      const payload = parseSortValuePayload(rawJson);
+      if (!payload || typeof payload.key !== 'string' || payload.key.trim() !== normalizedKey) {
+        return match;
+      }
+      replacements += 1;
+      return formatSortValueAnnotation(payload, text);
+    }
+  );
+  if (block.schema.kind === 'text') {
+    block.text = replaceInMarkdown(block.text);
+  }
+  if (block.schema.kind === 'table') {
+    block.schema.tableRows.forEach((row) => {
+      row.cells = row.cells.map(replaceInMarkdown);
+    });
+  }
+  getNestedBlocks(block).forEach((child) => {
+    replacements += setSortValueAnnotationText(child, normalizedKey, text);
+  });
+  return replacements;
+}
+
 export function getComponentSortValueDefs(
   meta: Record<string, unknown> | null | undefined,
   componentName: string

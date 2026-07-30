@@ -87,9 +87,12 @@ theme:
    component or section.
    - `handle.get_ancestor_record(excluded_tags="")` — find the nearest ancestor
    reusable record component.
-   - `handle.first_table_cell(index=0)` — read the first cell at `index` from a
-   nested table.
-   - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
+  - `handle.first_table_cell(index=0)` — read the first cell at `index` from a
+    nested table.
+  - `handle.set_sort_value(key, value)` — update every matching annotated sort
+    value within the component. This changes the annotation that owns the
+    derived sort key instead of writing the derived `sortKeys` cache directly.
+  - `handle.remove_children_by_tag(tag, slot="expandable-content")` — remove
    tagged child components from a child slot.
    - `handle.append_child(component, config=None, text="", slot="expandable-content")`
    — append a child component and return its handle.

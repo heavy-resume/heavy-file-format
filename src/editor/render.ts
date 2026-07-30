@@ -2174,6 +2174,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
+      preserveSortValueAnnotations: state.currentView === 'editor',
       crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
     }), state.crossDocumentLinksEnabled === true), deps.escapeHtml));
   }

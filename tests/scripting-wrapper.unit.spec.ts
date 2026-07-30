@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import {
   buildPythonProgram,
@@ -549,6 +549,75 @@ component_defs:
 
   const expectedResult = document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.sortKeys;
   expect(expectedResult).toEqual({ Time: '2026-07-08T16:15:00.000Z' });
+});
+
+test('component handle set_sort_value updates the annotation before deriving its sort key', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    sortValueDefs:
+      Outcome:
+        type: text
+---
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+ <!--hvy:component-list {"id":"entries","componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-1","sortKeys":{"Outcome":"Active"},"expandableAlwaysShowStub":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Outcome: <!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document });
+  const application = (runtime.doc.tool('get_components', { component: 'application-entry' }) as Array<{
+    set_sort_value(key: string, value: unknown): number;
+  }>)[0]!;
+
+  const expectedResult = application.set_sort_value('Outcome', 'Rejected');
+  runtime.doc.rerender();
+
+  expect(expectedResult).toBe(1);
+  expect(document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.expandableStubBlocks.children[0]!.text)
+    .toContain('<!--hvy:sort-value {"key":"Outcome"}-->Rejected<!--/hvy:sort-value-->');
+  expect(document.sections[0]!.blocks[0]!.schema.componentListBlocks[0]!.schema.sortKeys)
+    .toEqual({ Outcome: 'Rejected' });
+});
+
+test('scripting runtime can defer mutation rendering to its document hook caller', () => {
+  const renderApp = vi.fn();
+  const refreshReaderPanels = vi.fn();
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels,
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"notes"}-->
+#! Notes
+
+<!--hvy:text {"id":"note"}-->
+Before
+`, '.hvy');
+  const runtime = createScriptingRuntime({ document, renderOnMutation: false });
+
+  runtime.markMutated();
+  runtime.doc.rerender();
+
+  expect(refreshReaderPanels).not.toHaveBeenCalled();
+  expect(renderApp).not.toHaveBeenCalled();
 });
 
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {

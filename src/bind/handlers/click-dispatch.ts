@@ -30,6 +30,9 @@ export function bindClickDispatch(app: HTMLElement): void {
     logClickTrace(event, 'click-dispatch:capture:enter', {
       currentView: state.currentView,
     });
+    if (handlePassiveEditorEnumActivationClick(app, event)) {
+      return;
+    }
     handleAiReaderTextActivationClick(app, event);
   }, true);
 
@@ -291,6 +294,67 @@ function closeUseAsMenus(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('.text-editor-shell.is-use-as-open').forEach((shell) => {
     shell.classList.remove('is-use-as-open');
   });
+}
+
+function handlePassiveEditorEnumActivationClick(app: HTMLElement, event: MouseEvent): boolean {
+  if (state.currentView !== 'editor') {
+    return false;
+  }
+  const target = event.target as HTMLElement | null;
+  const enumValue = target?.closest<HTMLElement>('.editor-block-passive [data-hvy-sort-value="true"][data-sort-value-key]');
+  const passiveBlock = enumValue?.closest<HTMLElement>('.editor-block-passive[data-action="activate-block"]');
+  logClickTrace(event, 'click-dispatch:capture:passive-enum-candidate', {
+    enumValue,
+    passiveBlock,
+    enumPointerEvents: enumValue ? getComputedStyle(enumValue).pointerEvents : null,
+    activeEditorBlock: state.activeEditorBlock,
+  });
+  if (!enumValue || !passiveBlock) {
+    return false;
+  }
+  const sectionKey = passiveBlock.dataset.sectionKey ?? '';
+  const blockId = passiveBlock.dataset.blockId ?? '';
+  const key = enumValue.dataset.sortValueKey ?? '';
+  if (!sectionKey || !blockId || !key) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
+  setActiveEditorBlock(sectionKey, blockId, { textEditorMode: 'rich' });
+  if (state.pendingEditorActivation) {
+    state.pendingEditorActivation.suppressFocus = true;
+  }
+  getRenderApp()();
+  const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
+    .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
+  const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
+    .find((candidate) => candidate.dataset.sortValueKey === key);
+  let pickerResult: 'not-rendered' | 'opened' | 'rejected' = select ? 'rejected' : 'not-rendered';
+  let pickerError: unknown = null;
+  if (select) {
+    select.focus({ preventScroll: true });
+    try {
+      select.showPicker();
+      pickerResult = 'opened';
+    } catch (error) {
+      pickerError = error;
+      // Focus leaves the enum keyboard-ready when the native picker cannot open.
+    }
+  }
+  logClickTrace(event, 'click-dispatch:capture:passive-enum-result', {
+    requestedSectionKey: sectionKey,
+    requestedBlockId: blockId,
+    requestedSortValueKey: key,
+    activeEditorBlock: state.activeEditorBlock,
+    activeBlock,
+    select,
+    pickerResult,
+    pickerError,
+    focusedElement: app.ownerDocument.activeElement,
+  });
+  return true;
 }
 
 function handleAiReaderTextActivationClick(app: HTMLElement, event: MouseEvent): void {

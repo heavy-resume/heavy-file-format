@@ -20,6 +20,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   }
   event.stopPropagation();
   const targetElement = event.target as HTMLElement | null;
+  const clickedSortValueKey = targetElement?.closest<HTMLElement>('[data-hvy-sort-value="true"]')?.dataset.sortValueKey?.trim() ?? '';
   const textEditorMode = targetElement?.closest('[data-field="text-fill-in-value"]') ? 'fill-in' : 'rich';
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
@@ -42,10 +43,31 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       clientY: event.clientY,
       preferTextFocus: true,
       immediateFocus: aiPlaceholderActivation ? true : state.pendingEditorActivation.immediateFocus,
+      suppressFocus: clickedSortValueKey ? true : state.pendingEditorActivation.suppressFocus,
     };
   }
   getRenderApp()();
+  if (clickedSortValueKey) {
+    openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey);
+  }
 };
+
+function openActivatedEnumSortValue(app: HTMLElement, sectionKey: string, blockId: string, key: string): void {
+  const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]
+    .find((candidate) => candidate.dataset.sectionKey === sectionKey && candidate.dataset.blockId === blockId);
+  const select = [...(activeBlock?.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]') ?? [])]
+    .find((candidate) => candidate.dataset.sortValueKey === key);
+  if (!select) {
+    return;
+  }
+  select.focus({ preventScroll: true });
+  try {
+    select.showPicker();
+  } catch {
+    // Focusing still leaves the enum ready for keyboard interaction when the
+    // browser does not permit a programmatically opened native picker.
+  }
+}
 
 type PassiveTextAnchor = {
   top: number;

@@ -11,6 +11,7 @@ import { findPdfStylePreset } from '../../pdf-style-presets';
 import { setSearchCategory, setSearchFilterEnabled } from '../../search/actions';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { SearchCategory } from '../../search/types';
+import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
 const loadDbTableRuntime = () => import('../../plugins/db-table');
 
@@ -118,8 +119,23 @@ export function bindChangeControls(app: HTMLElement): void {
         option.toggleAttribute('selected', option.selected);
       });
       if (handleBlockFieldInput(editor)) {
-        syncReusableTemplateForBlock(editor.dataset.sectionKey ?? '', editor.dataset.blockId ?? '');
+        const sectionKey = editor.dataset.sectionKey ?? '';
+        const blockId = editor.dataset.blockId ?? '';
+        const sortValueKey = target.dataset.sortValueKey ?? '';
+        syncReusableTemplateForBlock(sectionKey, blockId);
         refreshReaderPanelsOutsideActiveEditor(editor);
+        runDocumentEditHooksAfterCommit(null, () => {
+          if (document.activeElement !== document.body) {
+            return;
+          }
+          const nextTarget = [...app.querySelectorAll<HTMLSelectElement>('[data-field="sort-value-enum"]')]
+            .find((candidate) =>
+              candidate.dataset.sectionKey === sectionKey
+              && candidate.dataset.blockId === blockId
+              && candidate.dataset.sortValueKey === sortValueKey
+            );
+          nextTarget?.focus({ preventScroll: true });
+        });
       }
       return;
     }

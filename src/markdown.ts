@@ -122,6 +122,7 @@ export interface MarkdownRenderOptions {
   textLineStyleMode?: 'viewer' | 'editor';
   codeLanguageInputAttrs?: Record<string, string>;
   crossDocumentLinksEnabled?: boolean;
+  preserveSortValueAnnotations?: boolean;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
@@ -199,7 +200,10 @@ export function markdownToMobileAdjustmentEditorHtml(markdown: string): string {
 }
 
 export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
-  const annotations = extractResponsiveAnnotations(markdown || '', { editable: false });
+  const annotations = extractResponsiveAnnotations(markdown || '', {
+    editable: false,
+    preserveSortValues: options.preserveSortValueAnnotations === true,
+  });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'viewer',
@@ -350,7 +354,10 @@ interface ResponsiveAnnotationToken {
   html: string;
 }
 
-function extractResponsiveAnnotations(markdown: string, options: { editable: boolean }): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
+function extractResponsiveAnnotations(
+  markdown: string,
+  options: { editable: boolean; preserveSortValues?: boolean }
+): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
   const tokens: ResponsiveAnnotationToken[] = [];
   const makeToken = (html: string): string => {
     const token = `HVY_RESPONSIVE_ANNOTATION_${tokens.length}_TOKEN`;
@@ -368,13 +375,15 @@ function extractResponsiveAnnotations(markdown: string, options: { editable: boo
     makeToken(renderNowrapAnnotationHtml(text))
   );
   const withSortValues = replaceSortValueAnnotations(withNowrap, (annotation) =>
-    makeToken(options.editable ? renderSortValueAnnotationHtml(annotation.key, annotation.text) : escapeHtml(annotation.text))
+    makeToken(options.editable || options.preserveSortValues
+      ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
+      : escapeHtml(annotation.text))
   );
   return { markdown: options.editable ? withSortValues : replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
 }
 
 function renderSortValueAnnotationHtml(key: string, text: string): string {
-  return `<span data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
+  return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
 function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {

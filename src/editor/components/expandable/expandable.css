@@ -260,6 +260,11 @@
   pointer-events: none;
 }
 
+.expandable-collapsed-preview-button [data-hvy-sort-value="true"] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .expandable-collapsed-preview::after {
   content: "";
   position: absolute;

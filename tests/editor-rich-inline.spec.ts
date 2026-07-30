@@ -726,8 +726,7 @@ test('Done points to an invalid formatted date sort value and closes after corre
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
-  - name: application-entry
-    baseType: expandable
+  - name: text
     sortValueDefs:
       Date:
         type: date
@@ -868,6 +867,127 @@ component_defs:
   await page.locator('[data-action="activate-block"]', { hasText: 'Status:' }).last().dispatchEvent('click');
   await expect(page.locator('.editor-block[data-active-editor-block="true"]').last()
     .locator('[data-field="sort-value-enum"]')).toHaveValue('Rejected');
+});
+
+test('clicking a passive enum activates and opens its editor dropdown', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLSelectElement.prototype, 'showPicker', {
+      configurable: true,
+      value() {
+        (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount =
+          ((window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0) + 1;
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:text {"id":"application-status"}-->
+  Status: <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive [data-hvy-sort-value="true"][data-sort-value-key="Status"]').click();
+
+  const select = page.locator('.editor-block[data-active-editor-block="true"] [data-field="sort-value-enum"]');
+  await expect(select).toBeFocused();
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { enumPickerOpenCount?: number }).enumPickerOpenCount ?? 0
+  )).toBe(1);
+});
+
+test('changing an enum in AI mode updates a scripting-derived annotation before Done', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: application-entry
+    baseType: expandable
+    tags: job-application
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: "Applied"
+            value: "applied"
+          - label: "Rejected"
+            value: "rejected"
+      Outcome:
+        type: text
+---
+
+<!--hvy: {"id":"automation"}-->
+#! Automation
+
+ <!--hvy:plugin {"id":"status-script","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  applications = doc.tool.get_updated_components("application-entry")
+  if not applications:
+      return
+  for application in applications:
+      sort_keys = application.get("sortKeys") or {}
+      outcome = "Rejected" if getattr(sort_keys, "Status", "") == "rejected" else "Active"
+      application.set_sort_value("Outcome", outcome)
+
+<!--hvy: {"id":"applications"}-->
+#! Applications
+
+ <!--hvy:component-list {"id":"entries","componentListComponent":"application-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:application-entry {"id":"application-1","tags":"job-application","sortKeys":{"Status":"applied","Outcome":"Active"},"expandableAlwaysShowStub":true,"expandableExpanded":true}-->
+
+    <!--hvy:expandable:stub {}-->
+
+     <!--hvy:text {}-->
+      Example · **<!--hvy:sort-value {"key":"Outcome"}-->Active<!--/hvy:sort-value-->**
+
+    <!--hvy:expandable:content {}-->
+
+     <!--hvy:text {"fillIn":true}-->
+      **Status:** <!--hvy:sort-value {"key":"Status"}-->Applied<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  const reader = page.locator('#aiReaderDocument');
+  await reader.locator('.reader-block-text', { hasText: 'Status:' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+
+  const statusSelect = page.locator(
+    '#aiReaderDocument .editor-block[data-active-editor-block="true"] [data-field="sort-value-enum"]'
+  );
+  await statusSelect.selectOption({ label: 'Rejected' });
+
+  await expect.poll(() => page.evaluate(async () => {
+      const { state } = await import('/src/state.ts');
+      return state.document.sections
+        .flatMap((section) => section.blocks)
+        .flatMap((block) => block.schema.componentListBlocks ?? [])
+        .find((block) => block.schema.id === 'application-1')
+        ?.schema.sortKeys.Outcome;
+  })).toBe('Rejected');
+  await expect(reader.locator('.reader-block-text', { hasText: 'Example · Rejected' })).toBeVisible();
+  await expect(page.locator(
+    '#aiReaderDocument .editor-block[data-active-editor-block="true"]'
+  )).toHaveCount(1);
 });
 
 test('sidebar enum sort selector keeps active editor after one typed character', async ({ page }) => {

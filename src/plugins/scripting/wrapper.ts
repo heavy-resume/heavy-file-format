@@ -1399,6 +1399,7 @@ export interface RunUserScriptOptions {
   pluginVersion?: string;
   maxLines?: number;
   changeReason?: HvyPluginHookChangeReason;
+  renderOnMutation?: boolean;
   form?: ScriptingFormApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   injectedGlobals?: Record<string, unknown>;
@@ -1471,6 +1472,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
     previousDocument: options.previousDocument,
     maxLines: options.maxLines,
     changeReason: options.changeReason,
+    renderOnMutation: options.renderOnMutation,
     form: options.form,
     db: scriptingDb?.api,
     exportRuleRecorder: options.exportRuleRecorder,

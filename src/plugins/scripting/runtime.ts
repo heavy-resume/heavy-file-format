@@ -10,7 +10,7 @@ import { resolveBaseComponentFromMeta } from '../../component-defs';
 import { createEmptyBlock } from '../../document-factory';
 import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-loop';
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
-import { syncSortValuesForDocument } from '../../sort-values';
+import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
@@ -128,6 +128,7 @@ export interface ScriptingRuntimeOptions {
   document: VisualDocument;
   previousDocument?: VisualDocument | null;
   changeReason?: HvyPluginHookChangeReason;
+  renderOnMutation?: boolean;
   form?: ScriptingFormApi;
   db?: ScriptingDbApi;
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
@@ -289,15 +290,17 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
-    try {
-      getRefreshReaderPanels()();
-    } catch {
-      // Reader panel may not be initialized yet (during pre-first-render execution).
-    }
-    try {
-      getRenderApp()();
-    } catch {
-      // renderApp may not be ready yet during the very first load.
+    if (options.renderOnMutation !== false) {
+      try {
+        getRefreshReaderPanels()();
+      } catch {
+        // Reader panel may not be initialized yet (during pre-first-render execution).
+      }
+      try {
+        getRenderApp()();
+      } catch {
+        // renderApp may not be ready yet during the very first load.
+      }
     }
     options.onMutationFlushed?.();
   };
@@ -596,6 +599,18 @@ class ScriptingComponentHandle {
 
   first_table_cell(index = 0): string {
     return findFirstTableCell(this.location.block, Math.max(0, Math.floor(Number(index) || 0)));
+  }
+
+  set_sort_value(key: string, value: unknown): number {
+    const replacements = setSortValueAnnotationText(
+      this.location.block,
+      String(key ?? ''),
+      String(value ?? '')
+    );
+    if (replacements > 0) {
+      this.markMutated();
+    }
+    return replacements;
   }
 
   fingerprint(): string {

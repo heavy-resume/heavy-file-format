@@ -422,6 +422,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       pluginVersion: target.pluginVersion,
       maxLines: target.maxLines,
       changeReason: ctx.changeReason,
+      renderOnMutation: ctx.changeReason !== 'edit',
       libraries: target.libraries,
     });
     console.debug('[hvy:scripting] script run', {

@@ -469,7 +469,7 @@ test('advanced editor exposes anchored button configuration as a component card'
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await selectDocumentMenuItem(page, 'Resume Template');
   await page.getByRole('button', { name: 'Advanced' }).click();
 
   const buttonCard = page.locator('.editor-block-passive', { hasText: 'Button: Generate anchored to resume-pronunciation' });
@@ -489,6 +489,11 @@ test('advanced editor exposes anchored button configuration as a component card'
 
   const previewBox = await preview.boundingBox();
   const buttonBox = await previewButton.boundingBox();
+  const visibilityScript = settings.locator('.visibility-script-field');
+  await expect(visibilityScript).not.toHaveAttribute('open', '');
+  await expect(visibilityScript.locator('summary')).toContainText('Visibility Script');
+  await expect(visibilityScript.locator('summary')).toContainText('Configured');
+  await visibilityScript.locator('summary').click();
   const visibleScriptBox = await settings.locator('[data-field="block-button-visible-script"]').boundingBox();
 
   expect(previewBox).not.toBeNull();
@@ -497,9 +502,9 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 
-  await page.getByRole('button', { name: 'Meta' }).click();
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
   await expect(page.locator('#modalRoot')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.locator('.component-meta-modal [data-modal-action="close"]').click();
   await expect(page.locator('#modalRoot')).toHaveCount(0);
 });
 

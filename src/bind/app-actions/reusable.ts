@@ -8,7 +8,7 @@ import { refreshSearchFilterButton, setSearchExcludeTags } from '../../search/ac
 import { createEmptySectionWithMeta } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { revertReusableComponent } from '../../reusable';
-import { templateDefinitionDetailsKey } from '../../editor/render';
+import { componentSortValueDetailsKey, templateDefinitionDetailsKey } from '../../editor/render';
 import { stringify as stringifyYaml } from 'yaml';
 import type { AppActionHandler } from './types';
 
@@ -74,6 +74,83 @@ const removeComponentDefFlavor: AppActionHandler = ({ actionButton }) => {
   getRenderApp()();
 };
 
+const addComponentSortValue: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const defs = getComponentDefs();
+  const def = Number.isNaN(defIndex) ? null : defs[defIndex];
+  if (!def) {
+    return;
+  }
+  const sortValueDefs = def.sortValueDefs ?? {};
+  let suffix = Object.keys(sortValueDefs).length + 1;
+  let name = `Sort Value ${suffix}`;
+  while (sortValueDefs[name]) {
+    suffix += 1;
+    name = `Sort Value ${suffix}`;
+  }
+  recordHistory(`def:${defIndex}:sort-value:add`);
+  sortValueDefs[name] = { type: 'text' };
+  def.sortValueDefs = sortValueDefs;
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const removeComponentSortValue: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const def = Number.isNaN(defIndex) ? null : defs[defIndex];
+  if (!def?.sortValueDefs?.[name]) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:sort-value:${name}:remove`);
+  delete def.sortValueDefs[name];
+  if (Object.keys(def.sortValueDefs).length === 0) {
+    delete def.sortValueDefs;
+  }
+  keepTemplateDefinitionOpen('component', defIndex);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const addComponentEnumOption: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  if (!definition || definition.type !== 'enum') {
+    return;
+  }
+  const options = definition.options ?? [];
+  const optionNumber = options.length + 1;
+  recordHistory(`def:${defIndex}:sort-value:${name}:option:add`);
+  options.push({ label: `Option ${optionNumber}`, value: `option-${optionNumber}` });
+  definition.options = options;
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
+const removeComponentEnumOption: AppActionHandler = ({ actionButton }) => {
+  const defIndex = Number.parseInt(actionButton.dataset.defIndex ?? '', 10);
+  const optionIndex = Number.parseInt(actionButton.dataset.optionIndex ?? '', 10);
+  const name = actionButton.dataset.sortValueName ?? '';
+  const defs = getComponentDefs();
+  const definition = Number.isNaN(defIndex) ? null : defs[defIndex]?.sortValueDefs?.[name];
+  if (!definition || definition.type !== 'enum' || !definition.options?.[optionIndex]) {
+    return;
+  }
+  recordHistory(`def:${defIndex}:sort-value:${name}:option:${optionIndex}:remove`);
+  definition.options.splice(optionIndex, 1);
+  keepTemplateDefinitionOpen('component', defIndex);
+  keepComponentSortValueOpen(defIndex, name);
+  state.document.meta.component_defs = defs;
+  getRenderApp()();
+};
+
 const removeSectionDef: AppActionHandler = ({ actionButton }) => {
   recordHistory();
   const defIndex = Number.parseInt(actionButton.dataset.sectionDefIndex ?? '', 10);
@@ -106,6 +183,13 @@ const removeSectionDefFlavor: AppActionHandler = ({ actionButton }) => {
 
 function keepTemplateDefinitionOpen(kind: 'component' | 'section', index: number): void {
   const key = templateDefinitionDetailsKey(kind, index);
+  if (!state.openTemplateDefinitionKeys.includes(key)) {
+    state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, key];
+  }
+}
+
+function keepComponentSortValueOpen(defIndex: number, name: string): void {
+  const key = componentSortValueDetailsKey(defIndex, name);
   if (!state.openTemplateDefinitionKeys.includes(key)) {
     state.openTemplateDefinitionKeys = [...state.openTemplateDefinitionKeys, key];
   }
@@ -218,6 +302,10 @@ export const reusableActions: Record<string, AppActionHandler> = {
   'add-component-def': addComponentDef,
   'remove-component-def': removeComponentDef,
   'remove-component-def-flavor': removeComponentDefFlavor,
+  'add-component-sort-value': addComponentSortValue,
+  'remove-component-sort-value': removeComponentSortValue,
+  'add-component-enum-option': addComponentEnumOption,
+  'remove-component-enum-option': removeComponentEnumOption,
   'remove-section-def': removeSectionDef,
   'remove-section-def-flavor': removeSectionDefFlavor,
   'open-reusable-definition-editor': openReusableDefinitionEditor,

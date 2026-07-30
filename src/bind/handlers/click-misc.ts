@@ -2,7 +2,7 @@ import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation,
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
-import { templateDefinitionDetailsKey } from '../../editor/render';
+import { componentSortValueDetailsKey, templateDefinitionDetailsKey } from '../../editor/render';
 
 const pointerHandledPickerTriggers = new WeakSet<HTMLElement>();
 
@@ -12,6 +12,17 @@ export function bindClickMisc(app: HTMLElement): void {
   });
 
   app.addEventListener('toggle', (event) => {
+    const sortValueDetails = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLDetailsElement>('details.component-sort-value-details[data-def-index][data-sort-value-name]')
+      : null;
+    if (sortValueDetails && app.contains(sortValueDetails)) {
+      const defIndex = Number.parseInt(sortValueDetails.dataset.defIndex ?? '', 10);
+      const name = sortValueDetails.dataset.sortValueName ?? '';
+      if (!Number.isNaN(defIndex) && name) {
+        updateOpenTemplateDefinitionKey(componentSortValueDetailsKey(defIndex, name), sortValueDetails.open);
+      }
+      return;
+    }
     const details = event.target instanceof HTMLElement
       ? event.target.closest<HTMLDetailsElement>('details.template-def-details[data-template-kind]')
       : null;
@@ -24,13 +35,7 @@ export function bindClickMisc(app: HTMLElement): void {
       return;
     }
     const key = templateDefinitionDetailsKey(kind, index);
-    const openKeys = new Set(state.openTemplateDefinitionKeys);
-    if (details.open) {
-      openKeys.add(key);
-    } else {
-      openKeys.delete(key);
-    }
-    state.openTemplateDefinitionKeys = [...openKeys];
+    updateOpenTemplateDefinitionKey(key, details.open);
   }, true);
 
   app.addEventListener('mousedown', (event) => {
@@ -159,6 +164,16 @@ export function bindClickMisc(app: HTMLElement): void {
     closeAiEditPopover();
     getRenderApp()();
   });
+}
+
+function updateOpenTemplateDefinitionKey(key: string, open: boolean): void {
+  const openKeys = new Set(state.openTemplateDefinitionKeys);
+  if (open) {
+    openKeys.add(key);
+  } else {
+    openKeys.delete(key);
+  }
+  state.openTemplateDefinitionKeys = [...openKeys];
 }
 
 function toggleComponentPicker(app: HTMLElement, pickerTrigger: HTMLElement): void {

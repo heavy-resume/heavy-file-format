@@ -4030,6 +4030,55 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="block-component-list-component"]')).toHaveCount(0);
 });
 
+test('component-list meta edits its item type and shared sort values', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: sample-entry
+    baseType: text
+    sortValueDefs:
+      Status:
+        type: enum
+        options:
+          - label: Open
+            value: open
+---
+
+<!--hvy: {"id":"lists"}-->
+#! Lists
+
+ <!--hvy:component-list {"id":"sample-list","componentListComponent":"sample-entry"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:sample-entry {"id":"sample-item"}-->
+    Status: <!--hvy:sort-value {"key":"Status"}-->Open<!--/hvy:sort-value-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Status: Open' }).first().click({ position: { x: 4, y: 4 } });
+  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
+
+  const componentMeta = page.locator('.component-meta-modal', { hasText: 'Component Meta: component-list' });
+  await expect(componentMeta.getByLabel('List Item Type')).toHaveValue('sample-entry');
+  await expect(componentMeta.getByLabel('List Item Type')).toBeDisabled();
+  await expect(componentMeta).toContainText('Remove all list items before changing the item type.');
+  await expect(componentMeta).toContainText('Shared by every list using sample-entry');
+
+  const sortValues = componentMeta.getByRole('region', { name: 'Sort Values' });
+  await sortValues.locator('.component-sort-value-summary').click();
+  const expectedResult = sortValues.locator('[data-field="def-enum-option-label"]');
+  await expectedResult.fill('In Progress');
+  await expect(expectedResult).toBeFocused();
+
+  await componentMeta.locator('[data-modal-action="close"]').click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('label: In Progress');
+});
+
 test('component move and copy use placement boundaries', async ({ page }) => {
   await page.goto('/');
 

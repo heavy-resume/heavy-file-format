@@ -4113,6 +4113,72 @@ section_defs:
   await expect(page.locator('#rawEditor')).toHaveValue(/repeatable: true/);
 });
 
+test('component template sort values and enum options are editable metadata', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: Sample Entry
+    baseType: text
+    sortValueDefs:
+      Outcome:
+        type: enum
+        options:
+          - label: Active
+            value: active
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+
+  const componentTemplate = page.locator('.component-def', { hasText: 'Sample Entry' });
+  await componentTemplate.locator('.template-def-summary').click();
+  const sortValues = componentTemplate.getByRole('region', { name: 'Sort Values' });
+  const outcomeDetails = sortValues.locator('.component-sort-value-details').first();
+  await expect(outcomeDetails.locator('.component-sort-value-summary')).toContainText('Outcome');
+  await expect(outcomeDetails.locator('.component-sort-value-summary')).toContainText('Enum · 1 option');
+  await expect(outcomeDetails).not.toHaveAttribute('open', '');
+  await outcomeDetails.locator('.component-sort-value-summary').click();
+  await expect(sortValues.locator('[data-field="def-sort-value-type"]')).toHaveValue('enum');
+
+  const name = sortValues.locator('[data-field="def-sort-value-name"]');
+  await name.fill('');
+  await name.type('Status');
+  await expect(name).toBeFocused();
+
+  const firstLabel = sortValues.locator('[data-field="def-enum-option-label"]').first();
+  await firstLabel.fill('');
+  await firstLabel.type('Open');
+  await expect(firstLabel).toBeFocused();
+  await sortValues.locator('[data-field="def-enum-option-value"]').first().fill('open');
+
+  await sortValues.getByRole('button', { name: 'Add Option' }).click();
+  await expect(outcomeDetails).toHaveAttribute('open', '');
+  const expectedResult = sortValues.locator('[data-field="def-enum-option-label"]').nth(1);
+  await expectedResult.fill('Closed');
+  await sortValues.locator('[data-field="def-enum-option-value"]').nth(1).fill('closed');
+
+  await sortValues.getByRole('button', { name: 'Add Sort Value' }).click();
+  const addedSortValue = sortValues.locator('.component-sort-value-card').nth(1);
+  await addedSortValue.locator('[data-field="def-sort-value-name"]').fill('Priority');
+  await addedSortValue.locator('[data-field="def-sort-value-type"]').selectOption('enum');
+  await addedSortValue.getByRole('button', { name: 'Add Option' }).click();
+  await addedSortValue.locator('[data-field="def-enum-option-label"]').fill('High');
+  await addedSortValue.locator('[data-field="def-enum-option-value"]').fill('high');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('Status:');
+  await expect(page.locator('#rawEditor')).toContainText('Priority:');
+  await expect(page.locator('#rawEditor')).toContainText('label: Open');
+  await expect(page.locator('#rawEditor')).toContainText('label: High');
+  await expect(page.locator('#rawEditor')).toContainText('value: closed');
+});
+
 test('section template heading edits do not render block cancel or done controls', async ({ page }) => {
   await page.goto('/');
 
@@ -4187,7 +4253,7 @@ component_defs:
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   const componentTemplate = page.locator('.component-def', { hasText: 'Feature Card' });
-  await componentTemplate.locator('summary').click();
+  await componentTemplate.locator('.template-def-summary').click();
   await componentTemplate.getByRole('button', { name: 'Edit Template' }).click();
 
   const templateEditor = page.locator('.reusable-definition-modal');

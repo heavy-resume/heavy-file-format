@@ -2,7 +2,7 @@ import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
-import type { ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
+import type { ComponentDefinition, ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -88,19 +88,7 @@ interface ThemeConfig {
   colors: Record<string, string>;
 }
 
-interface ComponentDef {
-  name: string;
-  baseType: string;
-  tags?: string;
-  description?: string;
-  schema?: BlockSchema;
-  template?: VisualBlock;
-  flavors?: Array<{
-    name: string;
-    description?: string;
-    schema?: BlockSchema;
-  }>;
-}
+type ComponentDef = ComponentDefinition;
 
 interface SectionDef {
   name: string;
@@ -1425,6 +1413,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                     <span>Description</span>
                     <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
                   </label>
+                  ${renderComponentSortValueDefinitions(def, index)}
                   ${deps.resolveBaseComponent(def.baseType) === 'xref-card'
                   ? `<label>
                     <span>Target Tag Filter</span>
@@ -1747,6 +1736,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderBlockMetaFields(sectionKey: string, block: VisualBlock): string {
     const component = deps.resolveBaseComponent(block.schema.component);
+    const listItemComponent = block.schema.componentListComponent || 'text';
+    const componentDefs = component === 'component-list' ? deps.getComponentDefs() : [];
+    const listItemDefIndex = componentDefs.findIndex((definition) => definition.name === listItemComponent);
+    const listItemDefinition = listItemDefIndex >= 0 ? componentDefs[listItemDefIndex] : null;
+    const componentHelpers = component === 'component-list' ? deps.getComponentRenderHelpers() : null;
     const listDisplayContext = getComponentListDisplayContext(sectionKey, block.id);
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
     const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
@@ -1898,17 +1892,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         ${textMetaFields}
         ${gridMetaFields}
-        <label>
-          <div>Visible When Function Body</div>
-          <div>Controls when this block is visible. Returns boolean.</div>
-          <textarea
-            rows="5"
-            spellcheck="false"
-            data-section-key="${deps.escapeAttr(sectionKey)}"
-            data-block-id="${deps.escapeAttr(block.id)}"
-            data-field="block-visible-script"
-          >${deps.escapeHtml(block.schema.visibleScript)}</textarea>
-        </label>
+        ${renderVisibilityScriptDisclosure(
+          'block-visible-script',
+          block.schema.visibleScript,
+          `data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`,
+          'Controls when this component is visible. The script must return a boolean.'
+        )}
         ${listDisplayContext ? renderComponentListDisplayFields(sectionKey, block, listDisplayContext) : ''}
         ${component === 'container'
         ? `<label>
@@ -1926,7 +1915,20 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
         ${component === 'component-list'
-        ? `<label>
+        ? `<section class="component-list-item-meta" aria-label="List item configuration">
+          <label>
+            <span>List Item Type</span>
+            <select
+              data-section-key="${deps.escapeAttr(sectionKey)}"
+              data-block-id="${deps.escapeAttr(block.id)}"
+              data-field="block-component-list-component"
+              ${block.schema.componentListBlocks.length > 0 ? 'disabled' : ''}
+            >${componentHelpers?.renderComponentOptions(listItemComponent) ?? ''}</select>
+          </label>
+          ${block.schema.componentListBlocks.length > 0
+            ? '<p class="component-list-type-note">Remove all list items before changing the item type.</p>'
+            : ''}
+          <label>
           <span>List Item Label</span>
           <input
             data-section-key="${deps.escapeAttr(sectionKey)}"
@@ -1936,6 +1938,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             value="${deps.escapeAttr(block.schema.componentListItemLabel)}"
           />
         </label>
+        ${listItemDefinition
+          ? `<div class="component-list-shared-sort-values">
+            <p class="component-list-shared-note">Shared by every list using <strong>${deps.escapeHtml(listItemDefinition.name)}</strong>.</p>
+            ${renderComponentSortValueDefinitions(listItemDefinition, listItemDefIndex)}
+          </div>`
+          : `<p class="component-list-shared-note">Typed sort values require a reusable component item type.</p>`}
+        </section>
         <label class="checkbox-label">
           <input
             type="checkbox"
@@ -2026,12 +2035,12 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <span>Output Character Limit</span>
         <input type="number" min="1" step="1" ${attr} data-field="block-button-output-char-limit" value="${deps.escapeAttr(String(block.schema.buttonOutputCharLimit))}" />
       </label>
-      <label>
-        <div>Visible When Function Body</div>
-        <div>Controls when the button is visible.</div>
-        <div>Returns boolean</div>
-        <textarea rows="5" spellcheck="false" ${attr} data-field="block-button-visible-script">${deps.escapeHtml(block.schema.buttonVisibleScript)}</textarea>
-      </label>
+      ${renderVisibilityScriptDisclosure(
+        'block-button-visible-script',
+        block.schema.buttonVisibleScript,
+        attr,
+        'Controls when the button is visible. The script must return a boolean.'
+      )}
       <label>
         <div>Context Builder Function Body</div>
         <div>This is provided to the LLM</div>
@@ -2065,11 +2074,145 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     </div>`;
   }
 
+  function renderVisibilityScriptDisclosure(
+    field: 'block-visible-script' | 'block-button-visible-script',
+    value: string,
+    attributes: string,
+    description: string
+  ): string {
+    return `<details class="meta-expandable-field visibility-script-field">
+      <summary>
+        <span>Visibility Script</span>
+        ${value.trim() ? '<span class="muted">Configured</span>' : ''}
+      </summary>
+      <label>
+        <span>${deps.escapeHtml(description)}</span>
+        <textarea
+          rows="5"
+          spellcheck="false"
+          ${attributes}
+          data-field="${field}"
+        >${deps.escapeHtml(value)}</textarea>
+      </label>
+    </details>`;
+  }
+
   function renderComponentListDisplayFields(sectionKey: string, block: VisualBlock, context: ComponentListDisplayContext): string {
     return `<section class="component-list-display-editor" aria-label="Component list display">
       <strong>Component List Display</strong>
       ${renderDisplayKeyEditor('Sort Keys', 'sort', sectionKey, block, context.sortKeys, block.schema.sortKeys)}
       ${renderDisplayKeyEditor('Grouping Keys', 'group', sectionKey, block, context.groupKeys, block.schema.groupKeys)}
+    </section>`;
+  }
+
+  function renderComponentSortValueDefinitions(definition: ComponentDefinition, defIndex: number): string {
+    const entries = Object.entries(definition.sortValueDefs ?? {});
+    return `<section class="component-sort-value-editor" aria-label="Sort Values">
+      <div class="meta-panel-head">
+        <strong>Sort Values</strong>
+        <button type="button" class="ghost component-sort-value-action" data-action="add-component-sort-value" data-def-index="${defIndex}">
+          ${plusIcon()} Add Sort Value
+        </button>
+      </div>
+      ${entries.length === 0
+        ? '<p class="muted component-sort-value-empty">No sort values defined.</p>'
+        : entries.map(([name, sortDefinition], sortValueIndex) => {
+          const options = sortDefinition.type === 'enum' ? sortDefinition.options ?? [] : [];
+          const openKey = componentSortValueDetailsKey(defIndex, name);
+          return `<details
+            class="component-sort-value-card component-sort-value-details"
+            data-def-index="${defIndex}"
+            data-sort-value-name="${deps.escapeAttr(name)}"
+            data-sort-value-index="${sortValueIndex}"
+            ${state.openTemplateDefinitionKeys.includes(openKey) ? 'open' : ''}
+          >
+            <summary class="component-sort-value-summary">
+              <span class="component-sort-value-summary-text">
+                <strong>${deps.escapeHtml(name)}</strong>
+                <span>${sortDefinition.type === 'datetime' ? 'Date & Time' : sortDefinition.type[0].toUpperCase() + sortDefinition.type.slice(1)}${sortDefinition.type === 'enum' ? ` · ${options.length} option${options.length === 1 ? '' : 's'}` : ''}</span>
+              </span>
+              <span class="component-sort-value-summary-icon" aria-hidden="true">⌄</span>
+            </summary>
+            <div class="component-sort-value-card-body">
+              <div class="component-sort-value-fields">
+              <label>
+                <span>Name</span>
+                <input
+                  data-field="def-sort-value-name"
+                  data-def-index="${defIndex}"
+                  data-sort-value-name="${deps.escapeAttr(name)}"
+                  value="${deps.escapeAttr(name)}"
+                />
+              </label>
+              <label>
+                <span>Type</span>
+                <select
+                  data-field="def-sort-value-type"
+                  data-def-index="${defIndex}"
+                  data-sort-value-name="${deps.escapeAttr(name)}"
+                >
+                  ${(['text', 'number', 'date', 'datetime', 'enum'] as const).map((type) =>
+                    `<option value="${type}"${sortDefinition.type === type ? ' selected' : ''}>${type === 'datetime' ? 'Date & Time' : type[0].toUpperCase() + type.slice(1)}</option>`
+                  ).join('')}
+                </select>
+              </label>
+              <button
+                type="button"
+                class="danger remove-x component-sort-value-remove"
+                data-action="remove-component-sort-value"
+                data-def-index="${defIndex}"
+                data-sort-value-name="${deps.escapeAttr(name)}"
+                aria-label="Remove ${deps.escapeAttr(name)} sort value"
+              >${closeIcon()}</button>
+              </div>
+            ${sortDefinition.type === 'date'
+              ? `<label>
+                <span>Date Format</span>
+                <select data-field="def-sort-value-format" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}">
+                  ${(['YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY'] as const).map((format) =>
+                    `<option value="${format}"${sortDefinition.format === format ? ' selected' : ''}>${format}</option>`
+                  ).join('')}
+                </select>
+              </label>`
+              : ''}
+            ${sortDefinition.type === 'enum'
+              ? `<div class="component-enum-option-editor">
+                <div class="component-enum-option-head">
+                  <strong>Options</strong>
+                  <button
+                    type="button"
+                    class="ghost component-sort-value-action"
+                    data-action="add-component-enum-option"
+                    data-def-index="${defIndex}"
+                    data-sort-value-name="${deps.escapeAttr(name)}"
+                  >${plusIcon()} Add Option</button>
+                </div>
+                ${options.length === 0
+                  ? '<p class="muted component-sort-value-empty">No enum options defined.</p>'
+                  : options.map((option, optionIndex) => `<div class="component-enum-option-row">
+                    <label>
+                      <span>Label</span>
+                      <input data-field="def-enum-option-label" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}" data-option-index="${optionIndex}" value="${deps.escapeAttr(option.label)}" />
+                    </label>
+                    <label>
+                      <span>Value</span>
+                      <input data-field="def-enum-option-value" data-def-index="${defIndex}" data-sort-value-name="${deps.escapeAttr(name)}" data-option-index="${optionIndex}" value="${deps.escapeAttr(String(option.value))}" />
+                    </label>
+                    <button
+                      type="button"
+                      class="danger remove-x"
+                      data-action="remove-component-enum-option"
+                      data-def-index="${defIndex}"
+                      data-sort-value-name="${deps.escapeAttr(name)}"
+                      data-option-index="${optionIndex}"
+                      aria-label="Remove ${deps.escapeAttr(option.label)} option"
+                    >${closeIcon()}</button>
+                  </div>`).join('')}
+              </div>`
+              : ''}
+            </div>
+          </details>`;
+        }).join('')}
     </section>`;
   }
 
@@ -2399,6 +2542,10 @@ function findBlockLocation(
 
 export function templateDefinitionDetailsKey(kind: 'component' | 'section', index: number): string {
   return `${kind}:${index}`;
+}
+
+export function componentSortValueDetailsKey(defIndex: number, name: string): string {
+  return `component-sort-value:${defIndex}:${name}`;
 }
 
 function renderHeadingLevelOption(value: 'h1' | 'h2' | 'h3', selected: string, escapeAttr: (value: string) => string): string {

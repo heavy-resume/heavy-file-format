@@ -3,6 +3,7 @@ import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
 import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
+import bundledAsteroidsHvy from '../examples/asteroids.hvy?raw';
 import bundledPluginSortValuesHvy from '../examples/plugin-sort-values.hvy?raw';
 import bundledPdfTemplatePhvy from '../examples/pdf-template.phvy?raw';
 import bundledMeetingMinutesThvy from '../examples/meeting-minutes.thvy?raw';
@@ -55,6 +56,7 @@ import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expan
 import { syncReusableTemplateForBlock } from './reusable';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
+import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
 
 const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
@@ -173,7 +175,7 @@ async function loadSourceDocumentFromServer(
     throw new Error(`Could not load ${source.errorLabel}: ${response.status} ${response.statusText}`);
   }
   currentFileHandle = null;
-  replaceLoadedDocument(await response.text(), filename, selectedExample);
+  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), filename, selectedExample);
 }
 
 async function loadDefaultExampleDocument(): Promise<void> {
@@ -190,7 +192,10 @@ function loadBundledTextDocument(raw: string, filename: string, selectedExample:
   replaceLoadedDocument(raw, filename, selectedExample);
 }
 
-async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promise<void> {
+async function saveCurrentDocumentInPlace(
+  downloadName: HTMLInputElement,
+  options: { rerender?: boolean } = {}
+): Promise<void> {
   const normalized = normalizeFilename(state.filename || 'document.hvy');
   state.filename = normalized;
   downloadName.value = normalized;
@@ -201,22 +206,24 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
     const response = await fetch(sourceDocument.apiPath, {
       method: 'PUT',
       headers: {
-        'content-type': 'text/plain; charset=utf-8',
+        'content-type': 'application/octet-stream',
       },
-      body: new TextDecoder().decode(bytes),
+      body: new Blob([
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      ]),
     });
     if (!response.ok) {
       throw new Error(`Could not save ${sourceDocument.errorLabel}: ${response.status} ${response.statusText}`);
     }
     saveSessionState(state);
     markReferenceDocumentSaved();
-    getRenderApp()();
+    if (options.rerender !== false) getRenderApp()();
     return;
   }
   if (!currentFileHandle) {
     downloadBinaryFile(normalized, bytes);
     markReferenceDocumentSaved();
-    getRenderApp()();
+    if (options.rerender !== false) getRenderApp()();
     return;
   }
   const writable = await currentFileHandle.createWritable();
@@ -224,7 +231,42 @@ async function saveCurrentDocumentInPlace(downloadName: HTMLInputElement): Promi
   await writable.close();
   saveSessionState(state);
   markReferenceDocumentSaved();
-  getRenderApp()();
+  if (options.rerender !== false) getRenderApp()();
+}
+
+function confirmReferenceDownload(app: HTMLElement, reason: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-root';
+    modal.innerHTML = `
+      <div class="modal-overlay" data-save-request-action="cancel"></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="saveRequestTitle">
+        <div class="modal-head">
+          <h3 id="saveRequestTitle">Download updated document?</h3>
+        </div>
+        <p>${reason.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>
+        <div class="modal-head-actions">
+          <button type="button" class="ghost" data-save-request-action="cancel">Cancel</button>
+          <button type="button" data-save-request-action="confirm">Download updated file</button>
+        </div>
+      </section>
+    `;
+    const finish = (confirmed: boolean) => {
+      modal.remove();
+      resolve(confirmed);
+    };
+    modal.addEventListener('click', (event) => {
+      const action = (event.target as HTMLElement).closest<HTMLElement>('[data-save-request-action]')?.dataset.saveRequestAction;
+      if (action === 'confirm') finish(true);
+      if (action === 'cancel') finish(false);
+    });
+    (
+      app.querySelector<HTMLElement>('.hvy-power-script-reader')
+      ?? app.querySelector<HTMLElement>('.hvy-embed-layout')
+      ?? app
+    ).appendChild(modal);
+    modal.querySelector<HTMLButtonElement>('[data-save-request-action="cancel"]')?.focus();
+  });
 }
 
 export function bindUi(app: HTMLElement): void {
@@ -294,6 +336,15 @@ export function bindUi(app: HTMLElement): void {
   if (!newBtn || !fileInput || !downloadBtn || !downloadName) {
     throw new Error('Missing UI elements for binding.');
   }
+
+  setSaveRequestHandler(async (request) => {
+    const sourceDocument = state.selectedExample ? SOURCE_DOCUMENTS_BY_EXAMPLE[state.selectedExample] : undefined;
+    if (!sourceDocument && !currentFileHandle && !await confirmReferenceDownload(app, request.reason)) {
+      return 'canceled';
+    }
+    await saveCurrentDocumentInPlace(downloadName, { rerender: false });
+    return 'saved';
+  }, runtime);
 
   bindChatThreadUi(chatThread, chatScrollContainer, chatScrollBottomButton);
   bindImageDragAndDrop(app);
@@ -504,6 +555,11 @@ export function bindUi(app: HTMLElement): void {
   const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
   videoDemoExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledVideoDemoHvy, 'video-demo.hvy', 'video-demo');
+  });
+
+  const asteroidsExampleBtn = app.querySelector<HTMLButtonElement>('#asteroidsExampleBtn');
+  asteroidsExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledAsteroidsHvy, 'asteroids.hvy', 'asteroids');
   });
 
   const pluginSortValuesExampleBtn = app.querySelector<HTMLButtonElement>('#pluginSortValuesExampleBtn');

@@ -12,6 +12,8 @@ test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.qr-code');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.video');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.viewer-note');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.canvas');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.power-scripting');
 });
 
 test('default build config includes every built-in plugin', () => {

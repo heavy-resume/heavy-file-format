@@ -1,0 +1,446 @@
+---
+hvy_version: 0.1
+title: Asteroids power scripting demo
+plugins:
+  - id: hvy.canvas
+    source: builtin://canvas
+  - id: hvy.power-scripting
+    source: builtin://power-scripting
+  - id: hvy.db-table
+    source: builtin://db-table
+---
+
+<!--hvy: {"id":"asteroids-game","expanded":true}-->
+#! Asteroids
+
+<!--hvy:text {"css":"text-align:center; margin:0 0 0.75rem;"}-->
+ **ASTEROIDS** · Arrow keys steer and thrust · Space fires and starts
+
+<!--hvy:plugin {"id":"asteroids-game-code","plugin":"hvy.power-scripting","pluginConfig":{"version":"0.1"}}-->
+ const canvas = await doc.canvas.wait("asteroids-canvas");
+ doc.db.execute("CREATE TABLE IF NOT EXISTS asteroid_high_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, player TEXT NOT NULL, score INTEGER NOT NULL, created_at TEXT NOT NULL)");
+ const later = (callback, delay) => {
+   const timer = window.setTimeout(callback, delay);
+   doc.onCleanup(() => window.clearTimeout(timer));
+ };
+ doc.rerender();
+ const surface = canvas.canvas;
+ const width = 900;
+ const height = 560;
+ const keys = new Set();
+ let ship;
+ let rocks;
+ let shots;
+ let particles;
+ let score;
+ let lives;
+ let state;
+ let lastShot;
+ let level;
+ let highScores;
+ let attractUntil;
+
+ const theme = getComputedStyle(surface);
+ const ink = theme.getPropertyValue("--hvy-text").trim() || "#f8fafc";
+ const muted = theme.getPropertyValue("--hvy-text-muted").trim() || "#94a3b8";
+ const accent = theme.getPropertyValue("--hvy-accent-1").trim() || "#38bdf8";
+ const danger = theme.getPropertyValue("--hvy-danger").trim() || "#fb7185";
+ const ROCK_RADII = { 1: 11, 2: 23, 3: 40 };
+ const SMALLEST_ROCK_SIZE = 1;
+
+ const wrap = (entity) => {
+   if (entity.x < -20) entity.x = width + 20;
+   if (entity.x > width + 20) entity.x = -20;
+   if (entity.y < -20) entity.y = height + 20;
+   if (entity.y > height + 20) entity.y = -20;
+ };
+
+ const distance = (a, b) => {
+   const dx = a.x - b.x;
+   const dy = a.y - b.y;
+   return Math.sqrt(dx * dx + dy * dy);
+ };
+
+ const angleDifference = (target, current) => {
+   let difference = target - current;
+   while (difference > Math.PI) difference -= Math.PI * 2;
+   while (difference < -Math.PI) difference += Math.PI * 2;
+   return difference;
+ };
+
+ const makeRock = (size = 3, x = Math.random() * width, y = Math.random() * height) => ({
+   x,
+   y,
+   vx: (Math.random() - 0.5) * (1.2 + level * 0.08),
+   vy: (Math.random() - 0.5) * (1.2 + level * 0.08),
+   angle: Math.random() * Math.PI * 2,
+   spin: (Math.random() - 0.5) * 0.025,
+   size,
+   radius: ROCK_RADII[size],
+   shape: Array.from({ length: 9 }, () => 0.72 + Math.random() * 0.35),
+ });
+
+ const safeRock = () => {
+   let rock;
+   do rock = makeRock();
+   while (distance(rock, ship) < 170);
+   return rock;
+ };
+
+ const resetShip = () => {
+   ship = { x: width / 2, y: height / 2, vx: 0, vy: 0, angle: -Math.PI / 2, invulnerable: 1500, thrusting: false };
+ };
+
+ const startGame = () => {
+   score = 0;
+   lives = 3;
+   level = 1;
+   lastShot = 0;
+   shots = [];
+   particles = [];
+   resetShip();
+   rocks = Array.from({ length: 4 }, safeRock);
+   state = "playing";
+ };
+
+ const loadHighScores = () => {
+   highScores = doc.db.query("SELECT player, score FROM asteroid_high_scores ORDER BY score DESC, id ASC LIMIT 8");
+ };
+
+ const showHighScores = () => {
+   loadHighScores();
+   state = "scores";
+   score = 0;
+   attractUntil = performance.now() + 5000;
+   rocks = [];
+   shots = [];
+   particles = [];
+ };
+
+ const startDemo = () => {
+   score = 0;
+   lives = 3;
+   level = 1;
+   lastShot = 0;
+   shots = [];
+   particles = [];
+   resetShip();
+   rocks = Array.from({ length: 5 }, safeRock);
+   state = "demo";
+   attractUntil = performance.now() + 7500;
+ };
+
+ const burst = (x, y, color, count = 12) => {
+   for (let index = 0; index < count; index += 1) {
+     const angle = Math.random() * Math.PI * 2;
+     const speed = 0.4 + Math.random() * 2.4;
+     particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 500 + Math.random() * 500, color });
+   }
+ };
+
+ const breakRock = (rock, awardPoints = true) => {
+   if (awardPoints) score += (4 - rock.size) * 100;
+   burst(rock.x, rock.y, accent, 8 + rock.size * 4);
+   if (rock.size > SMALLEST_ROCK_SIZE) {
+     const childSize = rock.size - 1;
+     const splitAngle = Math.atan2(rock.vy, rock.vx) + Math.PI / 2;
+     [-1, 1].forEach((direction) => {
+       const offset = ROCK_RADII[childSize] * 0.45 * direction;
+       const child = makeRock(
+         childSize,
+         rock.x + Math.cos(splitAngle) * offset,
+         rock.y + Math.sin(splitAngle) * offset
+       );
+       child.vx += Math.cos(splitAngle) * 0.75 * direction;
+       child.vy += Math.sin(splitAngle) * 0.75 * direction;
+       rocks.push(child);
+     });
+   }
+ };
+
+ const saveScore = async () => {
+   const response = await doc.dialog.prompt("Enter your pilot name for the high-score table.", {
+     title: "New high score",
+     value: "ACE",
+     confirmLabel: "Save score",
+   });
+   const player = (response || "ACE").trim().slice(0, 20) || "ACE";
+   doc.db.execute(
+     "INSERT INTO asteroid_high_scores (player, score, created_at) VALUES (?, ?, ?)",
+     [player, score, new Date().toISOString()]
+   );
+   await doc.save.request({
+    reason: `${player} scored ${score}; the high-score table was updated.`,
+   });
+   loadHighScores();
+   doc.rerender();
+   showHighScores();
+ };
+
+ const gameOver = () => {
+   state = "gameover";
+   burst(ship.x, ship.y, danger, 36);
+   void saveScore();
+ };
+
+ const update = (delta, time) => {
+   const step = delta / 16.6667;
+   if (state === "scores" && time >= attractUntil) {
+     startDemo();
+   } else if (state === "demo" && time >= attractUntil) {
+     showHighScores();
+   }
+
+   if (state !== "playing" && state !== "demo") {
+     particles.forEach((particle) => {
+       particle.x += particle.vx * step;
+       particle.y += particle.vy * step;
+       particle.life -= delta;
+     });
+     particles = particles.filter((particle) => particle.life > 0);
+     return;
+   }
+
+   const demo = state === "demo";
+   const nearestRock = demo
+     ? rocks.reduce((nearest, rock) => !nearest || distance(ship, rock) < distance(ship, nearest) ? rock : nearest, null)
+     : null;
+   const nearestDistance = nearestRock ? distance(ship, nearestRock) : Infinity;
+   const targetAngle = nearestRock ? Math.atan2(nearestRock.y - ship.y, nearestRock.x - ship.x) : ship.angle;
+   const steeringAngle = nearestRock && nearestDistance < 145
+     ? Math.atan2(ship.y - nearestRock.y, ship.x - nearestRock.x)
+     : targetAngle;
+   const steeringDifference = angleDifference(steeringAngle, ship.angle);
+   const demoTurnLeft = demo && steeringDifference < -0.06;
+   const demoTurnRight = demo && steeringDifference > 0.06;
+   if (demoTurnLeft || keys.has("ArrowLeft")) ship.angle -= 0.075 * step;
+   if (demoTurnRight || keys.has("ArrowRight")) ship.angle += 0.075 * step;
+   const speed = Math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy);
+   const demoThrust = demo
+     && Math.abs(steeringDifference) < 0.3
+     && speed < 1.65
+     && time % 1800 < 280;
+   ship.thrusting = demoThrust || keys.has("ArrowUp");
+   if (ship.thrusting) {
+     ship.vx += Math.cos(ship.angle) * 0.009 * delta;
+     ship.vy += Math.sin(ship.angle) * 0.009 * delta;
+     if (Math.random() > 0.45) burst(ship.x - Math.cos(ship.angle) * 13, ship.y - Math.sin(ship.angle) * 13, accent, 1);
+   }
+   const demoAimDifference = angleDifference(targetAngle, ship.angle);
+   const demoFire = demo && nearestRock && Math.abs(demoAimDifference) < 0.22;
+   if ((demoFire || keys.has("Space")) && time - lastShot > (demo ? 460 : 170)) {
+     lastShot = time;
+     shots.push({
+       x: ship.x + Math.cos(ship.angle) * 17,
+       y: ship.y + Math.sin(ship.angle) * 17,
+       vx: ship.vx + Math.cos(ship.angle) * 7,
+       vy: ship.vy + Math.sin(ship.angle) * 7,
+       life: 850,
+     });
+   }
+
+   ship.vx *= Math.pow(0.994, step);
+   ship.vy *= Math.pow(0.994, step);
+   ship.x += ship.vx * step;
+   ship.y += ship.vy * step;
+   ship.invulnerable = Math.max(0, ship.invulnerable - delta);
+   wrap(ship);
+
+   shots.forEach((shot) => {
+     shot.x += shot.vx * step;
+     shot.y += shot.vy * step;
+     shot.life -= delta;
+     wrap(shot);
+   });
+   shots = shots.filter((shot) => shot.life > 0);
+
+   rocks.forEach((rock) => {
+     rock.x += rock.vx * step;
+     rock.y += rock.vy * step;
+     rock.angle += rock.spin * step;
+     wrap(rock);
+   });
+
+   for (let shotIndex = shots.length - 1; shotIndex >= 0; shotIndex -= 1) {
+     const shot = shots[shotIndex];
+     if (!shot) continue;
+     const rockIndex = rocks.findIndex((rock) => distance(shot, rock) < rock.radius);
+     if (rockIndex < 0) continue;
+     const [rock] = rocks.splice(rockIndex, 1);
+     shots.splice(shotIndex, 1);
+     breakRock(rock);
+   }
+
+   if (ship.invulnerable <= 0) {
+     const collisionIndex = rocks.findIndex((rock) => distance(ship, rock) < rock.radius + 10);
+     if (collisionIndex >= 0) {
+       const [collision] = rocks.splice(collisionIndex, 1);
+       breakRock(collision, false);
+       lives -= 1;
+       burst(ship.x, ship.y, danger, 24);
+       if (lives <= 0 && demo) showHighScores();
+       else if (lives <= 0) gameOver();
+       else resetShip();
+     }
+   }
+
+   particles.forEach((particle) => {
+     particle.x += particle.vx * step;
+     particle.y += particle.vy * step;
+     particle.life -= delta;
+   });
+   particles = particles.filter((particle) => particle.life > 0);
+
+   if (rocks.length === 0 && (state === "playing" || state === "demo")) {
+     level += 1;
+     rocks = Array.from({ length: Math.min(9, 3 + level) }, safeRock);
+   }
+ };
+
+ const drawShip = (context) => {
+   if (ship.invulnerable > 0 && Math.floor(ship.invulnerable / 100) % 2 === 0) return;
+   context.save();
+   context.translate(ship.x, ship.y);
+   context.rotate(ship.angle);
+   context.beginPath();
+   context.moveTo(18, 0);
+   context.lineTo(-12, -10);
+   context.lineTo(-7, 0);
+   context.lineTo(-12, 10);
+   context.closePath();
+   context.strokeStyle = ink;
+   context.lineWidth = 2;
+   context.stroke();
+   if (ship.thrusting) {
+     context.beginPath();
+     context.moveTo(-9, -5);
+     context.lineTo(-20 - Math.random() * 8, 0);
+     context.lineTo(-9, 5);
+     context.strokeStyle = accent;
+     context.stroke();
+   }
+   context.restore();
+ };
+
+ const draw = () => {
+   canvas.redraw();
+   const context = surface.getContext("2d");
+   context.save();
+   context.strokeStyle = muted;
+   context.fillStyle = ink;
+   context.lineWidth = 1.5;
+   context.font = "700 18px ui-monospace, monospace";
+   context.fillText(`SCORE ${String(score).padStart(6, "0")}`, 24, 34);
+   context.textAlign = "center";
+   context.fillText(`LEVEL ${level}`, width / 2, 34);
+   context.textAlign = "right";
+   context.fillText(`SHIPS ${lives}`, width - 24, 34);
+   context.textAlign = "left";
+
+   rocks.forEach((rock) => {
+     context.save();
+     context.translate(rock.x, rock.y);
+     context.rotate(rock.angle);
+     context.beginPath();
+     rock.shape.forEach((scale, index) => {
+       const angle = index / rock.shape.length * Math.PI * 2;
+       const radius = rock.radius * scale;
+       const x = Math.cos(angle) * radius;
+       const y = Math.sin(angle) * radius;
+       if (index === 0) context.moveTo(x, y);
+       else context.lineTo(x, y);
+     });
+     context.closePath();
+     context.stroke();
+     context.restore();
+   });
+
+   shots.forEach((shot) => {
+     context.beginPath();
+     context.arc(shot.x, shot.y, 2.4, 0, Math.PI * 2);
+     context.fillStyle = accent;
+     context.fill();
+   });
+
+   particles.forEach((particle) => {
+     context.globalAlpha = Math.max(0, particle.life / 900);
+     context.fillStyle = particle.color;
+     context.fillRect(particle.x, particle.y, 2, 2);
+   });
+   context.globalAlpha = 1;
+   if (state === "playing" || state === "demo") drawShip(context);
+
+   if (state === "scores") {
+     context.textAlign = "center";
+     context.fillStyle = ink;
+     context.font = "800 34px ui-monospace, monospace";
+     context.fillText("HIGH SCORES", width / 2, 105);
+     context.font = "700 18px ui-monospace, monospace";
+     if (highScores.length === 0) {
+       context.fillStyle = muted;
+       context.fillText("NO SCORES YET", width / 2, 175);
+     } else {
+       highScores.forEach((entry, index) => {
+         const y = 155 + index * 34;
+         context.textAlign = "right";
+         context.fillStyle = index === 0 ? accent : ink;
+         context.fillText(`${index + 1}. ${String(entry.player).slice(0, 20)}`, width / 2 - 24, y);
+         context.textAlign = "left";
+         context.fillText(String(entry.score).padStart(6, "0"), width / 2 + 24, y);
+       });
+     }
+     context.textAlign = "center";
+     context.fillStyle = accent;
+     context.font = "700 17px ui-monospace, monospace";
+     context.fillText("PRESS SPACE TO PLAY", width / 2, height - 62);
+   } else if (state !== "playing" && state !== "demo") {
+     context.textAlign = "center";
+     context.fillStyle = ink;
+     context.font = "800 42px ui-monospace, monospace";
+     context.fillText("GAME OVER", width / 2, height / 2 - 20);
+     context.fillStyle = accent;
+     context.font = "700 17px ui-monospace, monospace";
+     context.fillText(`FINAL SCORE ${score}`, width / 2, height / 2 + 24);
+   } else if (state === "demo") {
+     context.textAlign = "center";
+     context.fillStyle = accent;
+     context.font = "700 16px ui-monospace, monospace";
+     context.fillText("DEMO · PRESS SPACE TO PLAY", width / 2, height - 30);
+   }
+   context.restore();
+ };
+
+ doc.listen(window, "keydown", (event) => {
+   if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space"].includes(event.code)) event.preventDefault();
+   keys.add(event.code);
+   if (event.code === "Space" && state !== "playing") startGame();
+ });
+ doc.listen(window, "keyup", (event) => keys.delete(event.code));
+ doc.listen(surface, "pointerdown", () => surface.focus());
+ surface.tabIndex = 0;
+
+ score = 0;
+ lives = 3;
+ level = 1;
+ shots = [];
+ rocks = [];
+ particles = [];
+ highScores = [];
+ resetShip();
+ showHighScores();
+ doc.animation.start((time, delta) => {
+   update(delta, time);
+   draw();
+ });
+
+<!--hvy:plugin {"id":"asteroids-canvas","plugin":"hvy.canvas","pluginConfig":{"width":900,"height":560,"viewerDrawing":false,"strokeWidth":3},"css":"max-width: 980px; margin: 0 auto;"}-->
+{"version":1,"strokes":[]}
+
+<!--hvy: {"id":"asteroids-high-scores","expanded":true}-->
+#! High scores
+
+<!--hvy:text {}-->
+ Scores are stored inside this HVY file in the shared SQLite tail attachment. Finish a game to add a row.
+
+<!--hvy:plugin {"id":"asteroids-high-score-table","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"asteroid_high_scores","queryDynamicWindow":false,"queryLimit":10}}-->
+ SELECT player, score, created_at FROM asteroid_high_scores ORDER BY score DESC, id ASC LIMIT 10

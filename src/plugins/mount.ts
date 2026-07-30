@@ -92,7 +92,8 @@ function buildContext(
   plugin: HvyPlugin,
   mode: 'editor' | 'reader',
   sectionKey: string,
-  blockId: string
+  blockId: string,
+  hostRoot: HTMLElement
 ): HvyPluginContext | null {
   const runtime = getActiveStateRuntime();
   const block = findBlockByIds(sectionKey, blockId);
@@ -157,6 +158,10 @@ function buildContext(
 
   return {
     mode,
+    get view() {
+      return state.currentView;
+    },
+    hostRoot,
     get editor() {
       return {
         mode: mode === 'editor' ? 'edit' as const : 'view' as const,
@@ -306,7 +311,8 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
       return;
     }
 
-    const ctx = buildContext(registration, mode, sectionKey, blockId);
+    const hostRoot = placeholder.closest<HTMLElement>('.hvy-document') ?? placeholder.parentElement ?? placeholder;
+    const ctx = buildContext(registration, mode, sectionKey, blockId, hostRoot);
     if (!ctx) {
       placeholder.textContent = 'Plugin block is missing.';
       placeholder.classList.add('hvy-plugin-missing');

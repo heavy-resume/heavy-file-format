@@ -1,0 +1,144 @@
+.hvy-canvas-plugin {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.hvy-canvas-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--hvy-surface) 90%, var(--hvy-accent-1) 10%);
+  box-shadow: 0 0.4rem 1.2rem color-mix(in srgb, var(--hvy-text) 8%, transparent);
+}
+
+.hvy-canvas-toolbar[hidden] {
+  display: none;
+}
+
+.hvy-canvas-control {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hvy-canvas-control input[type='number'] {
+  width: 5.4rem;
+  min-height: 2.1rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--hvy-text);
+  background: var(--hvy-surface);
+}
+
+.hvy-canvas-color input {
+  width: 3.2rem;
+  height: 2.1rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.5rem;
+  padding: 0.18rem;
+  background: var(--hvy-surface);
+}
+
+.hvy-canvas-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.1rem;
+  color: var(--hvy-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.hvy-canvas-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hvy-canvas-toggle-track {
+  position: relative;
+  width: 2.3rem;
+  height: 1.25rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: var(--hvy-surface-muted);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.hvy-canvas-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 0.16rem;
+  left: 0.16rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--hvy-text-muted);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.hvy-canvas-toggle input:checked + .hvy-canvas-toggle-track {
+  border-color: var(--hvy-accent-1);
+  background: color-mix(in srgb, var(--hvy-accent-1) 28%, var(--hvy-surface));
+}
+
+.hvy-canvas-toggle input:checked + .hvy-canvas-toggle-track::after {
+  transform: translateX(1rem);
+  background: var(--hvy-accent-1);
+}
+
+.hvy-canvas-action {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0.4rem;
+  border-radius: 0.55rem;
+}
+
+.hvy-canvas-action svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.hvy-canvas-frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.85rem;
+  background-color: var(--hvy-surface);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--hvy-border) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--hvy-border) 28%, transparent) 1px, transparent 1px);
+  background-size: 20px 20px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 60%, transparent);
+}
+
+.hvy-canvas-frame.is-readonly {
+  background-image: none;
+}
+
+.hvy-canvas-surface {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  touch-action: none;
+}
+
+.hvy-canvas-surface.is-enabled {
+  cursor: crosshair;
+}
+
+.hvy-canvas-surface.is-drawing {
+  cursor: none;
+}

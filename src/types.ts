@@ -437,6 +437,7 @@ export type SelectedExample =
   | 'crm'
   | 'study-tools'
   | 'video-demo'
+  | 'asteroids'
   | 'plugin-sort-values'
   | 'pdf-template'
   | 'meeting-minutes-template'

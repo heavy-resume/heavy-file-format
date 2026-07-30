@@ -1,0 +1,22 @@
+Power Scripting plugin (hvy.power-scripting)
+
+Power scripts are unrestricted JavaScript for trusted documents. They execute
+only in Viewer mode. The reference client prompts the viewer to enable or hide
+the script; embedded hosts can set powerScripts to "enabled" for documents
+they trust or "hidden" when execution must never be offered.
+
+The script body receives `doc`. It includes the normal component, header,
+attachment, SQL database, JSON, time, CLI, and rerender APIs plus:
+
+- doc.canvas.get(id) / await doc.canvas.wait(id)
+- doc.animation.start((time, delta) => ...)
+- doc.listen(target, eventName, listener, options?)
+- doc.onCleanup(callback)
+- doc.dialog.alert(message, options?)
+- doc.dialog.confirm(message, options?)
+- doc.dialog.prompt(message, options?)
+- await doc.save.request({ reason, filename? })
+
+Return a cleanup function or register cleanups through doc.onCleanup. Managed
+animation and event helpers are stopped automatically when the block reruns,
+the viewer changes mode, or the plugin unmounts.

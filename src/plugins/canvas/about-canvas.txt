@@ -1,0 +1,12 @@
+Canvas plugin (hvy.canvas)
+
+The canvas stores a versioned JSON drawing in the plugin text body. Its
+pluginConfig supports width, height, strokeColor, strokeWidth, and
+viewerDrawing. Editors can pre-draw. Readers can draw only when viewerDrawing
+is true.
+
+Scripts can find an instance with [data-hvy-canvas-id="<block id>"] and use the
+element's hvyCanvas API: getDrawing, setDrawing, addStroke, clear, undo, redraw,
+and toDataURL. Listen for bubbling hvy:canvas:ready, hvy:canvas:change, and
+hvy:canvas:render events. The render event detail includes the scaled 2D
+context for script-owned overlays.

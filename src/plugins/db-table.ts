@@ -737,6 +737,13 @@ function resetRuntime(): void {
   clearDbTableViewState();
 }
 
+export function resetDbTableRuntimeForDocument(document: VisualDocument): void {
+  const runtime = getSqliteRuntime();
+  if (runtime.documentRef !== document) return;
+  resetRuntime();
+  runtime.documentRef = document;
+}
+
 function readTableSnapshot(
   db: SqlJsDatabase,
   tableName: string,

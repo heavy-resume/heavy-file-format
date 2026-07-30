@@ -143,6 +143,52 @@ const mount = HVY.mountHvy({
 });
 ```
 
+Trusted embedded viewers can opt into unrestricted, viewer-only
+`hvy.power-scripting` blocks with `powerScripts: 'enabled'`. The default is
+`'prompt'`, which requires the viewer to accept a warning. Use `'hidden'` to
+ensure power scripts are neither offered nor executed:
+
+```js
+HVY.mountHvy({
+  root,
+  document: trustedDocument,
+  mode: 'viewer',
+  powerScripts: 'enabled',
+});
+```
+
+Power-script trust is supplied by the embedding host or viewer session; it is
+never read from document metadata.
+
+Power scripts should prefer `doc.dialog.alert(...)`,
+`doc.dialog.confirm(...)`, and `doc.dialog.prompt(...)` over blocking browser
+dialogs. These themed asynchronous dialogs render inside the mounted HVY
+surface, including its emulated Phone, Tablet, or Desktop frame.
+
+Power scripts can request persistence with
+`await doc.save.request({ reason, filename? })`. Embedded hosts can autosave
+these changes—including updated SQLite or other tail attachments—through
+the generic `onSaveRequest` callback:
+
+```js
+HVY.mountHvy({
+  root,
+  document: trustedDocument,
+  mode: 'viewer',
+  powerScripts: 'enabled',
+  async onSaveRequest(request) {
+    const bytes = await request.serializeDocumentBytesAsync();
+    await saveToHostStorage(request.filename, bytes);
+    return 'saved';
+  },
+});
+```
+
+The callback can return `'canceled'` or `false` when it declines the request.
+`doc.save.request()` itself never prompts or downloads. The reference
+implementation supplies a generic save callback: it saves writable source
+documents immediately and only asks before falling back to a download.
+
 When `persistEmbeddingsToAttachments` is true, HVY keeps the prepared cache in
 memory until the document is explicitly saved or serialized through the mount
 save API. At that point HVY treats the embedding index like any other derived

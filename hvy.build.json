@@ -8,6 +8,8 @@
     "hvy.diagram",
     "hvy.qr-code",
     "hvy.video",
-    "hvy.viewer-note"
+    "hvy.viewer-note",
+    "hvy.canvas",
+    "hvy.power-scripting"
   ]
 }

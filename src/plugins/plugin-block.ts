@@ -1,7 +1,7 @@
 import type { VisualBlock } from '../editor/types';
 import { createQrCodePluginConfig, QR_CODE_DEFAULT_CSS, QR_CODE_PLUGIN_DEFAULT_TEXT } from './qr-code/qr-code-model';
 import { DEFAULT_DIAGRAM_SOURCE, DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
-import { DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID, VIDEO_PLUGIN_ID } from './registry';
+import { CANVAS_PLUGIN_ID, DIAGRAM_PLUGIN_ID, FORM_PLUGIN_ID, GRAPH_PLUGIN_ID, isDbTablePluginId, POWER_SCRIPTING_PLUGIN_ID, QR_CODE_PLUGIN_ID, SCRIPTING_PLUGIN_ID, VIDEO_PLUGIN_ID } from './registry';
 import { SCRIPTING_PLUGIN_VERSION } from './scripting/version';
 import { DEFAULT_VIDEO_CONFIG } from './video/video-model';
 
@@ -23,6 +23,10 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? createQrCodePluginConfig()
     : nextId === VIDEO_PLUGIN_ID
       ? { ...DEFAULT_VIDEO_CONFIG }
+    : nextId === CANVAS_PLUGIN_ID
+      ? { width: 800, height: 450, viewerDrawing: false, strokeColor: '', strokeWidth: 4 }
+    : nextId === POWER_SCRIPTING_PLUGIN_ID
+      ? { version: '0.1' }
       : {};
   block.text = nextId === GRAPH_PLUGIN_ID
     ? 'Label,Value\nExample A,10\nExample B,20\nExample C,15'
@@ -30,6 +34,8 @@ export function configurePluginBlock(block: VisualBlock, pluginId: string): void
       ? DEFAULT_DIAGRAM_SOURCE
     : nextId === QR_CODE_PLUGIN_ID
       ? QR_CODE_PLUGIN_DEFAULT_TEXT
+    : nextId === CANVAS_PLUGIN_ID
+      ? '{"version":1,"strokes":[]}'
       : '';
   if (nextId === QR_CODE_PLUGIN_ID) {
     block.schema.css = QR_CODE_DEFAULT_CSS;

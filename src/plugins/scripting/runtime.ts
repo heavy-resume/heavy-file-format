@@ -40,7 +40,7 @@ export interface ScriptingRuntime {
   setLineBudget(maxLines: number): void;
 }
 
-interface ScriptingDocApi {
+export interface ScriptingDocApi {
   log_json: (valuesJson: string) => void;
   tool: (name: string, args?: unknown) => unknown;
   tool_json: (name: string, argsJson: string) => unknown;

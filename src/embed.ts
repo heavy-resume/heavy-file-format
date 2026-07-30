@@ -38,7 +38,7 @@ import {
 } from './document-factory';
 import { resolveBaseComponent } from './component-defs';
 import { bindReaderUi } from './bind-reader-ui';
-import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
+import { capturePluginFocus, reconcilePluginMounts, unmountAllPlugins } from './plugins/mount';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import {
@@ -56,6 +56,8 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPlugin } from './plugins/types';
+import { clearPowerScriptingMode, setPowerScriptingMode, type HvyPowerScriptingMode } from './plugins/power-scripting/power-scripting-policy';
+import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import type { HvyPdfExportOptions } from './pdf-export/types';
@@ -125,6 +127,8 @@ export interface HvyMountOptions {
   editorClipboard?: HvyEditorClipboardHost | null;
   encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
+  powerScripts?: HvyPowerScriptingMode;
+  onSaveRequest?: HvySaveRequestHandler;
 }
 
 export interface HvyMount {
@@ -1016,6 +1020,20 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.encryption ?? null,
     options.crossDocumentLinks === true
   ));
+  setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
+  setSaveRequestHandler(options.onSaveRequest
+    ? (request) => options.onSaveRequest?.({
+        ...request,
+        document: runtime.state.document,
+        serializeDocumentBytes: () => runWithStateRuntime(runtime, () => {
+          materializePreparedEmbeddingAttachments(state.document);
+          return serializeDocumentBytes(state.document);
+        }),
+        serializeDocumentBytesAsync: () => runWithStateRuntimeAsync(runtime, () =>
+          serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null)
+        ),
+      })
+    : null, runtime);
   let linkObserver = options.linkObserver ?? null;
   runtime.state.chatContext = options.chatContext ?? null;
   runtime.state.chatContextProvider = options.chatContextProvider ?? null;
@@ -1049,11 +1067,14 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        unmountAllPlugins();
         options.root.innerHTML = '';
         setHostPlugins([]);
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
+        clearPowerScriptingMode(runtime);
+        clearSaveRequestHandler(runtime);
         if (currentRoot === options.root) {
           currentRoot = null;
           currentLinkObserver = null;

@@ -24,6 +24,8 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.qr-code',
   'hvy.video',
   'hvy.viewer-note',
+  'hvy.canvas',
+  'hvy.power-scripting',
 ] as const;
 
 type HvyBuiltInPluginId = (typeof HVY_BUILT_IN_PLUGIN_IDS)[number];
@@ -107,6 +109,20 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     exportName: 'viewerNotePlugin',
     modulePath: 'src/plugins/viewer-note.ts',
     displayName: 'Viewer Note',
+  },
+  {
+    id: 'hvy.canvas',
+    key: 'canvas',
+    exportName: 'canvasPlugin',
+    modulePath: 'src/plugins/canvas/canvas.ts',
+    displayName: 'Canvas',
+  },
+  {
+    id: 'hvy.power-scripting',
+    key: 'powerScripting',
+    exportName: 'powerScriptingPlugin',
+    modulePath: 'src/plugins/power-scripting/power-scripting.ts',
+    displayName: 'Power Scripting',
   },
 ];
 
@@ -227,14 +243,14 @@ function handleSourceDocumentRequest(req: IncomingMessage, res: ServerResponse, 
   }
   if (req.method === 'GET') {
     res.statusCode = 200;
-    res.setHeader('content-type', 'text/plain; charset=utf-8');
-    res.end(readFileSync(sourceDocument.filePath, 'utf8'));
+    res.setHeader('content-type', 'application/octet-stream');
+    res.end(readFileSync(sourceDocument.filePath));
     return;
   }
   if (req.method === 'PUT') {
-    void readRequestText(req)
+    void readRequestBytes(req)
       .then((body) => {
-        writeFileSync(sourceDocument.filePath, body, 'utf8');
+        writeFileSync(sourceDocument.filePath, body);
         res.statusCode = 200;
         res.setHeader('content-type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: true }));
@@ -264,13 +280,13 @@ function getSourceDocumentForRequest(url: string | undefined): { filePath: strin
   return null;
 }
 
-function readRequestText(req: NodeJS.ReadableStream): Promise<string> {
-  return new Promise((resolveText, reject) => {
+function readRequestBytes(req: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer | string) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
-    req.on('end', () => resolveText(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => resolveBody(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }

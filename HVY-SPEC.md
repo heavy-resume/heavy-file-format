@@ -1606,6 +1606,97 @@ loading the iframe. Clients MAY also render an external-open placeholder when a
 provider is known not to support playback in the current embedded browser
 runtime, such as a desktop webview.
 
+### 7.12 Canvas plugin contract
+
+The built-in canvas plugin is `hvy.canvas`. It renders a responsive drawing
+surface that can be pre-drawn in an editor and, when explicitly enabled, drawn
+on in a viewer.
+
+```markdown
+---
+hvy_version: 1.0
+plugins:
+  - id: hvy.canvas
+    source: builtin://canvas
+---
+
+<!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
+{"version":1,"strokes":[]}
+```
+
+Normative configuration and data:
+
+- `pluginConfig.width` and `pluginConfig.height` are optional positive integer
+  logical dimensions. Clients SHOULD default to `800` by `450`.
+- `pluginConfig.viewerDrawing` is an optional boolean that defaults to `false`.
+  When false, viewer surfaces MUST NOT modify the authored drawing through
+  pointer interaction. Editor surfaces MAY always pre-draw.
+- `pluginConfig.strokeColor` is an optional CSS color. When absent, clients
+  SHOULD derive the brush color from the shared document text theme role.
+- `pluginConfig.strokeWidth` is an optional positive number in logical canvas
+  units and SHOULD default to `4`.
+- The plugin text body MUST be interpreted as a JSON object with `version: 1`
+  and a `strokes` array. Each stroke contains a `color` string, positive `width`
+  number, and one or more `{x, y}` logical coordinate points. Clients MUST
+  preserve valid drawing data across responsive resizing.
+- The plugin surface SHOULD expose a script API for retrieving and replacing
+  drawing data, adding strokes, clearing, undoing, redrawing, and exporting the
+  rendered bitmap. Script-driven mutations MUST update the plugin text body.
+- Clients SHOULD emit lifecycle/change/render notifications so other installed
+  scripts can discover the surface and draw non-persistent overlays. Document
+  content itself MUST NOT be executed as script.
+
+### 7.13 Power scripting plugin contract
+
+The built-in power scripting plugin is `hvy.power-scripting`. It contains
+unrestricted JavaScript for interactive, performance-sensitive behavior that
+cannot be expressed by the sandboxed `hvy.scripting` runtime.
+
+```markdown
+<!--hvy:plugin {"id":"trusted-program","plugin":"hvy.power-scripting","pluginConfig":{"version":"0.1"}}-->
+const canvas = await doc.canvas.wait("drawing");
+doc.animation.start((_time, _delta) => canvas.redraw());
+```
+
+Power scripts have a deliberately different trust and lifecycle model:
+
+- A power script MUST execute only in the document `viewer` view. It MUST NOT
+  execute in editor or AI views.
+- A client MUST default to requiring explicit viewer authorization before
+  executing a power script. The authorization UI MUST warn that the script is
+  unrestricted JavaScript with page, browser API, and document-data access.
+- The viewer MUST be able to hide the power-script prompt without executing the
+  script.
+- An embedding host MAY mark the mounted document trusted and enable power
+  scripts programmatically, or disable/hide them without offering execution.
+  Trust is host/session state and MUST NOT be inferred from document metadata.
+- The plugin text body is JavaScript source and `pluginConfig.version` declares
+  its requested power-scripting API version.
+- The script receives `doc`, which includes the core scripting document APIs
+  and MAY include installed plugin APIs. The reference canvas integration
+  provides `doc.canvas.get(id)` and asynchronous `doc.canvas.wait(id)`.
+- The runtime SHOULD provide managed animation, event-listener, and cleanup
+  helpers. It MUST run registered cleanup callbacks and stop managed animation
+  frames when the block reruns, unmounts, or leaves Viewer mode.
+- The runtime SHOULD provide document-surface dialog helpers for alerts,
+  confirmations, and text prompts. These dialogs SHOULD render inside the
+  mounted/emulated HVY surface and MUST NOT require support for blocking browser
+  `alert`, `confirm`, or `prompt` dialogs.
+- A power script that uses the document database MAY keep its database runtime
+  open for the lifetime of the mounted program. Database mutations MUST use the
+  same attached database and persistence behavior as `doc.db` in basic
+  scripting.
+- Power scripts MAY request that the current document be saved after a
+  meaningful mutation. Embedded hosts SHOULD be able to handle the request with
+  their own persistence callback and serialize the current document, including
+  tail attachments. The request itself MUST NOT prompt or download. A client
+  MAY provide a generic save callback that persists immediately when it has a
+  writable destination and asks the viewer before falling back to a download.
+
+Because power scripts are unrestricted, the sandbox guarantees of
+`hvy.scripting` do not apply. Merely opening or editing a document MUST NOT be
+treated as authorization to run them.
+
 ## 8. Security & Runtime Constraints
 
 Client assumptions from product requirements:

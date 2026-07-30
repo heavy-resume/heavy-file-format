@@ -55,7 +55,7 @@ import {
 import { bindReaderUi } from './bind-reader-ui';
 import { bindClickActions } from './bind/handlers/click-actions';
 import { bindInputBlock } from './bind/handlers/input-block';
-import { capturePluginFocus, reconcilePluginMounts } from './plugins/mount';
+import { capturePluginFocus, reconcilePluginMounts, unmountAllPlugins } from './plugins/mount';
 import { setHostPlugins } from './plugins/registry';
 import { resetPluginDocumentHookState, runPluginDocumentHooks } from './plugins/hooks';
 import {
@@ -63,6 +63,8 @@ import {
   builtInPlugins,
 } from 'virtual:hvy-built-in-plugins';
 import type { HvyPlugin } from './plugins/types';
+import { clearPowerScriptingMode, setPowerScriptingMode, type HvyPowerScriptingMode } from './plugins/power-scripting/power-scripting-policy';
+import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
@@ -164,6 +166,8 @@ export interface HvyMountOptions {
   editorClipboard?: HvyEditorClipboardHost | null;
   encryption?: HvyEncryptionOptions | null;
   onDocumentChange?: HvyDocumentChangeCallback;
+  powerScripts?: HvyPowerScriptingMode;
+  onSaveRequest?: HvySaveRequestHandler;
 }
 
 export interface HvyMount {
@@ -1076,6 +1080,20 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   runtimeState.chatSearchCache = options.chatSearchCache ?? null;
   runtimeState.embeddingProvider = options.embeddingProvider ?? null;
   const runtime = createStateRuntime(runtimeState);
+  setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
+  setSaveRequestHandler(options.onSaveRequest
+    ? (request) => options.onSaveRequest?.({
+        ...request,
+        document: runtime.state.document,
+        serializeDocumentBytes: () => runWithStateRuntime(runtime, () => {
+          materializePreparedEmbeddingAttachments(state.document);
+          return serializeDocumentBytes(state.document);
+        }),
+        serializeDocumentBytesAsync: () => runWithStateRuntimeAsync(runtime, () =>
+          serializeMountedDocumentBytesAsync(state.document, state.attachmentHost, options.serializer ?? null, state.encryption ?? null)
+        ),
+      })
+    : null, runtime);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
   const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
@@ -1108,12 +1126,15 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     destroy() {
       runWithStateRuntime(runtime, () => {
         cancelPendingEmbedUiBind(options.root);
+        unmountAllPlugins();
         options.root.innerHTML = '';
         setHostChatClient(null);
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
         resetPluginDocumentHookState();
+        clearPowerScriptingMode(runtime);
+        clearSaveRequestHandler(runtime);
         sessionPersistence?.abort();
         if (currentRoot === options.root) {
           currentRoot = null;

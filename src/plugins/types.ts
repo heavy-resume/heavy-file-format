@@ -58,6 +58,8 @@ export interface HvyPluginTextEditorInstance {
 
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
+  view: 'editor' | 'viewer' | 'ai';
+  hostRoot: HTMLElement;
   editor: HvyPluginEditorContext;
   sectionKey: string;
   block: VisualBlock;

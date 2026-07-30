@@ -15,6 +15,8 @@ export const DIAGRAM_PLUGIN_ID = 'hvy.diagram';
 export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
 export const VIDEO_PLUGIN_ID = 'hvy.video';
 export const VIEWER_NOTE_PLUGIN_ID = 'hvy.viewer-note';
+export const CANVAS_PLUGIN_ID = 'hvy.canvas';
+export const POWER_SCRIPTING_PLUGIN_ID = 'hvy.power-scripting';
 export const BUILTIN_DB_TABLE_PLUGIN_SOURCE = 'builtin://db-table';
 export const BUILTIN_FORM_PLUGIN_SOURCE = 'builtin://form';
 export const BUILTIN_PROGRESS_BAR_PLUGIN_SOURCE = 'builtin://progress-bar';
@@ -24,6 +26,8 @@ export const BUILTIN_DIAGRAM_PLUGIN_SOURCE = 'builtin://diagram';
 export const BUILTIN_QR_CODE_PLUGIN_SOURCE = 'builtin://qr-code';
 export const BUILTIN_VIDEO_PLUGIN_SOURCE = 'builtin://video';
 export const BUILTIN_VIEWER_NOTE_PLUGIN_SOURCE = 'builtin://viewer-note';
+export const BUILTIN_CANVAS_PLUGIN_SOURCE = 'builtin://canvas';
+export const BUILTIN_POWER_SCRIPTING_PLUGIN_SOURCE = 'builtin://power-scripting';
 
 const BUILTIN_PLUGIN_SOURCES: Record<string, string> = {
   [DB_TABLE_PLUGIN_ID]: BUILTIN_DB_TABLE_PLUGIN_SOURCE,
@@ -35,6 +39,8 @@ const BUILTIN_PLUGIN_SOURCES: Record<string, string> = {
   [QR_CODE_PLUGIN_ID]: BUILTIN_QR_CODE_PLUGIN_SOURCE,
   [VIDEO_PLUGIN_ID]: BUILTIN_VIDEO_PLUGIN_SOURCE,
   [VIEWER_NOTE_PLUGIN_ID]: BUILTIN_VIEWER_NOTE_PLUGIN_SOURCE,
+  [CANVAS_PLUGIN_ID]: BUILTIN_CANVAS_PLUGIN_SOURCE,
+  [POWER_SCRIPTING_PLUGIN_ID]: BUILTIN_POWER_SCRIPTING_PLUGIN_SOURCE,
 };
 
 export function isDbTablePluginId(pluginId: string): boolean {
@@ -163,6 +169,12 @@ export function getPluginDisplayName(pluginId: string): string {
   }
   if (pluginId === VIEWER_NOTE_PLUGIN_ID) {
     return 'Viewer Note';
+  }
+  if (pluginId === CANVAS_PLUGIN_ID) {
+    return 'Canvas';
+  }
+  if (pluginId === POWER_SCRIPTING_PLUGIN_ID) {
+    return 'Power Scripting';
   }
   return pluginId;
 }

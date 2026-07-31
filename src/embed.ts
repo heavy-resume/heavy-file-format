@@ -65,6 +65,14 @@ import {
   type HvyPowerScriptingMode,
 } from './plugins/power-scripting/power-scripting-policy';
 import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
+import {
+  clearPluginAuthorization,
+  setPluginAuthorizationCallbacks,
+  setPluginAuthorizationMode,
+  type HvyGetPluginAuthorization,
+  type HvyPluginAuthorizationChanged,
+  type HvyPluginAuthorizationMode,
+} from './plugins/authorization/plugin-authorization-policy';
 import type { HostChatClient } from './chat/chat';
 import type { HvySearchSnapshot, HvySearchSnapshotInput, HvySemanticFilterProvider } from './search/types';
 import type { HvyPdfExportOptions } from './pdf-export/types';
@@ -137,6 +145,9 @@ export interface HvyMountOptions {
   powerScripts?: HvyPowerScriptingMode;
   getPowerScriptAcceptance?: HvyGetPowerScriptAcceptance;
   onPowerScriptAcceptanceChanged?: HvyPowerScriptAcceptanceChanged;
+  pluginAuthorization?: HvyPluginAuthorizationMode;
+  getPluginAuthorization?: HvyGetPluginAuthorization;
+  onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
 }
 
@@ -1034,6 +1045,11 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getAcceptance: options.getPowerScriptAcceptance ?? null,
     onAcceptanceChanged: options.onPowerScriptAcceptanceChanged ?? null,
   }, runtime);
+  setPluginAuthorizationMode(options.pluginAuthorization ?? 'prompt', runtime);
+  setPluginAuthorizationCallbacks({
+    getAcceptance: options.getPluginAuthorization ?? null,
+    onAcceptanceChanged: options.onPluginAuthorizationChanged ?? null,
+  }, runtime);
   setSaveRequestHandler(options.onSaveRequest
     ? (request) => options.onSaveRequest?.({
         ...request,
@@ -1087,6 +1103,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
         clearPowerScriptingMode(runtime);
+        clearPluginAuthorization(runtime);
         clearSaveRequestHandler(runtime);
         if (currentRoot === options.root) {
           currentRoot = null;

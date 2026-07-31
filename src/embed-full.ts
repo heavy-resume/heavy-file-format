@@ -72,6 +72,14 @@ import {
   type HvyPowerScriptingMode,
 } from './plugins/power-scripting/power-scripting-policy';
 import { clearSaveRequestHandler, setSaveRequestHandler, type HvySaveRequestHandler } from './plugins/power-scripting/power-save-request';
+import {
+  clearPluginAuthorization,
+  setPluginAuthorizationCallbacks,
+  setPluginAuthorizationMode,
+  type HvyGetPluginAuthorization,
+  type HvyPluginAuthorizationChanged,
+  type HvyPluginAuthorizationMode,
+} from './plugins/authorization/plugin-authorization-policy';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { createDefaultChatState } from './chat/chat';
 import { renderChatPanel, setHostChatClient, type HostChatClient } from './chat/chat';
@@ -176,6 +184,9 @@ export interface HvyMountOptions {
   powerScripts?: HvyPowerScriptingMode;
   getPowerScriptAcceptance?: HvyGetPowerScriptAcceptance;
   onPowerScriptAcceptanceChanged?: HvyPowerScriptAcceptanceChanged;
+  pluginAuthorization?: HvyPluginAuthorizationMode;
+  getPluginAuthorization?: HvyGetPluginAuthorization;
+  onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
 }
 
@@ -1094,6 +1105,11 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     getAcceptance: options.getPowerScriptAcceptance ?? null,
     onAcceptanceChanged: options.onPowerScriptAcceptanceChanged ?? null,
   }, runtime);
+  setPluginAuthorizationMode(options.pluginAuthorization ?? 'prompt', runtime);
+  setPluginAuthorizationCallbacks({
+    getAcceptance: options.getPluginAuthorization ?? null,
+    onAcceptanceChanged: options.onPluginAuthorizationChanged ?? null,
+  }, runtime);
   setSaveRequestHandler(options.onSaveRequest
     ? (request) => options.onSaveRequest?.({
         ...request,
@@ -1147,6 +1163,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setHostPlugins([]);
         resetPluginDocumentHookState();
         clearPowerScriptingMode(runtime);
+        clearPluginAuthorization(runtime);
         clearSaveRequestHandler(runtime);
         sessionPersistence?.abort();
         if (currentRoot === options.root) {

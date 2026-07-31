@@ -50,6 +50,11 @@ interface ZipEntryMetadata {
   expandedSize: number;
 }
 
+interface DecodedPluginZip {
+  files: Record<string, Uint8Array>;
+  manifest: HvyPluginPackageManifest;
+}
+
 function readUint16(bytes: Uint8Array, offset: number): number {
   return bytes[offset]! | (bytes[offset + 1]! << 8);
 }
@@ -146,11 +151,10 @@ function rewriteCssResourceUrls(css: string, cssPath: string, resourceUrl: (path
   });
 }
 
-export async function loadHvyPluginZip(
+function decodePluginZip(
   archiveBytes: Uint8Array,
-  options: LoadHvyPluginZipOptions = {}
-): Promise<LoadedHvyPluginPackage> {
-  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  limits: HvyPluginZipLimits
+): DecodedPluginZip {
   const metadata = inspectZip(archiveBytes, limits);
   const files = unzipSync(archiveBytes);
   if (Object.keys(files).length !== metadata.length) throw new Error('Plugin package ZIP entries did not decode consistently.');
@@ -160,6 +164,22 @@ export async function loadHvyPluginZip(
   for (const path of [manifest.entry, ...manifest.styles, ...(manifest.documentation ? [manifest.documentation] : [])]) {
     if (!files[path]) throw new Error(`Plugin package is missing manifest file "${path}".`);
   }
+  return { files, manifest };
+}
+
+export function readHvyPluginZipManifest(
+  archiveBytes: Uint8Array,
+  options: Pick<LoadHvyPluginZipOptions, 'limits'> = {}
+): HvyPluginPackageManifest {
+  return decodePluginZip(archiveBytes, { ...DEFAULT_LIMITS, ...options.limits }).manifest;
+}
+
+export async function loadHvyPluginZip(
+  archiveBytes: Uint8Array,
+  options: LoadHvyPluginZipOptions = {}
+): Promise<LoadedHvyPluginPackage> {
+  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const { files, manifest } = decodePluginZip(archiveBytes, limits);
 
   const createObjectUrl = options.createObjectUrl ?? ((blob: Blob) => URL.createObjectURL(blob));
   const revokeObjectUrl = options.revokeObjectUrl ?? ((url: string) => URL.revokeObjectURL(url));

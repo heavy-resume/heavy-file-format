@@ -240,6 +240,10 @@ export interface HvyPlugin {
   hvyApiVersion: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
+  // Conditional registrations expose metadata without loading executable
+  // plugin code. The host calls load only after per-file authorization.
+  authorization?: 'required';
+  load?: () => Promise<HvyPlugin>;
   // Optional capability list for renderable plugin components.
   components?: HvyPluginComponentDefinition[];
   // Optional output generators used by authoring UI such as reusable template forms.

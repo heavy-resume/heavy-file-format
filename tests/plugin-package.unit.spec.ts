@@ -6,7 +6,7 @@ import {
   parseHvyPluginPackageManifest,
   type HvyPluginPackageManifest,
 } from '../src/plugin-package';
-import { loadHvyPluginZip } from '../src/plugin-package-zip';
+import { loadHvyPluginZip, readHvyPluginZipManifest } from '../src/plugin-package-zip';
 
 const manifest: HvyPluginPackageManifest = {
   formatVersion: '0.1',
@@ -86,6 +86,18 @@ describe('source-independent plugin package loading', () => {
 });
 
 describe('optional ZIP plugin package loading', () => {
+  test('reads authorization metadata without importing plugin code', () => {
+    const importModule = vi.fn();
+    const archive = zipSync({
+      'hvy-plugin.json': strToU8(JSON.stringify({ ...manifest, authorization: 'required' })),
+      'plugin.mjs': strToU8('throw new Error("must not execute");'),
+      'plugin.css': strToU8(''),
+    });
+
+    expect(readHvyPluginZipManifest(archive)).toEqual({ ...manifest, authorization: 'required' });
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
   test('before, ZIP load, after: loads the bundled entry and rewrites packaged CSS resources', async () => {
     const archive = zipSync({
       'hvy-plugin.json': strToU8(JSON.stringify(manifest)),

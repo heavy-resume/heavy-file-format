@@ -3,6 +3,7 @@ import type { VisualDocument } from '../types';
 import { rcompare, satisfies, valid } from 'semver';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './declarations';
 import type { HvyOutputGenerator, HvyPlugin } from './types';
+import { getLoadedConditionalPlugin } from './authorization/conditional-plugin';
 
 export interface DocumentPluginDefinition {
   id: string;
@@ -96,7 +97,11 @@ export function getHostPlugins(): HvyPlugin[] {
 
 export function getRenderableHostPlugins(): HvyPlugin[] {
   const hostPlugins = getHostPlugins();
-  return hostPlugins.filter((plugin) => typeof plugin.create === 'function' || (plugin.components?.length ?? 0) > 0);
+  return hostPlugins.filter((plugin) => (
+    typeof plugin.create === 'function'
+    || (plugin.components?.length ?? 0) > 0
+    || (plugin.authorization === 'required' && typeof plugin.load === 'function')
+  ));
 }
 
 export function getHostPlugin(pluginName: string, document?: VisualDocument): HvyPlugin | null {
@@ -110,13 +115,16 @@ export function getHostPlugin(pluginName: string, document?: VisualDocument): Hv
     : undefined;
   if (!declaration) {
     if (new Set(candidates.map((entry) => entry.uuid)).size > 1) return null;
-    return candidates[0] ?? null;
+    return candidates[0]
+      ? (activeDocument ? getLoadedConditionalPlugin(candidates[0], activeDocument) : candidates[0])
+      : null;
   }
   if (!declaration.uuid && new Set(candidates.map((entry) => entry.uuid)).size > 1) return null;
-  return candidates.find((entry) => (
+  const selected = candidates.find((entry) => (
     (!declaration.uuid || entry.uuid === declaration.uuid)
     && (!declaration.versionRange || satisfies(entry.version, declaration.versionRange))
   )) ?? null;
+  return selected ? getLoadedConditionalPlugin(selected, activeDocument!) : null;
 }
 
 export function getAvailableOutputGenerators(): HvyOutputGenerator[] {
@@ -230,7 +238,7 @@ function selectHostPlugins(plugins: HvyPlugin[], document?: VisualDocument): Hvy
     ));
     if ((!declaration || !declaration.uuid) && new Set(candidates.map((entry) => entry.uuid)).size > 1) return [];
     const selected = candidates.sort((left, right) => rcompare(left.version, right.version))[0];
-    return selected ? [selected] : [];
+    return selected ? [document ? getLoadedConditionalPlugin(selected, document) : selected] : [];
   });
 }
 

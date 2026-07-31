@@ -16,6 +16,11 @@ import type {
 } from './types';
 import type { VisualBlock } from '../editor/types';
 import type { JsonObject } from '../hvy/types';
+import { createPluginAuthorizationPrompt } from './authorization/plugin-authorization-prompt';
+import { getPluginAuthorizationMode } from './authorization/plugin-authorization-policy';
+import {
+  loadConditionallyAllowedPlugin,
+} from './authorization/conditional-plugin';
 
 interface SavedFocus {
   element: HTMLElement;
@@ -45,6 +50,11 @@ interface MountedPlugin {
 const MOUNT_KEY_PREFIX = 'hvy-plugin-mount';
 const fallbackMounted = new Map<string, MountedPlugin>();
 const mountedByRuntime = new WeakMap<StateRuntime, Map<string, MountedPlugin>>();
+async function loadConditionalPlugin(registration: HvyPlugin): Promise<HvyPlugin> {
+  const plugin = await loadConditionallyAllowedPlugin(registration);
+  if (!plugin.create) throw new Error(`Plugin "${registration.id}" does not provide a renderable component.`);
+  return plugin;
+}
 
 function getMountedPlugins(): Map<string, MountedPlugin> {
   try {
@@ -316,6 +326,36 @@ export function reconcilePluginMounts(root: ParentNode, options: { prune?: boole
     if (!ctx) {
       placeholder.textContent = 'Plugin block is missing.';
       placeholder.classList.add('hvy-plugin-missing');
+      return;
+    }
+
+    if (registration.authorization === 'required') {
+      const authorizationMode = getPluginAuthorizationMode(state.document, registration);
+      if (authorizationMode === 'hidden') {
+        placeholder.textContent = `Plugin "${pluginId}" is blocked by the host.`;
+        placeholder.classList.add('hvy-plugin-missing');
+        return;
+      }
+      const instance = createPluginAuthorizationPrompt({
+        document: state.document,
+        plugin: registration,
+        loadAndMount: async () => {
+          const loaded = await loadConditionalPlugin(registration);
+          const loadedContext = buildContext(loaded, mode, sectionKey, blockId, hostRoot);
+          if (!loadedContext) throw new Error('Plugin block is missing.');
+          return loaded.create!(loadedContext);
+        },
+      });
+      placeholder.replaceWith(instance.element);
+      mounted.set(key, {
+        pluginId,
+        sectionKey,
+        blockId,
+        mode,
+        instance,
+        placeholder: instance.element,
+        pendingFocus: null,
+      });
       return;
     }
 

@@ -654,6 +654,36 @@ mount.destroy();
 loadedPackage.dispose();
 ```
 
+Plugins that should require per-file approval set
+`"authorization": "required"` in `hvy-plugin.json`. Inspect the archive manifest
+without importing its entry module, then register a conditional plugin:
+
+```js
+import { createConditionallyAllowedPlugin } from 'heavy-file-format-ref-impl/conditional-plugin';
+import { loadHvyPluginZip, readHvyPluginZipManifest } from 'heavy-file-format-ref-impl/plugin-package-zip';
+
+const manifest = readHvyPluginZipManifest(packageBytes);
+const conditionalPlugin = createConditionallyAllowedPlugin({
+  ...manifest,
+  load: async () => (await loadHvyPluginZip(packageBytes)).plugin,
+});
+
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [conditionalPlugin],
+  pluginAuthorization: 'prompt',
+  getPluginAuthorization: ({ document, id, uuid, version }) =>
+    hostTrustStore.isAllowed(document, id, uuid, version),
+  onPluginAuthorizationChanged: ({ document, id, uuid, version, accepted }) =>
+    hostTrustStore.setAllowed(document, id, uuid, version, accepted),
+});
+```
+
+The package entry, styles, hooks, and components are not loaded before approval.
+Hosts can instead use `pluginAuthorization: "enabled"` for trusted environments
+or `"hidden"` when approval must not be offered.
+
 Plugins can also publish named methods to the document scripting layer:
 
 ```js

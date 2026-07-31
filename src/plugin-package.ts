@@ -16,6 +16,7 @@ export interface HvyPluginPackageManifest {
   documentation?: string;
   permissions: string[];
   hvyApiVersion: string;
+  authorization?: 'required';
 }
 
 export interface HvyPluginPackageContext {
@@ -101,6 +102,12 @@ export function parseHvyPluginPackageManifest(input: string | Uint8Array): HvyPl
   if (uuid) manifest.uuid = uuid;
   if (typeof record.documentation !== 'undefined') {
     manifest.documentation = normalizePluginPackagePath(requireString(record, 'documentation'));
+  }
+  if (typeof record.authorization !== 'undefined') {
+    if (record.authorization !== 'required') {
+      throw new Error('Plugin manifest field "authorization" must be "required" when present.');
+    }
+    manifest.authorization = 'required';
   }
   if (manifest.formatVersion !== HVY_PLUGIN_PACKAGE_FORMAT_VERSION) {
     throw new Error(`Unsupported plugin package format "${manifest.formatVersion}".`);

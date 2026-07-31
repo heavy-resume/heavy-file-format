@@ -1,0 +1,22 @@
+.hvy-plugin-authorization {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--hvy-text);
+  background: color-mix(in srgb, var(--hvy-warning) 12%, var(--hvy-surface));
+  border: 1px solid var(--hvy-warning);
+  border-radius: 0.75rem;
+}
+
+.hvy-plugin-authorization-title,
+.hvy-plugin-authorization-detail,
+.hvy-plugin-authorization-status {
+  margin: 0;
+  color: var(--hvy-text-muted);
+}
+
+.hvy-plugin-authorization-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

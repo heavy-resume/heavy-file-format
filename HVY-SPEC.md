@@ -1193,6 +1193,7 @@ timeline.hvy.plugin
   "styles": ["plugin.css"],
   "documentation": "documentation.txt",
   "permissions": [],
+  "authorization": "required",
   "hvyApiVersion": "0.1"
 }
 ```
@@ -1213,6 +1214,9 @@ Optional fields:
 - `styles`: array of archive-relative CSS file paths loaded in order.
 - `documentation`: archive-relative path to a UTF-8 documentation file.
 - `permissions`: array of capabilities requested by the installed package.
+- `authorization`: when set to `"required"`, hosts MUST show the plugin as
+  blocked for each file until the user or host explicitly allows it. Hosts MUST
+  be able to inspect this field without importing or executing the entry module.
 
 All manifest paths MUST be relative, use `/` separators, remain inside the
 archive root after normalization, and identify regular files. Package readers
@@ -1263,6 +1267,15 @@ verification status. Package
 permissions describe what installed code may request; document permissions
 remain a separate per-document authorization and cannot expand the installed
 package's grants.
+
+For a package with `authorization: "required"`, installation does not authorize
+execution. The host MUST defer importing its entry module, applying its styles,
+running its hooks, and creating its components until that plugin is allowed for
+the current file. Before authorization, plugin blocks remain visible as blocked
+placeholders with an allow action unless the host policy hides them. Acceptance
+is keyed by the file and the installed plugin's `id`, optional `uuid`, and exact
+`version`; authorizing one version MUST NOT silently authorize a different
+version. Embedded hosts MAY persist this decision through acceptance callbacks.
 
 Hosts MUST treat package modules, styles, and assets as untrusted. Loading CSS
 MUST NOT allow a plugin to escape the plugin/host styling boundary, and plugins

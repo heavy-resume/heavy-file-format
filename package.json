@@ -47,6 +47,10 @@
       "types": "./src/plugin-package-zip.ts",
       "default": "./src/plugin-package-zip.ts"
     },
+    "./conditional-plugin": {
+      "types": "./src/plugins/authorization/conditional-plugin.ts",
+      "default": "./src/plugins/authorization/conditional-plugin.ts"
+    },
     "./mcp-cli-runner": "./scripts/hvy-mcp-cli.mjs",
     "./dist-embed/*": "./dist-embed/*",
     "./package.json": "./package.json"

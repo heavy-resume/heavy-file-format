@@ -472,7 +472,7 @@ Image blocks reference a binary attachment stored in the document tail:
 ```
 
 Image block fields:
-- `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.4). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
+- `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.6). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
 - `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
 
@@ -1099,20 +1099,61 @@ Declare plugins in front matter under `plugins`:
 ```yaml
 plugins:
   - id: com.example.timeline
-    source: https://plugins.example.com/timeline.hvyplugin
-    version: 1.2.0
-    integrity: sha256-BASE64_DIGEST
+    uuid: example-timeline-primary
+    versionRange: ^1.2.0
 ```
 
 Required fields:
-- `id`: globally unique plugin identifier. Built-in HVY plugins use the `hvy.*`
-  namespace; third-party plugins SHOULD use a namespace they control.
-- `source`: plugin package location or a client-known plugin locator such as `builtin://...`
+
+- `id`: stable namespace-qualified identifier used by plugin blocks and scripting
+  APIs. Built-in HVY plugins use the `hvy.*` namespace; third-party plugins
+  SHOULD use a namespace they control.
+
+Optional fields:
+
+- `uuid`: optional collision guard. When present, it MUST be a non-empty opaque
+  string of at most 64 Unicode characters. Its format is author-defined; it
+  does not need to use the standard UUID textual format. Authors SHOULD choose
+  a globally unique value and keep it unchanged across versions and ID changes.
+  Hosts MUST compare UUID strings exactly without case folding or normalization.
+  Reserved `hvy.*` built-ins SHOULD omit `uuid`.
 
 Recommended fields:
-- `version`
-- `integrity`
+
+- `versionRange`: versions of the plugin that the document accepts. It MAY be
+  an exact semantic version or a semantic-version range such as `^1.2.0`,
+  `~1.2.0`, or `>=1.2.0 <2.0.0`. When omitted, the declaration accepts any
+  installed version with the matching `id`, optional `uuid`, and `hvyApiVersion`.
+  Built-in `hvy.*` plugin declarations SHOULD omit `versionRange` so documents
+  remain compatible with host-provided built-in versions.
 - `permissions` (declared capabilities)
+
+Plugin package locations, registries, archive digests, signatures, and other
+installation records are host concerns and MUST NOT be stored as plugin
+acquisition instructions in an HVY document. The readable `id` is the
+document-facing reference. An optional `uuid` helps verify that a package
+found under that ID is the intended plugin; a UUID match does not by itself
+authenticate the publisher.
+
+The `hvy.*` namespace is reserved for HVY-owned built-in plugins. Its ID is
+the complete document identity, so a built-in declaration needs neither
+`source` nor `uuid`:
+
+```yaml
+plugins:
+  - id: hvy.form
+```
+
+Readers MUST accept the legacy built-in declaration shape where the built-in
+name was stored in `id`, with or without a `builtin://` source:
+
+```yaml
+plugins:
+  - id: hvy.form
+```
+
+Readers ignore the legacy `source`, and writers SHOULD emit the current ID-only
+form.
 
 The standardized `scripting` permission allows sandboxed `hvy.scripting`
 blocks to call the installed plugin's scripting API. A plugin declaration does
@@ -1120,7 +1161,121 @@ not install code or grant access by itself: the host MUST also have installed
 that plugin implementation. Clients MUST deny sandboxed calls when either the
 installed scripting capability or this document permission is absent.
 
-### 7.2 Plugin metadata at section level
+### 7.2 Plugin package format
+
+A distributable HVY plugin SHOULD be stored as a single `.hvy.plugin` file.
+The file is a ZIP archive with media type `application/vnd.hvy.plugin+zip`.
+Changing the extension does not change the archive format.
+
+The archive root MUST contain `hvy-plugin.json` and the entry module named by
+that manifest. A conventional package is:
+
+```text
+timeline.hvy.plugin
+├── hvy-plugin.json
+├── plugin.mjs
+├── plugin.css
+├── documentation.txt
+└── assets/
+    └── timeline-marker.svg
+```
+
+`hvy-plugin.json` is UTF-8 JSON. Its standardized fields are:
+
+```json
+{
+  "formatVersion": "0.1",
+  "id": "com.example.timeline",
+  "uuid": "example-timeline-primary",
+  "version": "1.2.0",
+  "displayName": "Timeline",
+  "entry": "plugin.mjs",
+  "styles": ["plugin.css"],
+  "documentation": "documentation.txt",
+  "permissions": [],
+  "hvyApiVersion": "0.1"
+}
+```
+
+Required fields:
+
+- `formatVersion`: version of this package envelope.
+- `id`: stable namespace-qualified plugin identifier.
+- `version`: plugin package version.
+- `displayName`: human-readable name.
+- `entry`: archive-relative path to a JavaScript ESM entry module.
+- `hvyApiVersion`: HVY host plugin API version required by the package.
+
+Optional fields:
+
+- `uuid`: author-defined collision guard using the same non-empty,
+  64-character maximum string format as document declarations.
+- `styles`: array of archive-relative CSS file paths loaded in order.
+- `documentation`: archive-relative path to a UTF-8 documentation file.
+- `permissions`: array of capabilities requested by the installed package.
+
+All manifest paths MUST be relative, use `/` separators, remain inside the
+archive root after normalization, and identify regular files. Package readers
+MUST reject absolute paths, `..` traversal, duplicate normalized paths, links,
+and entries that exceed their configured compressed or expanded size limits.
+Readers SHOULD impose limits on the total file count, expanded byte count, and
+compression ratio.
+
+The entry module MUST be self-contained: it MUST NOT depend on an npm install,
+bare module specifiers, network-fetched modules, or modules outside the
+package. It MUST default-export either one plugin object conforming to the
+host's `HvyPlugin` contract or a factory that returns that object. A package
+factory receives the parsed manifest and a `resourceUrl(path)` function for
+archive-relative resources. Authors SHOULD bundle JavaScript dependencies into
+the entry module. Package CSS MAY use relative `url(...)` references; loaders
+MUST resolve them against the CSS file's archive path without granting
+filesystem access.
+
+The exported plugin object's `id`, optional `uuid`, `version`, `displayName`, and
+`hvyApiVersion` MUST exactly match the manifest. This check applies regardless
+of whether a host obtained the module from a ZIP package, built-in registry,
+database, network service, or another source. ZIP decoding is an optional
+source adapter and MUST NOT be required by the core plugin resolver.
+
+The manifest `id`, optional `uuid`, and `version` MUST match the corresponding installed
+plugin record. A host resolving a document declaration MUST first find
+installed packages by `id`, reject packages whose declared `uuid` differs, and select
+the highest installed version satisfying `versionRange`. If no compatible
+package is installed, the plugin is unavailable. If lookup by `id` fails but
+an installed package has the declared `uuid`, the host MAY report that the plugin
+was renamed and offer an explicit document migration; it MUST NOT silently
+rewrite the document.
+
+If multiple installed plugins claim the same `id` with different UUIDs, the
+declaration `uuid` disambiguates them. When a declaration omits `uuid`, a host
+MUST NOT choose between different UUIDs sharing an ID; it MUST treat that ID as
+ambiguous and unavailable until the document selects a UUID.
+
+Archive digests and publisher signatures belong to the host's installation
+record. A host MUST verify them when its installation policy requires it, but
+they are not part of the normal HVY plugin declaration.
+
+Opening a document MUST NOT automatically install or execute a referenced
+package. Installation is a separate, explicit host or user decision. Before
+installation, a host MUST display or otherwise make available the package
+ID, UUID when present, version, installation origin, requested permissions, and
+verification status. Package
+permissions describe what installed code may request; document permissions
+remain a separate per-document authorization and cannot expand the installed
+package's grants.
+
+Hosts MUST treat package modules, styles, and assets as untrusted. Loading CSS
+MUST NOT allow a plugin to escape the plugin/host styling boundary, and plugins
+MUST use the shared HVY theme roles rather than defining their own global color
+scheme. Publisher signatures MAY be added by a future package-format version;
+an archive digest provides byte identity but does not establish publisher
+identity or publisher authenticity.
+
+Built-in and directly supplied host plugin objects remain valid. A host MAY
+also export them as `.hvy.plugin` packages, but documents MUST NOT require
+built-in plugins to have an on-disk package.
+
+### 7.3 Plugin metadata at section level
 
 Sections can request plugin behavior with metadata:
 
@@ -1129,7 +1284,7 @@ Sections can request plugin behavior with metadata:
 #! Launch Timeline
 ```
 
-### 7.3 Plugin block component
+### 7.4 Plugin block component
 
 Use the `plugin` block when a document embeds a client-resolved plugin instance in normal content flow:
 
@@ -1138,7 +1293,7 @@ Use the `plugin` block when a document embeds a client-resolved plugin instance 
 ```
 
 Plugin block fields:
-- `plugin`: REQUIRED plugin identifier matching a declared plugin
+- `plugin`: REQUIRED plugin identifier matching a declaration's `id`
 - `pluginConfig`: optional object interpreted only by that plugin
 
 HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin-specific.
@@ -1152,15 +1307,18 @@ MAY use both `pluginConfig` and the text body together (for example,
 structured numeric configuration in `pluginConfig` plus a templated label
 string in the text body).
 
-### 7.4 Plugin installation and selection
+### 7.5 Plugin installation and selection
 
-A plugin is identified by a stable namespace-qualified id and is
+A plugin is referred to by its stable namespace-qualified ID and verified by
+its optional author-defined UUID. It is
 resolved by the host that embeds an HVY reader/editor, not by the document
 itself. Hosts install zero or more plugin implementations at startup; the
 reference reader/editor exposes this as a host-supplied list of plugin objects.
 Each plugin object is a host-installed capability bundle. It MAY provide:
 
 - the plugin `id` matching the value used in `block.plugin`;
+- the optional plugin `uuid` matching the front-matter declaration;
+- the exact plugin `version` and supported `hvyApiVersion`;
 - a human-readable display name (used by editors to populate the plugin
   selector for new `plugin` blocks);
 - one or more renderable component factories that produce plugin instances bound to specific blocks;
@@ -1170,7 +1328,7 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
 - a PDF/static render capability that resolves a plugin block to ordinary
   PDF-compatible HVY blocks for export.
 - a scripting API capability whose named methods can be called through
-  `doc.plugins.call(pluginId, method, args)`.
+  `doc.plugins.call(pluginName, method, args)`.
 
 Plugin scripting method arguments MUST be an object and results SHOULD be
 structured-clone-compatible values. Sandboxed `hvy.scripting` calls MUST be
@@ -1261,7 +1419,7 @@ plugin instance until the user picks one. When the document declares a
 preserve the block (including `pluginConfig` and text body) on save, and
 SHOULD render a placeholder indicating the plugin is unavailable.
 
-### 7.5 Tail payload envelope
+### 7.6 Tail payload envelope
 
 `.hvy` files MAY append one or more opaque binary attachments after the Markdown/HVY text body. Attachments are intended for plugin-owned payloads (such as an embedded database) and for component-owned binary assets (such as image files referenced by `image` components).
 
@@ -1311,7 +1469,7 @@ Deleting an embedding-index attachment MUST NOT change the document's authored
 content or meaning. Template files (`.thvy`) MUST NOT use tail attachments for
 embedding caches.
 
-### 7.6 DB table plugin contract
+### 7.7 DB table plugin contract
 
 The first standardized plugin contract is `hvy.db-table`.
 
@@ -1320,7 +1478,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.db-table
-    source: builtin://db-table
 ```
 
 Block example:
@@ -1353,7 +1510,7 @@ Recommended client behavior:
 - Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
 - If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
 
-### 7.7 Form plugin contract
+### 7.8 Form plugin contract
 
 The built-in form plugin is `hvy.form`. A form is a plugin component, not
 a native HVY container. HVY stores the plugin block and a plugin-owned YAML text
@@ -1364,7 +1521,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.form
-    source: builtin://form
 ```
 
 Block example:
@@ -1469,7 +1625,7 @@ Plugin-specific rules:
   `doc.form.set_options(...)` rather than by schema-level database source
   declarations.
 
-### 7.8 Graph plugin contract
+### 7.9 Graph plugin contract
 
 The built-in graph plugin is `hvy.graph`. Graph attributes live in
 `pluginConfig`; chart data lives in the plugin text body as CSV.
@@ -1479,7 +1635,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.graph
-    source: builtin://graph
 ```
 
 Block example:
@@ -1512,7 +1667,7 @@ Plugin-specific rules:
 - Invalid CSV or non-numeric chart values SHOULD render an inline plugin error
   while preserving the original plugin text body.
 
-### 7.9 Diagram plugin contract
+### 7.10 Diagram plugin contract
 
 The built-in diagram plugin is `hvy.diagram`. Diagram source lives in the
 plugin text body as Mermaid text. `pluginConfig.syntax` is optional and defaults
@@ -1523,7 +1678,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.diagram
-    source: builtin://diagram
 ```
 
 Block example:
@@ -1546,7 +1700,7 @@ Plugin-specific rules:
 - Renderers MUST sanitize the generated SVG/HTML before inserting it into the
   document.
 
-### 7.10 QR code plugin contract
+### 7.11 QR code plugin contract
 
 The built-in QR code plugin is `hvy.qr-code`. The encoded QR payload lives in
 the plugin text body. QR caption and visual style live in `pluginConfig`.
@@ -1558,7 +1712,6 @@ Declaration example:
 ```yaml
 plugins:
   - id: hvy.qr-code
-    source: builtin://qr-code
 ```
 
 Block example:
@@ -1589,7 +1742,7 @@ Plugin-specific rules:
   `image` blocks backed by SVG image attachments. The authored plugin block
   MUST remain unchanged.
 
-### 7.11 Video plugin contract
+### 7.12 Video plugin contract
 
 The built-in video plugin is `hvy.video`. It embeds a remote video by URL. Video
 bytes are not stored as HVY tail attachments.
@@ -1599,7 +1752,6 @@ bytes are not stored as HVY tail attachments.
 hvy_version: 1.0
 plugins:
   - id: hvy.video
-    source: builtin://video
 ---
 
 <!--hvy:plugin {"plugin":"hvy.video","pluginConfig":{"url":"https://www.youtube.com/watch?v=iuPWDMY0Li4","title":"Example video"}}-->
@@ -1623,7 +1775,7 @@ loading the iframe. Clients MAY also render an external-open placeholder when a
 provider is known not to support playback in the current embedded browser
 runtime, such as a desktop webview.
 
-### 7.12 Canvas plugin contract
+### 7.13 Canvas plugin contract
 
 The built-in canvas plugin is `hvy.canvas`. It renders a responsive drawing
 surface that can be pre-drawn in an editor and, when explicitly enabled, drawn
@@ -1634,7 +1786,6 @@ on in a viewer.
 hvy_version: 1.0
 plugins:
   - id: hvy.canvas
-    source: builtin://canvas
 ---
 
 <!--hvy:plugin {"id":"sketch","plugin":"hvy.canvas","pluginConfig":{"width":800,"height":450,"viewerDrawing":false,"strokeWidth":4}}-->
@@ -1668,7 +1819,7 @@ Normative configuration and data:
   scripts can discover the surface and draw non-persistent overlays. Document
   content itself MUST NOT be executed as script.
 
-### 7.13 Power scripting plugin contract
+### 7.14 Power scripting plugin contract
 
 The built-in power scripting plugin is `hvy.power-scripting`. It contains
 unrestricted JavaScript for interactive, performance-sensitive behavior that

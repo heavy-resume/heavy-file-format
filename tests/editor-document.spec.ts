@@ -1254,6 +1254,9 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       plugins: [{
         id: 'test.text-renderer',
+        uuid: 'test-plugin-text-renderer',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
         displayName: 'Text Renderer Test',
         create(context) {
           const element = document.createElement('div');
@@ -1320,6 +1323,9 @@ hvy_version: 0.1
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       plugins: [{
         id: 'test.async-text-renderer',
+        uuid: 'test-plugin-async-text-renderer',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
         displayName: 'Async Text Renderer Test',
         create(context) {
           const element = document.createElement('div');
@@ -2517,6 +2523,9 @@ hvy_version: 0.1
       storageKey: 'rich-hook-keystroke',
       plugins: [{
         id: 'test.hooks',
+        uuid: 'test-plugin-hooks',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
         displayName: 'Test Hooks',
         create() {
           return { element: document.createElement('div') };
@@ -2620,6 +2629,9 @@ hvy_version: 0.1
       storageKey: 'rich-hook-done',
       plugins: [{
         id: 'test.hooks',
+        uuid: 'test-plugin-hooks',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
         displayName: 'Test Hooks',
         create() {
           return { element: document.createElement('div') };
@@ -3279,6 +3291,9 @@ hvy_version: 0.1
       mode: 'editor',
       plugins: [{
         id: 'test.import-hook',
+        uuid: 'test-plugin-import-hook',
+        version: '1.0.0',
+        hvyApiVersion: '0.1',
         displayName: 'Import Hook',
         create() {
           return { element: document.createElement('div') };
@@ -4836,6 +4851,9 @@ test('custom component template output generator fills a field from provided var
     const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
     setHostPlugins([{
       id: 'hvy.resume',
+      uuid: 'hvy-plugin-resume-test',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Resume',
       outputGenerators: [{
         key: 'hvy.resume.skill-description',
@@ -4925,6 +4943,9 @@ test('custom component template output generator locks field while pending and h
     const { setHostPlugins } = await import(/* @vite-ignore */ registryPath);
     setHostPlugins([{
       id: 'hvy.resume',
+      uuid: 'hvy-plugin-resume-test',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Resume',
       outputGenerators: [{
         key: 'hvy.resume.skill-description',

@@ -91,6 +91,9 @@ hvy_version: 0.1
   );
   registerHostPlugin({
     id: 'example.status-chart',
+    uuid: 'example-plugin-status-chart',
+    version: '1.0.0',
+    hvyApiVersion: '0.1',
     displayName: 'Status Chart',
     visualDescription: { describe },
   });

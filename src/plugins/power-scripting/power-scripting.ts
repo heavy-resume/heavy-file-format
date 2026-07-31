@@ -4,7 +4,7 @@ import { normalizeFilename } from '../../utils';
 import { refreshMountedPlugins } from '../mount';
 import type { HvyCanvasApi } from '../canvas/canvas';
 import { createScriptingDbRuntime, resetDbTableRuntimeForDocument } from '../db-table';
-import { DB_TABLE_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
 import { createScriptingRuntime, type ScriptingDocApi, type ScriptingRuntime } from '../scripting/runtime';
 import { createScriptingPluginsApi } from '../scripting/plugin-apis';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
@@ -423,7 +423,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 export const powerScriptingPluginFactory: HvyPluginFactory = build;
 
 export const powerScriptingPlugin: HvyPlugin = {
-  id: POWER_SCRIPTING_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(POWER_SCRIPTING_PLUGIN_ID),
   displayName: 'Power Scripting',
   documentation: { filename: 'about-power-scripting.txt', text: powerScriptingDocumentation },
   aiHint: 'Viewer-only unrestricted JavaScript. Source code lives in plugin.txt and requires explicit trust.',

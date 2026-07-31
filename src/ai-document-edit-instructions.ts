@@ -4,7 +4,7 @@ import type { DocumentEditPhase, DocumentEditToolName } from './ai-document-edit
 export const DOCUMENT_EDIT_MAX_TOOL_STEPS = 50;
 
 export interface DocumentEditPluginHint {
-  id: string;
+  name: string;
   displayName: string;
   hint?: string;
 }
@@ -23,7 +23,7 @@ export function buildDocumentEditFormatInstructions(options?: {
   const dbRelevant = isDatabaseRelevantRequest(request);
   const phase = options?.phase ?? (dbRelevant ? 'database' : 'planning');
   const canQueryDbTable = dbRelevant && dbTableNames.length > 0;
-  const canExecuteSql = dbRelevant && pluginHints.some((plugin) => plugin.id === 'hvy.db-table');
+  const canExecuteSql = dbRelevant && pluginHints.some((plugin) => plugin.name === 'hvy.db-table');
   const optionalTools = getAvailableOptionalDocumentTools({ canQueryDbTable, canExecuteSql });
   return [
     'Reply with exactly one JSON object and nothing else.',
@@ -37,7 +37,7 @@ export function buildDocumentEditFormatInstructions(options?: {
     'Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.',
     'Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help. Its topic may name one tool or several, such as `patch_component, edit_component, batch`.',
     'Do not put `answer`, `done`, `plan`, `mark_step_done`, or another `batch` inside a batch.',
-    ...(pluginHints.length > 0 ? [`Registered plugin ids: ${pluginHints.map((plugin) => plugin.id).join(', ')}.`] : []),
+    ...(pluginHints.length > 0 ? [`Registered plugin names: ${pluginHints.map((plugin) => plugin.name).join(', ')}.`] : []),
     planActive
       ? 'A plan already exists; continue from the next unfinished step.'
       : 'For larger work, create one plan after reviewing the notes. Plan steps must be document changes or final verification, not discovery.',

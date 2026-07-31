@@ -100,6 +100,9 @@ export const skillRatingExamplePluginFactory: HvyPluginFactory = build;
 
 export const skillRatingExamplePlugin: HvyPlugin = {
   id: EXAMPLE_SKILL_RATING_PLUGIN_ID,
+  uuid: 'example-plugin-skill-rating',
+  version: '0.1.0',
+  hvyApiVersion: '0.1',
   displayName: 'Skill Rating Example',
   documentation: {
     filename: 'about-example-skill-rating.txt',

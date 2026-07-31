@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import './diagram.css';
 
 import { DEFAULT_DIAGRAM_SYNTAX } from './diagram-defaults';
-import { DIAGRAM_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, DIAGRAM_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import diagramDocumentation from './diagram.about.txt?raw';
 
@@ -185,7 +185,7 @@ function escapeHtml(value: string): string {
 export const diagramPluginFactory: HvyPluginFactory = build;
 
 export const diagramPlugin: HvyPlugin = {
-  id: DIAGRAM_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(DIAGRAM_PLUGIN_ID),
   displayName: 'Diagram',
   documentation: {
     filename: 'about-diagram.txt',

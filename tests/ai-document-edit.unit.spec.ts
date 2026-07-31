@@ -223,7 +223,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   const instructions = buildDocumentEditFormatInstructions({
     pluginHints: [
       {
-        id: 'dev.test.widget',
+        name: 'dev.test.widget',
         displayName: 'Widget',
         hint: 'Use widget YAML in the component body.',
       },
@@ -237,7 +237,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(instructions).toContain('Use `batch` only when it is listed for the current phase and the calls are a known ordered sequence of concrete tool calls.');
   expect(instructions).toContain('Plan at tool-action granularity: one plan step should be completable by one normal tool call or one batch.');
   expect(instructions).toContain('If several edits will be executed together in one batch, describe that whole batch outcome as one plan step');
-  expect(instructions).toContain('Registered plugin ids: dev.test.widget.');
+  expect(instructions).toContain('Registered plugin names: dev.test.widget.');
   expect(instructions).toContain('Plan shape: `{"tool":"plan","steps":["Modify component X to remove Y","Verify no Y remains"]}`.');
   expect(instructions).toContain('Batch shape: `{"tool":"batch","calls":[{"tool":"remove_component","component_ref":"id"}]}`.');
   expect(instructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
@@ -271,7 +271,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const dbPluginInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
   });
   expect(dbPluginInstructions).toContain('Current edit phase: database.');
@@ -283,7 +283,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
 
   const explicitDbPhaseInstructions = buildDocumentEditFormatInstructions({
     dbTableNames: ['work_items'],
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
     request: 'Create a db table viewer.',
     phase: 'database',
   });
@@ -291,7 +291,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   expect(explicitDbPhaseInstructions).toContain('Valid tools for this phase are: `answer`, `plan`, `query_db_table`, `execute_sql`, `view_component`, `done`.');
 
   const dbPluginOnlyInstructions = buildDocumentEditFormatInstructions({
-    pluginHints: [{ id: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table', hint: 'Renders SQLite rows.' }],
   });
   expect(dbPluginOnlyInstructions).not.toContain('`execute_sql`');
   expect(dbPluginOnlyInstructions).toContain(
@@ -299,7 +299,7 @@ test('buildDocumentEditFormatInstructions documents the tool protocol', () => {
   );
 
   const noPluginInstructions = buildDocumentEditFormatInstructions();
-  expect(noPluginInstructions).not.toContain('Registered plugin ids:');
+  expect(noPluginInstructions).not.toContain('Registered plugin names:');
 
   const activePlanInstructions = buildDocumentEditFormatInstructions({ planActive: true, phase: 'mutation' });
   expect(activePlanInstructions).toContain('Current edit phase: mutation.');
@@ -5867,7 +5867,7 @@ hvy_version: 0.1
 
   expect(result.error).toBeNull();
   const firstToolInstructions = requestProxyCompletionMock.mock.calls[1]?.[0]?.responseInstructions ?? '';
-  expect(firstToolInstructions).toContain('Registered plugin ids: hvy.form.');
+  expect(firstToolInstructions).toContain('Registered plugin names: hvy.form.');
   expect(firstToolInstructions).toContain('Use `get_help` only when it is listed for the current phase and exact syntax is missing from the notes or recent tool help.');
   expect(firstToolInstructions).not.toContain('Form UI. Fields and script hooks live in the YAML body.');
   const retryMessages = requestProxyCompletionMock.mock.calls[2]?.[0]?.messages.map((message: ChatMessage) => message.content).join('\n') ?? '';

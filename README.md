@@ -615,11 +615,53 @@ HVY.mountHvy({
 });
 ```
 
+Shareable plugins use the `.hvy.plugin` package format defined by
+[`HVY-SPEC.md`](HVY-SPEC.md#72-plugin-package-format). Each package is a ZIP
+archive containing a manifest, a bundled ESM plugin entry, and optional styles,
+documentation, and assets. Opening an HVY document does not install a referenced
+package; plugin installation and permission grants remain explicit host or user
+decisions.
+
+Package/module validation is source-independent:
+
+```js
+import { loadHvyPluginModule } from 'heavy-file-format-ref-impl/plugin-package';
+
+const plugin = await loadHvyPluginModule({
+  manifest,
+  importEntry: () => import(moduleUrl),
+  resourceUrl: (path) => hostPluginStore.getResourceUrl(manifest.id, manifest.version, path),
+});
+```
+
+Hosts that receive an actual `.hvy.plugin` archive can opt into the separate ZIP
+adapter. Hosts supplying built-in objects, database modules, or already-loaded
+modules do not import the ZIP dependency:
+
+```js
+import { loadHvyPluginZip } from 'heavy-file-format-ref-impl/plugin-package-zip';
+
+const loadedPackage = await loadHvyPluginZip(packageBytes);
+const mount = HVY.mountHvy({
+  root,
+  document,
+  plugins: [loadedPackage.plugin, ...otherPlugins],
+});
+
+// `loadedPackage.styles` contains package CSS for the host's scoped style
+// boundary. Later, when the mount/package is no longer used:
+mount.destroy();
+loadedPackage.dispose();
+```
+
 Plugins can also publish named methods to the document scripting layer:
 
 ```js
 const lookupPlugin = {
   id: 'com.example.lookup',
+  uuid: 'example-plugin-lookup',
+  version: '1.0.0',
+  hvyApiVersion: '0.1',
   displayName: 'Lookup',
   scripting: {
     methods: {

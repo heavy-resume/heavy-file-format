@@ -149,6 +149,7 @@
       const viewerNoteWithInputPlugin = {
         ...viewerNotePlugin,
         id: 'example.viewer-note-input',
+        uuid: 'example-plugin-viewer-note-input',
         displayName: 'Viewer Note With Input',
         create(ctx) {
           const instance = viewerNotePluginFactory(ctx);
@@ -184,6 +185,8 @@ title: Lightweight Viewer Text Editor
 plugins:
   - id: hvy.viewer-note
   - id: example.viewer-note-input
+    uuid: example-plugin-viewer-note-input
+    versionRange: ^0.1.0
 ---
 
 <!--hvy: {"id":"main"}-->

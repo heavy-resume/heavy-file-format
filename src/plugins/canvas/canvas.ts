@@ -1,5 +1,5 @@
 import { closeIcon } from '../../icons';
-import { CANVAS_PLUGIN_ID } from '../registry';
+import { CANVAS_PLUGIN_ID, createBuiltInPluginMetadata } from '../registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
 import canvasDocumentation from './about-canvas.txt?raw';
 import './canvas.css';
@@ -528,7 +528,7 @@ function fillIcon(): string {
 export const canvasPluginFactory: HvyPluginFactory = build;
 
 export const canvasPlugin: HvyPlugin = {
-  id: CANVAS_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(CANVAS_PLUGIN_ID),
   displayName: 'Canvas',
   documentation: { filename: 'about-canvas.txt', text: canvasDocumentation },
   aiHint: 'Drawable canvas. Dimensions and viewerDrawing live in pluginConfig; vector drawing data lives in a tail attachment.',

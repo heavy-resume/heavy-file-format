@@ -10,6 +10,8 @@ import type { AppState } from '../src/types';
 function createHookPlugin(id: string, hooks: NonNullable<HvyPlugin['hooks']>): HvyPlugin {
   return {
     id,
+    version: '1.0.0',
+    hvyApiVersion: '0.1',
     displayName: id,
     create: () => ({ element: document.createElement('div') }),
     hooks,

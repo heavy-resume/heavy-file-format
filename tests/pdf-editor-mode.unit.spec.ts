@@ -86,6 +86,9 @@ test('PHVY component picker enables plugins with PDF static render capability', 
   const document = createPdfDocument();
   setHostPlugins([{
     id: 'fake.qr',
+    uuid: 'fake-plugin-qr',
+    version: '1.0.0',
+    hvyApiVersion: '0.1',
     displayName: 'QR',
     create: () => ({ element: globalThis.document.createElement('div') }),
     pdf: {
@@ -119,11 +122,17 @@ test('PHVY component picker lists PDF-supported plugins before unsupported plugi
   setHostPlugins([
     {
       id: 'fake.unsupported',
+      uuid: 'fake-plugin-unsupported',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Unsupported Plugin',
       create: () => ({ element: globalThis.document.createElement('div') }),
     },
     {
       id: 'fake.supported',
+      uuid: 'fake-plugin-supported',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Supported Plugin',
       create: () => ({ element: globalThis.document.createElement('div') }),
       pdf: {

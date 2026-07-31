@@ -4,7 +4,7 @@ title: Plugin Sort Values
 reader_max_width: 56rem
 plugins:
   - id: example.skill-rating
-    source: example://skill-rating
+    uuid: example-plugin-skill-rating
 component_defs:
   - name: skill-record
     baseType: container

@@ -480,6 +480,9 @@ hvy_version: 0.1
     document.sections = [createSection('summary', [plugin])];
     setHostPlugins([{
       id: 'fake.qr',
+      uuid: 'fake-plugin-qr',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'QR',
       pdf: {
         renderStatic: async (ctx) => {

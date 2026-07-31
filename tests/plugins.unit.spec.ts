@@ -3,12 +3,13 @@ import { describe, expect, test, beforeEach, vi } from 'vitest';
 import { deserializeDocument } from '../src/serialization';
 import { serializeDocument } from '../src/serialization';
 import {
-  registerHostPlugin,
+  registerHostPlugin as registerRuntimePlugin,
   setHostPlugins,
   getAvailableDocumentPlugins,
   getAvailableOutputGenerators,
   getHostPlugins,
   getOutputGenerator,
+  getHostPlugin,
   getPluginDisplayName,
   DB_TABLE_PLUGIN_ID,
   FORM_PLUGIN_ID,
@@ -16,6 +17,7 @@ import {
   SCRIPTING_PLUGIN_ID,
   VIDEO_PLUGIN_ID,
 } from '../src/plugins/registry';
+import type { HvyPlugin } from '../src/plugins/types';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { initCallbacks, initState, state } from '../src/state';
 import type { AppState } from '../src/types';
@@ -29,12 +31,22 @@ function bootstrapState(hvy: string): void {
   initState({ document } as unknown as AppState);
 }
 
+function registerHostPlugin(
+  plugin: Omit<HvyPlugin, 'version' | 'hvyApiVersion'> & Partial<Pick<HvyPlugin, 'version' | 'hvyApiVersion'>>
+): void {
+  registerRuntimePlugin({
+    ...plugin,
+    version: plugin.version ?? '1.0.0',
+    hvyApiVersion: plugin.hvyApiVersion ?? '0.1',
+  });
+}
+
 beforeEach(() => {
   setHostPlugins([]);
 });
 
 describe('plugin host registry', () => {
-  test('registerHostPlugin appends and dedupes by id', () => {
+  test('registerHostPlugin appends and dedupes the same name and version', () => {
     registerHostPlugin({ id: 'a.test', displayName: 'A', create: () => ({ element: document.createElement('div') }) });
     registerHostPlugin({ id: 'b.test', displayName: 'B', create: () => ({ element: document.createElement('div') }) });
     registerHostPlugin({ id: 'a.test', displayName: 'A v2', create: () => ({ element: document.createElement('div') }) });
@@ -52,15 +64,89 @@ describe('plugin host registry', () => {
 
     const ids = getAvailableDocumentPlugins().map((entry) => entry.id);
     expect(ids).toEqual([DB_TABLE_PLUGIN_ID, PROGRESS_BAR_PLUGIN_ID]);
+    expect(getAvailableDocumentPlugins().every((entry) => entry.versionRange === undefined)).toBe(true);
+    expect(getAvailableDocumentPlugins().every((entry) => entry.uuid === undefined)).toBe(true);
+  });
+
+  test('resolves reserved hvy plugins from the current id-only declaration', () => {
+    registerHostPlugin({
+      id: FORM_PLUGIN_ID,
+      version: '4.0.0',
+      displayName: 'Form',
+    });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: hvy.form\n---\n`);
+
+    expect(getHostPlugin(FORM_PLUGIN_ID)?.version).toBe('4.0.0');
+    expect(getAvailableDocumentPlugins()).toEqual([{
+      id: FORM_PLUGIN_ID,
+      permissions: [],
+    }]);
+    const serialized = serializeDocument(state.document);
+    expect(serialized).toContain('id: hvy.form');
+    expect(serialized).not.toContain('source: builtin://form');
+    expect(serialized).not.toContain('name: hvy.form');
+  });
+
+  test('normalizes legacy built-in id and source declarations to the reserved plugin name', () => {
+    registerHostPlugin({
+      id: FORM_PLUGIN_ID,
+      version: '4.0.0',
+      displayName: 'Form',
+    });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: hvy.form\n    source: builtin://form\n---\n`);
+
+    expect(getHostPlugin(FORM_PLUGIN_ID)?.displayName).toBe('Form');
+    expect(getAvailableDocumentPlugins()).toEqual([{
+      id: FORM_PLUGIN_ID,
+      permissions: [],
+    }]);
+    const serialized = serializeDocument(state.document);
+    expect(serialized).toContain('id: hvy.form');
+    expect(serialized).not.toContain('source: builtin://form');
+    expect(serialized).not.toContain('name: hvy.form');
   });
 
   test('getAvailableDocumentPlugins prefers document-declared plugins when present', () => {
     registerHostPlugin({ id: DB_TABLE_PLUGIN_ID, displayName: 'DB Table', create: () => ({ element: document.createElement('div') }) });
 
-    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: com.example.custom\n    source: builtin://custom\n---\n`);
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: com.example.custom\n    uuid: example-plugin-custom\n    versionRange: ^1.0.0\n---\n`);
 
     const ids = getAvailableDocumentPlugins().map((entry) => entry.id);
     expect(ids).toEqual(['com.example.custom']);
+  });
+
+  test('resolves the highest installed version matching the declared id, uuid, and range', () => {
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'timeline-primary', version: '1.2.0', displayName: 'Timeline 1.2' });
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'timeline-primary', version: '1.8.0', displayName: 'Timeline 1.8' });
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'timeline-primary', version: '2.0.0', displayName: 'Timeline 2' });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: com.example.timeline\n    uuid: timeline-primary\n    versionRange: ^1.2.0\n---\n`);
+
+    expect(getHostPlugin('com.example.timeline')?.version).toBe('1.8.0');
+  });
+
+  test('treats an omitted version range as unrestricted and selects the highest matching uuid', () => {
+    registerHostPlugin({ id: 'hvy.timeline', version: '1.0.0', displayName: 'Timeline 1' });
+    registerHostPlugin({ id: 'hvy.timeline', version: '7.3.0', displayName: 'Timeline 7' });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: hvy.timeline\n---\n`);
+
+    expect(getHostPlugin('hvy.timeline')?.version).toBe('7.3.0');
+  });
+
+  test('rejects an installed package whose uuid does not match the declaration', () => {
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'different-plugin', version: '1.8.0', displayName: 'Wrong Timeline' });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: com.example.timeline\n    uuid: timeline-primary\n    versionRange: ^1.2.0\n---\n`);
+
+    expect(getHostPlugin('com.example.timeline')).toBeNull();
+  });
+
+  test('uses uuid to disambiguate packages sharing an id and never guesses without a declaration', () => {
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'timeline-primary', version: '1.0.0', displayName: 'Expected Timeline' });
+    registerHostPlugin({ id: 'com.example.timeline', uuid: 'unrelated-timeline', version: '9.0.0', displayName: 'Unrelated Timeline' });
+    bootstrapState(`---\nhvy_version: 1.0\n---\n`);
+    expect(getHostPlugin('com.example.timeline')).toBeNull();
+
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: com.example.timeline\n    uuid: timeline-primary\n    versionRange: ^1.0.0\n---\n`);
+    expect(getHostPlugin('com.example.timeline')?.displayName).toBe('Expected Timeline');
   });
 
   test('output generators are registered by plugin-qualified key and reject duplicates', () => {
@@ -113,7 +199,7 @@ describe('plugin scripting APIs', () => {
 hvy_version: 1.0
 plugins:
   - id: com.example.lookup
-    source: builtin://lookup
+    versionRange: ^1.0.0
     permissions:
       - scripting
 ---
@@ -152,7 +238,7 @@ plugins:
 hvy_version: 1.0
 plugins:
   - id: com.example.lookup
-    source: builtin://lookup
+    versionRange: ^1.0.0
 ---
 `, '.hvy');
     registerHostPlugin({
@@ -176,7 +262,7 @@ plugins:
 hvy_version: 1.0
 plugins:
   - id: com.example.network
-    source: builtin://network
+    versionRange: ^1.0.0
     permissions:
       - scripting
 ---
@@ -216,7 +302,7 @@ plugins:
 
 describe('progress-bar plugin block round-trip', () => {
   test('preserves unavailable plugin block across save-style round-trip', () => {
-    const before = `---\nhvy_version: 1.0\nplugins:\n  - id: com.example.unavailable\n    source: https://plugins.example.invalid/unavailable.hvyplugin\n---\n\n#! External Widget\n\n<!--hvy:plugin {"plugin":"com.example.unavailable","pluginConfig":{"answer":42,"mode":"compact"}}-->\n plugin-owned body\n`;
+    const before = `---\nhvy_version: 1.0\nplugins:\n  - id: com.example.unavailable\n    uuid: example-unavailable-primary\n    versionRange: ^1.0.0\n---\n\n#! External Widget\n\n<!--hvy:plugin {"plugin":"com.example.unavailable","pluginConfig":{"answer":42,"mode":"compact"}}-->\n plugin-owned body\n`;
 
     const documentBeforeSave = deserializeDocument(before, '.hvy');
     const serializedAfterSave = serializeDocument(documentBeforeSave);
@@ -229,6 +315,7 @@ describe('progress-bar plugin block round-trip', () => {
     expect(expectedResult?.schema.pluginConfig).toEqual({ answer: 42, mode: 'compact' });
     expect(expectedResult?.text.trim()).toBe('plugin-owned body');
     expect(serializedAfterSave).toContain('id: com.example.unavailable');
+    expect(serializedAfterSave).toContain('uuid: example-unavailable-primary');
     expect(serializedAfterSave).toContain('"plugin":"com.example.unavailable"');
   });
 

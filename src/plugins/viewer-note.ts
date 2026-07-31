@@ -1,6 +1,6 @@
 import './viewer-note.css';
 
-import { VIEWER_NOTE_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, VIEWER_NOTE_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import viewerNoteDocumentation from './viewer-note.about.txt?raw';
 
@@ -57,7 +57,7 @@ function isViewerNoteEditable(root: HTMLElement, ctx: HvyPluginContext): boolean
 export const viewerNotePluginFactory: HvyPluginFactory = build;
 
 export const viewerNotePlugin: HvyPlugin = {
-  id: VIEWER_NOTE_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(VIEWER_NOTE_PLUGIN_ID),
   displayName: 'Viewer Note',
   documentation: {
     filename: 'about-viewer-note.txt',

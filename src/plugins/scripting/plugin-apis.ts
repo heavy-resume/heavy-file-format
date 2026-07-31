@@ -13,12 +13,12 @@ interface CreateScriptingPluginsApiOptions {
   onMutation?: () => void;
 }
 
-function hasDocumentScriptingPermission(document: VisualDocument, pluginId: string): boolean {
+function hasDocumentScriptingPermission(document: VisualDocument, pluginName: string): boolean {
   if (!Array.isArray(document.meta.plugins)) return false;
   return document.meta.plugins.some((candidate) => {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
     const declaration = candidate as Record<string, unknown>;
-    return declaration.id === pluginId
+    return declaration.id === pluginName
       && Array.isArray(declaration.permissions)
       && declaration.permissions.includes('scripting');
   });
@@ -37,23 +37,23 @@ export function createScriptingPluginsApi(
   options: CreateScriptingPluginsApiOptions
 ): ScriptingPluginsApi {
   const call = (pluginIdValue: string, methodValue: string, args?: JsonObject): unknown | Promise<unknown> => {
-    const pluginId = String(pluginIdValue ?? '').trim();
+    const pluginName = String(pluginIdValue ?? '').trim();
     const method = String(methodValue ?? '').trim();
-    const plugin = getHostPlugin(pluginId);
+    const plugin = getHostPlugin(pluginName, document);
     if (!plugin?.scripting) {
-      throw new Error(`Plugin "${pluginId}" does not provide a scripting API.`);
+      throw new Error(`Plugin "${pluginName}" does not provide a scripting API.`);
     }
-    if (options.requireDocumentPermission && !hasDocumentScriptingPermission(document, pluginId)) {
-      throw new Error(`Plugin "${pluginId}" requires the "scripting" document permission.`);
+    if (options.requireDocumentPermission && !hasDocumentScriptingPermission(document, pluginName)) {
+      throw new Error(`Plugin "${pluginName}" requires the "scripting" document permission.`);
     }
     const callable = Object.prototype.hasOwnProperty.call(plugin.scripting.methods, method)
       ? plugin.scripting.methods[method]
       : undefined;
     if (typeof callable !== 'function') {
-      throw new Error(`Plugin "${pluginId}" does not provide scripting method "${method}".`);
+      throw new Error(`Plugin "${pluginName}" does not provide scripting method "${method}".`);
     }
     const result = callable(normalizeArgs(args), {
-      pluginId,
+      pluginId: pluginName,
       rawDocument: document,
       markMutated: () => options.onMutation?.(),
     });
@@ -67,7 +67,7 @@ export function createScriptingPluginsApi(
       // invoked from the synchronous sandbox.
       void Promise.resolve(result).catch(() => undefined);
       throw new Error(
-        `Plugin scripting method "${pluginId}.${method}" is asynchronous; call it from an authorized power script.`
+        `Plugin scripting method "${pluginName}.${method}" is asynchronous; call it from an authorized power script.`
       );
     }
     return result;

@@ -632,8 +632,7 @@ test('serializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -803,8 +802,7 @@ test('serializes db-table query text in the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -827,8 +825,7 @@ test('serializes db-table query window settings in plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->

@@ -56,7 +56,7 @@ export function buildAiEditFormatInstructions(): string {
           'Available plugins for replacement components:',
           ...pluginHints.map((plugin) => {
             const hint = plugin.hint.trim();
-            return `- ${plugin.displayName} (${plugin.id})${hint ? `: ${hint}` : ''}`;
+            return `- ${plugin.displayName} (${plugin.name})${hint ? `: ${hint}` : ''}`;
           }),
           'Only use registered plugin ids from this list. Do not invent plugin component directives.',
         ].join('\n')

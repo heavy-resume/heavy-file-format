@@ -2,7 +2,7 @@ import '../editor/components/table/table.css';
 import './graph.css';
 
 import { plusIcon, closeIcon } from '../icons';
-import { GRAPH_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, GRAPH_PLUGIN_ID } from './registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from './types';
 import graphDocumentation from './graph.about.txt?raw';
 
@@ -943,7 +943,7 @@ function escapeAttr(value: string): string {
 export const graphPluginFactory: HvyPluginFactory = build;
 
 export const graphPlugin: HvyPlugin = {
-  id: GRAPH_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(GRAPH_PLUGIN_ID),
   displayName: 'Graph',
   documentation: {
     filename: 'about-graph.txt',

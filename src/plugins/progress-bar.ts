@@ -4,7 +4,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from './types';
-import { PROGRESS_BAR_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, PROGRESS_BAR_PLUGIN_ID } from './registry';
 import { colorValueToPickerHex, getResolvedThemeColor } from '../theme';
 import progressBarDocumentation from './progress-bar.about.txt?raw';
 
@@ -281,7 +281,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 export const progressBarPluginFactory: HvyPluginFactory = build;
 
 export const progressBarPlugin: HvyPlugin = {
-  id: PROGRESS_BAR_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(PROGRESS_BAR_PLUGIN_ID),
   displayName: 'Progress Bar',
   documentation: {
     filename: 'about-progress-bar.txt',

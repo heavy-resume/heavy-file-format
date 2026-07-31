@@ -346,6 +346,9 @@ test('plugins can mount the shared text editor helper', async ({ page }) => {
     const { setHostPlugins } = await import('/src/plugins/registry.ts');
     setHostPlugins([{
       id: 'example.text-editor',
+      uuid: 'example-plugin-text-editor',
+      version: '1.0.0',
+      hvyApiVersion: '0.1',
       displayName: 'Text Editor Plugin',
       create: (ctx) => {
         const root = document.createElement('div');

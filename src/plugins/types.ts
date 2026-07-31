@@ -229,9 +229,15 @@ export interface HvyPluginHooks {
 }
 
 export interface HvyPlugin {
-  // Stable identifier serialized into the document as block.schema.plugin.
-  // Convention: namespace-qualified, e.g. 'hvy.db-table'.
+  // Stable namespace-qualified identifier serialized as block.schema.plugin.
   id: string;
+  // Optional author-defined collision guard. It is an opaque string of at most
+  // 64 characters and remains stable if the plugin id changes.
+  uuid?: string;
+  // Exact semantic version of this implementation.
+  version: string;
+  // HVY host plugin API version required by this implementation.
+  hvyApiVersion: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
   // Optional capability list for renderable plugin components.

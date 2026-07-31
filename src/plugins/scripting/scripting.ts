@@ -5,7 +5,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from '../types';
-import { SCRIPTING_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, SCRIPTING_PLUGIN_ID } from '../registry';
 import { visitBlocksInList } from '../../section-ops';
 import type { JsonObject } from '../../hvy/types';
 import { deserializeDocument, serializeDocument } from '../../serialization';
@@ -454,7 +454,7 @@ const scriptingDocumentHook = {
 };
 
 export const scriptingPlugin: HvyPlugin = {
-  id: SCRIPTING_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(SCRIPTING_PLUGIN_ID),
   displayName: 'Scripting',
   documentation: {
     filename: 'about-scripting.txt',

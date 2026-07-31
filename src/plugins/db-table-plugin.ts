@@ -8,7 +8,7 @@ import { getDbTableRenderedVisualDescription, resetDbTableViewState } from './db
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { getCachedComponentRenderHelpers } from '../state';
-import { DB_TABLE_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID } from './registry';
 import dbTableDocumentation from './db-table.about.txt?raw';
 
 // Captured focus state inside a db-table editor before its inner HTML is
@@ -180,7 +180,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 export const dbTablePluginFactory: HvyPluginFactory = build;
 
 export const dbTablePlugin: HvyPlugin = {
-  id: DB_TABLE_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(DB_TABLE_PLUGIN_ID),
   displayName: 'DB Table',
   documentation: {
     filename: 'about-db-table.txt',

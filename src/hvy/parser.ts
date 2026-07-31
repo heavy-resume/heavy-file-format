@@ -1,5 +1,6 @@
 import { parse as parseYaml } from 'yaml';
 import type { HvyCssBlock, HvyDocument, HvySection, JsonObject } from './types';
+import { normalizeHvyPluginDeclarations } from '../plugins/declarations';
 
 interface ParseState {
   root: HvySection;
@@ -145,7 +146,10 @@ export function parseHvy(sourceText: string, extension: HvyDocument['extension']
   assignGeneratedIds(state.root.children);
 
   const meta = mergeObjects(frontMatter ?? {}, ...state.docMetaDirectives);
-  const plugins = Array.isArray(meta.plugins) ? (meta.plugins as JsonObject[]) : [];
+  const plugins = normalizeHvyPluginDeclarations(meta.plugins);
+  if (Array.isArray(meta.plugins)) {
+    meta.plugins = plugins;
+  }
 
   return {
     extension,

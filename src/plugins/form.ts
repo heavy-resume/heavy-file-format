@@ -6,7 +6,7 @@ import type {
   HvyPluginFactory,
   HvyPluginInstance,
 } from './types';
-import { FORM_PLUGIN_ID } from './registry';
+import { createBuiltInPluginMetadata, FORM_PLUGIN_ID } from './registry';
 import { SCRIPTING_LIBRARY_OPTIONS, type ScriptingRunResult, type ScriptingLibraryName } from './scripting/wrapper';
 import type { ScriptingFormApi, ScriptingFormOption } from './scripting/runtime';
 import { requestProxyCompletion } from '../chat/chat';
@@ -1240,7 +1240,7 @@ function escapeAttr(value: string): string {
 export const formPluginFactory: HvyPluginFactory = build;
 
 export const formPlugin: HvyPlugin = {
-  id: FORM_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(FORM_PLUGIN_ID),
   displayName: 'Form',
   documentation: {
     filename: 'about-form.txt',

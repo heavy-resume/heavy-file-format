@@ -36,8 +36,7 @@ test('AI form submit applies generated card data through a component template', 
   await page.locator('#rawEditor').fill(String.raw`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.form
-    source: builtin://form
+  - name: hvy.form
 component_defs:
   - name: flashcard-card
     baseType: expandable

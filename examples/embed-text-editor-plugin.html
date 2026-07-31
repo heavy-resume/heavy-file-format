@@ -307,8 +307,12 @@ hvy_version: 0.1
 title: Embedded Plugin Text Editor
 plugins:
   - id: example.rich-note
+    uuid: example-plugin-rich-note
+    versionRange: ^0.1.0
   - id: hvy.viewer-note
   - id: example.disabled-text-placeholder
+    uuid: example-plugin-disabled-text-placeholder
+    versionRange: ^0.1.0
 ---
 
 <!--hvy: {"id":"main"}-->
@@ -352,6 +356,9 @@ This lightweight viewer note should show the text editor toolbar.
 
       const richNotePlugin = {
         id: 'example.rich-note',
+        uuid: 'example-plugin-rich-note',
+        version: '0.1.0',
+        hvyApiVersion: '0.1',
         displayName: 'Plugin Rich Note',
         create(ctx) {
           const element = document.createElement('div');
@@ -432,6 +439,9 @@ This lightweight viewer note should show the text editor toolbar.
 
       const disabledTextPlaceholderPlugin = {
         id: 'example.disabled-text-placeholder',
+        uuid: 'example-plugin-disabled-text-placeholder',
+        version: '0.1.0',
+        hvyApiVersion: '0.1',
         displayName: 'Disabled Text Placeholder',
         create(ctx) {
           const element = document.createElement('div');

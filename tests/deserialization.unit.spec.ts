@@ -377,8 +377,7 @@ test('deserializes plugin blocks with plugin identity and config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -401,8 +400,7 @@ test('deserializes a binary SQLite attachment tail from HVY bytes', () => {
   const prefix = `---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -736,8 +734,7 @@ test('deserializes db-table query text from the plugin block body', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->
@@ -763,8 +760,7 @@ test('deserializes db-table query window settings from plugin config', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table
-    source: builtin://db-table
+  - name: hvy.db-table
 ---
 
 <!--hvy: {"id":"data"}-->

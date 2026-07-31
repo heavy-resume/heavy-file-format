@@ -314,6 +314,8 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
   const selected = HVY_BUILT_IN_PLUGIN_DEFINITIONS.filter((definition) => selectedIds.includes(definition.id));
   const definitions = selected.map((definition) => ({
     id: definition.id,
+    version: '0.1.0',
+    hvyApiVersion: '0.1',
     key: definition.key,
     displayName: definition.displayName,
     pdfStatic: definition.pdfStatic === true,
@@ -380,6 +382,8 @@ export function createLazyHvyBuiltInPluginsModuleSource(selectedIds: readonly Hv
     `function createLazyPlugin(definition) {`,
     `  return {`,
     `    id: definition.id,`,
+    `    version: definition.version,`,
+    `    hvyApiVersion: definition.hvyApiVersion,`,
     `    displayName: definition.displayName,`,
     `    create(ctx) {`,
     `      const root = document.createElement('div');`,

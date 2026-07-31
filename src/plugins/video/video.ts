@@ -2,7 +2,7 @@ import './video.css';
 
 import { escapeAttr, escapeHtml } from '../../utils';
 import { refreshIcon } from '../../icons';
-import { VIDEO_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, VIDEO_PLUGIN_ID } from '../registry';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
 import type { VisualBlock } from '../../editor/types';
 import type { VisualDocument } from '../../types';
@@ -421,7 +421,7 @@ function normalizeVideoBlocks(document: VisualDocument): boolean {
 export const videoPluginFactory: HvyPluginFactory = build;
 
 export const videoPlugin: HvyPlugin = {
-  id: VIDEO_PLUGIN_ID,
+  ...createBuiltInPluginMetadata(VIDEO_PLUGIN_ID),
   displayName: 'Video',
   documentation: {
     filename: 'about-video.txt',

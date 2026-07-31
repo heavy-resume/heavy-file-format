@@ -5,7 +5,6 @@ reader_max_width: 62rem
 sidebar_label: Study Tools
 plugins:
   - id: hvy.form
-    source: builtin://form
     version: 0.1
 section_defaults:
   css: "margin: 0.5rem 0;"

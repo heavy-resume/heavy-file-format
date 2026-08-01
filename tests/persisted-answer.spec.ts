@@ -87,3 +87,43 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).toContainText('[x] Approved');
   await expect(page.locator('#rawEditor')).toContainText('- ( ) Email\n  - (x) Phone');
 });
+
+test('clicking past an answer label places the caret at the end of that line', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Survey Example', exact: true }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Communication' }).click();
+  const communicationRow = page.locator(
+    '.editor-block[data-active-editor-block="true"] .hvy-inline-checkbox-line',
+    { hasText: 'Communication' }
+  );
+  const rowBounds = await communicationRow.boundingBox();
+  if (!rowBounds) throw new Error('Communication answer row was not measurable.');
+  const editorBounds = await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').boundingBox();
+  if (!editorBounds) throw new Error('Active answer editor was not measurable.');
+  await page.mouse.move(editorBounds.x + editorBounds.width - 4, rowBounds.y + rowBounds.height / 2);
+  await page.mouse.down();
+  await expect.poll(() => page.evaluate(() => {
+    const selection = window.getSelection();
+    const row = selection?.anchorNode instanceof Element
+      ? selection.anchorNode.closest('.hvy-inline-checkbox-line')
+      : selection?.anchorNode?.parentElement?.closest('.hvy-inline-checkbox-line');
+    if (!row || !selection?.isCollapsed || selection.rangeCount === 0) return false;
+    const beforeCaret = document.createRange();
+    beforeCaret.selectNodeContents(row);
+    beforeCaret.setEnd(selection.anchorNode!, selection.anchorOffset);
+    return beforeCaret.toString().endsWith('Communication');
+  })).toBe(true);
+  await page.mouse.up();
+  await page.keyboard.type('Z');
+
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections
+      .flatMap((section) => section.blocks)
+      .find((block) => block.schema.id === 'successful-areas')?.text;
+  })).toContain('[ ] CommunicationZ');
+});

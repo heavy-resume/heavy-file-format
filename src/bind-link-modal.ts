@@ -193,6 +193,9 @@ function normalizeLinkInputValue(value: string): string {
   if (isEmailAddress(trimmed)) {
     return `mailto:${trimmed}`;
   }
+  if (isWebAddressWithoutProtocol(trimmed)) {
+    return `https://${trimmed}`;
+  }
   return trimmed;
 }
 
@@ -210,4 +213,17 @@ function isLinkInputValue(value: string): boolean {
 
 function isEmailAddress(value: string): boolean {
   return /^[^\s:@<>()[\]]+@[^\s:@<>()[\]]+\.[^\s:@<>()[\]]+$/.test(value);
+}
+
+function isWebAddressWithoutProtocol(value: string): boolean {
+  if (!value || /\s/.test(value) || /^[a-z][a-z\d+.-]*:/i.test(value)) {
+    return false;
+  }
+  try {
+    const url = new URL(`https://${value}`);
+    return url.hostname.includes('.')
+      && url.hostname.split('.').every((label) => /^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(label));
+  } catch {
+    return false;
+  }
 }

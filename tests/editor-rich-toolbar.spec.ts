@@ -723,7 +723,7 @@ test('quote toolbar action formats every selected paragraph and list block', asy
 
 test('link toolbar only defaults selected text that looks like a link target', async ({ page }) => {
   await page.goto('/');
-  await loadRichTextDocument(page, 'Foo bar https://example.test/path person@example.com');
+  await loadRichTextDocument(page, 'Foo bar foo.com https://example.test/path person@example.com');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
@@ -743,6 +743,23 @@ test('link toolbar only defaults selected text that looks like a link target', a
   });
   await linkButton.click();
   await expect(linkInput).toHaveValue('');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.firstChild;
+    const text = textNode!.textContent!;
+    const start = text.indexOf('foo.com');
+    const range = document.createRange();
+    range.setStart(textNode!, start);
+    range.setEnd(textNode!, start + 'foo.com'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await linkButton.click();
+  await expect(linkInput).toHaveValue('https://foo.com');
   await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
 
   await editor.evaluate((node) => {

@@ -2328,6 +2328,14 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
     );
     return false;
   }
+  const answerRow = findInlineAnswerRowAtPointer(editable, event);
+  if (answerRow && editable.contains(answerRow)) {
+    if (event.clientX > getInlineAnswerRowContentRight(answerRow)) {
+      placeCaretAtEnd(answerRow);
+      updateRichToolbarState(editable);
+      return true;
+    }
+  }
   const range = getEditableSelectionRange(editable);
   if (!range) {
     return false;
@@ -2343,6 +2351,47 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
   moveCollapsedCaretOutsideInline(code, range);
   updateRichToolbarState(editable);
   return true;
+}
+
+export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLElement): boolean {
+  if (event.button !== 0 || !(event.target instanceof Element)) return false;
+  const answerRow = findInlineAnswerRowAtPointer(editable, event);
+  if (!answerRow) return false;
+  if (event.clientX <= getInlineAnswerRowContentRight(answerRow)) return false;
+  event.preventDefault();
+  editable.focus({ preventScroll: true });
+  placeCaretAtEnd(answerRow);
+  updateRichToolbarState(editable);
+  return true;
+}
+
+function findInlineAnswerRowAtPointer(editable: HTMLElement, event: MouseEvent): HTMLElement | null {
+  const directRow = event.target instanceof Element
+    ? event.target.closest<HTMLElement>('.hvy-inline-checkbox-line')
+    : null;
+  if (directRow && editable.contains(directRow)) return directRow;
+  return [...editable.querySelectorAll<HTMLElement>('.hvy-inline-checkbox-line')].find((row) => {
+    const rect = row.getBoundingClientRect();
+    return event.clientY >= rect.top && event.clientY <= rect.bottom;
+  }) ?? null;
+}
+
+function getInlineAnswerRowContentRight(row: HTMLElement): number {
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    if (node instanceof Text && (node.textContent ?? '').trim().length > 0) textNodes.push(node);
+    node = walker.nextNode();
+  }
+  const lastText = textNodes.at(-1);
+  if (lastText) {
+    const range = document.createRange();
+    range.selectNodeContents(lastText);
+    return range.getBoundingClientRect().right;
+  }
+  return row.querySelector<HTMLElement>('input.hvy-inline-checkbox:last-of-type')?.getBoundingClientRect().right
+    ?? row.getBoundingClientRect().left;
 }
 
 export function showInlineAnswerModeSwitchForInput(answerInput: HTMLInputElement): void {

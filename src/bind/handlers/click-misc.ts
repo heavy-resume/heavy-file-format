@@ -1,4 +1,4 @@
-import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, refreshRichToolbarState } from './_imports';
+import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorPointerDown, refreshRichToolbarState } from './_imports';
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
@@ -40,6 +40,8 @@ export function bindClickMisc(app: HTMLElement): void {
 
   app.addEventListener('mousedown', (event) => {
     const target = event.target as HTMLElement;
+    const richTarget = getRichTarget(target);
+    if (richTarget && handleRichEditorPointerDown(event, richTarget)) return;
     const pickerTrigger = target.closest<HTMLElement>('.component-picker-trigger');
     if (!pickerTrigger) {
       const activeInsertGhost = target.closest<HTMLElement>('.active-component-insert-ghost');

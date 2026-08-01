@@ -16,6 +16,7 @@ import {
   PROGRESS_BAR_PLUGIN_ID,
   SCRIPTING_PLUGIN_ID,
   VIDEO_PLUGIN_ID,
+  HVY_LEGACY_PLUGIN_VERSION,
 } from '../src/plugins/registry';
 import type { HvyPlugin } from '../src/plugins/types';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
@@ -46,6 +47,28 @@ beforeEach(() => {
 });
 
 describe('plugin host registry', () => {
+  test('normalizes legacy host plugins without version metadata', () => {
+    setHostPlugins([{
+      id: 'heavy_resume.github',
+      displayName: 'GitHub',
+      create: () => ({ element: document.createElement('div') }),
+    }]);
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: heavy_resume.github\n---\n`);
+
+    expect(getHostPlugin('heavy_resume.github')).toMatchObject({
+      id: 'heavy_resume.github',
+      version: HVY_LEGACY_PLUGIN_VERSION,
+      hvyApiVersion: '0.1',
+    });
+  });
+
+  test('does not pretend a legacy unversioned plugin satisfies a newer version range', () => {
+    registerRuntimePlugin({ id: 'heavy_resume.github', displayName: 'GitHub' });
+    bootstrapState(`---\nhvy_version: 1.0\nplugins:\n  - id: heavy_resume.github\n    versionRange: ^1.0.0\n---\n`);
+
+    expect(getHostPlugin('heavy_resume.github')).toBeNull();
+  });
+
   test('registerHostPlugin appends and dedupes the same name and version', () => {
     registerHostPlugin({ id: 'a.test', displayName: 'A', create: () => ({ element: document.createElement('div') }) });
     registerHostPlugin({ id: 'b.test', displayName: 'B', create: () => ({ element: document.createElement('div') }) });

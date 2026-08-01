@@ -62,7 +62,7 @@ import {
   builtInPluginMap,
   builtInPlugins,
 } from 'virtual:hvy-built-in-plugins';
-import type { HvyPlugin } from './plugins/types';
+import type { HvyPluginInput } from './plugins/types';
 import {
   clearPowerScriptingMode,
   setPowerScriptAcceptanceCallbacks,
@@ -157,7 +157,7 @@ export interface HvyMountOptions {
   root: HTMLElement;
   document: VisualDocument;
   mode?: HvyEmbedMode;
-  plugins?: HvyPlugin[];
+  plugins?: HvyPluginInput[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatSettings?: Partial<ChatSettings> | null;
@@ -1005,7 +1005,7 @@ function freshLoadMountedDocumentInPlace(): void {
 function refreshModalPreview(): void {}
 
 function ensureEmbedRuntime(
-  plugins: HvyPlugin[],
+  plugins: HvyPluginInput[],
   runtime: StateRuntime,
   root: HTMLElement,
   getLinkObserver: () => HvyLinkObserver | null

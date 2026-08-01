@@ -283,5 +283,11 @@ export interface HvyPlugin {
   };
 }
 
+// Host integrations created before plugin version negotiation may omit these
+// fields. Registration normalizes them to the legacy compatibility defaults;
+// package manifests and loaded package implementations remain strict.
+export type HvyPluginInput = Omit<HvyPlugin, 'version' | 'hvyApiVersion'> &
+  Partial<Pick<HvyPlugin, 'version' | 'hvyApiVersion'>>;
+
 /** @deprecated Use HvyPlugin. */
-export type HvyPluginRegistration = HvyPlugin;
+export type HvyPluginRegistration = HvyPluginInput;

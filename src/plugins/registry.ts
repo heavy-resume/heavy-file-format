@@ -2,7 +2,7 @@ import { getActiveStateRuntime, state, type StateRuntime } from '../state';
 import type { VisualDocument } from '../types';
 import { rcompare, satisfies, valid } from 'semver';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './declarations';
-import type { HvyOutputGenerator, HvyPlugin } from './types';
+import type { HvyOutputGenerator, HvyPlugin, HvyPluginInput } from './types';
 import { getLoadedConditionalPlugin } from './authorization/conditional-plugin';
 
 export interface DocumentPluginDefinition {
@@ -14,6 +14,7 @@ export interface DocumentPluginDefinition {
 
 export const HVY_PLUGIN_API_VERSION = '0.1';
 export const HVY_BUILT_IN_PLUGIN_VERSION = '0.1.0';
+export const HVY_LEGACY_PLUGIN_VERSION = '0.0.0';
 export const DB_TABLE_PLUGIN_ID = 'hvy.db-table';
 export const FORM_PLUGIN_ID = 'hvy.form';
 export const PROGRESS_BAR_PLUGIN_ID = 'hvy.progress-bar';
@@ -56,7 +57,8 @@ function getMutableHostPlugins(): HvyPlugin[] {
   }
 }
 
-export function registerHostPlugin(plugin: HvyPlugin): void {
+export function registerHostPlugin(input: HvyPluginInput): void {
+  const plugin = normalizeHostPlugin(input);
   validateHostPlugin(plugin);
   const hostPlugins = getMutableHostPlugins();
   const nextPlugins = [...hostPlugins];
@@ -79,14 +81,23 @@ export function registerHostPlugin(plugin: HvyPlugin): void {
   }
 }
 
-export function setHostPlugins(plugins: HvyPlugin[]): void {
+export function setHostPlugins(inputs: HvyPluginInput[]): void {
   const hostPlugins = getMutableHostPlugins();
+  const plugins = inputs.map(normalizeHostPlugin);
   plugins.forEach(validateHostPlugin);
   assertUniqueOutputGeneratorKeys(selectHostPlugins(plugins));
   hostPlugins.length = 0;
   for (const plugin of plugins) {
     hostPlugins.push(plugin);
   }
+}
+
+function normalizeHostPlugin(plugin: HvyPluginInput): HvyPlugin {
+  return {
+    ...plugin,
+    version: plugin.version === undefined ? HVY_LEGACY_PLUGIN_VERSION : plugin.version,
+    hvyApiVersion: plugin.hvyApiVersion === undefined ? HVY_PLUGIN_API_VERSION : plugin.hvyApiVersion,
+  };
 }
 
 export function getHostPlugins(): HvyPlugin[] {

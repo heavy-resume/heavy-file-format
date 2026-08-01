@@ -55,7 +55,7 @@ import {
   createDocumentChangeApi,
   type HvyDocumentChangeCallback,
 } from './document-change';
-import type { HvyPlugin } from './plugins/types';
+import type { HvyPluginInput } from './plugins/types';
 import {
   clearPowerScriptingMode,
   setPowerScriptAcceptanceCallbacks,
@@ -120,7 +120,7 @@ export interface HvyMountOptions {
   root: HTMLElement;
   document: VisualDocument;
   mode?: HvyEmbedMode;
-  plugins?: HvyPlugin[];
+  plugins?: HvyPluginInput[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatContext?: HvyChatContextOptions | null;
@@ -782,7 +782,7 @@ function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
 }
 
 function ensureEmbedRuntime(
-  plugins: HvyPlugin[],
+  plugins: HvyPluginInput[],
   runtime: StateRuntime,
   root: HTMLElement,
   getLinkObserver: () => HvyLinkObserver | null

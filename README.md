@@ -686,6 +686,11 @@ or `"hidden"` when approval must not be offered.
 
 Plugins can also publish named methods to the document scripting layer:
 
+Legacy host plugin objects that omit `version` and `hvyApiVersion` remain
+supported. Direct registration normalizes them to plugin version `0.0.0` and
+the current HVY plugin API version. Packaged plugins still require explicit,
+valid version metadata.
+
 ```js
 const lookupPlugin = {
   id: 'com.example.lookup',

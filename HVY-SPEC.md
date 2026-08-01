@@ -1315,6 +1315,14 @@ Built-in and directly supplied host plugin objects remain valid. A host MAY
 also export them as `.hvy.plugin` packages, but documents MUST NOT require
 built-in plugins to have an on-disk package.
 
+For compatibility with host integrations created before plugin version
+metadata existed, hosts MUST accept directly supplied plugin objects that omit
+`version` and/or `hvyApiVersion`. They are normalized to version `0.0.0` and the
+host's current plugin API version. This compatibility applies only to direct
+host registrations; `.hvy.plugin` manifests and their exported implementations
+remain strict. A normalized `0.0.0` plugin does not satisfy a document range
+that requires a later version. Documents without `versionRange` may use it.
+
 ### 7.3 Plugin metadata at section level
 
 Sections can request plugin behavior with metadata:

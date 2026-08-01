@@ -1,0 +1,56 @@
+---
+hvy_version: 0.1
+title: Project Retrospective Survey
+description: A fillable HVY document whose answers persist directly in component text.
+section_defaults:
+  css: "margin: 0 0 0.75rem;"
+  contained: true
+---
+
+<!--hvy: {"id":"survey-introduction","expanded":true}-->
+#! Project Retrospective Survey
+
+ <!--hvy:text {}-->
+  Complete the questions below, save the document, and send the resulting `.hvy` file. Every selection is stored directly in this document; there is no form submission or script.
+
+<!--hvy: {"id":"completion","expanded":true}-->
+#! Completion
+
+ <!--hvy:text {"id":"work-completed"}-->
+  [ ] I completed the project review
+
+<!--hvy: {"id":"experience","expanded":true}-->
+#! Experience
+
+ <!--hvy:text {"css":"margin-bottom: 0.25rem;"}-->
+  **How would you rate the overall experience?**
+
+ <!--hvy:text {"id":"overall-rating"}-->
+  ( ) Excellent
+  ( ) Good
+  ( ) Fair
+  ( ) Poor
+
+ <!--hvy:text {"css":"margin-top: 1rem; margin-bottom: 0.25rem;"}-->
+  **Which areas worked well? Select all that apply.**
+
+ <!--hvy:text {"id":"successful-areas"}-->
+  [ ] Planning
+  [ ] Communication
+  [ ] Execution
+  [ ] Documentation
+  [ ] Follow-up
+
+<!--hvy: {"id":"next-steps","expanded":true}-->
+#! Next Steps
+
+ <!--hvy:text {"css":"margin-bottom: 0.25rem;"}-->
+  **Should the team schedule a follow-up discussion?**
+
+ <!--hvy:text {"id":"follow-up-decision"}-->
+  ( ) Yes
+  ( ) No
+  ( ) Not sure
+
+ <!--hvy:text {"id":"permission-to-share","css":"margin-top: 1rem;"}-->
+  [ ] This completed survey may be shared with the project team

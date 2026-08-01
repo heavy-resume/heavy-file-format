@@ -5,6 +5,7 @@ import {
   applyUnderlineSyntax,
   escapeRawHtml,
   markdownToReaderHtml,
+  normalizeEditorMarkdownWhitespace,
   normalizeMarkdownIndentation,
   normalizeMarkdownLists,
   removeNonTextContentFromRichEditor,
@@ -58,13 +59,34 @@ test('renders bare inline checkbox markers as checkbox controls in reader html',
   const html = markdownToReaderHtml('[ ] Draft task\n\n[x] Done task');
 
   expect(html).toContain('<div class="hvy-inline-checkbox-line">');
-  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" contenteditable="false" disabled>');
-  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" checked contenteditable="false" disabled>');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" data-field="inline-persisted-answer" data-answer-index="0" contenteditable="false">');
+  expect(html).toContain('<input class="hvy-inline-checkbox" type="checkbox" data-field="inline-persisted-answer" data-answer-index="1" checked contenteditable="false">');
   expect(html).toContain('Draft task');
   expect(html).toContain('Done task');
   expect(html).not.toContain('<p><input class="hvy-inline-checkbox"');
   expect(html).not.toContain('[ ] Draft task');
   expect(html).not.toContain('[x] Done task');
+});
+
+test('renders consecutive radio markers as one persisted radio group', () => {
+  const html = markdownToReaderHtml('- ( ) Email\n- (x) Phone\n\n[ ] Send a copy');
+
+  expect(html).toContain('type="radio"');
+  expect(html.match(/name="hvy-inline-radio-\d+"/g)).toEqual([
+    'name="hvy-inline-radio-1"',
+    'name="hvy-inline-radio-1"',
+  ]);
+  expect(html).toContain('type="checkbox"');
+  expect(html).toContain('data-answer-index="2"');
+});
+
+test('renders source-line answer markers vertically and same-line markers inline', () => {
+  expect(markdownToReaderHtml('( ) One\n( ) Two')).toContain(' One</div><div class="hvy-inline-checkbox-line"><input');
+  expect(markdownToReaderHtml('( ) One ( ) Two')).not.toContain('<br>');
+});
+
+test('normalizes editor answer spacing and paragraph gaps', () => {
+  expect(normalizeEditorMarkdownWhitespace('( )  One\n\n( ) Two')).toBe('( ) One\n( ) Two');
 });
 
 test('keeps checkbox marker text literal inside code', () => {
@@ -75,13 +97,14 @@ test('keeps checkbox marker text literal inside code', () => {
   expect(html).not.toContain('hvy-inline-checkbox');
 });
 
-test('keeps markdown task list markers as task lists', () => {
+test('renders markdown task list markers as persisted checkboxes', () => {
   const html = markdownToReaderHtml('- [ ] Draft task\n- [x] Done task');
 
   expect(html).toContain('<ul>');
   expect(html).toContain('<li><input');
   expect(html).toContain('type="checkbox"');
-  expect(html).not.toContain('hvy-inline-checkbox');
+  expect(html).toContain('hvy-inline-checkbox');
+  expect(html).not.toContain('disabled');
 });
 
 test('renders sort value annotations as visible text without leaking markers', () => {

@@ -2,6 +2,7 @@ import bundledResumeThvy from '../examples/resume.thvy?raw';
 import bundledResumeHvy from '../examples/resume.hvy?raw';
 import bundledCrmHvy from '../examples/crm.hvy?raw';
 import bundledStudyToolsHvy from '../examples/study-tools.hvy?raw';
+import bundledSurveyHvy from '../examples/survey.hvy?raw';
 import bundledVideoDemoHvy from '../examples/video-demo.hvy?raw';
 import bundledAsteroidsHvy from '../examples/asteroids.hvy?raw';
 import bundledPluginSortValuesHvy from '../examples/plugin-sort-values.hvy?raw';
@@ -21,7 +22,7 @@ import {
   runWithStateRuntimeAsync,
 } from './state';
 import { findSectionByKey } from './section-ops';
-import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock } from './block-ops';
+import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, updateInlineAnswerMarkerStates } from './block-ops';
 import { navigateToSection, closeModal, resetTransientUiState, resetToBlankDocument } from './navigation';
 import { deserializeDocumentBytes, serializeDocument, serializeDocumentBytes } from './serialization';
 import { detectExtension, normalizeFilename, normalizeMarkdownImportFilename, downloadBinaryFile } from './utils';
@@ -54,6 +55,7 @@ import { logClickTrace } from './bind/click-trace';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
+import { recordHistory } from './history';
 import type { ReaderViewFilter, SelectedExample, VisualDocument } from './types';
 import { markReferenceDocumentSaved, resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setSaveRequestHandler } from './plugins/power-scripting/power-save-request';
@@ -559,6 +561,11 @@ export function bindUi(app: HTMLElement): void {
   const studyToolsExampleBtn = app.querySelector<HTMLButtonElement>('#studyToolsExampleBtn');
   studyToolsExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledStudyToolsHvy, 'study-tools.hvy', 'study-tools');
+  });
+
+  const surveyExampleBtn = app.querySelector<HTMLButtonElement>('#surveyExampleBtn');
+  surveyExampleBtn?.addEventListener('click', () => {
+    loadBundledTextDocument(bundledSurveyHvy, 'survey.hvy', 'survey');
   });
 
   const videoDemoExampleBtn = app.querySelector<HTMLButtonElement>('#videoDemoExampleBtn');
@@ -1161,15 +1168,45 @@ export function bindUi(app: HTMLElement): void {
     }
   };
 
+  const handlePersistedAnswerChange = (event: Event): void => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.field !== 'inline-persisted-answer') return;
+    const shell = input.closest<HTMLElement>('[data-section-key][data-block-id]');
+    const sectionKey = shell?.dataset.sectionKey ?? '';
+    const blockId = shell?.dataset.blockId ?? '';
+    const lineIndex = Number.parseInt(input.dataset.lineIndex ?? input.dataset.answerIndex ?? '', 10);
+    const block = sectionKey && blockId ? findBlockByIds(sectionKey, blockId) : null;
+    if (!block || Number.isNaN(lineIndex)) return;
+    runInBoundRuntime(() => {
+      recordHistory(`persisted-answer:${blockId}`);
+      if (block.schema.kind === 'text') {
+        const controls = input.type === 'radio'
+          ? [...(input.closest('.reader-block')?.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${CSS.escape(input.name)}"]`) ?? [])]
+          : [input];
+        block.text = updateInlineAnswerMarkerStates(block.text, new Map(controls.map((control) => [Number.parseInt(control.dataset.answerIndex ?? '', 10), control.checked])));
+      } else {
+        return;
+      }
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+        getRefreshReaderPanels()({ runVisibilityScripts: false });
+      }
+    });
+  };
+
   readerDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   readerSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   aiReaderDocument?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
   aiSidebarSections?.addEventListener('pointerdown', handleCollapsedListControlPointerDown);
 
   readerDocument?.addEventListener('click', handleReaderAreaClick);
+  readerDocument?.addEventListener('change', handlePersistedAnswerChange);
   readerSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  readerSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
   aiReaderDocument?.addEventListener('click', handleReaderAreaClick);
+  aiReaderDocument?.addEventListener('change', handlePersistedAnswerChange);
   aiSidebarSections?.addEventListener('click', handleReaderAreaClick);
+  aiSidebarSections?.addEventListener('change', handlePersistedAnswerChange);
   aiReaderDocument?.addEventListener('dblclick', clearPendingAiReaderAction);
   aiSidebarSections?.addEventListener('dblclick', clearPendingAiReaderAction);
 

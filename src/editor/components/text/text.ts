@@ -1,4 +1,5 @@
 import './text.css';
+import './text-answer-mode.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
@@ -89,6 +90,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   <div class="text-editor-shell">
     ${richToolbar ? `<div class="text-editor-toolbar-bounds"><div class="text-editor-toolbar-slot">${richToolbar}</div></div><div class="text-editor-toolbar-spacer"></div>` : ''}
     ${useAsSelectionControl}
+    ${mobileAdjustment ? '' : renderInlineAnswerModeSwitch(sectionKey, block.id, helpers)}
     <div
       class="rich-editor${mobileAdjustment ? ' mobile-adjustment-editor' : ''}"
       contenteditable="true"
@@ -102,6 +104,27 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   </div>
 `;
 };
+
+function renderInlineAnswerModeSwitch(
+  sectionKey: string,
+  blockId: string,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  const attrs = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-field="inline-answer-mode"`;
+  return `<fieldset class="hvy-choice-mode-switch" aria-label="Selected answer block type" hidden>
+    <legend>Answer type</legend>
+    <label title="Allow one answer">
+      <input type="radio" name="hvy-answer-mode-${helpers.escapeAttr(blockId)}" value="radio" ${attrs}>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.25" class="choice-mode-icon-fill"/></svg>
+      <span>Radio</span>
+    </label>
+    <label title="Allow multiple answers">
+      <input type="radio" name="hvy-answer-mode-${helpers.escapeAttr(blockId)}" value="checkbox" ${attrs}>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="m5.25 8 1.8 1.8 3.8-4"/></svg>
+      <span>Checkbox</span>
+    </label>
+  </fieldset>`;
+}
 
 function renderUseAsSelectionControl(
   sectionKey: string,

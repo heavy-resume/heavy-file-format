@@ -1,4 +1,4 @@
-import { state, getRenderApp, getDefaultModelForProvider, persistChatSettings } from './_imports';
+import { state, getRenderApp, getDefaultModelForProvider, persistChatSettings, showInlineAnswerModeSwitchForInput } from './_imports';
 
 export function bindChangeRaw(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
@@ -65,11 +65,16 @@ export function bindChangeRaw(app: HTMLElement): void {
       return;
     }
     const checkboxTarget = event.target;
-    if (!(checkboxTarget instanceof HTMLInputElement) || checkboxTarget.type !== 'checkbox') {
+    if (!(checkboxTarget instanceof HTMLInputElement) || (checkboxTarget.type !== 'checkbox' && checkboxTarget.type !== 'radio')) {
       return;
     }
     if (!checkboxTarget.closest('.rich-editor')) {
       return;
+    }
+    if (checkboxTarget.type === 'radio') {
+      checkboxTarget.closest('.rich-editor')?.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${CSS.escape(checkboxTarget.name)}"]`).forEach((radio) => {
+        if (radio !== checkboxTarget) radio.removeAttribute('checked');
+      });
     }
     if (checkboxTarget.checked) {
       checkboxTarget.setAttribute('checked', '');
@@ -78,5 +83,10 @@ export function bindChangeRaw(app: HTMLElement): void {
     }
     const editable = checkboxTarget.closest<HTMLElement>('.rich-editor');
     editable?.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const answerIndex = checkboxTarget.dataset.answerIndex;
+    const currentInput = answerIndex
+      ? app.querySelector<HTMLInputElement>(`.editor-block[data-active-editor-block="true"] .rich-editor input.hvy-inline-checkbox[data-answer-index="${CSS.escape(answerIndex)}"]`)
+      : null;
+    if (currentInput) showInlineAnswerModeSwitchForInput(currentInput);
   });
 }

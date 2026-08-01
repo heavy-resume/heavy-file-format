@@ -21,11 +21,17 @@ export const turndown = new TurndownService({
 });
 
 turndown.addRule('task-list-checkbox', {
-  filter: (node) => node.nodeName === 'INPUT' && (node as HTMLInputElement).getAttribute('type') === 'checkbox',
+  filter: (node) => node.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((node as HTMLInputElement).getAttribute('type') ?? ''),
   replacement: (_content, node) => {
     const input = node as HTMLInputElement;
-    return input.checked ? '[x] ' : '[ ] ';
+    const marker = input.getAttribute('type') === 'radio' ? ['( )', '(x)'] : ['[ ]', '[x]'];
+    return marker[input.checked ? 1 : 0] ?? marker[0]!;
   },
+});
+
+turndown.addRule('inline-answer-line-break', {
+  filter: (node) => node.nodeName === 'BR' && Boolean(node.parentElement?.closest('.hvy-inline-checkbox-line')),
+  replacement: () => '\n',
 });
 
 turndown.addRule('underline', {
@@ -147,8 +153,10 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
   });
   renderInlineCheckboxes(template.content);
   markInlineCheckboxLines(template.content);
+  splitInlineAnswerLineContainers(template.content);
+  configureInlineAnswerControls(template.content, true);
   preserveTrailingEditableSpaces(template.content);
-  template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox) => {
+  template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"], input[type="radio"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');
     checkbox.setAttribute('contenteditable', 'false');
   });
@@ -379,7 +387,7 @@ function extractResponsiveAnnotations(
       ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
       : escapeHtml(annotation.text))
   );
-  return { markdown: options.editable ? withSortValues : replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
+  return { markdown: replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
 }
 
 function renderSortValueAnnotationHtml(key: string, text: string): string {
@@ -389,8 +397,11 @@ function renderSortValueAnnotationHtml(key: string, text: string): string {
 function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {
   const lines = markdown.split(/(\r?\n)/);
   let fence: { marker: '`' | '~'; length: number } | null = null;
+  let answerIndex = 0;
+  let radioGroup = 0;
+  let previousLineWasRadio = false;
   return lines
-    .map((line) => {
+    .map((line, lineIndex) => {
       if (/^\r?\n$/.test(line)) {
         return line;
       }
@@ -405,13 +416,27 @@ function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string
         fence = fenceLine;
         return line;
       }
-      return replaceInlineCheckboxMarkersInLine(line, makeToken);
+      const lineHasRadio = /(^|\s)\((?: |x|X)\)(?=\s|$)/.test(line);
+      if (lineHasRadio && !previousLineWasRadio) radioGroup += 1;
+      let rendered = replaceInlineCheckboxMarkersInLine(line, (checked, radio) => {
+        const html = renderInlineCheckboxHtml(checked, radio, answerIndex, radio ? radioGroup : undefined);
+        answerIndex += 1;
+        return makeToken(html);
+      });
+      if (isBareAnswerMarkerLine(line) && isBareAnswerMarkerLine(lines[lineIndex + 2] ?? '')) {
+        rendered = `${rendered.replace(/[ \t]+$/, '')}  `;
+      }
+      previousLineWasRadio = lineHasRadio;
+      return rendered;
     })
     .join('');
 }
 
-function replaceInlineCheckboxMarkersInLine(line: string, makeToken: (html: string) => string): string {
-  const taskListPrefix = line.match(/^(\s*(?:[-+*]|\d+[.)])\s+)\[(?: |x|X)\](?=\s|$)/)?.[1]?.length ?? -1;
+function isBareAnswerMarkerLine(line: string): boolean {
+  return /^\s*(?:\[(?: |x|X)\]|\((?: |x|X)\))(?=\s|$)/.test(line);
+}
+
+function replaceInlineCheckboxMarkersInLine(line: string, renderMarker: (checked: boolean, radio: boolean) => string): string {
   let result = '';
   let index = 0;
   let inlineCodeMarker: string | null = null;
@@ -430,9 +455,11 @@ function replaceInlineCheckboxMarkersInLine(line: string, makeToken: (html: stri
       continue;
     }
 
-    const checkboxMatch = line.slice(index).match(/^\[( |x|X)\]/);
-    if (checkboxMatch?.[0] && !inlineCodeMarker && index !== taskListPrefix) {
-      result += makeToken(renderInlineCheckboxHtml((checkboxMatch[1] ?? ' ').toLowerCase() === 'x'));
+    const checkboxMatch = line.slice(index).match(/^(\[( |x|X)\]|\(( |x|X)\))/);
+    if (checkboxMatch?.[0] && !inlineCodeMarker) {
+      const radio = checkboxMatch[0].startsWith('(');
+      const state = radio ? checkboxMatch[3] : checkboxMatch[2];
+      result += renderMarker((state ?? ' ').toLowerCase() === 'x', radio);
       index += checkboxMatch[0].length;
       continue;
     }
@@ -574,12 +601,19 @@ function renderNowrapAnnotationHtml(text: string): string {
   return `<span class="hvy-nowrap" data-hvy-nowrap="true">${escapeHtml(text)}</span>`;
 }
 
-function renderInlineCheckboxHtml(checked: boolean): string {
-  return `<input class="hvy-inline-checkbox" type="checkbox"${checked ? ' checked' : ''} contenteditable="false" disabled>`;
+function renderInlineCheckboxHtml(checked: boolean, radio = false, answerIndex?: number, radioGroup?: number): string {
+  const answerAttrs = typeof answerIndex === 'number' ? ` data-field="inline-persisted-answer" data-answer-index="${answerIndex}"` : '';
+  const nameAttr = radio && typeof radioGroup === 'number' ? ` name="hvy-inline-radio-${radioGroup}"` : '';
+  return `<input class="hvy-inline-checkbox${radio ? ' hvy-inline-radio' : ''}" type="${radio ? 'radio' : 'checkbox'}"${nameAttr}${answerAttrs}${checked ? ' checked' : ''} contenteditable="false">`;
 }
 
 function wrapInlineCheckboxLines(html: string): string {
-  return html.replace(/<p>((?=[\s\S]*?\bhvy-inline-checkbox\b)[\s\S]*?)<\/p>/g, '<div class="hvy-inline-checkbox-line">$1</div>');
+  return html.replace(/<p>((?=[\s\S]*?\bhvy-inline-checkbox\b)[\s\S]*?)<\/p>/g, (_match, content: string) =>
+    content
+      .split(/<br\s*\/?>/i)
+      .map((row) => `<div class="hvy-inline-checkbox-line">${row}</div>`)
+      .join('')
+  );
 }
 
 function markInlineCheckboxLines(root: ParentNode): void {
@@ -590,6 +624,45 @@ function markInlineCheckboxLines(root: ParentNode): void {
     }
     parent.classList.add('hvy-inline-checkbox-line');
   });
+}
+
+function splitInlineAnswerLineContainers(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.hvy-inline-checkbox-line').forEach((container) => {
+    if (!container.querySelector('br') || !container.querySelector('input.hvy-inline-checkbox')) return;
+    const rows: HTMLDivElement[] = [document.createElement('div')];
+    rows[0]!.className = 'hvy-inline-checkbox-line';
+    [...container.childNodes].forEach((node) => {
+      if (node instanceof HTMLBRElement) {
+        const row = document.createElement('div');
+        row.className = 'hvy-inline-checkbox-line';
+        rows.push(row);
+      } else {
+        rows[rows.length - 1]!.appendChild(node);
+      }
+    });
+    container.replaceWith(...rows.filter((row) => row.childNodes.length > 0));
+  });
+}
+
+function configureInlineAnswerControls(root: ParentNode, editable: boolean): void {
+  const inputs = [...root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')];
+  inputs.forEach((input, index) => {
+    input.dataset.answerIndex = String(index);
+    if (!editable) input.dataset.field = 'inline-persisted-answer';
+  });
+  let groupIndex = 0;
+  let previousContainer: Element | null = null;
+  for (const input of inputs) {
+    if (input.type !== 'radio') {
+      previousContainer = null;
+      continue;
+    }
+    const container = input.closest('li, .hvy-inline-checkbox-line') ?? input.parentElement;
+    const consecutive = previousContainer !== null && previousContainer.nextElementSibling === container;
+    if (!consecutive) groupIndex += 1;
+    input.name = `hvy-inline-radio-${groupIndex}`;
+    previousContainer = container;
+  }
 }
 
 function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
@@ -605,7 +678,17 @@ function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
 }
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
-  return markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+  const normalized = markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+  const withSingleMarkerSpacing = normalized.replace(
+    /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))[ \t]+/gm,
+    '$1 '
+  );
+  let compacted = withSingleMarkerSpacing;
+  const answerParagraphGap = /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\))[^\n]*)\n[ \t]*\n(?=[ \t]*(?:\[(?: |x|X)\]|\((?: |x|X)\)))/gm;
+  while (answerParagraphGap.test(compacted)) {
+    compacted = compacted.replace(answerParagraphGap, '$1\n');
+  }
+  return compacted;
 }
 
 export function normalizeMarkdownIndentation(markdown: string): string {
@@ -799,7 +882,7 @@ function renderInlineCheckboxes(root: ParentNode): void {
       if (parent.closest('code, pre, script, style, textarea')) {
         return NodeFilter.FILTER_REJECT;
       }
-      return /\[( |x|X)\]/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      return /(\[( |x|X)\]|\(( |x|X)\))/.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
 
@@ -814,7 +897,7 @@ function renderInlineCheckboxes(root: ParentNode): void {
 
   textNodes.forEach((textNode) => {
     const text = textNode.textContent ?? '';
-    const regex = /\[( |x|X)\]/g;
+    const regex = /(\[( |x|X)\]|\(( |x|X)\))/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null = regex.exec(text);
     if (!match) {
@@ -828,9 +911,11 @@ function renderInlineCheckboxes(root: ParentNode): void {
       }
 
       const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
+      const radio = match[0].startsWith('(');
+      checkbox.type = radio ? 'radio' : 'checkbox';
       checkbox.classList.add('hvy-inline-checkbox');
-      const isChecked = (match[1] ?? ' ').toLowerCase() === 'x';
+      if (radio) checkbox.classList.add('hvy-inline-radio');
+      const isChecked = (radio ? match[3] : match[2] ?? ' ').toLowerCase() === 'x';
       checkbox.checked = isChecked;
       if (isChecked) {
         checkbox.setAttribute('checked', '');

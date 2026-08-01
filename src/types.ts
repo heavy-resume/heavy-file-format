@@ -436,6 +436,7 @@ export type SelectedExample =
   | 'guide'
   | 'crm'
   | 'study-tools'
+  | 'survey'
   | 'video-demo'
   | 'asteroids'
   | 'plugin-sort-values'

@@ -33,6 +33,31 @@ const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
 const CODE_BLOCK_ENTER_SUPPRESS_MS = 300;
 
+export function convertInlineAnswerMarkerRange(text: string, start: number, end: number, radio: boolean): string {
+  let answerIndex = -1;
+  let selectedRadioSeen = false;
+  return text.replace(/\[( |x|X)\]|\(( |x|X)\)/g, (marker, checkboxState, radioState) => {
+    answerIndex += 1;
+    if (answerIndex < start || answerIndex > end) return marker;
+    let checked = String(checkboxState ?? radioState ?? ' ').toLowerCase() === 'x';
+    if (radio && checked) {
+      if (selectedRadioSeen) checked = false;
+      selectedRadioSeen = true;
+    }
+    return radio ? `(${checked ? 'x' : ' '})` : `[${checked ? 'x' : ' '}]`;
+  });
+}
+
+export function updateInlineAnswerMarkerStates(text: string, states: Map<number, boolean>): string {
+  let answerIndex = -1;
+  return text.replace(/\[( |x|X)\]|\(( |x|X)\)/g, (marker) => {
+    answerIndex += 1;
+    const checked = states.get(answerIndex);
+    if (checked === undefined) return marker;
+    return marker.startsWith('(') ? `(${checked ? 'x' : ' '})` : `[${checked ? 'x' : ' '}]`;
+  });
+}
+
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
   const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
   if (sqliteRowComponentBlock) {
@@ -207,6 +232,17 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return false;
   }
   const block = context.block;
+
+  if (field === 'inline-answer-mode' && target instanceof HTMLInputElement && block.schema.kind === 'text') {
+    const control = target.closest<HTMLElement>('.hvy-choice-mode-switch');
+    const start = Number.parseInt(control?.dataset.answerStart ?? '', 10);
+    const end = Number.parseInt(control?.dataset.answerEnd ?? '', 10);
+    if (Number.isNaN(start) || Number.isNaN(end)) return true;
+    block.text = convertInlineAnswerMarkerRange(block.text, start, end, target.value === 'radio');
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    getRenderApp()();
+    return true;
+  }
 
   if (field === 'rich-code-language') {
     if (!(target instanceof HTMLInputElement)) {
@@ -2281,6 +2317,17 @@ export function handleRichEditorKeyup(editable: HTMLElement): boolean {
 }
 
 export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement): boolean {
+  const answerInput = event.target instanceof HTMLInputElement && event.target.matches('input.hvy-inline-checkbox')
+    ? event.target
+    : null;
+  if (answerInput) {
+    updateInlineAnswerModeSwitch(
+      editable.closest<HTMLElement>('.text-editor-shell'),
+      null,
+      answerInput.closest<HTMLElement>('li, .hvy-inline-checkbox-line')
+    );
+    return false;
+  }
   const range = getEditableSelectionRange(editable);
   if (!range) {
     return false;
@@ -2298,9 +2345,18 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
   return true;
 }
 
+export function showInlineAnswerModeSwitchForInput(answerInput: HTMLInputElement): void {
+  updateInlineAnswerModeSwitch(
+    answerInput.closest<HTMLElement>('.text-editor-shell'),
+    null,
+    answerInput.closest<HTMLElement>('li, .hvy-inline-checkbox-line')
+  );
+}
+
 function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
+  updateInlineAnswerModeSwitch(textEditorShell, range);
   const hasFillInSelection = editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0;
   if (hasFillInSelection) {
     textEditorShell?.classList.add('has-fill-in-selection');
@@ -2368,6 +2424,51 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
       button.classList.toggle('ghost', !selected);
     });
   });
+}
+
+function updateInlineAnswerModeSwitch(shell: HTMLElement | null, range: Range | null, selectedRow: HTMLElement | null = null): void {
+  const control = shell?.querySelector<HTMLFieldSetElement>('.hvy-choice-mode-switch');
+  if (!control) return;
+  const node = range?.startContainer;
+  const element = node instanceof Element ? node : node?.parentElement;
+  const row = selectedRow ?? element?.closest<HTMLElement>('li, .hvy-inline-checkbox-line');
+  const input = row?.querySelector<HTMLInputElement>('input.hvy-inline-checkbox');
+  if (!row || !input) {
+    control.hidden = true;
+    return;
+  }
+  const rows: HTMLElement[] = [row];
+  let previous = row.previousElementSibling;
+  while (previous instanceof HTMLElement && previous.querySelector('input.hvy-inline-checkbox')) {
+    rows.unshift(previous);
+    previous = previous.previousElementSibling;
+  }
+  let next = row.nextElementSibling;
+  while (next instanceof HTMLElement && next.querySelector('input.hvy-inline-checkbox')) {
+    rows.push(next);
+    next = next.nextElementSibling;
+  }
+  const indexes = rows.flatMap((candidate) =>
+    [...candidate.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')].flatMap((candidateInput) => {
+      const value = Number.parseInt(candidateInput.dataset.answerIndex ?? '', 10);
+      return Number.isNaN(value) ? [] : [value];
+    })
+  );
+  if (indexes.length === 0) {
+    control.hidden = true;
+    return;
+  }
+  control.dataset.answerStart = String(Math.min(...indexes));
+  control.dataset.answerEnd = String(Math.max(...indexes));
+  control.querySelectorAll<HTMLInputElement>('input[data-field="inline-answer-mode"]').forEach((mode) => {
+    mode.checked = mode.value === (input.type === 'radio' ? 'radio' : 'checkbox');
+  });
+  const shellRect = shell?.getBoundingClientRect();
+  const firstRowRect = rows[0]?.getBoundingClientRect();
+  if (shellRect && firstRowRect) {
+    control.style.top = `${Math.max(0, firstRowRect.top - shellRect.top)}px`;
+  }
+  control.hidden = false;
 }
 
 function getSelectedTextLineStyleName(editable: HTMLElement): string {

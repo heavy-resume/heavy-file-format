@@ -75,6 +75,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'defaultExampleBtn', label: 'Default Example', selectedExample: 'default' },
   { id: 'crmExampleBtn', label: 'CRM Example', selectedExample: 'crm' },
   { id: 'studyToolsExampleBtn', label: 'Study Tools Example', selectedExample: 'study-tools' },
+  { id: 'surveyExampleBtn', label: 'Survey Example', selectedExample: 'survey' },
   { id: 'videoDemoExampleBtn', label: 'Video Demo', selectedExample: 'video-demo' },
   { id: 'asteroidsExampleBtn', label: 'Asteroids', selectedExample: 'asteroids' },
   { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },

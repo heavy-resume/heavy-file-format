@@ -351,6 +351,33 @@ Block content indentation is structural and MUST NOT be interpreted as Markdown 
 
 `hvy:encrypted` is the native encrypted-component directive. It uses the same block directive position as any other component, but its decrypted payload is stored in the HVY tail as described in §2.1 and MUST NOT be serialized as nested visible block content.
 
+#### Persistent inline answers
+
+Text components MAY contain persistent answer markers. These markers represent
+document state rather than form submission fields: changing an answer MUST
+update the text source so ordinary HVY serialization, saving, reopening, and
+sharing preserve the selected state. No plugin or script is required.
+
+`[ ]` and `[x]` represent an unselected and selected independent checkbox.
+`( )` and `(x)` represent an unselected and selected radio option. Consecutive
+radio-option lines form one mutually exclusive group and MUST contain no more
+than one selected marker. A non-radio line ends the group.
+
+```markdown
+<!--hvy:text {"id":"survey-answers"}-->
+[x] Send me a copy
+
+- ( ) Email
+- (x) Phone
+- ( ) Mail
+```
+
+Marker `x` values are case-insensitive when reading; authors SHOULD use
+lowercase `x` when writing. Text following a marker is its visible label.
+Readers MUST preserve unrecognized lines and MUST NOT treat inline answers as
+`hvy.form` fields. Non-interactive outputs, including print and PDF-oriented
+rendering, SHOULD display the controls in their persisted state.
+
 ### 5.7.1 Inline responsive annotations
 
 Text content MAY include paired HVY comment annotations for explicit responsive hints:

@@ -265,8 +265,11 @@
 .reader-block .hvy-inline-checkbox-line {
   display: flex;
   align-items: center;
-  gap: 0.42rem;
   margin: 0 0 0.45rem;
+}
+
+.reader-block .hvy-inline-checkbox-line input.hvy-inline-checkbox {
+  margin: 0 0.42rem 0 0;
 }
 
 .reader-block input[type='checkbox'] {
@@ -316,6 +319,35 @@
 
 .reader-block input[type='checkbox']:disabled {
   opacity: 1;
+}
+
+.reader-block input.hvy-inline-radio {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 50%;
+  background: var(--hvy-surface);
+  cursor: pointer;
+}
+
+.reader-block input.hvy-inline-radio::before {
+  content: '';
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 50%;
+  background: var(--hvy-accent-1);
+  transform: scale(0);
+}
+
+.reader-block input.hvy-inline-radio:checked::before {
+  transform: scale(1);
 }
 
 .hvy-embed-layout .reader-block :where(ul:not(.contains-task-list)) {

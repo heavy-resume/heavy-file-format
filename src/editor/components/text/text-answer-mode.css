@@ -1,0 +1,72 @@
+.hvy-choice-mode-switch {
+  position: absolute;
+  z-index: 4;
+  right: 0.45rem;
+  display: flex;
+  width: fit-content;
+  margin: 0;
+  padding: 0.2rem;
+  gap: 0.16rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-accent-1) 6%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hvy-shadow) 24%, transparent);
+  transform: translateY(-0.1rem);
+}
+
+.hvy-choice-mode-switch[hidden] { display: none; }
+
+.hvy-choice-mode-switch legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hvy-choice-mode-switch label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.8rem;
+  padding: 0.1rem 0.62rem;
+  border-radius: 999px;
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.hvy-choice-mode-switch label:has(input:checked) {
+  color: var(--hvy-accent-1-text);
+  background: var(--hvy-accent-1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--hvy-accent-1-alt) 42%, transparent);
+}
+
+.hvy-choice-mode-switch label:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.hvy-choice-mode-switch input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hvy-choice-mode-switch svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.hvy-choice-mode-switch .choice-mode-icon-fill {
+  fill: currentColor;
+  stroke: none;
+}

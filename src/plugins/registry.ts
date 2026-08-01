@@ -23,7 +23,7 @@ export const GRAPH_PLUGIN_ID = 'hvy.graph';
 export const DIAGRAM_PLUGIN_ID = 'hvy.diagram';
 export const QR_CODE_PLUGIN_ID = 'hvy.qr-code';
 export const VIDEO_PLUGIN_ID = 'hvy.video';
-export const VIEWER_NOTE_PLUGIN_ID = 'hvy.viewer-note';
+export const EDITABLE_TEXT_PLUGIN_ID = 'hvy.editable-text';
 export const CANVAS_PLUGIN_ID = 'hvy.canvas';
 export const POWER_SCRIPTING_PLUGIN_ID = 'hvy.power-scripting';
 export function createBuiltInPluginMetadata(id: string): Pick<HvyPlugin, 'id' | 'version' | 'hvyApiVersion'> {
@@ -207,8 +207,8 @@ export function getPluginDisplayName(pluginName: string): string {
   if (pluginName === VIDEO_PLUGIN_ID) {
     return 'Video';
   }
-  if (pluginName === VIEWER_NOTE_PLUGIN_ID) {
-    return 'Viewer Note';
+  if (pluginName === EDITABLE_TEXT_PLUGIN_ID) {
+    return 'Editable Text';
   }
   if (pluginName === CANVAS_PLUGIN_ID) {
     return 'Canvas';

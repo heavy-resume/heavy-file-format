@@ -23,7 +23,7 @@ export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.diagram',
   'hvy.qr-code',
   'hvy.video',
-  'hvy.viewer-note',
+  'hvy.editable-text',
   'hvy.canvas',
   'hvy.power-scripting',
 ] as const;
@@ -104,11 +104,11 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     displayName: 'Video',
   },
   {
-    id: 'hvy.viewer-note',
-    key: 'viewerNote',
-    exportName: 'viewerNotePlugin',
-    modulePath: 'src/plugins/viewer-note.ts',
-    displayName: 'Viewer Note',
+    id: 'hvy.editable-text',
+    key: 'editableText',
+    exportName: 'editableTextPlugin',
+    modulePath: 'src/plugins/editable-text/editable-text.ts',
+    displayName: 'Editable Text',
   },
   {
     id: 'hvy.canvas',

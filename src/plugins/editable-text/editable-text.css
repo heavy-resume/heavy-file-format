@@ -1,0 +1,13 @@
+.hvy-editable-text {
+  display: block;
+  min-width: 0;
+  padding: 0.72rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-input-bg);
+}
+
+.hvy-editable-text .hvy-plugin-text-editor {
+  min-height: 5.5rem;
+  background: var(--hvy-input-bg);
+}

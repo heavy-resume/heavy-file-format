@@ -19,7 +19,7 @@ declare module 'virtual:hvy-built-in-plugins' {
     diagram?: HvyPlugin;
     qrCode?: HvyPlugin;
     video?: HvyPlugin;
-    viewerNote?: HvyPlugin;
+    editableText?: HvyPlugin;
     canvas?: HvyPlugin;
     powerScripting?: HvyPlugin;
   }>;

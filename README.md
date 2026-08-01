@@ -410,7 +410,8 @@ not enabled automatically:
     "hvy.scripting",
     "hvy.graph",
     "hvy.diagram",
-    "hvy.qr-code"
+    "hvy.qr-code",
+    "hvy.editable-text"
   ]
 }
 ```
@@ -922,4 +923,5 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
 - The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.
 - Plugin editor UIs can reuse the host text editor with `ctx.textEditor.mount({ value, onChange })`. The returned element uses the same rich text toolbar, Markdown conversion, paste handling, and caret-preserving input behavior as normal HVY text components; plugins remain responsible for persisting changes through `ctx.setText`, `ctx.setConfig`, or their own `onChange` callback.
+- The built-in `hvy.editable-text` plugin uses that editor as a permanently visible writable surface in Viewer mode. Its Markdown body is stored in `plugin.txt`; `pluginConfig.placeholder` optionally controls its empty-state prompt.
 - See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.

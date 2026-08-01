@@ -8,7 +8,7 @@
     "hvy.diagram",
     "hvy.qr-code",
     "hvy.video",
-    "hvy.viewer-note",
+    "hvy.editable-text",
     "hvy.canvas",
     "hvy.power-scripting"
   ]

@@ -1,0 +1,5 @@
+Editable Text stores rich Markdown in plugin.txt and remains visibly editable in viewer mode.
+
+Use it for a persistent writing surface whose reader should always understand that the content can be changed. It mounts the shared HVY text editor, including paragraph styles and rich-text controls, without exposing document structure controls.
+
+The plugin body is the editable Markdown. pluginConfig.placeholder optionally supplies the empty-state prompt.

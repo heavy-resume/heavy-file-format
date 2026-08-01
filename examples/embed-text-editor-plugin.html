@@ -300,7 +300,7 @@
     <script type="module">
       import { deserializeDocumentBytes, mountHvy, serializeDocument } from '/src/embed-full.ts';
       import { deserializeDocumentBytes as deserializeLightweightDocumentBytes, mountHvy as mountLightweightHvy } from '/src/embed.ts';
-      import { viewerNotePlugin } from '/src/plugins/viewer-note.ts';
+      import { editableTextPlugin } from '/src/plugins/editable-text/editable-text.ts';
 
       const source = `---
 hvy_version: 0.1
@@ -309,7 +309,7 @@ plugins:
   - id: example.rich-note
     uuid: example-plugin-rich-note
     versionRange: ^0.1.0
-  - id: hvy.viewer-note
+  - id: hvy.editable-text
   - id: example.disabled-text-placeholder
     uuid: example-plugin-disabled-text-placeholder
     versionRange: ^0.1.0
@@ -325,7 +325,7 @@ Use the toolbar here, then compare it with the plugin editor below.
 
  <!--hvy:plugin {"id":"plugin-rich-note","plugin":"example.rich-note"}-->
 
- <!--hvy:plugin {"id":"plugin-viewer-note","plugin":"hvy.viewer-note"}-->
+ <!--hvy:plugin {"id":"plugin-editable-text","plugin":"hvy.editable-text"}-->
 This plugin text editor stays editable in Viewer mode.
 
  <!--hvy:plugin {"id":"plugin-disabled-placeholder","plugin":"example.disabled-text-placeholder"}-->
@@ -335,14 +335,14 @@ This plugin text editor stays editable in Viewer mode.
 hvy_version: 0.1
 title: Lightweight Plugin Text Editor
 plugins:
-  - id: hvy.viewer-note
+  - id: hvy.editable-text
 ---
 
 <!--hvy: {"id":"main"}-->
 #! Lightweight Text Editor
 
- <!--hvy:plugin {"id":"plugin-lightweight-viewer-note","plugin":"hvy.viewer-note"}-->
-This lightweight viewer note should show the text editor toolbar.
+ <!--hvy:plugin {"id":"plugin-lightweight-editable-text","plugin":"hvy.editable-text"}-->
+This lightweight editable text should show the text editor toolbar.
 `;
 
       const encoder = new TextEncoder();
@@ -501,7 +501,7 @@ This lightweight viewer note should show the text editor toolbar.
           root,
           document: documentToMount,
           mode,
-          plugins: [richNotePlugin, viewerNotePlugin, disabledTextPlaceholderPlugin],
+          plugins: [richNotePlugin, editableTextPlugin, disabledTextPlaceholderPlugin],
           storageKey: 'embed-text-editor-plugin-example',
           chatClient: {
             async complete(request) {
@@ -514,7 +514,7 @@ This lightweight viewer note should show the text editor toolbar.
           root: lightweightRoot,
           document: createLightweightDocument(),
           mode: 'viewer',
-          plugins: [viewerNotePlugin],
+          plugins: [editableTextPlugin],
         });
         setModeButtons();
         status.textContent = `Mounted ${mode}.`;

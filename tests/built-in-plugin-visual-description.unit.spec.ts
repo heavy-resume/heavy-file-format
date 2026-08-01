@@ -17,7 +17,7 @@ import { graphPlugin } from '../src/plugins/graph';
 import { diagramPlugin } from '../src/plugins/diagram';
 import { qrCodePlugin } from '../src/plugins/qr-code/qr-code';
 import { videoPlugin } from '../src/plugins/video/video';
-import { viewerNotePlugin } from '../src/plugins/viewer-note';
+import { editableTextPlugin } from '../src/plugins/editable-text/editable-text';
 
 afterEach(() => {
   clearScriptingResults();
@@ -111,6 +111,6 @@ test('built-ins backed by plugin text and config do not add visual descriptions'
     diagramPlugin,
     qrCodePlugin,
     videoPlugin,
-    viewerNotePlugin,
+    editableTextPlugin,
   ].every((plugin) => plugin.visualDescription === undefined)).toBe(true);
 });

@@ -210,17 +210,17 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   await page.goto('/examples/embed-text-editor-plugin.html');
 
   await expect(page.getByRole('heading', { name: 'Embedded Plugin Text Editor' })).toBeVisible();
-  await expect(page.getByText('Plugin "hvy.viewer-note" is not available.')).toHaveCount(0);
+  await expect(page.getByText('Plugin "hvy.editable-text" is not available.')).toHaveCount(0);
   await expect(page.getByText('Full embed')).toBeVisible();
   await expect(page.getByText('Lightweight embed')).toBeVisible();
   await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.example-rich-note-editor')).toContainText('Write plugin-owned Markdown here. This body is stored with ctx.setText.');
-  await expect(page.locator('#embedTextEditorMount .hvy-viewer-note')).toContainText('This plugin text editor stays editable in Viewer mode.');
-  const lightweightEditor = page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(page.locator('#embedTextEditorMount .hvy-editable-text')).toContainText('This plugin text editor stays editable in Viewer mode.');
+  const lightweightEditor = page.locator('#lightweightTextEditorMount .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
   await expect(lightweightEditor).toBeVisible();
-  await expect(lightweightEditor).toContainText('This lightweight viewer note should show the text editor toolbar.');
-  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
-  const editorModeViewerNote = page.locator('#embedTextEditorMount .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  await expect(lightweightEditor).toContainText('This lightweight editable text should show the text editor toolbar.');
+  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar')).toBeVisible();
+  const editorModeViewerNote = page.locator('#embedTextEditorMount .hvy-editable-text .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
   await expect(editorModeViewerNote).toBeVisible();
   await expect(editorModeViewerNote).toHaveAttribute('contenteditable', 'false');
   await expect(editorModeViewerNote).toHaveAttribute('aria-disabled', 'true');
@@ -291,10 +291,10 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   await expect(page.locator('[data-example-mode="viewer"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.example-rich-note-editor [data-field="hvy-plugin-text-editor"]')).toHaveCount(0);
   await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
-  const viewerNoteEditor = page.locator('#embedTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
-  await expect(viewerNoteEditor).toBeVisible();
-  await expect(viewerNoteEditor).toContainText('This plugin text editor stays editable in Viewer mode.');
-  await viewerNoteEditor.evaluate((node) => {
+  const editableTextEditor = page.locator('#embedTextEditorMount .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(editableTextEditor).toBeVisible();
+  await expect(editableTextEditor).toContainText('This plugin text editor stays editable in Viewer mode.');
+  await editableTextEditor.evaluate((node) => {
     const paragraph = node.querySelector('p')!;
     const selection = window.getSelection();
     const range = document.createRange();
@@ -305,8 +305,8 @@ test('isolated embed example exposes matching text editors for plugin authors', 
     (node as HTMLElement).focus();
   });
   await page.keyboard.type(' Edited from viewer.');
-  await expect(viewerNoteEditor).toBeFocused();
-  await expect(viewerNoteEditor).toContainText('This plugin text editor stays editable in Viewer mode. Edited from viewer.');
+  await expect(editableTextEditor).toBeFocused();
+  await expect(editableTextEditor).toContainText('This plugin text editor stays editable in Viewer mode. Edited from viewer.');
   await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toBeVisible();
   await expect(page.locator('.example-disabled-text-placeholder .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]')).toHaveAttribute('data-placeholder', 'This text field is disabled until the document enters another state.');
 
@@ -318,7 +318,7 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   await page.locator('[data-example-mode="editor"]').click();
   await expect(page.locator('[data-example-mode="editor"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.example-rich-note-editor')).toContainText('Plugin editor updated');
-  const returnedEditorModeViewerNote = page.locator('#embedTextEditorMount .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  const returnedEditorModeViewerNote = page.locator('#embedTextEditorMount .hvy-editable-text .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
   await expect(returnedEditorModeViewerNote).toBeVisible();
   await expect(returnedEditorModeViewerNote).toContainText('This plugin text editor stays editable in Viewer mode. Edited from viewer.');
   await expect(returnedEditorModeViewerNote).toHaveAttribute('contenteditable', 'false');
@@ -444,7 +444,7 @@ hvy_version: 0.1
   expect(expectedResult).toBe('Plugin alpha\n\nPlugin beta');
 });
 
-test('built-in viewer note plugin text editor is editable from viewer mode', async ({ page }) => {
+test('built-in editable text plugin remains editable from viewer mode', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Raw' })).toBeVisible();
 
@@ -457,26 +457,26 @@ hvy_version: 0.1
 <!--hvy: {"id":"main"}-->
 #! Main
 
- <!--hvy:plugin {"id":"viewer-note","plugin":"hvy.viewer-note"}-->
-Initial viewer note
+ <!--hvy:plugin {"id":"editable-text","plugin":"hvy.editable-text"}-->
+Initial editable text
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.waitForFunction(async () => {
     const { state } = await import('/src/state.ts');
-    return state.document.sections[0]?.blocks[0]?.schema.plugin === 'hvy.viewer-note';
+    return state.document.sections[0]?.blocks[0]?.schema.plugin === 'hvy.editable-text';
   }, null, { timeout: 1000 });
   await page.getByRole('button', { name: 'Basic' }).click();
-  const editorPluginEditor = page.locator('#editorTree .hvy-viewer-note .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
+  const editorPluginEditor = page.locator('#editorTree .hvy-editable-text .hvy-plugin-text-editor.is-disabled [data-field="hvy-plugin-text-editor"]');
   await expect(editorPluginEditor).toBeVisible();
-  await expect(editorPluginEditor).toContainText('Initial viewer note');
+  await expect(editorPluginEditor).toContainText('Initial editable text');
   await expect(editorPluginEditor).toHaveAttribute('contenteditable', 'false');
 
   await page.getByRole('button', { name: 'Viewer' }).click();
 
-  const viewerPluginEditor = page.locator('#readerDocument .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  const viewerPluginEditor = page.locator('#readerDocument .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
   await expect(viewerPluginEditor).toBeVisible();
-  await expect(page.locator('#readerDocument .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
-  await expect(viewerPluginEditor).toContainText('Initial viewer note');
+  await expect(page.locator('#readerDocument .hvy-editable-text-reader .rich-toolbar')).toBeVisible();
+  await expect(viewerPluginEditor).toContainText('Initial editable text');
 
   await viewerPluginEditor.evaluate((node) => {
     const paragraph = node.querySelector('p')!;
@@ -491,7 +491,7 @@ Initial viewer note
   await page.keyboard.type(' updated from viewer');
 
   await expect(viewerPluginEditor).toBeFocused();
-  await expect(viewerPluginEditor).toContainText('Initial viewer note updated from viewer');
+  await expect(viewerPluginEditor).toContainText('Initial editable text updated from viewer');
 
   const expectedResult = await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
@@ -503,30 +503,30 @@ Initial viewer note
   });
   expect(expectedResult).toEqual({
     view: 'viewer',
-    text: 'Initial viewer note updated from viewer',
+    text: 'Initial editable text updated from viewer',
   });
 });
 
-test('lightweight embed includes viewer note text editor controls', async ({ page }) => {
+test('lightweight embed includes editable text controls', async ({ page }) => {
   await page.goto('/examples/embed-text-editor-plugin.html');
 
   await page.waitForFunction(() => document.documentElement.scrollHeight > window.innerHeight, null, { timeout: 1000 });
   await page.locator('#lightweightTextEditorMount').scrollIntoViewIfNeeded();
   await expect(page.locator('#lightweightTextEditorMount')).toBeInViewport();
 
-  const editor = page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]');
+  const editor = page.locator('#lightweightTextEditorMount .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
   await expect(editor).toBeVisible();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar')).toBeVisible();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar [data-rich-action="bold"]')).toBeVisible();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-viewer-note-reader .rich-toolbar [data-rich-action="list"]')).toBeVisible();
-  await expect(editor).toContainText('This lightweight viewer note should show the text editor toolbar.');
+  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar')).toBeVisible();
+  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar [data-rich-action="bold"]')).toBeVisible();
+  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar [data-rich-action="list"]')).toBeVisible();
+  await expect(editor).toContainText('This lightweight editable text should show the text editor toolbar.');
 });
 
 test('lightweight viewer-only text editor applies heading toolbar actions', async ({ page }) => {
   await page.goto('/examples/lightweight-viewer-text-editor.html');
 
-  const editor = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader [data-field="hvy-plugin-text-editor"]').first();
-  const editorWithInput = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').nth(1);
+  const editor = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]').first();
+  const editorWithInput = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').nth(1);
   const extraInput = editorWithInput.locator('.viewer-note-input-field');
   await expect(editor).toBeVisible();
   await expect(editor).toHaveText('');
@@ -550,7 +550,7 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
-  const firstViewerNote = page.locator('#lightweightViewerOnlyMount .hvy-viewer-note-reader').first();
+  const firstViewerNote = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
   await firstViewerNote.locator('[data-rich-action="heading-1"]').click();
 
   await expect(editor.locator('h1')).toContainText('Viewer toolbar target');

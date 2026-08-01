@@ -2,6 +2,8 @@
 hvy_version: 0.1
 title: Project Retrospective Survey
 description: A fillable HVY document whose answers persist directly in component text.
+plugins:
+  - id: hvy.editable-text
 section_defaults:
   css: "margin: 0 0 0.75rem;"
   contained: true
@@ -41,6 +43,11 @@ section_defaults:
   [ ] Documentation
   [ ] Follow-up
 
+ <!--hvy:text {"css":"margin-top: 1rem; margin-bottom: 0.25rem;"}-->
+  **What went especially well?**
+
+ <!--hvy:plugin {"id":"positive-feedback","plugin":"hvy.editable-text","pluginConfig":{"placeholder":"Share the practices, decisions, or moments that helped the project succeed."}}-->
+
 <!--hvy: {"id":"next-steps","expanded":true}-->
 #! Next Steps
 
@@ -51,6 +58,11 @@ section_defaults:
   ( ) Yes
   ( ) No
   ( ) Not sure
+
+ <!--hvy:text {"css":"margin-top: 1rem; margin-bottom: 0.25rem;"}-->
+  **What should the team change next time?**
+
+ <!--hvy:plugin {"id":"improvement-feedback","plugin":"hvy.editable-text","pluginConfig":{"placeholder":"Suggest a change that would improve the next project."}}-->
 
  <!--hvy:text {"id":"permission-to-share","css":"margin-top: 1rem;"}-->
   [ ] This completed survey may be shared with the project team

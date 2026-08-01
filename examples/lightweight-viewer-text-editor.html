@@ -144,16 +144,16 @@
 
     <script type="module">
       import { deserializeDocumentBytes, mountHvy, serializeDocument } from '/src/embed.ts';
-      import { viewerNotePlugin, viewerNotePluginFactory } from '/src/plugins/viewer-note.ts';
+      import { editableTextPlugin, editableTextPluginFactory } from '/src/plugins/editable-text/editable-text.ts';
 
-      const viewerNoteWithInputPlugin = {
-        ...viewerNotePlugin,
+      const editableTextWithInputPlugin = {
+        ...editableTextPlugin,
         id: 'example.viewer-note-input',
         uuid: 'example-plugin-viewer-note-input',
-        displayName: 'Viewer Note With Input',
+        displayName: 'Editable Text With Input',
         create(ctx) {
-          const instance = viewerNotePluginFactory(ctx);
-          const frame = instance.element.querySelector('.hvy-viewer-note-frame');
+          const instance = editableTextPluginFactory(ctx);
+          const frame = instance.element;
           const input = document.createElement('input');
           input.className = 'viewer-note-input-field';
           input.type = 'text';
@@ -183,7 +183,7 @@
 hvy_version: 0.1
 title: Lightweight Viewer Text Editor
 plugins:
-  - id: hvy.viewer-note
+  - id: hvy.editable-text
   - id: example.viewer-note-input
     uuid: example-plugin-viewer-note-input
     versionRange: ^0.1.0
@@ -192,7 +192,7 @@ plugins:
 <!--hvy: {"id":"main"}-->
 #! Viewer
 
- <!--hvy:plugin {"id":"viewer-note","plugin":"hvy.viewer-note"}-->
+ <!--hvy:plugin {"id":"editable-text","plugin":"hvy.editable-text"}-->
 
  <!--hvy:plugin {"id":"viewer-note-with-input","plugin":"example.viewer-note-input","pluginConfig":{"inputValue":""}}-->
 `;
@@ -212,7 +212,7 @@ plugins:
           root,
           document: createDocument(),
           mode: 'viewer',
-          plugins: [viewerNotePlugin, viewerNoteWithInputPlugin],
+          plugins: [editableTextPlugin, editableTextWithInputPlugin],
         });
         status.textContent = 'Mounted viewer.';
       }

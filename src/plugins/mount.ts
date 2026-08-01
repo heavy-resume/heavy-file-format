@@ -120,7 +120,9 @@ function buildContext(
       recordHistory(`plugin-config:${plugin.id}:${sectionKey}:${blockId}`);
       current.schema.pluginConfig = { ...current.schema.pluginConfig, ...patch };
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };
@@ -132,7 +134,9 @@ function buildContext(
       recordHistory(`plugin-text:${plugin.id}:${sectionKey}:${blockId}`);
       current.text = text;
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };
@@ -144,7 +148,9 @@ function buildContext(
       recordHistory(`plugin-css:${plugin.id}:${sectionKey}:${blockId}`);
       current.schema.css = css;
       syncReusableTemplateForBlock(sectionKey, blockId);
-      getRefreshReaderPanels()();
+      if (state.currentView !== 'viewer') {
+        getRefreshReaderPanels()();
+      }
       refreshMountedPlugins(plugin.id, sectionKey, blockId);
     });
   };

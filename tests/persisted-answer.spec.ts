@@ -12,6 +12,10 @@ test('survey example presents persisted single and multiple answers', async ({ p
   const reader = page.locator('#readerDocument');
   await expect(reader.getByRole('radio')).toHaveCount(7);
   await expect(reader.getByRole('checkbox')).toHaveCount(7);
+  const firstRatingBounds = await reader.getByRole('radio').nth(0).locator('..').boundingBox();
+  const secondRatingBounds = await reader.getByRole('radio').nth(1).locator('..').boundingBox();
+  if (!firstRatingBounds || !secondRatingBounds) throw new Error('Survey rating rows were not measurable.');
+  expect(secondRatingBounds.y - (firstRatingBounds.y + firstRatingBounds.height)).toBeLessThanOrEqual(1);
   const goodRadio = reader.getByRole('radio').nth(1);
   await expect(goodRadio).toHaveCSS('appearance', 'none');
   await expect(goodRadio).toHaveCSS('border-radius', '50%');
@@ -23,6 +27,47 @@ test('survey example presents persisted single and multiple answers', async ({ p
   expect(await goodRadio.evaluate((input) => getComputedStyle(input, '::before').transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
   await expect(reader.getByRole('checkbox').nth(2)).toBeChecked();
   await expect(reader.getByRole('checkbox').nth(3)).toBeChecked();
+
+  const textResponses = reader.locator('.hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
+  await expect(textResponses).toHaveCount(2);
+  await expect(textResponses.first()).toHaveAttribute(
+    'data-placeholder',
+    'Share the practices, decisions, or moments that helped the project succeed.'
+  );
+  await textResponses.first().click();
+  await page.keyboard.type('Clear ownership helped the team move quickly.');
+  await expect(textResponses.first()).toBeFocused();
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections
+      .flatMap((section) => section.blocks)
+      .find((block) => block.schema.id === 'positive-feedback')?.text;
+  });
+  expect(expectedResult).toBe('Clear ownership helped the team move quickly.');
+});
+
+test('survey editable text preserves reader scroll while typing', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 520 });
+  await page.goto('/');
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Survey Example', exact: true }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const readerPane = page.locator('.reader-pane');
+  const editor = page.locator('#readerDocument .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]').last();
+  await editor.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  await editor.click();
+  const scrollBefore = await readerPane.evaluate((node) => node.scrollTop);
+  const topBefore = await editor.evaluate((node) => node.getBoundingClientRect().top);
+
+  await page.keyboard.type('Typing should stay put.');
+
+  await expect(editor).toBeFocused();
+  expect(await readerPane.evaluate((node) => node.scrollTop)).toBe(scrollBefore);
+  expect(await editor.evaluate((node) => node.getBoundingClientRect().top)).toBe(topBefore);
 });
 
 test('floating answer control converts only the active consecutive text block', async ({ page }) => {
@@ -104,19 +149,28 @@ test('clicking past an answer label places the caret at the end of that line', a
   if (!rowBounds) throw new Error('Communication answer row was not measurable.');
   const editorBounds = await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').boundingBox();
   if (!editorBounds) throw new Error('Active answer editor was not measurable.');
-  await page.mouse.move(editorBounds.x + editorBounds.width - 4, rowBounds.y + rowBounds.height / 2);
+  const contentRight = await communicationRow.evaluate((row) => {
+    const textNode = [...row.childNodes].findLast((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim());
+    if (!textNode) throw new Error('Communication label text was not measurable.');
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return range.getBoundingClientRect().right;
+  });
+  await page.mouse.move((contentRight + editorBounds.x + editorBounds.width) / 2, rowBounds.y + rowBounds.height / 2);
   await page.mouse.down();
-  await expect.poll(() => page.evaluate(() => {
+  const caretIsAtCommunicationEnd = await page.evaluate(() => {
     const selection = window.getSelection();
     const row = selection?.anchorNode instanceof Element
       ? selection.anchorNode.closest('.hvy-inline-checkbox-line')
       : selection?.anchorNode?.parentElement?.closest('.hvy-inline-checkbox-line');
-    if (!row || !selection?.isCollapsed || selection.rangeCount === 0) return false;
-    const beforeCaret = document.createRange();
-    beforeCaret.selectNodeContents(row);
-    beforeCaret.setEnd(selection.anchorNode!, selection.anchorOffset);
-    return beforeCaret.toString().endsWith('Communication');
-  })).toBe(true);
+    return Boolean(
+      row
+      && selection?.isCollapsed
+      && selection.anchorNode === row
+      && selection.anchorOffset === row.childNodes.length
+    );
+  });
+  expect(caretIsAtCommunicationEnd).toBe(true);
   await page.mouse.up();
   await page.keyboard.type('Z');
 

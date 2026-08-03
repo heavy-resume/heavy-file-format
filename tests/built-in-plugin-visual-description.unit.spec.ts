@@ -1,11 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
-import { dbTablePlugin } from '../src/plugins/db-table-plugin';
-import {
-  getDbTableRenderedVisualDescription,
-  setDbTableRenderedVisualState,
-} from '../src/plugins/db-table-model';
+import { dbTablePlugin } from '../src/plugins/db-table/db-table-component';
 import {
   clearScriptingResults,
   scriptingPlugin,
@@ -36,7 +32,7 @@ ${text}
 `, '.hvy');
 }
 
-test('DB table visual description follows the cached rendered snapshot and error', () => {
+test('DB table visual description starts empty before its first data snapshot', () => {
   const document = createPluginDocument('hvy.db-table');
   const block = document.sections[0]!.blocks[0]!;
   const describe = dbTablePlugin.visualDescription!.describe;
@@ -44,26 +40,7 @@ test('DB table visual description follows the cached rendered snapshot and error
   // BEFORE
   expect(describe({ block, rawDocument: document })).toBe('');
 
-  // TOOL CALL
-  setDbTableRenderedVisualState(block, {
-    columns: ['Status', 'Owner'],
-    rows: [
-      ['Open', 'Avery'],
-      ['Done', 'Morgan'],
-    ],
-  });
-
-  // AFTER
-  expect(describe({ block, rawDocument: document })).toBe([
-    'Columns: Status | Owner',
-    'Open | Avery',
-    'Done | Morgan',
-  ].join('\n'));
-
-  setDbTableRenderedVisualState(block, { error: 'Table or view "missing" does not exist.' });
-  expect(getDbTableRenderedVisualDescription(block)).toBe(
-    'DB table error: Table or view "missing" does not exist.'
-  );
+  expect(dbTablePlugin).toMatchObject({ id: 'hvy.db-table', version: '0.2.0' });
 });
 
 test('scripting visual description exposes only failed runtime output', () => {

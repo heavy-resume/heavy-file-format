@@ -1285,6 +1285,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           <input data-field="meta-reader-max-width" placeholder="60rem" value="${deps.escapeAttr(String(state.documentMeta.reader_max_width ?? ''))}" />
         </label>
         <label>
+          <span>Sidebar Max Width</span>
+          <input data-field="meta-sidebar-max-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.sidebar_max_width ?? ''))}" />
+        </label>
+        <label>
           <span>Database Table Max Column Width</span>
           <input data-field="meta-database-table-max-column-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.database_table_max_column_width ?? ''))}" />
         </label>

@@ -114,7 +114,7 @@ scripts:
   const addForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add chore' }) });
   await addForm.locator('textarea[name="Description"]').fill('Dishes');
   await addForm.getByRole('button', { name: 'Add chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'Dishes' })).toBeVisible({
+  await expect(page.locator('.hvy-database-table-reader').filter({ hasText: 'Dishes' })).toBeVisible({
     timeout: PLUGIN_SETTLE_TIMEOUT_MS,
   });
 
@@ -122,14 +122,14 @@ scripts:
   await assignForm.locator('input[name="Chore"]').fill('Dishes');
   await assignForm.locator('select[name="Assignee"]').selectOption('Child');
   await assignForm.getByRole('button', { name: 'Assign chore' }).click();
-  await expect(page.locator('.hvy-db-table-plugin-reader').filter({ hasText: 'assigned' })).toBeVisible();
+  await expect(page.locator('.hvy-database-table-reader').filter({ hasText: 'assigned' })).toBeVisible();
 
   const completeForm = page.locator('form').filter({ has: page.getByRole('button', { name: 'Complete chore' }) });
   await completeForm.locator('input[name="Chore"]').fill('Dishes');
   await completeForm.locator('select[name="Completed by"]').selectOption('Child');
   await completeForm.getByRole('button', { name: 'Complete chore' }).click();
 
-  const weeklyLeaders = page.locator('#weekly-leaders .hvy-db-table-plugin-reader');
+  const weeklyLeaders = page.locator('#weekly-leaders .hvy-database-table-reader');
   await expect(weeklyLeaders).toContainText('Child');
   await expect(weeklyLeaders).toContainText('1');
 });

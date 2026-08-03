@@ -182,6 +182,18 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-sidebar-max-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:sidebar-max-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.sidebar_max_width = target.value;
+      } else {
+        delete state.document.meta.sidebar_max_width;
+      }
+      applyTheme();
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if (field === 'meta-database-table-max-column-width' && target instanceof HTMLInputElement) {
       recordHistory('meta:database-table-max-column-width');
       if (target.value.trim().length > 0) {

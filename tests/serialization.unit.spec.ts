@@ -540,6 +540,19 @@ reader_max_width: 60rem
   expect(output).toContain('reader_max_width: 60rem');
 });
 
+test('preserves sidebar_max_width in document front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+sidebar_max_width: 28rem
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+`, '.hvy');
+
+  expect(serializeWithState(document)).toContain('sidebar_max_width: 28rem');
+});
+
 test('preserves PHVY PDF page settings in document front matter on round-trip', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

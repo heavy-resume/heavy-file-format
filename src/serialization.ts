@@ -16,6 +16,7 @@ import { makeId, sanitizeOptionalId } from './utils';
 import { resolveBaseComponentFromMeta, isBuiltinComponentName } from './component-defs';
 import {
   DEFAULT_READER_MAX_WIDTH,
+  DEFAULT_SIDEBAR_MAX_WIDTH,
   DEFAULT_SECTION_CSS,
   defaultBlockSchema,
   schemaFromUnknown,
@@ -100,6 +101,9 @@ export function deserializeDocumentWithDiagnostics(
   if (typeof meta.reader_max_width === 'undefined') {
     meta.reader_max_width = DEFAULT_READER_MAX_WIDTH;
   }
+  if (typeof meta.sidebar_max_width === 'undefined') {
+    meta.sidebar_max_width = DEFAULT_SIDEBAR_MAX_WIDTH;
+  }
   if (typeof meta.section_defaults === 'undefined') {
     meta.section_defaults = { css: DEFAULT_SECTION_CSS };
   }
@@ -146,6 +150,7 @@ export function wrapHvyFragmentAsDocument(
   const meta: JsonObject = {
     hvy_version: 0.1,
     reader_max_width: DEFAULT_READER_MAX_WIDTH,
+    sidebar_max_width: DEFAULT_SIDEBAR_MAX_WIDTH,
     section_defaults: {
       css: DEFAULT_SECTION_CSS,
     },

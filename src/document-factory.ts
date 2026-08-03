@@ -11,6 +11,7 @@ import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
+export const DEFAULT_SIDEBAR_MAX_WIDTH = '40rem';
 export const DEFAULT_SECTION_CSS = 'margin: 0 0 0.5rem;';
 export const DEFAULT_SECTION_CONTAINED = true;
 export const DEFAULT_BLOCK_CSS = 'margin: 0.5rem 0;';
@@ -642,6 +643,7 @@ export function createBlankDocument(extension: VisualDocument['extension'] = '.h
     meta: {
       hvy_version: 0.1,
       reader_max_width: DEFAULT_READER_MAX_WIDTH,
+      sidebar_max_width: DEFAULT_SIDEBAR_MAX_WIDTH,
       section_defaults: {
         css: DEFAULT_SECTION_CSS,
         contained: DEFAULT_SECTION_CONTAINED,

@@ -86,6 +86,41 @@ test('palette override takes precedence until document theme is selected', () =>
   expect(style.getPropertyValue('--hvy-bg')).toBe('#123456');
 });
 
+test('document sidebar width is applied at the theme root with its format default', () => {
+  const style = createStyleDeclaration();
+  vi.stubGlobal('document', {
+    documentElement: {
+      style,
+      classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+      offsetHeight: 0,
+    },
+  });
+  vi.stubGlobal('window', {});
+  initState({
+    document: {
+      meta: { hvy_version: 0.1, sidebar_max_width: '28rem' },
+      extension: '.hvy',
+      sections: [],
+      attachments: [],
+    },
+  } as unknown as AppState);
+
+  applyTheme();
+  expect(style.getPropertyValue('--hvy-sidebar-max-width')).toBe('28rem');
+
+  initState({
+    document: {
+      meta: { hvy_version: 0.1 },
+      extension: '.hvy',
+      sections: [],
+      attachments: [],
+    },
+  } as unknown as AppState);
+
+  applyTheme();
+  expect(style.getPropertyValue('--hvy-sidebar-max-width')).toBe('40rem');
+});
+
 function createStyleDeclaration(): CSSStyleDeclaration {
   const values = new Map<string, string>();
   const priorities = new Map<string, string>();

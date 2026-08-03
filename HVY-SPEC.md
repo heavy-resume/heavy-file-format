@@ -176,6 +176,7 @@ metadata:
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `sidebar_max_width`: optional CSS width value limiting the editor and viewer sidebar. Defaults to `40rem`.
 - `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
 - `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.

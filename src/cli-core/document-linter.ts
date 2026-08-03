@@ -25,6 +25,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'importPreplan',
   'sidebar_label',
   'reader_max_width',
+  'sidebar_max_width',
   'database_table_max_column_width',
   'pdf_page',
   'image_attachment_max_dimensions',

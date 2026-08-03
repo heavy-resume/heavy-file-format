@@ -40,7 +40,7 @@ import { executePatchHeaderTool } from '../src/ai-header-edit-tools';
 import { deserializeDocument, serializeDocument, serializeSectionFragment } from '../src/serialization';
 import { initCallbacks, initState } from '../src/state';
 import type { ChatMessage, ChatSettings } from '../src/types';
-import { dbTablePluginRegistration } from '../src/plugins/db-table-plugin';
+import { dbTablePlugin as dbTablePluginRegistration } from '../src/plugins/db-table/db-table-component';
 import { formPluginRegistration } from '../src/plugins/form';
 import { setHostPlugins } from '../src/plugins/registry';
 
@@ -159,7 +159,7 @@ hvy_version: 0.1
   const summary = summarizeDocumentStructure(document).summary;
 
   expect(summary).toContain('plugin id="chores-table"');
-  expect(summary).toContain('AI hint: Dynamic data-backed table/view display. Target: "chores".');
+  expect(summary).toContain('AI hint: Relationship-aware configurable database table/view. Target: "chores".');
 });
 
 test('summarizeDocumentStructure hides content deeper than three nesting levels', () => {

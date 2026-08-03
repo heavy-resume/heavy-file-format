@@ -7,7 +7,8 @@ import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateDbTableObjectName } from './db-table-identifiers';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
-import type { ScriptingDbApi } from './scripting/runtime';
+import type { ScriptingDatabaseTableHandle, ScriptingDbApi } from './scripting/runtime';
+import { recordDatabaseTablesChanged, type DatabaseChangeSnapshot } from '../database-change-tracker';
 import { closeIcon, plusIcon } from '../icons';
 import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory } from '../history';
 import {
@@ -1357,10 +1358,12 @@ export interface ScriptingDbRuntime {
 
 export async function createScriptingDbRuntime(
   document: VisualDocument,
-  onMutation?: () => void
+  onMutation?: () => void,
+  databaseChanges: DatabaseChangeSnapshot = { revision: 0, tables: [], complete: true }
 ): Promise<ScriptingDbRuntime> {
   const db = await openDocumentDatabase(document);
   let databaseHistoryCheckpointRecorded = false;
+  const getTableNames = () => readScriptingDatabaseTableNames(db);
   const api: ScriptingDbApi = {
     query: (sql, params) => {
       const trimmed = String(sql ?? '').trim().replace(/;+\s*$/u, '');
@@ -1394,10 +1397,24 @@ export async function createScriptingDbRuntime(
       }
       db.run(trimmed, normalizeScriptingSqlParams(params));
       const rowsAffected = db.getRowsModified();
+      const affected = inferScriptingDatabaseMutationTables(db, trimmed);
       persistScriptingDatabase(document, db, !databaseHistoryCheckpointRecorded);
       databaseHistoryCheckpointRecorded = true;
+      recordDatabaseTablesChanged(document, affected.tables, affected.complete);
       onMutation?.();
       return `Executed: ${trimmed}\nRows affected: ${rowsAffected}`;
+    },
+    get_tables: () => getTableNames().map((name) => ({ name, removed: false })),
+    get_updated_tables: (tableName = '') => {
+      const filter = String(tableName ?? '').trim();
+      const currentNames = getTableNames();
+      const currentNameSet = new Set(currentNames);
+      const changedNames = databaseChanges.complete
+        ? databaseChanges.tables
+        : [...new Set([...currentNames, ...databaseChanges.tables])];
+      return changedNames
+        .filter((name) => !filter || name === filter)
+        .map<ScriptingDatabaseTableHandle>((name) => ({ name, removed: !currentNameSet.has(name) }));
     },
   };
   return {
@@ -1409,6 +1426,49 @@ export async function createScriptingDbRuntime(
         // Ignore close failures for scripting databases.
       }
     },
+  };
+}
+
+function readScriptingDatabaseTableNames(db: SqlJsDatabase): string[] {
+  const result = db.exec(
+    "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  )[0];
+  return (result?.values ?? []).map((row) => String(row[0] ?? '')).filter(Boolean);
+}
+
+function normalizeSqlIdentifier(token: string): string {
+  const segment = token.trim().split('.').at(-1) ?? '';
+  if ((segment.startsWith('"') && segment.endsWith('"')) || (segment.startsWith('`') && segment.endsWith('`'))) {
+    return segment.slice(1, -1).replace(segment[0] === '"' ? /""/g : /``/g, segment[0]);
+  }
+  if (segment.startsWith('[') && segment.endsWith(']')) return segment.slice(1, -1);
+  return segment.replace(/[^A-Za-z0-9_$-].*$/u, '');
+}
+
+export function inferScriptingDatabaseMutationTables(
+  db: Pick<SqlJsDatabase, 'exec'>,
+  sql: string
+): { tables: string[]; complete: boolean } {
+  const identifier = String.raw`(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*)(?:\s*\.\s*(?:"(?:""|[^"])+"|\[(?:[^\]])+\]|` + '`(?:``|[^`])+`' + String.raw`|[A-Za-z_][A-Za-z0-9_$-]*))?`;
+  const patterns = [
+    new RegExp(String.raw`\b(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bUPDATE(?:\s+OR\s+\w+)?\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bDELETE\s+FROM\s+(${identifier})`, 'giu'),
+    new RegExp(String.raw`\b(?:CREATE|DROP|ALTER)\s+(?:TABLE|VIEW)\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(${identifier})`, 'giu'),
+    new RegExp(String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${identifier}\s+ON\s+(${identifier})`, 'giu'),
+  ];
+  const tables = new Set<string>();
+  for (const pattern of patterns) {
+    for (const match of sql.matchAll(pattern)) {
+      const name = normalizeSqlIdentifier(match[1] ?? '');
+      if (name) tables.add(name);
+    }
+  }
+  const hasTriggers = (db.exec("SELECT 1 FROM sqlite_schema WHERE type = 'trigger' LIMIT 1")[0]?.values.length ?? 0) > 0;
+  const statementCount = sql.split(';').map((statement) => statement.trim()).filter(Boolean).length;
+  return {
+    tables: [...tables],
+    complete: tables.size > 0 && statementCount === 1 && !hasTriggers,
   };
 }
 

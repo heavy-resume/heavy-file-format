@@ -39,6 +39,7 @@ scripts:
     doc.form.set_value("Notes", "Bring a spoon.")
 `, {
       initialScript: 'populate_food',
+      changeScript: 'populate_food',
       submitScript: 'populate_food',
       submitLabel: 'Save lunch order',
       showSubmit: false,
@@ -73,6 +74,7 @@ scripts:
     });
     expect(parsed.spec.scripts.populate_food).toContain('doc.form.set_value');
     expect(parsed.spec.initialScript).toBe('populate_food');
+    expect(parsed.spec.changeScript).toBe('populate_food');
     expect(parsed.spec.submitScript).toBe('populate_food');
     expect(parsed.spec.submitLabel).toBe('Save lunch order');
     expect(parsed.spec.showSubmit).toBe(false);
@@ -128,12 +130,14 @@ scripts:
       actionsCss: 'grid-column: 1 / -1;',
       submitCss: 'margin-inline-start: auto;',
       submitLabel: 'Send details',
+      changeScript: 'submit_form',
       submitScript: 'submit_form',
     })).toMatchObject({
       formCss: 'display: grid;',
       actionsCss: 'grid-column: 1 / -1;',
       submitCss: 'margin-inline-start: auto;',
       submitLabel: 'Send details',
+      changeScript: 'submit_form',
       submitScript: 'submit_form',
     });
   });

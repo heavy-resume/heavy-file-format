@@ -6,6 +6,7 @@ import { resetPluginDocumentHookState, runPluginDocumentHooks } from '../src/plu
 import { setHostPlugins } from '../src/plugins/registry';
 import type { HvyPlugin } from '../src/plugins/types';
 import type { AppState } from '../src/types';
+import { recordDatabaseTablesChanged } from '../src/database-change-tracker';
 
 function createHookPlugin(id: string, hooks: NonNullable<HvyPlugin['hooks']>): HvyPlugin {
   return {
@@ -71,6 +72,23 @@ test('documentLoad runs for new document identity and documentChange runs for sa
   await runPluginDocumentHooks('load');
 
   expect(expectedResult).toEqual(['load:load', 'before edit', 'change:edit', 'load:load']);
+});
+
+test('database table revisions participate in the document change lifecycle', async () => {
+  const expectedResult: string[] = [];
+  setHostPlugins([
+    createHookPlugin('database-lifecycle-plugin', {
+      documentLoad: { run: () => { expectedResult.push('load'); } },
+      documentChange: { run: () => { expectedResult.push('change'); } },
+    }),
+  ]);
+  bootstrap();
+  await runPluginDocumentHooks('load');
+
+  recordDatabaseTablesChanged(state.document, ['contacts']);
+  await runPluginDocumentHooks('edit');
+
+  expect(expectedResult).toEqual(['load', 'change']);
 });
 
 test('document edits made during a hook do not enqueue a follow-up hook pass', async () => {

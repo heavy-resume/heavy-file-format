@@ -13,6 +13,7 @@ import {
   createScriptInvocationIdentity,
   type ScriptCycleExecution,
 } from './cycle-coordinator';
+import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -1425,6 +1426,7 @@ export interface RunUserScriptOptions {
   exportRuleRecorder?: HvyPdfExportRuleRecorder;
   injectedGlobals?: Record<string, unknown>;
   libraries?: readonly string[];
+  databaseChanges?: DatabaseChangeSnapshot;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -1475,7 +1477,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       scriptingDb = await createScriptingDbRuntime(options.document, () => {
         dbMutated = true;
         runtime?.markMutated();
-      });
+      }, options.databaseChanges);
     } catch (error) {
       return {
         ok: false,

@@ -5,6 +5,7 @@ import { notifyDocumentMayHaveChanged } from '../document-change';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { refreshMountedPlugins } from './mount';
 import { getHostPlugins } from './registry';
+import { getDatabaseChangeRevision } from '../database-change-tracker';
 import type {
   HvyDocumentHookContext,
   HvyPlugin,
@@ -127,7 +128,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
   const hookState = getHookState();
   const document = state.document;
   const signatureStartedAt = nowMs();
-  const signature = serializeDocument(document);
+  const signature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
   const signatureMs = elapsedMs(signatureStartedAt);
   const hookName: DocumentHookName | null = hookState.lastHookDocument !== document
     ? 'documentLoad'
@@ -168,7 +169,7 @@ export function runPluginDocumentHooks(changeReason: HvyPluginHookChangeReason =
       await runHookHandlers(hookName, ctx);
       if (ctx.isCurrentDocument()) {
         hookState.lastHookDocument = document;
-        hookState.lastHookSignature = serializeDocument(document);
+        hookState.lastHookSignature = `${serializeDocument(document)}\u0000database:${getDatabaseChangeRevision(document)}`;
         notifyDocumentMayHaveChanged(`document-hook:${ctx.changeReason}`, 'script', { authoritative: true });
       }
     });

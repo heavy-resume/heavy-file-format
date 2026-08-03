@@ -21,6 +21,7 @@ import {
   isQueuedDatabaseHistoryCommandActive,
   restoreDatabaseHistoryVersion,
 } from './database-history-controller';
+import { recordDatabaseTablesChanged } from './database-change-tracker';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -632,6 +633,7 @@ function serializeHistoryAttachment(attachment: DocumentAttachment | null): Seri
 function restoreDatabaseAttachment(attachment: SerializedHistoryAttachment | null): void {
   if (!attachment) {
     removeAttachment(state.document, DB_ATTACHMENT_ID);
+    recordDatabaseTablesChanged(state.document, [], false);
     return;
   }
   setAttachment(
@@ -640,4 +642,5 @@ function restoreDatabaseAttachment(attachment: SerializedHistoryAttachment | nul
     attachment.meta,
     new Uint8Array(attachment.bytes)
   );
+  recordDatabaseTablesChanged(state.document, [], false);
 }

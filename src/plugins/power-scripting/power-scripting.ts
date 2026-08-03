@@ -4,7 +4,7 @@ import { normalizeFilename } from '../../utils';
 import { refreshMountedPlugins } from '../mount';
 import type { HvyCanvasApi } from '../canvas/canvas';
 import { createScriptingDbRuntime, resetDbTableRuntimeForDocument } from '../db-table';
-import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, FORM_PLUGIN_ID, POWER_SCRIPTING_PLUGIN_ID } from '../registry';
 import { createScriptingRuntime, type ScriptingDocApi, type ScriptingRuntime } from '../scripting/runtime';
 import { createScriptingPluginsApi } from '../scripting/plugin-apis';
 import type { HvyPlugin, HvyPluginContext, HvyPluginFactory, HvyPluginInstance } from '../types';
@@ -125,10 +125,13 @@ function buildPowerDoc(
   return Object.assign(runtime.doc, {
     db: {
       query: (sql: string, params?: unknown) => runWithStateRuntime(stateRuntime, () => coreDb.query(sql, params)),
+      get_tables: () => runWithStateRuntime(stateRuntime, () => coreDb.get_tables()),
+      get_updated_tables: (tableName?: string) => runWithStateRuntime(stateRuntime, () => coreDb.get_updated_tables(tableName)),
       execute: (sql: string, params?: unknown) => runWithStateRuntime(stateRuntime, () => {
         const result = coreDb.execute(sql, params);
         resetDbTableRuntimeForDocument(ctx.rawDocument);
         refreshMountedPlugins(DB_TABLE_PLUGIN_ID);
+        refreshMountedPlugins(FORM_PLUGIN_ID);
         return result;
       }),
     },

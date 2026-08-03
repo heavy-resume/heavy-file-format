@@ -18,6 +18,7 @@ import { getActiveStateRuntime, runWithStateRuntime } from '../state';
 import type { ChatMessage, VisualDocument } from '../types';
 import type { VisualBlock } from '../editor/types';
 import { openScriptingErrorModal } from './scripting/error-modal';
+import { getDatabaseChangesSince, getDatabaseChangeRevision, type DatabaseChangeSnapshot } from '../database-change-tracker';
 import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
@@ -73,6 +74,7 @@ export interface FormSpec {
   actionsCss: string;
   submitCss: string;
   initialScript: string;
+  changeScript: string;
   submitAction: FormSubmitAction;
   submitSourceScript: string;
   submitScript: string;
@@ -104,6 +106,7 @@ function defaultFormSpec(): FormSpec {
     actionsCss: '',
     submitCss: '',
     initialScript: '',
+    changeScript: '',
     submitAction: 'script',
     submitSourceScript: '',
     submitScript: '',
@@ -291,12 +294,13 @@ function coerceReturnedText(value: unknown): string {
   return String(value).trim();
 }
 
-function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actionsCss' | 'submitCss' | 'initialScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
+function parseFormConfig(config?: JsonObject): Pick<FormSpec, 'formCss' | 'actionsCss' | 'submitCss' | 'initialScript' | 'changeScript' | 'submitAction' | 'submitSourceScript' | 'submitScript' | 'submitPrompt' | 'submitInputCharLimit' | 'submitOutputCharLimit' | 'submitLabel' | 'showSubmit' | 'scriptLibraries' | 'scriptStepBudget'> {
   return {
     formCss: typeof config?.formCss === 'string' ? config.formCss : '',
     actionsCss: typeof config?.actionsCss === 'string' ? config.actionsCss : '',
     submitCss: typeof config?.submitCss === 'string' ? config.submitCss : '',
     initialScript: typeof config?.initialScript === 'string' ? config.initialScript.trim() : '',
+    changeScript: typeof config?.changeScript === 'string' ? config.changeScript.trim() : '',
     submitAction: normalizeSubmitAction(config?.submitAction),
     submitSourceScript: typeof config?.submitSourceScript === 'string' ? config.submitSourceScript.trim() : '',
     submitScript: typeof config?.submitScript === 'string' ? config.submitScript.trim() : '',
@@ -317,6 +321,7 @@ export function serializeFormConfig(spec: FormSpec): JsonObject {
     actionsCss: spec.actionsCss,
     submitCss: spec.submitCss,
     initialScript: spec.initialScript,
+    changeScript: spec.changeScript,
     submitAction: spec.submitAction,
     submitSourceScript: spec.submitSourceScript,
     submitScript: spec.submitScript,
@@ -431,6 +436,7 @@ function createLiveState(spec: FormSpec): LiveFormState {
 interface FormLifecycleState {
   initialized: boolean;
   live: LiveFormState;
+  lastDatabaseRevision: number;
 }
 
 const formLifecycleByDocument = new WeakMap<VisualDocument, WeakMap<VisualBlock, FormLifecycleState>>();
@@ -443,7 +449,11 @@ function getFormLifecycle(document: VisualDocument, block: VisualBlock, spec: Fo
   }
   let lifecycle = forms.get(block);
   if (!lifecycle) {
-    lifecycle = { initialized: false, live: createLiveState(spec) };
+    lifecycle = {
+      initialized: false,
+      live: createLiveState(spec),
+      lastDatabaseRevision: getDatabaseChangeRevision(document),
+    };
     forms.set(block, lifecycle);
   }
   return lifecycle;
@@ -493,7 +503,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-form-plugin hvy-form-plugin-${ctx.mode}`;
   const initialSpec = parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig).spec;
-  let live = getFormLifecycle(ctx.rawDocument, ctx.block, initialSpec).live;
+  const lifecycle = getFormLifecycle(ctx.rawDocument, ctx.block, initialSpec);
+  let live = lifecycle.live;
   let statusText = '';
   let statusError = false;
   let statusErrorDetail: string | null = null;
@@ -540,7 +551,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     },
   });
 
-  const runFormScript = async (scriptName: string, reason: string, injectedGlobals?: Record<string, unknown>): Promise<ScriptingRunResult> => {
+  const runFormScript = async (
+    scriptName: string,
+    reason: string,
+    injectedGlobals?: Record<string, unknown>,
+    databaseChanges?: DatabaseChangeSnapshot
+  ): Promise<ScriptingRunResult> => {
     const name = scriptName.trim();
     const { spec } = parseCurrent();
     const source = spec.scripts[name];
@@ -565,10 +581,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       form: buildFormApi(),
       injectedGlobals,
       libraries: spec.scriptLibraries,
+      databaseChanges,
     });
   };
 
-  const runNamedScript = (scriptName: string, reason: string): void => {
+  const runNamedScript = (scriptName: string, reason: string, databaseChanges?: DatabaseChangeSnapshot): void => {
     const name = scriptName.trim();
     if (name.length === 0) {
       return;
@@ -588,7 +605,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           reason,
           componentId: ctx.block.schema.id || ctx.block.id,
         });
-        return runFormScript(name, reason).then((result) => {
+        return runFormScript(name, reason, undefined, databaseChanges).then((result) => {
           logPerfTrace('form-script:end', {
             scriptName: name,
             reason,
@@ -795,6 +812,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     scriptControls.className = 'hvy-form-editor-grid';
     scriptControls.innerHTML = `
       ${renderTopScriptSelect('Initial Script', 'initialScript', spec.initialScript, scriptNames)}
+      ${renderTopScriptSelect('Change Script', 'changeScript', spec.changeScript, scriptNames)}
       <label><span>Submit Action</span><select data-form-top-submit-action>
         <option value="script"${spec.submitAction === 'script' ? ' selected' : ''}>Script</option>
         <option value="ai-generate"${spec.submitAction === 'ai-generate' ? ' selected' : ''}>AI Generate</option>
@@ -893,8 +911,18 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       root.appendChild(status);
     }
 
-    if (spec.initialScript.trim().length > 0 && claimFormInitialization(ctx.rawDocument, ctx.block)) {
-      runNamedScript(spec.initialScript, 'initial');
+    const initializing = claimFormInitialization(ctx.rawDocument, ctx.block);
+    if (initializing) {
+      lifecycle.lastDatabaseRevision = getDatabaseChangeRevision(ctx.rawDocument);
+      if (spec.initialScript.trim().length > 0) {
+        runNamedScript(spec.initialScript, 'initial');
+      }
+    } else if (lifecycle.initialized) {
+      const databaseChanges = getDatabaseChangesSince(ctx.rawDocument, lifecycle.lastDatabaseRevision);
+      if (databaseChanges.revision > lifecycle.lastDatabaseRevision) {
+        lifecycle.lastDatabaseRevision = databaseChanges.revision;
+        runNamedScript(spec.changeScript, 'change', databaseChanges);
+      }
     }
   }
 
@@ -1066,7 +1094,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       return;
     }
     if (target.dataset.formTopScript) {
-      const key = target.dataset.formTopScript as 'initialScript' | 'submitSourceScript' | 'submitScript';
+      const key = target.dataset.formTopScript as 'initialScript' | 'changeScript' | 'submitSourceScript' | 'submitScript';
       spec[key] = target.value.trim();
       commitBehavior(spec);
       return;
@@ -1117,6 +1145,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       spec.scripts[nextName] = spec.scripts[oldName] ?? '';
       delete spec.scripts[oldName];
       if (spec.initialScript === oldName) spec.initialScript = nextName;
+      if (spec.changeScript === oldName) spec.changeScript = nextName;
       if (spec.submitSourceScript === oldName) spec.submitSourceScript = nextName;
       if (spec.submitScript === oldName) spec.submitScript = nextName;
       for (const field of spec.fields) {
@@ -1125,7 +1154,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         }
       }
       commitSpec(spec);
-      if (spec.initialScript === nextName || spec.submitSourceScript === nextName || spec.submitScript === nextName) {
+      if (spec.initialScript === nextName || spec.changeScript === nextName || spec.submitSourceScript === nextName || spec.submitScript === nextName) {
         commitBehavior(spec);
       }
     }
@@ -1179,6 +1208,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const name = button.dataset.formScriptName ?? '';
       delete spec.scripts[name];
       if (spec.initialScript === name) spec.initialScript = '';
+      if (spec.changeScript === name) spec.changeScript = '';
       if (spec.submitSourceScript === name) spec.submitSourceScript = '';
       if (spec.submitScript === name) spec.submitScript = '';
       commitBehavior(spec);
@@ -1282,15 +1312,16 @@ export const formPlugin: HvyPlugin = {
     `Use \`<!--hvy:plugin {"plugin":"${FORM_PLUGIN_ID}","pluginConfig":{"version":"${FORM_PLUGIN_VERSION}","submitLabel":"Submit","submitScript":"submit"}}-->\` followed by form YAML in the component body.`,
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
-    'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `initialScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
+    'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `initialScript`, `changeScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
     'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
     '`formCss`, `actionsCss`, `submitCss`, and field `meta.css` are sanitized inline CSS applied to the form, action wrapper, submit button, and field wrapper respectively.',
-    '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, and field triggers name a script key.',
+    '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, `pluginConfig.changeScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',
     '`scriptLibraries` enables checked sandbox libraries such as `random`, `re`, and `datetime` for every form script.',
     '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',
+    'Use `doc.db.get_updated_tables(table_name="name")` in `changeScript` to skip queries when unrelated database tables changed.',
     'Script blocks must be indented under `scripts.NAME: |`; use Python comments (`# ...`) and Python booleans (`True`/`False`), not SQL `--` comments or JavaScript-style booleans.',
   ].join(' '),
   create: formPluginFactory,

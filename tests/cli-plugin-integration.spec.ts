@@ -576,6 +576,27 @@ test('chore chart example populates chore dropdowns from the attached database',
   await page.goto('/');
   await page.locator('#fileInput').setInputFiles('examples/chore-chart-3.hvy');
   await expect(page.getByLabel('Download file name')).toHaveValue('chore-chart-3.hvy');
+  await page.getByRole('button', { name: 'CLI' }).click();
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/chores-pivot/plugin.json',
+    '{"id":"chores-pivot","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"chores","queryLimit":10}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/leaderboard/plugin.json',
+    '{"id":"leaderboard","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"completions","queryLimit":10}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/add-chore/plugin.json',
+    '{"id":"add-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitScript":"submit","submitLabel":"Add chore"}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/assign-chore/plugin.json',
+    '{"id":"assign-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","changeScript":"load","submitScript":"submit","submitLabel":"Assign chore"}}'
+  ));
+  await runCliCommand(page, writeFileCommand(
+    '/chore-chart/complete-chore/plugin.json',
+    '{"id":"complete-chore","plugin":"hvy.form","pluginConfig":{"version":"0.1","initialScript":"load","changeScript":"load","submitScript":"submit","submitLabel":"Complete chore"}}'
+  ));
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(page.locator('#chores-pivot')).toContainText('Pick up clothes');

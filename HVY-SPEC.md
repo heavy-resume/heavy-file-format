@@ -1690,8 +1690,9 @@ scripts:
 
 Plugin-specific rules:
 - `pluginConfig.version` is optional and defaults to `"0.1"`.
-- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`
-  and `pluginConfig.submitScript` reference named scripts from the form body.
+- Form-level behavior is stored in `pluginConfig`. `pluginConfig.initialScript`,
+  `pluginConfig.changeScript`, and `pluginConfig.submitScript` reference named
+  scripts from the form body.
   `pluginConfig.submitLabel` customizes the visible submit button text and
   defaults to `"Submit"`. `pluginConfig.showSubmit` defaults to `true`; when
   `false`, clients MUST omit the visible submit button while preserving the form
@@ -1734,14 +1735,19 @@ Plugin-specific rules:
   object with `label` and optional `value`; when `value` is omitted, clients MUST
   use `label` as the value.
 - `scripts` is a map from script name to Python/Brython source.
-  `pluginConfig.initialScript`, `pluginConfig.submitSourceScript`,
-  `pluginConfig.submitScript`, and field trigger values reference keys in this
-  map.
+  `pluginConfig.initialScript`, `pluginConfig.changeScript`,
+  `pluginConfig.submitSourceScript`, `pluginConfig.submitScript`, and field
+  trigger values reference keys in this map.
 - `pluginConfig.initialScript` runs once for the form component during the
   current in-memory document lifecycle. DOM remounts, reader refreshes,
   database-driven rerenders, and view changes MUST NOT cause it to run again.
   Loading a new document or creating a new form component starts a new
   lifecycle.
+- `pluginConfig.changeScript` MAY reference a named script that runs after a
+  database-backed document change. Clients MUST coalesce refreshes and run the
+  script once per form component and database revision rather than once per DOM
+  mount. The script can use `doc.db.get_updated_tables(table_name="...")` to
+  avoid querying unrelated tables.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
   client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements
@@ -1761,6 +1767,12 @@ Plugin-specific rules:
   execution, `doc.form` exposes `get_value(label)`, `set_value(label, value)`,
   `get_values()`, `set_options(label, options)`, `get_options(label)`,
   `set_error(label, message)`, and `clear_error(label)`.
+- `doc.db.get_tables()` returns handles for the current attached SQLite tables.
+  `doc.db.get_updated_tables(table_name="")` returns handles for tables changed
+  since the preceding document-change script lifecycle; each handle exposes
+  `name` and `removed`. On initial load it returns an empty list. When the
+  client knows the database changed but cannot attribute every affected table,
+  it MUST conservatively return all matching current tables.
 - Scripts MAY use `doc.time.now_iso()`, `doc.time.now_local()`,
   `doc.time.now_unix_ms()`, and `doc.time.today_iso()` for current client time.
   `now_iso()` returns an ISO 8601 timestamp, `now_local()` returns a

@@ -9,6 +9,7 @@ import {
 import { getActiveStateRuntime, runWithStateRuntimeAsync, type StateRuntime } from './state';
 import type { JsonObject } from './hvy/types';
 import type { VisualDocument } from './types';
+import { recordDatabaseTablesChanged } from './database-change-tracker';
 
 export interface DatabaseHistoryQueueStatus {
   pending: number;
@@ -181,6 +182,7 @@ export async function restoreDatabaseHistoryVersion(targetVersion: string | null
     if (transition.beforeVersion === targetVersion) await transition.undo();
     else await transition.redo();
     history.currentVersion = targetVersion;
+    recordDatabaseTablesChanged(getActiveStateRuntime().state.document, [], false);
   } finally {
     history.commandActive = false;
   }

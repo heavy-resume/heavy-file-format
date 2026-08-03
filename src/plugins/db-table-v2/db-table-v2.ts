@@ -1,7 +1,7 @@
 import type { HvyPlugin, HvyPluginContext, HvyPluginInstance } from '../types';
 import type { VisualBlock } from '../../editor/types';
 import type { VisualDocument } from '../../types';
-import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, DB_TABLE_V2_PLUGIN_ID } from '../registry';
+import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID, DB_TABLE_V2_PLUGIN_ID, FORM_PLUGIN_ID } from '../registry';
 import { refreshMountedPlugins } from '../mount';
 import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, closeIcon, plusIcon } from '../../icons';
 import { escapeAttr, escapeHtml } from '../../utils';
@@ -723,6 +723,7 @@ export async function getDbTableV2RenderedText(document: VisualDocument, block: 
 function refreshDatabasePlugins(): void {
   refreshMountedPlugins(DB_TABLE_V2_PLUGIN_ID);
   refreshMountedPlugins(DB_TABLE_PLUGIN_ID);
+  refreshMountedPlugins(FORM_PLUGIN_ID);
 }
 
 export const dbTableV2Plugin: HvyPlugin = {

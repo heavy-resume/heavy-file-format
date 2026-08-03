@@ -16,6 +16,7 @@ import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
 import type { ScriptingPluginsApi } from './plugin-apis';
+import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
 
 // JS-side `doc` runtime exposed to the user's Python script. Every method is
 // synchronous from Python's point of view; mutations on the visual document
@@ -96,6 +97,13 @@ export interface ScriptingFormApi {
 export interface ScriptingDbApi {
   query(sql: string, params?: unknown): Record<string, unknown>[];
   execute(sql: string, params?: unknown): string;
+  get_tables(): ScriptingDatabaseTableHandle[];
+  get_updated_tables(table_name?: string): ScriptingDatabaseTableHandle[];
+}
+
+export interface ScriptingDatabaseTableHandle {
+  name: string;
+  removed: boolean;
 }
 
 export interface ScriptingJsonApi {
@@ -138,6 +146,7 @@ export interface ScriptingRuntimeOptions {
   now?: () => Date;
   onMutationFlushed?: () => void;
   beforeMutationRender?: () => void;
+  databaseChanges?: DatabaseChangeSnapshot;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -162,6 +171,8 @@ function createUnavailableDbApi(): ScriptingDbApi {
   return {
     query: fail,
     execute: fail,
+    get_tables: fail,
+    get_updated_tables: fail,
   };
 }
 

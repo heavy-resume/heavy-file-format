@@ -15,6 +15,7 @@ import python from 'highlight.js/lib/languages/python';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
 import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
+import { getDatabaseChangesSince, getDatabaseChangeRevision } from '../../database-change-tracker';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
 import './scripting.css';
@@ -346,6 +347,7 @@ interface ScriptingTarget {
 let lastScriptedDocument: HvyDocumentHookContext['document'] | null = null;
 let lastScriptedSignature = '';
 let lastScriptedDocumentSnapshot = '';
+const lastDatabaseRevisionByDocument = new WeakMap<HvyDocumentHookContext['document'], number>();
 
 function getScriptingPluginLibraries(pluginConfig: JsonObject | null | undefined): ScriptingLibraryName[] {
   const raw = Array.isArray(pluginConfig?.libraries) ? pluginConfig.libraries : [];
@@ -388,6 +390,10 @@ export function getRunnableScriptingTargetsForView(
 }
 
 async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Promise<void> {
+  const previousDatabaseRevision = ctx.changeReason === 'load'
+    ? getDatabaseChangeRevision(ctx.document)
+    : lastDatabaseRevisionByDocument.get(ctx.document) ?? 0;
+  const databaseChanges = getDatabaseChangesSince(ctx.document, previousDatabaseRevision);
   if (ctx.changeReason === 'load') {
     clearScriptingResults();
     lastScriptedDocumentSnapshot = '';
@@ -401,7 +407,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   const scriptSignature = targets
     .map((target) => `${target.sectionKey}\u0000${target.blockId}\u0000${target.editorOnly ? 'editor' : 'document'}\u0000${target.pluginVersion}\u0000${target.libraries.join(',')}\u0000${target.source}`)
     .join('\u0001');
-  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}`;
+  const signature = `${ctx.view}\u0002${scriptSignature}\u0002${serializeDocument(ctx.document)}\u0002database:${getDatabaseChangeRevision(ctx.document)}`;
   if (ctx.document === lastScriptedDocument && signature === lastScriptedSignature) {
     return;
   }
@@ -424,6 +430,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       changeReason: ctx.changeReason,
       renderOnMutation: ctx.changeReason !== 'edit',
       libraries: target.libraries,
+      databaseChanges,
     });
     console.debug('[hvy:scripting] script run', {
       changeReason: ctx.changeReason,
@@ -444,6 +451,7 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
   }
   if (ctx.isCurrentDocument()) {
     lastScriptedDocumentSnapshot = serializeDocument(ctx.document);
+    lastDatabaseRevisionByDocument.set(ctx.document, databaseChanges.revision);
   }
   ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
 }

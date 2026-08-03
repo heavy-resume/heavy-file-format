@@ -182,6 +182,17 @@ export function bindInputBlock(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'meta-database-table-max-column-width' && target instanceof HTMLInputElement) {
+      recordHistory('meta:database-table-max-column-width');
+      if (target.value.trim().length > 0) {
+        state.document.meta.database_table_max_column_width = target.value;
+      } else {
+        delete state.document.meta.database_table_max_column_width;
+      }
+      getRefreshReaderPanels()();
+      return;
+    }
+
     if ((field === 'meta-image-attachment-max-width' || field === 'meta-image-attachment-max-height') && target instanceof HTMLInputElement) {
       recordHistory('meta:image-attachment-max-dimensions');
       state.imageAttachmentReductionStatus = null;

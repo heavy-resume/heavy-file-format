@@ -894,7 +894,7 @@ function renderDataTable(csv: string, _activeField: string, _activeRow: string, 
           ${bodyRows.map((row, rowOffset) => renderBodyRow(row, rowOffset)).join('')}
           <tr class="table-add-row-line">
             <td colspan="${columnCount + 2}">
-              <button type="button" class="ghost" data-graph-action="add-row">${plusIcon()} Add Row</button>
+              <button type="button" class="ghost" data-graph-action="add-row">${plusIcon()} Row</button>
             </td>
           </tr>
         </tbody>

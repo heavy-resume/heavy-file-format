@@ -22,6 +22,9 @@ export interface DbTableV2ColumnDefaults {
 }
 
 const CSS_COLUMN_WIDTH = /^(?:auto|\d+(?:\.\d+)?(?:px|rem|em|ch|%))$/u;
+const CSS_MAX_COLUMN_WIDTH = /^\d+(?:\.\d+)?(?:px|rem|em|ch)$/u;
+
+export const DEFAULT_DB_TABLE_V2_MAX_COLUMN_WIDTH = '40rem';
 
 export function readDbTableV2Config(value: JsonObject): DbTableV2Config {
   return {
@@ -95,9 +98,12 @@ export function renameDbTableV2ColumnConfig(
   oldColumnName: string,
   nextColumnName: string
 ): JsonObject {
-  if (oldColumnName === nextColumnName || !(oldColumnName in config.columns)) return {};
+  if (oldColumnName === nextColumnName) return {};
   const columns = { ...config.columns };
-  columns[nextColumnName] = columns[oldColumnName]!;
+  columns[nextColumnName] = {
+    ...(columns[oldColumnName] ?? {}),
+    label: columns[oldColumnName]?.label ?? humanizeDbColumnName(oldColumnName),
+  };
   delete columns[oldColumnName];
   return { columns };
 }
@@ -112,6 +118,11 @@ export function removeDbTableV2ColumnConfig(config: DbTableV2Config, columnName:
 export function normalizeDbTableV2ColumnWidth(value: unknown): string {
   const width = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return CSS_COLUMN_WIDTH.test(width) ? width : '';
+}
+
+export function normalizeDbTableV2MaxColumnWidth(value: unknown): string {
+  const width = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return CSS_MAX_COLUMN_WIDTH.test(width) ? width : '';
 }
 
 export function humanizeDbColumnName(value: string): string {

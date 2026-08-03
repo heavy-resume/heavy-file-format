@@ -411,7 +411,7 @@ function renderEditableTable(
                   data-block-id="${helpers.escapeAttr(blockId)}"
                   data-table-name="${helpers.escapeAttr(tableName)}"
                   ${tableDisabledAttr}
-                >${plusIcon()} Add Row</button>
+                >${plusIcon()} Row</button>
               </td>
             </tr>
           </tbody>

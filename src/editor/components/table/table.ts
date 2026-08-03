@@ -253,7 +253,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
               <td colspan="${columns.length + 2}">
                 <button type="button" class="ghost" data-action="add-table-row" data-section-key="${helpers.escapeAttr(
                   sectionKey
-                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Add Row</button>
+                )}" data-block-id="${helpers.escapeAttr(block.id)}">${plusIcon()} Row</button>
               </td>
             </tr>
           </tbody>

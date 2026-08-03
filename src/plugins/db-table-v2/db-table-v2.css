@@ -1,8 +1,45 @@
 .hvy-db-table-v2 {
+  position: relative;
   display: grid;
   gap: 0.75rem;
   min-width: 0;
   color: var(--hvy-text, var(--reader-fg));
+}
+
+.db-v2-column-editor-popover {
+  position: absolute;
+  z-index: 12;
+  display: grid;
+  gap: 0.38rem;
+  width: max-content;
+  max-width: min(22rem, 100%);
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.65rem;
+  color: var(--hvy-text, var(--reader-fg));
+  background: var(--hvy-surface, var(--reader-panel));
+  box-shadow: 0 0.65rem 1.5rem var(--hvy-shadow, rgba(0, 0, 0, 0.24));
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.db-v2-column-editor-popover > span {
+  color: var(--hvy-text-muted, var(--reader-muted));
+}
+
+.db-v2-column-editor-modes {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.db-v2-column-editor-modes button {
+  white-space: nowrap;
+}
+
+.db-v2-column-editor-modes button.is-active {
+  color: var(--hvy-button-text, var(--reader-bg));
+  border-color: var(--hvy-button-bg, var(--hvy-accent, var(--reader-accent)));
+  background: var(--hvy-button-bg, var(--hvy-accent, var(--reader-accent)));
 }
 
 .db-v2-queue-status {
@@ -236,7 +273,11 @@
 }
 
 .db-v2-add-column {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   justify-self: start;
+  white-space: nowrap;
 }
 
 .db-v2-check {
@@ -361,13 +402,91 @@
   font-weight: 600;
 }
 
-.db-v2-table th > span {
-  vertical-align: middle;
+.db-v2-table th:has(.db-v2-resize-handle) {
+  position: sticky;
 }
 
-.db-v2-table th .db-v2-sort {
-  float: right;
-  margin: -0.25rem -0.3rem -0.25rem 0.3rem;
+.db-v2-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.db-v2-header-content > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-v2-column-name-input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  padding: 0.18rem 0.3rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  text-overflow: ellipsis;
+}
+
+.db-v2-column-name-input:hover {
+  border-color: var(--hvy-border-input, var(--reader-border));
+  background: color-mix(in srgb, var(--hvy-surface, var(--reader-panel)) 75%, transparent);
+}
+
+.db-v2-column-name-input:focus {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 1px;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.db-v2-header-content .db-v2-sort {
+  flex: 0 0 auto;
+  margin: -0.25rem -0.3rem -0.25rem auto;
+}
+
+.db-v2-resize-handle {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: -0.3rem;
+  bottom: 0;
+  width: 0.65rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.db-v2-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 0.3rem;
+  bottom: 20%;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.db-v2-resize-handle:hover::after {
+  background: var(--hvy-accent, var(--reader-accent));
+}
+
+.db-v2-width-probe,
+.db-v2-content-measurer {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.db-v2-table th.is-wrapped .db-v2-header-content > span {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .db-v2-table tbody tr:nth-child(even) td {
@@ -403,9 +522,18 @@
   text-align: right;
 }
 
+.db-v2-row-action-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
 .db-v2-row-component,
 .db-v2-delete-row {
+  flex: 0 0 auto;
   min-height: 1.9rem;
+  white-space: nowrap;
 }
 
 .db-v2-row-component.is-attached {
@@ -446,6 +574,14 @@
 
 .db-v2-table-actions {
   flex-wrap: wrap;
+}
+
+.db-v2-table-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @container hvy-surface (inline-size < 42rem) {

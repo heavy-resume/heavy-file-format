@@ -1323,11 +1323,29 @@ class __HvyPluginsProxy__:
         return self.__js_doc.plugins.call_json(plugin_id, method, __hvy_to_json__(merged))
 
 
+class __HvyDbProxy__:
+    def __init__(self, js_doc):
+        self.__js_doc = js_doc
+
+    def query(self, sql, params=None):
+        return self.__js_doc.db.query_json(sql, __hvy_to_json__(params))
+
+    def execute(self, sql, params=None):
+        return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))
+
+    def get_tables(self):
+        return self.__js_doc.db.get_tables()
+
+    def get_updated_tables(self, table_name=''):
+        return self.__js_doc.db.get_updated_tables(table_name)
+
+
 class __HvyDocProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
         self.tool = __HvyToolProxy__(js_doc)
         self.plugins = __HvyPluginsProxy__(js_doc)
+        self.db = __HvyDbProxy__(js_doc)
 
     def __getattr__(self, name):
         return getattr(self.__js_doc, name)

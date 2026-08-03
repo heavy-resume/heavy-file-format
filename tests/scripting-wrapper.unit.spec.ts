@@ -87,8 +87,11 @@ test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
 
   expect(expectedResult).toContain('class __HvyDocProxy__:');
   expect(expectedResult).toContain('class __HvyPluginsProxy__:');
+  expect(expectedResult).toContain('class __HvyDbProxy__:');
   expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
   expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
+  expect(expectedResult).toContain('self.db = __HvyDbProxy__(js_doc)');
+  expect(expectedResult).toContain('return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))');
   expect(expectedResult).toContain('return getattr(self.__js_doc, name)');
 });
 
@@ -682,6 +685,9 @@ test('createScriptingRuntime exposes a supplied database API', () => {
   ]);
   expect(runtime.doc.db.execute('INSERT INTO chores (title) VALUES (?)', ['Sweep'])).toBe(
     'ran INSERT INTO chores (title) VALUES (?) with ["Sweep"]'
+  );
+  expect(runtime.doc.db.execute_json('INSERT INTO chores (title) VALUES (?)', '[null]')).toBe(
+    'ran INSERT INTO chores (title) VALUES (?) with [null]'
   );
 });
 

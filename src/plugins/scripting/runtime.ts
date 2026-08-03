@@ -50,7 +50,7 @@ export interface ScriptingDocApi {
   header: ScriptingHeaderApi;
   attachments: ScriptingAttachmentsApi;
   form: ScriptingFormApi;
-  db: ScriptingDbApi;
+  db: ScriptingBrythonDbApi;
   json: ScriptingJsonApi;
   time: ScriptingTimeApi;
   export: ScriptingExportApi;
@@ -99,6 +99,11 @@ export interface ScriptingDbApi {
   execute(sql: string, params?: unknown): string;
   get_tables(): ScriptingDatabaseTableHandle[];
   get_updated_tables(table_name?: string): ScriptingDatabaseTableHandle[];
+}
+
+export interface ScriptingBrythonDbApi extends ScriptingDbApi {
+  query_json(sql: string, paramsJson: string): Record<string, unknown>[];
+  execute_json(sql: string, paramsJson: string): string;
 }
 
 export interface ScriptingDatabaseTableHandle {
@@ -331,6 +336,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
     }
   };
 
+  const database = options.db ?? createUnavailableDbApi();
   const doc: ScriptingDocApi = {
     log_json: (valuesJson) => {
       const parsed = JSON.parse(String(valuesJson || '[]')) as unknown;
@@ -429,7 +435,11 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       },
     },
     form: options.form ?? createUnavailableFormApi(),
-    db: options.db ?? createUnavailableDbApi(),
+    db: {
+      ...database,
+      query_json: (sql, paramsJson) => database.query(sql, JSON.parse(String(paramsJson))),
+      execute_json: (sql, paramsJson) => database.execute(sql, JSON.parse(String(paramsJson))),
+    },
     json: createJsonApi(),
     time: createTimeApi(options.now ?? (() => new Date())),
     export: options.exportRuleRecorder ? createExportApi(options.exportRuleRecorder) : createUnavailableExportApi(),

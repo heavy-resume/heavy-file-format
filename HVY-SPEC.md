@@ -176,6 +176,7 @@ metadata:
 Presentation keys in document metadata include:
 - `sidebar_label`: optional string. Use it as the label for the sidebar toggle control. Defaults to a client-defined fallback (e.g. `☰`) if absent.
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
+- `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
 - `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.
@@ -1638,6 +1639,12 @@ permit clients to silently reinterpret v1 blocks.
 - Column presentation is scoped to the plugin block. Multiple v2 blocks MAY
   present the same backing table with different labels, visibility, widths,
   wrapping, and foreign display columns.
+- Editable clients SHOULD allow authors to resize visible columns by dragging a
+  heading edge and auto-fit a column to its rendered heading and data by double
+  clicking that edge. Resized widths are stored in the block's column
+  presentation. Clients MUST clamp interactive and auto-fit widths to
+  `database_table_max_column_width`, which defaults to `40rem` when absent or
+  invalid.
 - V2 clients that support the v1 companion-table convention for row-attached
   HVY fragments SHOULD preserve and expose those fragments after explicit
   migration. Deleting a database row through the client SHOULD also delete its

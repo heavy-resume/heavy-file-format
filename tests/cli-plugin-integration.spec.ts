@@ -134,6 +134,48 @@ scripts:
   await expect(weeklyLeaders).toContainText('1');
 });
 
+test('form database scripts store Brython None parameters as SQLite NULL', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="nullableMount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"nullable-values"}-->
+#! Nullable values
+
+<!--hvy:plugin {"id":"nullable-form","plugin":"hvy.form","pluginConfig":{"version":"0.1","submitLabel":"Save","showSubmit":true,"submitScript":"submit"}}-->
+fields:
+  - label: Optional value
+    type: text
+scripts:
+  submit: |-
+    doc.db.execute("CREATE TABLE IF NOT EXISTS example (optional_value TEXT)")
+    doc.db.execute("INSERT INTO example (optional_value) VALUES (?)", [None])
+`;
+    const visualDocument = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    (window as Window & { __nullableDocument?: typeof visualDocument }).__nullableDocument = visualDocument;
+    mountHvy({ root: document.querySelector<HTMLElement>('#nullableMount')!, document: visualDocument, mode: 'viewer' });
+  });
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await waitForScriptingIdle(page);
+
+  const expectedResult = await page.evaluate(async () => {
+    const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
+    const visualDocument = (window as Window & { __nullableDocument?: Parameters<typeof createScriptingDbRuntime>[0] }).__nullableDocument;
+    if (!visualDocument) throw new Error('Nullable test document missing.');
+    const database = await createScriptingDbRuntime(visualDocument);
+    try {
+      return database.api.query('SELECT optional_value FROM example');
+    } finally {
+      database.dispose();
+    }
+  });
+  expect(expectedResult).toEqual([{ optional_value: null, '0': null }]);
+});
+
 test('scripting globals do not expose browser globals or wrapper internals', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
@@ -558,6 +600,7 @@ scripts:
     initial_runs = doc.header.get("form_initial_runs") or 0
     doc.header.set("form_initial_runs", initial_runs + 1)
     doc.form.set_options("Choice", [("a", "Alpha"), ("b", "Beta")])
+    doc.header.set("initial_choice", doc.form.get_value("Choice"))
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
@@ -568,6 +611,7 @@ scripts:
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('form_initial_runs: 1');
+  await expect(page.locator('#rawEditor')).toContainText('initial_choice: a');
   await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
 });

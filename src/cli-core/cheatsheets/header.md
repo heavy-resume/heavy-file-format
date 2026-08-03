@@ -12,7 +12,7 @@ nl -ba /header.yaml
 
 Use the header for document-level concerns:
 
-- `title`, `description`, `tags`, `sidebar_label`, and `reader_max_width`
+- `title`, `description`, `tags`, `sidebar_label`, `reader_max_width`, and `database_table_max_column_width`
 - `theme.colors`
 - `component_defs` and `section_defs`
 - `component_defaults`, `section_defaults`, and `heading_styles`

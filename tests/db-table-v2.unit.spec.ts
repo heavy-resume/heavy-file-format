@@ -15,6 +15,7 @@ import {
 } from '../src/plugins/db-table-v2/db-table-v2-data';
 import {
   normalizeDbTableV2ColumnWidth,
+  normalizeDbTableV2MaxColumnWidth,
   readDbTableV2ColumnConfig,
   readDbTableV2Config,
   removeDbTableV2ColumnConfig,
@@ -161,6 +162,8 @@ test('db-table-v2 column presentation defaults generated keys to compact and val
   });
   expect(normalizeDbTableV2ColumnWidth('18ch')).toBe('18ch');
   expect(normalizeDbTableV2ColumnWidth('calc(100% - 1rem)')).toBe('');
+  expect(normalizeDbTableV2MaxColumnWidth('40rem')).toBe('40rem');
+  expect(normalizeDbTableV2MaxColumnWidth('80%')).toBe('');
   expect(updateDbTableV2ColumnConfig(config, 'id', { visibility: 'hidden', width: '6rem' })).toEqual({
     columns: {
       id: { visibility: 'hidden', width: '6rem' },
@@ -350,5 +353,8 @@ test('db-table-v2 migrates and removes presentation settings when physical colum
   });
   expect(removeDbTableV2ColumnConfig(config, 'company')).toEqual({
     columns: { notes: { wrap: true } },
+  });
+  expect(renameDbTableV2ColumnConfig(readDbTableV2Config({ table: 'contacts' }), 'organization_id', 'company_id')).toEqual({
+    columns: { company_id: { label: 'Organization Id' } },
   });
 });

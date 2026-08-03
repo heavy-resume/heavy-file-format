@@ -423,12 +423,21 @@ function formatOptionsText(options: FormOption[]): string {
   return options.map((option) => (option.value === option.label ? option.label : `${option.label} | ${option.value}`)).join('\n');
 }
 
+function reconcileSelectValue(value: string | boolean, options: FormOption[]): string {
+  const current = String(value ?? '');
+  return options.some((option) => option.value === current)
+    ? current
+    : options[0]?.value ?? '';
+}
+
 function createLiveState(spec: FormSpec): LiveFormState {
   const values: Record<string, string | boolean> = {};
   const options: Record<string, FormOption[]> = {};
   for (const field of spec.fields) {
-    values[field.label] = field.value;
     options[field.label] = field.options.map((option) => ({ ...option }));
+    values[field.label] = field.type === 'select'
+      ? reconcileSelectValue(field.value, options[field.label]!)
+      : field.value;
   }
   return { values, options, errors: {} };
 }
@@ -478,6 +487,9 @@ function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
     }
     if (!(field.label in live.options)) {
       live.options[field.label] = field.options.map((option) => ({ ...option }));
+    }
+    if (field.type === 'select') {
+      live.values[field.label] = reconcileSelectValue(live.values[field.label]!, live.options[field.label]!);
     }
   }
   for (const label of Object.keys(live.values)) {
@@ -538,6 +550,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
             .map(normalizeScriptingFormOption)
             .filter((option) => option.label.length > 0)
         : [];
+      if (parseCurrent().spec.fields.find((field) => field.label === fieldName)?.type === 'select') {
+        live.values[fieldName] = reconcileSelectValue(live.values[fieldName] ?? '', live.options[fieldName]!);
+      }
       renderReader();
     },
     get_options: (fieldName) => (live.options[fieldName] ?? []).map((option) => ({ ...option })),

@@ -7,6 +7,8 @@ import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, closeIcon, p
 import { escapeAttr, escapeHtml } from '../../utils';
 import {
   humanizeDbColumnName,
+  DEFAULT_DB_TABLE_V2_MAX_COLUMN_WIDTH,
+  normalizeDbTableV2MaxColumnWidth,
   readDbTableV2ColumnConfig,
   readDbTableV2Config,
   removeDbTableV2ColumnConfig,
@@ -83,10 +85,35 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let refreshVersion = 0;
   let disposed = false;
   let unsubscribeQueue = () => {};
+  let stopColumnResize = () => {};
+  let columnEditor: HTMLElement | null = null;
+
+  const closeColumnEditor = () => {
+    columnEditor?.remove();
+    columnEditor = null;
+  };
+
+  const openColumnEditor = (input: HTMLInputElement) => {
+    closeColumnEditor();
+    const columnName = input.dataset.columnName ?? '';
+    const mode = input.dataset.columnEditMode === 'database' ? 'database' : 'display';
+    const editor = document.createElement('div');
+    editor.className = 'db-v2-column-editor-popover';
+    editor.dataset.columnName = columnName;
+    editor.innerHTML = `<strong>Edit column header</strong><div class="db-v2-column-editor-modes" role="group" aria-label="Column name type"><button type="button" class="ghost${mode === 'display' ? ' is-active' : ''}" data-db-v2-column-edit-mode="display">Display</button><button type="button" class="ghost${mode === 'database' ? ' is-active' : ''}" data-db-v2-column-edit-mode="database">DB Column</button></div><span>${mode === 'display' ? `Shown to readers · database: ${escapeHtml(columnName)}` : `Stored in the database · display: ${escapeHtml(input.dataset.displayName ?? '')}`}</span>`;
+    root.append(editor);
+    const rootBox = root.getBoundingClientRect();
+    const inputBox = input.getBoundingClientRect();
+    const editorBox = editor.getBoundingClientRect();
+    editor.style.left = `${Math.max(0, Math.min(inputBox.left - rootBox.left, rootBox.width - editorBox.width))}px`;
+    editor.style.top = `${inputBox.bottom - rootBox.top + 6}px`;
+    columnEditor = editor;
+  };
 
   const config = (): DbTableV2Config => readDbTableV2Config(ctx.block.schema.pluginConfig);
 
   const renderCurrent = () => {
+    closeColumnEditor();
     root.innerHTML = renderDbTableV2(ctx, config(), snapshot, ui);
   };
 
@@ -124,6 +151,23 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 
   root.addEventListener('click', (event) => {
+    const editMode = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-v2-column-edit-mode]');
+    if (editMode && snapshot) {
+      const columnName = editMode.closest<HTMLElement>('.db-v2-column-editor-popover')?.dataset.columnName ?? '';
+      const column = snapshot.columns.find((candidate) => candidate.name === columnName);
+      const input = root.querySelector<HTMLInputElement>(`.db-v2-column-name-input[data-column-name="${CSS.escape(columnName)}"]`);
+      if (!column || !input) return;
+      const mode = editMode.dataset.dbV2ColumnEditMode === 'database' ? 'database' : 'display';
+      const presentation = readDbTableV2ColumnConfig(config(), columnName, { generated: column.generated });
+      input.dataset.columnEditMode = mode;
+      input.dataset.dbV2Field = mode === 'database' ? 'schema-column-name' : 'column-label';
+      input.value = mode === 'database' ? columnName : presentation.label;
+      input.setAttribute('aria-label', mode === 'database' ? `Database name for ${columnName}` : `Display name for ${columnName}`);
+      input.focus({ preventScroll: true });
+      input.select();
+      openColumnEditor(input);
+      return;
+    }
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-v2-action]');
     if (!button) return;
     const action = button.dataset.dbV2Action ?? '';
@@ -219,6 +263,77 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the row.'));
       }, ctx.hostRoot);
     }
+  });
+
+  root.addEventListener('focusin', (event) => {
+    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-v2-column-name-input');
+    if (input) openColumnEditor(input);
+  });
+
+  root.addEventListener('focusout', () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active && (active.closest('.db-v2-column-editor-popover') || active.classList.contains('db-v2-column-name-input'))) return;
+      closeColumnEditor();
+    }, 0);
+  });
+
+  root.addEventListener('keydown', (event) => {
+    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-v2-column-name-input');
+    if (!input) return;
+    if (event.key === 'Enter') input.blur();
+  });
+
+  root.addEventListener('pointerdown', (event) => {
+    if ((event.target as Element | null)?.closest('[data-db-v2-column-edit-mode]')) {
+      event.preventDefault();
+      return;
+    }
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-v2-resize-handle');
+    if (!handle || event.button !== 0 || ctx.mode !== 'editor') return;
+    const columnName = handle.dataset.columnName ?? '';
+    const column = root.querySelector<HTMLTableColElement>(`col[data-column-name="${CSS.escape(columnName)}"]`);
+    const header = handle.closest<HTMLTableCellElement>('th');
+    if (!column || !header) return;
+    event.preventDefault();
+    event.stopPropagation();
+    stopColumnResize();
+    const startX = event.clientX;
+    const startWidth = header.getBoundingClientRect().width;
+    const maximumWidth = resolveDbTableV2MaximumColumnWidth(root, ctx.header.get('database_table_max_column_width'));
+    let nextWidth = startWidth;
+    let moved = false;
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const delta = moveEvent.clientX - startX;
+      if (Math.abs(delta) > 1) moved = true;
+      nextWidth = Math.max(64, Math.min(startWidth + delta, maximumWidth));
+      column.style.width = `${nextWidth}px`;
+    };
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      stopColumnResize();
+      if (moved) ctx.setConfig(updateDbTableV2ColumnConfig(config(), columnName, { width: `${Math.round(nextWidth)}px` }));
+    };
+    stopColumnResize = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      stopColumnResize = () => {};
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  });
+
+  root.addEventListener('dblclick', (event) => {
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-v2-resize-handle');
+    if (!handle || ctx.mode !== 'editor') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const columnName = handle.dataset.columnName ?? '';
+    const width = measureDbTableV2ColumnContent(root, columnName, ctx.header.get('database_table_max_column_width'));
+    if (width !== null) ctx.setConfig(updateDbTableV2ColumnConfig(config(), columnName, { width: `${width}px` }));
   });
 
   root.addEventListener('change', (event) => {
@@ -327,6 +442,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     unmount: () => {
       disposed = true;
       refreshVersion += 1;
+      stopColumnResize();
+      closeColumnEditor();
       unsubscribeQueue();
     },
   };
@@ -419,7 +536,7 @@ function renderColumnSettings(config: DbTableV2Config, snapshot: DbTableV2Snapsh
         </div>`;
       }).join('')}
     </div>
-    <button type="button" class="secondary db-v2-add-column" data-db-v2-action="add-column" ${snapshot.editable ? '' : 'disabled'}>${plusIcon()} Add Column</button>
+    <button type="button" class="secondary db-v2-add-column" data-db-v2-action="add-column" ${snapshot.editable ? '' : 'disabled'}>${plusIcon()} Column</button>
   </section>`;
 }
 
@@ -450,7 +567,7 @@ function renderTable(ctx: HvyPluginContext, config: DbTableV2Config, snapshot: D
       </table>
     </div>
     ${editable ? `<div class="db-v2-table-actions">
-      <button type="button" class="secondary" data-db-v2-action="add-row" ${ui.draftActive || hiddenRequired.length > 0 ? 'disabled' : ''}>${plusIcon()} Add Row</button>
+      <button type="button" class="secondary db-v2-add-row" data-db-v2-action="add-row" ${ui.draftActive || hiddenRequired.length > 0 ? 'disabled' : ''}>${plusIcon()} Row</button>
       ${hiddenRequired.length > 0 ? `<span class="db-v2-action-note">Show required column${hiddenRequired.length === 1 ? '' : 's'} ${hiddenRequired.map((column) => escapeHtml(column.name)).join(', ')} before adding rows.</span>` : ''}
     </div>` : ''}
   </div>`;
@@ -466,14 +583,16 @@ function renderRowActions(
   if (rowId === null) return '<td class="db-v2-row-actions"></td>';
   const attachmentAction = editable ? 'sqlite-open-row-component-editor' : 'sqlite-open-row-component-view';
   return `<td class="db-v2-row-actions">
-    ${editable || hasAttachedComponent ? `<button type="button" class="ghost db-v2-row-component ${hasAttachedComponent ? 'is-attached' : ''}" data-action="${attachmentAction}" data-section-key="${escapeAttr(ctx.sectionKey)}" data-block-id="${escapeAttr(ctx.block.id)}" data-table-name="${escapeAttr(config.table)}" data-rowid="${rowId}">${hasAttachedComponent ? (editable ? 'Edit details' : 'View details') : 'Add details'}</button>` : ''}
-    ${editable ? `<button type="button" class="ghost db-v2-delete-row" data-db-v2-action="delete-row" data-row-id="${rowId}" aria-label="Delete row">${closeIcon()}</button>` : ''}
+    <div class="db-v2-row-action-group">
+      ${editable || hasAttachedComponent ? `<button type="button" class="ghost db-v2-row-component ${hasAttachedComponent ? 'is-attached' : ''}" data-action="${attachmentAction}" data-section-key="${escapeAttr(ctx.sectionKey)}" data-block-id="${escapeAttr(ctx.block.id)}" data-table-name="${escapeAttr(config.table)}" data-rowid="${rowId}">${hasAttachedComponent ? (editable ? 'Edit details' : 'View details') : 'Add details'}</button>` : ''}
+      ${editable ? `<button type="button" class="ghost db-v2-delete-row" data-db-v2-action="delete-row" data-row-id="${rowId}" aria-label="Delete row">${closeIcon()}</button>` : ''}
+    </div>
   </td>`;
 }
 
 function renderColumnElement(config: DbTableV2Config, column: DbTableV2ColumnSchema): string {
   const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
-  return `<col style="width:${escapeAttr(presentation.width)}">`;
+  return `<col data-column-name="${escapeAttr(column.name)}" style="width:${escapeAttr(presentation.width)}">`;
 }
 
 function renderHeader(
@@ -484,7 +603,58 @@ function renderHeader(
 ): string {
   const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
   const sortIcon = ui.sortColumn === column.name && ui.sortDirection === 'desc' ? arrowDownIcon() : arrowUpIcon();
-  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><span>${escapeHtml(presentation.label)}</span>${snapshot.editable ? `<button type="button" class="ghost db-v2-sort" data-db-v2-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button>` : ''}</th>`;
+  const heading = snapshot.editable
+    ? `<input class="db-v2-column-name-input" data-db-v2-field="column-label" data-column-edit-mode="display" data-column-name="${escapeAttr(column.name)}" data-display-name="${escapeAttr(presentation.label)}" value="${escapeAttr(presentation.label)}" aria-label="Display name for ${escapeAttr(column.name)}" title="Edit display or DB column name">`
+    : `<span>${escapeHtml(presentation.label)}</span>`;
+  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><div class="db-v2-header-content">${heading}${snapshot.editable ? `<button type="button" class="ghost db-v2-sort" data-db-v2-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button><span class="db-v2-resize-handle" data-column-name="${escapeAttr(column.name)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>` : ''}</div></th>`;
+}
+
+function resolveDbTableV2MaximumColumnWidth(root: HTMLElement, configured: unknown): number {
+  const width = normalizeDbTableV2MaxColumnWidth(configured) || DEFAULT_DB_TABLE_V2_MAX_COLUMN_WIDTH;
+  const probe = document.createElement('span');
+  probe.className = 'db-v2-width-probe';
+  probe.style.width = width;
+  root.append(probe);
+  const pixels = probe.getBoundingClientRect().width;
+  probe.remove();
+  return Number.isFinite(pixels) && pixels > 0 ? pixels : 640;
+}
+
+function measureDbTableV2ColumnContent(root: HTMLElement, columnName: string, configuredMaximum: unknown): number | null {
+  const column = root.querySelector<HTMLTableColElement>(`col[data-column-name="${CSS.escape(columnName)}"]`);
+  const columns = [...root.querySelectorAll<HTMLTableColElement>('.db-v2-table col')];
+  const columnIndex = column ? columns.indexOf(column) : -1;
+  if (!column || columnIndex < 0) return null;
+  const table = column.closest('table');
+  const header = table?.querySelectorAll<HTMLTableCellElement>('thead th')[columnIndex];
+  if (!table || !header) return null;
+  const measurer = document.createElement('span');
+  measurer.className = 'db-v2-content-measurer';
+  const sample = (text: string, source: Element) => {
+    const style = getComputedStyle(source);
+    measurer.style.font = style.font;
+    measurer.style.letterSpacing = style.letterSpacing;
+    measurer.textContent = text || ' ';
+    root.append(measurer);
+    const width = measurer.getBoundingClientRect().width;
+    measurer.remove();
+    return width;
+  };
+  const headerLabel = header.querySelector<HTMLElement>('.db-v2-column-name-input, .db-v2-header-content > span:first-child');
+  const headerText = headerLabel instanceof HTMLInputElement ? headerLabel.value : headerLabel?.textContent ?? '';
+  let contentWidth = headerLabel ? sample(headerText, headerLabel) + 52 : 64;
+  for (const row of table.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
+    const cell = row.cells[columnIndex];
+    if (!cell) continue;
+    const control = cell.querySelector<HTMLInputElement | HTMLSelectElement>('input, select');
+    const text = control instanceof HTMLSelectElement
+      ? control.selectedOptions[0]?.textContent ?? ''
+      : control instanceof HTMLInputElement
+        ? control.value
+        : cell.textContent ?? '';
+    contentWidth = Math.max(contentWidth, sample(text, control ?? cell) + 20);
+  }
+  return Math.round(Math.max(64, Math.min(contentWidth, resolveDbTableV2MaximumColumnWidth(root, configuredMaximum))));
 }
 
 function renderCell(

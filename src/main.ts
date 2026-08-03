@@ -734,7 +734,7 @@ function renderApp(): void {
             isRawEditor,
           })}
         </div>
-        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane`)}>
+        <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
           ${isCliEditor || isDocumentMetaView ? '' : renderSearchCollapsedSurface()}
           ${
             isEditorView
@@ -806,7 +806,7 @@ function renderApp(): void {
                          <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                        </div>
                      </aside>` : ''}
-                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${
@@ -911,25 +911,25 @@ function renderTopbar(): string {
   return `
     <header class="topbar">
       <div class="title-block">
-        <h1>HVY Reference Implementation</h1>
-        <p>Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
+        <h1 class="reference-title">HVY Reference Implementation</h1>
+        <p class="reference-subtitle">Visual editor + reader for <code>.hvy</code>, <code>.thvy</code>, and <code>.phvy</code>. <a href="/examples/two-embedded-docs.html">Two embedded docs</a> | <a href="/examples/embed-text-editor-plugin.html">Plugin text editor</a> | <a href="/examples/lightweight-viewer-text-editor.html">Lightweight viewer text editor</a> | <a href="/examples/lightweight-file-viewer.html">Lightweight file viewer</a></p>
       </div>
       <div class="toolbar">
         <div class="toolbar-section toolbar-section-documents">
-          <button id="newBtn" type="button" class="toolbar-primary-button">New</button>
+          <button id="newBtn" type="button" class="toolbar-primary-button toolbar-document-action">New</button>
           ${renderDocumentMenu()}
         </div>
         <div class="toolbar-section toolbar-section-files">
-          <button id="openLocalFileBtn" type="button" class="hvy-button">Open Local</button>
-          <label class="file-picker">
+          <button id="openLocalFileBtn" type="button" class="hvy-button toolbar-file-action">Open Local</button>
+          <label class="file-picker toolbar-file-action">
             Select File
-            <input id="fileInput" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
+            <input id="fileInput" class="file-picker-input" type="file" accept=".hvy,.thvy,.phvy,.md,.markdown,text/markdown,text/plain" />
           </label>
-          <input id="downloadName" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
+          <input id="downloadName" class="toolbar-filename-input" type="text" value="${escapeAttr(state.filename)}" aria-label="Download file name" />
           ${renderReferenceDocumentDirtyIndicator()}
-          <button id="saveFileBtn" type="button" class="hvy-button">Save File</button>
-          <button id="downloadBtn" type="button" class="hvy-button">Download File</button>
-          <button id="exportPdfBtn" type="button" class="hvy-button">Export PDF</button>
+          <button id="saveFileBtn" type="button" class="hvy-button toolbar-file-action">Save File</button>
+          <button id="downloadBtn" type="button" class="hvy-button toolbar-file-action">Download File</button>
+          <button id="exportPdfBtn" type="button" class="hvy-button toolbar-file-action">Export PDF</button>
         </div>
       </div>
     </header>
@@ -957,15 +957,15 @@ function renderDocumentMenu(): string {
   const label = current?.label ?? 'Documents';
   return `
     <details class="document-menu">
-      <summary>
-        <span>Documents</span>
-        <strong>${escapeHtml(label)}</strong>
+      <summary class="document-menu-toggle">
+        <span class="document-menu-label">Documents</span>
+        <strong class="document-menu-current">${escapeHtml(label)}</strong>
       </summary>
       <div class="document-menu-panel">
         ${DOCUMENT_MENU_ITEMS
           .map((item) => {
             const selected = item.selectedExample === state.selectedExample;
-            return `<button id="${escapeAttr(item.id)}" type="button" class="${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`;
+            return `<button id="${escapeAttr(item.id)}" type="button" class="document-menu-action toolbar-document-action ${selected ? 'secondary' : 'ghost'}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`;
           })
           .join('')}
       </div>
@@ -983,7 +983,7 @@ function renderResponsivePreviewControls(): string {
   return `<div class="responsive-preview-controls compact-control-group" role="group" aria-label="Document preview width">
     ${options
       .map(
-        (option) => `<button type="button" class="${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
+        (option) => `<button type="button" class="compact-control-button ${state.responsivePreview === option.value ? 'secondary' : 'ghost'}" data-action="set-responsive-preview" data-responsive-preview="${escapeAttr(option.value)}">${escapeHtml(option.label)}</button>`
       )
       .join('')}
   </div>`;
@@ -1015,13 +1015,13 @@ function renderWorkspaceRightControls(options: {
       options.isEditorView
         ? `<div class="editor-top-controls">
             ${isPdfDocument(state.document) ? '<span class="pdf-document-badge" title="PDF template document">PDF Doc</span>' : ''}
-            <button type="button" class="${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
-            <button type="button" class="${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
-            <button type="button" class="${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
-            <button type="button" class="${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
+            <button type="button" class="compact-control-button ${state.editorMode === 'basic' ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="basic">Basic</button>
+            <button type="button" class="compact-control-button ${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
+            <button type="button" class="compact-control-button ${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
+            <button type="button" class="compact-control-button ${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
             ${
               options.isAdvancedEditor
-                ? `<button type="button" class="${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
+                ? `<button type="button" class="compact-control-button ${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
                 : ''
             }
           </div>`
@@ -1060,9 +1060,9 @@ function renderMetaFilterControls(): string {
       </button>
     </div>
     <details class="meta-filter-options">
-      <summary>
-        <span>Filter options</span>
-        <strong data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
+      <summary class="meta-filter-options-toggle">
+        <span class="meta-filter-options-label">Filter options</span>
+        <strong class="meta-filter-options-value" data-meta-filter-options-label>${escapeHtml(modeLabel)} · ${escapeHtml(behaviorLabel)}</strong>
       </summary>
       <div class="meta-filter-options-panel">
         <div class="meta-filter-mode-group" role="group" aria-label="Meta filter mode">
@@ -1417,7 +1417,7 @@ bootstrap().catch((error) => {
   app.innerHTML = `
     <main class="layout reference-layout hvy-embed-layout">
       <section class="pane full-pane">
-        <h2>Startup Problem</h2>
+        <h2 class="pane-heading">Startup Problem</h2>
         <p>The app failed before the first render.</p>
         <pre>${escapeHtml(message)}</pre>
       </section>

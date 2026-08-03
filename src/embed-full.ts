@@ -611,8 +611,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
         <button id="downloadBtn" type="button">Download</button>
         <button id="exportPdfBtn" type="button">Export PDF</button>
       </div>
-      <section class="workspace-shell">
-        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane">
+      <section class="workspace-shell hvy-full-workspace-shell">
+        <div class="${isEditor ? 'editor-pane' : 'reader-pane'} pane full-pane hvy-full-pane${isDocumentMetaView ? '' : ' workspace-content-pane'}">
           ${
             isEditor
               ? isDocumentMetaView
@@ -640,7 +640,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                         <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                       </div>
                     </aside>` : ''}
-                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }

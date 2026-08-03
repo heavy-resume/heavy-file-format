@@ -564,8 +564,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const renderHtmlStartedAt = nowMs();
   const markup = `
     <main class="layout hvy-embed-layout hvy-embed-full-layout">
-      <section class="workspace-shell">
-        <div class="reader-pane pane full-pane">
+      <section class="workspace-shell hvy-full-workspace-shell">
+        <div class="reader-pane pane full-pane workspace-content-pane hvy-full-pane">
           <div class="viewer-shell ${pdfDocument ? 'phvy-viewer-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}"${pdfDocument ? ` style="${renderPdfDocumentViewerThemeStyle(state.document, escapeAttr)}"` : ''}>
             ${renderTransientNotice()}
             ${hasViewerSidebar ? `<div class="viewer-sidebar-backdrop" data-action="toggle-viewer-sidebar"></div>
@@ -577,7 +577,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${readerSidebarSectionsHtml}</div>
                 </div>
               </aside>` : ''}
-            <div id="readerDocument" class="reader-document hvy-reader-surface">${renderer.renderReaderSections(state.document.sections)}</div>
+            <div id="readerDocument" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface">${renderer.renderReaderSections(state.document.sections)}</div>
           </div>
         </div>
       </section>
@@ -875,7 +875,7 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
   let queuedSearchSnapshot = options.searchSnapshot ?? null;
   const pending: Array<(mount: HvyMount) => void> = [];
   options.root.classList.add('hvy-document');
-  options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane"><p>Loading HVY...</p></section></main>';
+  options.root.innerHTML = '<main class="layout hvy-embed-layout hvy-embed-full-layout"><section class="pane full-pane hvy-full-pane"><p>Loading HVY...</p></section></main>';
   const ready = loadFullEmbed().then((module) => {
     mounted = module.mountHvy(options);
     for (const action of pending.splice(0)) {

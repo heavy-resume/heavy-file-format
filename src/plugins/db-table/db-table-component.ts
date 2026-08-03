@@ -741,7 +741,7 @@ function renderSelect(
 function renderPager(snapshot: DbTableV2Snapshot): string {
   const first = snapshot.rows.length === 0 ? 0 : snapshot.offset + 1;
   const last = snapshot.offset + snapshot.rows.length;
-  return `<div class="db-v2-pager"><span>Rows ${first}–${last}</span><button type="button" class="ghost" data-db-v2-action="previous-page" aria-label="Previous rows" ${snapshot.offset === 0 ? 'disabled' : ''}>${arrowLeftIcon()}</button><button type="button" class="ghost" data-db-v2-action="next-page" aria-label="Next rows" ${snapshot.hasNextPage ? '' : 'disabled'}>${arrowRightIcon()}</button></div>`;
+  return `<div class="db-v2-pager"><span>Rows ${first}–${last}</span><button type="button" class="ghost db-v2-page-button" data-db-v2-action="previous-page" aria-label="Previous rows" ${snapshot.offset === 0 ? 'disabled' : ''}>${arrowLeftIcon()}</button><button type="button" class="ghost db-v2-page-button" data-db-v2-action="next-page" aria-label="Next rows" ${snapshot.hasNextPage ? '' : 'disabled'}>${arrowRightIcon()}</button></div>`;
 }
 
 async function saveDraftRow(

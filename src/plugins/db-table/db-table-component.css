@@ -353,7 +353,7 @@
   min-width: 0;
 }
 
-.db-v2-pager button,
+.db-v2-page-button,
 .db-v2-sort {
   display: inline-grid;
   place-items: center;

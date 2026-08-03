@@ -24,7 +24,7 @@ export function buildDocumentEditFormatInstructions(options?: {
   const phase = options?.phase ?? (dbRelevant ? 'database' : 'planning');
   const canQueryDbTable = dbRelevant && dbTableNames.length > 0;
   const canExecuteSql = dbRelevant && pluginHints.some((plugin) => (
-    plugin.name === 'hvy.db-table' || plugin.name === 'hvy.db-table-v2'
+    plugin.name === 'hvy.db-table'
   ));
   const optionalTools = getAvailableOptionalDocumentTools({ canQueryDbTable, canExecuteSql });
   return [

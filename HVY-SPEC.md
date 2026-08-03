@@ -1520,7 +1520,8 @@ embedding caches.
 
 ### 7.7 DB table plugin contract
 
-The first standardized plugin contract is `hvy.db-table`.
+The standardized database-table contract is `hvy.db-table`. The built-in
+relationship-aware implementation is plugin version `0.2.0`.
 
 Declaration example:
 
@@ -1538,58 +1539,23 @@ Block example:
  WHERE status != 'Rejected'
 ```
 
-Plugin-specific rules:
-- `pluginConfig.source` MUST currently be `"with-file"`.
-- `pluginConfig.table` MUST be an existing table or view name in the plugin's current data backend. It MUST NOT contain SQL.
-- The plugin block text is interpreted as an optional read-only `SELECT` or `WITH` query string. This is an implicit property derived from the block text body rather than from `pluginConfig`.
-- Query text does not create data objects. Tables and views MUST be created through the backend execution API before a DB Table component can reference them.
-- If the plugin block contains non-text structured content, clients SHOULD discard that structured content for this plugin and preserve only the text body as the query value.
-- If the query text is empty after trimming, clients MUST behave as though the query were `SELECT * FROM <pluginConfig.table>`.
-- If the query text is non-empty, clients MUST render the result in a read-only state and SHOULD visually indicate that the table is query-driven rather than directly editable.
-- `pluginConfig.queryDynamicWindow` is an optional boolean. When `true` or absent, query views SHOULD use a moving offset/limit window. When `false`, clients SHOULD instead execute the query with a fixed limit and no moving offset window.
-- `pluginConfig.queryLimit` is an optional integer used when `pluginConfig.queryDynamicWindow` is `false`. Clients MUST clamp it to fewer than 100 rows.
-- Clients MUST enforce an implicit result cap of fewer than 100 rows for query-driven views.
-- Clients SHOULD render at most 50 rows at a time in the visible window and SHOULD advance or rewind the offset window as the user scrolls, for example by shifting the offset after the viewport passes roughly row 75.
-- Sort controls MAY be exposed for direct table views. If exposed, ascending and descending sort orders SHOULD be supported per visible column. Query-driven views SHOULD preserve query-defined ordering instead.
-- The current built-in implementation stores this plugin in exactly one gzip-compressed SQL database in the document tail.
-- Multiple plugin blocks MAY point at different tables within the same attached backend.
-
-Recommended client behavior:
-- Spreadsheet-like table views SHOULD virtualize row rendering and MUST NOT attempt to render every row at once for large tables.
-- Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
-- If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
-
-### 7.7.1 DB table v2 plugin contract
-
-`hvy.db-table-v2` is a separate relationship-aware successor contract. Clients
-MUST continue treating `hvy.db-table` as the independent contract above; a
-client MUST NOT silently reinterpret or migrate an existing `hvy.db-table`
-block as v2.
-
-Block example:
+Relationship-aware block example:
 
 ```markdown
-<!--hvy:plugin {"plugin":"hvy.db-table-v2","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
 ```
 
-V2 inherits the table/view target, optional query body, and direct-table versus
-read-only-query behavior from `hvy.db-table`, except where this section defines
-different behavior.
-
-An authored v1 block can be explicitly migrated by changing its plugin id to
-`hvy.db-table-v2` and declaring v2 in the document plugin list. Its existing
-`source`, `table`, `queryLimit`, and query body are retained. In v2,
-`queryLimit` is the page size and `queryDynamicWindow` has no meaning and MUST
-be ignored. The absence of `columns` MUST be valid and MUST select v2's default
-presentation. This explicit id change is the migration boundary; it does not
-permit clients to silently reinterpret v1 blocks.
+The plugin block text is an optional read-only `SELECT` or `WITH` query. Empty
+query text selects directly from `pluginConfig.table`; non-empty query text is
+read-only. The absence of `columns` is valid and selects the default
+presentation. `queryDynamicWindow` has no meaning and MUST be ignored.
 
 - `pluginConfig.source` MUST be a non-empty data-source adapter id. The built-in
   attached SQLite adapter id is `"with-file"`. Clients MUST report an unavailable
   configured source rather than silently substituting another source.
 - `pluginConfig.queryLimit` is the single page-size setting for direct table,
   view, and query results. It defaults to 50 rows. Clients MUST clamp authored
-  values to the inclusive range 1 through 1000. V2 MUST NOT impose a separate
+  values to the inclusive range 1 through 1000. Clients MUST NOT impose a separate
   implicit result cap or render-window limit.
 - A data-source adapter MUST apply the page size and offset at the source. It
   MUST NOT retrieve an unbounded result into the client and then slice it. An
@@ -1623,8 +1589,8 @@ permit clients to silently reinterpret v1 blocks.
   SHOULD include an empty option. Composite foreign keys are not defined by
   this version.
 - Clients MUST enable SQLite foreign-key enforcement on every writable database
-  connection used by v2.
-- A single `INTEGER PRIMARY KEY` is a generated surrogate key for v2
+  connection used by the plugin.
+- A single `INTEGER PRIMARY KEY` is a generated surrogate key for
   presentation and SHOULD default to compact visibility. Other primary-key
   shapes MUST NOT be assumed to be generated. Authored visibility settings
   override this presentation default.
@@ -1636,7 +1602,7 @@ permit clients to silently reinterpret v1 blocks.
 - A required user-supplied column with no default MUST remain available during
   row creation. Clients SHOULD prevent authors from hiding such a column in an
   editable direct-table presentation.
-- Column presentation is scoped to the plugin block. Multiple v2 blocks MAY
+- Column presentation is scoped to the plugin block. Multiple database-table blocks MAY
   present the same backing table with different labels, visibility, widths,
   wrapping, and foreign display columns.
 - Editable clients SHOULD allow authors to resize visible columns by dragging a
@@ -1645,11 +1611,11 @@ permit clients to silently reinterpret v1 blocks.
   presentation. Clients MUST clamp interactive and auto-fit widths to
   `database_table_max_column_width`, which defaults to `40rem` when absent or
   invalid.
-- V2 clients that support the v1 companion-table convention for row-attached
-  HVY fragments SHOULD preserve and expose those fragments after explicit
-  migration. Deleting a database row through the client SHOULD also delete its
+- Clients that support companion-table row-attached HVY fragments SHOULD
+  preserve and expose those fragments. Deleting a database row through the
+  client SHOULD also delete its
   companion fragment.
-- Editable V2 clients SHOULD present database and plugin-configuration changes
+- Editable clients SHOULD present database and plugin-configuration changes
   from one user command as one atomic undo step. Ordinary reversible writes
   SHOULD use logical inverse operations. Destructive schema changes and writes
   with trigger-defined side effects SHOULD use a complete SQLite checkpoint.

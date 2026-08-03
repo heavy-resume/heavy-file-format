@@ -26,6 +26,11 @@ import { deserializeDocument } from '../src/serialization';
 import { getDocumentDatabaseTableNames } from '../src/plugins/database-table-targets';
 import { buildDocumentEditFormatInstructions } from '../src/ai-document-edit-instructions';
 import { setHostDatabaseTableSources, type HvyDatabaseTablePageRequest } from '../src/plugins/database-table-source';
+import { dbTablePlugin } from '../src/plugins/db-table-v2/db-table-v2';
+
+test('canonical db-table uses the promoted plugin id and version', () => {
+  expect(dbTablePlugin).toMatchObject({ id: 'hvy.db-table', version: '0.2.0', displayName: 'DB Table' });
+});
 
 test('db-table-v2 reads simple foreign keys and configured display values', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
@@ -187,13 +192,13 @@ hvy_version: 0.1
 <!--hvy: {"id":"crm"}-->
 #! CRM
 
-<!--hvy:plugin {"plugin":"hvy.db-table-v2","pluginConfig":{"source":"with-file","table":"contacts"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"contacts"}}-->
 `, '.hvy');
 
   expect(getDocumentDatabaseTableNames(document)).toEqual(['contacts']);
   expect(buildDocumentEditFormatInstructions({
     dbTableNames: ['contacts'],
-    pluginHints: [{ name: 'hvy.db-table-v2', displayName: 'DB Table v2' }],
+    pluginHints: [{ name: 'hvy.db-table', displayName: 'DB Table' }],
     request: 'Create the CRM database schema.',
   })).toContain('`execute_sql`');
 
@@ -201,7 +206,7 @@ hvy_version: 0.1
 hvy_version: 0.1
 ---
 
-<!--hvy:plugin {"plugin":"hvy.db-table-v2","pluginConfig":{"source":"postgresql","table":"contacts"}}-->
+<!--hvy:plugin {"plugin":"hvy.db-table","pluginConfig":{"source":"postgresql","table":"contacts"}}-->
 `, '.hvy');
   expect(getDocumentDatabaseTableNames(externalDocument)).toEqual([]);
 });

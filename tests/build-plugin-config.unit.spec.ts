@@ -14,7 +14,8 @@ test('resolveBuiltInPluginIds defaults to every built-in plugin', () => {
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.editable-text');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.canvas');
   expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.power-scripting');
-  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.db-table-v2');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).toContain('hvy.db-table');
+  expect(HVY_BUILT_IN_PLUGIN_IDS).not.toContain('hvy.db-table-v2');
 });
 
 test('default build config includes every built-in plugin', () => {
@@ -59,9 +60,8 @@ test('resolveBuiltInPluginIds rejects unknown plugin ids', () => {
 });
 
 test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
-  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.db-table-v2', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code', 'hvy.video', 'hvy.editable-text']);
+  const expectedResult = createHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting', 'hvy.graph', 'hvy.diagram', 'hvy.qr-code', 'hvy.video', 'hvy.editable-text']);
 
-  expect(expectedResult).toContain('from "/src/plugins/db-table-plugin.ts"');
   expect(expectedResult).toContain('from "/src/plugins/db-table-v2/db-table-v2.ts"');
   expect(expectedResult).toContain('from "/src/plugins/scripting/scripting.ts"');
   expect(expectedResult).toContain('from "/src/plugins/graph.ts"');
@@ -76,11 +76,11 @@ test('createHvyBuiltInPluginsModuleSource uses Vite web-root imports', () => {
 test('createLazyHvyBuiltInPluginsModuleSource defers built-in plugin implementations', () => {
   const expectedResult = createLazyHvyBuiltInPluginsModuleSource(['hvy.db-table', 'hvy.scripting']);
 
-  expect(expectedResult).toContain('() => import("/src/plugins/db-table-plugin.ts")');
+  expect(expectedResult).toContain('() => import("/src/plugins/db-table-v2/db-table-v2.ts")');
   expect(expectedResult).toContain('() => import("/src/plugins/scripting/scripting.ts")');
-  expect(expectedResult).not.toContain('"importPath":"/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).not.toContain('"importPath":"/src/plugins/db-table-v2/db-table-v2.ts"');
   expect(expectedResult).not.toContain('"importPath":"/src/plugins/scripting/scripting.ts"');
-  expect(expectedResult).not.toContain('from "/src/plugins/db-table-plugin.ts"');
+  expect(expectedResult).not.toContain('from "/src/plugins/db-table-v2/db-table-v2.ts"');
   expect(expectedResult).not.toContain('from "/src/plugins/scripting/scripting.ts"');
 });
 

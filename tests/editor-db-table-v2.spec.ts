@@ -8,13 +8,13 @@ async function loadDbTableV2Crm(page: Page, contacts = ['Jane Smith']): Promise<
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 plugins:
-  - id: hvy.db-table-v2
+  - id: hvy.db-table
 ---
 
 <!--hvy: {"id":"crm"}-->
 #! CRM
 
-<!--hvy:plugin {"id":"contacts","plugin":"hvy.db-table-v2","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
+<!--hvy:plugin {"id":"contacts","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
 `);
   await expect(page.locator('#rawEditor')).toHaveValue(/hvy\.db-table-v2/u);
   await page.getByRole('button', { name: 'Apply' }).click();
@@ -37,7 +37,7 @@ plugins:
     }
     const section = state.document.sections[0];
     const block = section?.blocks[0];
-    if (!section || !block || block.schema.plugin !== 'hvy.db-table-v2') throw new Error('DB Table v2 fixture did not create its component.');
+    if (!section || !block || block.schema.plugin !== 'hvy.db-table') throw new Error('DB Table fixture did not create its component.');
     setActiveEditorBlock(section.key, block.id);
     getRenderApp()();
   }, contacts);

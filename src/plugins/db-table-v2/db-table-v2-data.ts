@@ -421,13 +421,13 @@ function normalizeReadOnlyQuery(value: string): string {
   const query = value.trim().replace(/;+\s*$/u, '');
   if (!query) return '';
   const token = query.match(/^[A-Za-z]+/u)?.[0]?.toUpperCase() ?? '';
-  if (token !== 'SELECT' && token !== 'WITH') throw new Error('DB Table v2 query must start with SELECT or WITH.');
+  if (token !== 'SELECT' && token !== 'WITH') throw new Error('DB Table query must start with SELECT or WITH.');
   return query;
 }
 
 function assertTableName(tableName: string): void {
   const error = validateDbTableObjectName(tableName);
-  if (error) throw new Error(error.replaceAll('db-table', 'db-table-v2'));
+  if (error) throw new Error(error);
 }
 
 function normalizePageOffset(offset: number, pageSize: number): number {

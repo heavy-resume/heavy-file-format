@@ -405,7 +405,6 @@ not enabled automatically:
 {
   "plugins": [
     "hvy.db-table",
-    "hvy.db-table-v2",
     "hvy.form",
     "hvy.progress-bar",
     "hvy.scripting",
@@ -442,7 +441,7 @@ HVY.mountHvy({
 });
 ```
 
-`hvy.db-table-v2` keeps its data backend behind a paged source adapter. The
+`hvy.db-table` keeps its data backend behind a paged source adapter. The
 built-in `with-file` source reads the database attached to the HVY file. Hosts
 can provide additional sources per mount through `databaseSources`:
 
@@ -450,7 +449,7 @@ can provide additional sources per mount through `databaseSources`:
 HVY.mountHvy({
   root,
   document,
-  plugins: [HVY.plugins.dbTableV2],
+  plugins: [HVY.plugins.dbTable],
   databaseSources: [{
     id: 'example-remote-db',
     label: 'Example remote database',

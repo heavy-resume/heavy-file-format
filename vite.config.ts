@@ -16,7 +16,6 @@ const SCRIPTING_HELP_FILE_PATH = resolve(process.cwd(), 'src/plugins/scripting/h
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.db-table',
-  'hvy.db-table-v2',
   'hvy.form',
   'hvy.progress-bar',
   'hvy.scripting',
@@ -51,15 +50,8 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     id: 'hvy.db-table',
     key: 'dbTable',
     exportName: 'dbTablePlugin',
-    modulePath: 'src/plugins/db-table-plugin.ts',
-    displayName: 'DB Table',
-  },
-  {
-    id: 'hvy.db-table-v2',
-    key: 'dbTableV2',
-    exportName: 'dbTableV2Plugin',
     modulePath: 'src/plugins/db-table-v2/db-table-v2.ts',
-    displayName: 'DB Table v2',
+    displayName: 'DB Table',
   },
   {
     id: 'hvy.form',

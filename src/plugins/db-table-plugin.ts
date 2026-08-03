@@ -10,6 +10,7 @@ import { findBlockByIds } from '../block-ops';
 import { getCachedComponentRenderHelpers } from '../state';
 import { createBuiltInPluginMetadata, DB_TABLE_PLUGIN_ID } from './registry';
 import dbTableDocumentation from './db-table.about.txt?raw';
+import { dbTablePlugin as currentDbTablePlugin } from './db-table-v2/db-table-v2';
 
 // Captured focus state inside a db-table editor before its inner HTML is
 // rebuilt. Each input is identified by its data-* attributes (which db-table
@@ -209,4 +210,4 @@ export const dbTablePlugin: HvyPlugin = {
 };
 
 /** @deprecated Use dbTablePlugin. */
-export const dbTablePluginRegistration = dbTablePlugin;
+export const dbTablePluginRegistration = currentDbTablePlugin;

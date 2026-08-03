@@ -12,12 +12,10 @@ export function getDocumentDatabaseTableNames(document: VisualDocument): string[
   const names = new Set(getDocumentDbTableNames(document));
   visitBlocks(document.sections, (block) => {
     if (!isDatabaseTablePluginBlock(block)) return;
-    if (block.schema.plugin === 'hvy.db-table-v2') {
-      const source = typeof block.schema.pluginConfig.source === 'string'
-        ? block.schema.pluginConfig.source.trim()
-        : 'with-file';
-      if (source && source !== 'with-file') return;
-    }
+    const source = typeof block.schema.pluginConfig.source === 'string'
+      ? block.schema.pluginConfig.source.trim()
+      : 'with-file';
+    if (source && source !== 'with-file') return;
     const tableName = typeof block.schema.pluginConfig.table === 'string' ? block.schema.pluginConfig.table.trim() : '';
     if (tableName) names.add(tableName);
   });

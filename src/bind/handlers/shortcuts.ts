@@ -1,5 +1,5 @@
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
-import { undoState, redoState } from './_imports';
+import { undoStateAsync, redoStateAsync } from './_imports';
 import { openSearch } from '../../search/actions';
 import { consumeNextNativeUndoSuppressed, consumeNextRedoTargetsDocument, consumeNextUndoTargetsDocument, routeNextRedoToDocument, routeNextUndoToDocument, suppressNextNativeUndo } from '../../edit-command-routing';
 
@@ -59,7 +59,7 @@ export function bindShortcuts(_app: HTMLElement): void {
           return;
         }
         event.preventDefault();
-        undoState();
+        void undoStateAsync();
         if (routeToDocument) {
           suppressNextNativeUndo();
         }
@@ -72,7 +72,7 @@ export function bindShortcuts(_app: HTMLElement): void {
           return;
         }
         event.preventDefault();
-        redoState();
+        void redoStateAsync();
         routeNextUndoToDocument();
       }
     };

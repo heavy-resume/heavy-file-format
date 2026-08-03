@@ -23,7 +23,9 @@ export function buildDocumentEditFormatInstructions(options?: {
   const dbRelevant = isDatabaseRelevantRequest(request);
   const phase = options?.phase ?? (dbRelevant ? 'database' : 'planning');
   const canQueryDbTable = dbRelevant && dbTableNames.length > 0;
-  const canExecuteSql = dbRelevant && pluginHints.some((plugin) => plugin.name === 'hvy.db-table');
+  const canExecuteSql = dbRelevant && pluginHints.some((plugin) => (
+    plugin.name === 'hvy.db-table' || plugin.name === 'hvy.db-table-v2'
+  ));
   const optionalTools = getAvailableOptionalDocumentTools({ canQueryDbTable, canExecuteSql });
   return [
     'Reply with exactly one JSON object and nothing else.',

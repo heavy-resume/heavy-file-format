@@ -100,6 +100,11 @@ test('getDocumentDbTableObjectNames does not treat configured component targets 
 test('isDbTablePluginBlock recognizes db-table plugin blocks', () => {
   const { block } = getDbTableBlock();
   expect(isDbTablePluginBlock(block)).toBe(true);
+  const migrated = deserializeDocument(
+    `---\nhvy_version: 0.1\n---\n\n#! S\n\n<!--hvy:plugin {"plugin":"hvy.db-table-v2","pluginConfig":{"source":"with-file","table":"work_items"}}-->\n`,
+    '.hvy'
+  );
+  expect(isDbTablePluginBlock(migrated.sections[0]!.blocks[0]!)).toBe(true);
 });
 
 test('isDbTablePluginBlock rejects non-plugin and non-db-table blocks', () => {
@@ -118,6 +123,7 @@ test('buildDbTableEditFormatInstructions names the table and lists all four tool
   expect(instructions).toContain('`edit_fragment`');
   expect(instructions).toContain('`done`');
   expect(instructions).toContain('SELECT is rejected here');
+  expect(buildDbTableEditFormatInstructions('work_items', 'hvy.db-table-v2')).toContain('hvy.db-table-v2');
 });
 
 test('buildDbTableEditContext embeds schema, sample rows, and the component fragment', () => {

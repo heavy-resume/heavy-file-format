@@ -1,14 +1,27 @@
 import { expect, test } from 'vitest';
 
-import { initCallbacks, initState, state } from '../src/state';
+import { getActiveStateRuntime, initCallbacks, initState, state } from '../src/state';
 import { createDefaultChatState } from '../src/chat/chat';
 import { createDefaultSearchState } from '../src/search/state';
 import { createEmptyBlock } from '../src/document-factory';
-import { markDatabaseAttachmentChanged, recordDatabaseAttachmentHistory, recordHistory, undoState, redoState } from '../src/history';
-import { DB_ATTACHMENT_ID, setAttachment } from '../src/attachments';
+import {
+  captureHistoryStackState,
+  clearDatabaseAttachmentChangedForQueuedHistory,
+  markDatabaseAttachmentChanged,
+  recordDatabaseAttachmentHistory,
+  recordHistory,
+  redoState,
+  redoStateAsync,
+  restoreHistoryStackState,
+  undoState,
+  undoStateAsync,
+} from '../src/history';
+import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../src/attachments';
 import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import type { AppState } from '../src/types';
 import { attachStoreToDocument, createLazyAttachmentStore, ensureDocumentAttachmentStore } from '../src/attachment-store';
+import { configureDatabaseHistoryStore, destroyDatabaseHistory, getDatabaseHistoryQueueStatus, runQueuedDatabaseHistoryCommand } from '../src/database-history-controller';
+import { InMemoryHvyHistoryArtifactStore, type HvyHistoryArtifactPutRequest, type HvyHistoryArtifactStore } from '../src/history-artifact-store';
 
 function createHistoryTestState(): AppState {
   return {
@@ -362,3 +375,247 @@ test('script database writes share one undo checkpoint per runtime', async () =>
   redoState();
   expect(state.document.attachments.find((attachment) => attachment.id === DB_ATTACHMENT_ID)).not.toBeUndefined();
 });
+
+test('queued checkpoint edits undo document config and SQLite bytes as one step', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([1]));
+  const store = new CountingHistoryStore();
+  configureDatabaseHistoryStore(getActiveStateRuntime(), store);
+  const commandDocument = state.document;
+
+  // BEFORE
+  expect(state.rawEditorText).toBe('#! First');
+  expect(readDatabaseTestBytes()).toEqual([1]);
+
+  // TOOL CALL
+  await runQueuedDatabaseHistoryCommand({
+    label: 'Drop column',
+    reason: 'Drop column',
+    document: commandDocument,
+    mode: 'checkpoint',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => {
+      state.rawEditorText = '#! Config after';
+      setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([2]));
+      markDatabaseAttachmentChanged();
+    },
+  });
+
+  // AFTER
+  expect(store.putCount).toBe(1);
+  expect(state.history.join('\n')).not.toContain('"bytes"');
+  await undoStateAsync();
+  expect(state.rawEditorText).toBe('#! First');
+  expect(readDatabaseTestBytes()).toEqual([1]);
+  expect(store.putCount).toBe(2);
+  await redoStateAsync();
+  expect(state.rawEditorText).toBe('#! Config after');
+  expect(readDatabaseTestBytes()).toEqual([2]);
+  expect(store.putCount).toBe(2);
+});
+
+test('queued logical edits use inverse operations without storing database checkpoints', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([4]));
+  const store = new CountingHistoryStore();
+  configureDatabaseHistoryStore(getActiveStateRuntime(), store);
+  const commandDocument = state.document;
+
+  // BEFORE / TOOL CALL / AFTER
+  await runQueuedDatabaseHistoryCommand({
+    label: 'Edit cell',
+    reason: 'Edit cell',
+    document: commandDocument,
+    mode: 'logical',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => {
+      setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([5]));
+      markDatabaseAttachmentChanged();
+      return { before: 4, after: 5 };
+    },
+    createLogicalTransition: ({ before, after }) => ({
+      undo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([before])),
+      redo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([after])),
+    }),
+  });
+  expect(store.putCount).toBe(0);
+  await undoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([4]);
+  await redoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([5]);
+  expect(store.putCount).toBe(0);
+});
+
+test('legacy full database history composes with queued logical history', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const commandDocument = state.document;
+  setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([20]));
+
+  await runQueuedDatabaseHistoryCommand({
+    label: 'Queued edit',
+    reason: 'Queued edit',
+    document: commandDocument,
+    mode: 'logical',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([21])),
+    createLogicalTransition: () => ({
+      undo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([20])),
+      redo: () => setAttachment(commandDocument, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([21])),
+    }),
+  });
+  recordDatabaseAttachmentHistory();
+  setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([22]));
+  markDatabaseAttachmentChanged();
+
+  // The legacy checkpoint is one step, followed by the earlier logical inverse.
+  await undoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([21]);
+  await undoStateAsync();
+  expect(readDatabaseTestBytes()).toEqual([20]);
+});
+
+test('a failed checkpoint command restores bytes, document state, and redo history', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([8]));
+  state.future = ['preserved-redo'];
+
+  await expect(runQueuedDatabaseHistoryCommand({
+    label: 'Failed destructive edit',
+    reason: 'Failed destructive edit',
+    document: state.document,
+    mode: 'checkpoint',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => {
+      state.rawEditorText = '#! Broken';
+      setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([9]));
+      throw new Error('forced failure');
+    },
+  })).rejects.toThrow('forced failure');
+
+  expect(state.rawEditorText).toBe('#! First');
+  expect(readDatabaseTestBytes()).toEqual([8]);
+  expect(state.future).toEqual(['preserved-redo']);
+});
+
+test('a failed checkpoint-store write prevents the destructive command from starting', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  let executed = false;
+  const failedStore: HvyHistoryArtifactStore = {
+    put: async () => { throw new Error('history storage unavailable'); },
+    get: async () => null,
+    remove: async () => {},
+  };
+  configureDatabaseHistoryStore(getActiveStateRuntime(), failedStore);
+
+  await expect(runQueuedDatabaseHistoryCommand({
+    label: 'Protected destructive edit',
+    reason: 'Protected destructive edit',
+    document: state.document,
+    mode: 'checkpoint',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => { executed = true; },
+  })).rejects.toThrow('history storage unavailable');
+
+  expect(executed).toBe(false);
+  expect(state.history).toEqual([]);
+});
+
+test('destroying database history removes retained external checkpoints', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const runtime = getActiveStateRuntime();
+  const store = new CountingHistoryStore();
+  configureDatabaseHistoryStore(runtime, store);
+
+  await runQueuedDatabaseHistoryCommand({
+    label: 'Retained checkpoint',
+    reason: 'Retained checkpoint',
+    document: state.document,
+    mode: 'checkpoint',
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute: () => setAttachment(state.document, DB_ATTACHMENT_ID, { mediaType: 'application/vnd.sqlite3' }, new Uint8Array([31])),
+  });
+  expect(store.size).toBe(1);
+
+  await destroyDatabaseHistory(runtime);
+  expect(store.size).toBe(0);
+});
+
+test('database commands execute FIFO and expose pending queue state', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const order: string[] = [];
+  let releaseFirst = () => {};
+  let markFirstStarted = () => {};
+  const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  const firstStarted = new Promise<void>((resolve) => { markFirstStarted = resolve; });
+  const command = (label: string, execute: () => Promise<void> | void) => runQueuedDatabaseHistoryCommand({
+    label,
+    reason: label,
+    document: state.document,
+    mode: 'logical' as const,
+    recordBefore: () => recordHistory(),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    clearDatabaseChangedFlag: clearDatabaseAttachmentChangedForQueuedHistory,
+    execute,
+    createLogicalTransition: () => ({ undo: () => {}, redo: () => {} }),
+  });
+
+  // BEFORE
+  expect(getDatabaseHistoryQueueStatus().pending).toBe(0);
+
+  // TOOL CALL
+  const first = command('First', async () => {
+    order.push('first:start');
+    markFirstStarted();
+    await firstGate;
+    order.push('first:end');
+  });
+  const second = command('Second', () => { order.push('second'); });
+  await firstStarted;
+
+  // AFTER
+  expect(getDatabaseHistoryQueueStatus().pending).toBe(2);
+  expect(order).toEqual(['first:start']);
+  releaseFirst();
+  await Promise.all([first, second]);
+  expect(order).toEqual(['first:start', 'first:end', 'second']);
+  expect(getDatabaseHistoryQueueStatus()).toMatchObject({ pending: 0, runningLabel: '' });
+});
+
+class CountingHistoryStore extends InMemoryHvyHistoryArtifactStore {
+  putCount = 0;
+
+  override async put(request: HvyHistoryArtifactPutRequest): Promise<{ id: string }> {
+    this.putCount += 1;
+    return super.put(request);
+  }
+}
+
+function readDatabaseTestBytes(): number[] {
+  return Array.from(getAttachment(state.document, DB_ATTACHMENT_ID)?.bytes ?? []);
+}

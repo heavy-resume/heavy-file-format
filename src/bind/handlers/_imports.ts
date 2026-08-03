@@ -5,7 +5,7 @@ export { assignSectionTitleAndGeneratedId, findSectionByKey, getSectionId, isDef
 export { getComponentDefs, getSectionDefs, getReusableNameFromSectionKey, isBuiltinComponent } from '../../component-defs';
 export { findBlockByIds, resolveBlockContext, handleBlockFieldInput, commitInlineTableEdit, setActiveEditorBlock, setAiEditorHostBlock, clearActiveEditorBlock, deactivateEditorBlock, cancelEditorBlockEdit, applyRichAction, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorPointerDown, showInlineAnswerModeSwitchForInput, handleRichEditorKeydown, handleRichEditorKeyup, handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste, refreshRichToolbarState, refreshReaderPanelsOutsideActiveEditor, moveBlockByOffset, getTagState, setTagState, getTagRenderOptions, removeBlockFromList, findBlockInList } from '../../block-ops';
 export { createEmptyBlock, createEmptySection, createDefaultTableRow, instantiateReusableSection, ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems, coerceAlign, getReusableTemplateByName } from '../../document-factory';
-export { recordHistory, undoState, redoState } from '../../history';
+export { recordHistory, undoState, redoState, undoStateAsync, redoStateAsync } from '../../history';
 export { setSidebarOpen, setEditorSidebarOpen, closeModal, closeModalIfTarget, navigateToSection, resetTransientUiState } from '../../navigation';
 export { deserializeDocument, serializeDocument } from '../../serialization';
 export { saveChatSessionState, saveSessionState } from '../../state-persistence';

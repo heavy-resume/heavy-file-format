@@ -1558,6 +1558,99 @@ Recommended client behavior:
 - Clients MAY store row-attached HVY fragments in companion tables keyed by table name and row identifier.
 - If row-attached HVY is supported, clients MAY expose context-menu actions such as setting or viewing the attached component for a row.
 
+### 7.7.1 DB table v2 plugin contract
+
+`hvy.db-table-v2` is a separate relationship-aware successor contract. Clients
+MUST continue treating `hvy.db-table` as the independent contract above; a
+client MUST NOT silently reinterpret or migrate an existing `hvy.db-table`
+block as v2.
+
+Block example:
+
+```markdown
+<!--hvy:plugin {"plugin":"hvy.db-table-v2","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
+```
+
+V2 inherits the table/view target, optional query body, and direct-table versus
+read-only-query behavior from `hvy.db-table`, except where this section defines
+different behavior.
+
+An authored v1 block can be explicitly migrated by changing its plugin id to
+`hvy.db-table-v2` and declaring v2 in the document plugin list. Its existing
+`source`, `table`, `queryLimit`, and query body are retained. In v2,
+`queryLimit` is the page size and `queryDynamicWindow` has no meaning and MUST
+be ignored. The absence of `columns` MUST be valid and MUST select v2's default
+presentation. This explicit id change is the migration boundary; it does not
+permit clients to silently reinterpret v1 blocks.
+
+- `pluginConfig.source` MUST be a non-empty data-source adapter id. The built-in
+  attached SQLite adapter id is `"with-file"`. Clients MUST report an unavailable
+  configured source rather than silently substituting another source.
+- `pluginConfig.queryLimit` is the single page-size setting for direct table,
+  view, and query results. It defaults to 50 rows. Clients MUST clamp authored
+  values to the inclusive range 1 through 1000. V2 MUST NOT impose a separate
+  implicit result cap or render-window limit.
+- A data-source adapter MUST apply the page size and offset at the source. It
+  MUST NOT retrieve an unbounded result into the client and then slice it. An
+  adapter MAY retrieve one additional bounded row to determine whether another
+  page exists.
+- Clients MUST preserve the authored query text as the inner result definition.
+  Source pagination MAY wrap it in a dialect-appropriate outer query. An
+  authored `LIMIT` or `OFFSET` therefore defines the result subset, while the
+  configured page size and current page offset apply outside that subset.
+- Pagination MUST NOT require an exact total-row count. Sources MAY provide one,
+  but clients SHOULD support previous/next navigation using only whether another
+  page exists so remote sources need not evaluate an expensive `COUNT(*)`.
+
+- `pluginConfig.columns` MAY be an object keyed by database or query-result
+  column name. Each entry MAY contain `label`, `visibility`, `width`, `wrap`,
+  and `foreignDisplayColumn`.
+- `visibility` MUST be `"visible"`, `"compact"`, or `"hidden"`. Hidden columns
+  are presentation-only: clients MUST NOT drop the database column or its data,
+  and SHOULD omit hidden cells from rendered DOM. Compact columns remain
+  visible with a narrow default width.
+- `width` MAY be `"auto"` or a non-negative CSS length using `px`, `rem`, `em`,
+  `ch`, or `%`. Clients MUST reject or ignore other values rather than placing
+  arbitrary text into a style declaration.
+- `label` changes the rendered heading without renaming the database column.
+  `wrap: true` requests wrapped cell content; absent or false values use the
+  client's compact overflow behavior.
+- For a direct base-table column participating in a simple single-column
+  SQLite foreign key, `foreignDisplayColumn` selects a column from the
+  referenced table. Clients MUST store the foreign-key value while rendering
+  and editing the selected referenced display value. Nullable relationships
+  SHOULD include an empty option. Composite foreign keys are not defined by
+  this version.
+- Clients MUST enable SQLite foreign-key enforcement on every writable database
+  connection used by v2.
+- A single `INTEGER PRIMARY KEY` is a generated surrogate key for v2
+  presentation and SHOULD default to compact visibility. Other primary-key
+  shapes MUST NOT be assumed to be generated. Authored visibility settings
+  override this presentation default.
+- "Add Row" MUST create only local draft state. A client MUST NOT insert a
+  database row until required values are complete and the user commits the
+  draft. The committed row SHOULD use one parameterized `INSERT`, omitting
+  unset columns that have defaults. Draft typing MUST preserve focus and MUST
+  NOT request a full application rerender.
+- A required user-supplied column with no default MUST remain available during
+  row creation. Clients SHOULD prevent authors from hiding such a column in an
+  editable direct-table presentation.
+- Column presentation is scoped to the plugin block. Multiple v2 blocks MAY
+  present the same backing table with different labels, visibility, widths,
+  wrapping, and foreign display columns.
+- V2 clients that support the v1 companion-table convention for row-attached
+  HVY fragments SHOULD preserve and expose those fragments after explicit
+  migration. Deleting a database row through the client SHOULD also delete its
+  companion fragment.
+- Editable V2 clients SHOULD present database and plugin-configuration changes
+  from one user command as one atomic undo step. Ordinary reversible writes
+  SHOULD use logical inverse operations. Destructive schema changes and writes
+  with trigger-defined side effects SHOULD use a complete SQLite checkpoint.
+  Checkpoints are client history artifacts, MUST NOT be serialized into the HVY
+  attachment tail, and SHOULD be created before the corresponding command runs.
+  A client using asynchronous checkpoint storage SHOULD serialize database
+  commands and undo/redo navigation through one FIFO queue.
+
 ### 7.8 Form plugin contract
 
 The built-in form plugin is `hvy.form`. A form is a plugin component, not

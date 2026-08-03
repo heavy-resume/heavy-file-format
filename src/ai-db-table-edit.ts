@@ -1,6 +1,7 @@
 import { requestProxyCompletion, type HostChatClient } from './chat/chat';
 import type { DbTableAiSummary } from './plugins/db-table';
 import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
+import { isDatabaseTablePluginBlock } from './plugins/database-table-targets';
 import { serializeBlockFragment } from './serialization';
 import type { ChatMessage, ChatSettings, VisualDocument } from './types';
 import type { VisualBlock } from './editor/types';
@@ -16,10 +17,10 @@ type DbTableEditTool =
   | { tool: 'done'; summary?: string };
 
 export function isDbTablePluginBlock(block: VisualBlock): boolean {
-  return block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_PLUGIN_ID;
+  return isDatabaseTablePluginBlock(block);
 }
 
-export function buildDbTableEditFormatInstructions(tableName: string): string {
+export function buildDbTableEditFormatInstructions(tableName: string, pluginId = DB_TABLE_PLUGIN_ID): string {
   return [
     'You are revising a `db-table` plugin component. The component renders dynamic data-backed rows from a table or view attached to the HVY document.',
     'Editing *data* in the table means running SQL against the current backend, not changing the HVY fragment.',
@@ -38,7 +39,7 @@ export function buildDbTableEditFormatInstructions(tableName: string): string {
     'Tool shapes:',
     '{"tool":"query_db_table","query":"SELECT * FROM ' + tableName + ' WHERE status = \\"Open\\"","limit":10,"reason":"optional"}',
     '{"tool":"execute_sql","sql":"UPDATE ' + tableName + ' SET status = \'Done\' WHERE id = 3","reason":"optional"}',
-    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"hvy.db-table\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
+    '{"tool":"edit_fragment","hvy":"<!--hvy:plugin {\\"plugin\\":\\"' + pluginId + '\\",\\"pluginConfig\\":{...}}-->\\nSELECT * FROM ' + tableName + ' WHERE ...","summary":"Updated stored query"}',
     '{"tool":"done","summary":"Short summary of what changed."}',
   ].join('\n');
 }
@@ -152,7 +153,7 @@ export async function requestAiDbTableEdit(params: {
     fragment: originalFragment,
     summary,
   });
-  const responseInstructions = buildDbTableEditFormatInstructions(tableName);
+  const responseInstructions = buildDbTableEditFormatInstructions(tableName, params.block.schema.plugin);
 
   let mutationRecorded = false;
   const recordMutationOnce = (): void => {

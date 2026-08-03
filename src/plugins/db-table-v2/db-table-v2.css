@@ -1,0 +1,470 @@
+.hvy-db-table-v2 {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--hvy-text, var(--reader-fg));
+}
+
+.db-v2-queue-status {
+  align-items: center;
+  background: color-mix(in srgb, var(--hvy-focus-ring) 10%, var(--hvy-surface, var(--reader-bg)));
+  border: 1px solid color-mix(in srgb, var(--hvy-focus-ring) 32%, transparent);
+  border-radius: 0.55rem;
+  color: var(--hvy-text, var(--reader-fg));
+  display: flex;
+  font-size: 0.78rem;
+  gap: 0.5rem;
+  margin: 0.55rem 0;
+  padding: 0.48rem 0.65rem;
+}
+
+.db-v2-queue-pulse {
+  animation: db-v2-queue-pulse 1.1s ease-in-out infinite;
+  background: var(--hvy-focus-ring);
+  border-radius: 999px;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+@keyframes db-v2-queue-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.hvy-db-table-v2.db-v2-loading {
+  opacity: 0.78;
+}
+
+.db-v2-screen-reader {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.db-v2-toolbar,
+.db-v2-table-heading,
+.db-v2-settings-heading,
+.db-v2-table-actions,
+.db-v2-pager,
+.db-v2-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.db-v2-toolbar {
+  align-items: end;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.85rem;
+  background: var(--hvy-surface-alt, var(--reader-panel));
+}
+
+.db-v2-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.8rem;
+}
+
+.db-v2-field > input,
+.db-v2-field > textarea,
+.db-v2-select-shell > select,
+.db-v2-cell-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.55rem;
+  padding: 0.52rem 0.62rem;
+  color: var(--hvy-text, var(--reader-fg));
+  background: var(--hvy-surface, var(--reader-panel));
+  font: inherit;
+}
+
+.db-v2-field > input:focus,
+.db-v2-field > textarea:focus,
+.db-v2-select-shell > select:focus,
+.db-v2-cell-input:focus {
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 1px;
+}
+
+.db-v2-table-field {
+  flex: 1 1 13rem;
+}
+
+.db-v2-columns-button.is-active {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 12%, var(--hvy-surface, var(--reader-panel)));
+}
+
+.db-v2-query {
+  flex: 1 1 100%;
+  border-top: 1px solid var(--hvy-border-translucent, var(--reader-border));
+  padding-top: 0.55rem;
+}
+
+.db-v2-query summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.85rem;
+}
+
+.db-v2-query .db-v2-field {
+  margin-top: 0.5rem;
+}
+
+.db-v2-query-options {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.db-v2-query-options .db-v2-field {
+  margin-top: 0;
+}
+
+.db-v2-query-limit {
+  width: 8rem;
+}
+
+.db-v2-placeholder,
+.db-v2-inline-error {
+  padding: 0.75rem;
+  border: 1px dashed var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.75rem;
+  background: var(--hvy-surface-alt, var(--reader-panel));
+}
+
+.db-v2-error,
+.db-v2-inline-error {
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.db-v2-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.db-v2-column-settings {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--hvy-surface-alt, var(--reader-panel)) 94%, var(--hvy-accent, var(--reader-accent)) 6%);
+}
+
+.db-v2-settings-heading,
+.db-v2-table-heading {
+  justify-content: space-between;
+}
+
+.db-v2-settings-heading > div,
+.db-v2-table-heading > div,
+.db-v2-column-identity {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.db-v2-settings-heading span,
+.db-v2-table-heading span,
+.db-v2-column-identity span,
+.db-v2-action-note {
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-size: 0.8rem;
+}
+
+.db-v2-settings-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.35rem;
+}
+
+.db-v2-settings-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.db-v2-column-card {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.1fr) minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(6rem, 0.7fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  border: 1px solid var(--hvy-border-translucent, var(--reader-border));
+  border-radius: 0.7rem;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.db-v2-relationship-setting {
+  grid-column: 2 / -1;
+}
+
+.db-v2-delete-column {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.db-v2-delete-column .hvy-ui-icon,
+.db-v2-add-column .hvy-ui-icon,
+.db-v2-delete-row .hvy-ui-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.db-v2-add-column {
+  justify-self: start;
+}
+
+.db-v2-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  font-size: 0.82rem;
+}
+
+.db-v2-check input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  border-radius: 0.3rem;
+  background: var(--hvy-surface, var(--reader-panel));
+  cursor: pointer;
+}
+
+.db-v2-check input::after {
+  content: '';
+  width: 0.25rem;
+  height: 0.5rem;
+  border: solid var(--hvy-surface, var(--reader-panel));
+  border-width: 0 0.14rem 0.14rem 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 120ms ease;
+}
+
+.db-v2-check input:checked {
+  border-color: var(--hvy-accent, var(--reader-accent));
+  background: var(--hvy-accent, var(--reader-accent));
+}
+
+.db-v2-check input:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.db-v2-check input:focus-visible {
+  outline: 2px solid var(--hvy-focus-ring, var(--reader-accent));
+  outline-offset: 2px;
+}
+
+.db-v2-select-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.db-v2-select-shell > select {
+  appearance: none;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+
+.db-v2-select-shell > .hvy-ui-icon {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--hvy-text-muted, var(--reader-muted));
+}
+
+.db-v2-table-shell {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.db-v2-pager button,
+.db-v2-sort {
+  display: inline-grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0.3rem;
+}
+
+.db-v2-pager .hvy-ui-icon,
+.db-v2-sort .hvy-ui-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.db-v2-table-frame {
+  max-width: 100%;
+  max-height: 28rem;
+  overflow: auto;
+  border: 1px solid var(--hvy-border, var(--reader-border));
+  border-radius: 0.85rem;
+  background: var(--hvy-surface, var(--reader-panel));
+}
+
+.db-v2-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.db-v2-table th,
+.db-v2-table td {
+  border: 1px solid var(--hvy-border-input, var(--reader-border));
+  padding: 0.45rem 0.55rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--hvy-table-row-bg-1, var(--reader-panel));
+}
+
+.db-v2-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--hvy-table-header, var(--reader-panel));
+  font-weight: 600;
+}
+
+.db-v2-table th > span {
+  vertical-align: middle;
+}
+
+.db-v2-table th .db-v2-sort {
+  float: right;
+  margin: -0.25rem -0.3rem -0.25rem 0.3rem;
+}
+
+.db-v2-table tbody tr:nth-child(even) td {
+  background: var(--hvy-table-row-bg-2, var(--reader-panel));
+}
+
+.db-v2-table .is-wrapped {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.db-v2-table td:has(.db-v2-cell-input),
+.db-v2-table td:has(.db-v2-select-shell) {
+  padding: 0;
+}
+
+.db-v2-cell-input,
+.db-v2-table td > .db-v2-select-shell > select {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.db-v2-actions-column,
+.db-v2-actions-heading,
+.db-v2-row-actions {
+  width: 10.5rem;
+}
+
+.db-v2-row-actions {
+  padding: 0.25rem !important;
+  text-align: right;
+}
+
+.db-v2-row-component,
+.db-v2-delete-row {
+  min-height: 1.9rem;
+}
+
+.db-v2-row-component.is-attached {
+  color: var(--hvy-accent, var(--reader-accent));
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 10%, transparent);
+}
+
+.db-v2-delete-row {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  padding: 0.35rem;
+  color: var(--hvy-danger, var(--reader-fg));
+}
+
+.db-v2-table tr.has-attached-component > td:first-child {
+  box-shadow: inset 0.18rem 0 var(--hvy-accent, var(--reader-accent));
+}
+
+.db-v2-draft-row td {
+  background: color-mix(in srgb, var(--hvy-accent, var(--reader-accent)) 8%, var(--hvy-surface, var(--reader-panel))) !important;
+}
+
+.db-v2-generated-value,
+.db-v2-empty {
+  color: var(--hvy-text-muted, var(--reader-muted));
+  font-style: italic;
+}
+
+.db-v2-empty {
+  text-align: center;
+  padding: 1rem !important;
+}
+
+.db-v2-draft-actions {
+  padding: 0.3rem !important;
+}
+
+.db-v2-table-actions {
+  flex-wrap: wrap;
+}
+
+@container hvy-surface (inline-size < 42rem) {
+  .db-v2-column-card {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .db-v2-column-identity,
+  .db-v2-relationship-setting {
+    grid-column: 1 / -1;
+  }
+}
+
+@container hvy-surface (inline-size < 28rem) {
+  .db-v2-column-card {
+    grid-template-columns: 1fr;
+  }
+
+  .db-v2-column-card > * {
+    grid-column: 1;
+  }
+}

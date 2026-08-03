@@ -16,6 +16,7 @@ export const HVY_PLUGIN_API_VERSION = '0.1';
 export const HVY_BUILT_IN_PLUGIN_VERSION = '0.1.0';
 export const HVY_LEGACY_PLUGIN_VERSION = '0.0.0';
 export const DB_TABLE_PLUGIN_ID = 'hvy.db-table';
+export const DB_TABLE_V2_PLUGIN_ID = 'hvy.db-table-v2';
 export const FORM_PLUGIN_ID = 'hvy.form';
 export const PROGRESS_BAR_PLUGIN_ID = 'hvy.progress-bar';
 export const SCRIPTING_PLUGIN_ID = 'hvy.scripting';
@@ -35,7 +36,7 @@ export function createBuiltInPluginMetadata(id: string): Pick<HvyPlugin, 'id' | 
 }
 
 export function isDbTablePluginId(pluginId: string): boolean {
-  return pluginId === DB_TABLE_PLUGIN_ID;
+  return pluginId === DB_TABLE_PLUGIN_ID || pluginId === DB_TABLE_V2_PLUGIN_ID;
 }
 
 // Host-supplied plugin objects. Keep insertion order — it drives the selector

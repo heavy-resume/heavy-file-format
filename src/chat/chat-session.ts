@@ -1,7 +1,7 @@
 import { buildProxyChatRequest, requestChatCompletion, type ProxyToolTurn } from './chat';
 import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
-import { hasDocumentDbTables } from '../plugins/db-table-model';
+import { hasDocumentDatabaseTables } from '../plugins/database-table-targets';
 import { runQaToolLoop } from '../ai-qa';
 import type { ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
@@ -92,7 +92,7 @@ export async function requestChatTurn(params: {
   let tokenUsage: ChatTokenUsage | null = null;
 
   try {
-    const answer = params.allowDbQaTools !== false && hasDocumentDbTables(params.document)
+    const answer = params.allowDbQaTools !== false && hasDocumentDatabaseTables(params.document)
       ? await runQaToolLoop({
           settings: params.settings,
           document: params.document,

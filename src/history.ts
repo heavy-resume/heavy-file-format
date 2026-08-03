@@ -12,6 +12,15 @@ import type { AppState } from './types';
 import type { VisualBlock } from './editor/types';
 import { attachStoreToDocument, ensureDocumentAttachmentStore } from './attachment-store';
 import { hasTextFillInMarker } from './text-fill-in';
+import {
+  adoptDatabaseHistoryVersion,
+  enqueueDatabaseHistoryNavigation,
+  getDatabaseHistoryVersion,
+  hasDatabaseHistoryVersionTransition,
+  invalidateDatabaseHistoryVersion,
+  isQueuedDatabaseHistoryCommandActive,
+  restoreDatabaseHistoryVersion,
+} from './database-history-controller';
 
 interface HistorySnapshotOptions {
   includeDatabaseAttachment?: boolean;
@@ -21,6 +30,26 @@ interface SerializedHistoryAttachment {
   id: string;
   meta: DocumentAttachment['meta'];
   bytes: number[];
+}
+
+interface ParsedHistorySnapshot {
+  document: VisualDocument;
+  databaseAttachment?: SerializedHistoryAttachment | null;
+  databaseHistoryVersion?: string | null;
+  templateValues: Record<string, string>;
+  filename: string;
+  editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
+  showAdvancedEditor?: boolean;
+  rawEditorText?: string;
+  rawEditorError?: string | null;
+  rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
+  paletteOverrideId?: string | null;
+}
+
+export interface HistoryStackState {
+  history: string[];
+  future: string[];
+  currentSnapshot: string;
 }
 
 interface HistoryDeltaEntry {
@@ -51,6 +80,9 @@ export function snapshotState(options: HistorySnapshotOptions = {}): string {
       document: documentToHistorySnapshot(state.document),
       ...(options.includeDatabaseAttachment
         ? { databaseAttachment: serializeHistoryAttachment(getAttachment(state.document, DB_ATTACHMENT_ID)) }
+        : {}),
+      ...(getDatabaseHistoryVersion() !== null
+        ? { databaseHistoryVersion: getDatabaseHistoryVersion() }
         : {}),
       templateValues: state.templateValues,
       filename: state.filename,
@@ -94,6 +126,9 @@ export function ensureHistoryInitialized(): void {
 
 export function recordHistory(group?: string): void {
   if (state.isRestoring) {
+    return;
+  }
+  if (isQueuedDatabaseHistoryCommandActive()) {
     return;
   }
   markKeywordChatContextDocumentChanged(state.document);
@@ -157,6 +192,9 @@ export function recordDatabaseAttachmentHistory(): void {
   if (state.isRestoring) {
     return;
   }
+  if (isQueuedDatabaseHistoryCommandActive()) {
+    return;
+  }
   ensureHistoryInitialized();
   const snap = snapshotState({ includeDatabaseAttachment: true });
   if (getLastHistorySnapshot() !== snap) {
@@ -170,7 +208,23 @@ export function recordDatabaseAttachmentHistory(): void {
 export function markDatabaseAttachmentChanged(): void {
   if (!state.isRestoring) {
     databaseAttachmentChangedSinceHistory = true;
+    invalidateDatabaseHistoryVersion();
   }
+}
+
+export function clearDatabaseAttachmentChangedForQueuedHistory(): void {
+  databaseAttachmentChangedSinceHistory = false;
+}
+
+export function captureHistoryStackState(): HistoryStackState {
+  return { history: [...state.history], future: [...state.future], currentSnapshot: snapshotState() };
+}
+
+export function restoreHistoryStackState(value: unknown): void {
+  const captured = value as HistoryStackState;
+  state.history = [...captured.history];
+  state.future = [...captured.future];
+  restoreFromSnapshot(captured.currentSnapshot);
 }
 
 export function undoState(): void {
@@ -223,6 +277,76 @@ export function redoState(): void {
   getRenderApp()();
   restoreModalScroll(modalScroll);
   notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'), { authoritative: true });
+}
+
+export function undoStateAsync(): Promise<void> {
+  return enqueueDatabaseHistoryNavigation('Undo database edit', async () => {
+    ensureHistoryInitialized();
+    const current = snapshotState({ includeDatabaseAttachment: databaseAttachmentChangedSinceHistory });
+    const last = getLastHistorySnapshot();
+    const targetIndex = last !== current ? state.history.length - 1 : state.history.length - 2;
+    if (targetIndex < 0) return;
+    const target = getHistorySnapshotAt(targetIndex);
+    if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(target))) {
+      undoState();
+      return;
+    }
+    const modalScroll = captureModalScroll();
+    const activeEditor = captureActiveEditorRestoreState();
+    state.isRestoring = true;
+    try {
+      restoreFromSnapshot(target);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(target));
+    } catch (error) {
+      restoreFromSnapshot(current);
+      state.isRestoring = false;
+      throw error;
+    }
+    if (last !== current) pushHistorySnapshot(current, { clearFuture: false });
+    databaseAttachmentChangedSinceHistory = false;
+    const currentSnapshot = getLastHistorySnapshot();
+    state.history.pop();
+    if (currentSnapshot) state.future.push(currentSnapshot);
+    restoreActiveEditorState(activeEditor);
+    finishHistoryNavigation('undo', modalScroll);
+  });
+}
+
+export function redoStateAsync(): Promise<void> {
+  return enqueueDatabaseHistoryNavigation('Redo database edit', async () => {
+    ensureHistoryInitialized();
+    const next = state.future[state.future.length - 1];
+    if (!next) return;
+    if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(next))) {
+      redoState();
+      return;
+    }
+    const modalScroll = captureModalScroll();
+    const activeEditor = captureActiveEditorRestoreState();
+    const current = snapshotState();
+    state.isRestoring = true;
+    try {
+      restoreFromSnapshot(next);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(next));
+    } catch (error) {
+      restoreFromSnapshot(current);
+      state.isRestoring = false;
+      throw error;
+    }
+    state.future.pop();
+    pushHistorySnapshot(next, { clearFuture: false });
+    restoreActiveEditorState(activeEditor);
+    finishHistoryNavigation('redo', modalScroll);
+  });
+}
+
+function finishHistoryNavigation(action: 'undo' | 'redo', modalScroll: { selector: string; scrollTop: number } | null): void {
+  state.lastHistoryGroup = null;
+  state.lastHistoryAt = 0;
+  state.isRestoring = false;
+  getRenderApp()();
+  restoreModalScroll(modalScroll);
+  notifyDocumentMayHaveChanged(action, inferDocumentChangeSource(action), { authoritative: true });
 }
 
 function pushHistorySnapshot(snapshot: string, options: { clearFuture?: boolean } = {}): void {
@@ -438,22 +562,13 @@ function restoreModalScroll(scroll: { selector: string; scrollTop: number } | nu
 function restoreFromSnapshot(snapshot: string): void {
   try {
     const liveAttachmentStore = ensureDocumentAttachmentStore(state.document);
-    const parsed = JSON.parse(snapshot) as {
-      document: VisualDocument;
-      databaseAttachment?: SerializedHistoryAttachment | null;
-      templateValues: Record<string, string>;
-      filename: string;
-      editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
-      showAdvancedEditor?: boolean;
-      rawEditorText?: string;
-      rawEditorError?: string | null;
-      rawEditorDiagnostics?: typeof state.rawEditorDiagnostics;
-      paletteOverrideId?: string | null;
-    };
+    const parsed = JSON.parse(snapshot) as ParsedHistorySnapshot;
     state.document = parsed.document;
     attachStoreToDocument(state.document, liveAttachmentStore);
     if (Object.prototype.hasOwnProperty.call(parsed, 'databaseAttachment')) {
       restoreDatabaseAttachment(parsed.databaseAttachment ?? null);
+      adoptDatabaseHistoryVersion(parsed.databaseHistoryVersion ?? null);
+      databaseAttachmentChangedSinceHistory = true;
     }
     state.templateValues = parsed.templateValues ?? {};
     state.filename = parsed.filename ?? 'document.hvy';
@@ -483,6 +598,14 @@ function restoreFromSnapshot(snapshot: string): void {
     }
   } catch {
     // no-op
+  }
+}
+
+function getHistoryDatabaseVersion(snapshot: string): string | null {
+  try {
+    return (JSON.parse(snapshot) as ParsedHistorySnapshot).databaseHistoryVersion ?? null;
+  } catch {
+    return null;
   }
 }
 

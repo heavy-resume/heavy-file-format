@@ -1,6 +1,7 @@
 {
   "plugins": [
     "hvy.db-table",
+    "hvy.db-table-v2",
     "hvy.form",
     "hvy.progress-bar",
     "hvy.scripting",

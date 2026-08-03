@@ -48,7 +48,9 @@ import {
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory, redoState, undoState } from './history';
+import { recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
+import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { virtualizeRenderedSections } from './section-virtualizer';
 import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import {
@@ -56,6 +58,7 @@ import {
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPluginInput } from './plugins/types';
+import { setHostDatabaseTableSources, type HvyDatabaseTableSource } from './plugins/database-table-source';
 import {
   clearPowerScriptingMode,
   setPowerScriptAcceptanceCallbacks,
@@ -114,6 +117,14 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { createHvyAgentTools } from './agent-tools';
 
+export type {
+  HvyHistoryArtifactKind,
+  HvyHistoryArtifactPutRequest,
+  HvyHistoryArtifactStore,
+  HvyHistoryArtifactStored,
+} from './history-artifact-store';
+export type { HvyDatabaseTableSource } from './plugins/database-table-source';
+
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
 export interface HvyMountOptions {
@@ -121,6 +132,7 @@ export interface HvyMountOptions {
   document: VisualDocument;
   mode?: HvyEmbedMode;
   plugins?: HvyPluginInput[];
+  databaseSources?: HvyDatabaseTableSource[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatContext?: HvyChatContextOptions | null;
@@ -137,6 +149,7 @@ export interface HvyMountOptions {
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
+  historyStore?: HvyHistoryArtifactStore | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
@@ -164,8 +177,8 @@ export interface HvyMount {
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
-  undo(): void;
-  redo(): void;
+  undo(): Promise<void>;
+  redo(): Promise<void>;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -783,6 +796,7 @@ function bindRuntimeActivation(root: HTMLElement, runtime: StateRuntime): void {
 
 function ensureEmbedRuntime(
   plugins: HvyPluginInput[],
+  databaseSources: HvyDatabaseTableSource[],
   runtime: StateRuntime,
   root: HTMLElement,
   getLinkObserver: () => HvyLinkObserver | null
@@ -824,6 +838,7 @@ function ensureEmbedRuntime(
     readerRenderer: renderer,
   });
   setHostPlugins(plugins);
+  setHostDatabaseTableSources(databaseSources);
   resetPluginDocumentHookState();
   syncColorMode();
 }
@@ -936,10 +951,10 @@ function mountFullHvyProxy(options: HvyMountOptions): HvyMount {
       return mounted?.isDirty() ?? false;
     },
     undo() {
-      withMount((mount) => mount.undo());
+      return ready.then((mount) => mount.undo());
     },
     redo() {
-      withMount((mount) => mount.redo());
+      return ready.then((mount) => mount.redo());
     },
     buildImportPlan(importOptions) {
       return ready.then((mount) => mount.buildImportPlan(importOptions));
@@ -1040,6 +1055,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.encryption ?? null,
     options.crossDocumentLinks === true
   ));
+  configureDatabaseHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
   setPowerScriptAcceptanceCallbacks({
     getAcceptance: options.getPowerScriptAcceptance ?? null,
@@ -1088,7 +1104,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   bindRuntimeActivation(options.root, runtime);
-  ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
+  ensureEmbedRuntime(options.plugins ?? builtInPlugins, options.databaseSources ?? [], runtime, options.root, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
@@ -1099,6 +1115,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         unmountAllPlugins();
         options.root.innerHTML = '';
         setHostPlugins([]);
+        setHostDatabaseTableSources([]);
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         resetPluginDocumentHookState();
@@ -1111,6 +1128,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           setThemeRoot(null);
         }
       });
+      void destroyDatabaseHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
@@ -1176,10 +1194,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return documentChangeApi.isDirty();
     },
     undo() {
-      runWithStateRuntime(runtime, () => undoState());
+      return runWithStateRuntimeAsync(runtime, () => undoStateAsync());
     },
     redo() {
-      runWithStateRuntime(runtime, () => redoState());
+      return runWithStateRuntimeAsync(runtime, () => redoStateAsync());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

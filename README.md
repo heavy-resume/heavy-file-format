@@ -405,6 +405,7 @@ not enabled automatically:
 {
   "plugins": [
     "hvy.db-table",
+    "hvy.db-table-v2",
     "hvy.form",
     "hvy.progress-bar",
     "hvy.scripting",
@@ -440,6 +441,31 @@ HVY.mountHvy({
   plugins: [HVY.plugins.progressBar],
 });
 ```
+
+`hvy.db-table-v2` keeps its data backend behind a paged source adapter. The
+built-in `with-file` source reads the database attached to the HVY file. Hosts
+can provide additional sources per mount through `databaseSources`:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  plugins: [HVY.plugins.dbTableV2],
+  databaseSources: [{
+    id: 'example-remote-db',
+    label: 'Example remote database',
+    async readPage(request) {
+      return remoteDatabase.readPage(request);
+    },
+  }],
+});
+```
+
+The adapter receives the authored query unchanged together with `pageSize` and
+`offset`. It must apply pagination at the source and return `hasNextPage`; it
+must not load an unbounded result and slice it in the browser. External sources
+are read-only in the current reference client. `queryLimit` is the single rows-
+per-page setting, defaults to 50, and is clamped to 1–1000.
 
 Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
 to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or
@@ -579,14 +605,43 @@ await saveDocument(mount.serializeDocumentBytes());
 mount.markSaved();
 
 // Hosts can also route their own undo/redo controls through the mounted editor.
-mount.undo();
-mount.redo();
+await mount.undo();
+await mount.redo();
 ```
 
 `changedSectionTitles` contains the user-facing titles of sections that differ
 from the last saved baseline. It accumulates across edits until `markSaved()`
 and never exposes internal section IDs. Untitled sections are reported as an
 empty string so the host can choose how to present them.
+
+DB Table v2 keeps ordinary edits compact by recording logical inverse
+operations. Before destructive or trigger-backed SQLite edits, it stores a
+full database checkpoint outside the HVY document. The default checkpoint
+store is in memory. Desktop, browser, and web hosts can instead provide a
+`historyStore`; its returned IDs remain opaque to HVY:
+
+```js
+const historyStore = {
+  async put({ bytes, kind, reason, namespace }) {
+    return { id: await temporaryHistory.write({ bytes, kind, reason, namespace }) };
+  },
+  async get(id) {
+    return temporaryHistory.read(id); // Uint8Array, ArrayBuffer, Blob, or null
+  },
+  async remove(id) {
+    await temporaryHistory.remove(id);
+  },
+};
+
+const mount = HVY.mountHvy({ root, document, mode: 'editor', historyStore });
+```
+
+Checkpoint writes are queued before the destructive command runs. Undo stores
+the corresponding redo checkpoint lazily, verifies checkpoint length and
+SHA-256 integrity before restoring it, and remains asynchronous when the host
+uses disk, IndexedDB, or bucket storage. Checkpoints are removed when their
+history branch expires or the mount is destroyed; they are never serialized
+into the `.hvy` file.
 
 Embedded editor/AI instances do not persist reconnect/reload session state by
 default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`

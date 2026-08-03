@@ -5,7 +5,7 @@ import type { HvyPdfExportRuleRecorder } from '../../pdf-export/types';
 import type { VisualDocument } from '../../types';
 import type { HvyPluginHookChangeReason } from '../types';
 import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
-import { hasDocumentDbTables } from '../db-table-model';
+import { hasDocumentDatabaseTables } from '../database-table-targets';
 import { notifyDocumentMayHaveChanged } from '../../document-change';
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
 
@@ -234,7 +234,7 @@ function withSuppressedBrythonConsoleNoise(run: () => void): void {
 }
 
 function shouldInitializeScriptingDb(document: VisualDocument, source: string): boolean {
-  if (hasDocumentDbTables(document)) {
+  if (hasDocumentDatabaseTables(document)) {
     return true;
   }
   return /\bdoc\s*\.\s*db\b|\bdb\b/u.test(source);

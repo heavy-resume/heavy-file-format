@@ -1,5 +1,5 @@
 import { state, getRenderApp } from '../../state';
-import { recordHistory, undoState, redoState } from '../../history';
+import { recordHistory, undoStateAsync, redoStateAsync } from '../../history';
 import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
@@ -15,11 +15,11 @@ import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySections
 import { capturePaneScroll } from '../../scroll';
 
 const undo: AppActionHandler = () => {
-  undoState();
+  void undoStateAsync();
 };
 
 const redo: AppActionHandler = () => {
-  redoState();
+  void redoStateAsync();
 };
 
 const switchView: AppActionHandler = ({ actionButton }) => {

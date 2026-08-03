@@ -13,7 +13,7 @@ import type { JsonObject } from './hvy/types';
 import type { HostChatClient } from './chat/chat';
 import type { ChatSettings, VisualDocument } from './types';
 import { buildDocumentEditToolHelp } from './ai-document-edit-instructions';
-import { DB_TABLE_PLUGIN_ID } from './plugins/registry';
+import { DB_TABLE_PLUGIN_ID, DB_TABLE_V2_PLUGIN_ID } from './plugins/registry';
 import { collectNestedBlocks, findBlockByInternalId, formatComponentLocation, formatNestedTargetRefs, resolveComponentRef, summarizeDocumentStructure, truncatePreview } from './ai-document-structure';
 import { applyComponentPatchEdits, buildDocumentNumberedLines, buildGrepRegex, buildToolRegex, clampLineRange, formatNumberedFragment, formatPatchContextFragment } from './ai-document-line-tools';
 import { hasNestedSlotDiagnostics } from './ai-document-loop-state';
@@ -264,6 +264,10 @@ async function renderComponentText(document: VisualDocument, block: VisualBlock,
   if (block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_PLUGIN_ID) {
     const { getDbTableRenderedText } = await import('./plugins/db-table');
     return getDbTableRenderedText(document, block);
+  }
+  if (block.schema.component === 'plugin' && block.schema.plugin === DB_TABLE_V2_PLUGIN_ID) {
+    const { getDbTableV2RenderedText } = await import('./plugins/db-table-v2/db-table-v2');
+    return getDbTableV2RenderedText(document, block);
   }
 
   const localLines = getLocalRenderedComponentLines(block);

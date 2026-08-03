@@ -28,6 +28,8 @@ vi.mock('../src/bind/handlers/_imports', () => {
     },
     undoState: undoStateMock,
     redoState: redoStateMock,
+    undoStateAsync: undoStateMock,
+    redoStateAsync: redoStateMock,
   };
 });
 

@@ -104,7 +104,9 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { centerPendingEditorSection } from './scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory, redoState, undoState } from './history';
+import { recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
+import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
@@ -141,6 +143,9 @@ import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, typ
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
+import { setHostDatabaseTableSources, type HvyDatabaseTableSource } from './plugins/database-table-source';
+
+export type { HvyDatabaseTableSource } from './plugins/database-table-source';
 
 export type HvyEmbedMode = 'viewer' | 'editor' | 'ai';
 
@@ -158,6 +163,7 @@ export interface HvyMountOptions {
   document: VisualDocument;
   mode?: HvyEmbedMode;
   plugins?: HvyPluginInput[];
+  databaseSources?: HvyDatabaseTableSource[];
   showAdvancedEditor?: boolean;
   chatClient?: HostChatClient | null;
   chatSettings?: Partial<ChatSettings> | null;
@@ -176,6 +182,7 @@ export interface HvyMountOptions {
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
+  historyStore?: HvyHistoryArtifactStore | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
   editorClipboard?: HvyEditorClipboardHost | null;
@@ -203,8 +210,8 @@ export interface HvyMount {
   exportPdf(options?: HvyPdfExportOptions): Promise<void>;
   markSaved(): void;
   isDirty(): boolean;
-  undo(): void;
-  redo(): void;
+  undo(): Promise<void>;
+  redo(): Promise<void>;
   buildImportPlan(options: BuildImportPlanOptions): Promise<BuildImportPlanResult>;
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
@@ -1006,6 +1013,7 @@ function refreshModalPreview(): void {}
 
 function ensureEmbedRuntime(
   plugins: HvyPluginInput[],
+  databaseSources: HvyDatabaseTableSource[],
   runtime: StateRuntime,
   root: HTMLElement,
   getLinkObserver: () => HvyLinkObserver | null
@@ -1065,6 +1073,7 @@ function ensureEmbedRuntime(
     readerRenderer,
   });
   setHostPlugins(plugins);
+  setHostDatabaseTableSources(databaseSources);
   resetPluginDocumentHookState();
   initColorModeSync();
 }
@@ -1100,6 +1109,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   runtimeState.chatSearchCache = options.chatSearchCache ?? null;
   runtimeState.embeddingProvider = options.embeddingProvider ?? null;
   const runtime = createStateRuntime(runtimeState);
+  configureDatabaseHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
   setPowerScriptAcceptanceCallbacks({
     getAcceptance: options.getPowerScriptAcceptance ?? null,
@@ -1146,7 +1156,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
   bindRuntimeActivation(options.root, runtime);
-  ensureEmbedRuntime(options.plugins ?? builtInPlugins, runtime, options.root, () => linkObserver);
+  ensureEmbedRuntime(options.plugins ?? builtInPlugins, options.databaseSources ?? [], runtime, options.root, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
@@ -1161,6 +1171,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         setHostPlugins([]);
+        setHostDatabaseTableSources([]);
         resetPluginDocumentHookState();
         clearPowerScriptingMode(runtime);
         clearPluginAuthorization(runtime);
@@ -1172,6 +1183,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           setThemeRoot(null);
         }
       });
+      void destroyDatabaseHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
@@ -1237,10 +1249,10 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
       return documentChangeApi.isDirty();
     },
     undo() {
-      runWithStateRuntime(runtime, () => undoState());
+      return runWithStateRuntimeAsync(runtime, () => undoStateAsync());
     },
     redo() {
-      runWithStateRuntime(runtime, () => redoState());
+      return runWithStateRuntimeAsync(runtime, () => redoStateAsync());
     },
     buildImportPlan(importOptions) {
       return runWithStateRuntimeAsync(runtime, () => buildImportPlan(importOptions));

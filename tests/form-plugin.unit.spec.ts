@@ -1,8 +1,20 @@
 import { describe, expect, test } from 'vitest';
 
-import { parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
+import { claimFormInitialization, parseFormSpec, serializeFormConfig, serializeFormSpec } from '../src/plugins/form';
+import type { VisualBlock } from '../src/editor/types';
+import type { VisualDocument } from '../src/types';
 
 describe('form plugin YAML', () => {
+  test('initialization is claimed once per document and form component lifecycle', () => {
+    const document = {} as VisualDocument;
+    const form = { text: '', schema: { pluginConfig: {} } } as VisualBlock;
+
+    expect(claimFormInitialization(document, form)).toBe(true);
+    expect(claimFormInitialization(document, form)).toBe(false);
+    expect(claimFormInitialization(document, { text: '', schema: { pluginConfig: {} } } as VisualBlock)).toBe(true);
+    expect(claimFormInitialization({} as VisualDocument, form)).toBe(true);
+  });
+
   test('normalizes fields, options, scripts, and triggers from YAML', () => {
     const parsed = parseFormSpec(`fields:
   - label: Food

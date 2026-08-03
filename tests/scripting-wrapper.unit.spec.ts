@@ -623,6 +623,31 @@ Before
   expect(renderApp).not.toHaveBeenCalled();
 });
 
+test('scripting runtime checks the cycle boundary before a mutation-triggered render', () => {
+  const renderApp = vi.fn();
+  const onMutationFlushed = vi.fn();
+  const beforeMutationRender = vi.fn(() => {
+    throw new Error('cycle stopped');
+  });
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  initState(createTestState(document));
+  const runtime = createScriptingRuntime({ document, beforeMutationRender, onMutationFlushed });
+
+  runtime.doc.header.set('changed', true);
+
+  expect(() => runtime.doc.rerender()).toThrow('cycle stopped');
+  expect(beforeMutationRender).toHaveBeenCalledOnce();
+  expect(renderApp).not.toHaveBeenCalled();
+  expect(onMutationFlushed).toHaveBeenCalledOnce();
+});
+
 test('createScriptingRuntime component set_text clears stale fill-in state', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

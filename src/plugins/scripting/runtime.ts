@@ -137,6 +137,7 @@ export interface ScriptingRuntimeOptions {
   plugins?: ScriptingPluginsApi;
   now?: () => Date;
   onMutationFlushed?: () => void;
+  beforeMutationRender?: () => void;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -293,19 +294,30 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
+    let renderGuardError: unknown = null;
     if (options.renderOnMutation !== false) {
       try {
-        getRefreshReaderPanels()();
-      } catch {
-        // Reader panel may not be initialized yet (during pre-first-render execution).
+        options.beforeMutationRender?.();
+      } catch (error) {
+        renderGuardError = error;
       }
-      try {
-        getRenderApp()();
-      } catch {
-        // renderApp may not be ready yet during the very first load.
+      if (!renderGuardError) {
+        try {
+          getRefreshReaderPanels()();
+        } catch {
+          // Reader panel may not be initialized yet (during pre-first-render execution).
+        }
+        try {
+          getRenderApp()();
+        } catch {
+          // renderApp may not be ready yet during the very first load.
+        }
       }
     }
     options.onMutationFlushed?.();
+    if (renderGuardError) {
+      throw renderGuardError;
+    }
   };
 
   const doc: ScriptingDocApi = {

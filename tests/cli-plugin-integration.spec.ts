@@ -555,12 +555,20 @@ fields:
     type: select
 scripts:
   load: |-
+    initial_runs = doc.header.get("form_initial_runs") or 0
+    doc.header.set("form_initial_runs", initial_runs + 1)
     doc.form.set_options("Choice", [("a", "Alpha"), ("b", "Beta")])
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
 
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Submit' }) });
+  await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('form_initial_runs: 1');
+  await page.getByRole('button', { name: 'Viewer' }).click();
   await expect(form.locator('select[name="Choice"] option')).toContainText(['Alpha', 'Beta']);
 });
 

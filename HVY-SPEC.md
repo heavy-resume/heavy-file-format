@@ -1737,6 +1737,11 @@ Plugin-specific rules:
   `pluginConfig.initialScript`, `pluginConfig.submitSourceScript`,
   `pluginConfig.submitScript`, and field trigger values reference keys in this
   map.
+- `pluginConfig.initialScript` runs once for the form component during the
+  current in-memory document lifecycle. DOM remounts, reader refreshes,
+  database-driven rerenders, and view changes MUST NOT cause it to run again.
+  Loading a new document or creating a new form component starts a new
+  lifecycle.
 - `pluginConfig.scriptLibraries` MAY list scripting libraries the client should
   make available to every form script before execution. Supported values are
   client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements

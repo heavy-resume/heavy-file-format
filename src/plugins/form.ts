@@ -15,7 +15,8 @@ import { recordHistory } from '../history';
 import type { JsonObject } from '../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../perf-trace';
 import { getActiveStateRuntime, runWithStateRuntime } from '../state';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, VisualDocument } from '../types';
+import type { VisualBlock } from '../editor/types';
 import { openScriptingErrorModal } from './scripting/error-modal';
 import formDocumentation from './form.about.txt?raw';
 
@@ -427,6 +428,38 @@ function createLiveState(spec: FormSpec): LiveFormState {
   return { values, options, errors: {} };
 }
 
+interface FormLifecycleState {
+  initialized: boolean;
+  live: LiveFormState;
+}
+
+const formLifecycleByDocument = new WeakMap<VisualDocument, WeakMap<VisualBlock, FormLifecycleState>>();
+
+function getFormLifecycle(document: VisualDocument, block: VisualBlock, spec: FormSpec): FormLifecycleState {
+  let forms = formLifecycleByDocument.get(document);
+  if (!forms) {
+    forms = new WeakMap<VisualBlock, FormLifecycleState>();
+    formLifecycleByDocument.set(document, forms);
+  }
+  let lifecycle = forms.get(block);
+  if (!lifecycle) {
+    lifecycle = { initialized: false, live: createLiveState(spec) };
+    forms.set(block, lifecycle);
+  }
+  return lifecycle;
+}
+
+export function claimFormInitialization(document: VisualDocument, block: VisualBlock): boolean {
+  const lifecycle = getFormLifecycle(
+    document,
+    block,
+    parseFormSpec(block.text, block.schema.pluginConfig).spec
+  );
+  if (lifecycle.initialized) return false;
+  lifecycle.initialized = true;
+  return true;
+}
+
 function reconcileLiveState(live: LiveFormState, spec: FormSpec): void {
   const fieldLabels = new Set(spec.fields.map((field) => field.label));
   for (const field of spec.fields) {
@@ -459,8 +492,8 @@ function resultText(result: ScriptingRunResult): string {
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-form-plugin hvy-form-plugin-${ctx.mode}`;
-  let live = createLiveState(parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig).spec);
-  let initialized = false;
+  const initialSpec = parseFormSpec(ctx.block.text, ctx.block.schema.pluginConfig).spec;
+  let live = getFormLifecycle(ctx.rawDocument, ctx.block, initialSpec).live;
   let statusText = '';
   let statusError = false;
   let statusErrorDetail: string | null = null;
@@ -860,8 +893,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       root.appendChild(status);
     }
 
-    if (!initialized) {
-      initialized = true;
+    if (spec.initialScript.trim().length > 0 && claimFormInitialization(ctx.rawDocument, ctx.block)) {
       runNamedScript(spec.initialScript, 'initial');
     }
   }
@@ -1180,7 +1212,6 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       forceEditorRender = false;
       renderEditor();
     } else {
-      initialized = false;
       renderReader();
     }
   };

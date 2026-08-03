@@ -8,6 +8,11 @@ import { getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { hasDocumentDatabaseTables } from '../database-table-targets';
 import { notifyDocumentMayHaveChanged } from '../../document-change';
 import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
+import {
+  beginScriptCycleExecution,
+  createScriptInvocationIdentity,
+  type ScriptCycleExecution,
+} from './cycle-coordinator';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -1483,6 +1488,14 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       };
     }
   }
+  let cycleExecution: ScriptCycleExecution | null = null;
+  if (stateRuntime) {
+    cycleExecution = beginScriptCycleExecution(
+      stateRuntime,
+      options.document,
+      createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source)
+    );
+  }
   runtime = createScriptingRuntime({
     document: options.document,
     previousDocument: options.previousDocument,
@@ -1505,6 +1518,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
       });
     },
+    beforeMutationRender: () => cycleExecution?.beforeMutationRender(),
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
@@ -1523,76 +1537,80 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   scriptElement.id = `hvy-script-${runtimeId}`;
   scriptElement.textContent = buildPythonProgram(runtimeId, options.componentId, options.injectedGlobals ?? {}, libraries);
 
-  return new Promise((resolve) => {
-    scripting.callbacks[runtimeId] = () => {
-      const error = scripting.errors[runtimeId];
-      const result: ScriptingRunResult = error
-        ? {
-            ok: false,
-            error: summarizeScriptingError(error),
-            errorDetail: cleanScriptingErrorDetail(error),
-            stepsExecuted: runtime.stats.stepsExecuted,
-            stepBudget: runtime.stats.stepBudget,
-            linesExecuted: runtime.stats.linesExecuted,
-            toolCalls: runtime.stats.toolCalls,
-            logs: [...runtime.stats.logs],
-          }
-        : {
-            ok: true,
-            stepsExecuted: runtime.stats.stepsExecuted,
-            stepBudget: runtime.stats.stepBudget,
-            linesExecuted: runtime.stats.linesExecuted,
-            toolCalls: runtime.stats.toolCalls,
-            returnValue: scripting.results[runtimeId],
-            logs: [...runtime.stats.logs],
-          };
+  try {
+    return await new Promise((resolve) => {
+      scripting.callbacks[runtimeId] = () => {
+        const error = scripting.errors[runtimeId];
+        const result: ScriptingRunResult = error
+          ? {
+              ok: false,
+              error: summarizeScriptingError(error),
+              errorDetail: cleanScriptingErrorDetail(error),
+              stepsExecuted: runtime.stats.stepsExecuted,
+              stepBudget: runtime.stats.stepBudget,
+              linesExecuted: runtime.stats.linesExecuted,
+              toolCalls: runtime.stats.toolCalls,
+              logs: [...runtime.stats.logs],
+            }
+          : {
+              ok: true,
+              stepsExecuted: runtime.stats.stepsExecuted,
+              stepBudget: runtime.stats.stepBudget,
+              linesExecuted: runtime.stats.linesExecuted,
+              toolCalls: runtime.stats.toolCalls,
+              returnValue: scripting.results[runtimeId],
+              logs: [...runtime.stats.logs],
+            };
 
-      delete scripting.runtimes[runtimeId];
-      delete scripting.sources[runtimeId];
-      delete scripting.instrumentedSources[runtimeId];
-      delete scripting.errors[runtimeId];
-      delete scripting.results[runtimeId];
-      delete scripting.callbacks[runtimeId];
-      scriptingDb?.dispose();
-      if (dbMutated) {
-        runtime.doc.rerender();
-      }
-
-      resolve(result);
-    };
-
-    try {
-      const brython = getBrython() as unknown as {
-        run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
-      };
-      if (typeof brython.run_script !== 'function') {
-        throw new Error('Brython run_script API unavailable.');
-      }
-      const runScript = brython.run_script;
-
-      withSuppressedBrythonConsoleNoise(() => {
-        runScript(
-          scriptElement,
-          scriptElement.textContent || '',
-          `hvy_script_${runtimeId}`,
-          `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
-          true
-        );
-      });
-    } catch (error) {
-      let message = String(error);
-      try {
-        const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
-        if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
-          message = brython.error_trace(error);
-        } else if (error instanceof Error) {
-          message = error.message;
+        delete scripting.runtimes[runtimeId];
+        delete scripting.sources[runtimeId];
+        delete scripting.instrumentedSources[runtimeId];
+        delete scripting.errors[runtimeId];
+        delete scripting.results[runtimeId];
+        delete scripting.callbacks[runtimeId];
+        scriptingDb?.dispose();
+        if (dbMutated) {
+          runtime.doc.rerender();
         }
-      } catch (_) {
-        // fallback to original error string
+
+        resolve(result);
+      };
+
+      try {
+        const brython = getBrython() as unknown as {
+          run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
+        };
+        if (typeof brython.run_script !== 'function') {
+          throw new Error('Brython run_script API unavailable.');
+        }
+        const runScript = brython.run_script;
+
+        withSuppressedBrythonConsoleNoise(() => {
+          runScript(
+            scriptElement,
+            scriptElement.textContent || '',
+            `hvy_script_${runtimeId}`,
+            `${window.location.href || 'http://localhost/hvy-plugin'}#hvy-script-${runtimeId}`,
+            true
+          );
+        });
+      } catch (error) {
+        let message = String(error);
+        try {
+          const brython = getBrython() as unknown as { error_trace?: (e: unknown) => string };
+          if (typeof brython.error_trace === 'function' && error && typeof error === 'object' && '__class__' in error) {
+            message = brython.error_trace(error);
+          } else if (error instanceof Error) {
+            message = error.message;
+          }
+        } catch (_) {
+          // fallback to original error string
+        }
+        scripting.errors[runtimeId] = message;
+        scripting.callbacks[runtimeId]();
       }
-      scripting.errors[runtimeId] = message;
-      scripting.callbacks[runtimeId]();
-    }
-  });
+    });
+  } finally {
+    cycleExecution?.complete();
+  }
 }

@@ -2,7 +2,7 @@ import type { VisualDocument } from '../../types';
 import { createScriptingDbRuntime } from '../db-table';
 import type { ScriptingDbApi } from '../scripting/runtime';
 import { validateDbTableObjectName } from '../db-table-identifiers';
-import type { DbTableV2Config } from './db-table-v2-config';
+import type { DbTableV2Config } from './db-table-config';
 import {
   getDatabaseTableSource,
   registerBuiltInDatabaseTableSource,

@@ -16,9 +16,9 @@ plugins:
 
 <!--hvy:plugin {"id":"contacts","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"contacts","columns":{"id":{"visibility":"compact","width":"5rem"},"relationship_id":{"label":"Organization","width":"16rem","foreignDisplayColumn":"organization"}}}}-->
 `);
-  await expect(page.locator('#rawEditor')).toHaveValue(/hvy\.db-table-v2/u);
+  await expect(page.locator('#rawEditor')).toHaveValue(/hvy\.db-table/u);
   await page.getByRole('button', { name: 'Apply' }).click();
-  await expect(page.locator('#rawEditor')).toHaveValue(/hvy\.db-table-v2/u);
+  await expect(page.locator('#rawEditor')).toHaveValue(/hvy\.db-table/u);
   await page.getByRole('button', { name: 'Basic' }).click();
   await page.evaluate(async (contactNames) => {
     const { state, getRenderApp } = await import('/src/state.ts');
@@ -41,12 +41,12 @@ plugins:
     setActiveEditorBlock(section.key, block.id);
     getRenderApp()();
   }, contacts);
-  await expect(page.locator('.hvy-db-table-v2-editor [data-db-v2-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
+  await expect(page.locator('.hvy-database-table-editor [data-db-v2-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
 }
 
-test('db-table-v2 edits relationships, stages required rows, and controls column visibility', async ({ page }) => {
+test('database-table edits relationships, stages required rows, and controls column visibility', async ({ page }) => {
   await loadDbTableV2Crm(page);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
   await expect(plugin.locator('thead')).toContainText('Id');
@@ -82,9 +82,9 @@ test('db-table-v2 edits relationships, stages required rows, and controls column
   })).toMatchObject({ relationship_id: 2, storage_type: 'integer' });
 });
 
-test('db-table-v2 carries forward schema editing, row attachments, and confirmed row deletion', async ({ page }) => {
+test('database-table carries forward schema editing, row attachments, and confirmed row deletion', async ({ page }) => {
   await loadDbTableV2Crm(page);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
   await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveValue('Jane Smith');
@@ -114,9 +114,9 @@ test('db-table-v2 carries forward schema editing, row attachments, and confirmed
   await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveCount(0);
 });
 
-test('db-table-v2 renames database columns directly from spreadsheet headers', async ({ page }) => {
+test('database-table renames database columns directly from spreadsheet headers', async ({ page }) => {
   await loadDbTableV2Crm(page);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
   const columnName = plugin.getByLabel('Display name for contact');
 
   // BEFORE
@@ -143,9 +143,9 @@ test('db-table-v2 renames database columns directly from spreadsheet headers', a
   })).toContain('contact_name');
 });
 
-test('db-table-v2 resizes columns and auto-fits data within the document maximum', async ({ page }) => {
+test('database-table resizes columns and auto-fits data within the document maximum', async ({ page }) => {
   await loadDbTableV2Crm(page);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
   const contactHeader = plugin.locator('.db-v2-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
   const resizeHandle = contactHeader.locator('.db-v2-resize-handle');
   await page.evaluate(async () => {
@@ -184,9 +184,9 @@ test('db-table-v2 resizes columns and auto-fits data within the document maximum
   })).toBe('160px');
 });
 
-test('db-table-v2 uses queryLimit as the single page size without changing an authored SQL limit', async ({ page }) => {
+test('database-table uses queryLimit as the single page size without changing an authored SQL limit', async ({ page }) => {
   await loadDbTableV2Crm(page, ['Jane Smith', 'Alex Doe', 'Blair Doe', 'Casey Doe', 'Devon Doe']);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
   await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveCount(5);
@@ -214,9 +214,9 @@ test('db-table-v2 uses queryLimit as the single page size without changing an au
   await expect(plugin.getByRole('button', { name: 'Next rows' })).toBeDisabled();
 });
 
-test('db-table-v2 cell and destructive schema edits share async document undo', async ({ page }) => {
+test('database-table cell and destructive schema edits share async document undo', async ({ page }) => {
   await loadDbTableV2Crm(page);
-  const plugin = page.locator('.hvy-db-table-v2-editor');
+  const plugin = page.locator('.hvy-database-table-editor');
   const contact = plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]');
 
   // BEFORE / TOOL CALL / AFTER: logical inverse

@@ -16,7 +16,7 @@ import {
   updateDbTableV2ColumnConfig,
   type DbTableV2ColumnConfig,
   type DbTableV2Config,
-} from './db-table-v2-config';
+} from './db-table-config';
 import {
   addDbTableV2Column,
   addNamedDbTableV2Column,
@@ -35,7 +35,7 @@ import {
   type DbTableV2ColumnSchema,
   type DbTableV2Snapshot,
   type DbTableV2Value,
-} from './db-table-v2-data';
+} from './db-table-data';
 import { getDatabaseTableSources } from '../database-table-source';
 import { openRemoveConfirmationModal } from '../../bind/handlers/remove-confirmation-modal';
 import {
@@ -50,10 +50,10 @@ import {
   recordHistory,
   restoreHistoryStackState,
 } from '../../history';
-import dbTableV2Documentation from './about-db-table-v2.txt?raw';
+import dbTableV2Documentation from './about-db-table.txt?raw';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from '../../document-change';
 
-import './db-table-v2.css';
+import './db-table-component.css';
 
 interface DbTableV2UiState {
   offset: number;
@@ -70,7 +70,7 @@ const visualDescriptions = new WeakMap<object, string>();
 
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
-  root.className = `hvy-db-table-v2 hvy-db-table-v2-${ctx.mode}`;
+  root.className = `hvy-database-table hvy-database-table-${ctx.mode}`;
   const ui: DbTableV2UiState = {
     offset: 0,
     sortColumn: null,

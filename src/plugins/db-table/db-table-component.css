@@ -1,4 +1,4 @@
-.hvy-db-table-v2 {
+.hvy-database-table {
   position: relative;
   display: grid;
   gap: 0.75rem;
@@ -68,7 +68,7 @@
   50% { opacity: 1; transform: scale(1); }
 }
 
-.hvy-db-table-v2.db-v2-loading {
+.hvy-database-table.db-v2-loading {
   opacity: 0.78;
 }
 

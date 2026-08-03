@@ -12,7 +12,7 @@ import {
   loadDbTableV2Snapshot,
   renameDbTableV2Column,
   updateDbTableV2Cell,
-} from '../src/plugins/db-table-v2/db-table-v2-data';
+} from '../src/plugins/db-table/db-table-data';
 import {
   normalizeDbTableV2ColumnWidth,
   normalizeDbTableV2MaxColumnWidth,
@@ -21,18 +21,18 @@ import {
   removeDbTableV2ColumnConfig,
   renameDbTableV2ColumnConfig,
   updateDbTableV2ColumnConfig,
-} from '../src/plugins/db-table-v2/db-table-v2-config';
+} from '../src/plugins/db-table/db-table-config';
 import { deserializeDocument } from '../src/serialization';
 import { getDocumentDatabaseTableNames } from '../src/plugins/database-table-targets';
 import { buildDocumentEditFormatInstructions } from '../src/ai-document-edit-instructions';
 import { setHostDatabaseTableSources, type HvyDatabaseTablePageRequest } from '../src/plugins/database-table-source';
-import { dbTablePlugin } from '../src/plugins/db-table-v2/db-table-v2';
+import { dbTablePlugin } from '../src/plugins/db-table/db-table-component';
 
 test('canonical db-table uses the promoted plugin id and version', () => {
   expect(dbTablePlugin).toMatchObject({ id: 'hvy.db-table', version: '0.2.0', displayName: 'DB Table' });
 });
 
-test('db-table-v2 reads simple foreign keys and configured display values', async () => {
+test('database-table reads simple foreign keys and configured display values', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const setup = await createScriptingDbRuntime(document);
   try {
@@ -80,7 +80,7 @@ test('db-table-v2 reads simple foreign keys and configured display values', asyn
   });
 });
 
-test('db-table-v2 writes numeric relationship values and enforces foreign keys', async () => {
+test('database-table writes numeric relationship values and enforces foreign keys', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const setup = await createScriptingDbRuntime(document);
   try {
@@ -115,7 +115,7 @@ test('db-table-v2 writes numeric relationship values and enforces foreign keys',
   await expect(updateDbTableV2Cell(document, 'contacts', 1, relationshipColumn, 999)).rejects.toThrow(/FOREIGN KEY constraint failed/u);
 });
 
-test('db-table-v2 inserts a complete staged row with one write', async () => {
+test('database-table inserts a complete staged row with one write', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const setup = await createScriptingDbRuntime(document);
   try {
@@ -151,7 +151,7 @@ test('db-table-v2 inserts a complete staged row with one write', async () => {
   expect(expectedResult.rows[0]?.values.created_at).toEqual(expect.any(String));
 });
 
-test('db-table-v2 column presentation defaults generated keys to compact and validates widths', () => {
+test('database-table column presentation defaults generated keys to compact and validates widths', () => {
   // BEFORE
   const config = readDbTableV2Config({ table: 'contacts' });
 
@@ -176,7 +176,7 @@ test('db-table-v2 column presentation defaults generated keys to compact and val
   });
 });
 
-test('db-table-v2 relationship option values preserve SQLite scalar types', () => {
+test('database-table relationship option values preserve SQLite scalar types', () => {
   expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue(14))).toBe(14);
   expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue('14'))).toBe('14');
   expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue(null))).toBeNull();
@@ -184,7 +184,7 @@ test('db-table-v2 relationship option values preserve SQLite scalar types', () =
   expect(coerceDbTableV2Input('14', 'TEXT')).toBe('14');
 });
 
-test('db-table-v2 participates in shared database targeting and AI SQL tools', () => {
+test('database-table participates in shared database targeting and AI SQL tools', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -211,7 +211,7 @@ hvy_version: 0.1
   expect(getDocumentDatabaseTableNames(externalDocument)).toEqual([]);
 });
 
-test('db-table-v2 retains a migrated query limit as its page size', async () => {
+test('database-table retains a migrated query limit as its page size', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const setup = await createScriptingDbRuntime(document);
   try {
@@ -243,7 +243,7 @@ test('db-table-v2 retains a migrated query limit as its page size', async () => 
   expect(expectedResult.rows.map((row) => row.values.name)).toEqual(['Three']);
 });
 
-test('db-table-v2 uses one bounded page size and preserves configured sources', () => {
+test('database-table uses one bounded page size and preserves configured sources', () => {
   expect(readDbTableV2Config({ source: 'postgresql', table: 'work_items' })).toMatchObject({
     source: 'postgresql',
     queryLimit: 50,
@@ -252,7 +252,7 @@ test('db-table-v2 uses one bounded page size and preserves configured sources', 
   expect(readDbTableV2Config({ table: 'work_items', queryLimit: 0 }).queryLimit).toBe(1);
 });
 
-test('db-table-v2 delegates authored queries and paging to the selected source', async () => {
+test('database-table delegates authored queries and paging to the selected source', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const requests: HvyDatabaseTablePageRequest[] = [];
   setHostDatabaseTableSources([{
@@ -310,7 +310,7 @@ test('db-table-v2 delegates authored queries and paging to the selected source',
   }
 });
 
-test('db-table-v2 carries forward schema editing and removes row-attached HVY with its row', async () => {
+test('database-table carries forward schema editing and removes row-attached HVY with its row', async () => {
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
   const setup = await createScriptingDbRuntime(document);
   try {
@@ -347,7 +347,7 @@ test('db-table-v2 carries forward schema editing and removes row-attached HVY wi
   }
 });
 
-test('db-table-v2 migrates and removes presentation settings when physical columns change', () => {
+test('database-table migrates and removes presentation settings when physical columns change', () => {
   const config = readDbTableV2Config({
     table: 'contacts',
     columns: { company: { label: 'Organization', width: '14rem' }, notes: { wrap: true } },

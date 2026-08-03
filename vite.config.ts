@@ -50,7 +50,7 @@ const HVY_BUILT_IN_PLUGIN_DEFINITIONS: HvyBuiltInPluginDefinition[] = [
     id: 'hvy.db-table',
     key: 'dbTable',
     exportName: 'dbTablePlugin',
-    modulePath: 'src/plugins/db-table-v2/db-table-v2.ts',
+    modulePath: 'src/plugins/db-table/db-table-component.ts',
     displayName: 'DB Table',
   },
   {

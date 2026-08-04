@@ -1,4 +1,4 @@
-import type { AppState } from './types';
+import type { AppState, HvyThemeOverrides } from './types';
 
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
@@ -58,6 +58,7 @@ type RuntimeCallbacks = {
 export interface StateRuntime {
   state: AppState;
   callbacks: RuntimeCallbacks;
+  themeOverrides: HvyThemeOverrides;
 }
 
 function createUninitializedCallbacks(): RuntimeCallbacks {
@@ -128,6 +129,7 @@ export function initCallbacks(callbacks: {
     activeRuntime = {
       state,
       callbacks: createUninitializedCallbacks(),
+      themeOverrides: {},
     };
   }
   activeRuntime.callbacks = {
@@ -150,17 +152,20 @@ export function initState(initial: AppState): void {
     activeRuntime = {
       state: initial,
       callbacks: createUninitializedCallbacks(),
+      themeOverrides: {},
     };
   } else {
     activeRuntime.state = initial;
+    activeRuntime.themeOverrides = {};
   }
   activateStateRuntime(activeRuntime);
 }
 
-export function createStateRuntime(initial: AppState): StateRuntime {
+export function createStateRuntime(initial: AppState, themeOverrides: HvyThemeOverrides = {}): StateRuntime {
   return {
     state: initial,
     callbacks: createUninitializedCallbacks(),
+    themeOverrides,
   };
 }
 

@@ -17,11 +17,11 @@ import {
   type ReaderPanelRefreshOptions,
   type StateRuntime,
 } from './state';
-import type { AppState, ChatAttachment, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, ImageAttachmentMaxDimensions, VisualDocument } from './types';
+import type { AppState, ChatAttachment, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
 import { deserializeDocumentBytes, deserializeDocumentBytesAsync, serializeDocument, serializeDocumentBytes, serializeDocumentBytesAsync, type HvyDocumentSerializerAdapter } from './serialization';
 import { deserializeDocumentWithDiagnostics } from './serialization';
 import { escapeAttr, escapeHtml, renderOption } from './utils';
-import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
+import { applyTheme, getThemeConfig, getThemeOverrides, initColorModeSync, setThemeOverrides as setRuntimeThemeOverrides, setThemeRoot } from './theme';
 import { getPaletteById } from './palettes/palette-registry';
 import {
   buildSectionRenderSequence,
@@ -177,6 +177,7 @@ export interface HvyMountOptions {
   crossDocumentLinks?: boolean;
   controls?: boolean;
   paletteId?: string | null;
+  themeOverrides?: HvyThemeOverrides | null;
   pdfStylePresets?: HvyPdfStylePreset[] | null;
   storageKey?: string | null;
   persistSessionState?: boolean;
@@ -216,6 +217,7 @@ export interface HvyMount {
   importFromText(options: ImportFromTextOptions): Promise<ImportFromTextResult>;
   setLinkObserver(observer: HvyLinkObserver | null): void;
   setPaletteOverrideId(id: string | null): void;
+  setThemeOverrides(overrides: HvyThemeOverrides | null): void;
   setSearchSnapshot(snapshot: HvySearchSnapshotInput | null): void;
   getSearchSnapshot(): HvySearchSnapshot;
   getChatState(): HvyChatSessionState;
@@ -760,6 +762,12 @@ function setPaletteOverrideId(id: string | null): void {
   renderApp();
 }
 
+function updateThemeOverrides(overrides: HvyThemeOverrides | null): void {
+  setRuntimeThemeOverrides(overrides);
+  applyTheme();
+  renderApp();
+}
+
 function setMountedSearchSnapshot(snapshot: HvySearchSnapshotInput | null, options: { render?: boolean } = {}): void {
   state.search.abortController?.abort();
   state.search = externalSearchSnapshotToDocumentState(snapshot, state.document);
@@ -792,6 +800,9 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
       for (const name of Object.keys(palette.colors)) {
         root.style.setProperty(name, computed.getPropertyValue(name));
       }
+    }
+    for (const name of Object.keys(getThemeOverrides())) {
+      root.style.setProperty(name, computed.getPropertyValue(name));
     }
   };
   const renderThemeEditor = () => {
@@ -1135,6 +1146,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     : null, runtime);
   let linkObserver = options.linkObserver ?? null;
   activateStateRuntime(runtime);
+  setRuntimeThemeOverrides(options.themeOverrides);
   const sessionPersistence = persistSessionState ? bindSessionPersistence(runtime) : null;
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
@@ -1276,6 +1288,14 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setPaletteOverrideId(id);
       });
     },
+    setThemeOverrides(overrides) {
+      runWithStateRuntime(runtime, () => {
+        currentRoot = options.root;
+        currentLinkObserver = linkObserver;
+        setThemeRoot(options.root);
+        updateThemeOverrides(overrides);
+      });
+    },
     setSearchSnapshot(snapshot) {
       runWithStateRuntime(runtime, () => {
         currentRoot = options.root;
@@ -1352,6 +1372,7 @@ export {
   buildDocumentRichTextCopyPayload,
 };
 export type { HvyDocumentDeltaOptions } from './document-delta';
+export type { HvyThemeOverrides } from './types';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';

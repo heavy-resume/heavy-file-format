@@ -2021,6 +2021,110 @@ hvy_version: 0.1
   expect(result.firstBg).not.toBe(result.secondBg);
 });
 
+test('embedded host theme overrides win per mount without changing document theme metadata', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-bg: "#123456"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Host theme override test.
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) throw new Error('Mount root missing.');
+    const hvyDocument = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    const expectedTheme = JSON.stringify(hvyDocument.meta.theme);
+    const mount = mountHvyViewer({
+      root,
+      document: hvyDocument,
+      paletteId: 'paper',
+      themeOverrides: { '--hvy-bg': '#010203', '--hvy-accent-1': '#aabbcc' },
+    });
+    const initialBackground = root.style.getPropertyValue('--hvy-bg');
+    mount.setThemeOverrides({ '--hvy-bg': '#040506' });
+    const updatedBackground = root.style.getPropertyValue('--hvy-bg');
+    mount.setThemeOverrides(null);
+    const paletteBackground = root.style.getPropertyValue('--hvy-bg');
+    return {
+      initialBackground,
+      updatedBackground,
+      paletteBackground,
+      documentThemeUnchanged: JSON.stringify(hvyDocument.meta.theme) === expectedTheme,
+    };
+  });
+
+  expect(result.initialBackground).toBe('#010203');
+  expect(result.updatedBackground).toBe('#040506');
+  expect(result.paletteBackground).not.toBe('#040506');
+  expect(result.paletteBackground).not.toBe('#123456');
+  expect(result.documentThemeUnchanged).toBe(true);
+});
+
+test('lazy full editor mount preserves queued host theme overrides', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+theme:
+  colors:
+    --hvy-bg: "#123456"
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Full editor theme override test.
+`;
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) throw new Error('Mount root missing.');
+    const hvyDocument = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
+    const expectedTheme = JSON.stringify(hvyDocument.meta.theme);
+    const mount = mountHvy({
+      root,
+      document: hvyDocument,
+      mode: 'editor',
+      themeOverrides: { '--hvy-bg': '#010203' },
+    });
+    mount.setThemeOverrides({ '--hvy-bg': '#070809' });
+    await new Promise<void>((resolve, reject) => {
+      const startedAt = performance.now();
+      const waitForMount = () => {
+        if (!root.textContent?.includes('Loading HVY')) {
+          resolve();
+          return;
+        }
+        if (performance.now() - startedAt > 1000) {
+          reject(new Error('Timed out waiting for full editor mount.'));
+          return;
+        }
+        window.requestAnimationFrame(waitForMount);
+      };
+      waitForMount();
+    });
+    return {
+      background: root.style.getPropertyValue('--hvy-bg'),
+      documentThemeUnchanged: JSON.stringify(hvyDocument.meta.theme) === expectedTheme,
+    };
+  });
+
+  expect(result.background).toBe('#070809');
+  expect(result.documentThemeUnchanged).toBe(true);
+});
+
 test('embedded reader xref from remounted sidebar navigates to main target', async ({ page }) => {
   await page.goto('/');
 

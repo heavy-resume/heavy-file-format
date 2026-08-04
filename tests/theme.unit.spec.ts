@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { initState } from '../src/state';
-import { colorValueToPickerHex, getThemeColorLabel, THEME_COLOR_NAMES } from '../src/theme';
+import { colorValueToPickerHex, getThemeColorLabel, setThemeOverrides, THEME_COLOR_NAMES } from '../src/theme';
 import { applyTheme } from '../src/theme';
 import { parsePaletteCss } from '../src/palettes/palette-registry';
 import type { AppState } from '../src/types';
@@ -84,6 +84,66 @@ test('palette override takes precedence until document theme is selected', () =>
 
   applyTheme();
   expect(style.getPropertyValue('--hvy-bg')).toBe('#123456');
+});
+
+test('host theme overrides win without changing document metadata', () => {
+  const style = createStyleDeclaration();
+  vi.stubGlobal('document', {
+    documentElement: {
+      style,
+      classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+      offsetHeight: 0,
+    },
+  });
+  vi.stubGlobal('window', {});
+  const document = {
+    meta: { hvy_version: 0.1, theme: { colors: { '--hvy-bg': '#123456' } } },
+    extension: '.hvy' as const,
+    sections: [],
+    attachments: [],
+  };
+  const expectedDocument = structuredClone(document);
+  initState({ document, paletteOverrideId: 'paper' } as unknown as AppState);
+  setThemeOverrides({
+    '--hvy-bg': ' #abcdef ',
+    '--hvy-accent-1': '#fedcba',
+    'background-color': 'red',
+  });
+
+  applyTheme();
+
+  expect(style.getPropertyValue('--hvy-bg')).toBe('#abcdef');
+  expect(style.getPropertyValue('--hvy-accent-1')).toBe('#fedcba');
+  expect(style.getPropertyValue('background-color')).toBe('');
+  expect(document).toEqual(expectedDocument);
+
+  setThemeOverrides(null);
+  applyTheme();
+  expect(style.getPropertyValue('--hvy-bg')).not.toBe('#abcdef');
+  expect(document).toEqual(expectedDocument);
+});
+
+test('applying viewer defaults does not add theme metadata to the document', () => {
+  const style = createStyleDeclaration();
+  vi.stubGlobal('document', {
+    documentElement: {
+      style,
+      classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+      offsetHeight: 0,
+    },
+  });
+  vi.stubGlobal('window', {});
+  const document = {
+    meta: { hvy_version: 0.1 },
+    extension: '.hvy' as const,
+    sections: [],
+    attachments: [],
+  };
+  initState({ document, paletteOverrideId: null } as unknown as AppState);
+
+  applyTheme();
+
+  expect(document.meta).toEqual({ hvy_version: 0.1 });
 });
 
 test('document sidebar width is applied at the theme root with its format default', () => {

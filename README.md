@@ -121,6 +121,35 @@ optionally edit the embedding model, then click Build Embeddings to prepare an
 embedding cache that will be attached the next time the current `.hvy` file is
 saved.
 
+Embedded hosts can apply branding without changing the mounted document by
+passing `themeOverrides`. Values are applied after the selected built-in palette
+or the document's `theme.colors`, so a host can replace a few roles or provide a
+complete custom theme. Only `--hvy-*` properties are accepted, and these values
+are runtime-only: they are not written to document metadata or serialized HVY
+bytes.
+
+```js
+const mount = HVY.mountHvy({
+  root,
+  document,
+  paletteId: 'paper',
+  themeOverrides: {
+    '--hvy-bg': '#101418',
+    '--hvy-surface': '#182027',
+    '--hvy-text': '#eef3f7',
+    '--hvy-accent-1': '#69c6b3',
+  },
+});
+
+mount.setThemeOverrides({ '--hvy-accent-1': '#7bd7c5' });
+mount.setThemeOverrides(null); // Return to the selected palette/document theme.
+```
+
+Theme precedence is library defaults, then the selected built-in palette or
+document theme, then host `themeOverrides`. `paletteId` and
+`setPaletteOverrideId(...)` are also runtime-only and do not clear or rewrite
+the document's theme.
+
 Embedded hosts can use the same embedding-based RAG path instead of the built-in
 keyword retrieval. Hosts may provide any embedding provider callback; if they
 expose an OpenAI-compatible `/api/embeddings` endpoint, they can reuse HVY's

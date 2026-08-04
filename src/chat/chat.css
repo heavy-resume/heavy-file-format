@@ -1,4 +1,4 @@
-.chat-dock {
+.hvy-document .chat-dock {
   --hvy-chat-panel-height: 42rem;
   --hvy-chat-document-edit-panel-height: 44rem;
 
@@ -17,12 +17,12 @@
   min-height: 0;
 }
 
-.chat-launcher,
-.chat-panel {
+.hvy-document .chat-launcher,
+.hvy-document .chat-panel {
   pointer-events: auto;
 }
 
-.chat-backdrop {
+.hvy-document .chat-backdrop {
   position: absolute;
   inset: 0;
   z-index: 70;
@@ -30,27 +30,27 @@
   backdrop-filter: blur(4px);
 }
 
-.chat-launcher {
+.hvy-document .chat-launcher {
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1;
   margin: 0;
 }
 
-.chat-dock.is-closed .chat-panel {
+.hvy-document .chat-dock.is-closed .chat-panel {
   display: none;
 }
 
-.chat-dock.is-open {
+.hvy-document .chat-dock.is-open {
   top: 1rem;
   bottom: 1rem;
 }
 
-.chat-dock.is-open .chat-launcher {
+.hvy-document .chat-dock.is-open .chat-launcher {
   display: none;
 }
 
-.chat-panel {
+.hvy-document .chat-panel {
   position: relative;
   flex: 0 1 var(--hvy-chat-panel-height);
   display: flex;
@@ -69,7 +69,7 @@
   overflow: hidden;
 }
 
-.chat-panel.is-document-edit {
+.hvy-document .chat-panel.is-document-edit {
   flex-basis: var(--hvy-chat-document-edit-panel-height);
   border: 2px solid color-mix(in srgb, var(--hvy-accent-2) 76%, var(--hvy-border));
   box-shadow:
@@ -77,12 +77,12 @@
     0 18px 40px var(--hvy-shadow);
 }
 
-.chat-panel>* {
+.hvy-document .chat-panel>* {
   min-width: 0;
   max-width: 100%;
 }
 
-.chat-panel-body {
+.hvy-document .chat-panel-body {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -95,7 +95,7 @@
   overscroll-behavior: contain;
 }
 
-.chat-panel-head {
+.hvy-document .chat-panel-head {
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -104,13 +104,13 @@
   padding-right: 2.6rem;
 }
 
-.chat-panel-head-actions {
+.hvy-document .chat-panel-head-actions {
   display: flex;
   gap: 0.45rem;
   flex-wrap: wrap;
 }
 
-.chat-panel-close {
+.hvy-document .chat-panel-close {
   position: absolute;
   top: 0;
   right: 0;
@@ -123,49 +123,49 @@
   border-radius: 999px;
 }
 
-.chat-panel-close .hvy-ui-icon {
+.hvy-document .chat-panel-close .hvy-ui-icon {
   width: 1.05rem;
   height: 1.05rem;
 }
 
-.chat-panel-head h2 {
+.hvy-document .chat-panel-head h2 {
   margin: 0;
   font-size: 1rem;
 }
 
-.chat-panel-head p {
+.hvy-document .chat-panel-head p {
   margin: 0.35rem 0 0;
   color: var(--hvy-text-alt);
   font-size: 0.92rem;
 }
 
-.chat-settings {
+.hvy-document .chat-settings {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
-.chat-setting {
+.hvy-document .chat-setting {
   display: grid;
   gap: 0.35rem;
   min-width: 0;
 }
 
-.chat-setting span,
-.chat-composer-field span,
-.chat-bubble-role,
-.chat-context-card strong {
+.hvy-document .chat-setting span,
+.hvy-document .chat-composer-field span,
+.hvy-document .chat-bubble-role,
+.hvy-document .chat-context-card strong {
   font-size: 0.78rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--hvy-text-alt);
 }
 
-.chat-setting-wide {
+.hvy-document .chat-setting-wide {
   grid-column: 1 / -1;
 }
 
-.chat-context-controls {
+.hvy-document .chat-context-controls {
   display: grid;
   gap: 0.65rem;
   padding: 0.75rem;
@@ -174,26 +174,26 @@
   background: color-mix(in srgb, var(--hvy-bg-alt) 60%, transparent);
 }
 
-.chat-embedding-controls {
+.hvy-document .chat-embedding-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.65rem;
   align-items: end;
 }
 
-.chat-embedding-controls.is-hidden {
+.hvy-document .chat-embedding-controls.is-hidden {
   display: none;
 }
 
-.chat-context-status {
+.hvy-document .chat-context-status {
   margin: 0;
   color: var(--hvy-text-alt);
   font-size: 0.82rem;
 }
 
-.chat-setting input,
-.chat-setting select,
-.chat-composer textarea {
+.hvy-document .chat-setting input,
+.hvy-document .chat-setting select,
+.hvy-document .chat-composer textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--hvy-border-input);
@@ -203,12 +203,12 @@
   padding: 0.6rem 0.75rem;
 }
 
-.chat-setting input,
-.chat-setting select {
+.hvy-document .chat-setting input,
+.hvy-document .chat-setting select {
   font: 13px/1.35 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.chat-context-card {
+.hvy-document .chat-context-card {
   padding: 0.8rem 0.9rem;
   border-radius: 12px;
   border: 1px solid var(--hvy-border-translucent);
@@ -217,26 +217,26 @@
       color-mix(in srgb, var(--hvy-surface) 92%, transparent));
 }
 
-.chat-context-card p {
+.hvy-document .chat-context-card p {
   margin: 0.35rem 0 0;
   color: var(--hvy-text-alt);
   font-size: 0.92rem;
 }
 
-.chat-context-meta {
+.hvy-document .chat-context-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-top: 0.65rem;
 }
 
-.chat-context-meta span,
-.chat-composer-status {
+.hvy-document .chat-context-meta span,
+.hvy-document .chat-composer-status {
   font-size: 0.82rem;
   color: var(--hvy-text-alt);
 }
 
-.chat-thread {
+.hvy-document .chat-thread {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -244,52 +244,52 @@
   gap: 0.7rem;
 }
 
-.chat-empty,
-.chat-bubble {
+.hvy-document .chat-empty,
+.hvy-document .chat-bubble {
   padding: 0.85rem 0.95rem;
   border-radius: 14px;
   border: 1px solid var(--hvy-border-translucent);
 }
 
-.chat-empty {
+.hvy-document .chat-empty {
   background: color-mix(in srgb, var(--hvy-bg-alt) 45%, transparent);
 }
 
-.chat-empty strong {
+.hvy-document .chat-empty strong {
   display: block;
   margin-bottom: 0.35rem;
 }
 
-.chat-empty p {
+.hvy-document .chat-empty p {
   margin: 0;
   color: var(--hvy-text-alt);
 }
 
-.chat-bubble {
+.hvy-document .chat-bubble {
   position: relative;
   isolation: isolate;
   background: color-mix(in srgb, var(--hvy-surface) 98%, transparent);
 }
 
-.chat-bubble-user {
+.hvy-document .chat-bubble-user {
   background: color-mix(in srgb, var(--hvy-button-bg) 18%, var(--hvy-surface));
 }
 
-.chat-bubble-progress {
+.hvy-document .chat-bubble-progress {
   border-style: dashed;
   background: color-mix(in srgb, var(--hvy-surface-tint) 16%, var(--hvy-surface));
 }
 
-.chat-bubble-progress .chat-bubble-body {
+.hvy-document .chat-bubble-progress .chat-bubble-body {
   color: var(--hvy-text-alt);
   font-size: 0.9rem;
 }
 
-.chat-bubble-work.chat-bubble-progress {
+.hvy-document .chat-bubble-work.chat-bubble-progress {
   border-style: solid;
 }
 
-.chat-work-body {
+.hvy-document .chat-work-body {
   display: flex;
   grid-template-columns: unset;
   align-items: center;
@@ -298,7 +298,7 @@
   font-size: 0.9rem;
 }
 
-.chat-work-pulse {
+.hvy-document .chat-work-pulse {
   width: 0.55rem;
   height: 0.55rem;
   flex: 0 0 auto;
@@ -307,7 +307,7 @@
   animation: chat-work-pulse 1.4s ease-in-out infinite;
 }
 
-.chat-work-details {
+.hvy-document .chat-work-details {
   margin-top: 0.65rem;
   border-top: 1px solid var(--hvy-border);
   padding-top: 0.55rem;
@@ -315,16 +315,16 @@
   font-size: 0.84rem;
 }
 
-.chat-work-details summary {
+.hvy-document .chat-work-details summary {
   cursor: pointer;
   font-weight: 650;
 }
 
-.chat-work-detail-section {
+.hvy-document .chat-work-detail-section {
   margin-top: 0.55rem;
 }
 
-.chat-work-detail-section pre {
+.hvy-document .chat-work-detail-section pre {
   max-height: 12rem;
   overflow: auto;
   margin: 0;
@@ -350,7 +350,7 @@
   }
 }
 
-.chat-reasoning {
+.hvy-document .chat-reasoning {
   margin-top: 0.6rem;
   border-top: 1px solid var(--hvy-border);
   padding-top: 0.5rem;
@@ -358,16 +358,16 @@
   font-size: 0.86rem;
 }
 
-.chat-reasoning summary {
+.hvy-document .chat-reasoning summary {
   cursor: pointer;
   font-weight: 650;
 }
 
-.chat-reasoning div {
+.hvy-document .chat-reasoning div {
   margin-top: 0.4rem;
 }
 
-.chat-bubble-meta {
+.hvy-document .chat-bubble-meta {
   position: absolute;
   top: 0.85rem;
   right: 0.85rem;
@@ -380,7 +380,7 @@
   pointer-events: none;
 }
 
-.chat-token-usage {
+.hvy-document .chat-token-usage {
   flex: 0 1 auto;
   min-width: 0;
   color: var(--hvy-text-alt);
@@ -392,13 +392,13 @@
   font: 10px/1.25 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.chat-copy-menu {
+.hvy-document .chat-copy-menu {
   position: relative;
   flex: 0 0 auto;
   pointer-events: auto;
 }
 
-.chat-copy-menu-toggle {
+.hvy-document .chat-copy-menu-toggle {
   appearance: none;
   display: inline-grid;
   grid-template: 1fr / 1fr;
@@ -423,8 +423,8 @@
   line-height: 1;
 }
 
-.chat-copy-menu-toggle:hover,
-.chat-copy-menu-toggle:focus-visible {
+.hvy-document .chat-copy-menu-toggle:hover,
+.hvy-document .chat-copy-menu-toggle:focus-visible {
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-surface) 68%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 32%);
   color: var(--hvy-text);
@@ -433,7 +433,7 @@
   transform: none;
 }
 
-.chat-copy-menu-toggle .hvy-ui-icon {
+.hvy-document .chat-copy-menu-toggle .hvy-ui-icon {
   place-self: center;
   width: 0.95rem;
   height: 0.95rem;
@@ -441,16 +441,16 @@
   transform: translateX(0.05rem) translateY(0.05rem);
 }
 
-.chat-copy-menu-toggle::-webkit-details-marker {
+.hvy-document .chat-copy-menu-toggle::-webkit-details-marker {
   display: none;
 }
 
-.chat-copy-menu-toggle.is-copied {
+.hvy-document .chat-copy-menu-toggle.is-copied {
   border-color: var(--hvy-success);
   color: var(--hvy-success);
 }
 
-.chat-copy-menu-popover {
+.hvy-document .chat-copy-menu-popover {
   position: absolute;
   top: calc(100% + 0.35rem);
   right: 0;
@@ -464,7 +464,7 @@
   box-shadow: 0 12px 28px var(--hvy-shadow);
 }
 
-.chat-copy-menu-popover button {
+.hvy-document .chat-copy-menu-popover button {
   width: 100%;
   border: 0;
   border-radius: 6px;
@@ -475,18 +475,18 @@
   cursor: pointer;
 }
 
-.chat-copy-menu-popover button:hover,
-.chat-copy-menu-popover button:focus-visible {
+.hvy-document .chat-copy-menu-popover button:hover,
+.hvy-document .chat-copy-menu-popover button:focus-visible {
   background: color-mix(in srgb, var(--hvy-button-bg) 12%, var(--hvy-surface));
 }
 
-.chat-bubble-error,
-.chat-error {
+.hvy-document .chat-bubble-error,
+.hvy-document .chat-error {
   border-color: color-mix(in srgb, var(--hvy-danger) 65%, var(--hvy-border));
   background: color-mix(in srgb, var(--hvy-danger) 12%, var(--hvy-surface));
 }
 
-.chat-bubble-body {
+.hvy-document .chat-bubble-body {
   display: grid;
   align-content: start;
   gap: 0.55rem;
@@ -497,7 +497,7 @@
   overflow-wrap: anywhere;
 }
 
-.chat-bubble-body code {
+.hvy-document .chat-bubble-body code {
   padding: 0.08rem 0.26rem;
   border-radius: 4px;
   background: var(--hvy-code-bg);
@@ -505,7 +505,7 @@
   font: 0.94em/1.45 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.chat-bubble-body pre {
+.hvy-document .chat-bubble-body pre {
   max-width: 100%;
   min-width: 0;
   overflow: auto;
@@ -517,52 +517,52 @@
   color: var(--hvy-code-text);
 }
 
-.chat-bubble-body pre code {
+.hvy-document .chat-bubble-body pre code {
   display: block;
   padding: 0;
   background: transparent;
   white-space: pre;
 }
 
-.chat-hvy-response,
-.chat-hvy-section-body,
-.chat-hvy-component-list,
-.chat-hvy-container {
+.hvy-document .chat-hvy-response,
+.hvy-document .chat-hvy-section-body,
+.hvy-document .chat-hvy-component-list,
+.hvy-document .chat-hvy-container {
   display: grid;
   gap: 0.7rem;
 }
 
-.chat-hvy-section {
+.hvy-document .chat-hvy-section {
   display: grid;
   gap: 0.55rem;
 }
 
-.chat-hvy-section-title {
+.hvy-document .chat-hvy-section-title {
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--hvy-text-alt);
 }
 
-.chat-hvy-text> :first-child {
+.hvy-document .chat-hvy-text> :first-child {
   margin-top: 0;
 }
 
-.chat-hvy-text> :last-child {
+.hvy-document .chat-hvy-text> :last-child {
   margin-bottom: 0;
 }
 
-.chat-hvy-grid {
+.hvy-document .chat-hvy-grid {
   display: grid;
   gap: 0.7rem;
 }
 
-.chat-error {
+.hvy-document .chat-error {
   padding: 0.75rem 0.9rem;
   border-radius: 12px;
 }
 
-.chat-cli-sim {
+.hvy-document .chat-cli-sim {
   display: grid;
   gap: 0.65rem;
   padding: 0.75rem 0.85rem;
@@ -571,25 +571,25 @@
   background: color-mix(in srgb, var(--hvy-bg-alt) 48%, transparent);
 }
 
-.chat-cli-sim-head {
+.hvy-document .chat-cli-sim-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.65rem;
 }
 
-.chat-cli-sim details {
+.hvy-document .chat-cli-sim details {
   min-width: 0;
 }
 
-.chat-cli-sim summary {
+.hvy-document .chat-cli-sim summary {
   cursor: pointer;
   color: var(--hvy-text-alt);
   font-size: 0.86rem;
   font-weight: 650;
 }
 
-.chat-cli-sim pre {
+.hvy-document .chat-cli-sim pre {
   max-height: 16rem;
   overflow: auto;
   margin: 0.45rem 0 0;
@@ -602,12 +602,12 @@
   font: 12px/1.45 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.chat-footer {
+.hvy-document .chat-footer {
   gap: 0.55rem;
   min-height: 0;
 }
 
-.chat-scroll-bottom {
+.hvy-document .chat-scroll-bottom {
   position: absolute;
   right: 1.35rem;
   bottom: 6.4rem;
@@ -620,11 +620,11 @@
   font-size: 0.82rem;
 }
 
-.chat-scroll-bottom[hidden] {
+.hvy-document .chat-scroll-bottom[hidden] {
   display: none;
 }
 
-.chat-composer {
+.hvy-document .chat-composer {
   display: grid;
   gap: 0.7rem;
   min-height: 0;
@@ -639,7 +639,7 @@
   align-self: end;
 }
 
-.chat-composer-field {
+.hvy-document .chat-composer-field {
   display: grid;
   gap: 0.35rem;
   min-width: 0;
@@ -647,21 +647,21 @@
   max-width: 100%;
 }
 
-.chat-composer-attachments,
-.chat-message-attachments {
+.hvy-document .chat-composer-attachments,
+.hvy-document .chat-message-attachments {
   display: grid;
   gap: 0.45rem;
 }
 
-.chat-composer-attachments[hidden] {
+.hvy-document .chat-composer-attachments[hidden] {
   display: none;
 }
 
-.chat-message-attachments {
+.hvy-document .chat-message-attachments {
   margin-top: 0.6rem;
 }
 
-.chat-attachment-chip {
+.hvy-document .chat-attachment-chip {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -673,7 +673,7 @@
   color: var(--hvy-text);
 }
 
-.chat-attachment-mark {
+.hvy-document .chat-attachment-mark {
   flex: 0 0 auto;
   width: 0.7rem;
   height: 1rem;
@@ -682,44 +682,44 @@
   box-shadow: inset 0 -0.25rem 0 color-mix(in srgb, var(--hvy-accent-2) 24%, transparent);
 }
 
-.chat-attachment-copy {
+.hvy-document .chat-attachment-copy {
   display: grid;
   flex: 1 1 auto;
   min-width: 0;
   line-height: 1.2;
 }
 
-.chat-attachment-copy strong,
-.chat-attachment-copy small {
+.hvy-document .chat-attachment-copy strong,
+.hvy-document .chat-attachment-copy small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-attachment-copy strong {
+.hvy-document .chat-attachment-copy strong {
   font-size: 0.8rem;
 }
 
-.chat-attachment-copy small {
+.hvy-document .chat-attachment-copy small {
   margin-top: 0.18rem;
   color: var(--hvy-text-alt);
   font-size: 0.7rem;
 }
 
-.chat-attachment-actions {
+.hvy-document .chat-attachment-actions {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   flex: 0 0 auto;
 }
 
-.chat-attachment-actions button {
+.hvy-document .chat-attachment-actions button {
   min-height: 1.8rem;
   padding: 0.25rem 0.45rem;
   font-size: 0.7rem;
 }
 
-.chat-attachment-actions .chat-attachment-remove {
+.hvy-document .chat-attachment-actions .chat-attachment-remove {
   display: inline-grid;
   place-items: center;
   width: 1.8rem;
@@ -727,12 +727,12 @@
   padding: 0;
 }
 
-.chat-attachment-remove .hvy-ui-icon {
+.hvy-document .chat-attachment-remove .hvy-ui-icon {
   width: 0.85rem;
   height: 0.85rem;
 }
 
-.chat-composer textarea {
+.hvy-document .chat-composer textarea {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -742,7 +742,7 @@
   font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.chat-composer-actions {
+.hvy-document .chat-composer-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -753,19 +753,19 @@
   max-width: 100%;
 }
 
-.chat-composer-status {
+.hvy-document .chat-composer-status {
   flex: 1 1 14rem;
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
 }
 
-.chat-composer-actions button {
+.hvy-document .chat-composer-actions button {
   flex: 0 0 auto;
   max-width: 100%;
 }
 
-.chat-busy-footer {
+.hvy-document .chat-busy-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -777,84 +777,84 @@
   background: color-mix(in srgb, var(--hvy-surface) 98%, transparent);
 }
 
-.chat-busy-footer button {
+.hvy-document .chat-busy-footer button {
   flex: 0 0 auto;
 }
 
 @media (max-width: 980px) {
-  .chat-dock {
+  .hvy-document .chat-dock {
     --hvy-chat-panel-height: 34rem;
     --hvy-chat-document-edit-panel-height: 36rem;
 
     width: min(28rem, calc(100% - 4rem));
   }
 
-  .chat-panel {
+  .hvy-document .chat-panel {
     width: 100%;
     flex-basis: var(--hvy-chat-panel-height);
   }
 }
 
 @media (max-width: 800px) {
-  .chat-dock {
+  .hvy-document .chat-dock {
     --hvy-chat-panel-height: 20rem;
     --hvy-chat-document-edit-panel-height: 20rem;
 
     width: calc(100% - var(--hvy-floating-control-edge-gutter) - var(--hvy-floating-control-edge-gutter));
   }
 
-  .chat-panel {
+  .hvy-document .chat-panel {
     width: 100%;
     flex-basis: var(--hvy-chat-panel-height);
   }
 
-  .chat-panel.is-document-edit {
+  .hvy-document .chat-panel.is-document-edit {
     flex-basis: var(--hvy-chat-document-edit-panel-height);
   }
 
-  .chat-settings {
+  .hvy-document .chat-settings {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .chat-setting-wide {
+  .hvy-document .chat-setting-wide {
     grid-column: auto;
   }
 
-  .chat-embedding-controls {
+  .hvy-document .chat-embedding-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.pane.hvy-preview-frame-tablet .chat-dock {
+.hvy-document .pane.hvy-preview-frame-tablet .chat-dock {
   --hvy-chat-panel-height: 34rem;
   --hvy-chat-document-edit-panel-height: 36rem;
 
   width: min(28rem, calc(100% - 4rem));
 }
 
-.pane.hvy-preview-frame-tablet .chat-panel {
+.hvy-document .pane.hvy-preview-frame-tablet .chat-panel {
   width: 100%;
   flex-basis: var(--hvy-chat-panel-height);
 }
 
-.pane.hvy-preview-frame-phone .chat-dock {
+.hvy-document .pane.hvy-preview-frame-phone .chat-dock {
   --hvy-chat-panel-height: 20rem;
   --hvy-chat-document-edit-panel-height: 20rem;
 
   width: calc(100% - var(--hvy-floating-control-edge-gutter) - var(--hvy-floating-control-edge-gutter));
 }
 
-.pane.hvy-preview-frame-phone .chat-panel {
+.hvy-document .pane.hvy-preview-frame-phone .chat-panel {
   width: 100%;
   flex-basis: var(--hvy-chat-panel-height);
 }
 
-.pane.hvy-preview-frame-phone .chat-panel.is-document-edit {
+.hvy-document .pane.hvy-preview-frame-phone .chat-panel.is-document-edit {
   flex-basis: var(--hvy-chat-document-edit-panel-height);
 }
 
-.pane.hvy-preview-frame-phone .chat-composer textarea,
-.pane.hvy-preview-frame-tablet .chat-composer textarea {
+.hvy-document .pane.hvy-preview-frame-phone .chat-composer textarea,
+.hvy-document .pane.hvy-preview-frame-tablet .chat-composer textarea {
   height: 3.25rem;
   min-height: 3.25rem;
 }

@@ -1,0 +1,454 @@
+.hvy-document .reusable-components-view {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.hvy-document .reusable-components-list {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.hvy-document .reusable-component-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  padding: 0.45rem;
+  border: 1px solid var(--hvy-border-input);
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .reusable-component-card.is-selected {
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 1px var(--hvy-focus-glow);
+}
+
+.hvy-document .reusable-component-select {
+  display: grid;
+  gap: 0.12rem;
+  text-align: left;
+  justify-items: start;
+  width: 100%;
+}
+
+.hvy-document .reusable-component-select span {
+  color: var(--hvy-text-muted);
+  font-size: 0.84rem;
+}
+
+.hvy-document .reusable-components-editor {
+  min-width: 0;
+}
+
+.hvy-document .editor-section-card {
+  position: relative;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 10px;
+  background: var(--hvy-surface);
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.hvy-document .editor-section-card.is-section-drop-before,
+.hvy-document .editor-section-card.is-section-drop-after {
+  z-index: 3;
+}
+
+.hvy-document .editor-section-card.is-section-drop-before::before,
+.hvy-document .editor-section-card.is-section-drop-after::after {
+  content: attr(data-section-drop-title);
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-button-bg) 68%, var(--hvy-border));
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--hvy-button-bg), color-mix(in srgb, var(--hvy-button-bg) 78%, var(--hvy-accent-1))),
+    var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hvy-button-bg) 18%, transparent),
+    0 0.45rem 1rem color-mix(in srgb, var(--hvy-shadow) 55%, transparent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+  pointer-events: none;
+}
+
+.hvy-document .editor-section-card.is-section-drop-before::before {
+  top: -0.95rem;
+}
+
+.hvy-document .editor-section-card.is-section-drop-after::after {
+  bottom: -0.95rem;
+}
+
+.hvy-document .editor-subsection-card {
+  padding-left: 1rem;
+}
+
+.hvy-document .section-nest-toggle {
+  position: absolute;
+  left: 0rem;
+  top: 0;
+  bottom: 0;
+  width: 0.85rem;
+  border: 0;
+  background: transparent;
+  color: var(--hvy-muted);
+  cursor: pointer;
+  border-radius: 10px 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.5;
+}
+
+.hvy-document .section-nest-toggle:hover {
+  background: var(--hvy-border);
+  color: var(--hvy-text);
+  opacity: 1;
+}
+
+.hvy-document .editor-block,
+.hvy-document .editor-block-passive {
+  position: relative;
+  padding-left: 0.85rem;
+  min-width: 0;
+  color: var(--hvy-text);
+}
+
+.hvy-document .editor-block-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hvy-document .editor-block.is-activating-path {
+  transform-origin: top center;
+  animation: editor-block-reveal 180ms ease-out both;
+  animation-delay: var(--editor-activation-delay, 0ms);
+}
+
+@keyframes editor-block-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem) scaleY(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hvy-document .editor-block.is-activating-path {
+    animation: none;
+  }
+}
+
+.hvy-document .block-nest-toggle {
+  position: absolute;
+  left: -0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--hvy-muted);
+  cursor: pointer;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.45;
+}
+
+.hvy-document .block-nest-toggle:hover {
+  background: var(--hvy-border);
+  color: var(--hvy-text);
+  opacity: 1;
+}
+
+.hvy-document .section-drag-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  cursor: grab;
+}
+
+.hvy-document .section-drag-title:active {
+  cursor: grabbing;
+}
+
+.hvy-document .editor-order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.hvy-document .order-arrow-button {
+  border: 0;
+  background: transparent;
+  color: var(--hvy-text-muted);
+  cursor: pointer;
+  padding: 0.2rem 0.22rem;
+  line-height: 1;
+  font-size: 0.78rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.2rem;
+  min-height: 1.6rem;
+}
+
+.hvy-document .section-drag-handle {
+  border: 0;
+  background: transparent;
+  color: var(--hvy-text-muted);
+  cursor: grab;
+  padding: 0.18rem 0.24rem;
+  line-height: 1;
+  font-size: 1rem;
+  min-width: 1.4rem;
+  min-height: 1.8rem;
+  display: grid;
+  place-items: center;
+}
+
+.hvy-document .section-drag-handle:active {
+  cursor: grabbing;
+}
+
+.hvy-document .hvy-embed-layout .section-drag-handle,
+.hvy-document .hvy-embed-layout .section-drag-handle:hover,
+.hvy-document .hvy-embed-layout .section-drag-title:has(.section-drag-handle:hover) {
+  cursor: grab;
+}
+
+.hvy-document .hvy-embed-layout .section-drag-handle:active,
+.hvy-document .hvy-embed-layout .section-drag-title:has(.section-drag-handle:active) {
+  cursor: grabbing;
+}
+
+.hvy-document .section-title-passive {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: text;
+  text-align: left;
+}
+
+.hvy-document .section-title-placeholder {
+  color: var(--hvy-text-muted);
+  font-style: italic;
+}
+
+.hvy-document .section-title-input {
+  width: min(100%, 24rem);
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.hvy-document .ghost-section-card {
+  border: 2px dashed var(--hvy-ghost-border, var(--hvy-border-input));
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--hvy-surface-alt), var(--hvy-surface-alt));
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  height: fit-content;
+}
+
+.hvy-document .ghost-section-card:hover {
+  box-shadow: none;
+  transform: none;
+  border-color: var(--hvy-ghost-border, var(--hvy-border-input));
+}
+
+.hvy-document .ghost-section-card:focus-within,
+.hvy-document .ghost-section-card:has(.component-picker[data-open="true"]) {
+  position: relative;
+  z-index: 9999;
+}
+
+.hvy-document .editor-section-card:has(.component-picker:focus-within),
+.hvy-document .editor-section-card:has(.component-picker[data-open="true"]),
+.hvy-document .editor-block:has(.component-picker:focus-within),
+.hvy-document .editor-block:has(.component-picker[data-open="true"]) {
+  position: relative;
+  z-index: 9998;
+}
+
+.hvy-document .ghost-plus-big,
+.hvy-document .ghost-plus-small {
+  border-radius: 999px;
+  border: 1px solid var(--hvy-focus);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 300;
+  background: var(--hvy-surface);
+}
+
+.hvy-document .ghost-plus-big {
+  width: 56px;
+  height: 56px;
+}
+
+.hvy-document .ghost-plus-small {
+  width: 36px;
+  height: 36px;
+}
+
+.hvy-document .ghost-plus-big .hvy-ui-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.hvy-document .ghost-plus-small .hvy-ui-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.hvy-document .ghost-label {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--hvy-text-alt);
+  text-align: center;
+}
+
+.hvy-document .add-ghost {
+  padding: 0.8rem;
+  margin-top: 0.35rem;
+  cursor: pointer;
+}
+
+.hvy-document .compact-add-component-ghost {
+  min-height: 0;
+  height: 2.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.25rem 0.55rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: stretch;
+}
+
+.hvy-document .compact-add-component-ghost .ghost-plus-small {
+  width: 1.45rem;
+  height: 1.45rem;
+  flex: 0 0 auto;
+}
+
+.hvy-document .compact-add-component-ghost .ghost-plus-small .hvy-ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hvy-document .compact-add-component-ghost .ghost-label {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.hvy-document .compact-add-component-ghost.active-component-insert-ghost {
+  min-height: 0;
+  height: 2rem;
+  width: 100%;
+  align-self: stretch;
+  grid-column: 1 / -1;
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.6rem;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--hvy-ghost-border, var(--hvy-border-input)) 72%, transparent);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 82%, transparent);
+}
+
+.hvy-document .active-component-insert-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--hvy-text-muted);
+  text-transform: uppercase;
+}
+
+.hvy-document .active-component-insert-ghost .component-picker {
+  width: auto;
+}
+
+.hvy-document .active-component-insert-ghost .component-picker-trigger {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+
+.hvy-document .empty-section-heading-ghost {
+  position: relative;
+  overflow: hidden;
+  min-height: 8rem;
+  isolation: isolate;
+}
+
+.hvy-document .empty-section-heading-ghost > *:not(.empty-section-heading-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.hvy-document .empty-section-heading-watermark {
+  position: absolute;
+  inset: 0.4rem 0.8rem;
+  display: grid;
+  place-items: center;
+  color: var(--hvy-text-muted);
+  font-size: clamp(2.2rem, 9vw, 5.5rem);
+  font-weight: 800;
+  line-height: 0.95;
+  opacity: 0.12;
+  text-align: center;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  z-index: 0;
+}
+
+.hvy-document .ghost-component-picker {
+  display: grid;
+  gap: 0.2rem;
+  width: min(220px, 92%);
+}
+
+.hvy-document .ghost-component-picker span {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-document .ghost-component-picker select {
+  width: 100%;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 8px;
+  padding: 0.35rem 0.4rem;
+  background: var(--hvy-surface);
+}
+

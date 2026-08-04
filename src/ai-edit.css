@@ -1,4 +1,4 @@
-.ai-view-hint {
+.hvy-document .ai-view-hint {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
@@ -18,34 +18,34 @@
   text-align: center;
 }
 
-.ai-view-hint:hover,
-.ai-view-hint:focus-visible {
+.hvy-document .ai-view-hint:hover,
+.hvy-document .ai-view-hint:focus-visible {
   color: var(--hvy-text);
   border-color: var(--hvy-border-alt);
   background: color-mix(in srgb, var(--hvy-ai-view-hint-bg) 86%, var(--hvy-surface) 14%);
 }
 
-.ai-view-hint-touch {
+.hvy-document .ai-view-hint-touch {
   display: none;
 }
 
-.hvy-preview-frame-phone .ai-view-hint,
-.hvy-preview-frame-tablet .ai-view-hint {
+.hvy-document .hvy-preview-frame-phone .ai-view-hint,
+.hvy-document .hvy-preview-frame-tablet .ai-view-hint {
   max-width: min(18rem, 50%, 50vw);
   border-radius: 14px;
 }
 
-.hvy-preview-frame-phone .ai-view-hint-desktop,
-.hvy-preview-frame-tablet .ai-view-hint-desktop {
+.hvy-document .hvy-preview-frame-phone .ai-view-hint-desktop,
+.hvy-document .hvy-preview-frame-tablet .ai-view-hint-desktop {
   display: none;
 }
 
-.hvy-preview-frame-phone .ai-view-hint-touch,
-.hvy-preview-frame-tablet .ai-view-hint-touch {
+.hvy-document .hvy-preview-frame-phone .ai-view-hint-touch,
+.hvy-document .hvy-preview-frame-tablet .ai-view-hint-touch {
   display: inline;
 }
 
-.ai-edit-popover {
+.hvy-document .ai-edit-popover {
   position: absolute;
   z-index: 130;
   width: min(26rem, calc(100% - 2rem));
@@ -59,7 +59,7 @@
   backdrop-filter: blur(14px);
 }
 
-.ai-edit-popover-head {
+.hvy-document .ai-edit-popover-head {
   display: flex;
   justify-content: space-between;
   align-items: start;
@@ -68,30 +68,30 @@
   user-select: none;
 }
 
-.ai-edit-popover-head button {
+.hvy-document .ai-edit-popover-head button {
   cursor: pointer;
 }
 
-.ai-edit-popover-head h3 {
+.hvy-document .ai-edit-popover-head h3 {
   margin: 0;
   font-size: 1rem;
 }
 
-.ai-edit-popover-head p {
+.hvy-document .ai-edit-popover-head p {
   margin: 0.3rem 0 0;
   color: var(--hvy-text-alt);
   font-size: 0.9rem;
 }
 
-.ai-edit-settings {
+.hvy-document .ai-edit-settings {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
-.ai-edit-popover input,
-.ai-edit-popover select,
-.ai-edit-popover textarea {
+.hvy-document .ai-edit-popover input,
+.hvy-document .ai-edit-popover select,
+.hvy-document .ai-edit-popover textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--hvy-border-input);
@@ -101,12 +101,12 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-border) 40%, transparent);
 }
 
-.ai-edit-popover input,
-.ai-edit-popover select {
+.hvy-document .ai-edit-popover input,
+.hvy-document .ai-edit-popover select {
   padding: 0.58rem 0.7rem;
 }
 
-.ai-edit-popover textarea {
+.hvy-document .ai-edit-popover textarea {
   resize: vertical;
   min-height: 7rem;
   padding: 0.65rem 0.75rem;
@@ -114,14 +114,14 @@
   line-height: 1.45;
 }
 
-.ai-edit-popover input::placeholder,
-.ai-edit-popover textarea::placeholder {
+.hvy-document .ai-edit-popover input::placeholder,
+.hvy-document .ai-edit-popover textarea::placeholder {
   color: var(--hvy-text-muted);
 }
 
-.ai-edit-popover input:focus,
-.ai-edit-popover select:focus,
-.ai-edit-popover textarea:focus {
+.hvy-document .ai-edit-popover input:focus,
+.hvy-document .ai-edit-popover select:focus,
+.hvy-document .ai-edit-popover textarea:focus {
   outline: none;
   border-color: var(--hvy-focus-ring);
   box-shadow:
@@ -129,12 +129,12 @@
     inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus-ring) 45%, transparent);
 }
 
-.ai-edit-composer {
+.hvy-document .ai-edit-composer {
   display: grid;
   gap: 0.7rem;
 }
 
-.ai-edit-error {
+.hvy-document .ai-edit-error {
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--hvy-danger);
   border-radius: 10px;
@@ -143,15 +143,15 @@
 }
 
 @media (max-width: 800px) {
-  .ai-edit-settings {
+  .hvy-document .ai-edit-settings {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ai-edit-popover {
+  .hvy-document .ai-edit-popover {
     width: calc(100% - 1rem);
   }
 
-  .ai-view-hint {
+  .hvy-document .ai-view-hint {
     left: 1rem;
     right: auto;
     bottom: 1rem;
@@ -159,11 +159,11 @@
     border-radius: 12px;
   }
 
-  .ai-view-hint-desktop {
+  .hvy-document .ai-view-hint-desktop {
     display: none;
   }
 
-  .ai-view-hint-touch {
+  .hvy-document .ai-view-hint-touch {
     display: inline;
   }
 }

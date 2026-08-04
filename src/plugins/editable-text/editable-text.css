@@ -1,4 +1,4 @@
-.hvy-editable-text {
+.hvy-document .hvy-editable-text {
   display: block;
   min-width: 0;
   padding: 0.72rem;
@@ -7,7 +7,7 @@
   background: var(--hvy-input-bg);
 }
 
-.hvy-editable-text .hvy-plugin-text-editor {
+.hvy-document .hvy-editable-text .hvy-plugin-text-editor {
   min-height: 5.5rem;
   background: var(--hvy-input-bg);
 }

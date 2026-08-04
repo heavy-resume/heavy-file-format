@@ -1,16 +1,16 @@
-.reader-component-list {
+.hvy-document .reader-component-list {
   display: grid;
 }
 
-.container-inner-blocks.component-list-editor-blocks {
+.hvy-document .container-inner-blocks.component-list-editor-blocks {
   gap: 0;
 }
 
-.reader-component-list.is-grouped-view {
+.hvy-document .reader-component-list.is-grouped-view {
   gap: 0.5rem;
 }
 
-.component-list-reader-controls {
+.hvy-document .component-list-reader-controls {
   display: grid;
   grid-template-columns: auto auto;
   align-items: center;
@@ -27,12 +27,12 @@
   z-index: 2;
 }
 
-.component-list-reader-controls.has-sort-options.has-group-options {
+.hvy-document .component-list-reader-controls.has-sort-options.has-group-options {
   grid-template-columns: auto auto auto;
 }
 
-.component-list-view-picker,
-.component-list-group-picker {
+.hvy-document .component-list-view-picker,
+.hvy-document .component-list-group-picker {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -41,8 +41,8 @@
   font-size: 0.85rem;
 }
 
-.component-list-view-picker select,
-.component-list-group-picker select {
+.hvy-document .component-list-view-picker select,
+.hvy-document .component-list-group-picker select {
   min-width: 9rem;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -54,16 +54,16 @@
   cursor: pointer;
 }
 
-.component-list-view-picker > span,
-.component-list-group-picker > span {
+.hvy-document .component-list-view-picker > span,
+.hvy-document .component-list-group-picker > span {
   padding-left: 0.5rem;
 }
 
-.component-list-group-picker select {
+.hvy-document .component-list-group-picker select {
   min-width: 8rem;
 }
 
-.component-list-reverse-button {
+.hvy-document .component-list-reverse-button {
   display: inline-grid;
   place-items: center;
   width: 1.85rem;
@@ -78,38 +78,38 @@
   padding: 0;
 }
 
-.component-list-reverse-button .hvy-ui-icon {
+.hvy-document .component-list-reverse-button .hvy-ui-icon {
   width: 1rem;
   height: 1rem;
 }
 
-.component-list-reverse-button:hover,
-.component-list-reverse-button.is-active {
+.hvy-document .component-list-reverse-button:hover,
+.hvy-document .component-list-reverse-button.is-active {
   border-color: var(--hvy-border-alt);
   background: var(--hvy-xref-card-hover-bg);
   color: var(--hvy-text);
 }
 
-.component-list-view-picker select:hover,
-.component-list-group-picker select:hover,
-.component-list-view-picker select:focus-visible,
-.component-list-group-picker select:focus-visible {
+.hvy-document .component-list-view-picker select:hover,
+.hvy-document .component-list-group-picker select:hover,
+.hvy-document .component-list-view-picker select:focus-visible,
+.hvy-document .component-list-group-picker select:focus-visible {
   border-color: var(--hvy-border-alt);
   background: var(--hvy-surface-alt);
   color: var(--hvy-text);
 }
 
-.component-list-type-summary {
+.hvy-document .component-list-type-summary {
   color: var(--hvy-text-muted);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
 
-.component-list-type-summary strong {
+.hvy-document .component-list-type-summary strong {
   color: var(--hvy-text-alt);
 }
 
-.component-list-view-editor {
+.hvy-document .component-list-view-editor {
   display: grid;
   gap: 0.45rem;
   margin: 0.35rem 0 0.6rem;
@@ -119,7 +119,7 @@
   background: var(--hvy-surface-alt);
 }
 
-.component-list-view-editor-head {
+.hvy-document .component-list-view-editor-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -127,103 +127,103 @@
   flex-wrap: wrap;
 }
 
-.component-list-view-editor-head label {
+.hvy-document .component-list-view-editor-head label {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   margin: 0;
 }
 
-.component-list-view-rows {
+.hvy-document .component-list-view-rows {
   display: grid;
   gap: 0.35rem;
 }
 
-.component-list-view-row {
+.hvy-document .component-list-view-row {
   display: grid;
   grid-template-columns: minmax(5rem, 0.8fr) minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(6rem, 0.8fr) minmax(6rem, 1fr) 4.5rem;
   gap: 0.35rem;
   align-items: center;
 }
 
-.component-list-view-row input,
-.component-list-view-row select {
+.hvy-document .component-list-view-row input,
+.hvy-document .component-list-view-row select {
   min-width: 0;
 }
 
-.ghost-section-card.component-list-add-ghost {
+.hvy-document .ghost-section-card.component-list-add-ghost {
   min-height: 0;
   padding-block: 0.55rem;
   align-content: center;
 }
 
-.reader-block.align-center .reader-component-list {
+.hvy-document .reader-block.align-center .reader-component-list {
   grid-template-columns: min(100%, 20rem);
   justify-content: space-around;
 }
 
-.reader-block.align-center .reader-xref-card {
+.hvy-document .reader-block.align-center .reader-xref-card {
   width: 100%;
   text-align: left;
 }
 
 @container hvy-surface (inline-size <= 50rem) {
-  .component-list-reader-controls {
+  .hvy-document .component-list-reader-controls {
     grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
     justify-self: center;
     width: min(100%, 28rem);
   }
 
-  .component-list-reader-controls.has-sort-options.has-group-options {
+  .hvy-document .component-list-reader-controls.has-sort-options.has-group-options {
     grid-template-columns: 4.1rem minmax(0, 1fr) 1.85rem;
   }
 
-  .component-list-view-picker,
-  .component-list-group-picker {
+  .hvy-document .component-list-view-picker,
+.hvy-document .component-list-group-picker {
     display: contents;
   }
 
-  .component-list-view-picker > span {
+  .hvy-document .component-list-view-picker > span {
     grid-column: 1;
     grid-row: 1;
     align-self: center;
   }
 
-  .component-list-view-picker select {
+  .hvy-document .component-list-view-picker select {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .component-list-group-picker > span {
+  .hvy-document .component-list-group-picker > span {
     grid-column: 1;
     grid-row: 2;
     align-self: center;
   }
 
-  .component-list-group-picker select {
+  .hvy-document .component-list-group-picker select {
     grid-column: 2;
     grid-row: 2;
   }
 
-  .component-list-reverse-button {
+  .hvy-document .component-list-reverse-button {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;
   }
 
-  .component-list-reader-controls.has-group-options:not(.has-sort-options) {
+  .hvy-document .component-list-reader-controls.has-group-options:not(.has-sort-options) {
     grid-template-columns: 4.1rem minmax(0, 1fr);
   }
 
-  .component-list-view-picker select,
-  .component-list-group-picker select {
+  .hvy-document .component-list-view-picker select,
+.hvy-document .component-list-group-picker select {
     min-width: 0;
     width: 100%;
   }
 }
 
 @media (max-width: 800px) {
-  .component-list-view-row {
+  .hvy-document .component-list-view-row {
     grid-template-columns: 1fr 1fr;
   }
 }

@@ -1,10 +1,10 @@
-.reader-code-block {
+.hvy-document .reader-code-block {
   border: 1px solid var(--hvy-border-input);
   background: var(--hvy-code-bg);
   overflow: hidden;
 }
 
-.reader-code-head {
+.hvy-document .reader-code-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -13,13 +13,13 @@
   background: var(--hvy-code-bg);
 }
 
-.reader-code-language {
+.hvy-document .reader-code-language {
   font: 600 0.78rem/1.2 "JetBrains Mono", "Fira Code", monospace;
   color: var(--hvy-text-muted);
   text-transform: lowercase;
 }
 
-.reader-code-badge {
+.hvy-document .reader-code-badge {
   display: inline-flex;
   align-items: center;
   min-height: 1.45rem;
@@ -32,7 +32,7 @@
   white-space: nowrap;
 }
 
-.reader-block pre {
+.hvy-document .reader-block pre {
   margin: 0;
   overflow: auto;
   background: var(--hvy-code-bg);
@@ -40,7 +40,7 @@
   border-radius: 0;
 }
 
-.reader-block pre code {
+.hvy-document .reader-block pre code {
   display: block;
   font-size: 0.86rem;
   line-height: 1.45;
@@ -50,95 +50,95 @@
   word-break: normal;
 }
 
-.reader-block pre code.hljs {
+.hvy-document .reader-block pre code.hljs {
   padding: 0;
   background: transparent;
   color: var(--hvy-code-text);
 }
 
-.reader-code-block .hljs {
+.hvy-document .reader-code-block .hljs {
   color: var(--hvy-code-text);
   background: transparent;
 }
 
-.reader-code-block .hljs-subst,
-.reader-code-block .hljs-punctuation,
-.reader-code-block .hljs-operator,
-.reader-code-block .hljs-property,
-.reader-code-block .hljs-params {
+.hvy-document .reader-code-block .hljs-subst,
+.hvy-document .reader-code-block .hljs-punctuation,
+.hvy-document .reader-code-block .hljs-operator,
+.hvy-document .reader-code-block .hljs-property,
+.hvy-document .reader-code-block .hljs-params {
   color: var(--hvy-code-text);
 }
 
-.reader-code-block .hljs-comment,
-.reader-code-block .hljs-code,
-.reader-code-block .hljs-formula {
+.hvy-document .reader-code-block .hljs-comment,
+.hvy-document .reader-code-block .hljs-code,
+.hvy-document .reader-code-block .hljs-formula {
   color: var(--hvy-code-muted);
 }
 
-.reader-code-block .hljs-built_in,
-.reader-code-block .hljs-symbol,
-.reader-code-block .hljs-attr,
-.reader-code-block .hljs-attribute,
-.reader-code-block .hljs-selector-attr,
-.reader-code-block .hljs-selector-class,
-.reader-code-block .hljs-selector-id,
-.reader-code-block .hljs-meta {
+.hvy-document .reader-code-block .hljs-built_in,
+.hvy-document .reader-code-block .hljs-symbol,
+.hvy-document .reader-code-block .hljs-attr,
+.hvy-document .reader-code-block .hljs-attribute,
+.hvy-document .reader-code-block .hljs-selector-attr,
+.hvy-document .reader-code-block .hljs-selector-class,
+.hvy-document .reader-code-block .hljs-selector-id,
+.hvy-document .reader-code-block .hljs-meta {
   color: var(--hvy-code-builtin);
 }
 
-.reader-code-block .hljs-string,
-.reader-code-block .hljs-regexp,
-.reader-code-block .hljs-quote {
+.hvy-document .reader-code-block .hljs-string,
+.hvy-document .reader-code-block .hljs-regexp,
+.hvy-document .reader-code-block .hljs-quote {
   color: var(--hvy-code-string);
 }
 
-.reader-code-block .hljs-number,
-.reader-code-block .hljs-literal {
+.hvy-document .reader-code-block .hljs-number,
+.hvy-document .reader-code-block .hljs-literal {
   color: var(--hvy-code-number);
 }
 
-.reader-code-block .hljs-title,
-.reader-code-block .hljs-title.class_,
-.reader-code-block .hljs-title.class_.inherited__,
-.reader-code-block .hljs-title.function_ {
+.hvy-document .reader-code-block .hljs-title,
+.hvy-document .reader-code-block .hljs-title.class_,
+.hvy-document .reader-code-block .hljs-title.class_.inherited__,
+.hvy-document .reader-code-block .hljs-title.function_ {
   color: var(--hvy-code-function);
 }
 
-.reader-code-block .hljs-keyword,
-.reader-code-block .hljs-doctag,
-.reader-code-block .hljs-template-tag,
-.reader-code-block .hljs-type,
-.reader-code-block .hljs-variable.language_,
-.reader-code-block .hljs-section {
+.hvy-document .reader-code-block .hljs-keyword,
+.hvy-document .reader-code-block .hljs-doctag,
+.hvy-document .reader-code-block .hljs-template-tag,
+.hvy-document .reader-code-block .hljs-type,
+.hvy-document .reader-code-block .hljs-variable.language_,
+.hvy-document .reader-code-block .hljs-section {
   color: var(--hvy-code-keyword);
 }
 
-.code-editor-shell {
+.hvy-document .code-editor-shell {
   border: 1px solid var(--hvy-border-input);
   background: var(--hvy-code-bg);
   overflow: hidden;
   margin-top: 0.45rem;
 }
 
-.code-editor-head {
+.hvy-document .code-editor-head {
   padding: 0.6rem 0.7rem;
   border-bottom: 1px solid var(--hvy-border-input);
   background: var(--hvy-code-bg);
 }
 
-.code-language-field {
+.hvy-document .code-language-field {
   display: grid;
   gap: 0.28rem;
   max-width: 14rem;
 }
 
-.code-language-field span {
+.hvy-document .code-language-field span {
   font: 600 0.78rem/1.2 "JetBrains Mono", "Fira Code", monospace;
   color: var(--hvy-text-muted);
   text-transform: lowercase;
 }
 
-.code-language-field input {
+.hvy-document .code-language-field input {
   width: 100%;
   border: 1px solid var(--hvy-border-input);
   border-radius: 8px;
@@ -147,7 +147,7 @@
   font: 13px/1.35 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.code-editor {
+.hvy-document .code-editor {
   width: 100%;
   min-height: 220px;
   border: 0;
@@ -159,6 +159,6 @@
   resize: vertical;
 }
 
-.code-editor:focus {
+.hvy-document .code-editor:focus {
   outline: none;
 }

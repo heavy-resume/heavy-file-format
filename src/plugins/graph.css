@@ -1,4 +1,4 @@
-.hvy-graph {
+.hvy-document .hvy-graph {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -7,7 +7,7 @@
   color: var(--hvy-text);
 }
 
-.hvy-graph-frame {
+.hvy-document .hvy-graph-frame {
   position: relative;
   width: 100%;
   max-width: 100%;
@@ -21,13 +21,13 @@
   padding: 0.75rem;
 }
 
-.hvy-graph-frame canvas {
+.hvy-document .hvy-graph-frame canvas {
   width: 100% !important;
   height: 100% !important;
   min-height: 0;
 }
 
-.hvy-graph-external-legend {
+.hvy-document .hvy-graph-external-legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -40,11 +40,11 @@
   line-height: 1.15;
 }
 
-.hvy-graph-external-legend[hidden] {
+.hvy-document .hvy-graph-external-legend[hidden] {
   display: none;
 }
 
-.hvy-graph-legend-item {
+.hvy-document .hvy-graph-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 0.24rem;
@@ -52,7 +52,7 @@
   max-width: 100%;
 }
 
-.hvy-graph-legend-swatch {
+.hvy-document .hvy-graph-legend-swatch {
   flex: 0 0 auto;
   width: 0.5rem;
   height: 0.5rem;
@@ -61,56 +61,56 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 82%, transparent);
 }
 
-.hvy-graph-legend-label {
+.hvy-document .hvy-graph-legend-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hvy-graph-error,
-.hvy-graph-empty,
-.hvy-graph-loading {
+.hvy-document .hvy-graph-error,
+.hvy-document .hvy-graph-empty,
+.hvy-document .hvy-graph-loading {
   padding: 0.85rem;
   border: 1px dashed var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-surface-alt) 74%, transparent);
   color: var(--hvy-text-alt);
 }
 
-.hvy-graph-error {
+.hvy-document .hvy-graph-error {
   border-color: color-mix(in srgb, var(--hvy-danger) 58%, var(--hvy-border));
   background: color-mix(in srgb, var(--hvy-danger) 10%, var(--hvy-surface));
   color: var(--hvy-text);
 }
 
-.hvy-graph-editor {
+.hvy-document .hvy-graph-editor {
   display: grid;
   gap: 0.85rem;
 }
 
-.hvy-graph-controls,
-.hvy-graph-data-panel {
+.hvy-document .hvy-graph-controls,
+.hvy-document .hvy-graph-data-panel {
   border: 1px solid var(--hvy-border);
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-bg-alt) 6%);
   padding: 0.75rem;
 }
 
-.hvy-graph-controls {
+.hvy-document .hvy-graph-controls {
   display: grid;
   grid-template-columns: minmax(7rem, 0.7fr) repeat(3, minmax(8rem, 1fr)) max-content;
   gap: 0.65rem;
   align-items: end;
 }
 
-.hvy-graph-editor > .hvy-graph-controls label {
+.hvy-document .hvy-graph-editor > .hvy-graph-controls label {
   display: grid;
   gap: 0.25rem;
   font-size: 0.82rem;
   color: var(--hvy-text-alt);
 }
 
-.hvy-graph-editor > .hvy-graph-controls input,
-.hvy-graph-editor > .hvy-graph-controls select {
+.hvy-document .hvy-graph-editor > .hvy-graph-controls input,
+.hvy-document .hvy-graph-editor > .hvy-graph-controls select {
   min-width: 0;
   border: 1px solid var(--hvy-border-input);
   border-radius: 6px;
@@ -120,27 +120,27 @@
   font: inherit;
 }
 
-.hvy-graph-toggle {
+.hvy-document .hvy-graph-toggle {
   grid-template-columns: auto auto;
   align-items: center;
   color: var(--hvy-text);
 }
 
-.hvy-graph-toggle input {
+.hvy-document .hvy-graph-toggle input {
   accent-color: var(--hvy-accent-1);
 }
 
-.hvy-graph-data-panel {
+.hvy-document .hvy-graph-data-panel {
   display: grid;
   gap: 0.65rem;
 }
 
-.hvy-graph-expanded-modal-root {
+.hvy-document .hvy-graph-expanded-modal-root {
   container-type: inline-size;
   padding: 0.75rem;
 }
 
-.hvy-graph-expanded-modal,
+.hvy-document .hvy-graph-expanded-modal,
 .hvy-document .hvy-graph-expanded-modal {
   width: min(100%, 68rem);
   height: min(100%, 44rem);
@@ -151,7 +151,7 @@
   overflow: hidden;
 }
 
-.hvy-graph-expanded-head {
+.hvy-document .hvy-graph-expanded-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -159,7 +159,7 @@
   min-width: 0;
 }
 
-.hvy-graph-expanded-head h3 {
+.hvy-document .hvy-graph-expanded-head h3 {
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -170,7 +170,7 @@
   white-space: nowrap;
 }
 
-.hvy-graph-expanded-close {
+.hvy-document .hvy-graph-expanded-close {
   flex: 0 0 auto;
   width: 2rem;
   height: 2rem;
@@ -180,18 +180,18 @@
   padding: 0;
 }
 
-.hvy-graph-expanded-close .hvy-ui-icon {
+.hvy-document .hvy-graph-expanded-close .hvy-ui-icon {
   width: 1rem;
   height: 1rem;
 }
 
-.hvy-graph-expanded-modal .hvy-graph-frame {
+.hvy-document .hvy-graph-expanded-modal .hvy-graph-frame {
   height: 100%;
   max-height: none;
   cursor: default;
 }
 
-.hvy-graph-expanded-modal-root.is-rotated .hvy-graph-expanded-modal,
+.hvy-document .hvy-graph-expanded-modal-root.is-rotated .hvy-graph-expanded-modal,
 .hvy-document .hvy-graph-expanded-modal-root.is-rotated .hvy-graph-expanded-modal {
   position: absolute;
   top: 50%;
@@ -205,21 +205,21 @@
 }
 
 @container (max-width: 34rem) {
-  .hvy-graph-frame {
+  .hvy-document .hvy-graph-frame {
     height: clamp(12rem, 72cqw, 20rem);
     padding: 0.5rem;
   }
 
-  .hvy-graph-reader .hvy-graph-frame {
+  .hvy-document .hvy-graph-reader .hvy-graph-frame {
     cursor: zoom-in;
   }
 
-  .hvy-graph-expanded-modal-root {
+  .hvy-document .hvy-graph-expanded-modal-root {
     padding: 0.5rem;
   }
 
-  .hvy-graph-expanded-modal,
-  .hvy-document .hvy-graph-expanded-modal {
+  .hvy-document .hvy-graph-expanded-modal,
+.hvy-document .hvy-graph-expanded-modal {
     width: 100%;
     height: 100%;
     max-height: none;
@@ -229,7 +229,7 @@
 }
 
 @container (max-width: 44rem) {
-  .hvy-graph-controls {
+  .hvy-document .hvy-graph-controls {
     grid-template-columns: 1fr;
   }
 }

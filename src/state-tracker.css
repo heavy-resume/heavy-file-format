@@ -1,4 +1,4 @@
-.state-tracker {
+.hvy-reference-app .state-tracker {
   border: 1px solid var(--hvy-border);
   border-radius: 8px;
   background: var(--hvy-surface-alt);
@@ -6,19 +6,19 @@
   margin-bottom: 0.7rem;
 }
 
-.state-head {
+.hvy-reference-app .state-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.35rem;
 }
 
-.state-actions {
+.hvy-reference-app .state-actions {
   display: flex;
   gap: 0.35rem;
 }
 
-.state-tracker pre {
+.hvy-reference-app .state-tracker pre {
   margin: 0;
   max-height: 180px;
   overflow: auto;

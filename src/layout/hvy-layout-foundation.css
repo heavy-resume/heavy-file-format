@@ -1,0 +1,64 @@
+.hvy-document {
+  --hvy-floating-control-size: 3.2rem;
+  --hvy-sidebar-tab-gap: 0.25rem;
+  --hvy-sidebar-footprint: 3.25rem;
+  --hvy-sidebar-tab-size: calc(var(--hvy-sidebar-footprint) - var(--hvy-sidebar-tab-gap));
+  --hvy-document-edge-gutter: 0.9rem;
+  --hvy-floating-control-edge-gutter: 1rem;
+  --hvy-floating-control-gap: 0.5rem;
+  --hvy-floating-controls-clearance: 6.6rem;
+}
+
+.hvy-document .hvy-embed-layout,
+.hvy-document .hvy-embed-layout * {
+  box-sizing: border-box;
+}
+
+.hvy-document .hvy-embed-layout {
+  position: relative;
+  line-height: var(--hvy-line-height, 1.4);
+}
+
+.hvy-document.no-transitions .hvy-embed-layout *,
+.hvy-document .hvy-embed-layout.no-transitions * {
+  transition: none !important;
+}
+
+.hvy-document .hvy-embed-layout a[href] {
+  color: var(--hvy-link-color);
+  transition:
+    color 140ms ease,
+    text-shadow 140ms ease;
+}
+
+.hvy-document .hvy-embed-layout a[href]:hover {
+  color: var(--hvy-link-hover-color, var(--hvy-link-color));
+  text-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-link-hover-color, var(--hvy-link-color)) 35%, transparent);
+}
+
+.hvy-document .hvy-workspace-link-disabled {
+  color: var(--hvy-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.hvy-document .layout {
+  font-family: "Segoe UI", sans-serif;
+  height: 100%;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.9rem;
+  overflow: hidden;
+  color: var(--hvy-text);
+  background: linear-gradient(135deg, var(--hvy-bg), var(--hvy-bg-alt));
+}
+
+.hvy-document .hvy-embed-full-layout {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+.hvy-document .reference-layout {
+  padding: 1rem;
+}

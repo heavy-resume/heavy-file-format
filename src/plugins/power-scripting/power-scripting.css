@@ -1,10 +1,10 @@
-.hvy-power-script {
+.hvy-document .hvy-power-script {
   min-width: 0;
 }
 
-.hvy-power-script-warning,
-.hvy-power-script-editor-notice,
-.hvy-power-script-disabled-view {
+.hvy-document .hvy-power-script-warning,
+.hvy-document .hvy-power-script-editor-notice,
+.hvy-document .hvy-power-script-disabled-view {
   border: 1px solid var(--hvy-warning);
   border-radius: 0.8rem;
   padding: 0.85rem 1rem;
@@ -12,18 +12,18 @@
   background: color-mix(in srgb, var(--hvy-warning) 12%, var(--hvy-surface));
 }
 
-.hvy-power-script-warning p {
+.hvy-document .hvy-power-script-warning p {
   margin: 0.35rem 0 0.75rem;
   color: var(--hvy-text-muted);
 }
 
-.hvy-power-script-actions {
+.hvy-document .hvy-power-script-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
 }
 
-.hvy-power-script-source {
+.hvy-document .hvy-power-script-source {
   display: block;
   width: 100%;
   min-height: 18rem;
@@ -38,7 +38,7 @@
   tab-size: 2;
 }
 
-.hvy-power-script [data-power-script-status] {
+.hvy-document .hvy-power-script [data-power-script-status] {
   overflow: auto;
   margin: 0.6rem 0 0;
   border-radius: 0.6rem;
@@ -48,15 +48,15 @@
   white-space: pre-wrap;
 }
 
-.hvy-power-script [data-power-script-status].is-error {
+.hvy-document .hvy-power-script [data-power-script-status].is-error {
   color: var(--hvy-danger);
 }
 
-.hvy-power-dialog-host {
+.hvy-document .hvy-power-dialog-host {
   position: relative;
 }
 
-.hvy-power-dialog-overlay {
+.hvy-document .hvy-power-dialog-overlay {
   position: absolute;
   z-index: 40;
   inset: 0;
@@ -68,7 +68,7 @@
   backdrop-filter: blur(3px);
 }
 
-.hvy-power-dialog {
+.hvy-document .hvy-power-dialog {
   display: grid;
   gap: 0.75rem;
   width: min(28rem, 100%);
@@ -81,16 +81,16 @@
   animation: hvy-power-dialog-enter 140ms ease-out;
 }
 
-.hvy-power-dialog h3,
-.hvy-power-dialog p {
+.hvy-document .hvy-power-dialog h3,
+.hvy-document .hvy-power-dialog p {
   margin: 0;
 }
 
-.hvy-power-dialog p {
+.hvy-document .hvy-power-dialog p {
   color: var(--hvy-text-muted);
 }
 
-.hvy-power-dialog input {
+.hvy-document .hvy-power-dialog input {
   width: 100%;
   border: 1px solid var(--hvy-border);
   border-radius: 0.6rem;
@@ -99,12 +99,12 @@
   background: var(--hvy-surface-muted);
 }
 
-.hvy-power-dialog input:focus {
+.hvy-document .hvy-power-dialog input:focus {
   border-color: var(--hvy-focus);
   outline: 2px solid color-mix(in srgb, var(--hvy-focus) 35%, transparent);
 }
 
-.hvy-power-dialog-actions {
+.hvy-document .hvy-power-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.55rem;

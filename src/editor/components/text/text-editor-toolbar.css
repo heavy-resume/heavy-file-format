@@ -1,0 +1,464 @@
+.hvy-document .editor-block-title {
+  position: absolute;
+  left: 0;
+  top: -1.5em;
+  z-index: 1;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  line-height: 1.1;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.hvy-document .editor-blocks {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hvy-document .rich-toolbar {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.hvy-document .rich-toolbar button {
+  min-width: 2rem;
+  padding: 0.25rem 0.45rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .rich-toolbar button.secondary,
+.hvy-document .align-buttons button.secondary {
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.hvy-document .toolbar-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.hvy-document .block-style-buttons {
+  width: 100%;
+}
+
+.hvy-document .format-buttons {
+  align-items: center;
+}
+
+.hvy-document .responsive-format-buttons {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.hvy-document .align-buttons {
+  margin: 0;
+}
+
+.hvy-document .rich-toolbar .icon-button {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  height: 2rem;
+  padding: 0.2rem;
+  display: inline-grid;
+  place-items: center;
+}
+
+.hvy-document .toolbar-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: currentColor;
+  line-height: 1;
+}
+
+.hvy-document .text-line-style-toolbar {
+  padding: 0.28rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 78%, transparent);
+  position: relative;
+}
+
+.hvy-document .text-line-style-toolbar-label {
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.hvy-document .paragraph-style-toolbar {
+  display: inline-grid;
+  grid-template-columns: auto minmax(12rem, 1fr) auto;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-width: min(100%, 19rem);
+}
+
+.hvy-document .paragraph-style-toolbar .text-line-style-toolbar-label {
+  grid-column: 1 / -1;
+}
+
+.hvy-document .paragraph-style-recent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.hvy-document .rich-toolbar button.text-line-style-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.28rem 0.48rem;
+}
+
+.hvy-document .rich-toolbar button.paragraph-style-card {
+  min-height: 2.2rem;
+  border-style: solid;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+  justify-content: center;
+}
+
+.hvy-document .rich-toolbar button.paragraph-style-card.is-selected {
+  box-shadow: inset 0 0 0 1px var(--hvy-accent-1);
+}
+
+.hvy-document .paragraph-style-expand {
+  width: 2.15rem;
+  min-width: 2.15rem;
+}
+
+.hvy-document .paragraph-style-modal,
+.hvy-document .paragraph-style-edit-modal {
+  display: none;
+  position: absolute;
+  z-index: 10050;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  width: min(28rem, calc(100cqw - 1rem));
+  max-width: calc(100cqw - 1rem);
+}
+
+.hvy-document .editor-block:has(.paragraph-style-toolbar.is-picker-open),
+.hvy-document .editor-block:has(.paragraph-style-toolbar.is-style-edit-open) {
+  position: relative;
+  z-index: 10040;
+}
+
+.hvy-document .paragraph-style-toolbar.is-picker-open .paragraph-style-modal,
+.hvy-document .paragraph-style-toolbar.is-style-edit-open .paragraph-style-edit-modal {
+  display: block;
+}
+
+.hvy-document .paragraph-style-modal-card,
+.hvy-document .paragraph-style-edit-card {
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  box-shadow: 0 18px 45px var(--hvy-shadow);
+  padding: 0.55rem;
+}
+
+.hvy-document .paragraph-style-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0 0.45rem;
+}
+
+.hvy-document .paragraph-style-modal-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: min(22rem, 58vh);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.hvy-document .paragraph-style-modal-list .paragraph-style-card {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.hvy-document .paragraph-style-edit-card {
+  max-height: min(28rem, 68vh);
+  overflow: auto;
+}
+
+.hvy-document .paragraph-style-edit-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.hvy-document .paragraph-style-edit-title span {
+  font-weight: 800;
+}
+
+.hvy-document .paragraph-style-edit-title code {
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .paragraph-style-box-model {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 20rem) minmax(0, 1fr);
+  grid-template-areas:
+    "label top ."
+    "left center right"
+    ". bottom .";
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.hvy-document .paragraph-style-padding-box {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "label top ."
+    "left . right"
+    ". bottom .";
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.hvy-document .paragraph-style-box-model {
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 10px;
+  padding: 0.7rem 0.4rem;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 62%, transparent);
+  overflow: visible;
+}
+
+.hvy-document .paragraph-style-padding-box {
+  grid-area: center;
+  width: 100%;
+  max-width: 20rem;
+  justify-self: center;
+  border: 1px solid var(--hvy-border);
+  border-radius: 9px;
+  padding: 0.45rem;
+  background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-accent) 14%);
+  min-width: 0;
+}
+
+.hvy-document .paragraph-style-box-model-label {
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.hvy-document .paragraph-style-box-model-label-margin,
+.hvy-document .paragraph-style-box-model-label-padding {
+  grid-area: label;
+  align-self: start;
+  justify-self: start;
+  line-height: 1;
+}
+
+.hvy-document .paragraph-style-box-field-margin-top,
+.hvy-document .paragraph-style-box-field-padding-top {
+  grid-area: top;
+}
+
+.hvy-document .paragraph-style-box-field-margin-right,
+.hvy-document .paragraph-style-box-field-padding-right {
+  grid-area: right;
+}
+
+.hvy-document .paragraph-style-box-field-margin-bottom,
+.hvy-document .paragraph-style-box-field-padding-bottom {
+  grid-area: bottom;
+}
+
+.hvy-document .paragraph-style-box-field-margin-left,
+.hvy-document .paragraph-style-box-field-padding-left {
+  grid-area: left;
+}
+
+.hvy-document .paragraph-style-box-field-margin-top {
+  align-self: end;
+  justify-self: center;
+}
+
+.hvy-document .paragraph-style-box-field-margin-right {
+  justify-self: start;
+  align-self: center;
+}
+
+.hvy-document .paragraph-style-box-field-margin-bottom {
+  align-self: start;
+  justify-self: center;
+}
+
+.hvy-document .paragraph-style-box-field-margin-left {
+  justify-self: end;
+  align-self: center;
+}
+
+.hvy-document .paragraph-style-box-field-padding-top,
+.hvy-document .paragraph-style-box-field-padding-right,
+.hvy-document .paragraph-style-box-field-padding-bottom,
+.hvy-document .paragraph-style-box-field-padding-left {
+  justify-self: center;
+}
+
+.hvy-document .paragraph-style-box-model label {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  max-width: 6rem;
+}
+
+.hvy-document .paragraph-style-box-model label span,
+.hvy-document .paragraph-style-css-lines span {
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.hvy-document .paragraph-style-box-model input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 6rem;
+}
+
+.hvy-document .paragraph-style-box-model .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hvy-document .paragraph-style-margin-mobile-label {
+  display: none;
+}
+
+.hvy-document .paragraph-style-css-lines {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+
+.hvy-document .hvy-text-line-style-marker {
+  display: none;
+}
+
+.hvy-document .text-line-style-pill-sample {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2;
+}
+
+@container hvy-surface (inline-size <= 50rem) {
+  .hvy-document .paragraph-style-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hvy-document .paragraph-style-toolbar .text-line-style-toolbar-label {
+    display: none;
+  }
+
+  .hvy-document .paragraph-style-recent {
+    display: contents;
+  }
+
+  .hvy-document .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"] {
+    display: none;
+  }
+
+  .hvy-document .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .hvy-document .paragraph-style-toolbar:has(.paragraph-style-recent button[data-rich-action="text-line-style"].is-selected) > .text-line-style-clear {
+    display: none;
+  }
+
+  .hvy-document .paragraph-style-toolbar .text-line-style-clear {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .hvy-document .rich-toolbar .paragraph-style-toolbar > button.text-line-style-clear.secondary,
+.hvy-document .rich-toolbar .paragraph-style-recent button[data-rich-action="text-line-style"].is-selected.secondary {
+    background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+    border-color: var(--hvy-border-input);
+    color: var(--hvy-button-text);
+    box-shadow: none;
+  }
+
+  .hvy-document .rich-toolbar .paragraph-style-expand {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    display: none;
+  }
+
+  .hvy-document .paragraph-style-modal,
+.hvy-document .paragraph-style-edit-modal {
+    left: 0;
+    right: auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hvy-document .paragraph-style-box-model {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "label label"
+      "top left"
+      "center center"
+      "bottom right";
+  }
+
+  .hvy-document .paragraph-style-padding-box {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hvy-document .paragraph-style-box-field-margin-left,
+.hvy-document .paragraph-style-box-field-margin-right {
+    max-width: none;
+    justify-self: stretch;
+    align-self: stretch;
+  }
+
+  .hvy-document .paragraph-style-box-field-margin-top,
+.hvy-document .paragraph-style-box-field-margin-bottom {
+    max-width: none;
+    justify-self: stretch;
+    align-self: stretch;
+  }
+
+  .hvy-document .paragraph-style-margin-mobile-label {
+    display: block;
+  }
+}
+

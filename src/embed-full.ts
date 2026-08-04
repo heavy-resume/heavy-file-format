@@ -1,7 +1,7 @@
 import './default-theme.css';
 import './host-overrides.css';
 import './style.css';
-import 'highlight.js/styles/github.css';
+import './highlight-theme.css';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';

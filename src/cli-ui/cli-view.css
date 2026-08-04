@@ -1,4 +1,4 @@
-.cli-shell {
+.hvy-document .cli-shell {
   height: 100%;
   min-height: 0;
   display: grid;
@@ -6,7 +6,7 @@
   gap: 0.75rem;
 }
 
-.cli-command-summary {
+.hvy-document .cli-command-summary {
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--hvy-border-alt);
   border-radius: 8px;
@@ -16,7 +16,7 @@
   overflow-wrap: anywhere;
 }
 
-.cli-output {
+.hvy-document .cli-output {
   min-height: 0;
   overflow: auto;
   padding: 0.85rem;
@@ -29,23 +29,23 @@
   overflow-wrap: anywhere;
 }
 
-.cli-line {
+.hvy-document .cli-line {
   margin: 0 0 0.65rem;
 }
 
-.cli-line:last-child {
+.hvy-document .cli-line:last-child {
   margin-bottom: 0;
 }
 
-.cli-prompt {
+.hvy-document .cli-prompt {
   color: var(--hvy-code-muted);
 }
 
-.cli-error {
+.hvy-document .cli-error {
   color: var(--hvy-danger);
 }
 
-.cli-form {
+.hvy-document .cli-form {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.5rem;
@@ -56,11 +56,11 @@
   background: var(--hvy-surface);
 }
 
-.cli-form code {
+.hvy-document .cli-form code {
   color: var(--hvy-text-alt);
 }
 
-.cli-input {
+.hvy-document .cli-input {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -69,6 +69,6 @@
   font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
 }
 
-.cli-input:focus {
+.hvy-document .cli-input:focus {
   outline: none;
 }

@@ -1,104 +1,12 @@
-import postcss, { type Rule } from 'postcss';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
 import { createHvyBuiltInPluginsPlugin } from './vite.config';
-
-const EMBED_SCOPE = ':where(.hvy-document)';
-
-function splitSelectors(selector: string): string[] {
-  const selectors: string[] = [];
-  let depth = 0;
-  let quote: string | null = null;
-  let start = 0;
-  for (let index = 0; index < selector.length; index += 1) {
-    const char = selector[index];
-    if (quote) {
-      if (char === '\\') {
-        index += 1;
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-    if (char === '(' || char === '[') {
-      depth += 1;
-      continue;
-    }
-    if (char === ')' || char === ']') {
-      depth = Math.max(0, depth - 1);
-      continue;
-    }
-    if (char === ',' && depth === 0) {
-      selectors.push(selector.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  selectors.push(selector.slice(start).trim());
-  return selectors.filter(Boolean);
-}
-
-function scopeSelector(selector: string): string {
-  if (selector.includes(EMBED_SCOPE)) {
-    return selector;
-  }
-  if (selector.startsWith(':root')) {
-    return selector.replace(/^:root\b/, EMBED_SCOPE);
-  }
-  if (selector === 'html' || selector === 'body') {
-    return EMBED_SCOPE;
-  }
-  if (selector.startsWith('html ') || selector.startsWith('body ')) {
-    return `${EMBED_SCOPE} ${selector.slice(selector.indexOf(' ') + 1)}`;
-  }
-  return `${EMBED_SCOPE} ${selector}`;
-}
-
-function isInsideKeyframes(rule: Rule): boolean {
-  let parent = rule.parent;
-  while (parent) {
-    if (parent.type === 'atrule' && /keyframes$/i.test(parent.name)) {
-      return true;
-    }
-    parent = parent.parent;
-  }
-  return false;
-}
-
-function createEmbedCssScopePlugin(): Plugin {
-  return {
-    name: 'hvy-embed-css-scope',
-    enforce: 'post' as const,
-    async generateBundle(_options, bundle) {
-      for (const asset of Object.values(bundle)) {
-        if (asset.type !== 'asset' || !asset.fileName.endsWith('.css')) {
-          continue;
-        }
-        const result = await postcss([
-          {
-            postcssPlugin: 'hvy-embed-css-scope',
-            Rule(rule) {
-              if (isInsideKeyframes(rule)) {
-                return;
-              }
-              rule.selector = splitSelectors(rule.selector).map(scopeSelector).join(',');
-            },
-          },
-        ]).process(String(asset.source), { from: undefined });
-        asset.source = result.css;
-      }
-    },
-  };
-}
 
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, '.', ''), HVY_LAZY_BUILT_INS: 'true' };
 
   return {
-    plugins: [createBrythonMinimalVfsPlugin(), createHvyBuiltInPluginsPlugin(env), createEmbedCssScopePlugin()],
+    plugins: [createBrythonMinimalVfsPlugin(), createHvyBuiltInPluginsPlugin(env)],
     build: {
       outDir: 'dist-embed',
       emptyOutDir: true,

@@ -1,24 +1,24 @@
-.image-editor {
+.hvy-document .image-editor {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.image-toolbar {
+.hvy-document .image-toolbar {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.image-toolbar button.is-active,
-.image-toolbar button[aria-pressed="true"] {
+.hvy-document .image-toolbar button.is-active,
+.hvy-document .image-toolbar button[aria-pressed="true"] {
   border-color: var(--hvy-focus);
   background: color-mix(in srgb, var(--hvy-button-bg) 28%, var(--hvy-surface) 72%);
   color: var(--hvy-text);
   box-shadow: inset 0 0 0 1px var(--hvy-focus-ring);
 }
 
-.image-dropzone {
+.hvy-document .image-dropzone {
   position: relative;
   border: 2px dashed var(--hvy-ghost-border, var(--hvy-border));
   border-radius: 0.5rem;
@@ -33,16 +33,16 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.image-dropzone.image-dropzone-active {
+.hvy-document .image-dropzone.image-dropzone-active {
   border-color: var(--hvy-accent-1);
   background: var(--hvy-highlight-1);
 }
 
-.image-dropzone.has-image {
+.hvy-document .image-dropzone.has-image {
   background: var(--hvy-surface);
 }
 
-.image-dropzone-hint {
+.hvy-document .image-dropzone-hint {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -50,24 +50,24 @@
   color: var(--hvy-text-muted);
 }
 
-.image-pick-label input[type="file"] {
+.hvy-document .image-pick-label input[type="file"] {
   display: none;
 }
 
-.image-pick-button,
-.image-download-link {
+.hvy-document .image-pick-button,
+.hvy-document .image-download-link {
   cursor: pointer;
   text-decoration: underline;
   color: var(--hvy-link-color);
 }
 
-.image-camera-row {
+.hvy-document .image-camera-row {
   display: flex;
   width: 100%;
   justify-content: center;
 }
 
-.image-camera-button {
+.hvy-document .image-camera-button {
   display: inline-flex;
   align-items: center;
   gap: 0.38rem;
@@ -86,8 +86,8 @@
   transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
-.image-camera-button:hover,
-.image-camera-button:focus-visible {
+.hvy-document .image-camera-button:hover,
+.hvy-document .image-camera-button:focus-visible {
   background: color-mix(in srgb, var(--hvy-button-bg) 84%, var(--hvy-accent-1));
   box-shadow:
     0 0.42rem 0.95rem color-mix(in srgb, var(--hvy-button-bg) 24%, transparent),
@@ -95,30 +95,30 @@
   transform: translateY(-1px);
 }
 
-.image-camera-button .hvy-ui-icon {
+.hvy-document .image-camera-button .hvy-ui-icon {
   width: 1rem;
   height: 1rem;
   stroke-width: 2.15;
 }
 
-.image-filename {
+.hvy-document .image-filename {
   font-family: monospace;
   font-size: 0.85em;
   word-break: break-all;
 }
 
-.image-figure {
+.hvy-document .image-figure {
   margin: 0;
   text-align: center;
 }
 
-.image-block-img,
-.image-reader img,
-.image-empty {
+.hvy-document .image-block-img,
+.hvy-document .image-reader img,
+.hvy-document .image-empty {
   max-width: 100%;
 }
 
-.image-empty-editable {
+.hvy-document .image-empty-editable {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -129,15 +129,15 @@
   padding: 0.75rem;
 }
 
-.image-empty-edit-button {
+.hvy-document .image-empty-edit-button {
   flex: 0 0 auto;
 }
 
-.image-reader img {
+.hvy-document .image-reader img {
   display: inline-block;
 }
 
-.image-caption {
+.hvy-document .image-caption {
   margin-top: 0.4rem;
   color: var(--hvy-text-alt);
   font-size: 0.92rem;
@@ -145,7 +145,7 @@
   text-align: center;
 }
 
-.image-alt-label {
+.hvy-document .image-alt-label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -154,7 +154,7 @@
   text-align: center;
 }
 
-.image-alt-label-container {
+.hvy-document .image-alt-label-container {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -163,7 +163,7 @@
   width: 100%;
 }
 
-.image-attachment-panel {
+.hvy-document .image-attachment-panel {
   display: grid;
   gap: 0.45rem;
   width: 100%;
@@ -172,24 +172,24 @@
   background: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-bg-alt) 8%);
 }
 
-.image-attachment-panel-title {
+.hvy-document .image-attachment-panel-title {
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--hvy-text-alt);
 }
 
-.image-attachment-picker {
+.hvy-document .image-attachment-picker {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
   gap: 0.45rem;
 }
 
-.image-attachment-choice-wrap {
+.hvy-document .image-attachment-choice-wrap {
   position: relative;
   min-width: 0;
 }
 
-.image-attachment-choice {
+.hvy-document .image-attachment-choice {
   display: grid;
   gap: 0.3rem;
   width: 100%;
@@ -204,20 +204,20 @@
   transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-.image-attachment-choice:hover,
-.image-attachment-choice:focus-visible,
-.image-attachment-choice.is-selected {
+.hvy-document .image-attachment-choice:hover,
+.hvy-document .image-attachment-choice:focus-visible,
+.hvy-document .image-attachment-choice.is-selected {
   border-color: var(--hvy-accent-1);
   background: color-mix(in srgb, var(--hvy-accent-1) 12%, var(--hvy-surface));
 }
 
-.image-attachment-choice:hover,
-.image-attachment-choice:focus-visible {
+.hvy-document .image-attachment-choice:hover,
+.hvy-document .image-attachment-choice:focus-visible {
   box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, var(--hvy-accent-1) 16%, transparent);
   transform: translateY(-1px);
 }
 
-.image-attachment-choice-thumb {
+.hvy-document .image-attachment-choice-thumb {
   aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
@@ -226,20 +226,20 @@
   border: 1px solid var(--hvy-border);
 }
 
-.image-attachment-choice-thumb img {
+.hvy-document .image-attachment-choice-thumb img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.image-attachment-choice-name {
+.hvy-document .image-attachment-choice-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.78rem;
 }
 
-.image-attachment-choice-action {
+.hvy-document .image-attachment-choice-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -255,18 +255,18 @@
   text-align: center;
 }
 
-.image-attachment-choice.is-selected .image-attachment-choice-action {
+.hvy-document .image-attachment-choice.is-selected .image-attachment-choice-action {
   background: color-mix(in srgb, var(--hvy-accent-1) 22%, var(--hvy-surface));
   color: var(--hvy-text);
 }
 
-.image-attachment-choice-action .hvy-ui-icon {
+.hvy-document .image-attachment-choice-action .hvy-ui-icon {
   width: 0.82rem;
   height: 0.82rem;
   stroke-width: 2.6;
 }
 
-.image-attachment-delete {
+.hvy-document .image-attachment-delete {
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
@@ -283,22 +283,22 @@
   box-shadow: 0 0.25rem 0.65rem color-mix(in srgb, var(--hvy-danger) 22%, transparent);
 }
 
-.image-attachment-delete .hvy-ui-icon {
+.hvy-document .image-attachment-delete .hvy-ui-icon {
   width: 0.82rem;
   height: 0.82rem;
   stroke-width: 2.5;
 }
 
-.image-attachment-delete:hover,
-.image-attachment-delete:focus-visible {
+.hvy-document .image-attachment-delete:hover,
+.hvy-document .image-attachment-delete:focus-visible {
   background: color-mix(in srgb, var(--hvy-danger) 78%, var(--hvy-bg));
   box-shadow:
     0 0.32rem 0.8rem color-mix(in srgb, var(--hvy-danger) 26%, transparent),
     0 0 0 0.16rem color-mix(in srgb, var(--hvy-danger) 18%, transparent);
 }
 
-.image-camera-modal-root,
-.modal-root.image-camera-modal-root,
+.hvy-document .image-camera-modal-root,
+.hvy-document .modal-root.image-camera-modal-root,
 .hvy-document .modal-root.image-camera-modal-root {
   position: absolute;
   inset: 0;
@@ -309,8 +309,8 @@
   padding: 0.75rem;
 }
 
-.image-camera-modal,
-.modal-panel.image-camera-modal,
+.hvy-document .image-camera-modal,
+.hvy-document .modal-panel.image-camera-modal,
 .hvy-document .modal-panel.image-camera-modal {
   width: min(38rem, calc(100% - 1rem));
   max-height: calc(100% - 1rem);
@@ -321,20 +321,20 @@
   padding: 0.75rem;
 }
 
-.image-camera-header {
+.hvy-document .image-camera-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
-.image-camera-header h3 {
+.hvy-document .image-camera-header h3 {
   margin: 0;
   font-size: 1rem;
 }
 
-.image-camera-close,
-.image-camera-actions .ghost {
+.hvy-document .image-camera-close,
+.hvy-document .image-camera-actions .ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -352,16 +352,16 @@
   transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.image-camera-close:hover,
-.image-camera-close:focus-visible,
-.image-camera-actions .ghost:hover,
-.image-camera-actions .ghost:focus-visible {
+.hvy-document .image-camera-close:hover,
+.hvy-document .image-camera-close:focus-visible,
+.hvy-document .image-camera-actions .ghost:hover,
+.hvy-document .image-camera-actions .ghost:focus-visible {
   border-color: var(--hvy-button-bg);
   background: color-mix(in srgb, var(--hvy-button-hover-bg) 55%, var(--hvy-surface));
   box-shadow: 0 0 0 0.16rem color-mix(in srgb, var(--hvy-button-bg) 16%, transparent);
 }
 
-.image-camera-video {
+.hvy-document .image-camera-video {
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -375,19 +375,19 @@
   object-fit: contain;
 }
 
-.image-camera-status {
+.hvy-document .image-camera-status {
   min-height: 1.2rem;
   margin: 0;
 }
 
-.image-camera-actions {
+.hvy-document .image-camera-actions {
   display: flex;
   justify-content: end;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.image-camera-capture-button {
+.hvy-document .image-camera-capture-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -406,41 +406,41 @@
   appearance: none;
 }
 
-.image-camera-capture-button:disabled {
+.hvy-document .image-camera-capture-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-.image-camera-capture-button:not(:disabled):hover,
-.image-camera-capture-button:not(:disabled):focus-visible {
+.hvy-document .image-camera-capture-button:not(:disabled):hover,
+.hvy-document .image-camera-capture-button:not(:disabled):focus-visible {
   background: color-mix(in srgb, var(--hvy-button-bg) 84%, var(--hvy-accent-1));
   box-shadow:
     0 0.38rem 0.9rem color-mix(in srgb, var(--hvy-button-bg) 22%, transparent),
     0 0 0 0.16rem color-mix(in srgb, var(--hvy-button-bg) 16%, transparent);
 }
 
-.image-camera-capture-button .hvy-ui-icon {
+.hvy-document .image-camera-capture-button .hvy-ui-icon {
   width: 1.05rem;
   height: 1.05rem;
 }
 
 @container (max-height: 34rem) {
-  .image-camera-modal-root,
-  .modal-root.image-camera-modal-root,
-  .hvy-document .modal-root.image-camera-modal-root {
+  .hvy-document .image-camera-modal-root,
+.hvy-document .modal-root.image-camera-modal-root,
+.hvy-document .modal-root.image-camera-modal-root {
     padding: 0.45rem;
   }
 
-  .image-camera-modal,
-  .modal-panel.image-camera-modal,
-  .hvy-document .modal-panel.image-camera-modal {
+  .hvy-document .image-camera-modal,
+.hvy-document .modal-panel.image-camera-modal,
+.hvy-document .modal-panel.image-camera-modal {
     width: min(32rem, calc(100% - 0.5rem));
     gap: 0.45rem;
     padding: 0.55rem;
   }
 
-  .image-camera-video {
+  .hvy-document .image-camera-video {
     max-height: 42vh;
   }
 }

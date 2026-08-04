@@ -1,8 +1,10 @@
 import './default-theme.css';
 import './host-overrides.css';
 import './style.css';
+import './layout/reference-shell.css';
+import './layout/reference-application-controls.css';
 import './state-tracker.css';
-import 'highlight.js/styles/github.css';
+import './highlight-theme.css';
 import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 
@@ -64,7 +66,7 @@ if (!appRoot) {
   throw new Error('App container not found.');
 }
 const app = appRoot;
-app.classList.add('hvy-document');
+app.classList.add('hvy-reference-app', 'hvy-document');
 setThemeRoot(app);
 setReferenceAppConfig({
   semanticFilterProvider: window.HVY_REFERENCE_CONFIG?.semanticFilterProvider ?? chatSemanticFilterProvider,

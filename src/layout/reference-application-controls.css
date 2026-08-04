@@ -1,0 +1,278 @@
+.hvy-reference-app .topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+}
+
+.hvy-reference-app .reference-title {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.hvy-reference-app .reference-subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--hvy-text-alt);
+}
+
+.hvy-reference-app .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hvy-reference-app .toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.hvy-reference-app .toolbar-section-files {
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--hvy-border-translucent);
+}
+
+.hvy-reference-app .reference-save-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--hvy-success-border);
+  border-radius: 999px;
+  background: var(--hvy-success-bg);
+  color: var(--hvy-success);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.hvy-reference-app .reference-save-state.is-unsaved {
+  border-color: var(--hvy-warning-border);
+  background: var(--hvy-warning-bg);
+  color: var(--hvy-warning-text);
+}
+
+.hvy-reference-app .document-menu {
+  position: relative;
+  --document-menu-arrow-rotation: 45deg;
+}
+
+.hvy-reference-app .document-menu[open] {
+  --document-menu-arrow-rotation: 225deg;
+}
+
+.hvy-reference-app .document-menu-toggle {
+  min-height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.72rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-reference-app .document-menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.hvy-reference-app .document-menu-toggle::after {
+  content: "";
+  width: 0.48rem;
+  height: 0.48rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(var(--document-menu-arrow-rotation)) translateY(-0.12rem);
+  transition: transform 140ms ease;
+}
+
+.hvy-reference-app .document-menu-current {
+  max-width: 10.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hvy-text);
+}
+
+.hvy-reference-app .document-menu-toggle:hover,
+.hvy-reference-app .document-menu-toggle:focus-visible {
+  color: var(--hvy-text);
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 28%);
+  box-shadow: 0 6px 16px var(--hvy-shadow);
+  transform: translateY(-1px);
+}
+
+.hvy-reference-app .document-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 80;
+  min-width: 13rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 96%, transparent);
+  box-shadow: 0 14px 30px var(--hvy-shadow-md);
+}
+
+.hvy-reference-app .document-menu-action {
+  width: 100%;
+  text-align: left;
+}
+
+.hvy-reference-app .document-menu-action.ghost {
+  color: var(--hvy-text);
+  background: color-mix(in srgb, var(--hvy-surface) 86%, transparent);
+}
+
+.hvy-reference-app .document-menu-action.ghost:not(:disabled):hover,
+.hvy-reference-app .document-menu-action.ghost:focus-visible {
+  color: var(--hvy-text);
+  background: color-mix(in srgb, var(--hvy-button-hover-bg, var(--hvy-button-bg)) 24%, var(--hvy-surface));
+}
+
+.hvy-reference-app .document-menu-action.secondary {
+  color: var(--hvy-button-text);
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-button-bg);
+}
+
+.hvy-reference-app .file-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.15rem;
+  padding: 0.38rem 0.72rem;
+  border-radius: 8px;
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-reference-app .toolbar-primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.15rem;
+  padding: 0.38rem 0.72rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-reference-app .file-picker-input {
+  display: none;
+}
+
+.hvy-reference-app .toolbar-filename-input {
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 8px;
+  padding: 0.38rem 0.58rem;
+  background: var(--hvy-surface);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-reference-app .toolbar-filename-input {
+  color: var(--hvy-text);
+  caret-color: var(--hvy-text);
+}
+
+.hvy-reference-app .toolbar-filename-input::placeholder {
+  color: var(--hvy-text-muted);
+}
+
+@media (max-width: 720px) {
+  .hvy-reference-app .toolbar {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .hvy-reference-app .toolbar-section,
+.hvy-reference-app .document-menu {
+    width: 100%;
+  }
+
+  .hvy-reference-app .toolbar-document-action,
+.hvy-reference-app .document-menu,
+.hvy-reference-app .document-menu-toggle {
+    width: 100%;
+  }
+
+  .hvy-reference-app .toolbar-section-files {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--hvy-border-translucent);
+    padding-top: 0.55rem;
+  }
+
+  .hvy-reference-app .toolbar-file-action {
+    flex: 0 0 auto;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .hvy-reference-app .toolbar-filename-input {
+    flex: 1 1 10rem;
+    min-width: min(100%, 9rem);
+    width: auto;
+  }
+
+  .hvy-reference-app .document-menu-panel {
+    left: 0;
+    right: 0;
+  }
+}
+
+@layer hvy-control-defaults {
+  .hvy-reference-app .toolbar-primary-button:not(:disabled):hover,
+.hvy-reference-app .file-picker:hover {
+    color: var(--hvy-button-hover-text, var(--hvy-button-text));
+    border-color: var(--hvy-focus);
+    background: var(--hvy-button-hover-bg, var(--hvy-button-bg));
+    box-shadow: 0 8px 18px var(--hvy-shadow-md);
+    transform: translateY(-1px);
+  }
+
+}

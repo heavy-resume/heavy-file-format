@@ -488,9 +488,11 @@ hvy_version: 0.1
     const listItem = root.querySelector<HTMLElement>('.reader-block li');
     const paragraph = root.querySelector<HTMLElement>('.reader-block p');
     const pane = root.querySelector<HTMLElement>('.pane.full-pane');
-    if (!button || !link || !list || !listItem || !paragraph || !pane) {
+    const hamburger = root.querySelector<HTMLElement>('.sidebar-tab-hamburger');
+    if (!button || !link || !list || !listItem || !paragraph || !pane || !hamburger) {
       throw new Error('Expected embedded controls missing.');
     }
+    const rootStyle = getComputedStyle(root);
     const buttonStyle = getComputedStyle(button);
     const linkStyle = getComputedStyle(link);
     const listStyle = getComputedStyle(list);
@@ -500,6 +502,12 @@ hvy_version: 0.1
     return {
       hasBoundary: root.classList.contains('hvy-document'),
       hasLayout: Boolean(root.querySelector('.hvy-embed-layout')),
+      sidebarFootprint: rootStyle.getPropertyValue('--hvy-sidebar-footprint').trim(),
+      sidebarTabSize: rootStyle.getPropertyValue('--hvy-sidebar-tab-size').trim(),
+      sidebarButtonWidth: button.getBoundingClientRect().width,
+      sidebarButtonHeight: button.getBoundingClientRect().height,
+      hamburgerWidth: hamburger.getBoundingClientRect().width,
+      hamburgerHeight: hamburger.getBoundingClientRect().height,
       buttonColor: buttonStyle.color,
       buttonBackground: buttonStyle.backgroundColor,
       linkColor: linkStyle.color,
@@ -516,6 +524,12 @@ hvy_version: 0.1
 
   expect(result.hasBoundary).toBe(true);
   expect(result.hasLayout).toBe(true);
+  expect(result.sidebarFootprint).toBe('3.25rem');
+  expect(result.sidebarTabSize).toBe('calc(3.25rem - 0.25rem)');
+  expect(result.sidebarButtonWidth).toBeCloseTo(48, 0);
+  expect(result.sidebarButtonHeight).toBeCloseTo(48, 0);
+  expect(result.hamburgerWidth).toBeGreaterThan(10);
+  expect(result.hamburgerHeight).toBeGreaterThan(7);
   expect(result.buttonColor).not.toBe('rgb(255, 0, 0)');
   expect(result.buttonBackground).not.toBe('rgb(255, 255, 255)');
   expect(result.linkColor).not.toBe('rgb(255, 0, 0)');

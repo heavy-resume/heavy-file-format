@@ -1,8 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 
+const applicationStyleFiles = [
+  '../src/layout/hvy-layout-foundation.css',
+  '../src/layout/hvy-control-primitives.css',
+  '../src/layout/hvy-floating-controls.css',
+  '../src/layout/workspace-layout.css',
+];
+
+function readApplicationStyles(): string {
+  return applicationStyleFiles
+    .map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
+    .join('\n');
+}
+
 test('embed button styling is opt-in instead of applied to every button', () => {
-  const source = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const source = readApplicationStyles();
 
   expect(source).not.toContain('.hvy-embed-layout :where(button)');
   expect(source).toContain('.hvy-document .hvy-button');
@@ -14,9 +27,10 @@ test('entry styles use explicit component classes instead of structural selector
   const styleSources = [
     readFileSync(new URL('../src/default-theme.css', import.meta.url), 'utf8'),
     readFileSync(new URL('../src/host-overrides.css', import.meta.url), 'utf8'),
-    readFileSync(new URL('../src/style.css', import.meta.url), 'utf8'),
+    ...applicationStyleFiles.map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')),
+    readFileSync(new URL('../src/layout/reference-application-controls.css', import.meta.url), 'utf8'),
   ];
-  const layoutSource = styleSources[2];
+  const layoutSource = styleSources.slice(2).join('\n');
 
   for (const source of styleSources) {
     expect(source).not.toContain(':where(');
@@ -25,7 +39,8 @@ test('entry styles use explicit component classes instead of structural selector
   expect(styleSources[0]).not.toContain(':root');
   expect(styleSources[0]).toContain('.hvy-document.theme-dark');
   expect(styleSources[1]).toMatch(/^\.hvy-document\s*\{/);
-  expect(layoutSource).toMatch(/^\.hvy-document\s*\{/);
+  expect(styleSources[2]).toMatch(/^\.hvy-document\s*\{/);
+  expect(styleSources.at(-1)).toMatch(/^\.hvy-reference-app\s+/);
   expect(layoutSource).toContain('.document-menu-toggle');
   expect(layoutSource).toContain('.toolbar-filename-input');
   expect(layoutSource).toContain('.compact-control-button');
@@ -38,7 +53,7 @@ test('entry styles use explicit component classes instead of structural selector
 });
 
 test('component controls own their dimensions independently of stylesheet order', () => {
-  const layoutSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const layoutSource = readApplicationStyles();
   const databaseTableSource = readFileSync(new URL('../src/plugins/db-table/db-table-component.css', import.meta.url), 'utf8');
   const databaseTableMarkup = readFileSync(new URL('../src/plugins/db-table/db-table-component.ts', import.meta.url), 'utf8');
 
@@ -66,7 +81,7 @@ test('application entrypoints load theme, host overrides, then component styles'
 });
 
 test('floating launchers share one explicit reset class', () => {
-  const styleSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const styleSource = readApplicationStyles();
   const chatSource = readFileSync(new URL('../src/chat/chat.ts', import.meta.url), 'utf8');
   const searchSource = readFileSync(new URL('../src/search/render.ts', import.meta.url), 'utf8');
   const searchCssSource = readFileSync(new URL('../src/search/search.css', import.meta.url), 'utf8');
@@ -82,7 +97,7 @@ test('floating launchers share one explicit reset class', () => {
 });
 
 test('embed link hover styling only applies to anchors with href values', () => {
-  const source = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const source = readApplicationStyles();
 
   expect(source).toContain('.hvy-embed-layout a[href]');
   expect(source).toContain('.hvy-embed-layout a[href]:hover');

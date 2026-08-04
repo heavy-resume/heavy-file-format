@@ -5,7 +5,7 @@ describe('reader highlight styling', () => {
   test('adds persistent themed emphasis without overriding component corner styling', () => {
     const source = readFileSync(new URL('../src/reader/reader.css', import.meta.url), 'utf8');
     const expectedResult = source.match(
-      /\.reader-section\.is-highlighted,\s*\.reader-block\.is-highlighted\s*\{([^}]*)\}/,
+      /\.hvy-document \.reader-section\.is-highlighted,\s*\.hvy-document \.reader-block\.is-highlighted\s*\{([^}]*)\}/,
     )?.[1] ?? '';
 
     expect(expectedResult).toContain('background: var(--hvy-highlight-1)');

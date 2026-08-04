@@ -1,0 +1,558 @@
+.hvy-document .align-left-icon,
+.hvy-document .align-center-icon,
+.hvy-document .align-right-icon {
+  gap: 0.16rem;
+}
+
+.hvy-document .align-left-icon::before,
+.hvy-document .align-left-icon::after,
+.hvy-document .align-center-icon::before,
+.hvy-document .align-center-icon::after,
+.hvy-document .align-right-icon::before,
+.hvy-document .align-right-icon::after {
+  content: "";
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.hvy-document .align-left-icon::before {
+  width: 1rem;
+  justify-self: start;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.hvy-document .align-left-icon::after {
+  width: 0.68rem;
+  justify-self: start;
+}
+
+.hvy-document .align-center-icon::before {
+  width: 1rem;
+  justify-self: center;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.hvy-document .align-center-icon::after {
+  width: 0.68rem;
+  justify-self: center;
+}
+
+.hvy-document .align-right-icon::before {
+  width: 1rem;
+  justify-self: end;
+  box-shadow: 0 0.32rem 0 currentColor;
+}
+
+.hvy-document .align-right-icon::after {
+  width: 0.68rem;
+  justify-self: end;
+}
+
+.hvy-document .italic-icon {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.hvy-document .underline-icon {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
+}
+
+.hvy-document .strikethrough-icon {
+  position: relative;
+  font-weight: 700;
+}
+
+.hvy-document .strikethrough-icon::after {
+  content: "";
+  position: absolute;
+  left: 0.16rem;
+  right: 0.16rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.hvy-document .quote-icon {
+  font-family: Georgia, serif;
+  font-size: 1.6rem;
+  transform: translateY(0.12rem);
+}
+
+.hvy-document .list-icon {
+  position: relative;
+  width: 1.1rem;
+  height: 0.9rem;
+}
+
+.hvy-document .list-icon::before,
+.hvy-document .list-icon::after {
+  content: "";
+  position: absolute;
+  left: 0.08rem;
+}
+
+.hvy-document .list-icon::before {
+  top: 0.08rem;
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 0.31rem 0 currentColor,
+    0 0.62rem 0 currentColor;
+}
+
+.hvy-document .list-icon::after {
+  top: 0.13rem;
+  left: 0.4rem;
+  width: 0.62rem;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 0.31rem 0 currentColor,
+    0 0.62rem 0 currentColor;
+}
+
+.hvy-document .ordered-list-icon {
+  position: relative;
+  width: 1.1rem;
+  height: 0.9rem;
+}
+
+.hvy-document .ordered-list-icon::before,
+.hvy-document .ordered-list-icon::after {
+  content: "";
+  position: absolute;
+}
+
+.hvy-document .ordered-list-icon::before {
+  left: 0.02rem;
+  top: 0.01rem;
+  width: 0.28rem;
+  height: 0.86rem;
+  background:
+    linear-gradient(currentColor, currentColor) 0.08rem 0.1rem / 0.11rem 0.36rem no-repeat,
+    radial-gradient(circle, currentColor 48%, transparent 52%) 0.06rem 0.77rem / 0.18rem 0.18rem no-repeat;
+}
+
+.hvy-document .ordered-list-icon::after {
+  top: 0.13rem;
+  left: 0.4rem;
+  width: 0.62rem;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 0.31rem 0 currentColor,
+    0 0.62rem 0 currentColor;
+}
+
+.hvy-document .checkbox-icon {
+  font-size: 1.05rem;
+}
+
+.hvy-document .link-icon {
+  position: relative;
+  width: 1.25rem;
+  height: 1rem;
+  transform: translateY(-0.02rem) rotate(-25deg);
+}
+
+.hvy-document .link-icon::before,
+.hvy-document .link-icon::after {
+  content: "";
+  position: absolute;
+  top: 0.24rem;
+  width: 0.48rem;
+  height: 0.3rem;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.hvy-document .link-icon::before {
+  left: 0;
+}
+
+.hvy-document .link-icon::after {
+  right: 0;
+}
+
+.hvy-document .rich-editor {
+  position: relative;
+  min-height: 96px;
+  min-width: 0;
+  max-width: 100%;
+  cursor: text;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  padding: 0.48rem;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+.hvy-document .rich-editor.text-fill-in-editor {
+  cursor: text;
+  min-height: 0;
+  padding-block: 0.24rem;
+}
+
+.hvy-document .text-fill-in-reader-editor {
+  display: contents;
+}
+
+.hvy-document .rich-editor:focus {
+  outline: 2px solid var(--hvy-focus);
+  outline-offset: 1px;
+}
+
+.hvy-document .rich-editor p {
+  min-width: 0;
+  margin: 0 0 0.45rem;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+}
+
+.hvy-document .rich-editor :where(li, blockquote, h1, h2, h3, h4, h5, h6) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ul:not(.contains-task-list)) {
+  list-style-position: outside;
+  list-style-type: disc;
+  padding-inline-start: 1.35rem;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ol:not(.contains-task-list)) {
+  list-style-position: outside;
+  list-style-type: decimal;
+  padding-inline-start: 1.35rem;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ul:not(.contains-task-list) ul:not(.contains-task-list)) {
+  list-style-type: circle;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ul:not(.contains-task-list) ul:not(.contains-task-list) ul:not(.contains-task-list)) {
+  list-style-type: square;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ol:not(.contains-task-list) ol:not(.contains-task-list)) {
+  list-style-type: lower-alpha;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(ol:not(.contains-task-list) ol:not(.contains-task-list) ol:not(.contains-task-list)) {
+  list-style-type: lower-roman;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(li:not(.task-list-item)) {
+  display: list-item;
+  padding-inline-start: 0.05rem;
+}
+
+.hvy-document .hvy-embed-layout .rich-editor :where(li:not(.task-list-item) > ul, li:not(.task-list-item) > ol) {
+  margin-top: 0.25rem;
+}
+
+.hvy-document .hvy-text-line-style {
+  min-width: 0;
+}
+
+.hvy-document .rich-editor .hvy-text-line-style {
+  position: relative;
+  padding-top: 0.05rem;
+}
+
+.hvy-document .rich-editor .hvy-text-line-style > :is(p, div, blockquote, h1, h2, h3, h4, h5, h6):empty {
+  margin: 0;
+  min-height: 1lh;
+}
+
+.hvy-document .rich-editor .hvy-text-line-style > .hvy-text-line-style-marker {
+  display: none;
+}
+
+.hvy-document .rich-editor .hvy-text-line-style.is-unknown {
+  box-shadow: inset 3px 0 0 var(--hvy-warning-border);
+}
+
+.hvy-document .rich-editor .hvy-text-line-style.is-unknown > .hvy-text-line-style-marker {
+  display: none;
+}
+
+.hvy-document .hvy-text-line-style > :last-child {
+  margin-bottom: 0;
+}
+
+.hvy-document .rich-editor > :first-child,
+.hvy-document .editor-block-passive .reader-block > :first-child {
+  margin-top: 0;
+}
+
+.hvy-document .rich-editor > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type,
+.hvy-document .editor-block-passive .reader-block > .hvy-text-line-style:first-child > :is(h1, h2, h3, h4, h5, h6):first-of-type {
+  margin-top: 0;
+}
+
+.hvy-document .rich-editor > :last-child,
+.hvy-document .editor-block-passive .reader-block > :last-child {
+  margin-bottom: 0;
+}
+
+.hvy-document .rich-editor h1,
+.hvy-document .rich-editor h2,
+.hvy-document .rich-editor h3,
+.hvy-document .rich-editor h4,
+.hvy-document .rich-editor h5,
+.hvy-document .rich-editor h6 {
+  margin: 0.2rem 0 0.15rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.hvy-document .rich-editor h1 {
+  font-size: 2rem;
+}
+
+.hvy-document .rich-editor h3 {
+  margin-top: 0.7rem;
+}
+
+.hvy-document .rich-editor :is(p, ul, ol, blockquote, pre)+h3 {
+  margin-top: 0.95rem;
+}
+
+.hvy-document .rich-editor code:not(pre code) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hvy-document .rich-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.hvy-document .rich-editor blockquote {
+  margin: 0 0 0.45rem;
+  padding: 0.2rem 0 0.2rem 0.75rem;
+  border-left: 3px solid var(--hvy-border-alt);
+  color: var(--hvy-text-alt);
+}
+
+.hvy-document .rich-editor pre {
+  position: relative;
+  margin: 0 0 0.45rem;
+  padding: 1.55rem 0.75rem 0.75rem;
+  overflow: auto;
+  background: var(--hvy-code-bg);
+  color: var(--hvy-code-text);
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+}
+
+.hvy-document .rich-editor pre::before {
+  content: attr(data-code-language);
+  position: absolute;
+  top: 0.38rem;
+  left: 0.75rem;
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.hvy-document .rich-editor pre[data-code-language=""] {
+  padding-top: 0.75rem;
+}
+
+.hvy-document .rich-editor pre[data-code-language=""]::before {
+  content: none;
+}
+
+.hvy-document .rich-code-block-shell {
+  position: relative;
+  margin: 0 0 0.45rem;
+}
+
+.hvy-document .rich-editor .rich-code-block-shell pre {
+  margin-bottom: 0;
+  padding-top: 1.55rem;
+}
+
+.hvy-document .rich-code-block-shell pre::before {
+  content: none;
+}
+
+.hvy-document .rich-code-language-control {
+  position: absolute;
+  top: 0.32rem;
+  left: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(18rem, calc(100% - 1.3rem));
+  color: var(--hvy-text-muted);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.hvy-document .rich-code-language-control input {
+  width: 7.5rem;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.18rem 0.38rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: 600 0.72rem/1.2 "JetBrains Mono", "Fira Code", monospace;
+  text-transform: lowercase;
+}
+
+.hvy-document .rich-code-language-control input:focus {
+  border-color: var(--hvy-accent);
+  outline: 2px solid var(--hvy-accent-soft);
+  outline-offset: 1px;
+}
+
+.hvy-document .rich-editor pre code {
+  display: block;
+  min-height: 1.5em;
+  padding: 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
+  font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.hvy-document .rich-editor pre code:focus {
+  outline: none;
+}
+
+.hvy-document .rich-editor ul.contains-task-list,
+.hvy-document .rich-editor ol.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.hvy-document .rich-editor input[type='checkbox'] {
+  all: initial;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: -0.16rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0 0.34rem 0 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--hvy-surface) 0%, var(--hvy-surface-alt) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface-alt) 78%, white 22%);
+  color: var(--hvy-accent-1-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hvy-document .rich-editor .hvy-inline-checkbox-line {
+  display: flex;
+  align-items: center;
+}
+
+.hvy-document .rich-editor .hvy-inline-checkbox-line input.hvy-inline-checkbox {
+  margin: 0 0.42rem 0 0;
+}
+
+.hvy-document .rich-editor input[type='checkbox']::before {
+  content: '';
+  box-sizing: border-box;
+  width: 0.26rem;
+  height: 0.5rem;
+  border-right: 0.13rem solid currentColor;
+  border-bottom: 0.13rem solid currentColor;
+  margin-top: -0.08rem;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 180ms ease;
+}
+
+.hvy-document .rich-editor input[type='checkbox']:checked {
+  border-color: var(--hvy-accent-1-alt);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-surface) 82%) 0%,
+    color-mix(in srgb, var(--hvy-accent-1-alt) 22%, var(--hvy-surface-alt) 78%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hvy-surface) 88%, white 12%);
+}
+
+.hvy-document .rich-editor input[type='checkbox']:checked::before {
+  transform: rotate(45deg) scale(1);
+}
+
+.hvy-document .rich-editor input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
+}
+
+.hvy-document .rich-editor input.hvy-inline-radio {
+  all: initial;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  vertical-align: -0.16rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0 0.34rem 0 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 50%;
+  background: var(--hvy-surface);
+  cursor: pointer;
+}
+
+.hvy-document .rich-editor input.hvy-inline-radio::before {
+  content: '';
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 50%;
+  background: var(--hvy-accent-1);
+  transform: scale(0);
+}
+
+.hvy-document .rich-editor input.hvy-inline-radio:checked::before {
+  transform: scale(1);
+}
+
+.hvy-document .rich-editor .task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+}
+
+.hvy-document .rich-editor .task-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.hvy-document .rich-editor .task-list-item > input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: 0.15rem 0.22rem 0 0;
+}

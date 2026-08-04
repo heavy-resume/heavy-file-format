@@ -1,11 +1,11 @@
-.hvy-scripting-error-modal,
+.hvy-document .hvy-scripting-error-modal,
 .hvy-document .hvy-scripting-error-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: min(760px, calc(100% - 2rem));
 }
 
-.hvy-scripting-error-modal-detail {
+.hvy-document .hvy-scripting-error-modal-detail {
   min-height: 8rem;
   max-height: min(65vh, 36rem);
   overflow: auto;

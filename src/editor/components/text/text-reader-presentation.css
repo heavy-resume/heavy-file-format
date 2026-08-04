@@ -1,0 +1,467 @@
+.hvy-document .rich-editor[data-placeholder]:empty::before,
+.hvy-document .rich-editor[data-placeholder]:has(> br:only-child)::before,
+.hvy-document .rich-editor[data-placeholder]:has(> p:only-child:empty)::before,
+.hvy-document .rich-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset: 0.48rem;
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+  pointer-events: none;
+  display: block;
+}
+
+.hvy-document .text-editor-shell {
+  --text-editor-toolbar-bottom-clearance: calc(6lh + 0.75rem);
+  --text-editor-toolbar-height: 0px;
+
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  container: text-editor-shell / inline-size;
+}
+
+.hvy-document .text-editor-toolbar-bounds {
+  position: absolute;
+  inset: 0 0 var(--text-editor-toolbar-bottom-clearance);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.hvy-document .text-editor-toolbar-slot {
+  position: sticky;
+  top: 0.35rem;
+  box-sizing: border-box;
+  margin-inline: 0.625rem;
+  pointer-events: none;
+}
+
+.hvy-document .text-editor-shell.is-fill-in-editor .text-editor-toolbar-slot {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hvy-document .text-editor-toolbar-spacer {
+  height: var(--text-editor-toolbar-height);
+  margin-bottom: 0.4rem;
+}
+
+.hvy-document .text-editor-toolbar-slot > .rich-toolbar {
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--hvy-shadow) 38%, transparent);
+  margin-bottom: 0;
+  padding: 0.35rem;
+  pointer-events: auto;
+}
+
+.hvy-document .text-editor-shell.is-disabled {
+  opacity: 0.78;
+}
+
+.hvy-document .text-editor-shell.is-disabled .rich-editor {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-border) 18%);
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .text-editor-shell.is-disabled .rich-toolbar {
+  opacity: 0.72;
+}
+
+.hvy-document .text-editor-shell.is-disabled .rich-toolbar button {
+  cursor: not-allowed;
+}
+
+.hvy-document .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-bounds {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+}
+
+.hvy-document .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  margin-bottom: 0.4rem;
+}
+
+.hvy-document .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-slot > .rich-toolbar {
+  box-shadow: none;
+}
+
+.hvy-document .editor-block:not([data-active-editor-block="true"]) .text-editor-toolbar-spacer {
+  display: none;
+}
+
+.hvy-document .reader-block-text:has(> .text-copy-button) {
+  position: relative;
+}
+
+.hvy-document .reader-block-text:has(> .text-copy-button) > :nth-last-child(2) {
+  margin-bottom: 0;
+}
+
+.hvy-document .text-copy-button {
+  position: absolute;
+  bottom: 0.18rem;
+  right: 0.18rem;
+  z-index: 3;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--hvy-border-alt);
+  background: color-mix(in srgb, var(--hvy-surface) 88%, transparent);
+  color: var(--hvy-muted);
+  box-shadow: 0 6px 14px var(--hvy-shadow-sm);
+  opacity: 0;
+  transform: none;
+  transition: opacity 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.hvy-document .reader-block-text:hover > .text-copy-button,
+.hvy-document .text-copy-button:focus-visible,
+.hvy-document .text-copy-button.is-copied {
+  opacity: 1;
+}
+
+.hvy-document .text-copy-button:hover,
+.hvy-document .text-copy-button:focus-visible {
+  color: var(--hvy-text);
+  background: var(--hvy-surface);
+  transform: none;
+}
+
+.hvy-document .text-copy-button.is-copied {
+  color: var(--hvy-focus);
+}
+
+.hvy-document .text-copy-icon {
+  position: relative;
+  width: 0.74rem;
+  height: 0.78rem;
+  transform: translate(-0.03rem, -0.02rem);
+}
+
+.hvy-document .text-copy-icon::before,
+.hvy-document .text-copy-icon::after {
+  content: "";
+  position: absolute;
+  width: 0.48rem;
+  height: 0.55rem;
+  border: 1.25px solid currentColor;
+  border-radius: 0.12rem;
+  background: color-mix(in srgb, var(--hvy-surface) 92%, transparent);
+}
+
+.hvy-document .text-copy-icon::before {
+  left: 0.2rem;
+  top: 0.01rem;
+}
+
+.hvy-document .text-copy-icon::after {
+  left: 0.02rem;
+  top: 0.22rem;
+}
+
+.hvy-document .hvy-preview-frame-phone .reader-block-text:has(> .text-copy-button) {
+  padding-bottom: 1.85rem;
+  padding-right: 2rem;
+}
+
+.hvy-document .hvy-preview-frame-phone .text-copy-button {
+  bottom: 0.25rem;
+  right: 0.25rem;
+  opacity: 1;
+  transform: none;
+}
+
+.hvy-document .hvy-preview-frame-phone .text-copy-button:hover,
+.hvy-document .hvy-preview-frame-phone .text-copy-button:focus-visible {
+  transform: none;
+}
+
+@media (hover: none) {
+  .hvy-document .reader-block-text:has(> .text-copy-button) {
+    padding-bottom: 1.85rem;
+    padding-right: 2rem;
+  }
+
+  .hvy-document .text-copy-button {
+    bottom: 0.25rem;
+    right: 0.25rem;
+    opacity: 1;
+    transform: none;
+  }
+
+  .hvy-document .text-copy-button:hover,
+.hvy-document .text-copy-button:focus-visible {
+    transform: none;
+  }
+}
+
+.hvy-document .text-use-as-selection {
+  position: absolute;
+  top: -0.95rem;
+  right: 0.65rem;
+  z-index: 40;
+  display: none;
+}
+
+.hvy-document .text-editor-shell.has-fill-in-selection .text-use-as-selection {
+  display: inline-block;
+}
+
+.hvy-document .text-use-as-button {
+  min-height: 1.85rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text);
+  font-size: 0.76rem;
+  line-height: 1;
+  box-shadow: 0 6px 14px var(--hvy-shadow);
+}
+
+.hvy-document .text-use-as-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  display: none;
+  min-width: 10rem;
+  max-width: min(18rem, calc(100cqw - 1rem));
+  padding: 0.28rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  background: var(--hvy-surface);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--hvy-shadow) 48%, transparent);
+}
+
+.hvy-document .text-use-as-selection.is-use-as-open .text-use-as-menu {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.hvy-document .text-use-as-selection.is-use-as-open .text-use-as-button {
+  background: var(--hvy-button-bg);
+  border-color: var(--hvy-border-input);
+  color: var(--hvy-button-text);
+}
+
+.hvy-document .text-use-as-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.45rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hvy-document .text-use-as-menu-divider {
+  height: 1px;
+  margin: 0.15rem 0;
+  background: var(--hvy-border-input);
+}
+
+.hvy-document .hvy-sort-value[data-hvy-sort-value="true"] {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 1.55em;
+  align-items: center;
+  vertical-align: baseline;
+  border-radius: 6px;
+  border: 1px solid var(--hvy-border-input);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 86%, var(--hvy-accent-2) 14%);
+  color: var(--hvy-text);
+}
+
+.hvy-document .hvy-sort-value[data-hvy-sort-value="true"]:not(select) {
+  padding: 0.04rem 0.35rem;
+}
+
+.hvy-document .text-editor-shell.is-use-as-open .hvy-sort-value[data-hvy-sort-value="true"]:not(select)::before {
+  content: attr(data-sort-value-key);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.12rem);
+  max-width: 14rem;
+  padding: 0.08rem 0.28rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--hvy-shadow) 28%, transparent);
+}
+
+.hvy-document .hvy-sort-value.hvy-sort-value-enum {
+  width: auto;
+  min-width: 4.5rem;
+  max-width: min(100%, 16rem);
+  padding: 0.04rem 1.35rem 0.04rem 0.35rem;
+  font: inherit;
+  line-height: 1.25;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.78rem) 50%,
+    calc(100% - 0.48rem) 50%;
+  background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+  background-repeat: no-repeat;
+}
+
+.hvy-document .hvy-sort-value-enum:focus-visible {
+  outline: 2px solid var(--hvy-focus);
+  outline-offset: 2px;
+}
+
+.hvy-document .hvy-sort-value.hvy-sort-value-invalid {
+  border-color: var(--hvy-danger);
+  background: color-mix(in srgb, var(--hvy-surface) 72%, var(--hvy-danger) 28%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-danger) 28%, transparent);
+}
+
+.hvy-document .hvy-sort-value-validation-popover {
+  width: fit-content;
+  max-width: min(28rem, 100%);
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--hvy-danger);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-danger) 12%);
+  color: var(--hvy-text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hvy-shadow) 36%, transparent);
+}
+
+.hvy-document .text-fill-in-box {
+  display: inline-block;
+  min-width: 7ch;
+  padding: 0.02em 0.32em;
+  border: 1px dashed color-mix(in srgb, var(--hvy-focus) 72%, var(--hvy-text));
+  border-radius: 0.28em;
+  color: var(--hvy-text);
+  /* box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-surface) 70%, transparent),
+    0 1px 4px color-mix(in srgb, var(--hvy-shadow) 72%, transparent); */
+  line-height: 1.15;
+  vertical-align: baseline;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.hvy-document .text-fill-in-box:empty::before {
+  content: attr(data-placeholder);
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+  pointer-events: none;
+  text-shadow: 0 0 1px black;
+}
+
+.hvy-document .text-fill-in-box:focus {
+  border-style: solid;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--hvy-surface) 78%, transparent), color-mix(in srgb, var(--hvy-highlight-1) 42%, var(--hvy-surface))),
+    var(--hvy-surface);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hvy-focus) 32%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring, #2563eb) 28%, transparent),
+    0 2px 8px color-mix(in srgb, var(--hvy-shadow) 82%, transparent);
+}
+
+.hvy-document .text-fill-in-rich-marker {
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+  text-shadow: 0 0 1px black;
+}
+
+.hvy-document .hvy-alt {
+  display: inline;
+}
+
+.hvy-document .hvy-alt-compact {
+  display: none;
+  min-width: 3ch;
+  outline: none;
+}
+
+.hvy-document .rich-editor .hvy-alt-compact,
+.hvy-document .table-inline-text .hvy-alt-compact {
+  padding: 0 0.22em;
+  border: 1px dashed currentColor;
+  border-radius: 0.2em;
+}
+
+.hvy-document .hvy-alt-compact:empty::before {
+  content: "compact";
+  color: var(--hvy-text-muted);
+  opacity: 0.72;
+}
+
+.hvy-document .hvy-alt-compact:focus {
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-focus-ring, #2563eb) 20%, transparent);
+}
+
+.hvy-document .hvy-nowrap {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.hvy-document .hvy-surface-phone .hvy-alt-full,
+.hvy-document .hvy-surface-tablet .hvy-alt-full {
+  display: none;
+}
+
+.hvy-document .hvy-surface-phone .hvy-alt-compact,
+.hvy-document .hvy-surface-tablet .hvy-alt-compact {
+  display: inline-block;
+}
+
+.hvy-document .hvy-surface-desktop .hvy-alt-full {
+  display: inline;
+}
+
+.hvy-document .hvy-surface-desktop .hvy-alt-compact {
+  display: none;
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .hvy-document .hvy-alt-full {
+    display: none;
+  }
+
+  .hvy-document .hvy-alt-compact {
+    display: inline-block;
+  }
+}
+
+@container hvy-surface (inline-size <= 50rem) {
+  .hvy-document .hvy-nowrap {
+    font-size: 0.94em;
+  }
+}
+
+@container hvy-surface (inline-size < 30rem) {
+  .hvy-document .hvy-nowrap {
+    font-size: 0.88em;
+  }
+}
+

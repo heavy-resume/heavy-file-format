@@ -19,6 +19,11 @@ import type { ChatMessage, VisualDocument } from '../types';
 import type { VisualBlock } from '../editor/types';
 import { openScriptingErrorModal } from './scripting/error-modal';
 import { getDatabaseChangesSince, getDatabaseChangeRevision, type DatabaseChangeSnapshot } from '../database-change-tracker';
+import {
+  createFormPhotoControl,
+  normalizeFormPhotoMeta,
+  type FormPhotoValue,
+} from './form-photo-field/form-photo-field';
 import formDocumentation from './form.about.txt?raw';
 
 import './form.css';
@@ -38,6 +43,7 @@ const FIELD_TYPES = [
   'url',
   'password',
   'hidden',
+  'photo',
 ] as const;
 
 type FormFieldType = (typeof FIELD_TYPES)[number];
@@ -56,7 +62,7 @@ export interface FormOption {
 export interface FormFieldDefinition {
   label: string;
   type: FormFieldType;
-  value: string | boolean;
+  value: FormFieldValue;
   placeholder: string;
   required: boolean;
   rows: number;
@@ -64,6 +70,10 @@ export interface FormFieldDefinition {
   triggers: Partial<Record<FormTriggerName, string>>;
   meta: {
     css: string;
+    accept: string[];
+    maxBytes: number;
+    maxWidth: number;
+    maxHeight: number;
   };
 }
 
@@ -92,8 +102,10 @@ export interface ParsedFormSpec {
   error: string | null;
 }
 
+type FormFieldValue = string | boolean | FormPhotoValue | null;
+
 interface LiveFormState {
-  values: Record<string, string | boolean>;
+  values: Record<string, FormFieldValue>;
   options: Record<string, FormOption[]>;
   errors: Record<string, string>;
 }
@@ -131,6 +143,10 @@ const DEFAULT_FIELD: FormFieldDefinition = {
   triggers: {},
   meta: {
     css: '',
+    accept: [],
+    maxBytes: 0,
+    maxWidth: 0,
+    maxHeight: 0,
   },
 };
 
@@ -230,7 +246,11 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
   const label = typeof raw.label === 'string' && raw.label.trim().length > 0 ? raw.label.trim() : `Field ${index + 1}`;
   const type = normalizeFieldType(raw.type);
   const rawValue = raw.value;
-  const fieldValue = type === 'checkbox' ? rawValue === true || rawValue === 'true' : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+  const fieldValue = type === 'checkbox'
+    ? rawValue === true || rawValue === 'true'
+    : type === 'photo'
+      ? null
+      : typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
   const options = Array.isArray(raw.options) ? raw.options.map(normalizeOption).filter((option): option is FormOption => option !== null) : [];
   const meta = isObject(raw.meta) ? raw.meta : {};
   return {
@@ -242,9 +262,7 @@ function normalizeField(candidate: unknown, index: number): FormFieldDefinition 
     rows: type === 'textarea' ? normalizeFieldRows(raw.rows) : 0,
     options,
     triggers: normalizeTriggers(raw.triggers),
-    meta: {
-      css: typeof meta.css === 'string' ? meta.css : '',
-    },
+    meta: normalizeFormPhotoMeta(meta),
   };
 }
 
@@ -375,13 +393,21 @@ export function serializeFormSpec(spec: FormSpec): string {
       label: field.label,
       type: field.type,
     };
-    if (field.value !== '' && field.value !== false) item.value = field.value;
+    if (field.type !== 'photo' && field.value !== '' && field.value !== false && field.value !== null) item.value = field.value;
     if (field.placeholder.length > 0) item.placeholder = field.placeholder;
     if (field.required) item.required = true;
     if (field.type === 'textarea' && field.rows > 0) item.rows = field.rows;
     if (field.options.length > 0) item.options = field.options.map((option) => ({ label: option.label, value: option.value }));
     if (Object.keys(field.triggers).length > 0) item.triggers = field.triggers;
-    if (field.meta.css.length > 0) item.meta = { css: field.meta.css };
+    const meta: Record<string, unknown> = {};
+    if (field.meta.css.length > 0) meta.css = field.meta.css;
+    if (field.type === 'photo') {
+      if (field.meta.accept.length > 0) meta.accept = field.meta.accept;
+      if (field.meta.maxBytes > 0) meta.maxBytes = field.meta.maxBytes;
+      if (field.meta.maxWidth > 0) meta.maxWidth = field.meta.maxWidth;
+      if (field.meta.maxHeight > 0) meta.maxHeight = field.meta.maxHeight;
+    }
+    if (Object.keys(meta).length > 0) item.meta = meta;
     return item;
   });
   if (Object.keys(spec.scripts).length > 0) clean.scripts = spec.scripts;
@@ -423,15 +449,23 @@ function formatOptionsText(options: FormOption[]): string {
   return options.map((option) => (option.value === option.label ? option.label : `${option.label} | ${option.value}`)).join('\n');
 }
 
-function reconcileSelectValue(value: string | boolean, options: FormOption[]): string {
+function reconcileSelectValue(value: FormFieldValue, options: FormOption[]): string {
   const current = String(value ?? '');
   return options.some((option) => option.value === current)
     ? current
     : options[0]?.value ?? '';
 }
 
+function normalizePhotoValue(value: unknown): FormPhotoValue | null {
+  if (!isObject(value)) return null;
+  const attachmentId = typeof value.attachmentId === 'string' ? value.attachmentId : '';
+  const imageFile = typeof value.imageFile === 'string' ? value.imageFile : '';
+  const mediaType = typeof value.mediaType === 'string' ? value.mediaType : '';
+  return attachmentId && imageFile && mediaType ? { attachmentId, imageFile, mediaType } : null;
+}
+
 function createLiveState(spec: FormSpec): LiveFormState {
-  const values: Record<string, string | boolean> = {};
+  const values: Record<string, FormFieldValue> = {};
   const options: Record<string, FormOption[]> = {};
   for (const field of spec.fields) {
     options[field.label] = field.options.map((option) => ({ ...option }));
@@ -540,7 +574,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   const buildFormApi = (): ScriptingFormApi => ({
     get_value: (fieldName) => live.values[fieldName],
     set_value: (fieldName, value) => {
-      live.values[fieldName] = typeof value === 'boolean' ? value : String(value ?? '');
+      const field = parseCurrent().spec.fields.find((candidate) => candidate.label === fieldName);
+      live.values[fieldName] = field?.type === 'photo'
+        ? normalizePhotoValue(value)
+        : typeof value === 'boolean' ? value : String(value ?? '');
       renderReader();
     },
     get_values: () => ({ ...live.values }),
@@ -769,8 +806,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
           <label><span>Type</span><select data-form-field-index="${index}" data-form-field-prop="type">${FIELD_TYPES.map((type) => `<option value="${type}"${field.type === type ? ' selected' : ''}>${type}</option>`).join('')}</select></label>
           ${field.type === 'checkbox'
             ? `<label class="hvy-form-checkbox-label"><span>Default Checked</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="value" ${field.value === true ? 'checked' : ''}></label>`
-            : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
-          ${renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
+            : field.type === 'photo' ? '' : renderTextInput('Default Value', 'value', String(field.value ?? ''), index)}
+          ${field.type === 'photo' ? '' : renderTextInput('Placeholder', 'placeholder', field.placeholder, index)}
           ${field.type === 'textarea' ? `<label><span>Rows</span><input type="number" min="1" step="1" value="${field.rows || 2}" data-form-field-index="${index}" data-form-field-prop="rows"></label>` : ''}
           <label class="hvy-form-checkbox-label"><span>Required</span><input type="checkbox" data-form-field-index="${index}" data-form-field-prop="required" ${field.required ? 'checked' : ''}></label>
         </div>
@@ -799,6 +836,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
                 <span>CSS</span>
                 <textarea rows="5" data-form-field-index="${fieldIndex}" data-form-field-prop="metaCss" placeholder="margin: 0.5rem 0;">${escapeHtml(field.meta.css)}</textarea>
               </label>
+              ${field.type === 'photo' ? `
+                <label><span>Accepted MIME types</span><input data-form-field-index="${fieldIndex}" data-form-field-prop="metaAccept" value="${escapeAttr(field.meta.accept.join(', '))}" placeholder="image/jpeg, image/png"></label>
+                <label><span>Maximum bytes</span><input type="number" min="1" step="1" data-form-field-index="${fieldIndex}" data-form-field-prop="metaMaxBytes" value="${field.meta.maxBytes || ''}"></label>
+                <label><span>Maximum width</span><input type="number" min="1" step="1" data-form-field-index="${fieldIndex}" data-form-field-prop="metaMaxWidth" value="${field.meta.maxWidth || ''}"></label>
+                <label><span>Maximum height</span><input type="number" min="1" step="1" data-form-field-index="${fieldIndex}" data-form-field-prop="metaMaxHeight" value="${field.meta.maxHeight || ''}"></label>
+              ` : ''}
               ${renderScriptSelect('Input Script', 'input', field.triggers.input ?? '', fieldIndex, scriptNames)}
               ${renderScriptSelect('Change Script', 'change', field.triggers.change ?? '', fieldIndex, scriptNames)}
               ${renderScriptSelect('Blur Script', 'blur', field.triggers.blur ?? '', fieldIndex, scriptNames)}
@@ -958,7 +1001,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   }
 
   function renderReaderField(field: FormFieldDefinition): HTMLElement {
-    const wrap = document.createElement(field.type === 'radio' ? 'div' : 'label');
+    const wrap = document.createElement(field.type === 'radio' || field.type === 'photo' ? 'div' : 'label');
     wrap.className = `hvy-form-field hvy-form-field-${field.type}`;
     if (field.meta.css.trim().length > 0) {
       wrap.setAttribute('style', sanitizeInlineCss(field.meta.css));
@@ -972,7 +1015,30 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
 
     const value = live.values[field.label] ?? field.value;
-    if (field.type === 'textarea') {
+    if (field.type === 'photo') {
+      const photoValue = normalizePhotoValue(value);
+      wrap.appendChild(createFormPhotoControl({
+        ctx,
+        label: field.label,
+        required: field.required,
+        meta: field.meta,
+        value: photoValue,
+        imageAttachmentMaxDimensions: getActiveStateRuntime().state.imageAttachmentMaxDimensions,
+        onChange: (next) => {
+          live.values[field.label] = next;
+          delete live.errors[field.label];
+          runNamedScript(field.triggers.change ?? '', `change:${field.label}`);
+        },
+        onError: (message) => {
+          if (message) {
+            live.errors[field.label] = message;
+            renderReader();
+          } else {
+            delete live.errors[field.label];
+          }
+        },
+      }));
+    } else if (field.type === 'textarea') {
       const textarea = document.createElement('textarea');
       textarea.name = field.label;
       textarea.value = String(value ?? '');
@@ -1092,6 +1158,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (prop === 'placeholder') field.placeholder = target.value;
       if (prop === 'rows') field.rows = normalizeFieldRows(target.value);
       if (prop === 'metaCss') field.meta.css = target.value;
+      if (prop === 'metaAccept') field.meta.accept = target.value.split(',').map((value) => value.trim()).filter(Boolean);
+      if (prop === 'metaMaxBytes') field.meta.maxBytes = normalizePositiveInt(target.value, 0);
+      if (prop === 'metaMaxWidth') field.meta.maxWidth = normalizePositiveInt(target.value, 0);
+      if (prop === 'metaMaxHeight') field.meta.maxHeight = normalizePositiveInt(target.value, 0);
       commitSpec(spec, { refreshEditor: prop === 'type' || prop === 'options' });
       return;
     }
@@ -1328,7 +1398,8 @@ export const formPlugin: HvyPlugin = {
     'Do not use `<!--hvy:form ...-->`.',
     'Supported form YAML keys include `fields` and `scripts`.',
     'Form-level behavior and styling keys live in pluginConfig: `formCss`, `actionsCss`, `submitCss`, `submitLabel`, `showSubmit`, `initialScript`, `changeScript`, `submitAction`, `submitSourceScript`, `submitScript`, `submitPrompt`, `submitInputCharLimit`, `submitOutputCharLimit`, `scriptLibraries`, and `scriptStepBudget`.',
-    'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key.',
+    'Fields use `label`, `type`, optional `placeholder`, optional `required`, optional `options`, optional `value`, and optional `triggers`. The label is both visible text and the script key. Type `photo` stores an HVY image attachment before submit and exposes an object with `attachmentId`, `imageFile`, and `mediaType` through `doc.form`.',
+    'Photo field `meta` supports `accept`, `maxBytes`, `maxWidth`, and `maxHeight`; dimension limits preserve aspect ratio and fall back to document or host image limits when omitted.',
     '`formCss`, `actionsCss`, `submitCss`, and field `meta.css` are sanitized inline CSS applied to the form, action wrapper, submit button, and field wrapper respectively.',
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, `pluginConfig.changeScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',

@@ -1701,8 +1701,23 @@ Plugin-specific rules:
   inline CSS style string applied to that rendered field wrapper and MUST be
   sanitized like other document-supplied CSS.
 - Supported `type` values are `text`, `textarea`, `number`, `select`,
-  `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, and `hidden`.
-  File inputs are not part of the standard form plugin contract.
+  `checkbox`, `radio`, `date`, `email`, `tel`, `url`, `password`, `hidden`, and
+  `photo`. General-purpose file inputs are not part of the standard form plugin
+  contract.
+- A `photo` field accepts a single image. Its live value is `null` until an
+  image is selected, then is an object containing `attachmentId`, `imageFile`,
+  and `mediaType`. `attachmentId` MUST equal `image:<imageFile>`. The image is
+  stored as a normal HVY tail attachment before field triggers or the form's
+  `submitScript` run, so those scripts can assign `imageFile` directly to an
+  image component without handling raw bytes or base64 data.
+- Photo field `meta.accept` MAY be a MIME-type string, a comma-separated MIME
+  string, or an array of MIME strings. `meta.maxBytes`, `meta.maxWidth`, and
+  `meta.maxHeight` MAY be positive integers. `maxBytes` constrains the selected
+  source file. `maxWidth` and `maxHeight` constrain the stored raster image and
+  MUST preserve its aspect ratio without enlarging smaller images. When neither
+  dimension is set, clients SHOULD use the document or host image attachment
+  limits. A required photo field MUST prevent submission until its attachment
+  has been stored successfully.
 - `rows` applies to `textarea` fields. When present, it MUST be a positive
   integer and controls the initial rendered textarea height in text rows.
 - `options` applies to `select` and `radio`. Each option MAY be a string or an

@@ -1400,6 +1400,23 @@ the sandboxed runtime and MAY be awaited by an explicitly authorized
 boundary because power scripts already have unrestricted page and network
 access; installed plugin APIs do not weaken that boundary.
 
+Sandboxed scripting runtimes MAY expose component handles through document
+tools such as `doc.tool.get_components(...)` and
+`doc.tool.get_updated_components(...)`, and MAY return the same handles from
+component-creation or child-append operations. A current component handle MUST
+provide `handle.expand()`. Calling it requests that the handled component be
+expanded in the reader after the current script run. The client MUST also
+expand the component's containing expandable blocks, collapsible containers,
+and section as necessary to make it visible. Calling `expand()` on a removed
+component handle MUST be a no-op.
+
+`handle.expand()` is transient reader UI state. It MUST NOT change authored
+fields such as `expandableExpanded`, `containerExpanded`, or section
+`expanded`; MUST NOT mark the document dirty or emit a document-content change;
+and MUST NOT affect serialized HVY output. Reloading the document therefore
+restores its authored default expansion state. Expansion alone MUST NOT scroll
+the reader, move focus, or highlight the component.
+
 A visual-description capability receives the current plugin block and document
 and returns optional plain text describing rendered output that is not otherwise
 represented by ordinary HVY block text. Hosts MAY index this text and expose it

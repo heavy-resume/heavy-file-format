@@ -15,9 +15,10 @@ import {
 import { createScriptingRuntime } from '../src/plugins/scripting/runtime';
 import { SCRIPTING_PLUGIN_VERSION } from '../src/plugins/scripting/version';
 import { getRunnableScriptingTargetsForView } from '../src/plugins/scripting/scripting';
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { syncSortValuesForDocument } from '../src/sort-values';
-import { initCallbacks, initState } from '../src/state';
+import { initCallbacks, initState, state } from '../src/state';
+import { getReaderSectionExpandedOverride } from '../src/navigation';
 import { createTestState } from './serialization-test-helpers';
 
 test('instrumentPythonSource adds step calls without rewriting compare expressions', () => {
@@ -895,4 +896,45 @@ test('scripting hooks run editor-only scripts in editor and AI views', () => {
   expect(getRunnableScriptingTargetsForView(targets, 'editor').map((target) => target.blockId)).toEqual(['editor-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'viewer').map((target) => target.blockId)).toEqual(['document-script']);
   expect(getRunnableScriptingTargetsForView(targets, 'ai').map((target) => target.blockId)).toEqual(['editor-script']);
+});
+
+test('component handle expand applies transient reader state without changing serialized defaults', () => {
+  const refreshReaderPanels = vi.fn();
+  const renderApp = vi.fn();
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"records","expanded":false}-->
+#! Records
+
+ <!--hvy:expandable {"id":"new-record","expandableExpanded":false}-->
+  <!--hvy:expandable:content {}-->
+   <!--hvy:text {}-->
+    Newly created record
+`, '.hvy');
+  initCallbacks({
+    renderApp,
+    refreshReaderPanels,
+    refreshModalPreview: () => {},
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  initState(createTestState(document));
+  const serializedBefore = serializeDocument(document);
+  const runtime = createScriptingRuntime({ document });
+  const record = (runtime.doc.tool('get_components', { component: 'expandable' }) as Array<{
+    expand(): void;
+  }>)[0]!;
+
+  record.expand();
+  runtime.doc.rerender();
+
+  const block = document.sections[0]!.blocks[0]!;
+  expect(state.readerExpandableState[`${document.sections[0]!.key}:${block.id}`]).toBe(true);
+  expect(getReaderSectionExpandedOverride(document.sections[0]!)).toBe(true);
+  expect(block.schema.expandableExpanded).toBe(false);
+  expect(serializeDocument(document)).toBe(serializedBefore);
+  expect(refreshReaderPanels).toHaveBeenCalledOnce();
+  expect(renderApp).toHaveBeenCalledOnce();
 });

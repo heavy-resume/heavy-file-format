@@ -12,6 +12,7 @@ import { parseJsonObjectResponse, parseJsonValueResponse } from '../../llm-tool-
 import { serializeBlockFragment, serializeDocument } from '../../serialization';
 import { setSortValueAnnotationText, syncSortValuesForDocument } from '../../sort-values';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../state';
+import { expandBlockPathByBlockId } from '../../navigation';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { hasTextFillInMarker } from '../../text-fill-in';
 import type { VisualBlock } from '../../editor/types';
@@ -287,9 +288,13 @@ function formatLocalDate(date: Date): string {
 export function createScriptingRuntime(options: ScriptingRuntimeOptions): ScriptingRuntime {
   const stats: ScriptingRuntimeStats = { toolCalls: 0, stepsExecuted: 0, stepBudget: options.maxLines ?? 100_000, linesExecuted: 0, logs: [] };
   let mutated = false;
+  const pendingExpansions = new Map<string, { sectionKey: string; blockId: string }>();
 
   const onMutation = () => {
     mutated = true;
+  };
+  const requestExpansion = (sectionKey: string, blockId: string) => {
+    pendingExpansions.set(`${sectionKey}:${blockId}`, { sectionKey, blockId });
   };
   const recordLog = (...values: unknown[]) => {
     if (stats.logs.length >= 200) {
@@ -302,14 +307,23 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
   };
 
   const flushIfMutated = () => {
-    if (!mutated) return;
+    if (!mutated && pendingExpansions.size === 0) return;
+    const documentMutated = mutated;
     mutated = false;
-    syncSortValuesForDocument(options.document);
-    if (state?.document === options.document) {
+    if (documentMutated) {
+      syncSortValuesForDocument(options.document);
+    }
+    if (documentMutated && state?.document === options.document) {
       state.rawEditorText = serializeDocument(options.document);
       state.rawEditorError = null;
       state.rawEditorDiagnostics = [];
     }
+    if (state?.document === options.document) {
+      for (const { sectionKey, blockId } of pendingExpansions.values()) {
+        expandBlockPathByBlockId(options.document.sections, blockId, sectionKey);
+      }
+    }
+    pendingExpansions.clear();
     let renderGuardError: unknown = null;
     if (options.renderOnMutation !== false) {
       try {
@@ -330,7 +344,9 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         }
       }
     }
-    options.onMutationFlushed?.();
+    if (documentMutated) {
+      options.onMutationFlushed?.();
+    }
     if (renderGuardError) {
       throw renderGuardError;
     }
@@ -352,11 +368,12 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
           options.document,
           options.previousDocument ?? null,
           String(readScriptValue(args, 'component') ?? ''),
-          onMutation
+          onMutation,
+          requestExpansion
         );
       }
       if (name === 'get_components') {
-        return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation);
+        return getScriptingComponentHandles(options.document, String(readScriptValue(args, 'component') ?? ''), onMutation, false, requestExpansion);
       }
       const result = executeDocumentEditToolByName(name, normalizeScriptObject(args), options.document, onMutation);
       return result;
@@ -582,7 +599,8 @@ class ScriptingComponentHandle {
     private document: VisualDocument,
     private location: ScriptingBlockLocation,
     private markMutated: () => void,
-    removed = false
+    removed = false,
+    private requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
   ) {
     this.id = location.block.schema.id;
     this.component = location.block.schema.component;
@@ -616,10 +634,16 @@ class ScriptingComponentHandle {
     return hasTag(this.location.block.schema.tags, tag);
   }
 
+  expand(): void {
+    if (!this.removed) {
+      this.requestExpansion(this.location.section.key, this.location.block.id);
+    }
+  }
+
   get_parent_by_tag(tag: string): ScriptingComponentHandle | ScriptingSectionHandle | null {
     for (const ancestor of [...this.location.ancestors].reverse()) {
       if (hasTag(ancestor.schema.tags, tag)) {
-        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
+        return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed, this.requestExpansion);
       }
     }
     return hasTag(this.location.section.tags, tag)
@@ -636,7 +660,7 @@ class ScriptingComponentHandle {
       if (excluded.some((tag) => hasTag(ancestor.schema.tags, tag))) {
         continue;
       }
-      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed);
+      return new ScriptingComponentHandle(this.document, { ...this.location, block: ancestor }, this.markMutated, this.removed, this.requestExpansion);
     }
     return null;
   }
@@ -689,7 +713,7 @@ class ScriptingComponentHandle {
       block: child,
       section: this.location.section,
       ancestors: [...this.location.ancestors, this.location.block],
-    }, this.markMutated);
+    }, this.markMutated, false, this.requestExpansion);
   }
 }
 
@@ -723,7 +747,8 @@ function getScriptingComponentHandles(
   document: VisualDocument,
   component: string,
   markMutated: () => void,
-  removed = false
+  removed = false,
+  requestExpansion: (sectionKey: string, blockId: string) => void = () => {}
 ): ScriptingComponentHandle[] {
   const query = component.trim();
   const matches: ScriptingComponentHandle[] = [];
@@ -731,7 +756,7 @@ function getScriptingComponentHandles(
     for (const block of blocks) {
       const base = resolveBaseComponentFromMeta(block.schema.component, document.meta);
       if (!query || block.schema.component === query || base === query || (query === 'xref' && base === 'xref-card')) {
-        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed));
+        matches.push(new ScriptingComponentHandle(document, { block, section, ancestors }, markMutated, removed, requestExpansion));
       }
       const nextAncestors = [...ancestors, block];
       visit(block.schema.containerBlocks ?? [], section, nextAncestors);
@@ -753,9 +778,10 @@ function getUpdatedScriptingComponentHandles(
   document: VisualDocument,
   previousDocument: VisualDocument | null,
   component: string,
-  markMutated: () => void
+  markMutated: () => void,
+  requestExpansion: (sectionKey: string, blockId: string) => void
 ): ScriptingComponentHandle[] {
-  const current = getScriptingComponentHandles(document, component, markMutated);
+  const current = getScriptingComponentHandles(document, component, markMutated, false, requestExpansion);
   if (!previousDocument) {
     return current;
   }

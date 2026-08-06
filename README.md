@@ -616,6 +616,17 @@ keyring[generated.keyId] = generated.key;
 const encryptedBytes = await mount.serializeDocumentBytesAsync();
 ```
 
+Hosts that manage compact saved history can unwrap only the whole-document
+envelope before creating a delta. Ordinary, unencrypted bytes pass through
+unchanged and return an empty `keyId`:
+
+```js
+const { bytes: historyBytes, keyId } = await HVY.decryptDocumentEnvelopeBytes(
+  encryptedBytes,
+  { keyring },
+);
+```
+
 Editor, AI, and import mutations can also notify hosts when the mounted
 document changes relative to the last saved baseline:
 

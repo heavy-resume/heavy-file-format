@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import { ensureDocumentAttachmentStore } from '../src/attachment-store';
 import { encryptComponentInDocument } from '../src/encrypted-components';
-import { encryptDocumentBytes, fernetDecryptBytes, fernetEncryptBytes, generateFernetKey } from '../src/encryption';
+import { decryptDocumentEnvelopeBytes, encryptDocumentBytes, fernetDecryptBytes, fernetEncryptBytes, generateFernetKey } from '../src/encryption';
 import {
   deserializeDocument,
   deserializeDocumentBytes,
@@ -43,6 +43,25 @@ hvy_version: 0.1
 
   expect(expectedResult.encryption).toEqual({ algorithm: 'fernet', keyId: encrypted.keyId, encrypted: true });
   expect(expectedResult.sections[0]?.blocks[0]?.text).toBe('Secret document text');
+});
+
+test('expected result: document envelope helper returns decrypted serialized bytes and key id', async () => {
+  const plainBytes = new TextEncoder().encode('saved history bytes');
+  const encrypted = await encryptDocumentBytes(plainBytes);
+
+  const expectedResult = await decryptDocumentEnvelopeBytes(encrypted.bytes, {
+    keyring: { [encrypted.keyId]: encrypted.key },
+  });
+
+  expect(expectedResult).toEqual({ bytes: plainBytes, keyId: encrypted.keyId });
+});
+
+test('expected result: document envelope helper passes ordinary bytes through unchanged', async () => {
+  const bytes = new TextEncoder().encode('ordinary history bytes');
+
+  const expectedResult = await decryptDocumentEnvelopeBytes(bytes, null);
+
+  expect(expectedResult).toEqual({ bytes, keyId: '' });
 });
 
 test('expected result: encrypted component round-trips as opaque tail when key is missing', async () => {

@@ -110,7 +110,7 @@ import { bindCarouselInteractions } from './editor/components/carousel/carousel'
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
-import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { decryptDocumentEnvelopeBytes, encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
@@ -1304,6 +1304,7 @@ export {
   createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
+  decryptDocumentEnvelopeBytes,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
@@ -1400,6 +1401,7 @@ declare global {
     HVY?: {
       deserializeDocumentBytes: typeof deserializeDocumentBytes;
       deserializeDocumentBytesAsync: typeof deserializeDocumentBytesAsync;
+      decryptDocumentEnvelopeBytes: typeof decryptDocumentEnvelopeBytes;
       applyHvyDocumentDelta: typeof applyHvyDocumentDelta;
       createHvyDocumentDelta: typeof createHvyDocumentDelta;
       isHvyDocumentDelta: typeof isHvyDocumentDelta;
@@ -1434,6 +1436,7 @@ declare global {
 window.HVY = {
   applyHvyDocumentDelta,
   createHvyDocumentDelta,
+  decryptDocumentEnvelopeBytes,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   isHvyDocumentDelta,

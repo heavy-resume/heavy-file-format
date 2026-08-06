@@ -139,7 +139,7 @@ import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { decryptEncryptedComponents, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
-import { encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
+import { decryptDocumentEnvelopeBytes, encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
@@ -1358,6 +1358,7 @@ export {
   createHostedAttachmentAdapter,
   createPdfExportPlan,
   createPdfExportPlanFromPrompt,
+  decryptDocumentEnvelopeBytes,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   encryptDocumentBytes,
@@ -1448,6 +1449,7 @@ export type {
 window.HVY = {
   applyHvyDocumentDelta,
   createHvyDocumentDelta,
+  decryptDocumentEnvelopeBytes,
   deserializeDocumentBytes,
   deserializeDocumentBytesAsync,
   isHvyDocumentDelta,

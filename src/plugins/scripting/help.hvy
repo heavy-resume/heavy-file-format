@@ -96,6 +96,8 @@ theme:
    tagged child components from a child slot.
    - `handle.append_child(component, config=None, text="", slot="expandable-content")`
    — append a child component and return its handle.
+  - `handle.expand()` — expand the component and its containing reader blocks for
+   the current session without changing its serialized default expansion state.
   
   Header tools:
   

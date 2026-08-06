@@ -96,6 +96,81 @@ test('passive editor fallback renders plain reader content without re-entering A
   expect(expectedOptions).toEqual({ suppressAiEditorDelegation: true });
 });
 
+test('expected result: passive editor grid cells do not apply document slot CSS', () => {
+  const child = {
+    id: 'block-photo',
+    text: 'Photo',
+    schemaMode: false,
+    schema: defaultBlockSchema('text'),
+  } satisfies VisualBlock;
+  const block = {
+    id: 'block-grid',
+    text: '',
+    schemaMode: false,
+    schema: {
+      ...defaultBlockSchema('grid'),
+      gridItems: [{ id: 'photo', css: 'display: none; max-md:order: -1;', block: child }],
+    },
+  } satisfies VisualBlock;
+  const section = createSection([block]);
+  const helpers = {} as ComponentRenderHelpers;
+  const renderer = createEditorRenderer({
+    documentExtension: '.hvy',
+    documentMeta: {},
+    documentSections: [section],
+    showAdvancedEditor: false,
+    addComponentBySection: {},
+    activeEditorBlock: null,
+    aiEditorHostBlock: null,
+    aiEditorHostSectionKey: null,
+    componentPlacement: null,
+    pendingEditorActivation: null,
+    expandableEditorPanels: {},
+    readerExpandableState: {},
+    editorSidebarHelpDismissed: true,
+    currentView: 'editor',
+    responsivePreview: 'full',
+    mobileAdjustmentMode: false,
+    openTemplateDefinitionKeys: [],
+    openTextLineStyleName: null,
+    paragraphStyleRecentNames: [],
+    pdfStylePresets: [],
+    pdfStylePresetId: null,
+  }, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    flattenSections: (sections) => sections,
+    renderReaderBlock: () => '<article>Photo</article>',
+    renderReusableSectionOptions: () => '',
+    renderOption: () => '',
+    resolveBaseComponent: (componentName) => componentName,
+    ensureContainerBlocks: () => {},
+    ensureComponentListBlocks: () => {},
+    ensureExpandableBlocks: () => {},
+    ensureGridItems: () => {},
+    isActiveEditorSectionTitle: () => false,
+    isActiveEditorBlock: () => false,
+    isDefaultUntitledSectionTitle: () => false,
+    formatSectionTitle: (title) => title,
+    findSectionByKey: () => section,
+    buildSectionRenderSequence: (targetSection) => targetSection.blocks.map((targetBlock) => ({ kind: 'block' as const, block: targetBlock })),
+    getComponentDefs: () => [],
+    getSectionDefs: () => [],
+    getThemeConfig: () => ({ colors: {} }),
+    getComponentRenderHelpers: () => helpers,
+    isBuiltinComponent: () => true,
+  });
+
+  const expectedResult = renderer.renderPassiveEditorBlock(section.key, block, [section]);
+
+  expect(expectedResult).toContain('class="reader-grid-cell is-passive-grid-cell"');
+  expect(expectedResult).toContain('grid-column: 1 / span 1;');
+  expect(expectedResult).not.toContain('display: none');
+  expect(expectedResult).not.toContain('order: -1');
+  expect(expectedResult).not.toContain('@container hvy-surface');
+  expect(expectedResult).not.toContain('grid-item-passive-');
+});
+
 test('block meta fields include grid stack width for grid components', () => {
   const block = {
     id: 'block-grid',

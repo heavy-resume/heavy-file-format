@@ -148,11 +148,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                   })}
                 </div>`}
         </div>`
-            : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
+            : `<div class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey
-              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" aria-expanded="false">
+              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="stub" role="button" tabindex="0" aria-expanded="false">
                  ${stubPreview || '<div class="expandable-collapsed-empty">No stub content yet.</div>'}
-               </button>`
+               </div>`
         }
       </section>
       <section class="expandable-part expandable-part-expanded${expandedOpen ? ' is-open' : ' is-closed'}">
@@ -186,11 +186,11 @@ export const renderExpandableEditor: ComponentEditorRenderer = (sectionKey, bloc
                   })}
                 </div>`}
         </div>`
-            : `<button type="button" class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
+            : `<div class="expandable-collapsed-preview expandable-collapsed-preview-button" data-action="toggle-expandable-editor-panel" data-section-key="${helpers.escapeAttr(
                 sectionKey
-              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" aria-expanded="false">
+              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-expandable-panel="expanded" role="button" tabindex="0" aria-expanded="false">
                  ${contentPreview || '<div class="expandable-collapsed-empty">No expanded content yet.</div>'}
-               </button>`
+               </div>`
         }
       </section>
     </div>

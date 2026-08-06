@@ -58,12 +58,14 @@ hvy_version: 0.1
   <!--hvy:expandable:stub {}-->
 
    <!--hvy:text {}-->
-    ## Summary
+    ## <!--hvy:sort-value {"key":"Name"}-->Summary<!--/hvy:sort-value-->
 
   <!--hvy:expandable:content {}-->
 
    <!--hvy:text {}-->
     Expanded detail
+
+   <!--hvy:button {"buttonLabel":"Nested action"}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
@@ -75,9 +77,14 @@ hvy_version: 0.1
 
   await expect(activeBlock.locator('[data-field="block-expandable-stub-lock"]')).toHaveCount(0);
   await expect(activeBlock.locator('[data-field="block-expandable-content-lock"]')).toHaveCount(0);
+  await expect(activeBlock.locator('button button')).toHaveCount(0);
+  await expect(activeBlock.locator('> .editor-block-done-row')).toBeVisible();
 
   await activeBlock.locator('[data-expandable-panel="stub"]').first().click();
-  await activeBlock.locator('[data-expandable-panel="expanded"]').first().click();
+  const expandedPreview = activeBlock.locator('.expandable-part-expanded .expandable-collapsed-preview-button');
+  await expect(expandedPreview).toHaveJSProperty('tagName', 'DIV');
+  await expandedPreview.focus();
+  await page.keyboard.press('Enter');
 
   await expect(activeBlock.getByRole('button', { name: 'Expandable stub component type' })).toBeVisible();
   await expect(activeBlock.getByRole('button', { name: 'Expandable content component type' })).toBeVisible();
@@ -150,8 +157,11 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first().click();
+  const expandablePassive = page.locator('.editor-block-passive', { has: page.locator('.expandable-reader') }).first();
+  await expandablePassive.getByRole('heading', { name: 'Summary' }).click();
   const expandableEditor = page.locator('.editor-block', { has: page.locator('.expand-chooser-grid') }).first();
+  await expect(expandableEditor).toBeVisible();
+  await expect(expandableEditor.locator('.rich-editor')).toHaveCount(0);
   await expandableEditor.locator('[data-expandable-panel="stub"]').first().click();
 
   await expandableEditor.locator('.expandable-part-stub .editor-block-passive').first().click();
@@ -3819,7 +3829,6 @@ hvy_version: 0.1
   );
   await expect(listEditor.locator('> [data-action="remove-block"]')).toBeVisible();
   await expect(expandableEditor.locator('> [data-action="remove-block"]')).toBeVisible();
-
   await expandableEditor.locator('> [data-action="remove-block"]').click();
   await page.getByRole('button', { name: 'Delete' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();

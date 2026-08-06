@@ -80,9 +80,9 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             placement: 'after',
             targetGridItemId: item.id,
           });
-          const responsiveClass = getGridItemResponsiveClass(block.id, item.id);
-          const responsiveCss = compileSurfaceResponsiveCss(item.css, `.${responsiveClass}`, state.document.meta);
-          return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="grid-field-row ${helpers.escapeAttr(responsiveClass)}"${responsiveCss.inlineCss ? ` style="${helpers.escapeAttr(responsiveCss.inlineCss)}"` : ''}>
+          // Cell CSS belongs to the rendered document. Applying it to this
+          // authoring row can hide or reorder the controls away from source order.
+          return `<div class="grid-field-row">
           ${beforePlacementTarget}
           <div class="grid-field-head">
             <div class="section-drag-title">

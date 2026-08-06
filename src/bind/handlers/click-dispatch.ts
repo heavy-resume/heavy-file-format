@@ -15,6 +15,7 @@ import { clearHideIfUnmodifiedForSectionPath, clearHideIfUnmodifiedForSections, 
 import { isAiEditablePlaceholderTextBlock } from '../../ai-placeholder';
 import { logClickTrace } from '../click-trace';
 import { capturePaneScroll } from '../../scroll';
+import { resolveAppActionTarget } from './click-actions';
 
 interface RichToolbarSelection {
   range: Range;
@@ -131,7 +132,7 @@ export function bindClickDispatch(app: HTMLElement): void {
 
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const actionButton = target.closest<HTMLElement>('[data-action]');
+    const actionButton = resolveAppActionTarget(target);
     logClickTrace(event, 'click-dispatch:bubble:enter', {
       action: actionButton?.dataset.action ?? null,
       componentPlacement: Boolean(state.componentPlacement),
@@ -301,7 +302,7 @@ function handlePassiveEditorEnumActivationClick(app: HTMLElement, event: MouseEv
     return false;
   }
   const target = event.target as HTMLElement | null;
-  const enumValue = target?.closest<HTMLElement>('.editor-block-passive [data-hvy-sort-value="true"][data-sort-value-key]');
+  const enumValue = target?.closest<HTMLElement>('.editor-block-passive .hvy-sort-value-enum[data-hvy-sort-value="true"][data-sort-value-key]');
   const passiveBlock = enumValue?.closest<HTMLElement>('.editor-block-passive[data-action="activate-block"]');
   logClickTrace(event, 'click-dispatch:capture:passive-enum-candidate', {
     enumValue,

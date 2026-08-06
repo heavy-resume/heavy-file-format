@@ -30,7 +30,6 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import { areTablesEnabled } from '../reference-config';
 import { sanitizeInlineCss } from '../css-sanitizer';
-import { compileSurfaceResponsiveCss } from '../surface-responsive-css';
 import { applyWorkspaceLinkRendering } from '../workspace-links';
 import { SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugins/scripting/version';
@@ -922,12 +921,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         .map((item, index) => {
           const columnIndex = columns <= 1 ? 1 : (index % columns) + 1;
           const gridColumn = columns <= 1 ? '1 / -1' : `${columnIndex} / span 1`;
-          const responsiveClass = `grid-item-passive-${block.id.replace(/[^a-z0-9_-]/gi, '-')}-${item.id.replace(/[^a-z0-9_-]/gi, '-')}`;
-          const responsiveCss = compileSurfaceResponsiveCss(item.css, `.${responsiveClass}`, state.documentMeta);
-          const cellStyle = [
-            `grid-column: ${gridColumn};`,
-            responsiveCss.inlineCss,
-          ].filter(Boolean).join(' ');
+          // Keep document cell CSS off passive editor scaffolding because
+          // placement controls share these cells. Reader rendering owns that CSS.
+          const cellStyle = `grid-column: ${gridColumn};`;
           const beforePlacementTarget = index === 0 ? leadingPlacementTarget : '';
           const trailingPlacementTarget = state.componentPlacement && !block.schema.lock
             ? renderComponentPlacementTarget({
@@ -938,7 +934,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               targetGridItemId: item.id,
             })
             : '';
-          return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div class="reader-grid-cell is-passive-grid-cell ${deps.escapeAttr(responsiveClass)}" data-grid-item-id="${deps.escapeAttr(item.id)}" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
+          return `<div class="reader-grid-cell is-passive-grid-cell" data-grid-item-id="${deps.escapeAttr(item.id)}" style="${deps.escapeAttr(cellStyle)}">${beforePlacementTarget}${renderPassiveEditorBlock(
             sectionKey,
             item.block,
             rootSections

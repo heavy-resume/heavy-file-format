@@ -192,6 +192,15 @@ export function bindKeydown(app: HTMLElement): void {
       return;
     }
 
+    if (
+      target.matches('.expandable-collapsed-preview-button[data-action="toggle-expandable-editor-panel"]')
+      && (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault();
+      target.click();
+      return;
+    }
+
     if (target instanceof HTMLElement && target.dataset.field === 'text-fill-in-value' && event.key === 'Enter') {
       event.preventDefault();
       if (event.metaKey || event.ctrlKey) {

@@ -198,13 +198,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <div class="hvy-nav-title">Navigation</div>
         <div class="hvy-nav-list">
           ${items
-            .map(
-              (section) =>
-                `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
-                  deps.formatSectionTitle(section.title)
-                )}</button>`
-            )
-            .join('')}
+          .map(
+            (section) =>
+              `<button type="button" class="hvy-nav-item" data-nav-id="${deps.escapeAttr(deps.getSectionId(section))}" data-level="${section.level}">${deps.escapeHtml(
+                deps.formatSectionTitle(section.title)
+              )}</button>`
+          )
+          .join('')}
         </div>
       `;
     });
@@ -221,8 +221,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return getActiveSearchFilterContext().filtering
           ? '<div class="reader-search-empty"><div>No matches in this filtered view.</div></div>'
           : topLevelAddGhost
-          ? `<div${renderResponsiveSurfaceAttrs('')}>${renderSurfaceHeadingStyles()}<div class="reader-document-body">${topLevelAddGhost}</div></div>`
-          : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
+            ? `<div${renderResponsiveSurfaceAttrs('')}>${renderSurfaceHeadingStyles()}<div class="reader-document-body">${topLevelAddGhost}</div></div>`
+            : '<div class="reader-empty-state" role="status">No content to display yet.</div>';
       }
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
@@ -295,8 +295,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       <div class="viewer-sidebar-help-title">Contains</div>
       <ul>
         ${sidebarSections
-          .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
-          .join('')}
+        .map((section) => `<li title="${deps.escapeAttr(deps.formatSectionTitle(section.title))}">${deps.escapeHtml(deps.formatSectionTitle(section.title))}</li>`)
+        .join('')}
       </ul>
     </div>`;
   }
@@ -362,10 +362,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const toggleAttrs = modifiers.has('collapse')
       ? (sectionExpanded ? '' : ` ${viewCollapseAttrs}`)
       : section.contained && sectionExpanded
-      ? ''
-      : section.contained
-      ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
-      : '';
+        ? ''
+        : section.contained
+          ? ` data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`
+          : '';
 
     const suppressSectionToggle = state.currentView === 'ai' && state.activeEditorBlock?.sectionKey === section.key;
     const header = !suppressSectionToggle && (section.contained || modifiers.has('collapse'))
@@ -373,10 +373,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <header class="reader-section-head" aria-label="Section controls">
           <div class="reader-head-actions">
             <button type="button" class="tiny toggle-expand-button" ${modifiers.has('collapse')
-              ? viewCollapseAttrs
-              : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${
-          sectionExpanded ? 'Collapse section' : 'Expand section'
-        }">${sectionExpanded ? '-' : '+'}</button>
+        ? viewCollapseAttrs
+        : `data-reader-action="toggle-expand" data-section-key="${deps.escapeAttr(section.key)}"`} aria-label="${sectionExpanded ? 'Collapse section' : 'Expand section'
+      }">${sectionExpanded ? '-' : '+'}</button>
           </div>
         </header>
       `
@@ -460,7 +459,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       : '';
     const anchor = getReaderButtonAnchor(section, block);
     const visibleState = block.schema.visibleScript.trim() ? 'pending' : 'visible';
-    const blockStyle = sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
+    // Image CSS styles the rendered <img> itself. Reapplying it to the reader
+    // shell creates a second sized, bordered image frame around the image.
+    const blockStyle = base === 'image'
+      ? ''
+      : sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
     const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string, extraAttrs = ''): string => {
@@ -513,10 +516,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const readerBlock = modifiers.has('collapse')
         ? { ...block, schema: { ...block.schema, containerExpanded: false } } as VisualBlock
         : forceSearchExpanded
-        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
-        : prioritized
-        ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
-        : block;
+          ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
+          : prioritized
+            ? { ...block, schema: { ...block.schema, containerExpanded: true } } as VisualBlock
+            : block;
       const body = renderContainerReader(section, readerBlock, helpers);
       if (!body.trim()) {
         return '';
@@ -590,15 +593,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     return `<div class="ghost-section-card add-ghost compact-add-component-ghost">
       ${renderAddComponentPicker({
-        id: `ai-section:${section.key}`,
-        action: 'add-block',
-        sectionKey: section.key,
-        label: 'Section component type',
-      }, {
-        escapeAttr: deps.escapeAttr,
-        escapeHtml: deps.escapeHtml,
-        getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
-      })}
+      id: `ai-section:${section.key}`,
+      action: 'add-block',
+      sectionKey: section.key,
+      label: 'Section component type',
+    }, {
+      escapeAttr: deps.escapeAttr,
+      escapeHtml: deps.escapeHtml,
+      getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
+    })}
     </div>`;
   }
 
@@ -744,9 +747,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const componentId = block.schema.id.trim();
     const buttons = componentId
       ? section.blocks.filter((candidate) =>
-          deps.resolveBaseComponent(candidate.schema.component) === 'button'
-          && candidate.schema.buttonPositionTargetId.trim() === componentId
-        )
+        deps.resolveBaseComponent(candidate.schema.component) === 'button'
+        && candidate.schema.buttonPositionTargetId.trim() === componentId
+      )
       : [];
     if (buttons.length === 0) {
       return { className: '', attrs: '', overlay: '' };
@@ -975,131 +978,131 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       states: Array<{ id: string; label: string; variables: string[] }>;
       html: string;
     }> = [
-      {
-        id: 'container',
-        label: 'Container',
-        detail: 'Reader container shell, title, collapsed preview',
-        className: 'theme-preview-container-card',
-        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
-        states: [
-          { id: 'collapsed', label: 'Collapsed', variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-text-alt'] },
-          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
-        ],
-        html: containerPreview,
-      },
-      {
-        id: 'component-list',
-        label: 'Component List',
-        detail: 'Reader controls, hover state, and editor ghost input',
-        className: 'theme-preview-component-list-card',
-        variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-ghost-border', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
-        states: [
-          { id: 'controls', label: 'Controls', variables: ['--hvy-surface-alt', '--hvy-border-input', '--hvy-shadow', '--hvy-text-muted'] },
-          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
-          { id: 'ghost', label: 'Ghost', variables: ['--hvy-surface-alt', '--hvy-ghost-border', '--hvy-text-muted'] },
-        ],
-        html: `${componentListPreview}${componentListHoverPreview}${ghostInputPreview}`,
-      },
-      {
-        id: 'button',
-        label: 'Button',
-        detail: 'Primary button rest and hover states',
-        className: 'theme-preview-button-card',
-        variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
-        states: [
-          { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
-          { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
-        ],
-        html: `${buttonRestPreview}${buttonHoverPreview}`,
-      },
-      {
-        id: 'text',
-        label: 'Text',
-        detail: 'Rich text, fill-ins, quotes, and AI target state',
-        className: 'theme-preview-text-card',
-        variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
-        states: [
-          { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
-          { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
-          { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
-        ],
-        html: `<div class="theme-demo-text">
+        {
+          id: 'container',
+          label: 'Container',
+          detail: 'Reader container shell, title, collapsed preview',
+          className: 'theme-preview-container-card',
+          variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+          states: [
+            { id: 'collapsed', label: 'Collapsed', variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-text-alt'] },
+            { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+          ],
+          html: containerPreview,
+        },
+        {
+          id: 'component-list',
+          label: 'Component List',
+          detail: 'Reader controls, hover state, and editor ghost input',
+          className: 'theme-preview-component-list-card',
+          variables: ['--hvy-surface', '--hvy-surface-alt', '--hvy-border-input', '--hvy-border-alt', '--hvy-ghost-border', '--hvy-text', '--hvy-text-muted', '--hvy-xref-card-hover-bg', '--hvy-shadow'],
+          states: [
+            { id: 'controls', label: 'Controls', variables: ['--hvy-surface-alt', '--hvy-border-input', '--hvy-shadow', '--hvy-text-muted'] },
+            { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-border-alt', '--hvy-text'] },
+            { id: 'ghost', label: 'Ghost', variables: ['--hvy-surface-alt', '--hvy-ghost-border', '--hvy-text-muted'] },
+          ],
+          html: `${componentListPreview}${componentListHoverPreview}${ghostInputPreview}`,
+        },
+        {
+          id: 'button',
+          label: 'Button',
+          detail: 'Primary button rest and hover states',
+          className: 'theme-preview-button-card',
+          variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-border-alt', '--hvy-focus', '--hvy-shadow-md'],
+          states: [
+            { id: 'rest', label: 'Rest', variables: ['--hvy-button-bg', '--hvy-button-text', '--hvy-border-alt'] },
+            { id: 'hover', label: 'Hover', variables: ['--hvy-button-hover-bg', '--hvy-button-hover-text', '--hvy-focus', '--hvy-shadow-md'] },
+          ],
+          html: `${buttonRestPreview}${buttonHoverPreview}`,
+        },
+        {
+          id: 'text',
+          label: 'Text',
+          detail: 'Rich text, fill-ins, quotes, and AI target state',
+          className: 'theme-preview-text-card',
+          variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-surface', '--hvy-surface-alt', '--hvy-surface-tint', '--hvy-border-alt', '--hvy-focus-ring', '--hvy-focus-glow'],
+          states: [
+            { id: 'rest', label: 'Rest', variables: ['--hvy-text', '--hvy-text-alt', '--hvy-text-muted'] },
+            { id: 'fill-in', label: 'Fill-in', variables: ['--hvy-text', '--hvy-text-muted', '--hvy-focus-ring'] },
+            { id: 'target', label: 'Target', variables: ['--hvy-surface', '--hvy-surface-tint', '--hvy-focus-ring', '--hvy-focus-glow'] },
+          ],
+          html: `<div class="theme-demo-text">
           ${textPreview}
           ${fillInPreview}
           <button type="button" class="theme-demo-target theme-demo-ai-target" data-theme-demo-state="target" data-action="theme-filter-to-colors" data-theme-filter="--hvy-surface --hvy-surface-tint --hvy-focus-ring --hvy-focus-glow" title="Filter to highlighted text target colors">AI target</button>
         </div>`,
-      },
-      {
-        id: 'xref',
-        label: 'Xref Card',
-        detail: 'Reference card rest, invalid, and hover colors',
-        className: 'theme-preview-xref-card',
-        variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-border-alt', '--hvy-focus', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-shadow', '--hvy-shadow-md'],
-        states: [
-          { id: 'rest', label: 'Rest', variables: ['--hvy-xref-card-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'] },
-          { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-focus', '--hvy-shadow-md'] },
-          { id: 'invalid', label: 'Invalid', variables: ['--hvy-xref-card-bg', '--hvy-border-alt', '--hvy-text-muted'] },
-        ],
-        html: `<div class="theme-demo-xref-stack">${xrefPreview}${xrefHoverPreview}${xrefInvalidPreview}</div>`,
-      },
-      {
-        id: 'highlights',
-        label: 'Highlights',
-        detail: 'Search result and xref jump states',
-        className: 'theme-preview-highlight-card',
-        variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
-        states: [
-          { id: 'search', label: 'Search', variables: ['--hvy-highlight-1'] },
-          { id: 'active', label: 'Active', variables: ['--hvy-highlight-2'] },
-          { id: 'jump', label: 'Xref Jump', variables: ['--hvy-button-bg', '--hvy-surface'] },
-        ],
-        html: `<div class="theme-demo-highlight">
+        },
+        {
+          id: 'xref',
+          label: 'Xref Card',
+          detail: 'Reference card rest, invalid, and hover colors',
+          className: 'theme-preview-xref-card',
+          variables: ['--hvy-xref-card-bg', '--hvy-xref-card-hover-bg', '--hvy-border', '--hvy-border-alt', '--hvy-focus', '--hvy-text', '--hvy-text-alt', '--hvy-text-muted', '--hvy-shadow', '--hvy-shadow-md'],
+          states: [
+            { id: 'rest', label: 'Rest', variables: ['--hvy-xref-card-bg', '--hvy-border', '--hvy-text', '--hvy-text-alt', '--hvy-shadow'] },
+            { id: 'hover', label: 'Hover', variables: ['--hvy-xref-card-hover-bg', '--hvy-focus', '--hvy-shadow-md'] },
+            { id: 'invalid', label: 'Invalid', variables: ['--hvy-xref-card-bg', '--hvy-border-alt', '--hvy-text-muted'] },
+          ],
+          html: `<div class="theme-demo-xref-stack">${xrefPreview}${xrefHoverPreview}${xrefInvalidPreview}</div>`,
+        },
+        {
+          id: 'highlights',
+          label: 'Highlights',
+          detail: 'Search result and xref jump states',
+          className: 'theme-preview-highlight-card',
+          variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
+          states: [
+            { id: 'search', label: 'Search', variables: ['--hvy-highlight-1'] },
+            { id: 'active', label: 'Active', variables: ['--hvy-highlight-2'] },
+            { id: 'jump', label: 'Xref Jump', variables: ['--hvy-button-bg', '--hvy-surface'] },
+          ],
+          html: `<div class="theme-demo-highlight">
           <button type="button" class="theme-demo-target" data-theme-demo-state="search" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-1" title="Filter to inline highlight colors">Filtered match</button>
           <button type="button" class="theme-demo-target theme-demo-highlight-active" data-theme-demo-state="active" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-2" title="Filter to active search result colors">active result</button>
           <button type="button" class="theme-demo-target theme-demo-highlight-jump" data-theme-demo-state="jump" data-action="theme-filter-to-colors" data-theme-filter="--hvy-button-bg --hvy-surface" title="Filter to xref jump flash colors">xref jump</button>
         </div>`,
-      },
-      {
-        id: 'table',
-        label: 'Table',
-        detail: 'Header and alternating rows',
-        className: 'theme-preview-table-card',
-        variables: ['--hvy-table-header', '--hvy-table-row-bg-1', '--hvy-table-row-bg-2', '--hvy-border-input', '--hvy-text'],
-        states: [
-          { id: 'header', label: 'Header', variables: ['--hvy-table-header', '--hvy-text', '--hvy-border-input'] },
-          { id: 'row-1', label: 'Row 1', variables: ['--hvy-table-row-bg-1', '--hvy-text', '--hvy-border-input'] },
-          { id: 'row-2', label: 'Row 2', variables: ['--hvy-table-row-bg-2', '--hvy-text', '--hvy-border-input'] },
-        ],
-        html: `<div class="theme-demo-table-stack">${tablePreview}${tableRowOnePreview}${tableRowTwoPreview}</div>`,
-      },
-      {
-        id: 'diagnostics',
-        label: 'Diagnostics',
-        detail: 'Reader warnings and raw editor errors',
-        className: 'theme-preview-diagnostics-card',
-        variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-danger', '--hvy-surface', '--hvy-border', '--hvy-text-alt'],
-        states: [
-          { id: 'warning', label: 'Warning', variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text'] },
-          { id: 'error', label: 'Error', variables: ['--hvy-danger', '--hvy-surface', '--hvy-border'] },
-        ],
-        html: `<div class="theme-demo-diagnostics">
+        },
+        {
+          id: 'table',
+          label: 'Table',
+          detail: 'Header and alternating rows',
+          className: 'theme-preview-table-card',
+          variables: ['--hvy-table-header', '--hvy-table-row-bg-1', '--hvy-table-row-bg-2', '--hvy-border-input', '--hvy-text'],
+          states: [
+            { id: 'header', label: 'Header', variables: ['--hvy-table-header', '--hvy-text', '--hvy-border-input'] },
+            { id: 'row-1', label: 'Row 1', variables: ['--hvy-table-row-bg-1', '--hvy-text', '--hvy-border-input'] },
+            { id: 'row-2', label: 'Row 2', variables: ['--hvy-table-row-bg-2', '--hvy-text', '--hvy-border-input'] },
+          ],
+          html: `<div class="theme-demo-table-stack">${tablePreview}${tableRowOnePreview}${tableRowTwoPreview}</div>`,
+        },
+        {
+          id: 'diagnostics',
+          label: 'Diagnostics',
+          detail: 'Reader warnings and raw editor errors',
+          className: 'theme-preview-diagnostics-card',
+          variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text', '--hvy-danger', '--hvy-surface', '--hvy-border', '--hvy-text-alt'],
+          states: [
+            { id: 'warning', label: 'Warning', variables: ['--hvy-warning-bg', '--hvy-warning-border', '--hvy-warning-text'] },
+            { id: 'error', label: 'Error', variables: ['--hvy-danger', '--hvy-surface', '--hvy-border'] },
+          ],
+          html: `<div class="theme-demo-diagnostics">
           <button type="button" class="theme-demo-target theme-demo-warning" data-theme-demo-state="warning" data-action="theme-filter-to-colors" data-theme-filter="--hvy-warning-bg --hvy-warning-border --hvy-warning-text" title="Filter to reader warning colors">Warning</button>
           <button type="button" class="theme-demo-target theme-demo-error" data-theme-demo-state="error" data-action="theme-filter-to-colors" data-theme-filter="--hvy-danger --hvy-surface --hvy-border" title="Filter to raw editor error colors">Error</button>
         </div>`,
-      },
-      {
-        id: 'code',
-        label: 'Code',
-        detail: 'Text code block and syntax colors',
-        className: 'theme-preview-code-card',
-        variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'],
-        states: [
-          { id: 'block', label: 'Block', variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-border-input'] },
-          { id: 'syntax', label: 'Syntax', variables: ['--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'] },
-        ],
-        html: `${codePreview}${codeSyntaxPreview}`,
-      },
-    ];
+        },
+        {
+          id: 'code',
+          label: 'Code',
+          detail: 'Text code block and syntax colors',
+          className: 'theme-preview-code-card',
+          variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'],
+          states: [
+            { id: 'block', label: 'Block', variables: ['--hvy-code-bg', '--hvy-code-text', '--hvy-code-muted', '--hvy-border-input'] },
+            { id: 'syntax', label: 'Syntax', variables: ['--hvy-code-string', '--hvy-code-builtin', '--hvy-code-keyword', '--hvy-code-function', '--hvy-code-number'] },
+          ],
+          html: `${codePreview}${codeSyntaxPreview}`,
+        },
+      ];
     const previewPicker = previewItems.map((item, index) => `<button
       type="button"
       class="theme-component-picker-button${index === 0 ? ' is-active' : ''}"
@@ -1230,11 +1233,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <output>${deps.escapeHtml(String(Math.round(alphaValue * 100)))}</output>
           </label>
           ${isOverridden
-            ? `<span class="theme-color-reset-group">
+          ? `<span class="theme-color-reset-group">
                 <button type="button" class="ghost theme-color-action" data-action="theme-reset-color" data-color-name="${deps.escapeAttr(name)}" title="Reset to default">Reset</button>
                 <span class="theme-color-reset-swatch" style="${resetValue ? `background: ${deps.escapeAttr(resetValue)};` : ''}" title="${deps.escapeAttr(`Reset value: ${resetValue}`)}" aria-hidden="true"></span>
               </span>`
-            : '<span class="theme-color-action theme-color-default muted">default</span>'}
+          : '<span class="theme-color-action theme-color-default muted">default</span>'}
         </div>
       `;
     }).join('');
@@ -1274,11 +1277,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             Overrides are saved with the document.
           </p>
           ${includePalettePicker
-            ? `<div class="theme-palette-grid" aria-label="Theme palettes">
+        ? `<div class="theme-palette-grid" aria-label="Theme palettes">
                 ${documentPaletteCard}
                 ${paletteCards}
               </div>`
-            : ''}
+        : ''}
           <div class="theme-component-preview-picker" aria-label="Theme component preview picker">
             ${previewPicker}
           </div>
@@ -1300,7 +1303,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           </div>
           <div class="theme-filter-empty muted" hidden>No matching theme colors.</div>
           ${customRows
-            ? `<div class="theme-custom-section">
+        ? `<div class="theme-custom-section">
                 <div class="theme-custom-head">
                   <h4>Custom Variables</h4>
                   <p class="muted">Use raw CSS variable names for custom theme entries.</p>
@@ -1309,7 +1312,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   ${customRows}
                 </div>
               </div>`
-            : ''}
+        : ''}
           <div class="link-inline-actions">
             ${includeModalActions ? '<button type="button" class="secondary" data-modal-action="close">Done</button>' : ''}
           </div>
@@ -1323,10 +1326,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <div class="modal-overlay" data-modal-action="close-overlay"></div>
         <section class="modal-panel">
           ${renderThemeEditor({
-            advanced: state.themeModalMode === 'advanced',
-            includePalettePicker: true,
-            includeModalActions: true,
-          })}
+      advanced: state.themeModalMode === 'advanced',
+      includePalettePicker: true,
+      includeModalActions: true,
+    })}
         </section>
       </div>
     `;
@@ -1391,7 +1394,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${modal.status ? `<p class="pdf-template-import-status">${deps.escapeHtml(modal.status)}</p>` : ''}
             ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER
-              ? `<ol class="pdf-template-import-stepper">
+          ? `<ol class="pdf-template-import-stepper">
                   ${modal.steps.map((step) => `
                     <li class="pdf-template-import-step is-${deps.escapeAttr(step.status)}">
                       <span class="pdf-template-import-step-state">${deps.escapeHtml(formatPdfTemplateImportStepStatus(step.status))}</span>
@@ -1400,15 +1403,15 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     </li>
                   `).join('')}
                 </ol>`
-              : ''}
+          : ''}
             ${hasPdfTemplateImportTokenUsage(modal.totalTokenUsage)
-              ? `<p class="pdf-template-import-token-total">${deps.escapeHtml(`Total ${formatPdfTemplateImportTokenUsage(modal.totalTokenUsage)}`)}</p>`
-              : ''}
+          ? `<p class="pdf-template-import-token-total">${deps.escapeHtml(`Total ${formatPdfTemplateImportTokenUsage(modal.totalTokenUsage)}`)}</p>`
+          : ''}
             ${ENABLE_PDF_TEMPLATE_IMPORT_STEPPER && modal.awaitingLlmStep
-              ? `<div class="pdf-template-import-next-step">
+          ? `<div class="pdf-template-import-next-step">
                   <button type="button" class="secondary" data-modal-action="pdf-template-import-next-llm">Run Next LLM Step</button>
                 </div>`
-              : ''}
+          : ''}
             ${renderPdfTemplateImportRequestLog(modal.requestLog)}
             <label class="pdf-template-import-picker">
               <span>PHVY Template</span>
@@ -1447,24 +1450,24 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             <p class="muted">${help}</p>
             ${existingName
-              ? `<div class="reusable-existing-option">
+          ? `<div class="reusable-existing-option">
                   <div>
                     <strong>${deps.escapeHtml(existingName)}</strong>
                     <span>Update the existing ${state.reusableSaveModal.kind === 'component' ? 'component' : 'section'} template definition.</span>
                   </div>
                   <button type="button" class="secondary" data-modal-action="update-reusable">Update Existing</button>
                 </div>`
-              : ''}
+          : ''}
             <label>
               <span>${existingName ? 'New Name' : 'Name'}</span>
               <input id="reusableNameInput" value="${deps.escapeAttr(state.reusableSaveModal.draftName)}" placeholder="Callout, Pricing Table, FAQ Section..." autofocus />
             </label>
             ${existingName
-              ? `<label>
+          ? `<label>
                   <span>Flavor Description</span>
                   <textarea id="reusableFlavorDescriptionInput" rows="3" placeholder="Describe when this flavor should be used."></textarea>
                 </label>`
-              : ''}
+          : ''}
             <div class="link-inline-actions reusable-save-actions">
               <button type="button" class="ghost" data-modal-action="close">Cancel</button>
               ${existingName ? '<button type="button" class="ghost" data-modal-action="add-reusable-flavor">Add Flavor</button>' : ''}
@@ -1599,22 +1602,22 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
             ${modal.mode === 'raw'
-              ? `<label class="reusable-definition-raw-field">
+          ? `<label class="reusable-definition-raw-field">
                   <span>Header Definition YAML</span>
                   <textarea id="reusableDefinitionRawInput" rows="18" spellcheck="false">${deps.escapeHtml(rawDraft)}</textarea>
                 </label>`
-              : `<div class="reusable-definition-editor">
+          : `<div class="reusable-definition-editor">
                   ${componentTemplate
-                    ? `<div class="reusable-definition-hvy-surface">
+            ? `<div class="reusable-definition-hvy-surface">
                         ${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}
                         <details class="meta-expandable-field">
                           <summary><span>Template Meta</span></summary>
                           ${deps.renderBlockMetaFields(componentTemplateSectionKey, componentTemplate)}
                         </details>
                       </div>`
-                    : ''}
+            : ''}
                   ${sectionTemplate
-                    ? `<div class="reusable-definition-section-surface">
+            ? `<div class="reusable-definition-section-surface">
                         <label>
                           <span>Section Title</span>
                           <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
@@ -1626,7 +1629,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(sectionTemplateKey)}">Meta</button>
                         ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
                       </div>`
-                    : ''}
+            : ''}
                 </div>`}
           </section>
         </div>
@@ -1654,9 +1657,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 <button type="button" class="section-template-flavor-option" data-modal-action="choose-section-template-flavor" data-section-template-name="${deps.escapeAttr(definition.name)}" data-section-template-flavor="${deps.escapeAttr(flavor.name)}">
                   <span class="section-template-flavor-name">${deps.escapeHtml(flavor.name)}</span>
                   ${flavor.description?.trim()
-                    ? `<span class="section-template-flavor-description">${deps.escapeHtml(flavor.description.trim())}</span>`
-                    : '<span class="section-template-flavor-description muted">No description.</span>'
-                  }
+          ? `<span class="section-template-flavor-description">${deps.escapeHtml(flavor.description.trim())}</span>`
+          : '<span class="section-template-flavor-description muted">No description.</span>'
+        }
                 </button>
               `).join('')}
             </div>
@@ -1747,8 +1750,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               <h3>${deps.escapeHtml(rowModal.tableName)} / ${deps.escapeHtml(String(rowModal.rowId))}</h3>
               <div class="modal-head-actions">
                 ${rowModal.readOnly
-                  ? ''
-                  : `<div class="editor-mode-toggle">
+          ? ''
+          : `<div class="editor-mode-toggle">
                       <button type="button" class="${rowModal.mode === 'basic' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="basic">Basic</button>
                       <button type="button" class="${rowModal.mode === 'advanced' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="advanced">Advanced</button>
                       <button type="button" class="${rowModal.mode === 'raw' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="raw">Raw</button>
@@ -1758,15 +1761,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>
             <p class="muted">
               ${rowModal.readOnly
-                ? 'Component(s) attached to this row.'
-                : 'Add component(s) to this row.'}
+          ? 'Component(s) attached to this row.'
+          : 'Add component(s) to this row.'}
             </p>
             ${rowModal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(rowModal.error)}</div>` : ''}
-            ${
-              rowModal.readOnly
-                ? ''
-                : rowModal.mode === 'raw'
-                ? `<label>
+            ${rowModal.readOnly
+          ? ''
+          : rowModal.mode === 'raw'
+            ? `<label>
                     <span>Attached HVY</span>
                     <textarea id="sqliteRowComponentRawInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(rowModal.rawDraft)}</textarea>
                   </label>
@@ -1775,13 +1777,13 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
                     <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
                   </div>`
-                : attachedBlocks.length > 0
-                ? `<div class="sqlite-row-component-modal-stack">
+            : attachedBlocks.length > 0
+              ? `<div class="sqlite-row-component-modal-stack">
                     ${attachedBlocks.map((block) => deps.renderEditorBlock(rowModal.sectionKey, block)).join('')}
                   </div>
                   <div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
-                    rowModal.sectionKey
-                  )}">
+                rowModal.sectionKey
+              )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
@@ -1800,9 +1802,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                     <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
                     <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
                   </div>`
-                : `<div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
-                    state.sqliteRowComponentModal.sectionKey
-                  )}">
+              : `<div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                state.sqliteRowComponentModal.sectionKey
+              )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>
                     <label class="ghost-component-picker">
@@ -1819,22 +1821,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
                   </div>`
-            }
-            ${
-              (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
-                ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
-                    .map(
-                      (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}">
+        }
+            ${(rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks).length > 0
+          ? (rowModal.mode === 'raw' ? rawPreviewBlocks : attachedBlocks)
+            .map(
+              (block) => `<div class="reader-block slot-center" style="${deps.escapeAttr(sanitizeInlineCss(block.schema.css))}">
                         ${renderReaderBlock(section, block)}
                       </div>`
-                    )
-                    .join('')
-                : rowModal.readOnly
-                ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
-                : rowModal.mode === 'raw'
-                ? '<div class="plugin-placeholder">Enter valid HVY fragments to preview them here.</div>'
-                : ''
-            }
+            )
+            .join('')
+          : rowModal.readOnly
+            ? '<div class="plugin-placeholder">No attached component found for this row.</div>'
+            : rowModal.mode === 'raw'
+              ? '<div class="plugin-placeholder">Enter valid HVY fragments to preview them here.</div>'
+              : ''
+        }
           </section>
         </div>
       `;
@@ -1919,12 +1920,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           </div>
           <div class="caption-text-modal-editor">
             ${helpers.renderRichToolbar(modal.target.sectionKey, modal.target.blockId, {
-              field: 'caption-rich',
-              includeAlign: true,
-              align,
-              currentMarkdown: draft.text,
-              textLineStyles: helpers.getTextLineStyles?.() ?? {},
-            })}
+      field: 'caption-rich',
+      includeAlign: true,
+      align,
+      currentMarkdown: draft.text,
+      textLineStyles: helpers.getTextLineStyles?.() ?? {},
+    })}
             <div
               class="rich-editor caption-rich-editor"
               contenteditable="true"
@@ -1960,8 +1961,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         <section class="modal-panel section-meta-modal">
           <div class="modal-head">
             <h3 id="modalTitle">Section Meta: ${deps.escapeHtml(deps.formatSectionTitle(section.title))} <code>#${deps.escapeHtml(
-              deps.getSectionId(section)
-            )}</code></h3>
+      deps.getSectionId(section)
+    )}</code></h3>
             <div class="modal-head-actions">
               <button
                 type="button"
@@ -1993,18 +1994,17 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             <label>
               <span>Tags</span>
               ${renderTagEditor(
-                'section-tags',
-                section.tags,
-                { sectionKey: section.key, placeholder: 'Add a tag' },
-                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-              )}
+      'section-tags',
+      section.tags,
+      { sectionKey: section.key, placeholder: 'Add a tag' },
+      { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
+    )}
             </label>
             <label>
-              <span class="description-label-with-action">Description${
-                section.description.trim()
-                  ? ''
-                  : ` <button type="button" class="ghost inline-generate-description" data-action="generate-section-description" data-section-key="${deps.escapeAttr(section.key)}">Generate</button>`
-              }</span>
+              <span class="description-label-with-action">Description${section.description.trim()
+        ? ''
+        : ` <button type="button" class="ghost inline-generate-description" data-action="generate-section-description" data-section-key="${deps.escapeAttr(section.key)}">Generate</button>`
+      }</span>
               <textarea
                 rows="3"
                 data-section-key="${deps.escapeAttr(section.key)}"

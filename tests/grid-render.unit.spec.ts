@@ -111,6 +111,24 @@ test('grid editor renders a newly added blank text item without reading other co
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
+test('expected result: grid editor stores cell CSS without applying it to editor rows', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'photo',
+    css: 'display: none; max-md:order: -1;',
+    block: createEmptyBlock('image'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
+
+  expect(expectedResult).toContain('data-field="block-grid-item-css"');
+  expect(expectedResult).toContain('display: none; max-md:order: -1;');
+  expect(expectedResult).toContain('<div class="grid-field-row">');
+  expect(expectedResult).not.toContain('@container hvy-surface');
+  expect(expectedResult).not.toContain('class="grid-field-row grid-item-responsive-');
+  expect(expectedResult).not.toContain('class="grid-field-row" style=');
+});
+
 test('grid editor renders default stack width as blank and never as a disabled checkbox state', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
 

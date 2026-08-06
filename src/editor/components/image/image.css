@@ -184,6 +184,19 @@
   gap: 0.45rem;
 }
 
+.hvy-document .image-attachment-picker-shell {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hvy-document .image-attachment-picker-toggle {
+  justify-self: center;
+  min-height: 2rem;
+  border-radius: 999px;
+  padding-inline: 0.8rem;
+  color: var(--hvy-text-alt);
+}
+
 .hvy-document .image-attachment-choice-wrap {
   position: relative;
   min-width: 0;

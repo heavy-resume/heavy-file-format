@@ -3,3 +3,4 @@
 Displays multiple binary image attachments from carouselImages.
 Each carouselImages entry names a tail attachment with id image:<filename>.
 Set carouselShowFrame to false to keep the carousel behavior while hiding the visible frame background and border.
+Set allowDocumentImageReuse to false to hide the document-wide attached-image picker while keeping upload and camera capture available.

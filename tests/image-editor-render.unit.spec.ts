@@ -108,6 +108,24 @@ describe('image editor render controls', () => {
     expect(smallButton).toContain('aria-pressed="false"');
   });
 
+  test('expected result: image can disable document-wide attachment reuse', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.schema.allowDocumentImageReuse = false;
+    initState(createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [{ id: 'image:other.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1]) }],
+    }));
+
+    const expectedResult = renderImageEditor('profile', block, helpers);
+
+    expect(expectedResult).not.toContain('Use an attached image');
+    expect(expectedResult).not.toContain('data-action="image-use-existing"');
+    expect(expectedResult).toContain('data-field="image-upload"');
+    expect(expectedResult).toContain('data-action="image-take-photo"');
+  });
+
   test('expected result: carousel editor offers camera capture and attached picture duplication', () => {
     const block: VisualBlock = createEmptyBlock('carousel');
     block.id = 'carousel';
@@ -156,6 +174,24 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('class="hvy-carousel-reader-frame"');
     expect(expectedResult).not.toContain('hvy-carousel-reader-frame-chrome');
+  });
+
+  test('expected result: carousel can disable document-wide attachment reuse', () => {
+    const block: VisualBlock = createEmptyBlock('carousel');
+    block.schema.allowDocumentImageReuse = false;
+    initState(createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [{ id: 'image:other.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1]) }],
+    }));
+
+    const expectedResult = renderCarouselEditor('gallery', block, helpers);
+
+    expect(expectedResult).not.toContain('Add attached images to carousel');
+    expect(expectedResult).not.toContain('data-action="carousel-add-existing"');
+    expect(expectedResult).toContain('data-field="carousel-upload"');
+    expect(expectedResult).toContain('data-action="carousel-take-photo"');
   });
 
   test('expected result: hosted image component defers static url until lazy hydration', () => {

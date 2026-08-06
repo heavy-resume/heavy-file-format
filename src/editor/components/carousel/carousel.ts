@@ -102,7 +102,7 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
       </label>
       <button type="button" class="hvy-carousel-pick-button hvy-carousel-camera-button" data-action="carousel-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>Take Photo</span></button>
     </div>
-    <div class="hvy-carousel-attachment-panel">
+    ${block.schema.allowDocumentImageReuse ? `<div class="hvy-carousel-attachment-panel">
       <div class="hvy-carousel-attachment-title">Add attached images to carousel</div>
       ${renderImageAttachmentPicker({
         helpers,
@@ -112,7 +112,7 @@ export const renderCarouselEditor: ComponentEditorRenderer = (sectionKey, block,
         blockId: block.id,
         emptyText: 'No attached images yet.',
       })}
-    </div>
+    </div>` : ''}
     <div class="hvy-carousel-image-list">
       ${block.schema.carouselImages.length === 0 ? '<div class="hvy-carousel-empty">Add images to build a carousel.</div>' : ''}
       ${block.schema.carouselImages.map((image, index) => renderEditorImageRow(image, index, block.schema.carouselImages.length, helpers, sectionKey, block.id)).join('')}

@@ -504,6 +504,10 @@ Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.6). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
 - `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
+- `allowDocumentImageReuse`: optional boolean controlling authoring UI. It
+  defaults to `true`. When `false`, editors MUST omit controls that browse or
+  select image attachments used elsewhere in the document while preserving
+  direct upload, camera capture, and the component's current image.
 
 Common web image media types SHOULD be supported, including `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, and `image/bmp`. Clients MUST treat tail bytes as untrusted (see §8) and SHOULD render the image inline when the attachment is present, or surface a warning when it is missing.
 
@@ -518,6 +522,9 @@ Carousel block fields:
 - `carouselImages`: ordered array. Each entry MUST include `imageFile`, a
   filename whose bytes are stored in the tail attachment `image:<imageFile>`.
 - Each carousel image entry MAY include `imageAlt` and `caption` strings.
+- `allowDocumentImageReuse` has the same authoring behavior and `true` default
+  as on image blocks. When `false`, users can still upload or capture new
+  carousel images but cannot browse the document-wide attachment picker.
 - `carouselDurationMs` is optional and defaults to `3000`. Clients SHOULD clamp
   very small or very large values to preserve usability.
 - `carouselPauseOnHover`, `carouselShowControls`,
@@ -528,6 +535,10 @@ Carousel block fields:
 - Clients SHOULD only start automatic movement once the carousel is visible.
 - Missing image attachments SHOULD be rendered as an inline missing-asset
   warning while preserving the carousel configuration on save.
+- Document-wide attachment pickers SHOULD initially show and fetch no more than
+  two rows of thumbnails. When more attachments exist, editors SHOULD provide
+  an explicit expansion control and defer fetching the additional thumbnails
+  until it is expanded.
 
 Rules:
 - The directive MUST be on a single line.
@@ -579,8 +590,8 @@ Component-owned fields are:
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
 - `table`: `tableColumns`, `tableShowHeader`, `tableRows`
-- `image`: `imageFile`, `imageAlt`, `caption`
-- `carousel`: `carouselImages`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
+- `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
+- `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
 
 Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.

@@ -20,6 +20,8 @@ export { mergeImagePresetCss } from './image-preset-css';
 const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
 const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
 const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
+const imageAttachmentPickerStates = new WeakMap<HTMLElement, { expanded: boolean; observer: ResizeObserver | null }>();
+const IMAGE_ATTACHMENT_PICKER_ROWS = 2;
 export const IMAGE_ATTACHMENT_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml,image/avif,image/bmp,image/x-icon';
 const IMAGE_SIZE_PRESETS = ['small', 'medium', 'large', 'fit-width', 'fit-height'] as const;
 
@@ -106,6 +108,7 @@ export function clearImageBlobUrlCache(): void {
 }
 
 export function bindLazyImageHydration(root: ParentNode): void {
+  initializeImageAttachmentPickers(root);
   const startedAt = nowMs();
   lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
   lazyImageHydrationObservers.delete(root);
@@ -248,18 +251,16 @@ export function renderImageAttachmentPicker(options: {
   if (filenames.length === 0) {
     return `<div class="image-attachment-empty muted">${options.helpers.escapeHtml(options.emptyText)}</div>`;
   }
-  return `<div class="image-attachment-picker" aria-label="Attached images">
-    ${filenames.map((filename) => {
-      const url = getImageBlobUrl(filename);
+  return `<div class="image-attachment-picker-shell" data-image-attachment-picker-shell>
+    <div class="image-attachment-picker" aria-label="Attached images" data-image-attachment-picker>
+    ${filenames.map((filename, index) => {
       const selected = filename === options.selectedFilename;
       const unused = isImageAttachmentUnused(filename);
-      const preview = url
-        ? `<img src="${options.helpers.escapeAttr(url)}" alt="">`
-        : '<span>Missing</span>';
+      const preview = `<img data-image-attachment-picker-preview data-image-filename="${options.helpers.escapeAttr(filename)}" alt="">`;
       const actionText = selected && options.selectedLabel ? options.selectedLabel : options.actionLabel;
       const actionIcon = selected && options.selectedLabel ? '' : plusIcon();
       const actionTitle = `${actionText}: ${filename}`;
-      return `<div class="image-attachment-choice-wrap">
+      return `<div class="image-attachment-choice-wrap" data-image-picker-index="${index}">
         <button
           type="button"
           class="image-attachment-choice${selected ? ' is-selected' : ''}"
@@ -286,7 +287,69 @@ export function renderImageAttachmentPicker(options: {
         >${closeIcon()}</button>` : ''}
       </div>`;
     }).join('')}
+    </div>
+    <button type="button" class="ghost image-attachment-picker-toggle" data-image-attachment-picker-toggle aria-expanded="false" hidden></button>
   </div>`;
+}
+
+export function initializeImageAttachmentPickers(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-image-attachment-picker-shell]').forEach((shell) => {
+    if (imageAttachmentPickerStates.has(shell)) return;
+    const stateForPicker = { expanded: false, observer: null as ResizeObserver | null };
+    imageAttachmentPickerStates.set(shell, stateForPicker);
+    const update = () => updateImageAttachmentPicker(shell, stateForPicker);
+    const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
+    toggle?.addEventListener('click', () => {
+      stateForPicker.expanded = !stateForPicker.expanded;
+      update();
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+      stateForPicker.observer = new ResizeObserver(() => {
+        if (!shell.isConnected) {
+          stateForPicker.observer?.disconnect();
+          stateForPicker.observer = null;
+          return;
+        }
+        if (!stateForPicker.expanded) update();
+      });
+      stateForPicker.observer.observe(shell);
+    }
+    update();
+  });
+}
+
+function updateImageAttachmentPicker(
+  shell: HTMLElement,
+  stateForPicker: { expanded: boolean; observer: ResizeObserver | null },
+): void {
+  const picker = shell.querySelector<HTMLElement>('[data-image-attachment-picker]');
+  const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
+  if (!picker || !toggle) return;
+  const choices = Array.from(picker.querySelectorAll<HTMLElement>('[data-image-picker-index]'));
+  const columnCount = Math.max(1, getComputedStyle(picker).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+  const collapsedCount = Math.min(choices.length, columnCount * IMAGE_ATTACHMENT_PICKER_ROWS);
+  choices.forEach((choice, index) => {
+    choice.hidden = !stateForPicker.expanded && index >= collapsedCount;
+    if (!choice.hidden) hydrateImageAttachmentPickerPreview(choice);
+  });
+  const hiddenCount = choices.length - collapsedCount;
+  toggle.hidden = hiddenCount <= 0;
+  toggle.setAttribute('aria-expanded', stateForPicker.expanded ? 'true' : 'false');
+  toggle.textContent = stateForPicker.expanded ? 'Show fewer images' : `Show ${hiddenCount} more image${hiddenCount === 1 ? '' : 's'}`;
+}
+
+function hydrateImageAttachmentPickerPreview(choice: HTMLElement): void {
+  const image = choice.querySelector<HTMLImageElement>('img[data-image-attachment-picker-preview]');
+  if (!image || image.src) return;
+  const filename = image.dataset.imageFilename ?? '';
+  const url = getImageBlobUrl(filename);
+  if (url) {
+    image.src = url;
+    return;
+  }
+  const missing = document.createElement('span');
+  missing.textContent = 'Missing';
+  image.replaceWith(missing);
 }
 
 export function openImageCameraCapture(app: HTMLElement, options: {
@@ -526,7 +589,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
         </label>
       </div>
-      <div class="image-attachment-panel">
+      ${block.schema.allowDocumentImageReuse ? `<div class="image-attachment-panel">
         <div class="image-attachment-panel-title">Use an attached image</div>
         ${renderImageAttachmentPicker({
           helpers,
@@ -538,7 +601,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           selectedLabel: 'Current image',
           emptyText: 'No attached images yet.',
         })}
-      </div>
+      </div>` : ''}
     </div>
   `;
 };

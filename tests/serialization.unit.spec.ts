@@ -1460,7 +1460,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"cover"}-->
 #! Cover
 
-<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"css":"margin: 0.5rem auto; display: block;"}-->
+<!--hvy:image {"imageFile":"hero.png","imageAlt":"Cover photo","caption":{"text":"Hero caption","schema":{"kind":"text","component":"text","align":"center"}},"allowDocumentImageReuse":false,"css":"margin: 0.5rem auto; display: block;"}-->
 `, '.hvy');
 
   const block = document.sections[0]?.blocks[0];
@@ -1469,12 +1469,14 @@ hvy_version: 0.1
   expect(block?.schema.imageAlt).toBe('Cover photo');
   expect(block?.schema.caption?.text).toBe('Hero caption');
   expect(block?.schema.caption?.schema.align).toBe('center');
+  expect(block?.schema.allowDocumentImageReuse).toBe(false);
 
   const output = serializeWithState(document);
   expect(output).toContain('<!--hvy:image {');
   expect(output).toContain('"imageFile":"hero.png"');
   expect(output).toContain('"imageAlt":"Cover photo"');
   expect(output).toContain('"caption":{"text":"Hero caption"');
+  expect(output).toContain('"allowDocumentImageReuse":false');
 });
 
 test('image component migrates string captions to styled caption payloads', () => {
@@ -1579,7 +1581,7 @@ hvy_version: 0.1
 <!--hvy: {"id":"gallery"}-->
 #! Gallery
 
-<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
+<!--hvy:carousel {"carouselDurationMs":2500,"carouselShowFrame":false,"allowDocumentImageReuse":false,"carouselImages":[{"imageFile":"a.png","caption":"A"},{"imageFile":"b.png","imageAlt":"B alt"}]}-->
 `, '.hvy');
   document.attachments = [
     { id: 'image:a.png', meta: { mediaType: 'image/png' }, bytes: new Uint8Array([1, 2]) },
@@ -1593,6 +1595,7 @@ hvy_version: 0.1
   expect(block?.schema.component).toBe('carousel');
   expect(block?.schema.carouselDurationMs).toBe(2500);
   expect(block?.schema.carouselShowFrame).toBe(false);
+  expect(block?.schema.allowDocumentImageReuse).toBe(false);
   expect(block?.schema.carouselImages).toMatchObject([
       { imageFile: 'a.png', caption: 'A' },
       { imageFile: 'b.png', imageAlt: 'B alt' },

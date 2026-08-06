@@ -1003,9 +1003,11 @@ function blockSchemaToCliJson(schema: BlockSchema, meta: JsonObject): JsonObject
     value.imageFile = schema.imageFile;
     value.imageAlt = schema.imageAlt;
     value.caption = schema.caption;
+    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
   }
   if (baseComponent === 'carousel') {
     value.carouselImages = schema.carouselImages;
+    value.allowDocumentImageReuse = schema.allowDocumentImageReuse;
     value.carouselDurationMs = schema.carouselDurationMs;
     value.carouselPauseOnHover = schema.carouselPauseOnHover;
     value.carouselShowControls = schema.carouselShowControls;
@@ -1136,8 +1138,10 @@ function applyBlockSchemaJson(
     schema.imageFile = defaults.imageFile;
     schema.imageAlt = defaults.imageAlt;
     schema.caption = defaults.caption;
+    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
   } else if (baseComponent === 'carousel') {
     schema.carouselImages = defaults.carouselImages;
+    schema.allowDocumentImageReuse = defaults.allowDocumentImageReuse;
     schema.carouselDurationMs = defaults.carouselDurationMs;
     schema.carouselPauseOnHover = defaults.carouselPauseOnHover;
     schema.carouselShowControls = defaults.carouselShowControls;
@@ -1201,6 +1205,7 @@ function applyBlockSchemaJson(
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
   if (typeof value.imageAlt === 'string') schema.imageAlt = value.imageAlt;
+  if (typeof value.allowDocumentImageReuse === 'boolean') schema.allowDocumentImageReuse = value.allowDocumentImageReuse;
   if ('caption' in value) schema.caption = normalizeTextCaption(value.caption);
   if (Array.isArray(value.carouselImages)) schema.carouselImages = value.carouselImages
     .map((item) => {

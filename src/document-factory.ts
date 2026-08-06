@@ -89,12 +89,13 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
     case 'table':
       return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
     case 'image':
-      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null } as unknown as BlockSchema;
+      return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null, allowDocumentImageReuse: true } as unknown as BlockSchema;
     case 'carousel':
       return {
         ...base,
         kind: 'carousel',
         carouselImages: [],
+        allowDocumentImageReuse: true,
         carouselDurationMs: 3000,
         carouselPauseOnHover: true,
         carouselShowControls: true,
@@ -450,10 +451,12 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.imageFile = typeof candidate.imageFile === 'string' ? candidate.imageFile : schema.imageFile;
     schema.imageAlt = typeof candidate.imageAlt === 'string' ? candidate.imageAlt : schema.imageAlt;
     schema.caption = normalizeTextCaption(candidate.caption);
+    schema.allowDocumentImageReuse = candidate.allowDocumentImageReuse !== false;
     schema.css = typeof candidate.css === 'string' ? candidate.css : schema.css;
   }
   if (schema.kind === 'carousel') {
     schema.carouselImages = parseCarouselImages(candidate.carouselImages);
+    schema.allowDocumentImageReuse = candidate.allowDocumentImageReuse !== false;
     schema.carouselDurationMs = parsePositiveNumber(candidate.carouselDurationMs, schema.carouselDurationMs);
     schema.carouselPauseOnHover = candidate.carouselPauseOnHover !== false;
     schema.carouselShowControls = candidate.carouselShowControls !== false;

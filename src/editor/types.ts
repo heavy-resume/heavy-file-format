@@ -130,6 +130,7 @@ export interface ImageBlockSchema extends BaseBlockSchema {
   imageFile: string;
   imageAlt: string;
   caption: TextCaptionPayload | null;
+  allowDocumentImageReuse: boolean;
 }
 
 export interface TextCaptionPayload {
@@ -140,6 +141,7 @@ export interface TextCaptionPayload {
 export interface CarouselBlockSchema extends BaseBlockSchema {
   kind: 'carousel';
   carouselImages: CarouselImage[];
+  allowDocumentImageReuse: boolean;
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;
   carouselShowControls: boolean;
@@ -237,6 +239,7 @@ interface RuntimeSchemaFieldAccess {
   imageFile: string;
   imageAlt: string;
   caption: TextCaptionPayload | null;
+  allowDocumentImageReuse: boolean;
   carouselImages: CarouselImage[];
   carouselDurationMs: number;
   carouselPauseOnHover: boolean;

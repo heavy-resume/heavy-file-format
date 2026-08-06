@@ -3,3 +3,4 @@ Renders a binary image attachment from imageFile.
 imageFile is required and names the document tail attachment with id image:<filename>.
 imageAlt is optional alternate text for the rendered image.
 caption is an optional styled text caption payload rendered below the image.
+Set allowDocumentImageReuse to false to hide the document-wide attached-image picker while keeping upload and camera capture available.

@@ -762,6 +762,8 @@ export function escapeRawHtml(markdown: string): string {
   return output;
 }
 
+const markdownEscapablePunctuation = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/;
+
 function escapeRawHtmlOutsideInlineCode(markdown: string): string {
   let output = '';
   let index = 0;
@@ -776,6 +778,11 @@ function escapeRawHtmlOutsideInlineCode(markdown: string): string {
         index = close + ticks.length;
         continue;
       }
+    }
+    if (char === '\\' && index + 1 < markdown.length && markdownEscapablePunctuation.test(markdown[index + 1]!)) {
+      output += markdown.slice(index, index + 2);
+      index += 2;
+      continue;
     }
     if (char === '<') {
       output += '&lt;';

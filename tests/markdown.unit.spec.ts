@@ -154,6 +154,26 @@ test('keeps raw html escaped outside code while preserving fenced code literals'
   expect(escaped).toContain('<div>literal</div>');
 });
 
+test('keeps backslash escaped angle brackets as markdown escapes', () => {
+  expect(escapeRawHtml('There is <foo@example.com\\>\nthere')).toBe('There is &lt;foo@example.com\\>\nthere');
+  expect(escapeRawHtml('\\<not a tag\\>')).toBe('\\<not a tag\\>');
+});
+
+test('renders a trailing escaped angle bracket as a literal character', () => {
+  expect(markdownToReaderHtml('There is <foo@example.com\\>\nthere')).toContain('</a>&gt;');
+  expect(markdownToReaderHtml('There is <foo@example.com\\>\nthere')).not.toContain('&amp;gt;');
+});
+
+test('round trips an email in angle brackets through the editor without escaping the closing bracket', () => {
+  const editorHtml = markdownToReaderHtml('There is <foo@example.com>\nthere');
+  const editedMarkdown = turndown.turndown(editorHtml);
+
+  expect(editedMarkdown).toBe('There is <[foo@example.com](mailto:foo@example.com)\\> there');
+  expect(markdownToReaderHtml(editedMarkdown)).toBe(
+    '<p>There is &lt;<a href="mailto:foo@example.com">foo@example.com</a>&gt; there</p>\n'
+  );
+});
+
 test('serializes editor underline with hvy underline syntax', () => {
   expect(turndown.turndown('<p><u>Important</u></p>')).toBe('___Important___');
 });

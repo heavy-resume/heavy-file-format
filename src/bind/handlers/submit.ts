@@ -8,6 +8,7 @@ import type { HvyChatContextPreparationProgress } from '../../types';
 import { recordMeasurement } from '../../perf-trace';
 import { isLikelyInformationalAnswerRequest } from '../../ai-document-tool-parsing';
 import { getPendingChatAttachments } from '../../chat/chat-attachments';
+import { applyInlineAnswerTypeChoice } from '../../block-ops';
 
 interface PendingDocumentEditMutation {
   requiresFullRefresh: boolean;
@@ -33,6 +34,15 @@ function formatContextPreparationStatus(progress?: HvyChatContextPreparationProg
 export function bindSubmit(app: HTMLElement): void {
   app.addEventListener('submit', async (event) => {
     const form = event.target as HTMLElement | null;
+    if (form?.matches('.choice-mode-name-form')) {
+      event.preventDefault();
+      const control = form.closest<HTMLElement>('.hvy-choice-mode-switch');
+      const name = form.querySelector<HTMLInputElement>('.choice-mode-name-input')?.value ?? '';
+      if (control && name.trim().length > 0) {
+        applyInlineAnswerTypeChoice(control, { radio: true, groupName: name });
+      }
+      return;
+    }
     if (form?.id === 'searchComposer') {
       event.preventDefault();
       if (state.search.activeTab === 'filter') {

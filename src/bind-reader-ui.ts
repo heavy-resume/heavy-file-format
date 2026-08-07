@@ -1,4 +1,4 @@
-import { findBlockByIds, updateInlineAnswerMarkerStates } from './block-ops';
+import { findBlockByIds } from './block-ops';
 import { bindChangeControls } from './bind/handlers/change-controls';
 import { bindInputBlock } from './bind/handlers/input-block';
 import { bindInputMisc } from './bind/handlers/input-misc';
@@ -13,10 +13,10 @@ import {
 } from './editor/components/component-list/component-list-view';
 import { logClickTrace } from './bind/click-trace';
 import { navigateToSection } from './navigation';
+import { applyPersistedAnswerSelection } from './persisted-answer-selection';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { expandSingletonVirtualGroupChild } from './reader/singleton-group-expand';
 import { syncReusableTemplateForBlock } from './reusable';
-import { recordHistory } from './history';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
@@ -416,28 +416,14 @@ export function bindReaderUi(app: HTMLElement): void {
     if (!(input instanceof HTMLInputElement) || input.dataset.field !== 'inline-persisted-answer') {
       return;
     }
-    const shell = input.closest<HTMLElement>('[data-section-key][data-block-id]');
-    const sectionKey = shell?.dataset.sectionKey ?? '';
-    const blockId = shell?.dataset.blockId ?? '';
-    const lineIndex = Number.parseInt(input.dataset.lineIndex ?? input.dataset.answerIndex ?? '', 10);
-    if (!sectionKey || !blockId || Number.isNaN(lineIndex)) {
+    const touched = applyPersistedAnswerSelection(input);
+    if (touched.length === 0) {
       return;
     }
-    const block = findBlockByIds(sectionKey, blockId);
-    if (!block) {
-      return;
-    }
-    recordHistory(`persisted-answer:${blockId}`);
-    if (block.schema.kind === 'text') {
-      const controls = input.type === 'radio'
-        ? [...(input.closest('.reader-block')?.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${CSS.escape(input.name)}"]`) ?? [])]
-        : [input];
-      block.text = updateInlineAnswerMarkerStates(block.text, new Map(controls.map((control) => [Number.parseInt(control.dataset.answerIndex ?? '', 10), control.checked])));
-    } else {
-      return;
-    }
-    syncReusableTemplateForBlock(sectionKey, blockId);
-    if (!getRefreshReaderBlock()(app, sectionKey, blockId, { runVisibilityScripts: false })) {
+    const refreshedEveryBlock = touched.every((target) =>
+      getRefreshReaderBlock()(app, target.sectionKey, target.blockId, { runVisibilityScripts: false })
+    );
+    if (!refreshedEveryBlock) {
       getRefreshReaderPanels()({ runVisibilityScripts: false });
     }
   };

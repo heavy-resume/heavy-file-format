@@ -70,34 +70,85 @@ test('survey editable text preserves reader scroll while typing', async ({ page 
   expect(await editor.evaluate((node) => node.getBoundingClientRect().top)).toBe(topBefore);
 });
 
-test('floating answer control converts only the active consecutive text block', async ({ page }) => {
+test('the answer type popover converts a run without answering it', async ({ page }) => {
   await page.goto('/');
   await page.locator('.document-menu').evaluate((menu) => {
     if (menu instanceof HTMLDetailsElement) menu.open = true;
   });
   await page.locator('.document-menu-panel').getByRole('button', { name: 'Survey Example', exact: true }).click();
 
-  const choiceBlock = page.locator('.editor-block-passive', { hasText: 'Excellent' });
-  await choiceBlock.click();
+  await page.locator('.editor-block-passive', { hasText: 'Excellent' }).click();
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
   await expect(activeEditor.locator('input[type="radio"]')).toHaveCount(4);
-  await expect(activeEditor.locator('input[type="checkbox"]')).toHaveCount(0);
+
   await activeEditor.locator('input[type="radio"]').nth(1).click();
-  const modeSwitch = page.getByRole('group', { name: 'Selected answer block type' });
-  await expect(modeSwitch).toBeVisible();
-  await expect(modeSwitch.getByRole('radio', { name: 'Radio' })).toBeChecked();
-  await modeSwitch.locator('label', { hasText: 'Checkbox' }).click();
+
+  const popover = page.getByRole('dialog', { name: 'Selected answer block type' });
+  await expect(popover).toBeVisible();
+  await expect(activeEditor.locator('input[type="radio"]').nth(1)).not.toBeChecked();
+
+  await popover.locator('[data-answer-type="checkbox"]').click();
   await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="checkbox"]')).toHaveCount(4);
-  await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="checkbox"]').nth(1).click();
-  await expect(modeSwitch.getByRole('radio', { name: 'Checkbox' })).toBeChecked();
-  await modeSwitch.locator('label', { hasText: 'Radio' }).click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="radio"]')).toHaveCount(4);
-  await activeEditor.locator('input[type="radio"]').nth(1).check();
-  await expect(activeEditor.locator('input[type="radio"]').nth(1)).toBeChecked();
-  await expect(activeEditor.locator('input[type="radio"]').first()).not.toBeChecked();
 });
 
-test('viewer selections persist into inline checkbox and radio marker source', async ({ page }) => {
+test('a new radio group spans components and clears selections across them', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:text {"id":"preferred"}-->
+  [ ] Email
+  [ ] Phone
+
+ <!--hvy:text {"id":"fallback"}-->
+  [ ] Postal mail
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Email' }).first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input').first().click();
+  const popover = page.getByRole('dialog', { name: 'Selected answer block type' });
+  await popover.locator('[data-field="inline-answer-new-group"]').click();
+  await popover.locator('.choice-mode-name-input').fill('contact');
+  await popover.locator('.choice-mode-name-confirm').click();
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="radio"]')).toHaveCount(2);
+
+  await page.locator('.editor-block-passive', { hasText: 'Postal mail' }).first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input').first().click();
+  await expect(popover.locator('.choice-mode-group-option', { hasText: 'contact' })).toBeVisible();
+  await popover.locator('.choice-mode-group-option', { hasText: 'contact' }).click();
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  const radios = page.locator('#readerDocument input[type="radio"]');
+  await expect(radios).toHaveCount(3);
+  await radios.nth(0).check();
+  await radios.nth(2).check();
+
+  await expect(radios.nth(0)).not.toBeChecked();
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return Object.fromEntries(
+      state.document.sections.flatMap((section) => section.blocks).map((block) => [block.schema.id, block.text])
+    );
+  })).toEqual({
+    preferred: '<!--hvy:radio-group contact-->\n( ) Email\n( ) Phone',
+    fallback: '(x) Postal mail',
+  });
+});
+
+test('viewer selections write through to inline checkbox and radio marker source', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -127,10 +178,19 @@ hvy_version: 0.1
   await reader.locator('li', { hasText: 'Phone' }).locator('input').check();
   await expect(reader.locator('li', { hasText: 'Email' }).locator('input')).not.toBeChecked();
 
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return Object.fromEntries(
+      state.document.sections.flatMap((section) => section.blocks).map((block) => [block.schema.id, block.text])
+    );
+  })).toEqual({ approved: '[x] Approved', contact: '- ( ) Email\n- (x) Phone' });
+
+  // Returning to the editor keeps the checkbox but drops the radio, which has no other
+  // way to be deselected.
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toContainText('[x] Approved');
-  await expect(page.locator('#rawEditor')).toContainText('- ( ) Email\n  - (x) Phone');
+  await expect(page.locator('#rawEditor')).toContainText('- ( ) Email\n  - ( ) Phone');
 });
 
 test('clicking past an answer label places the caret at the end of that line', async ({ page }) => {
@@ -180,4 +240,115 @@ test('clicking past an answer label places the caret at the end of that line', a
       .flatMap((section) => section.blocks)
       .find((block) => block.schema.id === 'successful-areas')?.text;
   })).toContain('[ ] CommunicationZ');
+});
+
+test('entering editor mode clears radio selections made while reading', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:text {"id":"pick"}-->
+  ( ) Email
+  ( ) Phone
+
+ <!--hvy:text {"id":"extras"}-->
+  [ ] Send a copy
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.locator('#readerDocument input[type="radio"]').first().check();
+  await page.locator('#readerDocument input[type="checkbox"]').first().check();
+
+  const blockTexts = () => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return Object.fromEntries(
+      state.document.sections.flatMap((section) => section.blocks).map((block) => [block.schema.id, block.text])
+    );
+  });
+  expect(await blockTexts()).toEqual({ pick: '(x) Email\n( ) Phone', extras: '[x] Send a copy' });
+
+  await page.getByRole('button', { name: 'Editor' }).click();
+
+  await expect.poll(blockTexts).toEqual({ pick: '( ) Email\n( ) Phone', extras: '[x] Send a copy' });
+});
+
+test('the answer type popover opens for a checkbox written mid-sentence', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:text {"id":"terms"}-->
+  Agree to terms [ ] and conditions
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Agree to terms' }).first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input.hvy-inline-checkbox').first().click();
+
+  await expect(page.getByRole('dialog', { name: 'Selected answer block type' })).toBeVisible();
+});
+
+test('a radio group directive takes up no room in the editor', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:text {"id":"grouped"}-->
+  <!--hvy:radio-group contact-->
+  ( ) Email
+  ( ) Phone
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Email' }).first().click();
+  const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+
+  // The directive stays in the DOM so it round-trips, but it must not be laid out.
+  await expect(activeEditor.locator('[data-hvy-radio-group]')).toHaveCount(1);
+  expect(await activeEditor.locator('[data-hvy-radio-group]').evaluate((node) => ({
+    display: getComputedStyle(node).display,
+    width: node.getBoundingClientRect().width,
+    height: node.getBoundingClientRect().height,
+  }))).toEqual({ display: 'none', width: 0, height: 0 });
+
+  // Both answers keep their own line, left-aligned with each other.
+  const answerLines = activeEditor.locator('.hvy-inline-checkbox-line');
+  await expect(answerLines).toHaveCount(2);
+  const [firstLine, secondLine] = await answerLines.evaluateAll((rows) =>
+    rows.map((row) => Math.round(row.getBoundingClientRect().x))
+  );
+  expect(firstLine).toBe(secondLine);
 });

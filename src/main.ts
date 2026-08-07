@@ -1,4 +1,5 @@
 import './default-theme.css';
+import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
 import './style.css';
 import './layout/reference-shell.css';
@@ -671,6 +672,7 @@ readerRenderer = createReaderRenderer(
 
 function renderApp(): void {
   const renderId = incrementRenderCount();
+  invalidateInlineAnswerGroupIndex();
   const startedAt = performance.now();
   let captureMs = 0;
   let themeMs = 0;
@@ -1161,6 +1163,7 @@ function renderSidebarTabLabel(): string {
 }
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
+  invalidateInlineAnswerGroupIndex();
   const refreshId = incrementRefreshReaderCount();
   const startedAt = nowMs();
   let modalMs = 0;

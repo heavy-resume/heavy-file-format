@@ -1,4 +1,5 @@
 import { state, getRenderApp, closeAiEditPopover, completePendingRichAnnotation, handleRichEditorClick, handleRichEditorPointerDown, refreshRichToolbarState } from './_imports';
+import { applyInlineAnswerTypeChoice } from '../../block-ops';
 import { dismissSidebarHelpBalloon } from '../../sidebar-help';
 import { closeReaderContextPopover } from './contextmenu';
 import { logClickTrace } from '../click-trace';
@@ -71,6 +72,9 @@ export function bindClickMisc(app: HTMLElement): void {
   app.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     logClickTrace(event, 'click-misc:enter');
+    if (handleInlineAnswerTypePopoverClick(event, target)) {
+      return;
+    }
     const richTarget = getRichTarget(target);
     if (richTarget) {
       logClickTrace(event, 'click-misc:handled:rich-editor-click');
@@ -278,4 +282,54 @@ function placeComponentPicker(picker: HTMLElement): void {
   } else if (overflowRight > 0) {
     picker.style.setProperty('--component-picker-shift', `${-overflowRight}px`);
   }
+}
+
+/**
+ * The answer-type popover picks the marker type and radio group for the selected run.
+ * It lives inside the editor shell, so it has to claim its own clicks before the rich
+ * editor treats them as caret movement.
+ */
+function handleInlineAnswerTypePopoverClick(event: MouseEvent, target: HTMLElement): boolean {
+  const control = target.closest<HTMLElement>('.hvy-choice-mode-switch');
+  if (!control) {
+    return false;
+  }
+  const typeOption = target.closest<HTMLElement>('[data-field="inline-answer-type"]');
+  if (typeOption) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-type');
+    applyInlineAnswerTypeChoice(control, {
+      radio: typeOption.dataset.answerType === 'radio',
+      groupName: typeOption.dataset.answerGroupName ?? null,
+    });
+    return true;
+  }
+  if (target.closest<HTMLElement>('[data-field="inline-answer-new-group"]')) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-new-group');
+    const form = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+    if (form) {
+      form.hidden = false;
+      const input = form.querySelector<HTMLInputElement>('.choice-mode-name-input');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+    return true;
+  }
+  if (target.closest<HTMLElement>('.choice-mode-name-cancel')) {
+    event.preventDefault();
+    logClickTrace(event, 'click-misc:handled:inline-answer-group-name-cancel');
+    const form = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+    if (form) form.hidden = true;
+    return true;
+  }
+  if (target.closest<HTMLElement>('button[type="submit"], .choice-mode-name-input')) {
+    // Let the name form submit and keep the caret in its own input.
+    return true;
+  }
+  // Clicks on the popover chrome must not move the caret out of the answer run.
+  event.preventDefault();
+  return true;
 }

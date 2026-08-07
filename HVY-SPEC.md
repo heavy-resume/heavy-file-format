@@ -361,9 +361,9 @@ update the text source so ordinary HVY serialization, saving, reopening, and
 sharing preserve the selected state. No plugin or script is required.
 
 `[ ]` and `[x]` represent an unselected and selected independent checkbox.
-`( )` and `(x)` represent an unselected and selected radio option. Consecutive
-radio-option lines form one mutually exclusive group and MUST contain no more
-than one selected marker. A non-radio line ends the group.
+`( )` and `(x)` represent an unselected and selected radio option. Every radio
+option belongs to exactly one mutually exclusive group, which MUST contain no
+more than one selected marker.
 
 ```markdown
 <!--hvy:text {"id":"survey-answers"}-->
@@ -379,6 +379,45 @@ lowercase `x` when writing. Text following a marker is its visible label.
 Readers MUST preserve unrecognized lines and MUST NOT treat inline answers as
 `hvy.form` fields. Non-interactive outputs, including print and PDF-oriented
 rendering, SHOULD display the controls in their persisted state.
+
+##### Radio groups
+
+A radio group is either *named* or *implicit*.
+
+The `<!--hvy:radio-group NAME-->` directive names the group that every following
+radio option joins. It applies from its position onward in document order and
+continues past the end of its own text component into subsequent components,
+until another `radio-group` directive changes it. `<!--hvy:radio-group-->`, with
+no name, ends the active named group and returns following radio options to
+implicit grouping. A named group therefore MAY span any number of text
+components, and a single component MAY contain several groups.
+
+```markdown
+<!--hvy:text {"id":"preferred-contact"}-->
+<!--hvy:radio-group contact-->
+( ) Email
+( ) Phone
+
+<!--hvy:text {"id":"fallback-contact"}-->
+(x) Postal mail
+<!--hvy:radio-group-->
+```
+
+Here all three options form the single `contact` group even though they live in
+two components, and exactly one of them is selected.
+
+Where no named group is active, consecutive radio-option lines within one text
+component form an implicit group; a line that is not a radio option ends it.
+Implicit groups never span components. Group names are document-scoped: two
+`radio-group` directives with the same name refer to the same group no matter
+where they appear.
+
+`radio-group` directives are structural. Renderers MUST NOT display them as
+text, and MUST preserve them through serialization.
+
+Selecting a radio option MUST clear every other marker in its group, including
+markers stored in other components, and MUST write those cleared values back to
+the text source of each component that owns them.
 
 ### 5.7.1 Inline responsive annotations
 

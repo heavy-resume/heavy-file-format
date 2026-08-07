@@ -3,6 +3,7 @@ import './text-answer-mode.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
 import { getTextFillInPlaceholder, splitTextFillIns } from '../../../text-fill-in';
 import { state } from '../../../state';
+import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../../../inline-answer-groups';
 import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { findReusableOwner } from '../../../reusable';
@@ -110,20 +111,66 @@ function renderInlineAnswerModeSwitch(
   blockId: string,
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
-  const attrs = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-field="inline-answer-mode"`;
-  return `<fieldset class="hvy-choice-mode-switch" aria-label="Selected answer block type" hidden>
-    <legend>Answer type</legend>
-    <label title="Allow one answer">
-      <input type="radio" name="hvy-answer-mode-${helpers.escapeAttr(blockId)}" value="radio" ${attrs}>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.25" class="choice-mode-icon-fill"/></svg>
-      <span>Radio</span>
-    </label>
-    <label title="Allow multiple answers">
-      <input type="radio" name="hvy-answer-mode-${helpers.escapeAttr(blockId)}" value="checkbox" ${attrs}>
+  const attrs = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}"`;
+  return `<div class="hvy-choice-mode-switch" role="dialog" aria-label="Selected answer block type" ${attrs} hidden>
+    <p class="choice-mode-title">Answer type</p>
+    <button
+      type="button"
+      class="choice-mode-option"
+      ${attrs}
+      data-field="inline-answer-type"
+      data-answer-type="checkbox"
+      title="Allow multiple answers"
+    >
       <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="m5.25 8 1.8 1.8 3.8-4"/></svg>
       <span>Checkbox</span>
-    </label>
-  </fieldset>`;
+    </button>
+    <div class="choice-mode-groups" role="group" aria-label="Radio groups"></div>
+    <button
+      type="button"
+      class="choice-mode-option choice-mode-new-group"
+      ${attrs}
+      data-field="inline-answer-new-group"
+      title="Create a new radio group"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9"/><path d="M3.5 8h9"/></svg>
+      <span>radio group</span>
+    </button>
+    <form class="choice-mode-name-form" data-field="inline-answer-group-name" ${attrs} hidden>
+      <label class="choice-mode-name-label" for="hvy-answer-group-name-${helpers.escapeAttr(blockId)}">Group name</label>
+      <input
+        class="choice-mode-name-input"
+        id="hvy-answer-group-name-${helpers.escapeAttr(blockId)}"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="contact"
+      >
+      <div class="choice-mode-name-actions">
+        <button type="submit" class="secondary choice-mode-name-confirm">Confirm</button>
+        <button type="button" class="ghost choice-mode-name-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+export function renderInlineAnswerGroupOption(
+  groupName: string,
+  selected: boolean,
+  escapeHtmlValue: (value: string) => string
+): string {
+  return `<button
+    type="button"
+    class="choice-mode-option choice-mode-group-option${selected ? ' is-selected' : ''}"
+    data-field="inline-answer-type"
+    data-answer-type="radio"
+    data-answer-group-name="${escapeHtmlValue(groupName)}"
+    aria-pressed="${selected ? 'true' : 'false'}"
+    title="Put these answers in the ${escapeHtmlValue(groupName)} radio group"
+  >
+    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.25" class="choice-mode-icon-fill"/></svg>
+    <span>${escapeHtmlValue(groupName)}</span>
+  </button>`;
 }
 
 function renderUseAsSelectionControl(
@@ -206,8 +253,9 @@ function renderMarkdownEditorHtmlWithSortValues(
   codeLanguageInputAttrs?: Record<string, string>
 ): string {
   const defs = getSortValueDefsForEditorBlock(sectionKey, block);
+  const answerGroups = getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id);
   if (Object.keys(defs).length === 0) {
-    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs);
+    return helpers.markdownToEditorHtml(markdown, codeLanguageInputAttrs, answerGroups);
   }
   const replacements: string[] = [];
   const source = replaceSortValueAnnotations(markdown, (annotation) => {
@@ -215,7 +263,7 @@ function renderMarkdownEditorHtmlWithSortValues(
     replacements.push(renderSortValueEditorControl(annotation.key, annotation.text, defs[annotation.key], sectionKey, block.id, helpers));
     return token;
   });
-  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs);
+  let html = helpers.markdownToEditorHtml(source, codeLanguageInputAttrs, answerGroups);
   replacements.forEach((replacement, index) => {
     html = html.replace(`HVY_SORT_VALUE_TOKEN_${index}`, replacement);
   });

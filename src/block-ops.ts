@@ -20,6 +20,16 @@ import { routeNextUndoToDocument } from './edit-command-routing';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
+import { renderInlineAnswerGroupOption } from './editor/components/text/text';
+import {
+  getInlineAnswerGroupIndex,
+  getNearbyRadioGroupNames,
+  invalidateInlineAnswerGroupIndex,
+  makeAnswerBlockKey,
+  normalizeRadioGroupName,
+  resolveBlockAnswerGroups,
+  setAnswerRangeRadioGroup,
+} from './inline-answer-groups';
 import { createTextFillInMarker, hasTextFillInMarker, prepareTextFillIn } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
@@ -233,16 +243,6 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   }
   const block = context.block;
 
-  if (field === 'inline-answer-mode' && target instanceof HTMLInputElement && block.schema.kind === 'text') {
-    const control = target.closest<HTMLElement>('.hvy-choice-mode-switch');
-    const start = Number.parseInt(control?.dataset.answerStart ?? '', 10);
-    const end = Number.parseInt(control?.dataset.answerEnd ?? '', 10);
-    if (Number.isNaN(start) || Number.isNaN(end)) return true;
-    block.text = convertInlineAnswerMarkerRange(block.text, start, end, target.value === 'radio');
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRenderApp()();
-    return true;
-  }
 
   if (field === 'rich-code-language') {
     if (!(target instanceof HTMLInputElement)) {
@@ -1159,10 +1159,11 @@ export function getComponentRenderHelpers(editorRenderer: {
   return {
     escapeAttr,
     escapeHtml,
-    markdownToEditorHtml: (markdown, codeLanguageInputAttrs) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
+    markdownToEditorHtml: (markdown, codeLanguageInputAttrs, answerGroups) => highlightEditorSearchMatches(renderMarkdownToEditorHtml(markdown, {
       textLineStyles: getTextLineStylesFromMeta(state.document.meta),
       textLineStyleMode: 'editor',
       codeLanguageInputAttrs,
+      answerGroups,
     })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
@@ -2321,11 +2322,10 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
     ? event.target
     : null;
   if (answerInput) {
-    updateInlineAnswerModeSwitch(
-      editable.closest<HTMLElement>('.text-editor-shell'),
-      null,
-      answerInput.closest<HTMLElement>('li, .hvy-inline-checkbox-line')
-    );
+    // In the editor a marker click configures the answer, it does not answer it.
+    // Selecting values is a reader/viewer action.
+    event.preventDefault();
+    updateInlineAnswerModeSwitch(editable.closest<HTMLElement>('.text-editor-shell'), answerInput);
     return false;
   }
   const answerRow = findInlineAnswerRowAtPointer(editable, event);
@@ -2394,18 +2394,68 @@ function getInlineAnswerRowContentRight(row: HTMLElement): number {
     ?? row.getBoundingClientRect().left;
 }
 
-export function showInlineAnswerModeSwitchForInput(answerInput: HTMLInputElement): void {
-  updateInlineAnswerModeSwitch(
-    answerInput.closest<HTMLElement>('.text-editor-shell'),
-    null,
-    answerInput.closest<HTMLElement>('li, .hvy-inline-checkbox-line')
+/**
+ * Applies an answer-type choice from the popover to the selected marker range.
+ * `groupName` null with `radio` false converts the range to checkboxes; otherwise the
+ * range is moved into the named radio group, which may already span other components.
+ */
+export function applyInlineAnswerTypeChoice(
+  control: HTMLElement,
+  choice: { radio: boolean; groupName: string | null }
+): boolean {
+  const sectionKey = control.dataset.sectionKey ?? '';
+  const blockId = control.dataset.blockId ?? '';
+  const start = Number.parseInt(control.dataset.answerStart ?? '', 10);
+  const end = Number.parseInt(control.dataset.answerEnd ?? '', 10);
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'text' || Number.isNaN(start) || Number.isNaN(end)) {
+    return false;
+  }
+  recordHistory(`inline-answer-type:${blockId}`);
+  block.text = convertInlineAnswerMarkerRange(block.text, start, end, choice.radio);
+  const incomingName = getIncomingRadioGroupName(sectionKey, blockId);
+  block.text = setAnswerRangeRadioGroup(
+    block.text,
+    start,
+    end,
+    choice.radio ? normalizeRadioGroupName(choice.groupName ?? '') || null : null,
+    incomingName
   );
+  syncReusableTemplateForBlock(sectionKey, blockId);
+  invalidateInlineAnswerGroupIndex();
+  // Changing marker type and group membership is structural, so a full rerender is
+  // the honest response here rather than patching the editor DOM in place.
+  getRenderApp()();
+  return true;
+}
+
+/** The radio group already active when document order reaches this block. */
+function getIncomingRadioGroupName(sectionKey: string, blockId: string): string | null {
+  const index = getInlineAnswerGroupIndex(state.document.sections);
+  const position = index.order.findIndex((entry) => entry.sectionKey === sectionKey && entry.blockId === blockId);
+  let activeName: string | null = null;
+  for (let cursor = 0; cursor < position; cursor += 1) {
+    const entry = index.order[cursor];
+    if (!entry) continue;
+    const previousBlock = findBlockByIds(entry.sectionKey, entry.blockId);
+    if (!previousBlock || previousBlock.schema.kind !== 'text') continue;
+    activeName = resolveBlockAnswerGroups(
+      previousBlock.text,
+      makeAnswerBlockKey(entry.sectionKey, entry.blockId),
+      activeName
+    ).activeName;
+  }
+  return activeName;
+}
+
+export function showInlineAnswerModeSwitchForInput(answerInput: HTMLInputElement): void {
+  updateInlineAnswerModeSwitch(answerInput.closest<HTMLElement>('.text-editor-shell'), answerInput);
 }
 
 function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: string): void {
   const range = getEditableSelectionRange(editable);
   const textEditorShell = editable.closest<HTMLElement>('.text-editor-shell');
-  updateInlineAnswerModeSwitch(textEditorShell, range);
+  updateInlineAnswerModeSwitch(textEditorShell);
   const hasFillInSelection = editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0;
   if (hasFillInSelection) {
     textEditorShell?.classList.add('has-fill-in-selection');
@@ -2475,49 +2525,86 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
   });
 }
 
-function updateInlineAnswerModeSwitch(shell: HTMLElement | null, range: Range | null, selectedRow: HTMLElement | null = null): void {
-  const control = shell?.querySelector<HTMLFieldSetElement>('.hvy-choice-mode-switch');
+/**
+ * Opens the answer-type popover for a marker the author clicked. Merely moving the
+ * caret onto an answer line closes it: the popover floats over the end of those lines,
+ * so leaving it open would swallow clicks meant for the text.
+ */
+function updateInlineAnswerModeSwitch(shell: HTMLElement | null, selectedInput: HTMLInputElement | null = null): void {
+  const control = shell?.querySelector<HTMLElement>('.hvy-choice-mode-switch');
   if (!control) return;
-  const node = range?.startContainer;
-  const element = node instanceof Element ? node : node?.parentElement;
-  const row = selectedRow ?? element?.closest<HTMLElement>('li, .hvy-inline-checkbox-line');
-  const input = row?.querySelector<HTMLInputElement>('input.hvy-inline-checkbox');
-  if (!row || !input) {
+  const input = selectedInput;
+  if (!input) {
     control.hidden = true;
+    const nameForm = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+    if (nameForm) nameForm.hidden = true;
     return;
   }
-  const rows: HTMLElement[] = [row];
-  let previous = row.previousElementSibling;
-  while (previous instanceof HTMLElement && previous.querySelector('input.hvy-inline-checkbox')) {
-    rows.unshift(previous);
-    previous = previous.previousElementSibling;
+  // Answers stacked on their own lines are configured as one run. A marker embedded in
+  // prose has no answer line of its own, so it is a run of one.
+  const row = input.closest<HTMLElement>('li, .hvy-inline-checkbox-line');
+  const rows: HTMLElement[] = [];
+  if (row) {
+    rows.push(row);
+    let previous = row.previousElementSibling;
+    while (previous instanceof HTMLElement && previous.querySelector('input.hvy-inline-checkbox')) {
+      rows.unshift(previous);
+      previous = previous.previousElementSibling;
+    }
+    let next = row.nextElementSibling;
+    while (next instanceof HTMLElement && next.querySelector('input.hvy-inline-checkbox')) {
+      rows.push(next);
+      next = next.nextElementSibling;
+    }
   }
-  let next = row.nextElementSibling;
-  while (next instanceof HTMLElement && next.querySelector('input.hvy-inline-checkbox')) {
-    rows.push(next);
-    next = next.nextElementSibling;
-  }
-  const indexes = rows.flatMap((candidate) =>
-    [...candidate.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')].flatMap((candidateInput) => {
-      const value = Number.parseInt(candidateInput.dataset.answerIndex ?? '', 10);
-      return Number.isNaN(value) ? [] : [value];
-    })
-  );
+  const indexes = (rows.length > 0
+    ? rows.flatMap((candidate) => [...candidate.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')])
+    : [input]
+  ).flatMap((candidateInput) => {
+    const value = Number.parseInt(candidateInput.dataset.answerIndex ?? '', 10);
+    return Number.isNaN(value) ? [] : [value];
+  });
   if (indexes.length === 0) {
     control.hidden = true;
     return;
   }
   control.dataset.answerStart = String(Math.min(...indexes));
   control.dataset.answerEnd = String(Math.max(...indexes));
-  control.querySelectorAll<HTMLInputElement>('input[data-field="inline-answer-mode"]').forEach((mode) => {
-    mode.checked = mode.value === (input.type === 'radio' ? 'radio' : 'checkbox');
-  });
-  const shellRect = shell?.getBoundingClientRect();
-  const firstRowRect = rows[0]?.getBoundingClientRect();
-  if (shellRect && firstRowRect) {
-    control.style.top = `${Math.max(0, firstRowRect.top - shellRect.top)}px`;
+  const sectionKey = control.dataset.sectionKey ?? '';
+  const blockId = control.dataset.blockId ?? '';
+  const selectedGroupName = input.type === 'radio'
+    ? (input.dataset.answerGroup ?? '').startsWith('name:')
+      ? (input.dataset.answerGroup ?? '').slice('name:'.length)
+      : ''
+    : '';
+  // Only groups used near this component are offered; a document-wide list would
+  // grow unusable and says nothing about which group the author means here.
+  const nearbyNames = getNearbyRadioGroupNames(state.document.sections, sectionKey, blockId);
+  const offeredNames = selectedGroupName && !nearbyNames.includes(selectedGroupName)
+    ? [selectedGroupName, ...nearbyNames]
+    : nearbyNames;
+  const groups = control.querySelector<HTMLElement>('.choice-mode-groups');
+  if (groups) {
+    groups.innerHTML = offeredNames
+      .map((name) => renderInlineAnswerGroupOption(name, name === selectedGroupName, escapeHtml))
+      .join('');
   }
+  control.querySelectorAll<HTMLElement>('[data-answer-type="checkbox"]').forEach((option) => {
+    option.classList.toggle('is-selected', input.type !== 'radio');
+    option.setAttribute('aria-pressed', input.type !== 'radio' ? 'true' : 'false');
+  });
+  const nameForm = control.querySelector<HTMLFormElement>('.choice-mode-name-form');
+  if (nameForm && !nameForm.hidden && !control.contains(document.activeElement)) {
+    nameForm.hidden = true;
+  }
+  // Unhide before measuring: a hidden control has no height to clamp against.
   control.hidden = false;
+  const shellRect = shell?.getBoundingClientRect();
+  const anchorRect = (rows[0] ?? input).getBoundingClientRect();
+  if (shellRect) {
+    const maxTop = Math.max(0, shellRect.height - control.offsetHeight);
+    control.style.top = `${Math.min(Math.max(0, anchorRect.top - shellRect.top), maxTop)}px`;
+  }
 }
 
 function getSelectedTextLineStyleName(editable: HTMLElement): string {

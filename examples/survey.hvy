@@ -55,9 +55,16 @@ section_defaults:
   **Should the team schedule a follow-up discussion?**
 
  <!--hvy:text {"id":"follow-up-decision"}-->
+  <!--hvy:radio-group follow-up-->
   ( ) Yes
   ( ) No
+
+ <!--hvy:text {"css":"margin-top: 0.25rem; margin-bottom: 0.25rem;"}-->
+  _Still deciding?_
+
+ <!--hvy:text {"id":"follow-up-undecided"}-->
   ( ) Not sure
+  <!--hvy:radio-group-->
 
  <!--hvy:text {"css":"margin-top: 1rem; margin-bottom: 0.25rem;"}-->
   **What should the team change next time?**

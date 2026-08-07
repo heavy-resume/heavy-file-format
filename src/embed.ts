@@ -1,4 +1,5 @@
 import './default-theme.css';
+import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
 import './style.css';
 
@@ -544,6 +545,7 @@ function renderTransientNotice(): string {
 }
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
+  invalidateInlineAnswerGroupIndex();
   void options;
   if (!currentRoot) return;
   const startedAt = nowMs();

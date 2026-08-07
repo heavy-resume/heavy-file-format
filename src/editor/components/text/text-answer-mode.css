@@ -1,62 +1,157 @@
 .hvy-document .hvy-choice-mode-switch {
   position: absolute;
-  z-index: 4;
+  /* Above the sticky rich toolbar (z-index 20), which otherwise clips the popover. */
+  z-index: 30;
   right: 0.45rem;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   width: fit-content;
+  min-width: 9.5rem;
+  max-width: 15rem;
   margin: 0;
-  padding: 0.2rem;
-  gap: 0.16rem;
+  padding: 0.3rem;
+  gap: 0.14rem;
   border: 1px solid var(--hvy-border-translucent);
-  border-radius: 999px;
+  border-radius: 0.7rem;
   background: color-mix(in srgb, var(--hvy-surface) 94%, var(--hvy-accent-1) 6%);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--hvy-shadow) 24%, transparent);
   transform: translateY(-0.1rem);
+  animation: hvy-choice-mode-pop 140ms ease-out;
 }
 
-.hvy-document .hvy-choice-mode-switch[hidden] { display: none; }
-
-.hvy-document .hvy-choice-mode-switch legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+@keyframes hvy-choice-mode-pop {
+  from { opacity: 0; transform: translateY(-0.35rem) scale(0.97); }
+  to { opacity: 1; transform: translateY(-0.1rem) scale(1); }
 }
 
-.hvy-document .hvy-choice-mode-switch label {
-  position: relative;
+.hvy-document .hvy-choice-mode-switch .choice-mode-title {
+  margin: 0.1rem 0.4rem 0.2rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-groups:empty {
+  display: none;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-option {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  min-height: 1.8rem;
-  padding: 0.1rem 0.62rem;
-  border-radius: 999px;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0.16rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
   color: var(--hvy-text-muted);
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 700;
+  text-align: left;
   cursor: pointer;
-  transition: color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
-.hvy-document .hvy-choice-mode-switch label:has(input:checked) {
+.hvy-document .hvy-choice-mode-switch .choice-mode-option:hover {
+  border-color: var(--hvy-border-translucent);
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text);
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-option.is-selected {
   color: var(--hvy-accent-1-text);
   background: var(--hvy-accent-1);
+  border-color: var(--hvy-accent-1-alt);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--hvy-accent-1-alt) 42%, transparent);
 }
 
-.hvy-document .hvy-choice-mode-switch label:has(input:focus-visible) {
+.hvy-document .hvy-choice-mode-switch .choice-mode-option:focus-visible {
+  outline: none;
   box-shadow: 0 0 0 2px var(--hvy-focus-ring), 0 0 0 4px var(--hvy-focus-glow);
 }
 
-.hvy-document .hvy-choice-mode-switch input {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  opacity: 0;
-  pointer-events: none;
+.hvy-document .hvy-choice-mode-switch .choice-mode-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-new-group {
+  border-top: 1px dashed var(--hvy-border-translucent);
+  border-radius: 0 0 0.45rem 0.45rem;
+  margin-top: 0.1rem;
+  padding-top: 0.3rem;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin-top: 0.2rem;
+  padding: 0.4rem 0.45rem 0.3rem;
+  border-top: 1px solid var(--hvy-border-translucent);
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-form[hidden] {
+  display: none;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-label {
+  color: var(--hvy-text-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-input {
+  width: 100%;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 0.4rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-input:focus-visible {
+  outline: none;
+  border-color: var(--hvy-accent-1-alt);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-actions {
+  display: flex;
+  gap: 0.28rem;
+}
+
+.hvy-document .hvy-choice-mode-switch .choice-mode-name-actions button {
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+}
+
+/*
+ * A radio-group directive is structural, not content. It stays in the editor DOM so
+ * turndown can serialize it back into the source, but it must not occupy space: giving
+ * it a box would reflow the answer lines it sits in front of. Which group a run belongs
+ * to is shown by the answer-type popover instead.
+ */
+.hvy-document .rich-editor .hvy-radio-group-marker {
+  display: none;
+}
+
+.hvy-document .hvy-choice-mode-switch[hidden] { display: none; }
 
 .hvy-document .hvy-choice-mode-switch svg {
   width: 0.9rem;

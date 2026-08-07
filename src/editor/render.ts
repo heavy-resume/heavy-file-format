@@ -19,6 +19,7 @@ import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, SortKeyValue, VisualBlock, VisualSection } from './types';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../inline-answer-groups';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -2316,9 +2317,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return listBlock ? buildComponentListDisplayContext(listBlock) : null;
   }
 
-  function renderTextFragment(content: string): string {
+  function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
     const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
     return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
+      answerGroups,
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
       preserveSortValueAnnotations: state.currentView === 'editor',
@@ -2330,14 +2332,19 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (componentName === 'code') {
       return renderSyntaxHighlightedCode(content, block.schema.codeLanguage || 'text');
     }
+    // Radio groups can span components, so membership comes from the document index.
+    const answerGroups = componentName === 'text'
+      ? getBlockAnswerGroups(getInlineAnswerGroupIndex(state.documentSections), sectionKey, block.id)
+      : undefined;
     if (componentName === 'text' && block.schema.fillIn && hasTextFillInMarker(content)) {
       if (state.currentView === 'viewer') {
-        return renderTextFragment(removeTextFillInMarkers(content));
+        return renderTextFragment(removeTextFillInMarkers(content), answerGroups);
       }
       const parts = splitTextFillIns(content);
       const tokenPrefix = 'HVY_FILL_IN_VALUE_TOKEN_';
       let html = renderTextFragment(
-        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join('')
+        parts.map((part, index) => (index < parts.length - 1 ? `${part}${tokenPrefix}${index}` : part)).join(''),
+        answerGroups
       );
       for (let index = 0; index < parts.length - 1; index += 1) {
         html = html.replace(
@@ -2356,7 +2363,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
       return `<div class="text-fill-in-editor text-fill-in-reader-editor" data-fill-parts="${deps.escapeAttr(JSON.stringify(parts))}">${html}</div>`;
     }
-    return renderTextFragment(content);
+    return renderTextFragment(content, answerGroups);
   }
 
   function renderPassiveContainerBlocks(sectionKey: string, block: VisualBlock, rootSections: VisualSection[]): string {

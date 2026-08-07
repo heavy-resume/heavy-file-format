@@ -13,6 +13,8 @@ import { commitActiveTextFillIn } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { moveScriptOnlySectionsAfterRegularSections, wouldMoveScriptOnlySectionsAfterRegularSections } from '../../section-ops';
 import { capturePaneScroll } from '../../scroll';
+import { clearSelectedRadioAnswers } from '../../inline-answer-groups';
+import { syncReusableTemplateForBlock } from '../../reusable';
 
 const undo: AppActionHandler = () => {
   void undoStateAsync();
@@ -42,6 +44,8 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.componentPlacement = null;
     if (state.currentView === 'editor') {
       runDocumentEditHooksAfterCommit();
+    } else if (view === 'editor') {
+      clearSelectedRadioAnswersInDocument();
     }
   }
   state.currentView = view;
@@ -221,3 +225,27 @@ export const shellActions: Record<string, AppActionHandler> = {
   'request-context-component-changes': requestContextComponentChanges,
   'edit-context-component': editContextComponent,
 };
+
+/**
+ * Entering the editor drops radio selections made while reading. A radio cannot be
+ * deselected by clicking it, so without this an author has no way back to an unanswered
+ * document once any option has been picked.
+ */
+function clearSelectedRadioAnswersInDocument(): void {
+  const changed = clearSelectedRadioAnswers(
+    state.document.sections,
+    (sectionKey, blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      return block && block.schema.kind === 'text' ? block.text : null;
+    },
+    (sectionKey, blockId, text) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      if (!block) return;
+      block.text = text;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+    }
+  );
+  if (changed.length > 0) {
+    recordHistory('clear-radio-answers');
+  }
+}

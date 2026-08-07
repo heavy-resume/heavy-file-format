@@ -72,12 +72,41 @@ test('renders consecutive radio markers as one persisted radio group', () => {
   const html = markdownToReaderHtml('- ( ) Email\n- (x) Phone\n\n[ ] Send a copy');
 
   expect(html).toContain('type="radio"');
-  expect(html.match(/name="hvy-inline-radio-\d+"/g)).toEqual([
-    'name="hvy-inline-radio-1"',
-    'name="hvy-inline-radio-1"',
-  ]);
+  const groupNames = html.match(/name="hvy-inline-radio-[^"]+"/g);
+  expect(groupNames).toHaveLength(2);
+  expect(groupNames?.[0]).toBe(groupNames?.[1]);
   expect(html).toContain('type="checkbox"');
   expect(html).toContain('data-answer-index="2"');
+});
+
+test('separately rendered blocks never share a radio group name', () => {
+  const firstBlock = markdownToReaderHtml('( ) Email\n( ) Phone');
+  const secondBlock = markdownToReaderHtml('( ) Fax\n( ) Pigeon');
+
+  expect(firstBlock.match(/name="[^"]+"/)?.[0]).not.toBe(secondBlock.match(/name="[^"]+"/)?.[0]);
+});
+
+test('radio markers use the caller-supplied group so a group can span components', () => {
+  const html = markdownToReaderHtml('( ) Email\n( ) Phone', {
+    answerGroups: new Map([
+      [0, 'name:contact'],
+      [1, 'name:contact'],
+    ]),
+  });
+
+  expect(html.match(/name="hvy-inline-radio-[^"]+"/g)).toEqual([
+    'name="hvy-inline-radio-name_contact"',
+    'name="hvy-inline-radio-name_contact"',
+  ]);
+  expect(html).toContain('data-answer-group="name:contact"');
+});
+
+test('a radio-group directive never renders as reader text', () => {
+  const html = markdownToReaderHtml('<!--hvy:radio-group contact-->\n( ) Email');
+
+  expect(html).not.toContain('<!--');
+  expect(html.replace(/<[^>]*>/g, '').trim()).toBe('Email');
+  expect(html).toContain('name="hvy-inline-radio-name_contact"');
 });
 
 test('renders source-line answer markers vertically and same-line markers inline', () => {

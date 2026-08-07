@@ -5,6 +5,13 @@ import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } 
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
 import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
+import {
+  answerGroupInputName,
+  normalizeRadioGroupName,
+  radioGroupDirective,
+  resolveBlockAnswerGroups,
+  scanInlineAnswers,
+} from './inline-answer-groups';
 
 marked.setOptions({ gfm: true, breaks: false });
 marked.use({
@@ -84,6 +91,12 @@ turndown.addRule('hvy-nowrap-annotation', {
   },
 });
 
+turndown.addRule('hvy-radio-group-marker', {
+  filter: (node) => node.nodeType === 1 && (node as Element).getAttribute('data-hvy-radio-group') !== null,
+  replacement: (_content, node) =>
+    radioGroupDirective(normalizeRadioGroupName((node as Element).getAttribute('data-hvy-radio-group') ?? '')),
+});
+
 turndown.addRule('hvy-text-line-style-marker', {
   filter: (node) => node.nodeType === 1 && (node as Element).classList.contains('hvy-text-line-style-marker'),
   replacement: () => '',
@@ -129,11 +142,18 @@ export interface MarkdownRenderOptions {
   codeLanguageInputAttrs?: Record<string, string>;
   crossDocumentLinksEnabled?: boolean;
   preserveSortValueAnnotations?: boolean;
+  /**
+   * Resolved radio group key per answer marker index, from
+   * `buildInlineAnswerGroupIndex`. Groups can span components, so this is
+   * supplied by the caller that knows the whole document. Without it, radio
+   * options fall back to grouping within this text alone.
+   */
+  answerGroups?: Map<number, string>;
 }
 
 export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOptions = {}): string {
   const normalized = normalizeMarkdownIndentation(markdown || '');
-  const annotations = extractResponsiveAnnotations(normalized, { editable: true });
+  const annotations = extractResponsiveAnnotations(normalized, { editable: true, answerGroups: options.answerGroups });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
     textLineStyleMode: options.textLineStyleMode ?? 'editor',
@@ -211,6 +231,7 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
   const annotations = extractResponsiveAnnotations(markdown || '', {
     editable: false,
     preserveSortValues: options.preserveSortValueAnnotations === true,
+    answerGroups: options.answerGroups,
   });
   const html = renderMarkdownHtml(annotations.markdown, {
     textLineStyles: options.textLineStyles ?? {},
@@ -364,7 +385,7 @@ interface ResponsiveAnnotationToken {
 
 function extractResponsiveAnnotations(
   markdown: string,
-  options: { editable: boolean; preserveSortValues?: boolean }
+  options: { editable: boolean; preserveSortValues?: boolean; answerGroups?: Map<number, string> }
 ): { markdown: string; tokens: ResponsiveAnnotationToken[] } {
   const tokens: ResponsiveAnnotationToken[] = [];
   const makeToken = (html: string): string => {
@@ -387,89 +408,99 @@ function extractResponsiveAnnotations(
       ? renderSortValueAnnotationHtml(annotation.key, annotation.text)
       : escapeHtml(annotation.text))
   );
-  return { markdown: replaceInlineCheckboxMarkers(withSortValues, makeToken), tokens };
+  return {
+    markdown: replaceInlineCheckboxMarkers(withSortValues, makeToken, {
+      editable: options.editable,
+      answerGroups: options.answerGroups,
+    }),
+    tokens,
+  };
 }
 
 function renderSortValueAnnotationHtml(key: string, text: string): string {
   return `<span class="hvy-sort-value" data-hvy-sort-value="true" data-sort-value-key="${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
-function replaceInlineCheckboxMarkers(markdown: string, makeToken: (html: string) => string): string {
-  const lines = markdown.split(/(\r?\n)/);
-  let fence: { marker: '`' | '~'; length: number } | null = null;
-  let answerIndex = 0;
-  let radioGroup = 0;
-  let previousLineWasRadio = false;
-  return lines
-    .map((line, lineIndex) => {
-      if (/^\r?\n$/.test(line)) {
-        return line;
+let fallbackGroupSeed = 0;
+
+function replaceInlineCheckboxMarkers(
+  markdown: string,
+  makeToken: (html: string) => string,
+  options: { editable: boolean; answerGroups?: Map<number, string> }
+): string {
+  const scanned = scanInlineAnswers(markdown);
+  // Callers that know the document supply resolved groups. Without them, grouping is
+  // local to this text, and the key must still be unique per render so two separately
+  // rendered blocks never share a DOM radio name.
+  fallbackGroupSeed += 1;
+  const fallbackGroups = options.answerGroups
+    ? null
+    : resolveBlockAnswerGroups(markdown, `local-${fallbackGroupSeed}`, null).groups;
+  const groupOf = (answerIndex: number): string | undefined =>
+    (options.answerGroups ?? fallbackGroups ?? undefined)?.get(answerIndex);
+
+  // Splice replacements into each line back-to-front so earlier offsets stay valid.
+  const replacementsByLine = new Map<number, { start: number; length: number; html: string }[]>();
+  const addReplacement = (lineIndex: number, start: number, length: number, html: string): void => {
+    const list = replacementsByLine.get(lineIndex) ?? [];
+    list.push({ start, length, html });
+    replacementsByLine.set(lineIndex, list);
+  };
+  scanned.markers.forEach((marker) => {
+    const groupKey = marker.radio ? groupOf(marker.answerIndex) : undefined;
+    addReplacement(
+      marker.lineIndex,
+      marker.start,
+      marker.length,
+      makeToken(renderInlineCheckboxHtml(marker.checked, marker.radio, marker.answerIndex, groupKey))
+    );
+  });
+  scanned.directives.forEach((directive) => {
+    addReplacement(
+      directive.lineIndex,
+      directive.start,
+      directive.length,
+      makeToken(options.editable ? renderRadioGroupDirectiveHtml(directive.name) : '')
+    );
+  });
+
+  const segments = markdown.split(/(\r?\n)/);
+  return segments
+    .map((segment, segmentIndex) => {
+      if (segmentIndex % 2 === 1) {
+        return segment;
       }
-      const fenceLine = parseTextLineStyleFence(line);
-      if (fence) {
-        if (fenceLine && fenceLine.marker === fence.marker && fenceLine.length >= fence.length) {
-          fence = null;
-        }
-        return line;
+      const lineIndex = segmentIndex / 2;
+      const replacements = replacementsByLine.get(lineIndex);
+      let rendered = segment;
+      if (replacements) {
+        replacements
+          .sort((left, right) => right.start - left.start)
+          .forEach((replacement) => {
+            rendered = `${rendered.slice(0, replacement.start)}${replacement.html}${rendered.slice(replacement.start + replacement.length)}`;
+          });
       }
-      if (fenceLine) {
-        fence = fenceLine;
-        return line;
-      }
-      const lineHasRadio = /(^|\s)\((?: |x|X)\)(?=\s|$)/.test(line);
-      if (lineHasRadio && !previousLineWasRadio) radioGroup += 1;
-      let rendered = replaceInlineCheckboxMarkersInLine(line, (checked, radio) => {
-        const html = renderInlineCheckboxHtml(checked, radio, answerIndex, radio ? radioGroup : undefined);
-        answerIndex += 1;
-        return makeToken(html);
-      });
-      if (isBareAnswerMarkerLine(line) && isBareAnswerMarkerLine(lines[lineIndex + 2] ?? '')) {
+      if (isBareAnswerMarkerLine(segment) && isBareAnswerMarkerLine(segments[segmentIndex + 2] ?? '')) {
         rendered = `${rendered.replace(/[ \t]+$/, '')}  `;
       }
-      previousLineWasRadio = lineHasRadio;
       return rendered;
     })
     .join('');
+}
+
+function renderRadioGroupDirectiveHtml(name: string | null): string {
+  const label = name ?? 'end group';
+  return `<span
+    class="hvy-radio-group-marker${name ? '' : ' is-group-end'}"
+    data-hvy-radio-group="${escapeHtml(name ?? '')}"
+    contenteditable="false"
+  >${escapeHtml(label)}</span>`;
 }
 
 function isBareAnswerMarkerLine(line: string): boolean {
   return /^\s*(?:\[(?: |x|X)\]|\((?: |x|X)\))(?=\s|$)/.test(line);
 }
 
-function replaceInlineCheckboxMarkersInLine(line: string, renderMarker: (checked: boolean, radio: boolean) => string): string {
-  let result = '';
-  let index = 0;
-  let inlineCodeMarker: string | null = null;
-
-  while (index < line.length) {
-    const codeMatch = line.slice(index).match(/^`+/);
-    if (codeMatch?.[0]) {
-      const marker = codeMatch[0];
-      if (inlineCodeMarker === marker) {
-        inlineCodeMarker = null;
-      } else if (!inlineCodeMarker) {
-        inlineCodeMarker = marker;
-      }
-      result += marker;
-      index += marker.length;
-      continue;
-    }
-
-    const checkboxMatch = line.slice(index).match(/^(\[( |x|X)\]|\(( |x|X)\))/);
-    if (checkboxMatch?.[0] && !inlineCodeMarker) {
-      const radio = checkboxMatch[0].startsWith('(');
-      const state = radio ? checkboxMatch[3] : checkboxMatch[2];
-      result += renderMarker((state ?? ' ').toLowerCase() === 'x', radio);
-      index += checkboxMatch[0].length;
-      continue;
-    }
-
-    result += line[index] ?? '';
-    index += 1;
-  }
-
-  return result;
-}
 
 export function renderAltAnnotationsAsFullText(markdown: string): string {
   return replaceAltAnnotations(markdown, (_rawJson, fullText) => fullText);
@@ -601,10 +632,12 @@ function renderNowrapAnnotationHtml(text: string): string {
   return `<span class="hvy-nowrap" data-hvy-nowrap="true">${escapeHtml(text)}</span>`;
 }
 
-function renderInlineCheckboxHtml(checked: boolean, radio = false, answerIndex?: number, radioGroup?: number): string {
+function renderInlineCheckboxHtml(checked: boolean, radio = false, answerIndex?: number, groupKey?: string): string {
   const answerAttrs = typeof answerIndex === 'number' ? ` data-field="inline-persisted-answer" data-answer-index="${answerIndex}"` : '';
-  const nameAttr = radio && typeof radioGroup === 'number' ? ` name="hvy-inline-radio-${radioGroup}"` : '';
-  return `<input class="hvy-inline-checkbox${radio ? ' hvy-inline-radio' : ''}" type="${radio ? 'radio' : 'checkbox'}"${nameAttr}${answerAttrs}${checked ? ' checked' : ''} contenteditable="false">`;
+  const groupAttrs = radio && groupKey
+    ? ` name="${escapeHtml(answerGroupInputName(groupKey))}" data-answer-group="${escapeHtml(groupKey)}"`
+    : '';
+  return `<input class="hvy-inline-checkbox${radio ? ' hvy-inline-radio' : ''}" type="${radio ? 'radio' : 'checkbox'}"${groupAttrs}${answerAttrs}${checked ? ' checked' : ''} contenteditable="false">`;
 }
 
 function wrapInlineCheckboxLines(html: string): string {
@@ -644,24 +677,41 @@ function splitInlineAnswerLineContainers(root: ParentNode): void {
   });
 }
 
+/**
+ * Group membership is resolved from the document source (see `inline-answer-groups`)
+ * and carried on `data-answer-group`. Inputs recovered from literal marker text by
+ * `renderInlineCheckboxes` carry no group, so they inherit the run they sit in.
+ */
 function configureInlineAnswerControls(root: ParentNode, editable: boolean): void {
   const inputs = [...root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')];
   inputs.forEach((input, index) => {
     input.dataset.answerIndex = String(index);
     if (!editable) input.dataset.field = 'inline-persisted-answer';
   });
-  let groupIndex = 0;
+  let recoveredRun = 0;
   let previousContainer: Element | null = null;
+  let previousGroupKey: string | null = null;
   for (const input of inputs) {
     if (input.type !== 'radio') {
       previousContainer = null;
+      previousGroupKey = null;
       continue;
     }
     const container = input.closest('li, .hvy-inline-checkbox-line') ?? input.parentElement;
     const consecutive = previousContainer !== null && previousContainer.nextElementSibling === container;
-    if (!consecutive) groupIndex += 1;
-    input.name = `hvy-inline-radio-${groupIndex}`;
+    let groupKey = input.dataset.answerGroup ?? '';
+    if (!groupKey) {
+      if (consecutive && previousGroupKey) {
+        groupKey = previousGroupKey;
+      } else {
+        recoveredRun += 1;
+        groupKey = `recovered:${recoveredRun}`;
+      }
+      input.dataset.answerGroup = groupKey;
+    }
+    input.name = answerGroupInputName(groupKey);
     previousContainer = container;
+    previousGroupKey = groupKey;
   }
 }
 
@@ -672,9 +722,19 @@ function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
       previous = previous.previousSibling;
       continue;
     }
+    // Structural markers carry no visible content, so a marker sitting in front of an
+    // answer must not stop it counting as the start of its line.
+    if (previous instanceof Element && isStructuralInlineMarker(previous)) {
+      previous = previous.previousSibling;
+      continue;
+    }
     return false;
   }
   return true;
+}
+
+function isStructuralInlineMarker(element: Element): boolean {
+  return element.hasAttribute('data-hvy-radio-group');
 }
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {

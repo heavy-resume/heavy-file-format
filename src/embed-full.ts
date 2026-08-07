@@ -1,4 +1,5 @@
 import './default-theme.css';
+import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
 import './host-overrides.css';
 import './style.css';
 import './highlight-theme.css';
@@ -586,6 +587,7 @@ function ensureRenderers(): void {
 }
 
 function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
+  invalidateInlineAnswerGroupIndex();
   void options;
   if (!currentRoot) return;
   const startedAt = nowMs();

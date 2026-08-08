@@ -3670,17 +3670,26 @@ test('new section component picker opens on the first click', async ({ page }) =
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
 });
 
-test('new section title creates a matching section id', async ({ page }) => {
+test('new section title generates a matching section id without serializing it', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
-  const titleInput = page.locator('.editor-section-card').last().locator('[data-field="section-title"]');
+  const newSection = page.locator('.editor-section-card').last();
+  const titleInput = newSection.locator('[data-field="section-title"]');
 
   await titleInput.fill('Launch Plan');
   await expect(titleInput).toBeFocused();
 
+  // The generated id is live for linking and virtual filesystem paths...
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  await newSection.locator('.editor-section-head [data-action="focus-modal"]').click();
+  await expect(page.locator('.section-meta-modal [data-field="section-custom-id"]')).toHaveValue('launch-plan');
+  await page.locator('.section-meta-modal [data-modal-action="close"]').click();
+
+  // ...but HVY-SPEC.md forbids writing a generated id back into section metadata.
   await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('<!--hvy: {"id":"launch-plan"');
+  await expect(page.locator('#rawEditor')).toContainText('#! Launch Plan');
+  await expect(page.locator('#rawEditor')).not.toContainText('"id":"launch-plan"');
 });
 
 test('empty section heading level defaults to last used across ghost and title shortcuts', async ({ page }) => {
@@ -4194,16 +4203,13 @@ test('resume section templates hide already used non-repeatable sections', async
   await page.goto('/');
 
   await selectDocumentMenuItem(page, 'Resume Example');
-  let options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
-    items.map((item) => item.textContent?.trim())
-  );
-  expect(options).toEqual(['Blank', 'Projects', 'Publications', 'Awards', 'Certifications', 'Resume Section']);
 
-  await selectDocumentMenuItem(page, 'Resume Example');
-  options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
+  // Awards is the one non-repeatable template the resume does not already use;
+  // Tabular Resume Section stays offered because it declares repeatable: true.
+  const options = await page.locator('[data-field="reusable-section-type"][data-section-key="__top_level__"] option').evaluateAll((items) =>
     items.map((item) => item.textContent?.trim())
   );
-  expect(options).toEqual(['Blank', 'Awards', 'Resume Section']);
+  expect(options).toEqual(['Blank', 'Awards', 'Tabular Resume Section']);
 });
 
 test('document meta exposes whether a section template allows multiple sections per document', async ({ page }) => {
@@ -4746,6 +4752,9 @@ test('document ai import guidance is editable metadata and keeps focus while typ
 });
 
 test('description generate button appears only for empty component descriptions', async ({ page }) => {
+  await page.goto('/');
+  // Registered after navigation: intercepting during load slows every dev-server module
+  // request enough to blow the navigation timeout.
   await page.route('**/api/chat', async (route) => {
     const payload = route.request().postDataJSON() as { model?: string; openAiReasoningEffort?: string };
     await route.fulfill({
@@ -4756,7 +4765,6 @@ test('description generate button appears only for empty component descriptions'
       }),
     });
   });
-  await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---

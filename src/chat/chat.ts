@@ -18,7 +18,7 @@ import { wrapChatResponseAsDocument } from './chat-response-document';
 import { getDocumentAiContext } from '../document-ai-context';
 import { buildKeywordChatContext, isKeywordChatContextPrepared } from './chat-context';
 import { buildEmbeddingChatContext, isEmbeddingChatContextPrepared } from './embedding-context';
-import type { ProxyChatMode } from './chat-provider-payload';
+import type { OpenAiReasoningEffort, ProxyChatMode } from './chat-provider-payload';
 import type { ProviderToolCall, ProviderToolDefinition, ProviderToolState } from './provider-tools';
 import { closeIcon, copyIcon } from '../icons';
 import { measureAsyncPhase, measurePhase } from '../perf-trace';
@@ -62,6 +62,7 @@ export interface ProxyChatRequest {
   traceRunId?: string;
   tools?: ProviderToolDefinition[];
   toolState?: ProviderToolState;
+  openAiReasoningEffort?: OpenAiReasoningEffort;
 }
 
 interface ProxyChatRequestInput extends Omit<ProxyChatRequest, 'messages'> {
@@ -126,6 +127,10 @@ export interface ProxyCompletionParams {
   mode: ProxyChatMode;
   debugLabel?: string;
   traceRunId?: string;
+  // Lets short, mechanical calls (description labels) opt out of reasoning instead
+  // of paying the proxy default meant for conversational chat. Applies to OpenAI and
+  // OpenAI-compatible endpoints only; other providers keep their own default.
+  openAiReasoningEffort?: OpenAiReasoningEffort;
   maxContextChars?: number;
   onReasoningSummary?: (summary: string) => void;
   onTokenUsage?: (usage: ChatTokenUsage) => void;
@@ -718,6 +723,7 @@ export async function requestProxyCompletion(params: ProxyCompletionParams): Pro
     systemInstructions: params.systemInstructions ?? params.responseInstructions,
     mode: params.mode,
     traceRunId: params.traceRunId,
+    openAiReasoningEffort: params.openAiReasoningEffort,
   });
   const hostClient = params.client === undefined ? getHostChatClient() : params.client;
 
@@ -801,6 +807,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     systemInstructions: params.systemInstructions,
     mode: params.mode,
     traceRunId: params.traceRunId,
+    openAiReasoningEffort: params.openAiReasoningEffort,
     tools: params.tools,
     toolState: params.toolState,
   }));
@@ -959,6 +966,9 @@ export function buildProxyChatRequest(request: ProxyChatRequestInput): ProxyChat
   }
   if (request.toolState) {
     payload.toolState = request.toolState;
+  }
+  if (request.openAiReasoningEffort) {
+    payload.openAiReasoningEffort = request.openAiReasoningEffort;
   }
   return payload;
 }

@@ -68,12 +68,12 @@
  * not inherit any of the themed styling their <select> gets. Without this they fall
  * back to the browser default, which is unreadable on dark palettes.
  */
-.hvy-document :where(select option) {
+.hvy-document select option {
   background: var(--hvy-surface);
   color: var(--hvy-text);
 }
 
-.hvy-document :where(select option:checked) {
+.hvy-document select option:checked {
   background: var(--hvy-surface-alt);
   color: var(--hvy-text-alt);
 }

@@ -2,6 +2,7 @@ import { builtInSearchProvider } from './search-provider';
 import { createDocumentFilterSnapshot } from './document-filter';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
+import { restoreVirtualizedSection } from '../section-virtualizer';
 import { state, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
 import type {
   HvySearchResult,
@@ -199,10 +200,26 @@ function runAfterSearchResultRender(callback: () => void): void {
   });
 }
 
-function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement): void {
+/**
+ * Mirrors the reader navigation path: a section scrolled out of view is virtualized to a
+ * placeholder, so the target has to be restored and then waited for before it exists in
+ * the DOM. Without this, results in virtualized sections silently do nothing.
+ */
+const EDITOR_SEARCH_TARGET_ATTEMPTS = 8;
+
+function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement, attempt = 0): void {
   alignEditorSidebarToSearchResult(result, app);
+  restoreVirtualizedSection(app, result.sectionKey);
   const target = findEditorSearchTarget(result, app);
   if (!target) {
+    if (attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
+      window.setTimeout(() => navigateToEditorSearchTarget(result, app, attempt + 1), 60);
+      return;
+    }
+    console.error('[hvy:search] Unable to find editor target for search result.', {
+      sectionKey: result.sectionKey,
+      blockId: result.blockId ?? '',
+    });
     return;
   }
   scrollEditorSearchTargetIntoView(target);

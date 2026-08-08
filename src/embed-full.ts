@@ -1176,7 +1176,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
-  void decryptEncryptedComponents(state.document, options.encryption ?? null).then(() => runtime.callbacks.renderApp());
+  // Only re-render when there was actually something encrypted to reveal.
+  void decryptEncryptedComponents(state.document, options.encryption ?? null)
+    .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {

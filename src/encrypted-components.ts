@@ -12,12 +12,19 @@ export interface HvyEncryptedComponentResult extends HvyGeneratedEncryptionKey {
   attachmentId: string;
 }
 
-export async function decryptEncryptedComponents(document: VisualDocument, options: HvyEncryptionOptions | null | undefined): Promise<void> {
+/** Resolves to whether any encrypted component was touched, so callers can skip a
+ * pointless re-render on the common case of a document with none. */
+export async function decryptEncryptedComponents(
+  document: VisualDocument,
+  options: HvyEncryptionOptions | null | undefined
+): Promise<boolean> {
   const tasks: Promise<void>[] = [];
+  let touched = false;
   visitDocumentBlocks(document, (block) => {
     if (block.schema.kind !== 'encrypted') {
       return;
     }
+    touched = true;
     const keyId = block.schema.keyId.trim();
     const key = getEncryptionKey(options, keyId);
     if (!key) {
@@ -28,6 +35,7 @@ export async function decryptEncryptedComponents(document: VisualDocument, optio
     tasks.push(decryptEncryptedBlock(document, block, key));
   });
   await Promise.all(tasks);
+  return touched;
 }
 
 export async function prepareEncryptedComponentsForSerialization(

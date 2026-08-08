@@ -491,9 +491,40 @@ HVY.mountHvy({
 
 The adapter receives the authored query unchanged together with `pageSize` and
 `offset`. It must apply pagination at the source and return `hasNextPage`; it
-must not load an unbounded result and slice it in the browser. External sources
-are read-only in the current reference client. `queryLimit` is the single rows-
-per-page setting, defaults to 50, and is clamped to 1–1000.
+must not load an unbounded result and slice it in the browser. `queryLimit` is
+the single rows-per-page setting, defaults to 50, and is clamped to 1–1000.
+
+A source that supplies only `readPage` renders read-only. Adding an optional
+`write` member makes it fully editable, and every editing affordance the
+component offers routes through it — there is nothing else to implement:
+
+```js
+databaseSources: [{
+  id: 'example-remote-db',
+  label: 'Example remote database',
+  readPage: (request) => remoteDatabase.readPage(request),
+  write: {
+    // 'checkpoint' if the source can snapshot and restore its whole state for undo,
+    // 'logical' if undo relies on the inverse operations the editor issues.
+    undo: 'logical',
+    createTable: ({ table }) => remoteDatabase.createTable(table),
+    addColumn: ({ table }) => remoteDatabase.addColumn(table),
+    addNamedColumn: ({ table }, column) => remoteDatabase.addColumn(table, column),
+    dropColumn: ({ table }, column) => remoteDatabase.dropColumn(table, column),
+    renameColumn: ({ table }, from, to) => remoteDatabase.renameColumn(table, from, to),
+    updateCell: ({ table }, rowId, column, value) => remoteDatabase.updateCell(table, rowId, column.name, value),
+    insertRow: ({ table }, values) => remoteDatabase.insertRow(table, values),
+    deleteRow: ({ table }, rowId) => remoteDatabase.deleteRow(table, rowId),
+    restoreRow: ({ table }, row) => remoteDatabase.insertRow(table, row),
+  },
+}]
+```
+
+Under `undo: 'logical'` the editor only offers operations it can reverse with an
+inverse call, so dropping a column and deleting a table are not undoable and the
+editor does not pretend otherwise. `addColumn` returns the name it chose and
+`renameColumn` returns the name actually stored, so the editor can build those
+inverses.
 
 Editor and AI mounts resize large uploaded JPEG, PNG, and WebP image attachments
 to fit within 2048 x 2048 pixels by default. Hosts can override the bound, or

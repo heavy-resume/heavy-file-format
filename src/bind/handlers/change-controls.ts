@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
+import { state, getRefreshReaderPanels, refreshReaderPanelsOutsideActiveEditor, recordHistory, handleImageUpload, resolveBlockContext, syncReusableTemplateForBlock, handleBlockFieldInput } from './_imports';
 import {
   encodeComponentListRuntimeView,
   getComponentListDisplayState,
@@ -13,7 +13,6 @@ import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import type { SearchCategory } from '../../search/types';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 
-const loadDbTableRuntime = () => import('../../plugins/db-table');
 
 export function bindChangeControls(app: HTMLElement): void {
   app.addEventListener('change', (event) => {
@@ -65,41 +64,6 @@ export function bindChangeControls(app: HTMLElement): void {
       if (description instanceof HTMLElement && description.matches('[data-pdf-preset-description]')) {
         description.textContent = preset.description?.trim() ?? '';
       }
-      return;
-    }
-
-    if (field === 'db-table-cell' && target instanceof HTMLInputElement) {
-      const tableName = target.dataset.tableName ?? '';
-      const columnName = target.dataset.columnName ?? '';
-      const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
-      const isDraftRow = target.dataset.dbTableDraftRow === 'true';
-      if (tableName.length === 0 || columnName.length === 0) {
-        return;
-      }
-      if (isDraftRow) {
-        if (target.value.length === 0) {
-          return;
-        }
-        recordHistory(`db-table-draft-row:${tableName}:${columnName}`);
-        void loadDbTableRuntime()
-          .then(({ materializeDbTableDraftRow }) => materializeDbTableDraftRow(tableName, columnName, target.value))
-          .then(() => {
-            getRenderApp()();
-          })
-          .catch((error) => {
-            console.error('[hvy:db-table-plugin] draft row materialization failed', error);
-          });
-        return;
-      }
-      if (Number.isNaN(rowId)) {
-        return;
-      }
-      recordHistory(`db-table-cell:${tableName}:${rowId}:${columnName}`);
-      void loadDbTableRuntime()
-        .then(({ updateDbTableCell }) => updateDbTableCell(tableName, rowId, columnName, target.value))
-        .catch((error) => {
-          console.error('[hvy:db-table-plugin] cell update failed', error);
-        });
       return;
     }
 
@@ -223,51 +187,6 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'db-table-column-name' && target instanceof HTMLInputElement) {
-      const tableName = target.dataset.tableName ?? '';
-      const oldColumnName = target.dataset.oldColumnName ?? '';
-      if (tableName.length === 0 || oldColumnName.length === 0) {
-        return;
-      }
-      const trimmed = target.value.trim();
-      if (trimmed.length === 0) {
-        const proceed = window.confirm(`Delete column "${oldColumnName}"?`);
-        if (!proceed) {
-          target.value = oldColumnName;
-          return;
-        }
-        recordHistory(`db-table-column-drop:${tableName}:${oldColumnName}`);
-        void loadDbTableRuntime()
-          .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, oldColumnName))
-          .then(() => {
-            getRenderApp()();
-          })
-          .catch((error) => {
-            console.error('[hvy:db-table-plugin] column drop failed', error);
-            target.value = oldColumnName;
-            window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
-            getRenderApp()();
-          });
-        return;
-      }
-      recordHistory(`db-table-column:${tableName}:${oldColumnName}`);
-      void loadDbTableRuntime()
-        .then(({ renameDbTableColumn }) => renameDbTableColumn(tableName, oldColumnName, target.value))
-        .then(() => {
-          const nextColumnName = target.value.trim();
-          if (nextColumnName.length === 0) {
-            return;
-          }
-          target.dataset.oldColumnName = nextColumnName;
-          void loadDbTableRuntime().then(({ syncDbTableColumnNameInDom }) => {
-            syncDbTableColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
-          });
-        })
-        .catch((error) => {
-          console.error('[hvy:db-table-plugin] column rename failed', error);
-          getRenderApp()();
-        });
-    }
   });
 }
 

@@ -6,6 +6,7 @@ import type { DbTableConfig } from './db-table-config';
 import {
   getDatabaseTableSource,
   registerBuiltInDatabaseTableSource,
+  type HvyDatabaseTableWriter,
   type HvyDatabaseTableColumn,
   type HvyDatabaseTableForeignKey,
   type HvyDatabaseTableForeignOption,
@@ -55,7 +56,12 @@ export async function loadDbTableSourcePage(
         ? [[columnName, column.foreignDisplayColumn.trim()]]
         : [])),
   });
-  return source.id === 'with-file' ? page : { ...page, editable: false };
+  return source.write ? page : { ...page, editable: false };
+}
+
+/** The write half of the configured source, or null when the source is read-only. */
+export function getDbTableWriter(config: DbTableConfig): HvyDatabaseTableWriter | null {
+  return getDatabaseTableSource(config.source)?.write ?? null;
 }
 
 async function readWithFilePage(request: HvyDatabaseTablePageRequest): Promise<HvyDatabaseTablePage> {
@@ -113,9 +119,23 @@ registerBuiltInDatabaseTableSource({
   id: 'with-file',
   label: 'Attached database',
   readPage: readWithFilePage,
+  // The attached database is checkpointed wholesale for undo, so every operation here
+  // is reversible even when it has no logical inverse.
+  write: {
+    undo: 'checkpoint',
+    createTable: ({ document, table }) => createBasicDbTable(document, table),
+    addColumn: ({ document, table }) => addDbTableColumn(document, table),
+    addNamedColumn: ({ document, table }, column) => addNamedDbTableColumn(document, table, column),
+    dropColumn: ({ document, table }, column) => dropDbTableColumn(document, table, column),
+    renameColumn: ({ document, table }, from, to) => renameDbTableColumn(document, table, from, to),
+    updateCell: ({ document, table }, rowId, column, value) => updateDbTableCell(document, table, rowId, column, value),
+    insertRow: ({ document, table }, values) => insertDbTableRow(document, table, values),
+    deleteRow: ({ document, table }, rowId) => deleteDbTableRow(document, table, rowId),
+    restoreRow: ({ document, table }, row) => restoreDbTableRow(document, table, row),
+  },
 });
 
-export async function updateDbTableSourceCell(
+export async function updateDbTableCell(
   document: VisualDocument,
   tableName: string,
   rowId: number,
@@ -181,7 +201,7 @@ export async function createBasicDbTable(document: VisualDocument, tableName: st
   });
 }
 
-export async function addDbTableSourceColumn(document: VisualDocument, tableName: string): Promise<string> {
+export async function addDbTableColumn(document: VisualDocument, tableName: string): Promise<string> {
   assertTableName(tableName);
   return withDatabase(document, (db) => {
     requireWritableTable(db, tableName);
@@ -204,7 +224,7 @@ export async function addNamedDbTableColumn(
   });
 }
 
-export async function renameDbTableSourceColumn(
+export async function renameDbTableColumn(
   document: VisualDocument,
   tableName: string,
   oldColumnName: string,
@@ -224,7 +244,7 @@ export async function renameDbTableSourceColumn(
   });
 }
 
-export async function dropDbTableSourceColumn(document: VisualDocument, tableName: string, columnName: string): Promise<void> {
+export async function dropDbTableColumn(document: VisualDocument, tableName: string, columnName: string): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
     requireWritableTable(db, tableName);

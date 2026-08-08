@@ -49,8 +49,9 @@ test('database-table edits relationships, stages required rows, and controls col
   const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
-  await expect(plugin.locator('thead')).toContainText('Id');
-  await expect(plugin.locator('thead')).toContainText('Organization');
+  // Editable headers are inputs, so the visible name is a value rather than text.
+  await expect(plugin.getByLabel('Display name for id')).toHaveValue('Id');
+  await expect(plugin.getByLabel('Display name for relationship_id')).toHaveValue('Organization');
   await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="relationship_id"] option:checked')).toHaveText('Acme Corp');
 
   // TOOL CALL
@@ -61,7 +62,7 @@ test('database-table edits relationships, stages required rows, and controls col
   await plugin.getByRole('button', { name: 'Save' }).click();
 
   // AFTER
-  await expect(plugin.locator('thead').getByText('Id', { exact: true })).toHaveCount(0);
+  await expect(plugin.getByLabel('Display name for id')).toHaveCount(0);
   await expect(plugin.getByRole('alert')).toHaveText('Complete the required fields before saving this row.');
   const draftContact = plugin.locator('[data-db-table-draft-control][data-column-name="contact"]');
   await draftContact.fill('Alex Doe');
@@ -125,8 +126,10 @@ test('database-table renames database columns directly from spreadsheet headers'
   // TOOL CALL
   await columnName.focus();
   await plugin.getByRole('button', { name: 'DB Column' }).click();
-  await columnName.fill('contact_name');
-  await columnName.blur();
+  // Switching modes retargets the same header input at the database name.
+  const databaseName = plugin.getByLabel('Database name for contact');
+  await databaseName.fill('contact_name');
+  await databaseName.blur();
 
   // AFTER
   await expect(plugin.getByLabel('Display name for contact_name')).toHaveValue('Contact');
@@ -249,4 +252,112 @@ test('database-table cell and destructive schema edits share async document undo
     await plugin.getByRole('button', { name: 'Columns' }).click();
   }
   await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toBeVisible();
+});
+
+test('an embedded writable host source drives the real db-table editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="warehouseMount"></div>';
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const root = document.querySelector<HTMLElement>('#warehouseMount');
+    if (!root) throw new Error('Warehouse mount missing.');
+
+    // A source with no SQLite behind it at all: rows live in this array.
+    const rows = [{ rowId: 1, hasAttachedComponent: false, values: { name: 'Existing' } }];
+    const column = {
+      name: 'name',
+      type: 'text',
+      notNull: false,
+      defaultValue: null,
+      primaryKeyOrder: 0,
+      generated: false,
+      foreignKey: null,
+    };
+    const testWindow = window as Window & { warehouseCalls?: string[] };
+    testWindow.warehouseCalls = [];
+
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.db-table
+---
+
+<!--hvy: {"id":"warehouse"}-->
+#! Warehouse
+
+<!--hvy:plugin {"id":"items","plugin":"hvy.db-table","pluginConfig":{"source":"warehouse","table":"work_items"}}-->
+`), '.hvy'),
+      mode: 'editor',
+      plugins: [plugins.dbTable],
+      databaseSources: [{
+        id: 'warehouse',
+        label: 'Warehouse',
+        async readPage(request) {
+          return {
+            objectType: 'table',
+            editable: true,
+            queryActive: false,
+            columns: [column],
+            rows: rows.map((row) => ({ ...row, values: { ...row.values } })),
+            offset: request.offset,
+            hasNextPage: false,
+            hasTriggers: false,
+          };
+        },
+        write: {
+          undo: 'logical',
+          async createTable() { testWindow.warehouseCalls?.push('createTable'); },
+          async addColumn() { testWindow.warehouseCalls?.push('addColumn'); return 'Column 1'; },
+          async addNamedColumn(_request, name) { testWindow.warehouseCalls?.push(`addNamedColumn:${name}`); },
+          async dropColumn(_request, name) { testWindow.warehouseCalls?.push(`dropColumn:${name}`); },
+          async renameColumn(_request, from, to) { testWindow.warehouseCalls?.push(`renameColumn:${from}->${to}`); return to; },
+          async updateCell(_request, rowId, target, value) {
+            testWindow.warehouseCalls?.push(`updateCell:${rowId}:${target.name}=${String(value)}`);
+            const row = rows.find((candidate) => candidate.rowId === rowId);
+            if (row) row.values[target.name] = value as string;
+          },
+          async insertRow(_request, values) {
+            testWindow.warehouseCalls?.push(`insertRow:${values.map((entry) => String(entry.value)).join(',')}`);
+            const inserted = { rowId: rows.length + 1, values: Object.fromEntries(values.map((entry) => [entry.column.name, entry.value])) };
+            rows.push({ rowId: inserted.rowId, hasAttachedComponent: false, values: { ...inserted.values } as Record<string, string> });
+            return inserted;
+          },
+          async deleteRow(_request, rowId) {
+            testWindow.warehouseCalls?.push(`deleteRow:${rowId}`);
+            const index = rows.findIndex((candidate) => candidate.rowId === rowId);
+            if (index >= 0) rows.splice(index, 1);
+          },
+          async restoreRow() { testWindow.warehouseCalls?.push('restoreRow'); },
+        },
+      }],
+    });
+  });
+
+  // Activate the block the way an author would.
+  await page.locator('#warehouseMount .editor-block-passive').first().click();
+
+  const plugin = page.locator('#warehouseMount .hvy-database-table-editor');
+  const cells = plugin.locator('[data-db-table-field="cell"][data-column-name="name"]');
+
+  // BEFORE: a source declaring writes renders editable, with no SQLite involved.
+  await expect(cells).toHaveValue('Existing');
+  await expect(plugin.getByRole('button', { name: 'Row', exact: true })).toBeVisible();
+
+  // TOOL CALL: edit a cell and add a row through the normal editor affordances.
+  await cells.first().fill('Renamed');
+  await cells.first().blur();
+  await plugin.getByRole('button', { name: 'Row', exact: true }).click();
+  await plugin.locator('[data-db-table-draft-control][data-column-name="name"]').fill('Added');
+  await plugin.getByRole('button', { name: 'Save' }).click();
+
+  // AFTER: the host source received both writes and the grid shows its data.
+  await expect(cells).toHaveCount(2);
+  await expect(cells.nth(1)).toHaveValue('Added');
+  expect(await page.evaluate(() => (window as Window & { warehouseCalls?: string[] }).warehouseCalls)).toEqual([
+    'updateCell:1:name=Renamed',
+    'insertRow:Added',
+  ]);
 });

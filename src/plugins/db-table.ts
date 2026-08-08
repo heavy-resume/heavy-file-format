@@ -3,7 +3,6 @@ import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '.
 import type { DocumentAttachment, VisualDocument } from '../types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
-import { validateDbTableObjectName } from './db-table-identifiers';
 import { validateAttachedComponentHvy } from './db-table-fragment';
 import { formatQueryResultTable } from './db-table-format';
 import type { ScriptingDatabaseTableHandle, ScriptingDbApi } from './scripting/runtime';
@@ -109,90 +108,6 @@ export {
   restoreDbTableFrameScroll,
   toggleDbTableSort,
 } from './db-table-model';
-
-export async function addDbTableRow(tableName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
-  await persistRuntimeDatabase();
-}
-
-export async function createDbTable(tableName: string): Promise<boolean> {
-  const trimmed = tableName.trim();
-  const tableNameError = validateDbTableObjectName(trimmed);
-  if (tableNameError) {
-    throw new Error(tableNameError);
-  }
-  const db = await getLoadedDatabase();
-  const created = ensureTableExists(db, trimmed);
-  if (created) {
-    await persistRuntimeDatabase();
-  }
-  return created;
-}
-
-export async function materializeDbTableDraftRow(tableName: string, columnName: string, value: string): Promise<number | null> {
-  if (value.length === 0) {
-    return null;
-  }
-
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  db.run(`INSERT INTO ${quoteIdentifier(tableName)} DEFAULT VALUES`);
-  const rowIdResult = db.exec('SELECT last_insert_rowid()');
-  const rowId = Number(rowIdResult[0]?.values[0]?.[0] ?? 0);
-  if (!Number.isFinite(rowId) || rowId <= 0) {
-    throw new Error('Failed to create a database row.');
-  }
-  db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
-  await persistRuntimeDatabase();
-  return rowId;
-}
-
-export async function addDbTableColumn(tableName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  ensureWritableTableExists(db, tableName);
-  const nextName = getNextColumnName(getTableColumns(db, tableName));
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(nextName)} TEXT`);
-  await persistRuntimeDatabase();
-}
-
-export async function renameDbTableColumn(tableName: string, oldName: string, nextName: string): Promise<void> {
-  const trimmedNext = nextName.trim();
-  if (trimmedNext.length === 0 || trimmedNext === oldName) {
-    return;
-  }
-
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  const columns = getTableColumns(db, tableName);
-  if (columns.includes(trimmedNext)) {
-    throw new Error(`Column "${trimmedNext}" already exists.`);
-  }
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} RENAME COLUMN ${quoteIdentifier(oldName)} TO ${quoteIdentifier(trimmedNext)}`);
-  await persistRuntimeDatabase();
-}
-
-export async function dropDbTableColumn(tableName: string, columnName: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  const columns = getTableColumns(db, tableName);
-  if (!columns.includes(columnName)) {
-    return;
-  }
-  if (columns.length <= 1) {
-    throw new Error('Cannot delete the last remaining column.');
-  }
-  db.run(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`);
-  await persistRuntimeDatabase();
-}
-
-export async function updateDbTableCell(tableName: string, rowId: number, columnName: string, value: string): Promise<void> {
-  const db = await getLoadedDatabase();
-  requireWritableTable(db, tableName);
-  db.run(`UPDATE ${quoteIdentifier(tableName)} SET ${quoteIdentifier(columnName)} = ? WHERE rowid = ?`, [value, rowId]);
-  await persistRuntimeDatabase();
-}
 
 export async function getDbTableRowComponent(tableName: string, rowId: number): Promise<string | null> {
   const db = await getLoadedDatabase();
@@ -491,33 +406,12 @@ function ensureTableExists(db: SqlJsDatabase, tableName: string): boolean {
   return true;
 }
 
-function ensureWritableTableExists(db: SqlJsDatabase, tableName: string): boolean {
-  const objectType = getDbObjectType(db, tableName);
-  if (objectType === 'view') {
-    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
-  }
-  if (objectType === 'table') {
-    return false;
-  }
-
-  const columns = getDefaultColumnsForTable(tableName);
-  db.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${columns.map((column) => `${quoteIdentifier(column)} TEXT`).join(', ')})`);
-  return true;
-}
-
 function requireExistingDbObject(db: SqlJsDatabase, tableName: string): 'table' | 'view' {
   const objectType = getDbObjectType(db, tableName);
   if (!objectType) {
     throw new Error(`DB object "${tableName}" does not exist. Create a table or view named "${tableName}" first.`);
   }
   return objectType;
-}
-
-function requireWritableTable(db: SqlJsDatabase, tableName: string): void {
-  const objectType = requireExistingDbObject(db, tableName);
-  if (objectType === 'view') {
-    throw new Error(`Cannot edit database view "${tableName}". Create or edit a source table instead.`);
-  }
 }
 
 function ensureRowComponentsTableExists(db: SqlJsDatabase): void {
@@ -574,16 +468,6 @@ function getDefaultColumnsForTable(tableName: string): string[] {
     return ['Company', 'URL', 'Status'];
   }
   return ['Column 1', 'Column 2', 'Column 3'];
-}
-
-function getNextColumnName(existingColumns: string[]): string {
-  let index = existingColumns.length + 1;
-  let candidate = `Column ${index}`;
-  while (existingColumns.includes(candidate)) {
-    index += 1;
-    candidate = `Column ${index}`;
-  }
-  return candidate;
 }
 
 function buildSortClause(sortColumn: string | null, sortDirection: 'asc' | 'desc' | null): string {

@@ -2,16 +2,17 @@ import { expect, test } from 'vitest';
 
 import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import {
-  addDbTableSourceColumn,
+  addDbTableColumn,
   coerceDbTableInput,
   deleteDbTableRow,
   decodeDbTableOptionValue,
-  dropDbTableSourceColumn,
+  dropDbTableColumn,
   encodeDbTableOptionValue,
+  getDbTableWriter,
   insertDbTableRow,
   loadDbTableSourcePage,
-  renameDbTableSourceColumn,
-  updateDbTableSourceCell,
+  renameDbTableColumn,
+  updateDbTableCell,
 } from '../src/plugins/db-table/db-table-data';
 import {
   normalizeDbTableColumnWidth,
@@ -101,7 +102,7 @@ test('database-table writes numeric relationship values and enforces foreign key
   const relationshipColumn = snapshot.columns.find((column) => column.name === 'relationship_id')!;
 
   // TOOL CALL
-  await updateDbTableSourceCell(document, 'contacts', 1, relationshipColumn, 2);
+  await updateDbTableCell(document, 'contacts', 1, relationshipColumn, 2);
 
   // AFTER
   const inspection = await createScriptingDbRuntime(document);
@@ -112,7 +113,7 @@ test('database-table writes numeric relationship values and enforces foreign key
   } finally {
     inspection.dispose();
   }
-  await expect(updateDbTableSourceCell(document, 'contacts', 1, relationshipColumn, 999)).rejects.toThrow(/FOREIGN KEY constraint failed/u);
+  await expect(updateDbTableCell(document, 'contacts', 1, relationshipColumn, 999)).rejects.toThrow(/FOREIGN KEY constraint failed/u);
 });
 
 test('database-table inserts a complete staged row with one write', async () => {
@@ -324,9 +325,9 @@ test('database-table carries forward schema editing and removes row-attached HVY
   }
 
   // TOOL CALL
-  expect(await addDbTableSourceColumn(document, 'contacts')).toBe('Column 3');
-  await renameDbTableSourceColumn(document, 'contacts', 'Column 3', 'Notes');
-  await dropDbTableSourceColumn(document, 'contacts', 'Column 2');
+  expect(await addDbTableColumn(document, 'contacts')).toBe('Column 3');
+  await renameDbTableColumn(document, 'contacts', 'Column 3', 'Notes');
+  await dropDbTableColumn(document, 'contacts', 'Column 2');
   const beforeDelete = await loadDbTableSourcePage(document, readDbTableConfig({ table: 'contacts' }), {
     query: '',
     offset: 0,
@@ -362,4 +363,106 @@ test('database-table migrates and removes presentation settings when physical co
   expect(renameDbTableSourceColumnConfig(readDbTableConfig({ table: 'contacts' }), 'organization_id', 'company_id')).toEqual({
     columns: { company_id: { label: 'Organization Id' } },
   });
+});
+
+test('a host source without writes is read-only even when its page claims to be editable', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  setHostDatabaseTableSources([{
+    id: 'read-only-warehouse',
+    async readPage(request) {
+      return {
+        objectType: 'table',
+        editable: true,
+        queryActive: false,
+        columns: [{ name: 'name', type: 'text', notNull: false, defaultValue: null, primaryKeyOrder: 0, generated: false, foreignKey: null }],
+        rows: [{ rowId: 1, hasAttachedComponent: false, values: { name: 'Example' } }],
+        offset: request.offset,
+        hasNextPage: false,
+        hasTriggers: false,
+      };
+    },
+  }]);
+
+  try {
+    const config = readDbTableConfig({ source: 'read-only-warehouse', table: 'work_items' });
+
+    const expectedResult = await loadDbTableSourcePage(document, config, {
+      query: '',
+      offset: 0,
+      sortColumn: null,
+      sortDirection: null,
+    });
+
+    expect(expectedResult.editable).toBe(false);
+    expect(getDbTableWriter(config)).toBe(null);
+  } finally {
+    setHostDatabaseTableSources([]);
+  }
+});
+
+test('a host source that implements writes gets the same editing contract as the attached file', async () => {
+  const document = deserializeDocument('---\nhvy_version: 0.1\n---\n', '.hvy');
+  const calls: string[] = [];
+  const column = { name: 'name', type: 'text', notNull: false, defaultValue: null, primaryKeyOrder: 0, generated: false, foreignKey: null };
+  setHostDatabaseTableSources([{
+    id: 'writable-warehouse',
+    async readPage(request) {
+      return {
+        objectType: 'table',
+        editable: true,
+        queryActive: false,
+        columns: [column],
+        rows: [{ rowId: 1, hasAttachedComponent: false, values: { name: 'Example' } }],
+        offset: request.offset,
+        hasNextPage: false,
+        hasTriggers: false,
+      };
+    },
+    write: {
+      undo: 'logical',
+      async createTable({ table }) { calls.push(`createTable:${table}`); },
+      async addColumn({ table }) { calls.push(`addColumn:${table}`); return 'Column 1'; },
+      async addNamedColumn({ table }, name) { calls.push(`addNamedColumn:${table}:${name}`); },
+      async dropColumn({ table }, name) { calls.push(`dropColumn:${table}:${name}`); },
+      async renameColumn({ table }, from, to) { calls.push(`renameColumn:${table}:${from}->${to}`); return to; },
+      async updateCell({ table }, rowId, target, value) { calls.push(`updateCell:${table}:${rowId}:${target.name}=${String(value)}`); },
+      async insertRow({ table }, values) { calls.push(`insertRow:${table}:${values.length}`); return { rowId: 7, values: {} }; },
+      async deleteRow({ table }, rowId) { calls.push(`deleteRow:${table}:${rowId}`); },
+      async restoreRow({ table }, row) { calls.push(`restoreRow:${table}:${row.rowId}`); },
+    },
+  }]);
+
+  try {
+    const config = readDbTableConfig({ source: 'writable-warehouse', table: 'work_items' });
+    const request = { document, table: 'work_items' };
+
+    const page = await loadDbTableSourcePage(document, config, { query: '', offset: 0, sortColumn: null, sortDirection: null });
+    const writer = getDbTableWriter(config);
+    if (!writer) throw new Error('A source declaring writes must expose a writer.');
+
+    await writer.createTable(request);
+    await writer.addColumn(request);
+    await writer.addNamedColumn(request, 'Notes');
+    await writer.renameColumn(request, 'Notes', 'Detail');
+    await writer.updateCell(request, 1, column, 'Renamed');
+    await writer.insertRow(request, [{ column, value: 'New' }]);
+    await writer.deleteRow(request, 7);
+    await writer.restoreRow(request, { rowId: 7, values: { name: 'New' } });
+    await writer.dropColumn(request, 'Detail');
+
+    expect(page.editable).toBe(true);
+    expect(calls).toEqual([
+      'createTable:work_items',
+      'addColumn:work_items',
+      'addNamedColumn:work_items:Notes',
+      'renameColumn:work_items:Notes->Detail',
+      'updateCell:work_items:1:name=Renamed',
+      'insertRow:work_items:1',
+      'deleteRow:work_items:7',
+      'restoreRow:work_items:7',
+      'dropColumn:work_items:Detail',
+    ]);
+  } finally {
+    setHostDatabaseTableSources([]);
+  }
 });

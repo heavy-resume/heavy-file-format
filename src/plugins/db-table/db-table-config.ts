@@ -24,7 +24,7 @@ export interface DbTableColumnDefaults {
 const CSS_COLUMN_WIDTH = /^(?:auto|\d+(?:\.\d+)?(?:px|rem|em|ch|%))$/u;
 const CSS_MAX_COLUMN_WIDTH = /^\d+(?:\.\d+)?(?:px|rem|em|ch)$/u;
 
-export const DEFAULT_DB_TABLE__MAX_COLUMN_WIDTH = '40rem';
+export const DEFAULT_DB_TABLE_MAX_COLUMN_WIDTH = '40rem';
 
 export function readDbTableConfig(value: JsonObject): DbTableConfig {
   return {

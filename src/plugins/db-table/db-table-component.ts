@@ -7,7 +7,7 @@ import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, closeIcon, p
 import { escapeAttr, escapeHtml } from '../../utils';
 import {
   humanizeDbColumnName,
-  DEFAULT_DB_TABLE__MAX_COLUMN_WIDTH,
+  DEFAULT_DB_TABLE_MAX_COLUMN_WIDTH,
   normalizeDbTableMaxColumnWidth,
   readDbTableColumnConfig,
   readDbTableConfig,
@@ -18,25 +18,17 @@ import {
   type DbTableConfig,
 } from './db-table-config';
 import {
-  addDbTableSourceColumn,
-  addNamedDbTableColumn,
   coerceDbTableInput,
-  createBasicDbTable,
-  deleteDbTableRow,
   decodeDbTableOptionValue,
-  dropDbTableSourceColumn,
   encodeDbTableOptionValue,
-  insertDbTableRow,
+  getDbTableWriter,
   loadDbTableSourcePage,
-  renameDbTableSourceColumn,
-  restoreDbTableRow,
   stringifyDbTableValue,
-  updateDbTableSourceCell,
   type DbTableColumnSchema,
   type DbTableSourcePage,
   type DbTableValue,
 } from './db-table-data';
-import { getDatabaseTableSources } from '../database-table-source';
+import { getDatabaseTableSources, type HvyDatabaseTableWriter } from '../database-table-source';
 import { openRemoveConfirmationModal } from '../../bind/handlers/remove-confirmation-modal';
 import {
   getDatabaseHistoryQueueStatus,
@@ -216,8 +208,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     if (action === 'create-basic-table') {
       button.disabled = true;
-      void runDbTableMutation(ctx, 'Create database table', 'checkpoint', () => (
-        createBasicDbTable(ctx.rawDocument, config().table)
+      void runDbTableMutation(ctx, 'Create database table', irreversibleUndoMode(config()), () => (
+        requireWriter(config()).createTable({ document: ctx.rawDocument, table: config().table })
       ))
         .then(() => refreshDatabasePlugins())
         .catch((error) => {
@@ -230,10 +222,10 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       button.disabled = true;
       const tableName = config().table;
       void runDbTableMutation(ctx, 'Add database column', 'logical', () => (
-        addDbTableSourceColumn(ctx.rawDocument, tableName)
+        requireWriter(config()).addColumn({ document: ctx.rawDocument, table: tableName })
       ), (columnName) => ({
-        undo: () => dropDbTableSourceColumn(ctx.rawDocument, tableName, columnName),
-        redo: () => addNamedDbTableColumn(ctx.rawDocument, tableName, columnName),
+        undo: () => requireWriter(config()).dropColumn({ document: ctx.rawDocument, table: tableName }, columnName),
+        redo: () => requireWriter(config()).addNamedColumn({ document: ctx.rawDocument, table: tableName }, columnName),
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to add the column.'));
@@ -244,8 +236,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (!columnName) return;
       openRemoveConfirmationModal(() => {
         const tableName = config().table;
-        void runDbTableMutation(ctx, 'Delete database column', 'checkpoint', async () => {
-          await dropDbTableSourceColumn(ctx.rawDocument, tableName, columnName);
+        void runDbTableMutation(ctx, 'Delete database column', irreversibleUndoMode(config()), async () => {
+          await requireWriter(config()).dropColumn({ document: ctx.rawDocument, table: tableName }, columnName);
             ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
         }).then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the column.'));
@@ -256,8 +248,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const rowId = Number(button.dataset.rowId);
       if (!Number.isFinite(rowId)) return;
       openRemoveConfirmationModal(() => {
-        void runDbTableMutation(ctx, 'Delete database row', 'checkpoint', () => (
-          deleteDbTableRow(ctx.rawDocument, config().table, rowId)
+        void runDbTableMutation(ctx, 'Delete database row', irreversibleUndoMode(config()), () => (
+          requireWriter(config()).deleteRow({ document: ctx.rawDocument, table: config().table }, rowId)
         ))
           .then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the row.'));
@@ -372,12 +364,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       target.disabled = true;
       const tableName = config().table;
       void runDbTableMutation(ctx, 'Rename database column', 'logical', async () => {
-        const renamed = await renameDbTableSourceColumn(ctx.rawDocument, tableName, oldColumnName, nextColumnName);
+        const renamed = await requireWriter(config()).renameColumn({ document: ctx.rawDocument, table: tableName }, oldColumnName, nextColumnName);
         ctx.setConfig(renameDbTableSourceColumnConfig(config(), oldColumnName, renamed));
         return renamed;
       }, (renamed) => ({
-        undo: async () => { await renameDbTableSourceColumn(ctx.rawDocument, tableName, renamed, oldColumnName); },
-        redo: async () => { await renameDbTableSourceColumn(ctx.rawDocument, tableName, oldColumnName, renamed); },
+        undo: async () => { await requireWriter(config()).renameColumn({ document: ctx.rawDocument, table: tableName }, renamed, oldColumnName); },
+        redo: async () => { await requireWriter(config()).renameColumn({ document: ctx.rawDocument, table: tableName }, oldColumnName, renamed); },
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to rename the column.'));
@@ -393,11 +385,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       target.disabled = true;
       const tableName = config().table;
       const previousValue = cloneDbTableValue(snapshot.rows.find((row) => row.rowId === rowId)?.values[column.name] ?? null);
-      void runDbTableMutation(ctx, 'Edit database cell', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
-        updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, value)
+      void runDbTableMutation(ctx, 'Edit database cell', snapshot.hasTriggers ? irreversibleUndoMode(config()) : 'logical', () => (
+        requireWriter(config()).updateCell({ document: ctx.rawDocument, table: tableName }, rowId, column, value)
       ), () => ({
-        undo: () => updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, previousValue),
-        redo: () => updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, value),
+        undo: () => requireWriter(config()).updateCell({ document: ctx.rawDocument, table: tableName }, rowId, column, previousValue),
+        redo: () => requireWriter(config()).updateCell({ document: ctx.rawDocument, table: tableName }, rowId, column, value),
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => {
@@ -610,7 +602,7 @@ function renderHeader(
 }
 
 function resolveDbTableMaximumColumnWidth(root: HTMLElement, configured: unknown): number {
-  const width = normalizeDbTableMaxColumnWidth(configured) || DEFAULT_DB_TABLE__MAX_COLUMN_WIDTH;
+  const width = normalizeDbTableMaxColumnWidth(configured) || DEFAULT_DB_TABLE_MAX_COLUMN_WIDTH;
   const probe = document.createElement('span');
   probe.className = 'db-table-width-probe';
   probe.style.width = width;
@@ -777,11 +769,11 @@ async function saveDraftRow(
   const save = root.querySelector<HTMLButtonElement>('[data-db-table-action="save-row"]');
   if (save) save.disabled = true;
   try {
-    const inserted = await runDbTableMutation(ctx, 'Add database row', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
-      insertDbTableRow(ctx.rawDocument, config.table, values)
+    const inserted = await runDbTableMutation(ctx, 'Add database row', snapshot.hasTriggers ? irreversibleUndoMode(config) : 'logical', () => (
+      requireWriter(config).insertRow({ document: ctx.rawDocument, table: config.table }, values)
     ), (row) => ({
-      undo: () => deleteDbTableRow(ctx.rawDocument, config.table, row.rowId),
-      redo: () => restoreDbTableRow(ctx.rawDocument, config.table, row),
+      undo: () => requireWriter(config).deleteRow({ document: ctx.rawDocument, table: config.table }, row.rowId),
+      redo: () => requireWriter(config).restoreRow({ document: ctx.rawDocument, table: config.table }, row),
     }));
     void inserted;
     ui.draftActive = false;
@@ -792,6 +784,22 @@ async function saveDraftRow(
     if (save) save.disabled = false;
     showInlineDraftError(root, ui.error);
   }
+}
+
+/**
+ * Undo mode for an operation that has no inverse to replay. Only a source that can
+ * snapshot its whole state can reverse these, so a logical-only source gets no undo
+ * rather than a checkpoint that would silently do nothing.
+ */
+function irreversibleUndoMode(config: DbTableConfig): 'logical' | 'checkpoint' {
+  return getDbTableWriter(config)?.undo === 'checkpoint' ? 'checkpoint' : 'logical';
+}
+
+/** Editing affordances are only rendered for writable sources, so this should never throw. */
+function requireWriter(config: DbTableConfig): HvyDatabaseTableWriter {
+  const writer = getDbTableWriter(config);
+  if (!writer) throw new Error(`DB Table source "${config.source}" is read-only.`);
+  return writer;
 }
 
 function runDbTableMutation<T>(

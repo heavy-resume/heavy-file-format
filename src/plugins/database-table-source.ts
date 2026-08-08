@@ -55,10 +55,61 @@ export interface HvyDatabaseTablePage {
   hasTriggers: boolean;
 }
 
+export interface HvyDatabaseTableInsertedRow {
+  rowId: number;
+  values: Record<string, HvyDatabaseTableValue>;
+}
+
+
+/** Identifies the table a write applies to. */
+export interface HvyDatabaseTableWriteRequest {
+  document: VisualDocument;
+  table: string;
+}
+
+/**
+ * Optional write half of a source. A source that supplies this is editable in the
+ * editor; one that omits it renders read-only. Every editing affordance the db-table
+ * component offers routes through these methods, so a host implementing them gets the
+ * same editing experience as the built-in file source without writing anything else.
+ */
+export interface HvyDatabaseTableWriter {
+  /**
+   * How the editor makes these writes undoable.
+   *
+   * `checkpoint` means the source can snapshot and restore its own entire state, so any
+   * operation is reversible. `logical` means undo relies on the inverse operations the
+   * editor issues, and operations without a sound inverse (dropping a column, deleting
+   * a table) are not offered.
+   */
+  undo: 'checkpoint' | 'logical';
+  createTable(request: HvyDatabaseTableWriteRequest): Promise<void>;
+  /** Adds a column with a source-chosen name and returns the name it used. */
+  addColumn(request: HvyDatabaseTableWriteRequest): Promise<string>;
+  addNamedColumn(request: HvyDatabaseTableWriteRequest, column: string): Promise<void>;
+  dropColumn(request: HvyDatabaseTableWriteRequest, column: string): Promise<void>;
+  /** Renames a column and returns the name actually stored. */
+  renameColumn(request: HvyDatabaseTableWriteRequest, from: string, to: string): Promise<string>;
+  updateCell(
+    request: HvyDatabaseTableWriteRequest,
+    rowId: number,
+    column: HvyDatabaseTableColumn,
+    value: HvyDatabaseTableValue
+  ): Promise<void>;
+  insertRow(
+    request: HvyDatabaseTableWriteRequest,
+    values: Array<{ column: HvyDatabaseTableColumn; value: HvyDatabaseTableValue }>
+  ): Promise<HvyDatabaseTableInsertedRow>;
+  deleteRow(request: HvyDatabaseTableWriteRequest, rowId: number): Promise<void>;
+  /** Re-inserts a row previously removed by `deleteRow`, preserving its row id. */
+  restoreRow(request: HvyDatabaseTableWriteRequest, row: HvyDatabaseTableInsertedRow): Promise<void>;
+}
+
 export interface HvyDatabaseTableSource {
   id: string;
   label?: string;
   readPage(request: HvyDatabaseTablePageRequest): Promise<HvyDatabaseTablePage>;
+  write?: HvyDatabaseTableWriter;
 }
 
 const builtInSources = new Map<string, HvyDatabaseTableSource>();

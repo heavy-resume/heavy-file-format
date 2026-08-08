@@ -578,7 +578,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             placeholder="Describe the image"
           >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
         </label>
-        <label class="image-alt-label">
+        <div class="image-alt-label">
           <span>Caption</span>
           <button
             type="button"
@@ -587,7 +587,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
           >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
-        </label>
+        </div>
       </div>
       ${block.schema.allowDocumentImageReuse ? `<div class="image-attachment-panel">
         <div class="image-attachment-panel-title">Use an attached image</div>

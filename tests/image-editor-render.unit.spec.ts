@@ -80,6 +80,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).toContain('data-action="image-delete-unused"');
     expect(expectedResult).toContain('data-image-filename="unused.jpg"');
     expect(expectedResult).toContain('data-action="open-image-caption-modal"');
+    expect(expectedResult).toMatch(/<div class="image-alt-label">\s*<span>Caption<\/span>\s*<button/);
+    expect(expectedResult).not.toMatch(/<label class="image-alt-label">\s*<span>Caption<\/span>/);
     expect(expectedResult).toContain('<figcaption class="image-caption" style="text-align: center;">Team photo</figcaption>');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');

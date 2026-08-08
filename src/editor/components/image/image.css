@@ -61,6 +61,39 @@
   color: var(--hvy-link-color);
 }
 
+.hvy-document .image-caption-edit-button {
+  box-sizing: border-box;
+  width: 10rem;
+  align-self: center;
+  min-height: 2.5rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-button-bg) 68%, var(--hvy-border));
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--hvy-button-bg) 18%, var(--hvy-surface));
+  color: var(--hvy-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-button-bg) 10%, transparent);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hvy-document .image-caption-edit-button:hover,
+.hvy-document .image-caption-edit-button:focus-visible {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-bg) 30%, var(--hvy-surface));
+  color: var(--hvy-text);
+  box-shadow:
+    0 0.35rem 0.9rem color-mix(in srgb, var(--hvy-button-bg) 18%, transparent),
+    0 0 0 0.18rem var(--hvy-focus-ring);
+  transform: translateY(-1px);
+}
+
 .hvy-document .image-camera-row {
   display: flex;
   width: 100%;

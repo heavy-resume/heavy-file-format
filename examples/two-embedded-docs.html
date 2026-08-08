@@ -248,7 +248,7 @@
     <script type="module">
       import exampleHvyUrl from '/examples/example.hvy?url';
       import resumeHvyUrl from '/examples/resume.hvy?url';
-      import { deserializeDocumentBytes, mountHvy } from '/src/embed-full.ts';
+      import { builtInPlugins, deserializeDocumentBytes, mountHvy } from '/src/embed-full.ts';
 
       const eventLog = document.querySelector('#eventLog');
       const mounted = [];
@@ -326,6 +326,7 @@
           root: firstRoot,
           document: documentToMount,
           mode: docOneMode,
+          plugins: builtInPlugins,
           storageKey: getStorageKey(0, docOneSource),
           chatClient: makeChatClient('Document One'),
         });
@@ -357,6 +358,7 @@
           root: secondRoot,
           document: documentToMount,
           mode: 'viewer',
+          plugins: builtInPlugins,
           storageKey: getStorageKey(1, docTwoSource),
           chatClient: makeChatClient('Document Two'),
         });
@@ -379,6 +381,7 @@
           root: secondRoot,
           document: secondDocument,
           mode: 'viewer',
+          plugins: builtInPlugins,
           storageKey: getStorageKey(1, docTwoSource),
           chatClient: makeChatClient('Document Two'),
         });

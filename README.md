@@ -470,6 +470,12 @@ HVY.mountHvy({
 });
 ```
 
+Plugins are opt-in. A mount that passes no `plugins` registers none, and components
+in the document whose plugin was not supplied render as unavailable. This is
+deliberate: some built-in plugins run code carried by the document, so a host has
+to name the ones it wants rather than inherit them. Pass `HVY.builtInPlugins` to
+register the full set.
+
 `hvy.db-table` keeps its data backend behind a paged source adapter. The
 built-in `with-file` source reads the database attached to the HVY file. Hosts
 can provide additional sources per mount through `databaseSources`:

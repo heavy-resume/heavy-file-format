@@ -1119,7 +1119,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     setMountedSearchSnapshot(options.searchSnapshot ?? null, { render: false });
   }
   bindRuntimeActivation(options.root, runtime);
-  ensureEmbedRuntime(options.plugins ?? builtInPlugins, options.databaseSources ?? [], runtime, options.root, () => linkObserver);
+  // Built-in plugins are opt-in per mount: some of them execute document-supplied
+  // code, so a host that asks for nothing gets nothing.
+  ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');

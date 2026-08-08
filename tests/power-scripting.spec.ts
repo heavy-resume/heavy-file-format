@@ -5,7 +5,7 @@ test('power scripts require viewer trust, can reach canvas through doc, and clea
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="powerMount"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
     const source = `---
 hvy_version: 0.1
 ---
@@ -30,6 +30,8 @@ doc.listen(window, "power-test-event", () => window.__powerEvents = (window.__po
       root,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer',
+      // The script reaches the canvas component, so the host registers both plugins.
+      plugins: [plugins.powerScripting, plugins.canvas],
     });
   });
 
@@ -65,7 +67,7 @@ test('embedded hosts can enable or hide power scripts programmatically', async (
   const result = await page.evaluate(async () => {
     document.body.innerHTML = '<div id="enabled"></div><div id="hidden"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
     const source = `---
 hvy_version: 0.1
 ---
@@ -81,12 +83,14 @@ window.__programmaticRuns = (window.__programmaticRuns || 0) + 1;
       root: document.querySelector<HTMLElement>('#enabled')!,
       document: makeDocument(),
       mode: 'viewer',
+      plugins: [plugins.powerScripting],
       powerScripts: 'enabled',
     });
     mountHvy({
       root: document.querySelector<HTMLElement>('#hidden')!,
       document: makeDocument(),
       mode: 'viewer',
+      plugins: [plugins.powerScripting],
       powerScripts: 'hidden',
     });
     await new Promise((resolve) => window.setTimeout(resolve, 100));
@@ -103,7 +107,7 @@ test('embedded hosts own power-script acceptance across remounts', async ({ page
   await page.goto('/');
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="acceptanceMount"></div>';
-    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import('/src/embed.ts');
     const source = `---
 hvy_version: 0.1
 ---
@@ -119,6 +123,7 @@ window.__acceptedRuns = (window.__acceptedRuns || 0) + 1;
       root: document.querySelector<HTMLElement>('#acceptanceMount')!,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer' as const,
+      plugins: [plugins.powerScripting],
       getPowerScriptAcceptance: ({ fingerprint }: { fingerprint: string }) => accepted.has(fingerprint),
       onPowerScriptAcceptanceChanged: ({ fingerprint, accepted: value }: { fingerprint: string; accepted: boolean }) => {
         if (value) accepted.add(fingerprint);
@@ -262,7 +267,7 @@ test('power-script prompts render inside the HVY surface without browser dialogs
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="dialogMount"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
     const source = `---
 hvy_version: 0.1
 ---
@@ -278,6 +283,7 @@ window.__saveStatus = await doc.save.request({ reason: "Save the updated score?"
       root: document.querySelector<HTMLElement>('#dialogMount')!,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer',
+      plugins: [plugins.powerScripting],
       powerScripts: 'enabled',
     });
   });
@@ -296,7 +302,7 @@ test('embedded hosts can autosave power-script document changes', async ({ page 
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="saveMount"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
     const source = `---
 hvy_version: 0.1
 ---
@@ -312,6 +318,7 @@ window.__embeddedSaveStatus = await doc.save.request({ reason: "High score added
       root: document.querySelector<HTMLElement>('#saveMount')!,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
       mode: 'viewer',
+      plugins: [plugins.powerScripting],
       powerScripts: 'enabled',
       onSaveRequest: async (request) => {
         const serialized = new TextDecoder().decode(await request.serializeDocumentBytesAsync());

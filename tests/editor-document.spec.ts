@@ -131,7 +131,7 @@ test('embedded meeting minutes form script notifies the host after mutation', as
 
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="meetingMount"></div>';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ '/src/embed-full.ts');
     const response = await fetch('/examples/meeting-minutes.thvy');
     const root = document.querySelector<HTMLElement>('#meetingMount');
     if (!root) throw new Error('Meeting mount missing.');
@@ -144,6 +144,7 @@ test('embedded meeting minutes form script notifies the host after mutation', as
       root,
       document: deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.thvy'),
       mode: 'viewer',
+      plugins: [plugins.form],
       onDocumentChange: (event) => testWindow.meetingChangeEvents?.push(event),
     });
     testWindow.meetingIsDirty = () => mount.isDirty();
@@ -3184,13 +3185,13 @@ hvy_version: 0.1
   expect(Number.parseFloat(cameraStyles.width)).toBeCloseTo(608, 0);
 });
 
-test('embedded editor runtime registers built-in graph plugin', async ({ page }) => {
+test('an embedded host can register the built-in graph plugin', async ({ page }) => {
   await page.goto('/');
 
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="mount"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import(/* @vite-ignore */ modulePath);
     const response = await fetch('/examples/example.hvy');
     const root = document.querySelector<HTMLElement>('#mount');
     if (!root) {
@@ -3200,6 +3201,7 @@ test('embedded editor runtime registers built-in graph plugin', async ({ page })
       root,
       document: deserializeDocumentBytes(new Uint8Array(await response.arrayBuffer()), '.hvy'),
       mode: 'editor',
+      plugins: [plugins.graph],
     });
   });
 

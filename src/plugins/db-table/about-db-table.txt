@@ -1,4 +1,4 @@
-# DB Table v2 #
+# DB Table #
 Displays configurable paged rows from a database source.
 pluginConfig.source selects a registered source adapter; with-file reads the SQLite database attached to the HVY file.
 pluginConfig.table names the table or view to display, and pluginConfig.queryLimit sets rows per page from 1 through 1000.
@@ -7,5 +7,5 @@ The plugin body may contain an optional read-only SELECT query.
 Direct base-table rows are editable. SQLite views and query results are read-only.
 Add Row stages values locally and writes one INSERT only after required fields are complete.
 The built-in plugin id is hvy.db-table and this implementation is version 0.2.0.
-V2 retains table creation, column schema editing, paged queries, sorting, and row-attached HVY details.
+It retains table creation, column schema editing, paged queries, sorting, and row-attached HVY details.
 Rows and columns can be deleted through a confirmation dialog; deleting a row also removes its attached details.

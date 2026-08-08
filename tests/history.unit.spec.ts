@@ -103,7 +103,7 @@ function createHistoryTestState(): AppState {
     future: [],
     isRestoring: false,
     componentMetaModal: null,
-    sqliteRowComponentModal: null,
+    dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,

@@ -5,11 +5,11 @@
   padding: 0.5rem;
 }
 
-.hvy-document .sqlite-plugin-editor {
+.hvy-document .db-table-plugin-editor {
   margin-top: 0.75rem;
 }
 
-.hvy-document .sqlite-plugin-grid-input {
+.hvy-document .db-table-plugin-grid-input {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -19,41 +19,41 @@
   padding: 0.45rem 0.5rem;
 }
 
-.hvy-document .sqlite-plugin-grid-input:focus {
+.hvy-document .db-table-plugin-grid-input:focus {
   outline: 2px solid var(--hvy-focus-ring);
   outline-offset: -2px;
   background: color-mix(in srgb, var(--hvy-surface) 82%, var(--hvy-surface-tint) 18%);
 }
 
-.hvy-document .sqlite-plugin-grid-header {
+.hvy-document .db-table-plugin-grid-header {
   font-weight: 600;
 }
 
-.hvy-document .sqlite-plugin-row-number {
+.hvy-document .db-table-plugin-row-number {
   font-size: 0.84rem;
   color: var(--hvy-text-muted);
   text-align: center;
 }
 
-.hvy-document .sqlite-plugin-row-has-component {
+.hvy-document .db-table-plugin-row-has-component {
   cursor: pointer;
 }
 
-.hvy-document .sqlite-plugin-row-has-component:hover td {
+.hvy-document .db-table-plugin-row-has-component:hover td {
   background: color-mix(in srgb, var(--hvy-accent) 8%, white);
 }
 
-.hvy-document .sqlite-row-component-button {
+.hvy-document .db-table-row-component-button {
   min-width: 2rem;
 }
 
-.hvy-document .sqlite-row-component-button-attached {
+.hvy-document .db-table-row-component-button-attached {
   border-color: color-mix(in srgb, var(--hvy-accent) 55%, var(--hvy-border));
   background: color-mix(in srgb, var(--hvy-accent) 12%, var(--hvy-surface));
   color: color-mix(in srgb, var(--hvy-accent) 75%, var(--hvy-text));
 }
 
-.hvy-document .sqlite-row-component-button-attached:hover {
+.hvy-document .db-table-row-component-button-attached:hover {
   border-color: color-mix(in srgb, var(--hvy-accent) 72%, var(--hvy-border));
   background: color-mix(in srgb, var(--hvy-accent) 18%, var(--hvy-surface));
 }

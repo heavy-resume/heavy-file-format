@@ -8,35 +8,35 @@ import type { ActionHandler } from './types';
 
 const loadDbTableRuntime = () => import('../../plugins/db-table');
 
-const sqliteAddRow: ActionHandler = ({ actionButton }) => {
+const dbTableAddRow: ActionHandler = ({ actionButton }) => {
   const tableName = actionButton.dataset.tableName ?? '';
   if (tableName.length === 0) {
     return;
   }
-  recordHistory(`sqlite-add-row:${tableName}`);
+  recordHistory(`db-table-add-row:${tableName}`);
   void loadDbTableRuntime()
     .then(({ addDbTableRow }) => addDbTableRow(tableName))
     .then(() => {
       getRenderApp()();
     })
     .catch((error) => {
-      console.error('[hvy:sqlite-plugin] add row failed', error);
+      console.error('[hvy:db-table-plugin] add row failed', error);
     });
 };
 
-const sqliteAddColumn: ActionHandler = ({ actionButton }) => {
+const dbTableAddColumn: ActionHandler = ({ actionButton }) => {
   const tableName = actionButton.dataset.tableName ?? '';
   if (tableName.length === 0) {
     return;
   }
-  recordHistory(`sqlite-add-column:${tableName}`);
+  recordHistory(`db-table-add-column:${tableName}`);
   void loadDbTableRuntime()
     .then(({ addDbTableColumn }) => addDbTableColumn(tableName))
     .then(() => {
       getRenderApp()();
     })
     .catch((error) => {
-      console.error('[hvy:sqlite-plugin] add column failed', error);
+      console.error('[hvy:db-table-plugin] add column failed', error);
     });
 };
 
@@ -52,26 +52,26 @@ const dbTableCreateTable: ActionHandler = ({ actionButton }) => {
       getRenderApp()();
     })
     .catch((error) => {
-      console.error('[hvy:sqlite-plugin] create table failed', error);
+      console.error('[hvy:db-table-plugin] create table failed', error);
       window.alert(error instanceof Error ? error.message : 'Failed to create table.');
       getRenderApp()();
     });
 };
 
-const sqliteDropColumn: ActionHandler = ({ actionButton }) => {
+const dbTableDropColumn: ActionHandler = ({ actionButton }) => {
   const tableName = actionButton.dataset.tableName ?? '';
   const columnName = actionButton.dataset.columnName ?? '';
   if (tableName.length === 0 || columnName.length === 0) {
     return;
   }
-  recordHistory(`sqlite-column-drop:${tableName}:${columnName}`);
+  recordHistory(`db-table-column-drop:${tableName}:${columnName}`);
   void loadDbTableRuntime()
     .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, columnName))
     .then(() => {
       getRenderApp()();
     })
     .catch((error) => {
-      console.error('[hvy:sqlite-plugin] column drop failed', error);
+      console.error('[hvy:db-table-plugin] column drop failed', error);
       window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
       getRenderApp()();
     });
@@ -114,20 +114,20 @@ const dbTableToggleSort: ActionHandler = ({ actionButton, sectionKey, blockId })
   getRenderApp()();
 };
 
-const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sqlite-open-row-component-view'): ActionHandler => ({ actionButton, sectionKey, blockId }) => {
+const dbTableOpenRowComponent = (action: 'db-table-open-row-component-editor' | 'db-table-open-row-component-view'): ActionHandler => ({ actionButton, sectionKey, blockId }) => {
   const tableName = actionButton.dataset.tableName ?? '';
   const rowId = Number.parseInt(actionButton.dataset.rowid ?? '', 10);
   if (tableName.length === 0 || Number.isNaN(rowId) || blockId.length === 0 || sectionKey.length === 0) {
     return;
   }
-  if (action === 'sqlite-open-row-component-view' && state.currentView === 'editor') {
+  if (action === 'db-table-open-row-component-view' && state.currentView === 'editor') {
     setActiveEditorBlock(sectionKey, blockId);
     getRenderApp()();
     return;
   }
 
   void loadDbTableRuntime()
-    .then(({ getSqliteRowComponent }) => getSqliteRowComponent(tableName, rowId))
+    .then(({ getDbTableRowComponent }) => getDbTableRowComponent(tableName, rowId))
     .then((fragment) => {
       const modalBlocks = fragment ? parseAttachedComponentBlocks(fragment) : [];
       const rawDraft = fragment ?? '';
@@ -139,12 +139,12 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
         rowId,
         blocks: modalBlocks,
         error: null,
-        readOnly: action === 'sqlite-open-row-component-view',
+        readOnly: action === 'db-table-open-row-component-view',
         previousActiveEditorBlock: state.activeEditorBlock ? { ...state.activeEditorBlock } : null,
         mode: modalMode,
         rawDraft,
       };
-      state.sqliteRowComponentModal = modalState;
+      state.dbTableRowComponentModal = modalState;
       if (!modalState.readOnly && modalBlocks[0]) {
         state.activeEditorBlock = {
           sectionKey,
@@ -154,20 +154,20 @@ const sqliteOpenRowComponent = (action: 'sqlite-open-row-component-editor' | 'sq
       getRenderApp()();
     })
     .catch((error) => {
-      console.error('[hvy:sqlite-plugin] load row component failed', error);
+      console.error('[hvy:db-table-plugin] load row component failed', error);
     });
 };
 
-const sqliteRowComponentAddBlock: ActionHandler = () => {
-  const modal = state.sqliteRowComponentModal;
+const dbTableRowComponentAddBlock: ActionHandler = () => {
+  const modal = state.dbTableRowComponentModal;
   if (!modal || modal.readOnly) {
     return;
   }
-  recordHistory(`sqlite-row-component-add:${modal.tableName}:${modal.rowId}`);
-  const addKey = `sqlite-row-component:${modal.sectionKey}:${modal.rowId}`;
+  recordHistory(`db-table-row-component-add:${modal.tableName}:${modal.rowId}`);
+  const addKey = `db-table-row-component:${modal.sectionKey}:${modal.rowId}`;
   const component = (state.addComponentBySection[addKey] ?? 'text').trim() || 'text';
   const newBlock = createEmptyBlock(component);
-  state.sqliteRowComponentModal = {
+  state.dbTableRowComponentModal = {
     ...modal,
     blocks: [...modal.blocks, newBlock],
     error: null,
@@ -179,12 +179,12 @@ const sqliteRowComponentAddBlock: ActionHandler = () => {
 
 export const dbTableActions: Record<string, ActionHandler> = {
   'db-table-create-table': dbTableCreateTable,
-  'sqlite-add-row': sqliteAddRow,
-  'sqlite-add-column': sqliteAddColumn,
-  'sqlite-drop-column': sqliteDropColumn,
+  'db-table-add-row': dbTableAddRow,
+  'db-table-add-column': dbTableAddColumn,
+  'db-table-drop-column': dbTableDropColumn,
   'db-table-open-query-editor': dbTableOpenQueryEditor,
   'db-table-toggle-sort': dbTableToggleSort,
-  'sqlite-open-row-component-editor': sqliteOpenRowComponent('sqlite-open-row-component-editor'),
-  'sqlite-open-row-component-view': sqliteOpenRowComponent('sqlite-open-row-component-view'),
-  'sqlite-row-component-add-block': sqliteRowComponentAddBlock,
+  'db-table-open-row-component-editor': dbTableOpenRowComponent('db-table-open-row-component-editor'),
+  'db-table-open-row-component-view': dbTableOpenRowComponent('db-table-open-row-component-view'),
+  'db-table-row-component-add-block': dbTableRowComponentAddBlock,
 };

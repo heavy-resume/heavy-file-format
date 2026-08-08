@@ -2,7 +2,7 @@ import type { VisualDocument } from '../../types';
 import { createScriptingDbRuntime } from '../db-table';
 import type { ScriptingDbApi } from '../scripting/runtime';
 import { validateDbTableObjectName } from '../db-table-identifiers';
-import type { DbTableV2Config } from './db-table-config';
+import type { DbTableConfig } from './db-table-config';
 import {
   getDatabaseTableSource,
   registerBuiltInDatabaseTableSource,
@@ -15,33 +15,33 @@ import {
   type HvyDatabaseTableValue,
 } from '../database-table-source';
 
-export type DbTableV2Value = HvyDatabaseTableValue;
-export type DbTableV2ForeignKey = HvyDatabaseTableForeignKey;
-export type DbTableV2ForeignOption = HvyDatabaseTableForeignOption;
-export type DbTableV2ColumnSchema = HvyDatabaseTableColumn;
-export type DbTableV2Row = HvyDatabaseTableRow;
-export type DbTableV2Snapshot = HvyDatabaseTablePage;
+export type DbTableValue = HvyDatabaseTableValue;
+export type DbTableForeignKey = HvyDatabaseTableForeignKey;
+export type DbTableForeignOption = HvyDatabaseTableForeignOption;
+export type DbTableColumnSchema = HvyDatabaseTableColumn;
+export type DbTableRow = HvyDatabaseTableRow;
+export type DbTableSourcePage = HvyDatabaseTablePage;
 
-export interface DbTableV2InsertedRow {
+export interface DbTableInsertedRow {
   rowId: number;
-  values: Record<string, DbTableV2Value>;
+  values: Record<string, DbTableValue>;
 }
 
-interface DbTableV2LoadOptions {
+interface DbTableLoadOptions {
   query: string;
   offset: number;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc' | null;
 }
 
-export async function loadDbTableV2Snapshot(
+export async function loadDbTableSourcePage(
   document: VisualDocument,
-  config: DbTableV2Config,
-  options: DbTableV2LoadOptions
-): Promise<DbTableV2Snapshot> {
+  config: DbTableConfig,
+  options: DbTableLoadOptions
+): Promise<DbTableSourcePage> {
   if (!config.table.trim()) throw new Error('Choose a table or view to display.');
   const source = getDatabaseTableSource(config.source);
-  if (!source) throw new Error(`DB Table v2 source "${config.source}" is not available.`);
+  if (!source) throw new Error(`DB Table source "${config.source}" is not available.`);
   const page = await source.readPage({
     document,
     table: config.table,
@@ -82,14 +82,14 @@ async function readWithFilePage(request: HvyDatabaseTablePageRequest): Promise<H
       : '';
     const fetchLimit = request.pageSize + 1;
     const sql = queryActive
-      ? `SELECT * FROM (${normalizedQuery}) AS hvy_v2_query LIMIT ${fetchLimit} OFFSET ${offset}`
+      ? `SELECT * FROM (${normalizedQuery}) AS hvy_query LIMIT ${fetchLimit} OFFSET ${offset}`
       : objectType === 'table' && editable
-        ? `SELECT rowid AS "__hvy_v2_rowid__", * FROM ${quoteIdentifier(request.table)}${directTableOrder} LIMIT ${fetchLimit} OFFSET ${offset}`
+        ? `SELECT rowid AS "__hvy_rowid__", * FROM ${quoteIdentifier(request.table)}${directTableOrder} LIMIT ${fetchLimit} OFFSET ${offset}`
         : `SELECT * FROM ${quoteIdentifier(request.table)} LIMIT ${fetchLimit} OFFSET ${offset}`;
     const attachedRowIds = editable ? readAttachedRowIds(db, request.table) : new Set<number>();
     const fetchedRows = db.query(sql);
     const rows = fetchedRows.slice(0, request.pageSize).map((row) => {
-      const rowId = editable ? readNumber(row.__hvy_v2_rowid__) : null;
+      const rowId = editable ? readNumber(row.__hvy_rowid__) : null;
       return {
         rowId,
         hasAttachedComponent: rowId !== null && attachedRowIds.has(rowId),
@@ -115,12 +115,12 @@ registerBuiltInDatabaseTableSource({
   readPage: readWithFilePage,
 });
 
-export async function updateDbTableV2Cell(
+export async function updateDbTableSourceCell(
   document: VisualDocument,
   tableName: string,
   rowId: number,
-  column: DbTableV2ColumnSchema,
-  value: DbTableV2Value
+  column: DbTableColumnSchema,
+  value: DbTableValue
 ): Promise<void> {
   assertTableName(tableName);
   return withDatabase(document, (db) => {
@@ -131,11 +131,11 @@ export async function updateDbTableV2Cell(
   });
 }
 
-export async function insertDbTableV2Row(
+export async function insertDbTableRow(
   document: VisualDocument,
   tableName: string,
-  values: Array<{ column: DbTableV2ColumnSchema; value: DbTableV2Value }>
-): Promise<DbTableV2InsertedRow> {
+  values: Array<{ column: DbTableColumnSchema; value: DbTableValue }>
+): Promise<DbTableInsertedRow> {
   assertTableName(tableName);
   return withDatabase(document, (db) => {
     if (values.length === 0) {
@@ -158,10 +158,10 @@ export async function insertDbTableV2Row(
   });
 }
 
-export async function restoreDbTableV2Row(
+export async function restoreDbTableRow(
   document: VisualDocument,
   tableName: string,
-  row: DbTableV2InsertedRow
+  row: DbTableInsertedRow
 ): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
@@ -174,14 +174,14 @@ export async function restoreDbTableV2Row(
   });
 }
 
-export async function createBasicDbTableV2(document: VisualDocument, tableName: string): Promise<void> {
+export async function createBasicDbTable(document: VisualDocument, tableName: string): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
     db.execute(`CREATE TABLE ${quoteIdentifier(tableName)} ("Column 1" TEXT, "Column 2" TEXT)`);
   });
 }
 
-export async function addDbTableV2Column(document: VisualDocument, tableName: string): Promise<string> {
+export async function addDbTableSourceColumn(document: VisualDocument, tableName: string): Promise<string> {
   assertTableName(tableName);
   return withDatabase(document, (db) => {
     requireWritableTable(db, tableName);
@@ -192,7 +192,7 @@ export async function addDbTableV2Column(document: VisualDocument, tableName: st
   });
 }
 
-export async function addNamedDbTableV2Column(
+export async function addNamedDbTableColumn(
   document: VisualDocument,
   tableName: string,
   columnName: string
@@ -204,7 +204,7 @@ export async function addNamedDbTableV2Column(
   });
 }
 
-export async function renameDbTableV2Column(
+export async function renameDbTableSourceColumn(
   document: VisualDocument,
   tableName: string,
   oldColumnName: string,
@@ -224,7 +224,7 @@ export async function renameDbTableV2Column(
   });
 }
 
-export async function dropDbTableV2Column(document: VisualDocument, tableName: string, columnName: string): Promise<void> {
+export async function dropDbTableSourceColumn(document: VisualDocument, tableName: string, columnName: string): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
     requireWritableTable(db, tableName);
@@ -235,7 +235,7 @@ export async function dropDbTableV2Column(document: VisualDocument, tableName: s
   });
 }
 
-export async function deleteDbTableV2Row(document: VisualDocument, tableName: string, rowId: number): Promise<void> {
+export async function deleteDbTableRow(document: VisualDocument, tableName: string, rowId: number): Promise<void> {
   assertTableName(tableName);
   await withDatabase(document, (db) => {
     requireWritableTable(db, tableName);
@@ -246,14 +246,14 @@ export async function deleteDbTableV2Row(document: VisualDocument, tableName: st
   });
 }
 
-export function encodeDbTableV2OptionValue(value: DbTableV2Value): string {
+export function encodeDbTableOptionValue(value: DbTableValue): string {
   if (value === null) return 'null:';
   if (typeof value === 'number') return `number:${value}`;
   if (typeof value === 'string') return `string:${encodeURIComponent(value)}`;
   return `bytes:${Array.from(value).join('.')}`;
 }
 
-export function decodeDbTableV2OptionValue(value: string): DbTableV2Value {
+export function decodeDbTableOptionValue(value: string): DbTableValue {
   const separator = value.indexOf(':');
   const kind = separator >= 0 ? value.slice(0, separator) : '';
   const payload = separator >= 0 ? value.slice(separator + 1) : value;
@@ -268,13 +268,13 @@ export function decodeDbTableV2OptionValue(value: string): DbTableV2Value {
   throw new Error('Invalid relationship value.');
 }
 
-export function stringifyDbTableV2Value(value: DbTableV2Value): string {
+export function stringifyDbTableValue(value: DbTableValue): string {
   if (value === null) return '';
   if (value instanceof Uint8Array) return `[${value.length} bytes]`;
   return String(value);
 }
 
-export function coerceDbTableV2Input(value: string, type: string): DbTableV2Value {
+export function coerceDbTableInput(value: string, type: string): DbTableValue {
   const trimmedType = type.trim().toUpperCase();
   if (/INT/u.test(trimmedType) && /^[-+]?\d+$/u.test(value.trim())) {
     const parsed = Number(value);
@@ -287,7 +287,7 @@ export function coerceDbTableV2Input(value: string, type: string): DbTableV2Valu
   return value;
 }
 
-function readColumnSchema(db: ScriptingDbApi, tableName: string): DbTableV2ColumnSchema[] {
+function readColumnSchema(db: ScriptingDbApi, tableName: string): DbTableColumnSchema[] {
   const rows = db.query(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
   const primaryKeyColumns = rows.filter((row) => readNumber(row.pk) > 0);
   return rows.map((row) => {
@@ -309,8 +309,8 @@ async function addForeignKeyMetadata(
   db: ScriptingDbApi,
   tableName: string,
   relationshipDisplayColumns: Record<string, string>,
-  columns: DbTableV2ColumnSchema[]
-): Promise<DbTableV2ColumnSchema[]> {
+  columns: DbTableColumnSchema[]
+): Promise<DbTableColumnSchema[]> {
   const foreignRows = db.query(`PRAGMA foreign_key_list(${quoteIdentifier(tableName)})`);
   const grouped = new Map<number, Record<string, unknown>[]>();
   for (const row of foreignRows) {
@@ -329,10 +329,10 @@ async function addForeignKeyMetadata(
     const displayColumn = displayColumnOptions.includes(configuredDisplay) ? configuredDisplay : '';
     const options = displayColumn && referencedColumn
       ? db.query(
-          `SELECT ${quoteIdentifier(referencedColumn)} AS "__hvy_v2_value__", ${quoteIdentifier(displayColumn)} AS "__hvy_v2_label__" FROM ${quoteIdentifier(referencedTable)} ORDER BY ${quoteIdentifier(displayColumn)}`
+          `SELECT ${quoteIdentifier(referencedColumn)} AS "__hvy_value__", ${quoteIdentifier(displayColumn)} AS "__hvy_label__" FROM ${quoteIdentifier(referencedTable)} ORDER BY ${quoteIdentifier(displayColumn)}`
         ).map((row) => ({
-          value: normalizeValue(row.__hvy_v2_value__),
-          label: stringifyDbTableV2Value(normalizeValue(row.__hvy_v2_label__)),
+          value: normalizeValue(row.__hvy_value__),
+          label: stringifyDbTableValue(normalizeValue(row.__hvy_label__)),
         }))
       : [];
     return {
@@ -352,9 +352,9 @@ async function addForeignKeyMetadata(
 function readQueryColumns(
   db: ScriptingDbApi,
   query: string,
-  fallback: DbTableV2ColumnSchema[]
-): DbTableV2ColumnSchema[] {
-  const row = db.query(`SELECT * FROM (${query}) AS hvy_v2_columns LIMIT 1`)[0];
+  fallback: DbTableColumnSchema[]
+): DbTableColumnSchema[] {
+  const row = db.query(`SELECT * FROM (${query}) AS hvy_columns LIMIT 1`)[0];
   if (!row) return fallback.map((column) => ({ ...column, foreignKey: null }));
   return Object.keys(row)
     .filter((key) => !/^\d+$/u.test(key))
@@ -444,7 +444,7 @@ function readNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function normalizeValue(value: unknown): DbTableV2Value {
+function normalizeValue(value: unknown): DbTableValue {
   if (value === null) return null;
   if (typeof value === 'number' || typeof value === 'string') return value;
   if (value instanceof Uint8Array) return Uint8Array.from(value);
@@ -452,6 +452,6 @@ function normalizeValue(value: unknown): DbTableV2Value {
   return String(value);
 }
 
-function normalizeWriteValue(value: DbTableV2Value): DbTableV2Value {
+function normalizeWriteValue(value: DbTableValue): DbTableValue {
   return value instanceof Uint8Array ? Uint8Array.from(value) : value;
 }

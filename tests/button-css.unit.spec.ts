@@ -58,11 +58,11 @@ test('component controls own their dimensions independently of stylesheet order'
   const databaseTableMarkup = readFileSync(new URL('../src/plugins/db-table/db-table-component.ts', import.meta.url), 'utf8');
 
   expect(layoutSource).toContain('@layer hvy-control-defaults');
-  expect(databaseTableSource.match(/\.db-v2-sort\s*\{[^}]*\}/)?.[0] ?? '').toContain('padding: 0.3rem');
-  expect(databaseTableSource).toContain('.db-v2-page-button');
-  expect(databaseTableSource).not.toContain('.db-v2-pager button');
-  expect(databaseTableMarkup).toContain('class="ghost db-v2-sort"');
-  expect(databaseTableMarkup).toContain('class="ghost db-v2-page-button"');
+  expect(databaseTableSource.match(/\.db-table-sort\s*\{[^}]*\}/)?.[0] ?? '').toContain('padding: 0.3rem');
+  expect(databaseTableSource).toContain('.db-table-page-button');
+  expect(databaseTableSource).not.toContain('.db-table-pager button');
+  expect(databaseTableMarkup).toContain('class="ghost db-table-sort"');
+  expect(databaseTableMarkup).toContain('class="ghost db-table-page-button"');
 });
 
 test('application entrypoints load theme, host overrides, then component styles', () => {

@@ -258,8 +258,8 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
   }
   recordHistory();
   const scrollBeforeDelete = capturePaneScroll(state.paneScroll, app);
-  const sqliteRowModal = state.sqliteRowComponentModal;
-  if (sqliteRowModal?.sectionKey === sectionKey) {
+  const rowComponentModal = state.dbTableRowComponentModal;
+  if (rowComponentModal?.sectionKey === sectionKey) {
     const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey
       ? (state.activeEditorBlock?.blockId ?? null)
       : null;
@@ -269,9 +269,9 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
       (removedBlock !== null && findBlockInList([removedBlock], activeBlockId) !== null)
     );
     const parentId = activeIsAffected
-      ? findBlockContainerInList(sqliteRowModal.blocks, blockId, null)?.ownerBlockId ?? null
+      ? findBlockContainerInList(rowComponentModal.blocks, blockId, null)?.ownerBlockId ?? null
       : null;
-    removeBlockFromList(sqliteRowModal.blocks, blockId);
+    removeBlockFromList(rowComponentModal.blocks, blockId);
     if (activeIsAffected && activeBlockId) {
       clearActiveEditorBlock(activeBlockId);
     }
@@ -279,9 +279,9 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
       setActiveEditorBlock(sectionKey, parentId);
       state.pendingEditorActivation = null;
     }
-    state.sqliteRowComponentModal = {
-      ...sqliteRowModal,
-      blocks: [...sqliteRowModal.blocks],
+    state.dbTableRowComponentModal = {
+      ...rowComponentModal,
+      blocks: [...rowComponentModal.blocks],
       error: null,
     };
     state.pendingPaneScrollRestore = scrollBeforeDelete;
@@ -331,9 +331,9 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
     return;
   }
   recordHistory();
-  const sqliteRowModal = state.sqliteRowComponentModal;
-  if (sqliteRowModal?.sectionKey === sectionKey) {
-    const location = findBlockContainerInList(sqliteRowModal.blocks, blockId, null);
+  const rowComponentModal = state.dbTableRowComponentModal;
+  if (rowComponentModal?.sectionKey === sectionKey) {
+    const location = findBlockContainerInList(rowComponentModal.blocks, blockId, null);
     if (!location) {
       return;
     }
@@ -346,9 +346,9 @@ const moveBlock = (offset: -1 | 1): ActionHandler => ({ sectionKey, blockId }) =
       return;
     }
     location.container.splice(targetIndex, 0, movedBlock);
-    state.sqliteRowComponentModal = {
-      ...sqliteRowModal,
-      blocks: [...sqliteRowModal.blocks],
+    state.dbTableRowComponentModal = {
+      ...rowComponentModal,
+      blocks: [...rowComponentModal.blocks],
     };
     getRenderApp()();
     return;

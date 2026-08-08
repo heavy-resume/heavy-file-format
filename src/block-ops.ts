@@ -69,9 +69,9 @@ export function updateInlineAnswerMarkerStates(text: string, states: Map<number,
 }
 
 export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock | null {
-  const sqliteRowComponentBlock = findSqliteRowComponentBlock(sectionKey, blockId);
-  if (sqliteRowComponentBlock) {
-    return sqliteRowComponentBlock;
+  const dbTableRowComponentBlock = findDbTableRowComponentBlock(sectionKey, blockId);
+  if (dbTableRowComponentBlock) {
+    return dbTableRowComponentBlock;
   }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (reusableName) {
@@ -85,8 +85,8 @@ export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock
   return findBlockInList(section.blocks, blockId);
 }
 
-function findSqliteRowComponentBlock(sectionKey: string, blockId: string): VisualBlock | null {
-  const modal = state.sqliteRowComponentModal;
+function findDbTableRowComponentBlock(sectionKey: string, blockId: string): VisualBlock | null {
+  const modal = state.dbTableRowComponentModal;
   if (!modal || modal.sectionKey !== sectionKey) {
     return null;
   }
@@ -362,18 +362,6 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     getRenderApp()();
-    return true;
-  }
-
-  if (field === 'block-plugin-db-table' && target instanceof HTMLInputElement) {
-    block.schema.pluginConfig = {
-      ...block.schema.pluginConfig,
-      source: 'with-file',
-      table: target.value,
-    };
-    resetDbTableViewState(target.dataset.sectionKey ?? '', block.id);
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    refreshReaderPanelsOutsideActiveEditor(target);
     return true;
   }
 
@@ -930,9 +918,9 @@ function openExpandableEditorPanelsToBlock(sectionKey: string, blockId: string):
 }
 
 function getEditorRootBlocks(sectionKey: string): VisualBlock[] | null {
-  const sqliteRowComponentModal = state.sqliteRowComponentModal;
-  if (sqliteRowComponentModal?.sectionKey === sectionKey) {
-    return sqliteRowComponentModal.blocks;
+  const dbTableRowComponentModal = state.dbTableRowComponentModal;
+  if (dbTableRowComponentModal?.sectionKey === sectionKey) {
+    return dbTableRowComponentModal.blocks;
   }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (reusableName) {

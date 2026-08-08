@@ -506,19 +506,19 @@ export function closeModal(): void {
     state.modalSectionKey = null;
     return;
   }
-  const sqliteRowComponentModal = state.sqliteRowComponentModal;
+  const dbTableRowComponentModal = state.dbTableRowComponentModal;
   if (
-    sqliteRowComponentModal
-    && state.activeEditorBlock?.sectionKey === sqliteRowComponentModal.sectionKey
-    && sqliteRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
+    dbTableRowComponentModal
+    && state.activeEditorBlock?.sectionKey === dbTableRowComponentModal.sectionKey
+    && dbTableRowComponentModal.blocks.some((block) => findBlockInSectionById(block, state.activeEditorBlock?.blockId ?? ''))
   ) {
-    state.activeEditorBlock = sqliteRowComponentModal.previousActiveEditorBlock;
+    state.activeEditorBlock = dbTableRowComponentModal.previousActiveEditorBlock;
   }
   state.captionTextModal = null;
   state.modalSectionKey = null;
   state.newDocumentModalOpen = false;
   state.componentMetaModal = null;
-  state.sqliteRowComponentModal = null;
+  state.dbTableRowComponentModal = null;
   state.dbTableQueryModal = null;
   state.pdfExportPlanModal = null;
   state.pdfTemplateImportModal = null;
@@ -539,7 +539,7 @@ export function closeModalIfTarget(sectionKey: string): void {
   if (state.captionTextModal?.target.sectionKey === sectionKey) {
     state.captionTextModal = null;
   }
-  if (state.sqliteRowComponentModal?.sectionKey === sectionKey) {
+  if (state.dbTableRowComponentModal?.sectionKey === sectionKey) {
     closeModal();
   }
   if (state.dbTableQueryModal?.sectionKey === sectionKey) {
@@ -580,7 +580,7 @@ export function resetTransientUiState(): void {
   state.reusableDefinitionEditModal = null;
   state.sectionTemplateFlavorModal = null;
   state.componentMetaModal = null;
-  state.sqliteRowComponentModal = null;
+  state.dbTableRowComponentModal = null;
   state.dbTableQueryModal = null;
   state.themeModalOpen = false;
   state.tempHighlights = new Set<string>();

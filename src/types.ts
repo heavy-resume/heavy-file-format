@@ -350,7 +350,7 @@ export interface ReusableDefinitionEditModalState {
   error: string | null;
 }
 
-export interface SqliteRowComponentModalState {
+export interface DbTableRowComponentModalState {
   sectionKey: string;
   blockId: string;
   tableName: string;
@@ -602,7 +602,7 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
-  sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  dbTableRowComponentModal: DbTableRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;
   pdfTemplateImportModal: PdfTemplateImportModalState | null;

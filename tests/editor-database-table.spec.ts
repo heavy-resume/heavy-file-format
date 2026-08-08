@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.setTimeout(5_000);
 
-async function loadDbTableV2Crm(page: Page, contacts = ['Jane Smith']): Promise<void> {
+async function loadDbTableCrm(page: Page, contacts = ['Jane Smith']): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---
@@ -41,21 +41,21 @@ plugins:
     setActiveEditorBlock(section.key, block.id);
     getRenderApp()();
   }, contacts);
-  await expect(page.locator('.hvy-database-table-editor [data-db-v2-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
+  await expect(page.locator('.hvy-database-table-editor [data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue('Jane Smith');
 }
 
 test('database-table edits relationships, stages required rows, and controls column visibility', async ({ page }) => {
-  await loadDbTableV2Crm(page);
+  await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
   await expect(plugin.locator('thead')).toContainText('Id');
   await expect(plugin.locator('thead')).toContainText('Organization');
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="relationship_id"] option:checked')).toHaveText('Acme Corp');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="relationship_id"] option:checked')).toHaveText('Acme Corp');
 
   // TOOL CALL
   await plugin.getByRole('button', { name: 'Columns' }).click();
-  await plugin.locator('.db-v2-column-card').first().locator('[data-db-v2-field="column-visibility"]').selectOption('hidden');
+  await plugin.locator('.db-table-column-card').first().locator('[data-db-table-field="column-visibility"]').selectOption('hidden');
   await plugin.getByRole('button', { name: 'Close column settings' }).click();
   await plugin.getByRole('button', { name: 'Row', exact: true }).click();
   await plugin.getByRole('button', { name: 'Save' }).click();
@@ -63,13 +63,13 @@ test('database-table edits relationships, stages required rows, and controls col
   // AFTER
   await expect(plugin.locator('thead').getByText('Id', { exact: true })).toHaveCount(0);
   await expect(plugin.getByRole('alert')).toHaveText('Complete the required fields before saving this row.');
-  const draftContact = plugin.locator('[data-db-v2-draft-control][data-column-name="contact"]');
+  const draftContact = plugin.locator('[data-db-table-draft-control][data-column-name="contact"]');
   await draftContact.fill('Alex Doe');
   await expect(draftContact).toBeFocused();
-  await plugin.locator('select[data-db-v2-draft-control][data-column-name="relationship_id"]').selectOption({ label: 'Globex' });
+  await plugin.locator('select[data-db-table-draft-control][data-column-name="relationship_id"]').selectOption({ label: 'Globex' });
   await plugin.getByRole('button', { name: 'Save' }).click();
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]').nth(1)).toHaveValue('Alex Doe');
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="relationship_id"]').nth(1).locator('option:checked')).toHaveText('Globex');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]').nth(1)).toHaveValue('Alex Doe');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="relationship_id"]').nth(1).locator('option:checked')).toHaveText('Globex');
   await expect.poll(() => page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
     const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
@@ -83,26 +83,26 @@ test('database-table edits relationships, stages required rows, and controls col
 });
 
 test('database-table carries forward schema editing, row attachments, and confirmed row deletion', async ({ page }) => {
-  await loadDbTableV2Crm(page);
+  await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveValue('Jane Smith');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveValue('Jane Smith');
 
   // TOOL CALL
   await plugin.getByRole('button', { name: 'Columns' }).click();
   await plugin.getByRole('button', { name: 'Column', exact: true }).click();
-  const addedColumn = plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Column 1"]');
+  const addedColumn = plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]');
   await expect(addedColumn).toBeVisible();
   await addedColumn.fill('Notes');
   await addedColumn.blur();
 
   // AFTER
-  await expect(plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Notes"]')).toBeVisible();
-  const notesCard = plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Notes"]').locator('xpath=ancestor::div[contains(@class,"db-v2-column-card")]');
+  await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]')).toBeVisible();
+  const notesCard = plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]').locator('xpath=ancestor::div[contains(@class,"db-table-column-card")]');
   await notesCard.getByRole('button', { name: 'Delete database column Notes' }).click();
   await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Notes"]')).toHaveCount(0);
+  await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Notes"]')).toHaveCount(0);
 
   await plugin.getByRole('button', { name: 'Close column settings' }).click();
   await plugin.getByRole('button', { name: 'Add details' }).click();
@@ -111,11 +111,11 @@ test('database-table carries forward schema editing, row attachments, and confir
 
   await plugin.getByRole('button', { name: 'Delete row' }).click();
   await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveCount(0);
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveCount(0);
 });
 
 test('database-table renames database columns directly from spreadsheet headers', async ({ page }) => {
-  await loadDbTableV2Crm(page);
+  await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
   const columnName = plugin.getByLabel('Display name for contact');
 
@@ -130,7 +130,7 @@ test('database-table renames database columns directly from spreadsheet headers'
 
   // AFTER
   await expect(plugin.getByLabel('Display name for contact_name')).toHaveValue('Contact');
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact_name"]')).toHaveValue('Jane Smith');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact_name"]')).toHaveValue('Jane Smith');
   await expect.poll(() => page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
     const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
@@ -144,10 +144,10 @@ test('database-table renames database columns directly from spreadsheet headers'
 });
 
 test('database-table resizes columns and auto-fits data within the document maximum', async ({ page }) => {
-  await loadDbTableV2Crm(page);
+  await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
-  const contactHeader = plugin.locator('.db-v2-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
-  const resizeHandle = contactHeader.locator('.db-v2-resize-handle');
+  const contactHeader = plugin.locator('.db-table-column-name-input[data-column-name="contact"]').locator('xpath=ancestor::th');
+  const resizeHandle = contactHeader.locator('.db-table-resize-handle');
   await page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
     state.document.meta.database_table_max_column_width = '30rem';
@@ -174,7 +174,7 @@ test('database-table resizes columns and auto-fits data within the document maxi
     const { state } = await import('/src/state.ts');
     state.document.meta.database_table_max_column_width = '10rem';
   });
-  const contact = plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]').first();
+  const contact = plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]').first();
   await contact.fill('A deliberately very long contact value that exceeds the configured maximum');
   await contact.blur();
   await resizeHandle.dblclick();
@@ -185,28 +185,28 @@ test('database-table resizes columns and auto-fits data within the document maxi
 });
 
 test('database-table uses queryLimit as the single page size without changing an authored SQL limit', async ({ page }) => {
-  await loadDbTableV2Crm(page, ['Jane Smith', 'Alex Doe', 'Blair Doe', 'Casey Doe', 'Devon Doe']);
+  await loadDbTableCrm(page, ['Jane Smith', 'Alex Doe', 'Blair Doe', 'Casey Doe', 'Devon Doe']);
   const plugin = page.locator('.hvy-database-table-editor');
 
   // BEFORE
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveCount(5);
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveCount(5);
 
   // TOOL CALL
-  await plugin.locator('.db-v2-query summary').click();
+  await plugin.locator('.db-table-query summary').click();
   await plugin.getByLabel('Rows per page').fill('2');
   await plugin.getByLabel('Rows per page').blur();
 
   // AFTER
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveCount(2);
-  await expect(plugin.locator('.db-v2-pager')).toContainText('Rows 1–2');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveCount(2);
+  await expect(plugin.locator('.db-table-pager')).toContainText('Rows 1–2');
   await plugin.getByRole('button', { name: 'Next rows' }).click();
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]').first()).toHaveValue('Blair Doe');
-  await expect(plugin.locator('.db-v2-pager')).toContainText('Rows 3–4');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]').first()).toHaveValue('Blair Doe');
+  await expect(plugin.locator('.db-table-pager')).toContainText('Rows 3–4');
 
-  await plugin.locator('.db-v2-query summary').click();
+  await plugin.locator('.db-table-query summary').click();
   await plugin.getByLabel('Optional read-only SELECT').fill('SELECT contact FROM contacts ORDER BY id LIMIT 3');
   await plugin.getByLabel('Optional read-only SELECT').blur();
-  await expect(plugin.locator('.db-v2-table-heading')).toContainText('Query result · read-only');
+  await expect(plugin.locator('.db-table-table-heading')).toContainText('Query result · read-only');
   await expect(plugin.locator('tbody tr')).toHaveCount(2);
   await expect(plugin.getByRole('button', { name: 'Row', exact: true })).toHaveCount(0);
   await plugin.getByRole('button', { name: 'Next rows' }).click();
@@ -215,9 +215,9 @@ test('database-table uses queryLimit as the single page size without changing an
 });
 
 test('database-table cell and destructive schema edits share async document undo', async ({ page }) => {
-  await loadDbTableV2Crm(page);
+  await loadDbTableCrm(page);
   const plugin = page.locator('.hvy-database-table-editor');
-  const contact = plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]');
+  const contact = plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]');
 
   // BEFORE / TOOL CALL / AFTER: logical inverse
   await contact.fill('Janet Smith');
@@ -227,26 +227,26 @@ test('database-table cell and destructive schema edits share async document undo
     const { undoStateAsync } = await import('/src/history.ts');
     await undoStateAsync();
   });
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveValue('Jane Smith');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveValue('Jane Smith');
   await page.evaluate(async () => {
     const { redoStateAsync } = await import('/src/history.ts');
     await redoStateAsync();
   });
-  await expect(plugin.locator('[data-db-v2-field="cell"][data-column-name="contact"]')).toHaveValue('Janet Smith');
+  await expect(plugin.locator('[data-db-table-field="cell"][data-column-name="contact"]')).toHaveValue('Janet Smith');
 
   // BEFORE / TOOL CALL / AFTER: full checkpoint
   await plugin.getByRole('button', { name: 'Columns' }).click();
   await plugin.getByRole('button', { name: 'Column', exact: true }).click();
-  await expect(plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Column 1"]')).toBeVisible();
+  await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toBeVisible();
   await plugin.getByRole('button', { name: 'Delete database column Column 1' }).click();
   await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Column 1"]')).toHaveCount(0);
+  await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toHaveCount(0);
   await page.evaluate(async () => {
     const { undoStateAsync } = await import('/src/history.ts');
     await undoStateAsync();
   });
-  if (await plugin.locator('.db-v2-column-settings').count() === 0) {
+  if (await plugin.locator('.db-table-column-settings').count() === 0) {
     await plugin.getByRole('button', { name: 'Columns' }).click();
   }
-  await expect(plugin.locator('.db-v2-column-settings [data-db-v2-field="schema-column-name"][value="Column 1"]')).toBeVisible();
+  await expect(plugin.locator('.db-table-column-settings [data-db-table-field="schema-column-name"][value="Column 1"]')).toBeVisible();
 });

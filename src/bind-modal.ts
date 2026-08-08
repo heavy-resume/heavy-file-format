@@ -212,27 +212,27 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const saveSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-save"]');
-    if (saveSqliteRowComponentBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
+    const saveDbTableRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-save"]');
+    if (saveDbTableRowComponentBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
       const nextSerialized = modal.mode === 'raw' ? modal.rawDraft.trim() : modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n');
       if (nextSerialized.length === 0) {
-        state.sqliteRowComponentModal = {
+        state.dbTableRowComponentModal = {
           ...modal,
           error: 'Add at least one component before saving this row attachment.',
         };
         getRenderApp()();
         return;
       }
-      recordHistory(`sqlite-row-component:${modal.tableName}:${modal.rowId}`);
+      recordHistory(`db-table-row-component:${modal.tableName}:${modal.rowId}`);
       void loadDbTableRuntime()
-        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, nextSerialized))
+        .then(({ setDbTableRowComponent }) => setDbTableRowComponent(modal.tableName, modal.rowId, nextSerialized))
         .then(() => {
           closeModal();
           getRenderApp()();
         })
         .catch((error) => {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Failed to save attached component.',
           };
@@ -241,10 +241,10 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const sqliteRowComponentModeBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-mode"]');
-    if (sqliteRowComponentModeBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
-      const nextMode = sqliteRowComponentModeBtn.dataset.modalMode;
+    const dbTableRowComponentModeBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-mode"]');
+    if (dbTableRowComponentModeBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
+      const nextMode = dbTableRowComponentModeBtn.dataset.modalMode;
       if (nextMode !== 'basic' && nextMode !== 'advanced' && nextMode !== 'raw') {
         return;
       }
@@ -255,7 +255,7 @@ export function bindModal(app: HTMLElement): void {
       if (modal.mode === 'raw' && nextMode !== 'raw') {
         try {
           const parsedBlocks = parseAttachedComponentBlocks(modal.rawDraft);
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             mode: nextMode,
             blocks: parsedBlocks,
@@ -268,7 +268,7 @@ export function bindModal(app: HTMLElement): void {
             };
           }
         } catch (error) {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Attached HVY is invalid.',
           };
@@ -277,7 +277,7 @@ export function bindModal(app: HTMLElement): void {
         return;
       }
 
-      state.sqliteRowComponentModal = {
+      state.dbTableRowComponentModal = {
         ...modal,
         mode: nextMode,
         rawDraft: nextMode === 'raw' ? modal.blocks.map((block) => serializeBlockFragment(block)).join('\n\n') : modal.rawDraft,
@@ -287,18 +287,18 @@ export function bindModal(app: HTMLElement): void {
       return;
     }
 
-    const clearSqliteRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="sqlite-row-component-clear"]');
-    if (clearSqliteRowComponentBtn && state.sqliteRowComponentModal) {
-      const modal = state.sqliteRowComponentModal;
-      recordHistory(`sqlite-row-component-clear:${modal.tableName}:${modal.rowId}`);
+    const clearDbTableRowComponentBtn = target.closest<HTMLElement>('[data-modal-action="db-table-row-component-clear"]');
+    if (clearDbTableRowComponentBtn && state.dbTableRowComponentModal) {
+      const modal = state.dbTableRowComponentModal;
+      recordHistory(`db-table-row-component-clear:${modal.tableName}:${modal.rowId}`);
       void loadDbTableRuntime()
-        .then(({ setSqliteRowComponent }) => setSqliteRowComponent(modal.tableName, modal.rowId, ''))
+        .then(({ setDbTableRowComponent }) => setDbTableRowComponent(modal.tableName, modal.rowId, ''))
         .then(() => {
           closeModal();
           getRenderApp()();
         })
         .catch((error) => {
-          state.sqliteRowComponentModal = {
+          state.dbTableRowComponentModal = {
             ...modal,
             error: error instanceof Error ? error.message : 'Failed to remove attached component.',
           };
@@ -363,7 +363,7 @@ export function bindModal(app: HTMLElement): void {
 
   const cssInput = modalRoot.querySelector<HTMLTextAreaElement>('#modalCssInput');
   const reusableDefinitionRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#reusableDefinitionRawInput');
-  const sqliteRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#sqliteRowComponentRawInput');
+  const dbTableRowComponentRawInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableRowComponentRawInput');
   const dbTableQueryInput = modalRoot.querySelector<HTMLTextAreaElement>('#dbTableQueryInput');
   const dbTableQueryDynamicWindowInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryDynamicWindowInput');
   const dbTableQueryLimitInput = modalRoot.querySelector<HTMLInputElement>('#dbTableQueryLimitInput');
@@ -381,14 +381,14 @@ export function bindModal(app: HTMLElement): void {
     });
   }
 
-  if (sqliteRowComponentRawInput && state.sqliteRowComponentModal) {
-    sqliteRowComponentRawInput.addEventListener('input', () => {
-      if (!state.sqliteRowComponentModal) {
+  if (dbTableRowComponentRawInput && state.dbTableRowComponentModal) {
+    dbTableRowComponentRawInput.addEventListener('input', () => {
+      if (!state.dbTableRowComponentModal) {
         return;
       }
-      state.sqliteRowComponentModal = {
-        ...state.sqliteRowComponentModal,
-        rawDraft: sqliteRowComponentRawInput.value,
+      state.dbTableRowComponentModal = {
+        ...state.dbTableRowComponentModal,
+        rawDraft: dbTableRowComponentRawInput.value,
         error: null,
       };
     });

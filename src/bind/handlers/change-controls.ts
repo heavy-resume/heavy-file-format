@@ -68,11 +68,11 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'sqlite-cell' && target instanceof HTMLInputElement) {
+    if (field === 'db-table-cell' && target instanceof HTMLInputElement) {
       const tableName = target.dataset.tableName ?? '';
       const columnName = target.dataset.columnName ?? '';
       const rowId = Number.parseInt(target.dataset.rowid ?? '', 10);
-      const isDraftRow = target.dataset.sqliteDraftRow === 'true';
+      const isDraftRow = target.dataset.dbTableDraftRow === 'true';
       if (tableName.length === 0 || columnName.length === 0) {
         return;
       }
@@ -80,25 +80,25 @@ export function bindChangeControls(app: HTMLElement): void {
         if (target.value.length === 0) {
           return;
         }
-        recordHistory(`sqlite-draft-row:${tableName}:${columnName}`);
+        recordHistory(`db-table-draft-row:${tableName}:${columnName}`);
         void loadDbTableRuntime()
           .then(({ materializeDbTableDraftRow }) => materializeDbTableDraftRow(tableName, columnName, target.value))
           .then(() => {
             getRenderApp()();
           })
           .catch((error) => {
-            console.error('[hvy:sqlite-plugin] draft row materialization failed', error);
+            console.error('[hvy:db-table-plugin] draft row materialization failed', error);
           });
         return;
       }
       if (Number.isNaN(rowId)) {
         return;
       }
-      recordHistory(`sqlite-cell:${tableName}:${rowId}:${columnName}`);
+      recordHistory(`db-table-cell:${tableName}:${rowId}:${columnName}`);
       void loadDbTableRuntime()
         .then(({ updateDbTableCell }) => updateDbTableCell(tableName, rowId, columnName, target.value))
         .catch((error) => {
-          console.error('[hvy:sqlite-plugin] cell update failed', error);
+          console.error('[hvy:db-table-plugin] cell update failed', error);
         });
       return;
     }
@@ -223,7 +223,7 @@ export function bindChangeControls(app: HTMLElement): void {
       return;
     }
 
-    if (field === 'sqlite-column-name' && target instanceof HTMLInputElement) {
+    if (field === 'db-table-column-name' && target instanceof HTMLInputElement) {
       const tableName = target.dataset.tableName ?? '';
       const oldColumnName = target.dataset.oldColumnName ?? '';
       if (tableName.length === 0 || oldColumnName.length === 0) {
@@ -236,21 +236,21 @@ export function bindChangeControls(app: HTMLElement): void {
           target.value = oldColumnName;
           return;
         }
-        recordHistory(`sqlite-column-drop:${tableName}:${oldColumnName}`);
+        recordHistory(`db-table-column-drop:${tableName}:${oldColumnName}`);
         void loadDbTableRuntime()
           .then(({ dropDbTableColumn }) => dropDbTableColumn(tableName, oldColumnName))
           .then(() => {
             getRenderApp()();
           })
           .catch((error) => {
-            console.error('[hvy:sqlite-plugin] column drop failed', error);
+            console.error('[hvy:db-table-plugin] column drop failed', error);
             target.value = oldColumnName;
             window.alert(error instanceof Error ? error.message : 'Failed to delete column.');
             getRenderApp()();
           });
         return;
       }
-      recordHistory(`sqlite-column:${tableName}:${oldColumnName}`);
+      recordHistory(`db-table-column:${tableName}:${oldColumnName}`);
       void loadDbTableRuntime()
         .then(({ renameDbTableColumn }) => renameDbTableColumn(tableName, oldColumnName, target.value))
         .then(() => {
@@ -259,12 +259,12 @@ export function bindChangeControls(app: HTMLElement): void {
             return;
           }
           target.dataset.oldColumnName = nextColumnName;
-          void loadDbTableRuntime().then(({ syncSqliteColumnNameInDom }) => {
-            syncSqliteColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
+          void loadDbTableRuntime().then(({ syncDbTableColumnNameInDom }) => {
+            syncDbTableColumnNameInDom(tableName, oldColumnName, nextColumnName, app);
           });
         })
         .catch((error) => {
-          console.error('[hvy:sqlite-plugin] column rename failed', error);
+          console.error('[hvy:db-table-plugin] column rename failed', error);
           getRenderApp()();
         });
     }

@@ -22,7 +22,7 @@ import { renderTagEditor } from '../editor/tag-editor';
 import { colorValueToAlpha, colorValueToPickerHex, getResolvedThemeColor, getThemeColorLabel, getThemeResetColor, THEME_COLOR_NAMES } from '../theme';
 import type { ThemeConfig } from '../theme';
 import { getMatchedPaletteId, HVY_PALETTES } from '../palettes/palette-registry';
-import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, SqliteRowComponentModalState, VisualDocument } from '../types';
+import type { ComponentDefinition, DbTableQueryModalState, ReaderViewFilter, ReusableDefinitionEditModalState, ReusableSaveModalState, SectionTemplateFlavorModalState, DbTableRowComponentModalState, VisualDocument } from '../types';
 import type { CaptionTextModalState } from '../caption';
 import { createDefaultTextCaption, normalizeTextCaption, renderTextCaptionHtml } from '../caption';
 import type { SearchState } from '../search/types';
@@ -71,7 +71,7 @@ interface ReaderRenderState {
   aiEditorHostSectionKey?: string | null;
   modalSectionKey: string | null;
   captionTextModal: CaptionTextModalState | null;
-  sqliteRowComponentModal: SqliteRowComponentModalState | null;
+  dbTableRowComponentModal: DbTableRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfTemplateImportModal: import('../types').PdfTemplateImportModalState | null;
   reusableSaveModal: ReusableSaveModalState | null;
@@ -1726,8 +1726,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
-    if (state.sqliteRowComponentModal) {
-      const rowModal = state.sqliteRowComponentModal;
+    if (state.dbTableRowComponentModal) {
+      const rowModal = state.dbTableRowComponentModal;
       const section = deps.findSectionByKey(state.documentSections, rowModal.sectionKey);
       if (!section) {
         return '';
@@ -1741,7 +1741,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           rawPreviewBlocks = [];
         }
       }
-      const addKey = `sqlite-row-component:${rowModal.sectionKey}:${rowModal.rowId}`;
+      const addKey = `db-table-row-component:${rowModal.sectionKey}:${rowModal.rowId}`;
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="close-overlay"></div>
@@ -1752,9 +1752,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                 ${rowModal.readOnly
           ? ''
           : `<div class="editor-mode-toggle">
-                      <button type="button" class="${rowModal.mode === 'basic' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="basic">Basic</button>
-                      <button type="button" class="${rowModal.mode === 'advanced' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="advanced">Advanced</button>
-                      <button type="button" class="${rowModal.mode === 'raw' ? 'secondary' : 'ghost'}" data-modal-action="sqlite-row-component-mode" data-modal-mode="raw">Raw</button>
+                      <button type="button" class="${rowModal.mode === 'basic' ? 'secondary' : 'ghost'}" data-modal-action="db-table-row-component-mode" data-modal-mode="basic">Basic</button>
+                      <button type="button" class="${rowModal.mode === 'advanced' ? 'secondary' : 'ghost'}" data-modal-action="db-table-row-component-mode" data-modal-mode="advanced">Advanced</button>
+                      <button type="button" class="${rowModal.mode === 'raw' ? 'secondary' : 'ghost'}" data-modal-action="db-table-row-component-mode" data-modal-mode="raw">Raw</button>
                     </div>`}
                 <button type="button" class="hvy-button" data-modal-action="close">Close</button>
               </div>
@@ -1770,18 +1770,18 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           : rowModal.mode === 'raw'
             ? `<label>
                     <span>Attached HVY</span>
-                    <textarea id="sqliteRowComponentRawInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(rowModal.rawDraft)}</textarea>
+                    <textarea id="dbTableRowComponentRawInput" class="raw-editor-textarea" spellcheck="false">${deps.escapeHtml(rowModal.rawDraft)}</textarea>
                   </label>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-                    <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
-                    <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
+                    <button type="button" class="ghost" data-modal-action="db-table-row-component-clear">Remove</button>
+                    <button type="button" class="secondary" data-modal-action="db-table-row-component-save">Save</button>
                   </div>`
             : attachedBlocks.length > 0
-              ? `<div class="sqlite-row-component-modal-stack">
+              ? `<div class="db-table-row-component-modal-stack">
                     ${attachedBlocks.map((block) => deps.renderEditorBlock(rowModal.sectionKey, block)).join('')}
                   </div>
-                  <div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
+                  <div class="ghost-section-card add-ghost db-table-row-component-ghost" data-action="db-table-row-component-add-block" data-section-key="${deps.escapeAttr(
                 rowModal.sectionKey
               )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
@@ -1799,11 +1799,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                   </div>
                   <div class="link-inline-actions reusable-save-actions">
                     <button type="button" class="ghost" data-modal-action="close">Cancel</button>
-                    <button type="button" class="ghost" data-modal-action="sqlite-row-component-clear">Remove</button>
-                    <button type="button" class="secondary" data-modal-action="sqlite-row-component-save">Save</button>
+                    <button type="button" class="ghost" data-modal-action="db-table-row-component-clear">Remove</button>
+                    <button type="button" class="secondary" data-modal-action="db-table-row-component-save">Save</button>
                   </div>`
-              : `<div class="ghost-section-card add-ghost sqlite-row-component-ghost" data-action="sqlite-row-component-add-block" data-section-key="${deps.escapeAttr(
-                state.sqliteRowComponentModal.sectionKey
+              : `<div class="ghost-section-card add-ghost db-table-row-component-ghost" data-action="db-table-row-component-add-block" data-section-key="${deps.escapeAttr(
+                state.dbTableRowComponentModal.sectionKey
               )}">
                     <div class="ghost-plus-big">${plusIcon()}</div>
                     <div class="ghost-label">Add Component</div>

@@ -2,25 +2,25 @@ import { expect, test } from 'vitest';
 
 import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import {
-  addDbTableV2Column,
-  coerceDbTableV2Input,
-  deleteDbTableV2Row,
-  decodeDbTableV2OptionValue,
-  dropDbTableV2Column,
-  encodeDbTableV2OptionValue,
-  insertDbTableV2Row,
-  loadDbTableV2Snapshot,
-  renameDbTableV2Column,
-  updateDbTableV2Cell,
+  addDbTableSourceColumn,
+  coerceDbTableInput,
+  deleteDbTableRow,
+  decodeDbTableOptionValue,
+  dropDbTableSourceColumn,
+  encodeDbTableOptionValue,
+  insertDbTableRow,
+  loadDbTableSourcePage,
+  renameDbTableSourceColumn,
+  updateDbTableSourceCell,
 } from '../src/plugins/db-table/db-table-data';
 import {
-  normalizeDbTableV2ColumnWidth,
-  normalizeDbTableV2MaxColumnWidth,
-  readDbTableV2ColumnConfig,
-  readDbTableV2Config,
-  removeDbTableV2ColumnConfig,
-  renameDbTableV2ColumnConfig,
-  updateDbTableV2ColumnConfig,
+  normalizeDbTableColumnWidth,
+  normalizeDbTableMaxColumnWidth,
+  readDbTableColumnConfig,
+  readDbTableConfig,
+  removeDbTableColumnConfig,
+  renameDbTableSourceColumnConfig,
+  updateDbTableColumnConfig,
 } from '../src/plugins/db-table/db-table-config';
 import { deserializeDocument } from '../src/serialization';
 import { getDocumentDatabaseTableNames } from '../src/plugins/database-table-targets';
@@ -46,7 +46,7 @@ test('database-table reads simple foreign keys and configured display values', a
   }
 
   // TOOL CALL
-  const expectedResult = await loadDbTableV2Snapshot(document, readDbTableV2Config({
+  const expectedResult = await loadDbTableSourcePage(document, readDbTableConfig({
     source: 'with-file',
     table: 'contacts',
     columns: {
@@ -92,7 +92,7 @@ test('database-table writes numeric relationship values and enforces foreign key
   } finally {
     setup.dispose();
   }
-  const snapshot = await loadDbTableV2Snapshot(document, readDbTableV2Config({ table: 'contacts' }), {
+  const snapshot = await loadDbTableSourcePage(document, readDbTableConfig({ table: 'contacts' }), {
     query: '',
     offset: 0,
     sortColumn: null,
@@ -101,7 +101,7 @@ test('database-table writes numeric relationship values and enforces foreign key
   const relationshipColumn = snapshot.columns.find((column) => column.name === 'relationship_id')!;
 
   // TOOL CALL
-  await updateDbTableV2Cell(document, 'contacts', 1, relationshipColumn, 2);
+  await updateDbTableSourceCell(document, 'contacts', 1, relationshipColumn, 2);
 
   // AFTER
   const inspection = await createScriptingDbRuntime(document);
@@ -112,7 +112,7 @@ test('database-table writes numeric relationship values and enforces foreign key
   } finally {
     inspection.dispose();
   }
-  await expect(updateDbTableV2Cell(document, 'contacts', 1, relationshipColumn, 999)).rejects.toThrow(/FOREIGN KEY constraint failed/u);
+  await expect(updateDbTableSourceCell(document, 'contacts', 1, relationshipColumn, 999)).rejects.toThrow(/FOREIGN KEY constraint failed/u);
 });
 
 test('database-table inserts a complete staged row with one write', async () => {
@@ -124,7 +124,7 @@ test('database-table inserts a complete staged row with one write', async () => 
   } finally {
     setup.dispose();
   }
-  const snapshot = await loadDbTableV2Snapshot(document, readDbTableV2Config({ table: 'contacts' }), {
+  const snapshot = await loadDbTableSourcePage(document, readDbTableConfig({ table: 'contacts' }), {
     query: '',
     offset: 0,
     sortColumn: null,
@@ -132,7 +132,7 @@ test('database-table inserts a complete staged row with one write', async () => 
   });
 
   // TOOL CALL
-  const inserted = await insertDbTableV2Row(document, 'contacts', [{
+  const inserted = await insertDbTableRow(document, 'contacts', [{
     column: snapshot.columns.find((column) => column.name === 'contact')!,
     value: 'Jane Smith',
   }]);
@@ -140,7 +140,7 @@ test('database-table inserts a complete staged row with one write', async () => 
   // AFTER
   expect(inserted.rowId).toBe(1);
   expect(inserted.values.contact).toBe('Jane Smith');
-  const expectedResult = await loadDbTableV2Snapshot(document, readDbTableV2Config({ table: 'contacts' }), {
+  const expectedResult = await loadDbTableSourcePage(document, readDbTableConfig({ table: 'contacts' }), {
     query: '',
     offset: 0,
     sortColumn: null,
@@ -153,10 +153,10 @@ test('database-table inserts a complete staged row with one write', async () => 
 
 test('database-table column presentation defaults generated keys to compact and validates widths', () => {
   // BEFORE
-  const config = readDbTableV2Config({ table: 'contacts' });
+  const config = readDbTableConfig({ table: 'contacts' });
 
   // TOOL CALL
-  const expectedResult = readDbTableV2ColumnConfig(config, 'id', { generated: true });
+  const expectedResult = readDbTableColumnConfig(config, 'id', { generated: true });
 
   // AFTER
   expect(expectedResult).toMatchObject({
@@ -165,11 +165,11 @@ test('database-table column presentation defaults generated keys to compact and 
     width: '5rem',
     wrap: false,
   });
-  expect(normalizeDbTableV2ColumnWidth('18ch')).toBe('18ch');
-  expect(normalizeDbTableV2ColumnWidth('calc(100% - 1rem)')).toBe('');
-  expect(normalizeDbTableV2MaxColumnWidth('40rem')).toBe('40rem');
-  expect(normalizeDbTableV2MaxColumnWidth('80%')).toBe('');
-  expect(updateDbTableV2ColumnConfig(config, 'id', { visibility: 'hidden', width: '6rem' })).toEqual({
+  expect(normalizeDbTableColumnWidth('18ch')).toBe('18ch');
+  expect(normalizeDbTableColumnWidth('calc(100% - 1rem)')).toBe('');
+  expect(normalizeDbTableMaxColumnWidth('40rem')).toBe('40rem');
+  expect(normalizeDbTableMaxColumnWidth('80%')).toBe('');
+  expect(updateDbTableColumnConfig(config, 'id', { visibility: 'hidden', width: '6rem' })).toEqual({
     columns: {
       id: { visibility: 'hidden', width: '6rem' },
     },
@@ -177,11 +177,11 @@ test('database-table column presentation defaults generated keys to compact and 
 });
 
 test('database-table relationship option values preserve SQLite scalar types', () => {
-  expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue(14))).toBe(14);
-  expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue('14'))).toBe('14');
-  expect(decodeDbTableV2OptionValue(encodeDbTableV2OptionValue(null))).toBeNull();
-  expect(coerceDbTableV2Input('14', 'INTEGER')).toBe(14);
-  expect(coerceDbTableV2Input('14', 'TEXT')).toBe('14');
+  expect(decodeDbTableOptionValue(encodeDbTableOptionValue(14))).toBe(14);
+  expect(decodeDbTableOptionValue(encodeDbTableOptionValue('14'))).toBe('14');
+  expect(decodeDbTableOptionValue(encodeDbTableOptionValue(null))).toBeNull();
+  expect(coerceDbTableInput('14', 'INTEGER')).toBe(14);
+  expect(coerceDbTableInput('14', 'TEXT')).toBe('14');
 });
 
 test('database-table participates in shared database targeting and AI SQL tools', () => {
@@ -223,13 +223,13 @@ test('database-table retains a migrated query limit as its page size', async () 
   }
 
   // TOOL CALL
-  const migratedConfig = readDbTableV2Config({
+  const migratedConfig = readDbTableConfig({
     source: 'with-file',
     table: 'work_items',
     queryDynamicWindow: false,
     queryLimit: 2,
   });
-  const expectedResult = await loadDbTableV2Snapshot(document, migratedConfig, {
+  const expectedResult = await loadDbTableSourcePage(document, migratedConfig, {
     query: 'SELECT name FROM work_items ORDER BY name LIMIT 3',
     offset: 2,
     sortColumn: null,
@@ -244,12 +244,12 @@ test('database-table retains a migrated query limit as its page size', async () 
 });
 
 test('database-table uses one bounded page size and preserves configured sources', () => {
-  expect(readDbTableV2Config({ source: 'postgresql', table: 'work_items' })).toMatchObject({
+  expect(readDbTableConfig({ source: 'postgresql', table: 'work_items' })).toMatchObject({
     source: 'postgresql',
     queryLimit: 50,
   });
-  expect(readDbTableV2Config({ table: 'work_items', queryLimit: 2_000 }).queryLimit).toBe(1_000);
-  expect(readDbTableV2Config({ table: 'work_items', queryLimit: 0 }).queryLimit).toBe(1);
+  expect(readDbTableConfig({ table: 'work_items', queryLimit: 2_000 }).queryLimit).toBe(1_000);
+  expect(readDbTableConfig({ table: 'work_items', queryLimit: 0 }).queryLimit).toBe(1);
 });
 
 test('database-table delegates authored queries and paging to the selected source', async () => {
@@ -283,7 +283,7 @@ test('database-table delegates authored queries and paging to the selected sourc
 
   try {
     // TOOL CALL
-    const expectedResult = await loadDbTableV2Snapshot(document, readDbTableV2Config({
+    const expectedResult = await loadDbTableSourcePage(document, readDbTableConfig({
       source: 'postgresql',
       table: 'work_items',
       queryLimit: 200,
@@ -324,16 +324,16 @@ test('database-table carries forward schema editing and removes row-attached HVY
   }
 
   // TOOL CALL
-  expect(await addDbTableV2Column(document, 'contacts')).toBe('Column 3');
-  await renameDbTableV2Column(document, 'contacts', 'Column 3', 'Notes');
-  await dropDbTableV2Column(document, 'contacts', 'Column 2');
-  const beforeDelete = await loadDbTableV2Snapshot(document, readDbTableV2Config({ table: 'contacts' }), {
+  expect(await addDbTableSourceColumn(document, 'contacts')).toBe('Column 3');
+  await renameDbTableSourceColumn(document, 'contacts', 'Column 3', 'Notes');
+  await dropDbTableSourceColumn(document, 'contacts', 'Column 2');
+  const beforeDelete = await loadDbTableSourcePage(document, readDbTableConfig({ table: 'contacts' }), {
     query: '',
     offset: 0,
     sortColumn: null,
     sortDirection: null,
   });
-  await deleteDbTableV2Row(document, 'contacts', 1);
+  await deleteDbTableRow(document, 'contacts', 1);
 
   // AFTER
   expect(beforeDelete.columns.map((column) => column.name)).toEqual(['Column 1', 'Notes']);
@@ -348,18 +348,18 @@ test('database-table carries forward schema editing and removes row-attached HVY
 });
 
 test('database-table migrates and removes presentation settings when physical columns change', () => {
-  const config = readDbTableV2Config({
+  const config = readDbTableConfig({
     table: 'contacts',
     columns: { company: { label: 'Organization', width: '14rem' }, notes: { wrap: true } },
   });
 
-  expect(renameDbTableV2ColumnConfig(config, 'company', 'relationship')).toEqual({
+  expect(renameDbTableSourceColumnConfig(config, 'company', 'relationship')).toEqual({
     columns: { relationship: { label: 'Organization', width: '14rem' }, notes: { wrap: true } },
   });
-  expect(removeDbTableV2ColumnConfig(config, 'company')).toEqual({
+  expect(removeDbTableColumnConfig(config, 'company')).toEqual({
     columns: { notes: { wrap: true } },
   });
-  expect(renameDbTableV2ColumnConfig(readDbTableV2Config({ table: 'contacts' }), 'organization_id', 'company_id')).toEqual({
+  expect(renameDbTableSourceColumnConfig(readDbTableConfig({ table: 'contacts' }), 'organization_id', 'company_id')).toEqual({
     columns: { company_id: { label: 'Organization Id' } },
   });
 });

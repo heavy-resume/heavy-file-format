@@ -7,34 +7,34 @@ import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, closeIcon, p
 import { escapeAttr, escapeHtml } from '../../utils';
 import {
   humanizeDbColumnName,
-  DEFAULT_DB_TABLE_V2_MAX_COLUMN_WIDTH,
-  normalizeDbTableV2MaxColumnWidth,
-  readDbTableV2ColumnConfig,
-  readDbTableV2Config,
-  removeDbTableV2ColumnConfig,
-  renameDbTableV2ColumnConfig,
-  updateDbTableV2ColumnConfig,
-  type DbTableV2ColumnConfig,
-  type DbTableV2Config,
+  DEFAULT_DB_TABLE__MAX_COLUMN_WIDTH,
+  normalizeDbTableMaxColumnWidth,
+  readDbTableColumnConfig,
+  readDbTableConfig,
+  removeDbTableColumnConfig,
+  renameDbTableSourceColumnConfig,
+  updateDbTableColumnConfig,
+  type DbTableColumnConfig,
+  type DbTableConfig,
 } from './db-table-config';
 import {
-  addDbTableV2Column,
-  addNamedDbTableV2Column,
-  coerceDbTableV2Input,
-  createBasicDbTableV2,
-  deleteDbTableV2Row,
-  decodeDbTableV2OptionValue,
-  dropDbTableV2Column,
-  encodeDbTableV2OptionValue,
-  insertDbTableV2Row,
-  loadDbTableV2Snapshot,
-  renameDbTableV2Column,
-  restoreDbTableV2Row,
-  stringifyDbTableV2Value,
-  updateDbTableV2Cell,
-  type DbTableV2ColumnSchema,
-  type DbTableV2Snapshot,
-  type DbTableV2Value,
+  addDbTableSourceColumn,
+  addNamedDbTableColumn,
+  coerceDbTableInput,
+  createBasicDbTable,
+  deleteDbTableRow,
+  decodeDbTableOptionValue,
+  dropDbTableSourceColumn,
+  encodeDbTableOptionValue,
+  insertDbTableRow,
+  loadDbTableSourcePage,
+  renameDbTableSourceColumn,
+  restoreDbTableRow,
+  stringifyDbTableValue,
+  updateDbTableSourceCell,
+  type DbTableColumnSchema,
+  type DbTableSourcePage,
+  type DbTableValue,
 } from './db-table-data';
 import { getDatabaseTableSources } from '../database-table-source';
 import { openRemoveConfirmationModal } from '../../bind/handlers/remove-confirmation-modal';
@@ -50,12 +50,12 @@ import {
   recordHistory,
   restoreHistoryStackState,
 } from '../../history';
-import dbTableV2Documentation from './about-db-table.txt?raw';
+import dbTableDocumentation from './about-db-table.txt?raw';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from '../../document-change';
 
 import './db-table-component.css';
 
-interface DbTableV2UiState {
+interface DbTableUiState {
   offset: number;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc' | null;
@@ -71,7 +71,7 @@ const visualDescriptions = new WeakMap<object, string>();
 function build(ctx: HvyPluginContext): HvyPluginInstance {
   const root = document.createElement('div');
   root.className = `hvy-database-table hvy-database-table-${ctx.mode}`;
-  const ui: DbTableV2UiState = {
+  const ui: DbTableUiState = {
     offset: 0,
     sortColumn: null,
     sortDirection: null,
@@ -81,7 +81,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     queuePending: getDatabaseHistoryQueueStatus().pending,
     queueLabel: getDatabaseHistoryQueueStatus().runningLabel,
   };
-  let snapshot: DbTableV2Snapshot | null = null;
+  let snapshot: DbTableSourcePage | null = null;
   let refreshVersion = 0;
   let disposed = false;
   let unsubscribeQueue = () => {};
@@ -98,9 +98,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const columnName = input.dataset.columnName ?? '';
     const mode = input.dataset.columnEditMode === 'database' ? 'database' : 'display';
     const editor = document.createElement('div');
-    editor.className = 'db-v2-column-editor-popover';
+    editor.className = 'db-table-column-editor-popover';
     editor.dataset.columnName = columnName;
-    editor.innerHTML = `<strong>Edit column header</strong><div class="db-v2-column-editor-modes" role="group" aria-label="Column name type"><button type="button" class="ghost${mode === 'display' ? ' is-active' : ''}" data-db-v2-column-edit-mode="display">Display</button><button type="button" class="ghost${mode === 'database' ? ' is-active' : ''}" data-db-v2-column-edit-mode="database">DB Column</button></div><span>${mode === 'display' ? `Shown to readers · database: ${escapeHtml(columnName)}` : `Stored in the database · display: ${escapeHtml(input.dataset.displayName ?? '')}`}</span>`;
+    editor.innerHTML = `<strong>Edit column header</strong><div class="db-table-column-editor-modes" role="group" aria-label="Column name type"><button type="button" class="ghost${mode === 'display' ? ' is-active' : ''}" data-db-table-column-edit-mode="display">Display</button><button type="button" class="ghost${mode === 'database' ? ' is-active' : ''}" data-db-table-column-edit-mode="database">DB Column</button></div><span>${mode === 'display' ? `Shown to readers · database: ${escapeHtml(columnName)}` : `Stored in the database · display: ${escapeHtml(input.dataset.displayName ?? '')}`}</span>`;
     root.append(editor);
     const rootBox = root.getBoundingClientRect();
     const inputBox = input.getBoundingClientRect();
@@ -110,11 +110,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     columnEditor = editor;
   };
 
-  const config = (): DbTableV2Config => readDbTableV2Config(ctx.block.schema.pluginConfig);
+  const config = (): DbTableConfig => readDbTableConfig(ctx.block.schema.pluginConfig);
 
   const renderCurrent = () => {
     closeColumnEditor();
-    root.innerHTML = renderDbTableV2(ctx, config(), snapshot, ui);
+    root.innerHTML = renderDbTable(ctx, config(), snapshot, ui);
   };
 
   const refresh = () => {
@@ -122,12 +122,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const activeConfig = config();
     if (!activeConfig.table) {
       snapshot = null;
-      visualDescriptions.set(ctx.block, 'DB Table v2: no table selected.');
+      visualDescriptions.set(ctx.block, 'DB Table: no table selected.');
       renderCurrent();
       return;
     }
-    root.classList.add('db-v2-loading');
-    void loadDbTableV2Snapshot(ctx.rawDocument, activeConfig, {
+    root.classList.add('db-table-loading');
+    void loadDbTableSourcePage(ctx.rawDocument, activeConfig, {
       query: ctx.block.text,
       offset: ui.offset,
       sortColumn: ui.sortColumn,
@@ -142,25 +142,25 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }).catch((error) => {
       if (disposed || version !== refreshVersion) return;
       snapshot = null;
-      ui.error = error instanceof Error ? error.message : 'Unable to load DB Table v2.';
-      visualDescriptions.set(ctx.block, `DB Table v2 error: ${ui.error}`);
+      ui.error = error instanceof Error ? error.message : 'Unable to load DB Table.';
+      visualDescriptions.set(ctx.block, `DB Table error: ${ui.error}`);
       renderCurrent();
     }).finally(() => {
-      if (!disposed && version === refreshVersion) root.classList.remove('db-v2-loading');
+      if (!disposed && version === refreshVersion) root.classList.remove('db-table-loading');
     });
   };
 
   root.addEventListener('click', (event) => {
-    const editMode = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-v2-column-edit-mode]');
+    const editMode = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-table-column-edit-mode]');
     if (editMode && snapshot) {
-      const columnName = editMode.closest<HTMLElement>('.db-v2-column-editor-popover')?.dataset.columnName ?? '';
+      const columnName = editMode.closest<HTMLElement>('.db-table-column-editor-popover')?.dataset.columnName ?? '';
       const column = snapshot.columns.find((candidate) => candidate.name === columnName);
-      const input = root.querySelector<HTMLInputElement>(`.db-v2-column-name-input[data-column-name="${CSS.escape(columnName)}"]`);
+      const input = root.querySelector<HTMLInputElement>(`.db-table-column-name-input[data-column-name="${CSS.escape(columnName)}"]`);
       if (!column || !input) return;
-      const mode = editMode.dataset.dbV2ColumnEditMode === 'database' ? 'database' : 'display';
-      const presentation = readDbTableV2ColumnConfig(config(), columnName, { generated: column.generated });
+      const mode = editMode.dataset.dbTableColumnEditMode === 'database' ? 'database' : 'display';
+      const presentation = readDbTableColumnConfig(config(), columnName, { generated: column.generated });
       input.dataset.columnEditMode = mode;
-      input.dataset.dbV2Field = mode === 'database' ? 'schema-column-name' : 'column-label';
+      input.dataset.dbTableField = mode === 'database' ? 'schema-column-name' : 'column-label';
       input.value = mode === 'database' ? columnName : presentation.label;
       input.setAttribute('aria-label', mode === 'database' ? `Database name for ${columnName}` : `Display name for ${columnName}`);
       input.focus({ preventScroll: true });
@@ -168,9 +168,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       openColumnEditor(input);
       return;
     }
-    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-v2-action]');
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-db-table-action]');
     if (!button) return;
-    const action = button.dataset.dbV2Action ?? '';
+    const action = button.dataset.dbTableAction ?? '';
     if (action === 'toggle-columns') {
       ui.settingsOpen = !ui.settingsOpen;
       renderCurrent();
@@ -180,7 +180,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       ui.draftActive = true;
       ui.error = '';
       renderCurrent();
-      root.querySelector<HTMLElement>('[data-db-v2-draft-control]:not([disabled])')?.focus({ preventScroll: true });
+      root.querySelector<HTMLElement>('[data-db-table-draft-control]:not([disabled])')?.focus({ preventScroll: true });
       return;
     }
     if (action === 'cancel-row') {
@@ -216,8 +216,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     }
     if (action === 'create-basic-table') {
       button.disabled = true;
-      void runDbTableV2Mutation(ctx, 'Create database table', 'checkpoint', () => (
-        createBasicDbTableV2(ctx.rawDocument, config().table)
+      void runDbTableMutation(ctx, 'Create database table', 'checkpoint', () => (
+        createBasicDbTable(ctx.rawDocument, config().table)
       ))
         .then(() => refreshDatabasePlugins())
         .catch((error) => {
@@ -229,11 +229,11 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     if (action === 'add-column') {
       button.disabled = true;
       const tableName = config().table;
-      void runDbTableV2Mutation(ctx, 'Add database column', 'logical', () => (
-        addDbTableV2Column(ctx.rawDocument, tableName)
+      void runDbTableMutation(ctx, 'Add database column', 'logical', () => (
+        addDbTableSourceColumn(ctx.rawDocument, tableName)
       ), (columnName) => ({
-        undo: () => dropDbTableV2Column(ctx.rawDocument, tableName, columnName),
-        redo: () => addNamedDbTableV2Column(ctx.rawDocument, tableName, columnName),
+        undo: () => dropDbTableSourceColumn(ctx.rawDocument, tableName, columnName),
+        redo: () => addNamedDbTableColumn(ctx.rawDocument, tableName, columnName),
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to add the column.'));
@@ -244,9 +244,9 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (!columnName) return;
       openRemoveConfirmationModal(() => {
         const tableName = config().table;
-        void runDbTableV2Mutation(ctx, 'Delete database column', 'checkpoint', async () => {
-          await dropDbTableV2Column(ctx.rawDocument, tableName, columnName);
-            ctx.setConfig(removeDbTableV2ColumnConfig(config(), columnName));
+        void runDbTableMutation(ctx, 'Delete database column', 'checkpoint', async () => {
+          await dropDbTableSourceColumn(ctx.rawDocument, tableName, columnName);
+            ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
         }).then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the column.'));
       }, ctx.hostRoot);
@@ -256,8 +256,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const rowId = Number(button.dataset.rowId);
       if (!Number.isFinite(rowId)) return;
       openRemoveConfirmationModal(() => {
-        void runDbTableV2Mutation(ctx, 'Delete database row', 'checkpoint', () => (
-          deleteDbTableV2Row(ctx.rawDocument, config().table, rowId)
+        void runDbTableMutation(ctx, 'Delete database row', 'checkpoint', () => (
+          deleteDbTableRow(ctx.rawDocument, config().table, rowId)
         ))
           .then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the row.'));
@@ -266,30 +266,30 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   });
 
   root.addEventListener('focusin', (event) => {
-    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-v2-column-name-input');
+    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-table-column-name-input');
     if (input) openColumnEditor(input);
   });
 
   root.addEventListener('focusout', () => {
     window.setTimeout(() => {
       const active = document.activeElement;
-      if (active && (active.closest('.db-v2-column-editor-popover') || active.classList.contains('db-v2-column-name-input'))) return;
+      if (active && (active.closest('.db-table-column-editor-popover') || active.classList.contains('db-table-column-name-input'))) return;
       closeColumnEditor();
     }, 0);
   });
 
   root.addEventListener('keydown', (event) => {
-    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-v2-column-name-input');
+    const input = (event.target as Element | null)?.closest<HTMLInputElement>('.db-table-column-name-input');
     if (!input) return;
     if (event.key === 'Enter') input.blur();
   });
 
   root.addEventListener('pointerdown', (event) => {
-    if ((event.target as Element | null)?.closest('[data-db-v2-column-edit-mode]')) {
+    if ((event.target as Element | null)?.closest('[data-db-table-column-edit-mode]')) {
       event.preventDefault();
       return;
     }
-    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-v2-resize-handle');
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-table-resize-handle');
     if (!handle || event.button !== 0 || ctx.mode !== 'editor') return;
     const columnName = handle.dataset.columnName ?? '';
     const column = root.querySelector<HTMLTableColElement>(`col[data-column-name="${CSS.escape(columnName)}"]`);
@@ -300,7 +300,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     stopColumnResize();
     const startX = event.clientX;
     const startWidth = header.getBoundingClientRect().width;
-    const maximumWidth = resolveDbTableV2MaximumColumnWidth(root, ctx.header.get('database_table_max_column_width'));
+    const maximumWidth = resolveDbTableMaximumColumnWidth(root, ctx.header.get('database_table_max_column_width'));
     let nextWidth = startWidth;
     let moved = false;
     const onPointerMove = (moveEvent: PointerEvent) => {
@@ -313,7 +313,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
     const finish = (upEvent: PointerEvent) => {
       if (upEvent.pointerId !== event.pointerId) return;
       stopColumnResize();
-      if (moved) ctx.setConfig(updateDbTableV2ColumnConfig(config(), columnName, { width: `${Math.round(nextWidth)}px` }));
+      if (moved) ctx.setConfig(updateDbTableColumnConfig(config(), columnName, { width: `${Math.round(nextWidth)}px` }));
     };
     stopColumnResize = () => {
       window.removeEventListener('pointermove', onPointerMove);
@@ -327,19 +327,19 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   });
 
   root.addEventListener('dblclick', (event) => {
-    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-v2-resize-handle');
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.db-table-resize-handle');
     if (!handle || ctx.mode !== 'editor') return;
     event.preventDefault();
     event.stopPropagation();
     const columnName = handle.dataset.columnName ?? '';
-    const width = measureDbTableV2ColumnContent(root, columnName, ctx.header.get('database_table_max_column_width'));
-    if (width !== null) ctx.setConfig(updateDbTableV2ColumnConfig(config(), columnName, { width: `${width}px` }));
+    const width = measureDbTableColumnContent(root, columnName, ctx.header.get('database_table_max_column_width'));
+    if (width !== null) ctx.setConfig(updateDbTableColumnConfig(config(), columnName, { width: `${width}px` }));
   });
 
   root.addEventListener('change', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
-    const field = target.dataset.dbV2Field ?? '';
+    const field = target.dataset.dbTableField ?? '';
     if (field === 'source') {
       ui.offset = 0;
       ui.sortColumn = null;
@@ -371,13 +371,13 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (!oldColumnName || nextColumnName === oldColumnName) return;
       target.disabled = true;
       const tableName = config().table;
-      void runDbTableV2Mutation(ctx, 'Rename database column', 'logical', async () => {
-        const renamed = await renameDbTableV2Column(ctx.rawDocument, tableName, oldColumnName, nextColumnName);
-        ctx.setConfig(renameDbTableV2ColumnConfig(config(), oldColumnName, renamed));
+      void runDbTableMutation(ctx, 'Rename database column', 'logical', async () => {
+        const renamed = await renameDbTableSourceColumn(ctx.rawDocument, tableName, oldColumnName, nextColumnName);
+        ctx.setConfig(renameDbTableSourceColumnConfig(config(), oldColumnName, renamed));
         return renamed;
       }, (renamed) => ({
-        undo: async () => { await renameDbTableV2Column(ctx.rawDocument, tableName, renamed, oldColumnName); },
-        redo: async () => { await renameDbTableV2Column(ctx.rawDocument, tableName, oldColumnName, renamed); },
+        undo: async () => { await renameDbTableSourceColumn(ctx.rawDocument, tableName, renamed, oldColumnName); },
+        redo: async () => { await renameDbTableSourceColumn(ctx.rawDocument, tableName, oldColumnName, renamed); },
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to rename the column.'));
@@ -388,16 +388,16 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const rowId = Number(target.dataset.rowId);
       if (!column || !Number.isFinite(rowId)) return;
       const value = target instanceof HTMLSelectElement
-        ? decodeDbTableV2OptionValue(target.value)
-        : coerceDbTableV2Input(target.value, column.type);
+        ? decodeDbTableOptionValue(target.value)
+        : coerceDbTableInput(target.value, column.type);
       target.disabled = true;
       const tableName = config().table;
-      const previousValue = cloneDbTableV2Value(snapshot.rows.find((row) => row.rowId === rowId)?.values[column.name] ?? null);
-      void runDbTableV2Mutation(ctx, 'Edit database cell', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
-        updateDbTableV2Cell(ctx.rawDocument, tableName, rowId, column, value)
+      const previousValue = cloneDbTableValue(snapshot.rows.find((row) => row.rowId === rowId)?.values[column.name] ?? null);
+      void runDbTableMutation(ctx, 'Edit database cell', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
+        updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, value)
       ), () => ({
-        undo: () => updateDbTableV2Cell(ctx.rawDocument, tableName, rowId, column, previousValue),
-        redo: () => updateDbTableV2Cell(ctx.rawDocument, tableName, rowId, column, value),
+        undo: () => updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, previousValue),
+        redo: () => updateDbTableSourceCell(ctx.rawDocument, tableName, rowId, column, value),
       }))
         .then(() => refreshDatabasePlugins())
         .catch((error) => {
@@ -410,7 +410,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       const columnName = target.dataset.columnName ?? '';
       const column = snapshot.columns.find((candidate) => candidate.name === columnName);
       if (!column) return;
-      let patch: DbTableV2ColumnConfig = {};
+      let patch: DbTableColumnConfig = {};
       if (field === 'column-label') patch = { label: target.value };
       if (field === 'column-width') patch = { width: target.value };
       if (field === 'column-wrap' && target instanceof HTMLInputElement) patch = { wrap: target.checked };
@@ -424,7 +424,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         }
         patch = { visibility };
       }
-      ctx.setConfig(updateDbTableV2ColumnConfig(config(), columnName, patch));
+      ctx.setConfig(updateDbTableColumnConfig(config(), columnName, patch));
     }
   });
 
@@ -449,69 +449,69 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   };
 }
 
-function renderDbTableV2(
+function renderDbTable(
   ctx: HvyPluginContext,
-  config: DbTableV2Config,
-  snapshot: DbTableV2Snapshot | null,
-  ui: DbTableV2UiState
+  config: DbTableConfig,
+  snapshot: DbTableSourcePage | null,
+  ui: DbTableUiState
 ): string {
   const toolbar = ctx.mode === 'editor' ? renderEditorToolbar(ctx, config, snapshot, ui) : '';
   if (!config.table) {
-    return `${toolbar}<div class="db-v2-placeholder">Choose a table or view to display.</div>`;
+    return `${toolbar}<div class="db-table-placeholder">Choose a table or view to display.</div>`;
   }
   if (!snapshot) {
     const missing = /does not exist/u.test(ui.error);
-    return `${toolbar}<div class="db-v2-placeholder db-v2-error">
+    return `${toolbar}<div class="db-table-placeholder db-table-error">
       <span>${escapeHtml(ui.error || 'Loading table…')}</span>
       ${missing && ctx.mode === 'editor' && config.source === 'with-file'
-        ? `<button type="button" class="secondary" data-db-v2-action="create-basic-table">Create Basic Table</button>`
+        ? `<button type="button" class="secondary" data-db-table-action="create-basic-table">Create Basic Table</button>`
         : ''}
     </div>`;
   }
   const settings = ctx.mode === 'editor' && ui.settingsOpen ? renderColumnSettings(config, snapshot) : '';
-  const status = ui.error ? `<div class="db-v2-inline-error" role="alert">${escapeHtml(ui.error)}</div>` : '';
+  const status = ui.error ? `<div class="db-table-inline-error" role="alert">${escapeHtml(ui.error)}</div>` : '';
   const queue = ui.queuePending > 0
-    ? `<div class="db-v2-queue-status" role="status"><span class="db-v2-queue-pulse"></span>${escapeHtml(ui.queueLabel || 'Database edit queued')}${ui.queuePending > 1 ? ` · ${ui.queuePending - 1} waiting` : ''}</div>`
+    ? `<div class="db-table-queue-status" role="status"><span class="db-table-queue-pulse"></span>${escapeHtml(ui.queueLabel || 'Database edit queued')}${ui.queuePending > 1 ? ` · ${ui.queuePending - 1} waiting` : ''}</div>`
     : '';
   return `${toolbar}${settings}${queue}${status}${renderTable(ctx, config, snapshot, ui)}`;
 }
 
 function renderEditorToolbar(
   ctx: HvyPluginContext,
-  config: DbTableV2Config,
-  snapshot: DbTableV2Snapshot | null,
-  ui: DbTableV2UiState
+  config: DbTableConfig,
+  snapshot: DbTableSourcePage | null,
+  ui: DbTableUiState
 ): string {
   const sources = getDatabaseTableSources();
   const sourceOptions = sources.some((source) => source.id === config.source)
     ? sources
     : [{ id: config.source, label: config.source }, ...sources];
-  return `<div class="db-v2-toolbar">
-    ${sourceOptions.length > 1 ? `<label class="db-v2-field db-v2-source-field"><span>Source</span><span class="db-v2-select-shell"><select data-db-v2-field="source">${sourceOptions.map((source) => `<option value="${escapeAttr(source.id)}" ${source.id === config.source ? 'selected' : ''}>${escapeHtml(source.label || source.id)}</option>`).join('')}</select>${arrowDownIcon()}</span></label>` : ''}
-    <label class="db-v2-field db-v2-table-field"><span>Table or view</span><input data-db-v2-field="table" value="${escapeAttr(config.table)}" placeholder="table_name"></label>
-    <button type="button" class="secondary db-v2-columns-button${ui.settingsOpen ? ' is-active' : ''}" data-db-v2-action="toggle-columns" ${snapshot ? '' : 'disabled'}>Columns</button>
-    <details class="db-v2-query" ${ctx.block.text.trim() ? 'open' : ''}>
+  return `<div class="db-table-toolbar">
+    ${sourceOptions.length > 1 ? `<label class="db-table-field db-table-source-field"><span>Source</span><span class="db-table-select-shell"><select data-db-table-field="source">${sourceOptions.map((source) => `<option value="${escapeAttr(source.id)}" ${source.id === config.source ? 'selected' : ''}>${escapeHtml(source.label || source.id)}</option>`).join('')}</select>${arrowDownIcon()}</span></label>` : ''}
+    <label class="db-table-field db-table-table-field"><span>Table or view</span><input data-db-table-field="table" value="${escapeAttr(config.table)}" placeholder="table_name"></label>
+    <button type="button" class="secondary db-table-columns-button${ui.settingsOpen ? ' is-active' : ''}" data-db-table-action="toggle-columns" ${snapshot ? '' : 'disabled'}>Columns</button>
+    <details class="db-table-query" ${ctx.block.text.trim() ? 'open' : ''}>
       <summary>Query</summary>
-      <label class="db-v2-field"><span>Optional read-only SELECT</span><textarea data-db-v2-field="query" rows="4" placeholder="SELECT * FROM ${escapeAttr(config.table || 'table_name')}">${escapeHtml(ctx.block.text)}</textarea></label>
-      <div class="db-v2-query-options">
-        <label class="db-v2-field db-v2-query-limit"><span>Rows per page</span><input type="number" min="1" max="1000" data-db-v2-field="query-limit" value="${config.queryLimit}"></label>
+      <label class="db-table-field"><span>Optional read-only SELECT</span><textarea data-db-table-field="query" rows="4" placeholder="SELECT * FROM ${escapeAttr(config.table || 'table_name')}">${escapeHtml(ctx.block.text)}</textarea></label>
+      <div class="db-table-query-options">
+        <label class="db-table-field db-table-query-limit"><span>Rows per page</span><input type="number" min="1" max="1000" data-db-table-field="query-limit" value="${config.queryLimit}"></label>
       </div>
     </details>
   </div>`;
 }
 
-function renderColumnSettings(config: DbTableV2Config, snapshot: DbTableV2Snapshot): string {
-  return `<section class="db-v2-column-settings" aria-label="Column settings">
-    <div class="db-v2-settings-heading"><div><strong>Column management</strong><span>Database column changes affect the table. Presentation settings affect only this component.</span></div><button type="button" class="ghost db-v2-settings-close" data-db-v2-action="toggle-columns" aria-label="Close column settings">${closeIcon()}</button></div>
-    <div class="db-v2-settings-list">
+function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage): string {
+  return `<section class="db-table-column-settings" aria-label="Column settings">
+    <div class="db-table-settings-heading"><div><strong>Column management</strong><span>Database column changes affect the table. Presentation settings affect only this component.</span></div><button type="button" class="ghost db-table-settings-close" data-db-table-action="toggle-columns" aria-label="Close column settings">${closeIcon()}</button></div>
+    <div class="db-table-settings-list">
       ${snapshot.columns.map((column) => {
-        const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
+        const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
         const required = isRequiredDraftColumn(column);
-        return `<div class="db-v2-column-card">
-          <div class="db-v2-column-identity"><strong>${escapeHtml(column.name)}</strong><span>${escapeHtml(column.type || 'untyped')}${column.generated ? ' · generated key' : ''}${column.foreignKey ? ` · references ${escapeHtml(column.foreignKey.referencedTable)}` : ''}</span></div>
-          <label class="db-v2-field"><span>Database column</span><input data-db-v2-field="schema-column-name" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(column.name)}" ${snapshot.editable ? '' : 'disabled'}></label>
-          <label class="db-v2-field"><span>Heading</span><input data-db-v2-field="column-label" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.label)}"></label>
-          <label class="db-v2-field"><span>Visibility</span>${renderSelect(
+        return `<div class="db-table-column-card">
+          <div class="db-table-column-identity"><strong>${escapeHtml(column.name)}</strong><span>${escapeHtml(column.type || 'untyped')}${column.generated ? ' · generated key' : ''}${column.foreignKey ? ` · references ${escapeHtml(column.foreignKey.referencedTable)}` : ''}</span></div>
+          <label class="db-table-field"><span>Database column</span><input data-db-table-field="schema-column-name" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(column.name)}" ${snapshot.editable ? '' : 'disabled'}></label>
+          <label class="db-table-field"><span>Heading</span><input data-db-table-field="column-label" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.label)}"></label>
+          <label class="db-table-field"><span>Visibility</span>${renderSelect(
             'column-visibility',
             column.name,
             presentation.visibility,
@@ -521,9 +521,9 @@ function renderColumnSettings(config: DbTableV2Config, snapshot: DbTableV2Snapsh
               ...(!required ? [{ value: 'hidden', label: 'Hidden' }] : []),
             ]
           )}</label>
-          <label class="db-v2-field"><span>Width</span><input data-db-v2-field="column-width" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.width)}" placeholder="12rem"></label>
-          <label class="db-v2-check"><input type="checkbox" data-db-v2-field="column-wrap" data-column-name="${escapeAttr(column.name)}" ${presentation.wrap ? 'checked' : ''}><span>Wrap values</span></label>
-          ${column.foreignKey ? `<label class="db-v2-field db-v2-relationship-setting"><span>Display ${escapeHtml(column.foreignKey.referencedTable)} by</span>${renderSelect(
+          <label class="db-table-field"><span>Width</span><input data-db-table-field="column-width" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.width)}" placeholder="12rem"></label>
+          <label class="db-table-check"><input type="checkbox" data-db-table-field="column-wrap" data-column-name="${escapeAttr(column.name)}" ${presentation.wrap ? 'checked' : ''}><span>Wrap values</span></label>
+          ${column.foreignKey ? `<label class="db-table-field db-table-relationship-setting"><span>Display ${escapeHtml(column.foreignKey.referencedTable)} by</span>${renderSelect(
             'column-foreign-display',
             column.name,
             presentation.foreignDisplayColumn ?? '',
@@ -532,87 +532,87 @@ function renderColumnSettings(config: DbTableV2Config, snapshot: DbTableV2Snapsh
               ...column.foreignKey.displayColumnOptions.map((name) => ({ value: name, label: humanizeDbColumnName(name) })),
             ]
           )}</label>` : ''}
-          <button type="button" class="ghost db-v2-delete-column" data-db-v2-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!snapshot.editable || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
+          <button type="button" class="ghost db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!snapshot.editable || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
         </div>`;
       }).join('')}
     </div>
-    <button type="button" class="secondary db-v2-add-column" data-db-v2-action="add-column" ${snapshot.editable ? '' : 'disabled'}>${plusIcon()} Column</button>
+    <button type="button" class="secondary db-table-add-column" data-db-table-action="add-column" ${snapshot.editable ? '' : 'disabled'}>${plusIcon()} Column</button>
   </section>`;
 }
 
-function renderTable(ctx: HvyPluginContext, config: DbTableV2Config, snapshot: DbTableV2Snapshot, ui: DbTableV2UiState): string {
+function renderTable(ctx: HvyPluginContext, config: DbTableConfig, snapshot: DbTableSourcePage, ui: DbTableUiState): string {
   const visibleColumns = snapshot.columns.filter((column) => (
-    readDbTableV2ColumnConfig(config, column.name, { generated: column.generated }).visibility !== 'hidden'
+    readDbTableColumnConfig(config, column.name, { generated: column.generated }).visibility !== 'hidden'
   ));
   const hiddenRequired = snapshot.columns.filter((column) => (
-    readDbTableV2ColumnConfig(config, column.name, { generated: column.generated }).visibility === 'hidden'
+    readDbTableColumnConfig(config, column.name, { generated: column.generated }).visibility === 'hidden'
     && isRequiredDraftColumn(column)
   ));
   const editable = ctx.mode === 'editor' && snapshot.editable;
   const showRowActions = editable || snapshot.rows.some((row) => row.hasAttachedComponent);
-  return `<div class="db-v2-table-shell">
-    <div class="db-v2-table-heading">
+  return `<div class="db-table-table-shell">
+    <div class="db-table-table-heading">
       <div><strong>${escapeHtml(config.table)}</strong><span>${snapshot.queryActive ? 'Query result · read-only' : snapshot.objectType === 'view' ? 'Database view · read-only' : snapshot.editable ? 'Database table · editable' : 'Database table · read-only'}</span></div>
       ${snapshot.offset > 0 || snapshot.hasNextPage ? renderPager(snapshot) : ''}
     </div>
-    <div class="db-v2-table-frame">
-      <table class="db-v2-table${editable ? ' is-editable' : ''}">
-        <colgroup>${visibleColumns.map((column) => renderColumnElement(config, column)).join('')}${showRowActions ? '<col class="db-v2-actions-column">' : ''}</colgroup>
-        <thead><tr>${visibleColumns.map((column) => renderHeader(config, column, snapshot, ui)).join('')}${showRowActions ? '<th class="db-v2-actions-heading"><span class="db-v2-screen-reader">Actions</span></th>' : ''}</tr></thead>
+    <div class="db-table-table-frame">
+      <table class="db-table-table${editable ? ' is-editable' : ''}">
+        <colgroup>${visibleColumns.map((column) => renderColumnElement(config, column)).join('')}${showRowActions ? '<col class="db-table-actions-column">' : ''}</colgroup>
+        <thead><tr>${visibleColumns.map((column) => renderHeader(config, column, snapshot, ui)).join('')}${showRowActions ? '<th class="db-table-actions-heading"><span class="db-table-screen-reader">Actions</span></th>' : ''}</tr></thead>
         <tbody>
           ${snapshot.rows.map((row) => `<tr class="${row.hasAttachedComponent ? 'has-attached-component' : ''}">${visibleColumns.map((column) => renderCell(config, column, row.values[column.name] ?? null, row.rowId, editable)).join('')}${showRowActions ? renderRowActions(ctx, config, row.rowId, row.hasAttachedComponent, editable) : ''}</tr>`).join('')}
           ${ui.draftActive && editable ? renderDraftRow(config, visibleColumns) : ''}
-          ${snapshot.rows.length === 0 && !ui.draftActive ? `<tr><td class="db-v2-empty" colspan="${Math.max(visibleColumns.length + (editable ? 1 : 0), 1)}">No rows yet.</td></tr>` : ''}
+          ${snapshot.rows.length === 0 && !ui.draftActive ? `<tr><td class="db-table-empty" colspan="${Math.max(visibleColumns.length + (editable ? 1 : 0), 1)}">No rows yet.</td></tr>` : ''}
         </tbody>
       </table>
     </div>
-    ${editable ? `<div class="db-v2-table-actions">
-      <button type="button" class="secondary db-v2-add-row" data-db-v2-action="add-row" ${ui.draftActive || hiddenRequired.length > 0 ? 'disabled' : ''}>${plusIcon()} Row</button>
-      ${hiddenRequired.length > 0 ? `<span class="db-v2-action-note">Show required column${hiddenRequired.length === 1 ? '' : 's'} ${hiddenRequired.map((column) => escapeHtml(column.name)).join(', ')} before adding rows.</span>` : ''}
+    ${editable ? `<div class="db-table-table-actions">
+      <button type="button" class="secondary db-table-add-row" data-db-table-action="add-row" ${ui.draftActive || hiddenRequired.length > 0 ? 'disabled' : ''}>${plusIcon()} Row</button>
+      ${hiddenRequired.length > 0 ? `<span class="db-table-action-note">Show required column${hiddenRequired.length === 1 ? '' : 's'} ${hiddenRequired.map((column) => escapeHtml(column.name)).join(', ')} before adding rows.</span>` : ''}
     </div>` : ''}
   </div>`;
 }
 
 function renderRowActions(
   ctx: HvyPluginContext,
-  config: DbTableV2Config,
+  config: DbTableConfig,
   rowId: number | null,
   hasAttachedComponent: boolean,
   editable: boolean
 ): string {
-  if (rowId === null) return '<td class="db-v2-row-actions"></td>';
-  const attachmentAction = editable ? 'sqlite-open-row-component-editor' : 'sqlite-open-row-component-view';
-  return `<td class="db-v2-row-actions">
-    <div class="db-v2-row-action-group">
-      ${editable || hasAttachedComponent ? `<button type="button" class="ghost db-v2-row-component ${hasAttachedComponent ? 'is-attached' : ''}" data-action="${attachmentAction}" data-section-key="${escapeAttr(ctx.sectionKey)}" data-block-id="${escapeAttr(ctx.block.id)}" data-table-name="${escapeAttr(config.table)}" data-rowid="${rowId}">${hasAttachedComponent ? (editable ? 'Edit details' : 'View details') : 'Add details'}</button>` : ''}
-      ${editable ? `<button type="button" class="ghost db-v2-delete-row" data-db-v2-action="delete-row" data-row-id="${rowId}" aria-label="Delete row">${closeIcon()}</button>` : ''}
+  if (rowId === null) return '<td class="db-table-row-actions"></td>';
+  const attachmentAction = editable ? 'db-table-open-row-component-editor' : 'db-table-open-row-component-view';
+  return `<td class="db-table-row-actions">
+    <div class="db-table-row-action-group">
+      ${editable || hasAttachedComponent ? `<button type="button" class="ghost db-table-row-component ${hasAttachedComponent ? 'is-attached' : ''}" data-action="${attachmentAction}" data-section-key="${escapeAttr(ctx.sectionKey)}" data-block-id="${escapeAttr(ctx.block.id)}" data-table-name="${escapeAttr(config.table)}" data-rowid="${rowId}">${hasAttachedComponent ? (editable ? 'Edit details' : 'View details') : 'Add details'}</button>` : ''}
+      ${editable ? `<button type="button" class="ghost db-table-delete-row" data-db-table-action="delete-row" data-row-id="${rowId}" aria-label="Delete row">${closeIcon()}</button>` : ''}
     </div>
   </td>`;
 }
 
-function renderColumnElement(config: DbTableV2Config, column: DbTableV2ColumnSchema): string {
-  const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
+function renderColumnElement(config: DbTableConfig, column: DbTableColumnSchema): string {
+  const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
   return `<col data-column-name="${escapeAttr(column.name)}" style="width:${escapeAttr(presentation.width)}">`;
 }
 
 function renderHeader(
-  config: DbTableV2Config,
-  column: DbTableV2ColumnSchema,
-  snapshot: DbTableV2Snapshot,
-  ui: DbTableV2UiState
+  config: DbTableConfig,
+  column: DbTableColumnSchema,
+  snapshot: DbTableSourcePage,
+  ui: DbTableUiState
 ): string {
-  const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
+  const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
   const sortIcon = ui.sortColumn === column.name && ui.sortDirection === 'desc' ? arrowDownIcon() : arrowUpIcon();
   const heading = snapshot.editable
-    ? `<input class="db-v2-column-name-input" data-db-v2-field="column-label" data-column-edit-mode="display" data-column-name="${escapeAttr(column.name)}" data-display-name="${escapeAttr(presentation.label)}" value="${escapeAttr(presentation.label)}" aria-label="Display name for ${escapeAttr(column.name)}" title="Edit display or DB column name">`
+    ? `<input class="db-table-column-name-input" data-db-table-field="column-label" data-column-edit-mode="display" data-column-name="${escapeAttr(column.name)}" data-display-name="${escapeAttr(presentation.label)}" value="${escapeAttr(presentation.label)}" aria-label="Display name for ${escapeAttr(column.name)}" title="Edit display or DB column name">`
     : `<span>${escapeHtml(presentation.label)}</span>`;
-  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><div class="db-v2-header-content">${heading}${snapshot.editable ? `<button type="button" class="ghost db-v2-sort" data-db-v2-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button><span class="db-v2-resize-handle" data-column-name="${escapeAttr(column.name)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>` : ''}</div></th>`;
+  return `<th class="${presentation.wrap ? 'is-wrapped' : ''}" title="${escapeAttr(presentation.label)}"><div class="db-table-header-content">${heading}${snapshot.editable ? `<button type="button" class="ghost db-table-sort" data-db-table-action="sort" data-column-name="${escapeAttr(column.name)}" aria-label="Sort by ${escapeAttr(presentation.label)}">${sortIcon}</button><span class="db-table-resize-handle" data-column-name="${escapeAttr(column.name)}" title="Drag to resize; double-click to fit data" aria-hidden="true"></span>` : ''}</div></th>`;
 }
 
-function resolveDbTableV2MaximumColumnWidth(root: HTMLElement, configured: unknown): number {
-  const width = normalizeDbTableV2MaxColumnWidth(configured) || DEFAULT_DB_TABLE_V2_MAX_COLUMN_WIDTH;
+function resolveDbTableMaximumColumnWidth(root: HTMLElement, configured: unknown): number {
+  const width = normalizeDbTableMaxColumnWidth(configured) || DEFAULT_DB_TABLE__MAX_COLUMN_WIDTH;
   const probe = document.createElement('span');
-  probe.className = 'db-v2-width-probe';
+  probe.className = 'db-table-width-probe';
   probe.style.width = width;
   root.append(probe);
   const pixels = probe.getBoundingClientRect().width;
@@ -620,16 +620,16 @@ function resolveDbTableV2MaximumColumnWidth(root: HTMLElement, configured: unkno
   return Number.isFinite(pixels) && pixels > 0 ? pixels : 640;
 }
 
-function measureDbTableV2ColumnContent(root: HTMLElement, columnName: string, configuredMaximum: unknown): number | null {
+function measureDbTableColumnContent(root: HTMLElement, columnName: string, configuredMaximum: unknown): number | null {
   const column = root.querySelector<HTMLTableColElement>(`col[data-column-name="${CSS.escape(columnName)}"]`);
-  const columns = [...root.querySelectorAll<HTMLTableColElement>('.db-v2-table col')];
+  const columns = [...root.querySelectorAll<HTMLTableColElement>('.db-table-table col')];
   const columnIndex = column ? columns.indexOf(column) : -1;
   if (!column || columnIndex < 0) return null;
   const table = column.closest('table');
   const header = table?.querySelectorAll<HTMLTableCellElement>('thead th')[columnIndex];
   if (!table || !header) return null;
   const measurer = document.createElement('span');
-  measurer.className = 'db-v2-content-measurer';
+  measurer.className = 'db-table-content-measurer';
   const sample = (text: string, source: Element) => {
     const style = getComputedStyle(source);
     measurer.style.font = style.font;
@@ -640,7 +640,7 @@ function measureDbTableV2ColumnContent(root: HTMLElement, columnName: string, co
     measurer.remove();
     return width;
   };
-  const headerLabel = header.querySelector<HTMLElement>('.db-v2-column-name-input, .db-v2-header-content > span:first-child');
+  const headerLabel = header.querySelector<HTMLElement>('.db-table-column-name-input, .db-table-header-content > span:first-child');
   const headerText = headerLabel instanceof HTMLInputElement ? headerLabel.value : headerLabel?.textContent ?? '';
   let contentWidth = headerLabel ? sample(headerText, headerLabel) + 52 : 64;
   for (const row of table.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
@@ -654,56 +654,56 @@ function measureDbTableV2ColumnContent(root: HTMLElement, columnName: string, co
         : cell.textContent ?? '';
     contentWidth = Math.max(contentWidth, sample(text, control ?? cell) + 20);
   }
-  return Math.round(Math.max(64, Math.min(contentWidth, resolveDbTableV2MaximumColumnWidth(root, configuredMaximum))));
+  return Math.round(Math.max(64, Math.min(contentWidth, resolveDbTableMaximumColumnWidth(root, configuredMaximum))));
 }
 
 function renderCell(
-  config: DbTableV2Config,
-  column: DbTableV2ColumnSchema,
-  value: DbTableV2Value,
+  config: DbTableConfig,
+  column: DbTableColumnSchema,
+  value: DbTableValue,
   rowId: number | null,
   editable: boolean
 ): string {
-  const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
+  const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
   const className = presentation.wrap ? 'is-wrapped' : '';
   if (!editable || column.generated || rowId === null) {
-    return `<td class="${className}" title="${escapeAttr(displayDbTableV2Value(column, presentation.foreignDisplayColumn, value))}">${escapeHtml(displayDbTableV2Value(column, presentation.foreignDisplayColumn, value))}</td>`;
+    return `<td class="${className}" title="${escapeAttr(displayDbTableValue(column, presentation.foreignDisplayColumn, value))}">${escapeHtml(displayDbTableValue(column, presentation.foreignDisplayColumn, value))}</td>`;
   }
   if (column.foreignKey && presentation.foreignDisplayColumn) {
     return `<td class="${className}">${renderRelationshipSelect(column, value, 'cell', rowId)}</td>`;
   }
-  return `<td class="${className}"><input class="db-v2-cell-input" data-db-v2-field="cell" data-column-name="${escapeAttr(column.name)}" data-row-id="${rowId}" value="${escapeAttr(stringifyDbTableV2Value(value))}"></td>`;
+  return `<td class="${className}"><input class="db-table-cell-input" data-db-table-field="cell" data-column-name="${escapeAttr(column.name)}" data-row-id="${rowId}" value="${escapeAttr(stringifyDbTableValue(value))}"></td>`;
 }
 
-function renderDraftRow(config: DbTableV2Config, columns: DbTableV2ColumnSchema[]): string {
-  return `<tr class="db-v2-draft-row">
+function renderDraftRow(config: DbTableConfig, columns: DbTableColumnSchema[]): string {
+  return `<tr class="db-table-draft-row">
     ${columns.map((column) => {
-      const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
-      if (column.generated) return '<td class="db-v2-generated-value">Auto</td>';
+      const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
+      if (column.generated) return '<td class="db-table-generated-value">Auto</td>';
       if (column.foreignKey && presentation.foreignDisplayColumn) {
         return `<td>${renderRelationshipSelect(column, null, 'draft', null)}</td>`;
       }
       const required = isRequiredDraftColumn(column);
-      const placeholder = column.defaultValue !== null ? `Default: ${stringifyDbTableV2Value(column.defaultValue)}` : '';
-      return `<td><input class="db-v2-cell-input" data-db-v2-draft-control="true" data-column-name="${escapeAttr(column.name)}" data-column-type="${escapeAttr(column.type)}" value="" placeholder="${escapeAttr(placeholder)}" ${required ? 'required' : ''}></td>`;
+      const placeholder = column.defaultValue !== null ? `Default: ${stringifyDbTableValue(column.defaultValue)}` : '';
+      return `<td><input class="db-table-cell-input" data-db-table-draft-control="true" data-column-name="${escapeAttr(column.name)}" data-column-type="${escapeAttr(column.type)}" value="" placeholder="${escapeAttr(placeholder)}" ${required ? 'required' : ''}></td>`;
     }).join('')}
-    <td class="db-v2-draft-actions"><button type="button" class="primary" data-db-v2-action="save-row">Save</button><button type="button" class="ghost" data-db-v2-action="cancel-row">Cancel</button></td>
+    <td class="db-table-draft-actions"><button type="button" class="primary" data-db-table-action="save-row">Save</button><button type="button" class="ghost" data-db-table-action="cancel-row">Cancel</button></td>
   </tr>`;
 }
 
 function renderRelationshipSelect(
-  column: DbTableV2ColumnSchema,
-  value: DbTableV2Value,
+  column: DbTableColumnSchema,
+  value: DbTableValue,
   kind: 'cell' | 'draft',
   rowId: number | null
 ): string {
   const foreignKey = column.foreignKey!;
-  const encodedValue = encodeDbTableV2OptionValue(value);
-  const known = foreignKey.options.some((option) => encodeDbTableV2OptionValue(option.value) === encodedValue);
+  const encodedValue = encodeDbTableOptionValue(value);
+  const known = foreignKey.options.some((option) => encodeDbTableOptionValue(option.value) === encodedValue);
   const options = [
     ...(!column.notNull ? [{ value: 'null:', label: `No ${humanizeDbColumnName(foreignKey.referencedTable)}` }] : []),
-    ...(!known && value !== null ? [{ value: encodedValue, label: `Missing reference (${stringifyDbTableV2Value(value)})` }] : []),
-    ...foreignKey.options.map((option) => ({ value: encodeDbTableV2OptionValue(option.value), label: option.label })),
+    ...(!known && value !== null ? [{ value: encodedValue, label: `Missing reference (${stringifyDbTableValue(value)})` }] : []),
+    ...foreignKey.options.map((option) => ({ value: encodeDbTableOptionValue(option.value), label: option.label })),
   ];
   return renderSelect(
     kind === 'cell' ? 'cell' : '',
@@ -726,10 +726,10 @@ function renderSelect(
   options: Array<{ value: string; label: string }>,
   extra: { draft?: boolean; rowId?: number; placeholder?: string; required?: boolean } = {}
 ): string {
-  return `<span class="db-v2-select-shell"><select
-    ${field ? `data-db-v2-field="${escapeAttr(field)}"` : ''}
+  return `<span class="db-table-select-shell"><select
+    ${field ? `data-db-table-field="${escapeAttr(field)}"` : ''}
     data-column-name="${escapeAttr(columnName)}"
-    ${extra.draft ? `data-db-v2-draft-control="true" data-relationship-value="true"` : ''}
+    ${extra.draft ? `data-db-table-draft-control="true" data-relationship-value="true"` : ''}
     ${typeof extra.rowId === 'number' ? `data-row-id="${extra.rowId}"` : ''}
     ${extra.required ? 'required' : ''}
   >
@@ -738,23 +738,23 @@ function renderSelect(
   </select>${arrowDownIcon()}</span>`;
 }
 
-function renderPager(snapshot: DbTableV2Snapshot): string {
+function renderPager(snapshot: DbTableSourcePage): string {
   const first = snapshot.rows.length === 0 ? 0 : snapshot.offset + 1;
   const last = snapshot.offset + snapshot.rows.length;
-  return `<div class="db-v2-pager"><span>Rows ${first}–${last}</span><button type="button" class="ghost db-v2-page-button" data-db-v2-action="previous-page" aria-label="Previous rows" ${snapshot.offset === 0 ? 'disabled' : ''}>${arrowLeftIcon()}</button><button type="button" class="ghost db-v2-page-button" data-db-v2-action="next-page" aria-label="Next rows" ${snapshot.hasNextPage ? '' : 'disabled'}>${arrowRightIcon()}</button></div>`;
+  return `<div class="db-table-pager"><span>Rows ${first}–${last}</span><button type="button" class="ghost db-table-page-button" data-db-table-action="previous-page" aria-label="Previous rows" ${snapshot.offset === 0 ? 'disabled' : ''}>${arrowLeftIcon()}</button><button type="button" class="ghost db-table-page-button" data-db-table-action="next-page" aria-label="Next rows" ${snapshot.hasNextPage ? '' : 'disabled'}>${arrowRightIcon()}</button></div>`;
 }
 
 async function saveDraftRow(
   root: HTMLElement,
   ctx: HvyPluginContext,
-  config: DbTableV2Config,
-  snapshot: DbTableV2Snapshot | null,
-  ui: DbTableV2UiState
+  config: DbTableConfig,
+  snapshot: DbTableSourcePage | null,
+  ui: DbTableUiState
 ): Promise<void> {
   if (!snapshot) return;
-  const values: Array<{ column: DbTableV2ColumnSchema; value: DbTableV2Value }> = [];
+  const values: Array<{ column: DbTableColumnSchema; value: DbTableValue }> = [];
   let firstInvalid: HTMLInputElement | HTMLSelectElement | null = null;
-  for (const control of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-db-v2-draft-control]')) {
+  for (const control of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-db-table-draft-control]')) {
     const column = snapshot.columns.find((candidate) => candidate.name === control.dataset.columnName);
     if (!column) continue;
     if (!control.checkValidity()) {
@@ -763,8 +763,8 @@ async function saveDraftRow(
     }
     if (control.value.length === 0) continue;
     const value = control instanceof HTMLSelectElement && control.dataset.relationshipValue === 'true'
-      ? decodeDbTableV2OptionValue(control.value)
-      : coerceDbTableV2Input(control.value, column.type);
+      ? decodeDbTableOptionValue(control.value)
+      : coerceDbTableInput(control.value, column.type);
     values.push({ column, value });
   }
   if (firstInvalid) {
@@ -774,14 +774,14 @@ async function saveDraftRow(
     firstInvalid.focus({ preventScroll: true });
     return;
   }
-  const save = root.querySelector<HTMLButtonElement>('[data-db-v2-action="save-row"]');
+  const save = root.querySelector<HTMLButtonElement>('[data-db-table-action="save-row"]');
   if (save) save.disabled = true;
   try {
-    const inserted = await runDbTableV2Mutation(ctx, 'Add database row', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
-      insertDbTableV2Row(ctx.rawDocument, config.table, values)
+    const inserted = await runDbTableMutation(ctx, 'Add database row', snapshot.hasTriggers ? 'checkpoint' : 'logical', () => (
+      insertDbTableRow(ctx.rawDocument, config.table, values)
     ), (row) => ({
-      undo: () => deleteDbTableV2Row(ctx.rawDocument, config.table, row.rowId),
-      redo: () => restoreDbTableV2Row(ctx.rawDocument, config.table, row),
+      undo: () => deleteDbTableRow(ctx.rawDocument, config.table, row.rowId),
+      redo: () => restoreDbTableRow(ctx.rawDocument, config.table, row),
     }));
     void inserted;
     ui.draftActive = false;
@@ -794,7 +794,7 @@ async function saveDraftRow(
   }
 }
 
-function runDbTableV2Mutation<T>(
+function runDbTableMutation<T>(
   ctx: HvyPluginContext,
   label: string,
   mode: 'logical' | 'checkpoint',
@@ -813,31 +813,31 @@ function runDbTableV2Mutation<T>(
     execute,
     createLogicalTransition,
   }).then((result) => {
-    const reason = `db-table-v2:${label}`;
+    const reason = `db-table:${label}`;
     notifyDocumentMayHaveChanged(reason, inferDocumentChangeSource(reason));
     return result;
   });
 }
 
-function cloneDbTableV2Value(value: DbTableV2Value): DbTableV2Value {
+function cloneDbTableValue(value: DbTableValue): DbTableValue {
   return value instanceof Uint8Array ? Uint8Array.from(value) : value;
 }
 
 function showInlineDraftError(root: HTMLElement, message: string): void {
-  const existing = root.querySelector<HTMLElement>('.db-v2-inline-error');
+  const existing = root.querySelector<HTMLElement>('.db-table-inline-error');
   if (existing) {
     existing.textContent = message;
     return;
   }
   const error = document.createElement('div');
-  error.className = 'db-v2-inline-error';
+  error.className = 'db-table-inline-error';
   error.setAttribute('role', 'alert');
   error.textContent = message;
-  root.querySelector('.db-v2-table-shell')?.before(error);
+  root.querySelector('.db-table-table-shell')?.before(error);
 }
 
 function showOperationError(
-  ui: DbTableV2UiState,
+  ui: DbTableUiState,
   render: () => void,
   error: unknown,
   fallback: string
@@ -846,47 +846,47 @@ function showOperationError(
   render();
 }
 
-function displayDbTableV2Value(
-  column: DbTableV2ColumnSchema,
+function displayDbTableValue(
+  column: DbTableColumnSchema,
   foreignDisplayColumn: string | undefined,
-  value: DbTableV2Value
+  value: DbTableValue
 ): string {
   if (column.foreignKey && foreignDisplayColumn) {
     return column.foreignKey.options.find((option) => (
-      encodeDbTableV2OptionValue(option.value) === encodeDbTableV2OptionValue(value)
-    ))?.label ?? (value === null ? '' : `Missing reference (${stringifyDbTableV2Value(value)})`);
+      encodeDbTableOptionValue(option.value) === encodeDbTableOptionValue(value)
+    ))?.label ?? (value === null ? '' : `Missing reference (${stringifyDbTableValue(value)})`);
   }
-  return stringifyDbTableV2Value(value);
+  return stringifyDbTableValue(value);
 }
 
-function isRequiredDraftColumn(column: DbTableV2ColumnSchema): boolean {
+function isRequiredDraftColumn(column: DbTableColumnSchema): boolean {
   return column.notNull && column.defaultValue === null && !column.generated;
 }
 
-function describeSnapshot(config: DbTableV2Config, snapshot: DbTableV2Snapshot): string {
+function describeSnapshot(config: DbTableConfig, snapshot: DbTableSourcePage): string {
   const columns = snapshot.columns.filter((column) => (
-    readDbTableV2ColumnConfig(config, column.name, { generated: column.generated }).visibility !== 'hidden'
+    readDbTableColumnConfig(config, column.name, { generated: column.generated }).visibility !== 'hidden'
   ));
-  const headings = columns.map((column) => readDbTableV2ColumnConfig(config, column.name, { generated: column.generated }).label);
+  const headings = columns.map((column) => readDbTableColumnConfig(config, column.name, { generated: column.generated }).label);
   const rows = snapshot.rows.slice(0, 10).map((row) => columns.map((column) => {
-    const presentation = readDbTableV2ColumnConfig(config, column.name, { generated: column.generated });
-    return displayDbTableV2Value(column, presentation.foreignDisplayColumn, row.values[column.name] ?? null);
+    const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
+    return displayDbTableValue(column, presentation.foreignDisplayColumn, row.values[column.name] ?? null);
   }).join(' | '));
-  return [`DB Table v2: ${config.table}`, `Columns: ${headings.join(' | ') || '(none)'}`, ...rows].join('\n');
+  return [`DB Table: ${config.table}`, `Columns: ${headings.join(' | ') || '(none)'}`, ...rows].join('\n');
 }
 
-export async function getDbTableV2RenderedText(document: VisualDocument, block: VisualBlock): Promise<string> {
-  const config = readDbTableV2Config(block.schema.pluginConfig);
-  if (!config.table) return 'DB Table v2 error: no table selected.';
+export async function getDbTableComponentRenderedText(document: VisualDocument, block: VisualBlock): Promise<string> {
+  const config = readDbTableConfig(block.schema.pluginConfig);
+  if (!config.table) return 'DB Table error: no table selected.';
   try {
-    return describeSnapshot(config, await loadDbTableV2Snapshot(document, config, {
+    return describeSnapshot(config, await loadDbTableSourcePage(document, config, {
       query: block.text,
       offset: 0,
       sortColumn: null,
       sortDirection: null,
     }));
   } catch (error) {
-    return `DB Table v2 error: ${error instanceof Error ? error.message : 'Unable to render the table.'}`;
+    return `DB Table error: ${error instanceof Error ? error.message : 'Unable to render the table.'}`;
   }
 }
 
@@ -900,10 +900,10 @@ export const dbTablePlugin: HvyPlugin = {
   displayName: 'DB Table',
   documentation: {
     filename: 'about-db-table.txt',
-    text: dbTableV2Documentation,
+    text: dbTableDocumentation,
   },
   aiHint: (block) => {
-    const table = readDbTableV2Config(block.schema.pluginConfig).table || '(unset)';
+    const table = readDbTableConfig(block.schema.pluginConfig).table || '(unset)';
     return `Relationship-aware configurable database table/view. Target: "${table}".`;
   },
   aiHelp: 'Use pluginConfig.source and pluginConfig.table for the database target, pluginConfig.queryLimit for rows per page, pluginConfig.columns for presentation and relationship labels, and the plugin body for an optional read-only SELECT.',

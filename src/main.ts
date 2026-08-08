@@ -190,7 +190,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     future: [],
     isRestoring: false,
     componentMetaModal: null,
-    sqliteRowComponentModal: null,
+    dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
     pdfTemplateImportModal: null,
@@ -439,7 +439,7 @@ editorRenderer = createEditorRenderer(
       return state.document.sections;
     },
     get showAdvancedEditor() {
-      const rowModal = state.sqliteRowComponentModal;
+      const rowModal = state.dbTableRowComponentModal;
       if (rowModal && !rowModal.readOnly) {
         if (rowModal.mode === 'advanced') {
           return true;
@@ -578,8 +578,8 @@ readerRenderer = createReaderRenderer(
     get captionTextModal() {
       return state.captionTextModal;
     },
-    get sqliteRowComponentModal() {
-      return state.sqliteRowComponentModal;
+    get dbTableRowComponentModal() {
+      return state.dbTableRowComponentModal;
     },
     get dbTableQueryModal() {
       return state.dbTableQueryModal;

@@ -798,7 +798,7 @@ function requiresRemoveConfirmation(action: string, actionButton: HTMLElement): 
     'remove-grid-item',
     'remove-table-row',
     'remove-table-column',
-    'sqlite-drop-column',
+    'db-table-drop-column',
     'image-delete-unused',
     'image-delete-current',
     'carousel-delete-image',

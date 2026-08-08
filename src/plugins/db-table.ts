@@ -48,7 +48,7 @@ interface SqlJsStatic {
 }
 type InitSqlJs = (config: { locateFile: () => string }) => Promise<SqlJsStatic>;
 
-interface SqliteTableSnapshot {
+interface DbTableSnapshot {
   objectType: 'table' | 'view';
   columns: string[];
   rowIds: number[];
@@ -194,7 +194,7 @@ export async function updateDbTableCell(tableName: string, rowId: number, column
   await persistRuntimeDatabase();
 }
 
-export async function getSqliteRowComponent(tableName: string, rowId: number): Promise<string | null> {
+export async function getDbTableRowComponent(tableName: string, rowId: number): Promise<string | null> {
   const db = await getLoadedDatabase();
   ensureRowComponentsTableExists(db);
   const statement = db.prepare(
@@ -213,7 +213,7 @@ export async function getSqliteRowComponent(tableName: string, rowId: number): P
   }
 }
 
-export async function setSqliteRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
+export async function setDbTableRowComponent(tableName: string, rowId: number, hvy: string): Promise<void> {
   const db = await getLoadedDatabase();
   ensureRowComponentsTableExists(db);
   const trimmed = hvy.trim();
@@ -400,7 +400,7 @@ function readTableSnapshot(
     sortColumn: string | null;
     sortDirection: 'asc' | 'desc' | null;
   }
-): SqliteTableSnapshot {
+): DbTableSnapshot {
   const normalizedQuery = options.query.trim().replace(/;+\s*$/u, '');
   const queryActive = normalizedQuery.length > 0;
   const objectType = options.objectType ?? getDbObjectType(db, tableName);
@@ -820,7 +820,7 @@ export async function getDbTableRenderedText(document: VisualDocument, block: Vi
       ].join('\n');
     }
 
-    let snapshot: SqliteTableSnapshot;
+    let snapshot: DbTableSnapshot;
     try {
       snapshot = readTableSnapshot(db, tableName, {
         objectType,
@@ -1144,7 +1144,7 @@ async function persistDocumentDatabase(document: VisualDocument, db: SqlJsDataba
   }
 }
 
-export function syncSqliteColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
+export function syncDbTableColumnNameInDom(tableName: string, oldColumnName: string, nextColumnName: string, app: HTMLElement): void {
   const escapedTableName = CSS.escape(tableName);
   const escapedOldColumnName = CSS.escape(oldColumnName);
 

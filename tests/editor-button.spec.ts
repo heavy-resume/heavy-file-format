@@ -1,5 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Documents live behind the collapsed document menu, so it has to be opened first. */
+async function openDocument(page: Page, name: string): Promise<void> {
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name, exact: true }).click();
+}
+
 async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
   await page.locator('.document-menu').evaluate((menu) => {
@@ -325,7 +333,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
 
   await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 1_000 });
   await expect(page.locator('[data-action="run-button-ai-generate"]')).toBeHidden();
@@ -364,7 +372,7 @@ test('generate button runs on the first click after completing a fill-in', async
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
   const nameFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]');
@@ -393,7 +401,7 @@ test('generate button shows disabled busy state while pronunciation is generatin
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
   await page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-name"]) [data-field="text-fill-in-value"]').fill('Avery Hart');
@@ -426,7 +434,7 @@ test('generated pronunciation can be converted back into a clean fill-in', async
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');

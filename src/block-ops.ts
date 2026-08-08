@@ -1806,7 +1806,15 @@ function applyInlineRichAction(editable: HTMLElement, tagName: InlineRichTag, ac
       existing.setAttribute('href', href);
       return;
     }
-    unwrapInlineElement(existing);
+    // Toggling off applies to what is selected, not to the whole formatted run. Only a
+    // selection covering the entire run removes the element itself.
+    const covered = clampRangeToElementContents(existing, range);
+    if (!covered || isRangeCoveringElementContents(existing, covered)) {
+      unwrapInlineElement(existing);
+    } else {
+      unwrapInlineElementRange(existing, covered);
+    }
+    setPendingInlineAction(editable, action, false);
     return;
   }
   if (wrapSelectedEditableBlocksInline(editable, range, tagName, href)) {
@@ -1981,6 +1989,83 @@ function getAnnotationAncestor(range: Range, annotationKey: 'hvyAlt' | 'hvyNowra
     }
   }
   return null;
+}
+
+/**
+ * Narrows `range` to the part of it that lies inside `element`, or null when the two do
+ * not overlap. A selection that starts or ends outside the formatted run still only
+ * unformats the part that is actually inside it.
+ */
+function clampRangeToElementContents(element: HTMLElement, range: Range): Range | null {
+  const contents = document.createRange();
+  contents.selectNodeContents(element);
+  if (range.compareBoundaryPoints(Range.END_TO_START, contents) >= 0) return null;
+  if (range.compareBoundaryPoints(Range.START_TO_END, contents) <= 0) return null;
+  const clamped = range.cloneRange();
+  if (clamped.compareBoundaryPoints(Range.START_TO_START, contents) < 0) {
+    clamped.setStart(contents.startContainer, contents.startOffset);
+  }
+  if (clamped.compareBoundaryPoints(Range.END_TO_END, contents) > 0) {
+    clamped.setEnd(contents.endContainer, contents.endOffset);
+  }
+  return clamped;
+}
+
+function isRangeCoveringElementContents(element: HTMLElement, range: Range): boolean {
+  const contents = document.createRange();
+  contents.selectNodeContents(element);
+  return range.compareBoundaryPoints(Range.START_TO_START, contents) <= 0
+    && range.compareBoundaryPoints(Range.END_TO_END, contents) >= 0;
+}
+
+/**
+ * Removes the inline formatting from `range` only, keeping it on the text on either
+ * side. `<strong>one two three</strong>` with "two" selected becomes
+ * `<strong>one </strong>two<strong> three</strong>`.
+ */
+function unwrapInlineElementRange(element: HTMLElement, range: Range): void {
+  if (!element.parentNode) {
+    return;
+  }
+  const headRange = document.createRange();
+  headRange.selectNodeContents(element);
+  headRange.setEnd(range.startContainer, range.startOffset);
+  const tailRange = document.createRange();
+  tailRange.selectNodeContents(element);
+  tailRange.setStart(range.endContainer, range.endOffset);
+
+  const head = headRange.extractContents();
+  const tail = tailRange.extractContents();
+  const selected = document.createDocumentFragment();
+  while (element.firstChild) {
+    selected.appendChild(element.firstChild);
+  }
+  const firstSelected = selected.firstChild;
+  const lastSelected = selected.lastChild;
+
+  const replacements: Node[] = [];
+  if (head.childNodes.length > 0) {
+    const headWrapper = element.cloneNode(false) as HTMLElement;
+    headWrapper.appendChild(head);
+    replacements.push(headWrapper);
+  }
+  replacements.push(selected);
+  if (tail.childNodes.length > 0) {
+    const tailWrapper = element.cloneNode(false) as HTMLElement;
+    tailWrapper.appendChild(tail);
+    replacements.push(tailWrapper);
+  }
+  element.replaceWith(...replacements);
+
+  if (!firstSelected || !lastSelected) {
+    return;
+  }
+  const nextRange = document.createRange();
+  nextRange.setStartBefore(firstSelected);
+  nextRange.setEndAfter(lastSelected);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
 }
 
 function unwrapInlineElement(element: HTMLElement): void {

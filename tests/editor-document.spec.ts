@@ -3205,7 +3205,9 @@ test('embedded editor runtime registers built-in graph plugin', async ({ page })
 
   await expect(page.locator('#mount')).toContainText('Graph Example');
   await expect(page.locator('#mount')).not.toContainText('Plugin "hvy.graph" is not available.');
-  await expect(page.locator('#mount .hvy-carousel img').first()).toBeVisible();
+  // The first slide in DOM order is the off-screen neighbour and stays lazily unloaded.
+  await page.locator('#mount .hvy-carousel').first().scrollIntoViewIfNeeded();
+  await expect(page.locator('#mount .hvy-carousel img:visible').first()).toBeVisible();
   const registered = await page.evaluate(async () => {
     const registryModulePath = '/src/plugins/registry.ts';
     const { getHostPlugin } = await import(/* @vite-ignore */ registryModulePath);

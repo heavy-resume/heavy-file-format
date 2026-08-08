@@ -1,5 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Documents live behind the collapsed document menu, so it has to be opened first. */
+async function openDocument(page: Page, name: string): Promise<void> {
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) menu.open = true;
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name, exact: true }).click();
+}
+
 async function runCliCommand(page: Page, command: string): Promise<void> {
   const lineCount = await page.locator('#cliOutput .cli-line').count();
   const isPlaceholder = (await page.locator('#cliOutput').textContent())?.includes('/ $ man ls') ?? false;
@@ -529,7 +537,7 @@ test('ai resume summary placeholder expands parent before editing', async ({ pag
 test('ai resume summary placeholder margin expands parent before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
   await page.locator('#aiReaderDocument .expand-stub-toggle').first().dispatchEvent('click', {
@@ -544,7 +552,7 @@ test('ai resume summary placeholder margin expands parent before editing', async
 test('ai resume summary body text expands parent instead of opening text editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
 
   await page
@@ -559,7 +567,7 @@ test('ai resume summary body text expands parent instead of opening text editor'
 test('ai sidebar skill click expands collapsed record before editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
   await page.locator('.viewer-sidebar-tab').click();
 
@@ -600,7 +608,7 @@ hvy_version: 0.1
 test('canceling a newly added featured xref removes it without opening list editor', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
 
   const topSkillsList = page.locator('[data-component-id="top-skills-list"]').first();
   await topSkillsList.locator('[data-action="add-component-list-item"]').click();
@@ -918,7 +926,7 @@ component_defs:
 test('ai mode template-created skill stays in passive reader mode', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await page.locator('.viewer-sidebar-tab').click();
 
@@ -1444,7 +1452,7 @@ hvy_version: 0.1
 test('ai sidebar expandable hover does not cover active editor delete button', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await page.locator('.viewer-sidebar-tab').click();
 
@@ -2586,7 +2594,7 @@ hvy_version: 0.1
 test('resume template location fill-ins keep focus in AI view', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   await page.locator('.viewer-sidebar-tab').click();
 
@@ -3840,7 +3848,7 @@ hvy_version: 0.1
 test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Template' }).click();
+  await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'CLI' }).click();
   await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
   await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
@@ -3916,7 +3924,7 @@ hvy_version: 0.1
 test('editing the second resume project does not duplicate it after done', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'Basic' }).click();
 
   const projectEntry = page.locator('.editor-block-passive', { hasText: 'Autonomous Agent Hackathon' }).last();
@@ -3947,7 +3955,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Resume Example' }).click();
+  await openDocument(page, 'Resume Example');
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'TypeScript View' }).click();
 
@@ -3997,7 +4005,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
   await expect(page.getByRole('button', { name: 'No View' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#project-autonomous-agent-hackathon')).not.toHaveClass(/is-reader-view-dimmed/);
 
-  await page.getByRole('button', { name: 'CRM Example' }).click();
+  await openDocument(page, 'CRM Example');
   await expect(page.getByRole('button', { name: 'No View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'TypeScript View' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'LLM Engineer View' })).toHaveCount(0);

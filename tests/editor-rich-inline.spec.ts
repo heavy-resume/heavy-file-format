@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 test('undo inside active rich text editor keeps focus on text changes', async ({ page }) => {
   await page.goto('/');
@@ -1996,4 +1996,111 @@ test('markdown editor auto-upgrades raw task markers', async ({ page }) => {
 
   await expect(editor.locator('input[type="checkbox"]')).toHaveCount(1);
   await expect(editor.locator('input[type="checkbox"]').first()).toBeChecked();
+});
+
+async function loadInlineFormattingParagraph(page: Page, markdown: string): Promise<void> {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"s"}-->
+#! S
+
+ <!--hvy:text {"id":"para"}-->
+  ${markdown}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive').first().click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor')).toBeVisible();
+}
+
+/** Selects `text` inside the active rich editor, spanning element boundaries if needed. */
+async function selectTextInActiveEditor(page: Page, text: string): Promise<void> {
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
+  await editor.evaluate((node, target) => {
+    const start = (node as HTMLElement).innerText.indexOf(target);
+    if (start < 0) throw new Error(`Selection text ${JSON.stringify(target)} is not in the editor.`);
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    let from: { node: Node; offset: number } | null = null;
+    let to: { node: Node; offset: number } | null = null;
+    let current = walker.nextNode();
+    while (current) {
+      const length = (current.textContent ?? '').length;
+      if (!from && seen + length > start) from = { node: current, offset: start - seen };
+      if (!to && seen + length >= start + target.length) to = { node: current, offset: start + target.length - seen };
+      seen += length;
+      current = walker.nextNode();
+    }
+    if (!from || !to) throw new Error('Could not resolve selection offsets.');
+    (node as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  }, text);
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text);
+}
+
+function paragraphMarkdown(page: Page): Promise<string | undefined> {
+  return page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections[0]?.blocks.find((block) => block.schema.id === 'para')?.text;
+  });
+}
+
+test('unformatting part of a bold run leaves the rest of the run bold', async ({ page }) => {
+  // BEFORE
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  expect(await paragraphMarkdown(page)).toBe('**one two three**');
+
+  // TOOL CALL
+  await selectTextInActiveEditor(page, 'two');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  // AFTER
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** two **three**');
+});
+
+test('unformatting the start or end of a run keeps the remainder formatted', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  await selectTextInActiveEditor(page, 'one');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+  await expect.poll(() => paragraphMarkdown(page)).toBe('one **two three**');
+
+  await loadInlineFormattingParagraph(page, '_one two three_');
+  await selectTextInActiveEditor(page, 'three');
+  await page.getByRole('button', { name: 'Italic', exact: true }).first().click();
+  await expect.poll(() => paragraphMarkdown(page)).toBe('_one two_ three');
+});
+
+test('selecting a whole run still removes its formatting entirely', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two three**');
+  await selectTextInActiveEditor(page, 'one two three');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('one two three');
+});
+
+test('a selection reaching past a run only unformats the part inside it', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one two** three four');
+  await selectTextInActiveEditor(page, 'two three');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** two three four');
+});
+
+test('unformatting around nested emphasis preserves the nested markers', async ({ page }) => {
+  await loadInlineFormattingParagraph(page, '**one _two_ three**');
+  await selectTextInActiveEditor(page, 'two');
+  await page.getByRole('button', { name: 'Bold', exact: true }).first().click();
+
+  await expect.poll(() => paragraphMarkdown(page)).toBe('**one** _two_ **three**');
 });

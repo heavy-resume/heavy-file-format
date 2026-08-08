@@ -3331,7 +3331,6 @@ hvy_version: 0.1
       throw new Error('Mount root missing.');
     }
     const responses = [
-      '{"targets":[]}',
       '{"information":"Bad card"}',
       '{"hvy":"<!--hvy: {\\"id\\":\\"imported-after-diagnostic\\"}-->\\n#! Imported\\n\\n <!--hvy:text {\\"id\\":\\"imported-after-diagnostic-text\\"}-->\\n  Imported despite diagnostic"}',
     ];
@@ -3371,7 +3370,7 @@ hvy_version: 0.1
     };
   });
 
-  expect(result.calls).toBe(3);
+  expect(result.calls).toBe(2);
   expect(result.progress).toContain('linting');
   expect(result.result.status).toBe('error');
   expect(result.result.message).toContain('expandable block is missing');
@@ -3403,7 +3402,6 @@ hvy_version: 0.1
     const hookReasons: string[] = [];
     const progressSnapshots: string[] = [];
     const responses = [
-      '{"targets":[]}',
       '{"information":"Imported summary"}',
       '{"hvy":"<!--hvy: {\\"id\\":\\"imported-summary\\"}-->\\n#! Imported Summary\\n\\n <!--hvy:text {\\"id\\":\\"imported-summary-text\\"}-->\\n  Imported summary"}',
     ];
@@ -3495,7 +3493,6 @@ hvy_version: 0.1
     documentBytes.set(prefixBytes, 0);
     documentBytes.set([9, 8, 7], prefixBytes.length);
     const responses = [
-      '{"targets":[]}',
       '{"information":"Imported summary"}',
       '{"hvy":"<!--hvy: {\\"id\\":\\"summary\\"}-->\\n#! Summary\\n\\n <!--hvy:text {\\"id\\":\\"intro\\"}-->\\n  Imported summary"}',
     ];
@@ -3598,7 +3595,6 @@ component_defs:
     }
     const responses = [
       '{"steps":[{"section":"Awards","templateName":"Award Section"}]}',
-      '{"targets":[]}',
       '{"values":{"section_title":"Awards","awards_list":[{"award":"Best Tool","details":"Won for developer tooling."}]}}',
     ];
     const calls: unknown[] = [];
@@ -3645,7 +3641,7 @@ component_defs:
 
   expect(result.plan.steps?.[0]?.templateStructure?.id).toBe('definition:award-section');
   expect(result.importResult.status).toBe('complete');
-  expect(result.calls).toBe(3);
+  expect(result.calls).toBe(2);
   expect(result.serialized).toContain('# Awards');
   expect(result.serialized).toContain('Best Tool');
   expect(result.serialized).toContain('Won for developer tooling.');
@@ -3897,7 +3893,8 @@ test('section remove requires confirmation', async ({ page }) => {
   const sections = page.locator('.editor-section-card:not(.editor-subsection-card)');
   const initialCount = await sections.count();
 
-  await page.locator('[data-action="add-top-level-section"]').click();
+  // Main and sidebar each have their own add-section ghost.
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
   await expect(sections).toHaveCount(initialCount + 1);
 
   const removeButton = sections.last().locator('[data-action="remove-section"]');
@@ -3906,11 +3903,13 @@ test('section remove requires confirmation', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Confirm deletion?' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveCSS('font-family', await page.locator('main.layout').evaluate((el) => getComputedStyle(el).fontFamily));
+  // Cancel is a ghost button, so it takes the document text colour; --hvy-button-text
+  // belongs to filled buttons like Delete.
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveCSS(
     'color',
     await page.locator('#app').evaluate((root) => {
       const probe = document.createElement('span');
-      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-button-text');
+      probe.style.color = getComputedStyle(root).getPropertyValue('--hvy-text');
       root.append(probe);
       const color = getComputedStyle(probe).color;
       probe.remove();
@@ -4892,7 +4891,8 @@ component_defs:
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.ghost-label', { hasText: 'Add Card' }).click();
-  const modal = page.locator('.component-meta-modal', { hasText: 'card-record' });
+  // The modal titles itself with the humanized component name, not the raw def name.
+  const modal = page.locator('.component-meta-modal', { hasText: 'Add Card Record' });
   await expect(modal).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Card title' })).toBeVisible();
   await expect(modal.locator('label', { hasText: 'Details' })).toBeVisible();
@@ -4900,7 +4900,7 @@ component_defs:
   await expect(modal.locator('textarea[data-template-variable="details"]')).toBeVisible();
 
   await modal.locator('input[data-template-variable="title"]').fill('Launch Notes');
-  await modal.getByRole('button', { name: 'Insert' }).click();
+  await modal.getByRole('button', { name: 'Add', exact: true }).click();
 
   const inserted = page.locator('.editor-block', { hasText: 'card-record' });
   await expect(inserted.locator('.editor-block-passive', { hasText: 'Launch Notes' })).toBeVisible();
@@ -5194,7 +5194,8 @@ component_defs:
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.ghost-label', { hasText: 'Add Card' }).click();
-  const modal = page.locator('.component-meta-modal', { hasText: 'card-record' });
+  // The modal titles itself with the humanized component name, not the raw def name.
+  const modal = page.locator('.component-meta-modal', { hasText: 'Add Card Record' });
   await expect(modal).toBeVisible();
   await modal.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('.reader-block-text', { hasText: 'Card title' })).toHaveCount(0);

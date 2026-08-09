@@ -86,12 +86,21 @@ plugin = {
       componentId: 'fake-callback-script',
       source: `def js_finished(result):
     doc.header.set("fake_js_status", result["status"])
-    return "js-return:" + result["status"]
+    return {
+        "status": "js-return:" + result["status"],
+        "none_value": None,
+        "tuple_value": (1, {"ok": True}),
+        "nested": {"items": [None, result["nested"]]},
+    }
 
 def python_finished(result):
     doc.header.set("fake_python_status", result["status"])
     doc.header.set("fake_python_values", result["values"])
-    return "python-return:" + result["status"]
+    return {
+        "status": "python-return:" + result["status"],
+        "none_value": None,
+        "tuple_value": (2, {"ok": True}),
+    }
 
 doc.plugins.call(
     "com.example.fake-js-callback",
@@ -123,6 +132,7 @@ doc.plugins.call("com.example.fake-js-callback", "invoke", {"on_complete": faile
       },
     });
     await new Promise((resolve) => window.setTimeout(resolve, 15));
+    const errorCallbackReturn = callbackReturns.at(-1);
 
     let stepCallbackError = '';
     await wrapper.runUserScript({
@@ -179,6 +189,7 @@ doc.plugins.call("com.example.fake-js-callback", "invoke", {"delay": 20, "on_com
       callbackReturns: initialCallbackReturns,
       pythonCallbackReturns: (window as Window & { fakePythonCallbackReturns?: unknown[] }).fakePythonCallbackReturns,
       callbackError,
+      errorCallbackReturn,
       stepCallbackError,
       replacementHeader: { ...replacement.meta },
     };
@@ -193,10 +204,35 @@ doc.plugins.call("com.example.fake-js-callback", "invoke", {"delay": 20, "on_com
     jsStatus: 'js-2',
     pythonStatus: 'python-two',
     pythonValues: [2, { ok: true }],
-    callbackReturns: ['js-return:js-1', 'js-return:js-2'],
-    pythonCallbackReturns: ['python-return:python-one', 'python-return:python-two'],
+    callbackReturns: [
+      {
+        status: 'js-return:js-1',
+        none_value: null,
+        tuple_value: [1, { ok: true }],
+        nested: { items: [null, [{ ok: true }]] },
+      },
+      {
+        status: 'js-return:js-2',
+        none_value: null,
+        tuple_value: [1, { ok: true }],
+        nested: { items: [null, [{ ok: true }]] },
+      },
+    ],
+    pythonCallbackReturns: [
+      {
+        status: 'python-return:python-one',
+        none_value: null,
+        tuple_value: [2, { ok: true }],
+      },
+      {
+        status: 'python-return:python-two',
+        none_value: null,
+        tuple_value: [2, { ok: true }],
+      },
+    ],
   });
   expect(expectedResult.callbackError).toContain('fake delayed callback error');
+  expect(expectedResult.errorCallbackReturn).toBeNull();
   expect(expectedResult.stepCallbackError).toContain('step budget (20)');
   expect(expectedResult.replacementHeader).not.toHaveProperty('must_not_cross_document');
   expect(expectedResult.replacementHeader).not.toHaveProperty('must_not_run_after_destroy');

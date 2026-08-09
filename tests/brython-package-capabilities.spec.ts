@@ -52,10 +52,12 @@ def start(args, ctx):
         "year": date(2030, 1, 2).year,
         "matched": re.fullmatch("fake", "fake") is not None,
         "random_type": type(random.randint(1, 3)).__name__,
+        "none_value": None,
+        "tuple_value": (3, {"ok": True}),
     }
 
 async def render_static(ctx):
-    return {"blocks": []}
+    return {"blocks": [], "noneValue": None, "tupleValue": (4, {"ok": True})}
 
 def make_plugin(context):
     assert context["manifest"].id == "com.example.fake-worker"
@@ -167,8 +169,10 @@ plugin = make_plugin
       year: 2030,
       matched: true,
       random_type: 'int',
+      none_value: null,
+      tuple_value: [3, { ok: true }],
     },
-    pdf: { blocks: [] },
+    pdf: { blocks: [], noneValue: null, tupleValue: [4, { ok: true }] },
     visualDescription: 'relative-import-ok',
     resourceUrlIsLocal: true,
     packageModuleCount: 3,

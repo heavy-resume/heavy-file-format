@@ -801,7 +801,10 @@ It uses the same capability fields as a JavaScript `HvyPlugin`, including
 components, lifecycle hooks, scripting methods, visual descriptions, and PDF
 rendering. Optional manifest `pythonImports` can request the locally bundled
 `random`, `re`, and `datetime` modules; plugin packages never fetch Python code
-from the network.
+from the network. The host recursively normalizes Python results for plugin
+consumers: `None` becomes `null`, mappings become plain objects, sequences
+become arrays, callables remain callable, and coroutine results become
+Promises. JavaScript plugin code does not need to unpack Brython values.
 
 Plugins that should require per-file approval set
 `"authorization": "required"` in `hvy-plugin.json`. Inspect the archive manifest
@@ -881,8 +884,11 @@ doc.plugins.call(
 
 Ordinary values still cross the sandbox as JSON data. Callable leaves are
 preserved at their original nested paths, and delayed callback execution keeps
-the originating script's limits and error reporting. This transport is
-`hvy.scripting` version `0.2`; version `0.1` scripting blocks still run.
+the originating script's limits and error reporting. Callback arguments and
+return values are recursively normalized at the host boundary, so JavaScript
+plugins receive normal JavaScript objects, arrays, primitives, and `null`.
+This transport is `hvy.scripting` version `0.2`; version `0.1` scripting blocks
+still run.
 
 Embedded hosts can observe rendered reader links asynchronously and return how
 the link should be rendered. Use this for URL validation, safe-link

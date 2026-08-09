@@ -1327,15 +1327,18 @@ host MUST make its bundled Brython `browser` and `sys` modules available. It
 MUST load requested `pythonImports` and their dependency closure only from its
 local bundle and MUST NOT fetch Python dependencies from the network.
 
-Python mappings and sequences crossing into the host MUST be normalized to
-JavaScript objects and arrays while preserving callable values. Structured
-JavaScript arguments MAY become Python containers or JavaScript proxies.
-Supported Python coroutine results MUST become Promises for host capabilities
-that permit asynchronous results. A host MUST remove package-specific virtual
-modules and resource URLs when the loaded package is disposed. Package Python
-executes with the same authority as installed JavaScript plugin code; package
-installation and per-document plugin authorization are the trust boundaries,
-not `pythonImports`.
+Python values crossing into the host MUST be normalized recursively: `None`
+becomes JavaScript `null`, mappings become plain JavaScript objects, and
+sequences become arrays. Callable values MUST remain JavaScript-callable, and
+values they return later MUST pass through the same normalization. JavaScript
+plugin and host code MUST NOT need to unpack Brython runtime representations.
+Structured JavaScript arguments MAY become Python containers or JavaScript
+proxies. Supported Python coroutine results MUST become Promises for host
+capabilities that permit asynchronous results. A host MUST remove
+package-specific virtual modules and resource URLs when the loaded package is
+disposed. Package Python executes with the same authority as installed
+JavaScript plugin code; package installation and per-document plugin
+authorization are the trust boundaries, not `pythonImports`.
 
 Authors SHOULD bundle JavaScript dependencies into the entry module. Package
 CSS MAY use relative `url(...)` references; loaders MUST resolve them against
@@ -1462,7 +1465,10 @@ structured-clone-compatible values. Argument values MAY include callbacks at
 plugin-defined nested paths. The scripting bridge MUST preserve those callable
 values while retaining normal JSON normalization for all ordinary values. A
 plugin controls when and how often it invokes a callback, and callback return
-values MUST be returned to the plugin.
+values MUST be returned to the plugin. Values entering or leaving a Brython
+callback MUST use the same recursive host normalization as Python package
+capabilities, so a JavaScript plugin receives ordinary JavaScript values rather
+than Brython runtime representations.
 
 Delayed callbacks from sandboxed scripts MUST resume inside the originating
 scripting runtime with its step and cycle guards, flush resulting document

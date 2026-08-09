@@ -3,6 +3,7 @@ import {
   type HvyPluginPackageManifest,
 } from './plugin-package';
 import { getBrython, loadBrythonPythonImports } from './plugins/scripting/brython-loader';
+import { normalizeBrythonHostValue } from './plugins/scripting/brython-host-values';
 import type { HvyPlugin } from './plugins/types';
 
 export interface LoadHvyPluginPythonOptions {
@@ -113,55 +114,6 @@ function formatPythonPluginError(error: unknown): string {
     // Use the ordinary error string below.
   }
   return error instanceof Error ? error.message : String(error);
-}
-
-function normalizePythonHostValue(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
-  if (
-    value === null
-    || typeof value === 'undefined'
-    || typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-    || typeof value === 'bigint'
-  ) {
-    return value;
-  }
-  const brython = getBrython() as ReturnType<typeof getBrython> & {
-    pyobj2jsobj?: (pythonValue: unknown) => unknown;
-  };
-  const converted = typeof brython.pyobj2jsobj === 'function' ? brython.pyobj2jsobj(value) : value;
-  if (
-    converted !== null
-    && (typeof converted === 'object' || typeof converted === 'function')
-    && typeof (converted as PromiseLike<unknown>).then === 'function'
-  ) {
-    return Promise.resolve(converted).then((resolved) => normalizePythonHostValue(resolved));
-  }
-  if (typeof converted === 'function') {
-    const existing = seen.get(converted);
-    if (existing) return existing;
-    const wrapped = function (this: unknown, ...args: unknown[]) {
-      return normalizePythonHostValue(converted.apply(this, args));
-    };
-    seen.set(converted, wrapped);
-    return wrapped;
-  }
-  if (!converted || typeof converted !== 'object') return converted;
-  const existing = seen.get(converted);
-  if (existing) return existing;
-  if (Array.isArray(converted)) {
-    const normalized: unknown[] = [];
-    seen.set(converted, normalized);
-    normalized.push(...converted.map((entry) => normalizePythonHostValue(entry, seen)));
-    return normalized;
-  }
-  if (Object.getPrototypeOf(converted) !== Object.prototype) return converted;
-  const normalized: Record<string, unknown> = {};
-  seen.set(converted, normalized);
-  for (const [key, entry] of Object.entries(converted)) {
-    normalized[key] = normalizePythonHostValue(entry, seen);
-  }
-  return normalized;
 }
 
 function deletePythonPluginModules(moduleNames: Set<string>, runnerName: string): void {
@@ -275,7 +227,7 @@ finally:
         reject(new Error(formatPythonPluginError(error)));
       }
     });
-    const plugin = normalizePythonHostValue(exportedPlugin) as HvyPlugin;
+    const plugin = normalizeBrythonHostValue(exportedPlugin) as HvyPlugin;
     validatePluginAgainstManifest(plugin, options.manifest);
     let disposed = false;
     return {

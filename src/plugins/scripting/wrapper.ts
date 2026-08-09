@@ -18,6 +18,10 @@ import {
   isScriptingCallbackRuntimeDisposed,
   registerScriptingCallbackCleanup,
 } from './callback-lifecycle';
+import {
+  normalizeBrythonHostArguments,
+  normalizeBrythonHostValue,
+} from './brython-host-values';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -1626,8 +1630,11 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
             releaseCallbackResources();
             return undefined;
           }
+          const invokeCallback = () => normalizeBrythonHostValue(
+            callback(...normalizeBrythonHostArguments(args))
+          );
           if (initialExecutionActive || !stateRuntime) {
-            const result = callback(...args);
+            const result = invokeCallback();
             runtime?.doc.rerender();
             return result;
           }
@@ -1640,7 +1647,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
           renderCycleExecution = callbackCycle;
           try {
             return runWithStateRuntime(stateRuntime, () => {
-              const result = callback(...args);
+              const result = invokeCallback();
               runtime?.doc.rerender();
               return result;
             });

@@ -28,6 +28,18 @@ function coerceReturnedBoolean(value: unknown): boolean {
   return !!value;
 }
 
+/**
+ * `pending` renders as `display: none`, and hiding an ancestor of the caret collapses the
+ * DOM selection for good. Only the first evaluation has no answer to show, so only it may
+ * hide; later evaluations keep the previous answer until the script resolves. That also
+ * drops a forced hide/show reflow pair per block per keystroke.
+ */
+function markVisibilityPending(element: HTMLElement): void {
+  if (!element.dataset.visibleState) {
+    element.dataset.visibleState = 'pending';
+  }
+}
+
 export async function runButtonVisibilityScripts(root: ParentNode): Promise<void> {
   const startedAt = nowMs();
   const runtime = getActiveStateRuntime();
@@ -51,7 +63,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       element.dataset.visibleState = 'visible';
       return;
     }
-    element.dataset.visibleState = 'pending';
+    markVisibilityPending(element);
     const result = await runUserScript({
       document: runtime.state.document,
       source,
@@ -76,7 +88,7 @@ export async function runButtonVisibilityScripts(root: ParentNode): Promise<void
       element.dataset.visibleState = 'visible';
       return;
     }
-    element.dataset.visibleState = 'pending';
+    markVisibilityPending(element);
     const result = await runUserScript({
       document: runtime.state.document,
       source,

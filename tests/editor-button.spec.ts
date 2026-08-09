@@ -1,5 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/**
+ * Reloads and waits for the app to finish booting. `waitUntil: 'networkidle'` cannot be
+ * used here: it costs at least 500ms of enforced network silence on top of load, which
+ * does not fit the 1s navigation budget on a cold dev server.
+ */
+async function reloadApp(page: Page): Promise<void> {
+  await page.reload();
+  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+}
+
+/**
+ * Replaces the raw editor contents the way a paste would. `fill()` drives text through CDP
+ * and costs ~19s on a full example document, while the app's own input handler only needs
+ * ~10ms for the same change, so the wait is pure harness overhead.
+ */
+async function setRawEditorText(page: Page, text: string): Promise<void> {
+  await page.locator('#rawEditor').evaluate((node, value) => {
+    (node as HTMLTextAreaElement).value = value;
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }, text);
+}
+
 /** Documents live behind the collapsed document menu, so it has to be opened first. */
 async function openDocument(page: Page, name: string): Promise<void> {
   await page.locator('.document-menu').evaluate((menu) => {
@@ -332,7 +354,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
   await openDocument(page, 'Resume Template');
 
   await expect(page.locator('[data-component-id="resume-pronunciation"]').first()).toBeHidden({ timeout: 1_000 });
@@ -341,7 +363,7 @@ test('editor-only generate button applies pronunciation and stays out of viewer'
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');
-  await raw.fill((await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
+  await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
@@ -371,7 +393,7 @@ test('generate button runs on the first click after completing a fill-in', async
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
   await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
@@ -400,7 +422,7 @@ test('generate button shows disabled busy state while pronunciation is generatin
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
   await openDocument(page, 'Resume Template');
 
   await page.locator('.editor-block-passive .editor-block-content[data-component-id="resume-name"] .text-fill-in-box').click();
@@ -433,12 +455,12 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
   await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'Raw' }).click();
 
   const raw = page.locator('#rawEditor');
-  await raw.fill((await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
+  await setRawEditorText(page, (await raw.inputValue()).replace('# <!-- value {"placeholder":"Name"} -->', '# Avery Hart'));
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
@@ -461,7 +483,8 @@ test('generated pronunciation can be converted back into a clean fill-in', async
     selection?.addRange(range);
   });
   await page.locator('.rich-editor[data-field="block-rich"]').dispatchEvent('keyup');
-  await page.getByRole('button', { name: 'Convert to Fill-in' }).click();
+  await page.locator('.text-use-as-button').click();
+  await page.locator('[data-rich-action="fill-in"]').click();
 
   const pronunciationFillIn = page.locator('.editor-block:has(.editor-block-content[data-component-id="resume-pronunciation"]) [data-field="text-fill-in-value"]');
   await expect(pronunciationFillIn).toHaveAttribute('data-placeholder', 'FILL ME IN');
@@ -475,7 +498,7 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 test('advanced editor exposes anchored button configuration as a component card', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
   await selectDocumentMenuItem(page, 'Resume Template');
   await page.getByRole('button', { name: 'Advanced' }).click();
 
@@ -519,7 +542,7 @@ test('embedded editor and viewer keep independent document state', async ({ page
   test.setTimeout(5_000);
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
 
   const firstDoc = page.locator('#docOne');
   const secondDoc = page.locator('#docTwo');
@@ -689,7 +712,7 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   });
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
-  await page.reload({ waitUntil: 'networkidle' });
+  await reloadApp(page);
 
   const firstDoc = page.locator('#docOne');
   const secondDoc = page.locator('#docTwo');

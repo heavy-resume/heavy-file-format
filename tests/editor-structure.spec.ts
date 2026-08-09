@@ -16,6 +16,16 @@ async function runCliCommand(page: Page, command: string): Promise<void> {
   await expect(page.locator('#cliOutput .cli-line')).toHaveCount(isPlaceholder ? lineCount : lineCount + 1);
 }
 
+/**
+ * Opens the sidebar and waits out its entry animation. Panel children start at
+ * `opacity: 0` with a 90ms delay plus a 180ms fade, so clicking straight after the tab
+ * races the transition and fails actionability even though the geometry is already final.
+ */
+async function openSidebarPanel(page: Page, panel: string): Promise<void> {
+  await page.locator('.viewer-sidebar-tab').click();
+  await expect(page.locator(panel)).toHaveCSS('opacity', '1');
+}
+
 async function selectDocumentMenuItem(page: Page, name: string): Promise<void> {
   await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
   await page.locator('.document-menu summary').click();
@@ -452,9 +462,10 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'AI' }).click();
 
+  // An empty image renders as an editor placeholder in AI view, not a reader block,
+  // so its own Edit affordance is the way in.
   const reader = page.locator('#aiReaderDocument');
-  await reader.locator('.reader-block-image').click({ button: 'right' });
-  await page.getByRole('button', { name: 'Edit component' }).click();
+  await reader.locator('.editor-block-passive[data-block-id]').getByRole('button', { name: 'Edit', exact: true }).click();
   const alt = reader.locator('.editor-block[data-active-editor-block="true"] [data-field="image-alt"]');
   await alt.fill('Updated alt');
   await expect(alt).toBeFocused();
@@ -569,7 +580,7 @@ test('ai sidebar skill click expands collapsed record before editing', async ({ 
 
   await openDocument(page, 'Resume Example');
   await page.getByRole('button', { name: 'AI' }).click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const skillsSection = page.locator('#aiSidebarSections #skills');
   await skillsSection.click();
@@ -928,7 +939,7 @@ test('ai mode template-created skill stays in passive reader mode', async ({ pag
 
   await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   await page.locator('#aiSidebarSections #skills [data-action="add-component-list-item"]', { hasText: 'Add Skill' }).click();
   const modal = page.locator('.modal-root', { has: page.locator('input[data-template-variable="skill"]') });
@@ -1180,7 +1191,7 @@ test('resume xref to sidebar record opens sidebar in viewer and ai modes', async
   await expect(page.locator('#readerSidebarSections #tool-developer-containers')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI', exact: true }).click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
   await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
   await page.locator('#aiReaderDocument .reader-xref-card', { hasText: 'Developer Containers' }).first().click();
   await expect(page.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
@@ -1454,7 +1465,7 @@ test('ai sidebar expandable hover does not cover active editor delete button', a
 
   await openDocument(page, 'Resume Example');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const skillsSection = page.locator('#aiSidebarSections #skills');
   await skillsSection.click();
@@ -2596,7 +2607,7 @@ test('resume template location fill-ins keep focus in AI view', async ({ page })
 
   await openDocument(page, 'Resume Template');
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
-  await page.locator('.viewer-sidebar-tab').click();
+  await openSidebarPanel(page, '#aiSidebarSections');
 
   const locationBlock = page.locator('#aiSidebarSections #locations');
   const fillIns = locationBlock.locator('[data-field="text-fill-in-value"]');

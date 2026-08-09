@@ -1602,13 +1602,13 @@ hvy_version: 0.1
   expect(result.missing).toBe(false);
 });
 
-test('embedded viewer asynchronously resolves host image attachments from blobs', async ({ page }) => {
+test('embedded clients cache asynchronous host image blob resolution', async ({ page }) => {
   await page.goto('/');
 
   const result = await page.evaluate(async () => {
-    document.body.innerHTML = '<div id="viewerMount"></div>';
+    document.body.innerHTML = '<div id="viewerMount"></div><div id="editorMount"></div>';
     const modulePath = '/src/embed.ts';
-    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const { deserializeDocumentBytes, mountHvy, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
     const source = `---
 hvy_version: 0.1
 ---
@@ -1617,29 +1617,40 @@ hvy_version: 0.1
 #! Gallery
 
 <!--hvy:image {"imageFile":"decrypted-photo.svg","imageAlt":"Decrypted Photo"}-->
+
+<!--hvy:image {"imageFile":"decrypted-photo.svg","imageAlt":"Decrypted Photo Again"}-->
 `;
     const root = document.querySelector<HTMLElement>('#viewerMount');
-    if (!root) {
-      throw new Error('Mount root missing.');
+    const editorRoot = document.querySelector<HTMLElement>('#editorMount');
+    if (!root || !editorRoot) {
+      throw new Error('Mount roots missing.');
     }
     let resolveCalls = 0;
-    mountHvyViewer({
+    const attachmentStore = {
+      list: () => [{ id: 'image:decrypted-photo.svg', meta: { mediaType: 'image/svg+xml' }, length: 12 }],
+      recall: () => null,
+      store: () => {},
+      remove: () => {},
+      resolveUrl: async (id: string) => {
+        resolveCalls += 1;
+        if (id !== 'image:decrypted-photo.svg') return null;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
+        return new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="3"><rect width="2" height="3" fill="red"/></svg>',
+        ], { type: 'image/svg+xml' });
+      },
+    };
+    const mount = mountHvyViewer({
       root,
       document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
-      attachmentStore: {
-        list: () => [{ id: 'image:decrypted-photo.svg', meta: { mediaType: 'image/svg+xml' }, length: 12 }],
-        recall: () => null,
-        store: () => {},
-        remove: () => {},
-        resolveUrl: async (id: string) => {
-          resolveCalls += 1;
-          if (id !== 'image:decrypted-photo.svg') return null;
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
-          return new Blob([
-            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="3"><rect width="2" height="3" fill="red"/></svg>',
-          ], { type: 'image/svg+xml' });
-        },
-      },
+      attachmentStore,
+    });
+    mount.setThemeOverrides({});
+    mountHvy({
+      root: editorRoot,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      attachmentStore,
     });
     const image = root.querySelector<HTMLImageElement>('img[data-image-filename="decrypted-photo.svg"]');
     if (!image) {
@@ -1648,7 +1659,8 @@ hvy_version: 0.1
     await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 1000;
       const poll = () => {
-        if (image.complete && image.naturalWidth > 0) resolve();
+        const editorImage = editorRoot.querySelector<HTMLImageElement>('img[data-image-filename="decrypted-photo.svg"]');
+        if (image.complete && image.naturalWidth > 0 && editorImage?.complete && editorImage.naturalWidth > 0) resolve();
         else if (Date.now() > deadline) reject(new Error('Resolved image did not load.'));
         else window.setTimeout(poll, 10);
       };

@@ -757,7 +757,9 @@ HVY.mountHvy({
 Shareable plugins use the `.hvy.plugin` package format defined by
 [`HVY-SPEC.md`](HVY-SPEC.md#72-plugin-package-format). Each package is a ZIP
 archive containing a manifest, a bundled ESM plugin entry, and optional styles,
-documentation, and assets. Opening an HVY document does not install a referenced
+documentation, and assets. Format `0.2` packages may instead use a Brython
+`plugin.py` entry, with package-relative imports for sibling `.py` files.
+Opening an HVY document does not install a referenced
 package; plugin installation and permission grants remain explicit host or user
 decisions.
 
@@ -792,6 +794,14 @@ const mount = HVY.mountHvy({
 mount.destroy();
 loadedPackage.dispose();
 ```
+
+A Python entry exports a top-level `plugin` mapping or a callable that receives
+`{"manifest": manifest, "resource_url": resource_url}` and returns that mapping.
+It uses the same capability fields as a JavaScript `HvyPlugin`, including
+components, lifecycle hooks, scripting methods, visual descriptions, and PDF
+rendering. Optional manifest `pythonImports` can request the locally bundled
+`random`, `re`, and `datetime` modules; plugin packages never fetch Python code
+from the network.
 
 Plugins that should require per-file approval set
 `"authorization": "required"` in `hvy-plugin.json`. Inspect the archive manifest
@@ -854,6 +864,25 @@ Sandboxed `hvy.scripting` blocks can call synchronous methods only, and the
 matching front-matter plugin declaration must include
 `permissions: [scripting]`. Installing a plugin remains a host decision; a
 document declaration cannot install executable code.
+
+Synchronous plugin methods may retain callbacks passed inside their args and
+invoke them later:
+
+```python
+def finished(result):
+    doc.header.set("fake_status", result["status"])
+
+doc.plugins.call(
+    "com.example.worker",
+    "start",
+    {"fake_input": "value", "on_complete": finished},
+)
+```
+
+Ordinary values still cross the sandbox as JSON data. Callable leaves are
+preserved at their original nested paths, and delayed callback execution keeps
+the originating script's limits and error reporting. This transport is
+`hvy.scripting` version `0.2`; version `0.1` scripting blocks still run.
 
 Embedded hosts can observe rendered reader links asynchronously and return how
 the link should be rendered. Use this for URL validation, safe-link

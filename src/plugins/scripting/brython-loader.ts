@@ -3,9 +3,16 @@
 // scripting blocks pays nothing. HVY scripts disallow user imports, so we load
 // a generated tiny VFS bootstrap instead of Brython's multi-megabyte stdlib.
 
-interface BrythonGlobal {
+export interface BrythonGlobal {
+  protocol?: string;
   builtins: Record<string, unknown>;
   imported: Record<string, unknown>;
+  VFS?: Record<string, unknown>;
+  file_cache?: Record<string, unknown>;
+  url2name?: Record<string, unknown>;
+  import_info?: Record<string, unknown>;
+  stdlib_module_names?: string[];
+  update_VFS?: (entries: Record<string, unknown>) => void;
   python_to_js?: (src: string) => string;
   run_script?: (elt: HTMLElement, src: string, name: string, url: string, runLoop: boolean) => void;
   $options?: Record<string, unknown>;
@@ -74,4 +81,23 @@ export function getBrython(): BrythonGlobal {
     throw new Error('Brython is not loaded yet. Call loadBrython() first.');
   }
   return window.__BRYTHON__;
+}
+
+export async function loadBrythonPythonImports(names: readonly string[]): Promise<void> {
+  await loadBrython();
+  if (names.length === 0) return;
+  const { default: pythonLibraryVfsByName } = await import('virtual:hvy-brython-plugin-vfs');
+  const brython = getBrython();
+  if (typeof brython.update_VFS !== 'function') {
+    throw new Error('Brython VFS registration API unavailable.');
+  }
+  const additions: Record<string, unknown> = {};
+  for (const name of names) {
+    const library = pythonLibraryVfsByName[name];
+    if (!library) throw new Error(`Bundled Python import "${name}" is unavailable.`);
+    for (const [moduleName, entry] of Object.entries(library)) {
+      if (!Object.hasOwn(brython.VFS ?? {}, moduleName)) additions[moduleName] = entry;
+    }
+  }
+  if (Object.keys(additions).length > 0) brython.update_VFS(additions);
 }

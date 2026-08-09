@@ -117,6 +117,7 @@ import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { createHvyAgentTools } from './agent-tools';
+import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 
 export type {
   HvyHistoryArtifactKind,
@@ -1133,6 +1134,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        disposeScriptingCallbacks(runtime);
         unmountAllPlugins();
         options.root.innerHTML = '';
         setHostPlugins([]);

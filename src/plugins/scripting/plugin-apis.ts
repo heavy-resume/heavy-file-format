@@ -5,12 +5,59 @@ import { getHostPlugin } from '../registry';
 export interface ScriptingPluginsApi {
   call(pluginId: string, method: string, args?: JsonObject): unknown | Promise<unknown>;
   call_json(pluginId: string, method: string, argsJson?: string): unknown;
+  call_marshaled(
+    pluginId: string,
+    method: string,
+    argsJson?: string,
+    callbacksByPath?: Record<string, (...args: unknown[]) => unknown>
+  ): unknown;
 }
 
 interface CreateScriptingPluginsApiOptions {
   allowAsync: boolean;
   requireDocumentPermission: boolean;
   onMutation?: () => void;
+  wrapCallback?: (
+    callback: (...args: unknown[]) => unknown
+  ) => (...args: unknown[]) => unknown;
+}
+
+function decodeJsonPointerSegment(segment: string): string {
+  return segment.replaceAll('~1', '/').replaceAll('~0', '~');
+}
+
+function setValueAtJsonPointer(
+  root: JsonObject,
+  pointer: string,
+  value: (...args: unknown[]) => unknown
+): void {
+  if (!pointer.startsWith('/')) {
+    throw new TypeError(`Plugin callback path "${pointer}" is invalid.`);
+  }
+  const segments = pointer.slice(1).split('/').map(decodeJsonPointerSegment);
+  let target: unknown = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index]!;
+    if (!target || typeof target !== 'object') {
+      throw new TypeError(`Plugin callback path "${pointer}" does not resolve inside args.`);
+    }
+    target = (target as Record<string, unknown>)[segment];
+  }
+  if (!target || typeof target !== 'object') {
+    throw new TypeError(`Plugin callback path "${pointer}" does not resolve inside args.`);
+  }
+  const finalSegment = segments.at(-1)!;
+  if (Array.isArray(target)) {
+    if (!/^\d+$/.test(finalSegment) || Number(finalSegment) >= target.length) {
+      throw new TypeError(`Plugin callback path "${pointer}" does not resolve inside args.`);
+    }
+    target[Number(finalSegment)] = value;
+    return;
+  }
+  if (!Object.prototype.hasOwnProperty.call(target, finalSegment)) {
+    throw new TypeError(`Plugin callback path "${pointer}" does not resolve inside args.`);
+  }
+  (target as Record<string, unknown>)[finalSegment] = value;
 }
 
 function hasDocumentScriptingPermission(document: VisualDocument, pluginName: string): boolean {
@@ -78,6 +125,16 @@ export function createScriptingPluginsApi(
     call_json: (pluginId, method, argsJson = '{}') => {
       const parsed = JSON.parse(String(argsJson || '{}')) as unknown;
       return call(pluginId, method, normalizeArgs(parsed));
+    },
+    call_marshaled: (pluginId, method, argsJson = '{}', callbacksByPath = {}) => {
+      const parsed = normalizeArgs(JSON.parse(String(argsJson || '{}')) as unknown);
+      for (const [path, callback] of Object.entries(callbacksByPath)) {
+        if (typeof callback !== 'function') {
+          throw new TypeError(`Plugin callback at path "${path}" must be callable.`);
+        }
+        setValueAtJsonPointer(parsed, path, options.wrapCallback?.(callback) ?? callback);
+      }
+      return call(pluginId, method, parsed);
     },
   };
 }

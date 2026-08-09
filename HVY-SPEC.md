@@ -1252,7 +1252,8 @@ that manifest. A conventional package is:
 ```text
 timeline.hvy.plugin
 ├── hvy-plugin.json
-├── plugin.mjs
+├── plugin.py
+├── helpers.py
 ├── plugin.css
 ├── documentation.txt
 └── assets/
@@ -1263,15 +1264,16 @@ timeline.hvy.plugin
 
 ```json
 {
-  "formatVersion": "0.1",
+  "formatVersion": "0.2",
   "id": "com.example.timeline",
   "uuid": "example-timeline-primary",
   "version": "1.2.0",
   "displayName": "Timeline",
-  "entry": "plugin.mjs",
+  "entry": "plugin.py",
   "styles": ["plugin.css"],
   "documentation": "documentation.txt",
   "permissions": [],
+  "pythonImports": ["re"],
   "authorization": "required",
   "hvyApiVersion": "0.1"
 }
@@ -1283,7 +1285,9 @@ Required fields:
 - `id`: stable namespace-qualified plugin identifier.
 - `version`: plugin package version.
 - `displayName`: human-readable name.
-- `entry`: archive-relative path to a JavaScript ESM entry module.
+- `entry`: archive-relative path to a JavaScript ESM or Python/Brython entry
+  module. Format `0.1` packages support JavaScript entries only. Format `0.2`
+  packages support JavaScript and Python entries.
 - `hvyApiVersion`: HVY host plugin API version required by the package.
 
 Optional fields:
@@ -1293,6 +1297,9 @@ Optional fields:
 - `styles`: array of archive-relative CSS file paths loaded in order.
 - `documentation`: archive-relative path to a UTF-8 documentation file.
 - `permissions`: array of capabilities requested by the installed package.
+- `pythonImports`: for a format `0.2` Python entry, an array of optional Python
+  standard-library modules requested from the host's local Brython bundle. The
+  reference host supports `random`, `re`, and `datetime`.
 - `authorization`: when set to `"required"`, hosts MUST show the plugin as
   blocked for each file until the user or host explicitly allows it. Hosts MUST
   be able to inspect this field without importing or executing the entry module.
@@ -1305,14 +1312,34 @@ Readers SHOULD impose limits on the total file count, expanded byte count, and
 compression ratio.
 
 The entry module MUST be self-contained: it MUST NOT depend on an npm install,
-bare module specifiers, network-fetched modules, or modules outside the
-package. It MUST default-export either one plugin object conforming to the
-host's `HvyPlugin` contract or a factory that returns that object. A package
-factory receives the parsed manifest and a `resourceUrl(path)` function for
-archive-relative resources. Authors SHOULD bundle JavaScript dependencies into
-the entry module. Package CSS MAY use relative `url(...)` references; loaders
-MUST resolve them against the CSS file's archive path without granting
-filesystem access.
+network-fetched code, or modules outside the package and the host-provided
+runtime. A JavaScript entry MUST default-export either one plugin object
+conforming to the host's `HvyPlugin` contract or a factory that returns that
+object. Its factory receives the parsed manifest and a `resourceUrl(path)`
+function for archive-relative resources.
+
+A Python entry MUST export a top-level `plugin` value. That value is either a
+mapping conforming to the same `HvyPlugin` fields or a callable returning that
+mapping. A callable receives a context mapping with `manifest` and
+`resource_url`. Python package files are mounted under a unique internal module
+namespace; package modules MUST use relative imports for sibling modules. A
+host MUST make its bundled Brython `browser` and `sys` modules available. It
+MUST load requested `pythonImports` and their dependency closure only from its
+local bundle and MUST NOT fetch Python dependencies from the network.
+
+Python mappings and sequences crossing into the host MUST be normalized to
+JavaScript objects and arrays while preserving callable values. Structured
+JavaScript arguments MAY become Python containers or JavaScript proxies.
+Supported Python coroutine results MUST become Promises for host capabilities
+that permit asynchronous results. A host MUST remove package-specific virtual
+modules and resource URLs when the loaded package is disposed. Package Python
+executes with the same authority as installed JavaScript plugin code; package
+installation and per-document plugin authorization are the trust boundaries,
+not `pythonImports`.
+
+Authors SHOULD bundle JavaScript dependencies into the entry module. Package
+CSS MAY use relative `url(...)` references; loaders MUST resolve them against
+the CSS file's archive path without granting filesystem access.
 
 The exported plugin object's `id`, optional `uuid`, `version`, `displayName`, and
 `hvyApiVersion` MUST exactly match the manifest. This check applies regardless
@@ -1431,13 +1458,30 @@ Each plugin object is a host-installed capability bundle. It MAY provide:
   `doc.plugins.call(pluginName, method, args)`.
 
 Plugin scripting method arguments MUST be an object and results SHOULD be
-structured-clone-compatible values. Sandboxed `hvy.scripting` calls MUST be
-synchronous and require the plugin declaration's `scripting` permission.
+structured-clone-compatible values. Argument values MAY include callbacks at
+plugin-defined nested paths. The scripting bridge MUST preserve those callable
+values while retaining normal JSON normalization for all ordinary values. A
+plugin controls when and how often it invokes a callback, and callback return
+values MUST be returned to the plugin.
+
+Delayed callbacks from sandboxed scripts MUST resume inside the originating
+scripting runtime with its step and cycle guards, flush resulting document
+mutations, and surface exceptions through the originating script UI. A host
+MUST ignore a retained callback after its document is replaced or its mount is
+destroyed. A synchronously returning plugin method MAY schedule such callbacks;
+this does not make the method asynchronous. Sandboxed `hvy.scripting` calls
+MUST otherwise be synchronous and require the plugin declaration's `scripting`
+permission.
 Asynchronous methods, including host-approved network calls, MUST reject from
 the sandboxed runtime and MAY be awaited by an explicitly authorized
 `hvy.power-scripting` block. Power-script authorization is the applicable trust
 boundary because power scripts already have unrestricted page and network
 access; installed plugin APIs do not weaken that boundary.
+
+The built-in `hvy.scripting` feature version for callback-preserving plugin
+arguments is `0.2`, stored in the scripting block's `pluginConfig.version`.
+Clients implementing `0.2` MUST continue to execute `0.1` scripting blocks;
+those blocks simply did not declare the callback-preserving transport.
 
 Sandboxed scripting runtimes MAY expose component handles through document
 tools such as `doc.tool.get_components(...)` and

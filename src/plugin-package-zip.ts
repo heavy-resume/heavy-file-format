@@ -7,6 +7,11 @@ import {
   type HvyPluginModuleNamespace,
   type HvyPluginPackageManifest,
 } from './plugin-package';
+import {
+  loadHvyPluginPython,
+  type LoadedHvyPluginPython,
+  type LoadHvyPluginPythonOptions,
+} from './plugin-package-python';
 import type { HvyPlugin } from './plugins/types';
 
 export interface HvyPluginZipLimits {
@@ -22,6 +27,7 @@ export interface LoadHvyPluginZipOptions {
   importModule?(url: string): Promise<HvyPluginModuleNamespace>;
   createObjectUrl?(blob: Blob): string;
   revokeObjectUrl?(url: string): void;
+  loadPython?(options: LoadHvyPluginPythonOptions): Promise<LoadedHvyPluginPython>;
 }
 
 export interface LoadedHvyPluginPackage {
@@ -184,6 +190,7 @@ export async function loadHvyPluginZip(
   const createObjectUrl = options.createObjectUrl ?? ((blob: Blob) => URL.createObjectURL(blob));
   const revokeObjectUrl = options.revokeObjectUrl ?? ((url: string) => URL.revokeObjectURL(url));
   const urls = new Map<string, string>();
+  let disposeEntry: () => void = () => undefined;
   const resourceUrl = (pathValue: string): string => {
     const path = normalizePluginPackagePath(pathValue);
     const bytes = files[path];
@@ -197,13 +204,24 @@ export async function loadHvyPluginZip(
   };
 
   try {
-    const entryUrl = createObjectUrl(new Blob([files[manifest.entry] as BlobPart], { type: 'text/javascript' }));
-    urls.set(manifest.entry, entryUrl);
-    const plugin = await loadHvyPluginModule({
-      manifest,
-      importEntry: () => (options.importModule ?? defaultImportModule)(entryUrl),
-      resourceUrl,
-    });
+    let plugin: HvyPlugin;
+    if (manifest.entry.toLowerCase().endsWith('.py')) {
+      const loadedPython = await (options.loadPython ?? loadHvyPluginPython)({
+        manifest,
+        files,
+        resourceUrl,
+      });
+      plugin = loadedPython.plugin;
+      disposeEntry = loadedPython.dispose;
+    } else {
+      const entryUrl = createObjectUrl(new Blob([files[manifest.entry] as BlobPart], { type: 'text/javascript' }));
+      urls.set(manifest.entry, entryUrl);
+      plugin = await loadHvyPluginModule({
+        manifest,
+        importEntry: () => (options.importModule ?? defaultImportModule)(entryUrl),
+        resourceUrl,
+      });
+    }
     const decoder = new TextDecoder('utf-8', { fatal: true });
     const styles = manifest.styles.map((path) => (
       rewriteCssResourceUrls(decoder.decode(files[path]), path, resourceUrl)
@@ -214,11 +232,13 @@ export async function loadHvyPluginZip(
       styles,
       resourceUrl,
       dispose: () => {
+        disposeEntry();
         for (const url of urls.values()) revokeObjectUrl(url);
         urls.clear();
       },
     };
   } catch (error) {
+    disposeEntry();
     for (const url of urls.values()) revokeObjectUrl(url);
     throw error;
   }

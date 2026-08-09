@@ -2,8 +2,12 @@ import { valid } from 'semver';
 import { HVY_PLUGIN_API_VERSION } from './plugins/registry';
 import type { HvyPlugin } from './plugins/types';
 
-export const HVY_PLUGIN_PACKAGE_FORMAT_VERSION = '0.1';
+export const HVY_PLUGIN_PACKAGE_FORMAT_VERSION = '0.2';
+export const HVY_PLUGIN_PACKAGE_FORMAT_VERSIONS = ['0.1', HVY_PLUGIN_PACKAGE_FORMAT_VERSION] as const;
 export const HVY_PLUGIN_PACKAGE_MANIFEST = 'hvy-plugin.json';
+export const HVY_PLUGIN_PYTHON_IMPORTS = ['random', 're', 'datetime'] as const;
+
+export type HvyPluginPythonImport = (typeof HVY_PLUGIN_PYTHON_IMPORTS)[number];
 
 export interface HvyPluginPackageManifest {
   formatVersion: string;
@@ -15,6 +19,7 @@ export interface HvyPluginPackageManifest {
   styles: string[];
   documentation?: string;
   permissions: string[];
+  pythonImports?: HvyPluginPythonImport[];
   hvyApiVersion: string;
   authorization?: 'required';
 }
@@ -109,8 +114,30 @@ export function parseHvyPluginPackageManifest(input: string | Uint8Array): HvyPl
     }
     manifest.authorization = 'required';
   }
-  if (manifest.formatVersion !== HVY_PLUGIN_PACKAGE_FORMAT_VERSION) {
+  if (!(HVY_PLUGIN_PACKAGE_FORMAT_VERSIONS as readonly string[]).includes(manifest.formatVersion)) {
     throw new Error(`Unsupported plugin package format "${manifest.formatVersion}".`);
+  }
+  const entryExtension = manifest.entry.slice(manifest.entry.lastIndexOf('.')).toLowerCase();
+  if (manifest.formatVersion === '0.2' && !['.js', '.mjs', '.py'].includes(entryExtension)) {
+    throw new Error('Plugin package entry must be a JavaScript module or Python source file.');
+  }
+  const pythonImports = optionalStringArray(record, 'pythonImports');
+  if (manifest.formatVersion === '0.1' && (entryExtension === '.py' || pythonImports.length > 0)) {
+    throw new Error('Python plugin entries require package format "0.2".');
+  }
+  if (pythonImports.length > 0) {
+    const supportedImports = new Set<string>(HVY_PLUGIN_PYTHON_IMPORTS);
+    const uniqueImports = new Set<string>();
+    for (const moduleName of pythonImports) {
+      if (!supportedImports.has(moduleName)) {
+        throw new Error(`Plugin package requests unsupported Python import "${moduleName}".`);
+      }
+      if (uniqueImports.has(moduleName)) {
+        throw new Error(`Plugin manifest field "pythonImports" contains duplicate "${moduleName}".`);
+      }
+      uniqueImports.add(moduleName);
+    }
+    manifest.pythonImports = pythonImports as HvyPluginPythonImport[];
   }
   if (!valid(manifest.version)) {
     throw new Error(`Plugin package version "${manifest.version}" is not a valid semantic version.`);

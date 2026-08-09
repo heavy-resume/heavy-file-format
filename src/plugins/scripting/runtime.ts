@@ -45,6 +45,7 @@ export interface ScriptingRuntime {
 
 export interface ScriptingDocApi {
   log_json: (valuesJson: string) => void;
+  callback_error: (error: string) => void;
   tool: (name: string, args?: unknown) => unknown;
   tool_json: (name: string, argsJson: string) => unknown;
   component: ScriptingComponentApi;
@@ -153,6 +154,7 @@ export interface ScriptingRuntimeOptions {
   onMutationFlushed?: () => void;
   beforeMutationRender?: () => void;
   databaseChanges?: DatabaseChangeSnapshot;
+  onCallbackError?: (error: string) => void;
 }
 
 function createUnavailableFormApi(): ScriptingFormApi {
@@ -358,6 +360,7 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
       const parsed = JSON.parse(String(valuesJson || '[]')) as unknown;
       recordLog(...(Array.isArray(parsed) ? parsed : [parsed]));
     },
+    callback_error: (error) => options.onCallbackError?.(String(error)),
     tool: (name, args) => {
       stats.toolCalls += 1;
       if (name === 'get_updated_components') {
@@ -387,6 +390,9 @@ export function createScriptingRuntime(options: ScriptingRuntimeOptions): Script
         throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
       },
       call_json: (pluginId) => {
+        throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
+      },
+      call_marshaled: (pluginId) => {
         throw new Error(`Plugin "${String(pluginId ?? '')}" does not provide a scripting API.`);
       },
     },

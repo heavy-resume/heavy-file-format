@@ -90,6 +90,11 @@ test('buildPythonProgram exposes doc sub-apis through the doc proxy', () => {
   expect(expectedResult).toContain('class __HvyPluginsProxy__:');
   expect(expectedResult).toContain('class __HvyDbProxy__:');
   expect(expectedResult).toContain('def call(self, plugin_id, method, args=None, **kwargs):');
+  expect(expectedResult).toContain('def __hvy_plugin_to_json__(value, callbacks, path=\'\'):');
+  expect(expectedResult).toContain('if callable(value):');
+  expect(expectedResult).toContain('callbacks[path] = __hvy_wrap_plugin_callback__(value)');
+  expect(expectedResult).toContain('return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)');
+  expect(expectedResult).toContain('__hvy_runtime__.doc.callback_error(');
   expect(expectedResult).toContain('self.plugins = __HvyPluginsProxy__(js_doc)');
   expect(expectedResult).toContain('self.db = __HvyDbProxy__(js_doc)');
   expect(expectedResult).toContain('return self.__js_doc.db.execute_json(sql, __hvy_to_json__(params))');

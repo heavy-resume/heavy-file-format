@@ -634,6 +634,12 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       injectedGlobals,
       libraries: spec.scriptLibraries,
       databaseChanges,
+      onCallbackError: (callbackResult) => {
+        statusText = resultText(callbackResult);
+        statusError = true;
+        statusErrorDetail = callbackResult.errorDetail ?? callbackResult.error ?? 'Unknown script error.';
+        renderReader();
+      },
     });
   };
 

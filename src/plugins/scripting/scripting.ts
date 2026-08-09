@@ -14,7 +14,7 @@ import hljs from 'highlight.js/lib/core';
 import python from 'highlight.js/lib/languages/python';
 import { openScriptingHelpModal } from './help-modal';
 import { runUserScript, SCRIPTING_LIBRARY_OPTIONS, type ScriptingLibraryName } from './wrapper';
-import { getScriptingPluginMaxLines, getScriptingPluginVersion } from './version';
+import { getScriptingPluginMaxLines, getScriptingPluginVersion, SCRIPTING_PLUGIN_VERSION } from './version';
 import { getDatabaseChangesSince, getDatabaseChangeRevision } from '../../database-change-tracker';
 import scriptingDocumentation from './about-scripting.txt?raw';
 
@@ -431,6 +431,16 @@ async function runDocumentScriptingHooksForView(ctx: HvyDocumentHookContext): Pr
       renderOnMutation: ctx.changeReason !== 'edit',
       libraries: target.libraries,
       databaseChanges,
+      onCallbackError: (callbackResult) => {
+        if (!ctx.isCurrentDocument()) return;
+        storeScriptingResult(
+          target.sectionKey,
+          target.blockId,
+          callbackResult,
+          target.source
+        );
+        ctx.refreshPlugins(SCRIPTING_PLUGIN_ID);
+      },
     });
     console.debug('[hvy:scripting] script run', {
       changeReason: ctx.changeReason,
@@ -470,7 +480,7 @@ export const scriptingPlugin: HvyPlugin = {
   },
   aiHint: 'Script-backed component. Executable source is exposed as script.py.',
   aiHelp: [
-    `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"0.1"}}-->\`.`,
+    `Use \`<!--hvy:plugin {"plugin":"${SCRIPTING_PLUGIN_ID}","pluginConfig":{"version":"${SCRIPTING_PLUGIN_VERSION}"}}-->\`.`,
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
     'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random`, `re`, and `datetime` before the script runs.',

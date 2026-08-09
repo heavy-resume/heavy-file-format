@@ -110,6 +110,9 @@ theme:
   `doc.plugins.call(plugin_id, method, args)`. The document's plugin declaration
   must include the `scripting` permission. Asynchronous methods, including
   network-backed calls, require an authorized `hvy.power-scripting` block.
+  Callback functions may be nested inside `args`. A synchronous plugin method
+  may retain and invoke them later; callback errors and step limits are reported
+  by this script block, and callbacks stop when the document or mount is gone.
 <!--hvy: {"id":"execution-model","lock":false,"expanded":false,"highlight":false}-->
 #! Execution model
 

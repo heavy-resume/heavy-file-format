@@ -321,6 +321,82 @@ plugins:
 
     expect(expectedResult).toEqual({ status: 200, path: '/status' });
   });
+
+  test('before, marshaled plugin call, after: restores nested callbacks without changing ordinary JSON values', () => {
+    const document = deserializeDocument(`---
+hvy_version: 1.0
+plugins:
+  - id: com.example.worker
+    versionRange: ^1.0.0
+    permissions:
+      - scripting
+---
+`, '.hvy');
+    const received: unknown[] = [];
+    registerHostPlugin({
+      id: 'com.example.worker',
+      displayName: 'Worker',
+      scripting: {
+        methods: {
+          start: (args) => {
+            const topLevelResult = (args.on_complete as (value: unknown) => unknown)({
+              status: 'done',
+              values: [1, { ok: true }],
+            });
+            const nestedResult = (
+              (args.handlers as Array<{ finished: (value: string) => unknown }>)[0]!.finished
+            )('again');
+            received.push(args, topLevelResult, nestedResult);
+            return 'started';
+          },
+        },
+      },
+    });
+    const topLevelCallback = vi.fn(() => 'top-return');
+    const nestedCallback = vi.fn(() => 'nested-return');
+    const wrapCallback = vi.fn((callback: (...args: unknown[]) => unknown) => (
+      (...args: unknown[]) => callback(...args)
+    ));
+    const api = createScriptingPluginsApi(document, {
+      allowAsync: false,
+      requireDocumentPermission: true,
+      wrapCallback,
+    });
+    const before = JSON.stringify(document.meta.plugins);
+
+    const expectedResult = api.call_marshaled(
+      'com.example.worker',
+      'start',
+      '{"fake_input":"value","on_complete":null,"handlers":[{"finished":null}]}',
+      { '/on_complete': topLevelCallback, '/handlers/0/finished': nestedCallback }
+    );
+    const after = JSON.stringify(document.meta.plugins);
+
+    expect(after).toBe(before);
+    expect(expectedResult).toBe('started');
+    expect(wrapCallback).toHaveBeenCalledTimes(2);
+    expect(topLevelCallback).toHaveBeenCalledWith({ status: 'done', values: [1, { ok: true }] });
+    expect(nestedCallback).toHaveBeenCalledWith('again');
+    expect(received[1]).toBe('top-return');
+    expect(received[2]).toBe('nested-return');
+    expect(received[0]).toMatchObject({ fake_input: 'value' });
+  });
+
+  test('rejects a callback side-channel path that is not present in the JSON args', () => {
+    const document = deserializeDocument('---\nhvy_version: 1.0\n---\n', '.hvy');
+    registerHostPlugin({
+      id: 'com.example.worker',
+      displayName: 'Worker',
+      scripting: { methods: { start: () => undefined } },
+    });
+
+    expect(() => createScriptingPluginsApi(document, {
+      allowAsync: false,
+      requireDocumentPermission: false,
+    }).call_marshaled('com.example.worker', 'start', '{}', { '/missing': () => undefined })).toThrow(
+      'does not resolve inside args'
+    );
+  });
 });
 
 describe('progress-bar plugin block round-trip', () => {

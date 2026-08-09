@@ -88,6 +88,7 @@ import { bindChatThreadUi, refreshRenderedChatSurface } from './chat/chat-thread
 import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { createHvyAgentTools } from './agent-tools';
+import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
 import { setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -1185,6 +1186,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        disposeScriptingCallbacks(runtime);
         cancelPendingEmbedUiBind(options.root);
         unmountAllPlugins();
         options.root.innerHTML = '';

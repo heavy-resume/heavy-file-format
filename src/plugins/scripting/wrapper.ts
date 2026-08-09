@@ -14,6 +14,10 @@ import {
   type ScriptCycleExecution,
 } from './cycle-coordinator';
 import type { DatabaseChangeSnapshot } from '../../database-change-tracker';
+import {
+  isScriptingCallbackRuntimeDisposed,
+  registerScriptingCallbackCleanup,
+} from './callback-lifecycle';
 
 export const SCRIPTING_LIBRARY_OPTIONS = ['random', 're', 'datetime'] as const;
 export type ScriptingLibraryName = (typeof SCRIPTING_LIBRARY_OPTIONS)[number];
@@ -1281,6 +1285,67 @@ def __hvy_to_json__(value):
     return __hvy_json_escape__(value)
 
 
+def __hvy_json_pointer_segment__(value):
+    return str(value).replace('~', '~0').replace('/', '~1')
+
+
+def __hvy_wrap_plugin_callback__(callback):
+    def __hvy_plugin_callback__(*args):
+        __hvy_callback_trace_enabled__ = False
+        try:
+            if __hvy_trace_enabled__:
+                __hvy_sys__.settrace(__hvy_trace__)
+                __hvy_callback_trace_enabled__ = True
+            return callback(*args)
+        except Exception as __hvy_callback_err__:
+            __hvy_runtime__.doc.callback_error(
+                __hvy_window__.__BRYTHON__.error_trace(__hvy_callback_err__)
+            )
+            return None
+        finally:
+            if __hvy_callback_trace_enabled__:
+                try:
+                    __hvy_sys__.settrace(None)
+                except Exception:
+                    pass
+    return __hvy_plugin_callback__
+
+
+def __hvy_plugin_to_json__(value, callbacks, path=''):
+    if callable(value):
+        callbacks[path] = __hvy_wrap_plugin_callback__(value)
+        return 'null'
+    if value is None:
+        return 'null'
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return __hvy_json_escape__(value)
+    if isinstance(value, (list, tuple)):
+        return '[' + ','.join([
+            __hvy_plugin_to_json__(item, callbacks, path + '/' + str(index))
+            for index, item in enumerate(value)
+        ]) + ']'
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            key_text = str(key)
+            parts.append(
+                __hvy_json_escape__(key_text) + ':' +
+                __hvy_plugin_to_json__(
+                    item,
+                    callbacks,
+                    path + '/' + __hvy_json_pointer_segment__(key_text)
+                )
+            )
+        return '{' + ','.join(parts) + '}'
+    return __hvy_json_escape__(value)
+
+
 class __HvyToolProxy__:
     def __init__(self, js_doc):
         self.__js_doc = js_doc
@@ -1320,7 +1385,9 @@ class __HvyPluginsProxy__:
         else:
             raise TypeError("doc.plugins.call args must be a dict when provided")
         merged.update(kwargs)
-        return self.__js_doc.plugins.call_json(plugin_id, method, __hvy_to_json__(merged))
+        callbacks = {}
+        args_json = __hvy_plugin_to_json__(merged, callbacks)
+        return self.__js_doc.plugins.call_marshaled(plugin_id, method, args_json, callbacks)
 
 
 class __HvyDbProxy__:
@@ -1445,6 +1512,7 @@ export interface RunUserScriptOptions {
   injectedGlobals?: Record<string, unknown>;
   libraries?: readonly string[];
   databaseChanges?: DatabaseChangeSnapshot;
+  onCallbackError?: (result: ScriptingRunResult) => void;
 }
 
 export async function runUserScript(options: RunUserScriptOptions): Promise<ScriptingRunResult> {
@@ -1482,7 +1550,10 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
 
   let stateRuntime: StateRuntime | null = null;
   try {
-    stateRuntime = getActiveStateRuntime();
+    const activeStateRuntime = getActiveStateRuntime();
+    if (activeStateRuntime.state.document === options.document) {
+      stateRuntime = activeStateRuntime;
+    }
   } catch {
     // Standalone scripting tests and pre-bootstrap runs do not have an active state runtime.
   }
@@ -1516,6 +1587,19 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       createScriptInvocationIdentity(options.componentId ?? 'hvy-script', options.source)
     );
   }
+  let renderCycleExecution = cycleExecution;
+  let initialExecutionActive = true;
+  let hasPluginCallbacks = false;
+  let callbackResourcesActive = true;
+  const callbackIdentity = createScriptInvocationIdentity(
+    options.componentId ?? 'hvy-script',
+    options.source
+  );
+  const releaseCallbackResources = () => {
+    if (!callbackResourcesActive) return;
+    callbackResourcesActive = false;
+    scriptingDb?.dispose();
+  };
   runtime = createScriptingRuntime({
     document: options.document,
     previousDocument: options.previousDocument,
@@ -1528,6 +1612,44 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
       allowAsync: false,
       requireDocumentPermission: true,
       onMutation: () => runtime?.markMutated(),
+      wrapCallback: (callback) => {
+        hasPluginCallbacks = true;
+        return (...args) => {
+          if (!callbackResourcesActive) return undefined;
+          if (
+            stateRuntime
+            && (
+              isScriptingCallbackRuntimeDisposed(stateRuntime)
+              || stateRuntime.state.document !== options.document
+            )
+          ) {
+            releaseCallbackResources();
+            return undefined;
+          }
+          if (initialExecutionActive || !stateRuntime) {
+            const result = callback(...args);
+            runtime?.doc.rerender();
+            return result;
+          }
+          const callbackCycle = beginScriptCycleExecution(
+            stateRuntime,
+            options.document,
+            callbackIdentity
+          );
+          const previousRenderCycle = renderCycleExecution;
+          renderCycleExecution = callbackCycle;
+          try {
+            return runWithStateRuntime(stateRuntime, () => {
+              const result = callback(...args);
+              runtime?.doc.rerender();
+              return result;
+            });
+          } finally {
+            renderCycleExecution = previousRenderCycle;
+            callbackCycle.complete();
+          }
+        };
+      },
     }),
     exportRuleRecorder: options.exportRuleRecorder,
     onMutationFlushed: () => {
@@ -1538,7 +1660,17 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         notifyDocumentMayHaveChanged(`script:${options.changeReason ?? 'run'}`, 'script', { authoritative: true });
       });
     },
-    beforeMutationRender: () => cycleExecution?.beforeMutationRender(),
+    beforeMutationRender: () => renderCycleExecution?.beforeMutationRender(),
+    onCallbackError: (error) => options.onCallbackError?.({
+      ok: false,
+      error: summarizeScriptingError(error),
+      errorDetail: cleanScriptingErrorDetail(error),
+      stepsExecuted: runtime?.stats.stepsExecuted ?? 0,
+      stepBudget: runtime?.stats.stepBudget ?? (options.maxLines ?? 100_000),
+      linesExecuted: runtime?.stats.linesExecuted ?? 0,
+      toolCalls: runtime?.stats.toolCalls ?? 0,
+      logs: [...(runtime?.stats.logs ?? [])],
+    }),
   });
   const runtimeId = `r${++runtimeCounter}`;
   const scripting = getScriptingGlobal();
@@ -1560,6 +1692,7 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
   try {
     return await new Promise((resolve) => {
       scripting.callbacks[runtimeId] = () => {
+        initialExecutionActive = false;
         const error = scripting.errors[runtimeId];
         const result: ScriptingRunResult = error
           ? {
@@ -1588,7 +1721,11 @@ export async function runUserScript(options: RunUserScriptOptions): Promise<Scri
         delete scripting.errors[runtimeId];
         delete scripting.results[runtimeId];
         delete scripting.callbacks[runtimeId];
-        scriptingDb?.dispose();
+        if (hasPluginCallbacks && stateRuntime) {
+          registerScriptingCallbackCleanup(stateRuntime, releaseCallbackResources);
+        } else {
+          releaseCallbackResources();
+        }
         if (dbMutated) {
           runtime.doc.rerender();
         }

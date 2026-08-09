@@ -827,8 +827,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);
-      const expandableStateKey = `${sectionKey}:${block.id}`;
-      const expanded = state.readerExpandableState[expandableStateKey] ?? block.schema.expandableExpanded;
+      // Editing surfaces follow the document: the editor's own toggle writes
+      // expandableExpanded, while readerExpandableState is ephemeral viewer session state
+      // that must not decide what the editor shows.
+      const expanded = block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
       const stubPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
       const contentPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));
@@ -893,7 +895,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
             ? `<div class="reader-component-list">${block.schema.componentListBlocks
               .map((innerBlock) => renderPassiveEditorBlock(sectionKey, innerBlock, rootSections))
               .join('')}</div>`
-            : deps.renderReaderBlock(section, block)
+            : deps.renderReaderBlock(section, block, { ignoreReaderSessionState: true })
           : '';
         return `${existingContent}<div class="ghost-section-card add-ghost component-list-add-ghost passive-empty-list-ghost"${actionAttr}>
           <div class="ghost-plus-small">${plusIcon()}</div>
@@ -978,7 +980,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text${block.schema.placeholder ? ' has-placeholder' : ''}"${alignStyle}>${content}</div>`;
     }
 
-    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true });
+    return deps.renderReaderBlock(section, block, { suppressAiEditorDelegation: true, ignoreReaderSessionState: true });
   }
 
   function renderRichToolbar(

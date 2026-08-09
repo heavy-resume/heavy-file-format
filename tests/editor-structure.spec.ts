@@ -4640,6 +4640,8 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Skill name' }).first().click();
+  // Placement targets only exist inside open panes, so both have to be open to offer both.
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
   await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="expanded"]').first().click();
   await page.locator('.editor-block-passive', { hasText: 'Skill details' }).click();
   await page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') }).locator('[data-action="start-component-copy"]').last().click();
@@ -4809,7 +4811,9 @@ component_defs:
   await skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Copy', exact: true }).click();
 
   await expect(skillEditor.locator('.expandable-part-stub').getByRole('button', { name: 'Cancel place', exact: true })).toBeVisible();
-  await expect(page.locator('[data-action="place-component"]')).toHaveCount(2);
+  // Before/after the skill-card itself, plus before/after inside the stub pane the test opened.
+  await expect(page.locator('[data-placement-container="section"]')).toHaveCount(2);
+  await expect(page.locator('[data-placement-container="expandable-stub"]')).toHaveCount(2);
 });
 
 test('component placement works inside expandable children of a locked section', async ({ page }) => {

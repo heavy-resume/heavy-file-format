@@ -428,7 +428,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
-    const readerExpanded = base === 'expandable'
+    const readerExpanded = base === 'expandable' && !options.ignoreReaderSessionState
       ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
       : block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
@@ -525,7 +525,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         return '';
       }
       const containerKey = `${section.key}:${block.id}`;
-      const expanded = helpers.getReaderContainerExpanded(containerKey, readerBlock.schema.containerExpanded);
+      const expanded = options.ignoreReaderSessionState
+        ? readerBlock.schema.containerExpanded
+        : helpers.getReaderContainerExpanded(containerKey, readerBlock.schema.containerExpanded);
       const containerToggleAttrs = hasContainerBorderCss(readerBlock.schema.css) && !expanded
         ? ` data-reader-action="toggle-container" data-container-key="${deps.escapeAttr(containerKey)}" aria-expanded="false"`
         : '';

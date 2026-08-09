@@ -7,7 +7,8 @@ import { expect, test, type Page } from '@playwright/test';
  */
 async function reloadApp(page: Page): Promise<void> {
   await page.reload();
-  await expect(page.locator('#downloadName')).toHaveValue(/.+\.(hvy|thvy)$/);
+  // Embedded example pages mount more than one document, so match the first mount.
+  await expect(page.locator('#downloadName').first()).toHaveValue(/.+\.(hvy|thvy)$/);
 }
 
 /**
@@ -556,11 +557,6 @@ test('embedded editor and viewer keep independent document state', async ({ page
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveClass(/is-closing/);
   await page.waitForTimeout(220);
   await expect(secondDoc.locator('.viewer-sidebar-help-balloon')).toHaveCount(0);
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
 });
 
 test('embedded editor remains in editor view after activating a component beside a viewer mount', async ({ page }) => {

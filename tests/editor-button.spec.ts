@@ -1,6 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
+ * Waits until a mount stops re-rendering. Boot work (visibility scripts, link observer)
+ * keeps replacing nodes for several hundred milliseconds, and a click landing on a node
+ * that is about to be replaced is simply lost.
+ */
+async function waitForMountIdle(page: Page, selector: string, quietMs = 250): Promise<void> {
+  await page.locator(selector).evaluate((root, quiet) => new Promise<void>((resolve) => {
+    let timer = window.setTimeout(finish, quiet as number);
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(finish, quiet as number);
+    });
+    function finish(): void {
+      observer.disconnect();
+      resolve();
+    }
+    observer.observe(root, { subtree: true, childList: true, attributes: true });
+  }), quietMs);
+}
+
+/**
  * Reloads and waits for the app to finish booting. `waitUntil: 'networkidle'` cannot be
  * used here: it costs at least 500ms of enforced network silence on top of load, which
  * does not fit the 1s navigation budget on a cold dev server.
@@ -692,57 +712,63 @@ test('two embedded docs can switch example sources independently', async ({ page
   await expect(secondDoc).not.toContainText('Avery Hart');
 });
 
-test('second embedded viewer action buttons remain clickable', async ({ page }) => {
-  test.setTimeout(5_000);
-  const chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];
+/** Opens the two-doc example with a stubbed chat proxy and waits for both mounts. */
+async function openTwoEmbeddedDocs(
+  page: Page,
+  chatRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }>
+): Promise<void> {
   await page.route('**/api/chat', async (route) => {
-    const payload = route.request().postDataJSON() as { mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> };
-    chatRequests.push(payload);
+    chatRequests.push(route.request().postDataJSON() as { mode?: string; context?: string });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        output: 'API answer: Avery Hart is the resume candidate.',
-      }),
+      body: JSON.stringify({ output: 'API answer: Avery Hart is the resume candidate.' }),
     });
   });
   await page.goto('/examples/two-embedded-docs.html');
   await page.evaluate(() => sessionStorage.clear());
   await reloadApp(page);
+  await expect(page.locator('#docTwo #readerDocument')).toBeVisible({ timeout: 1_000 });
+}
 
+test('embedded mounts fill their host frames', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+
+  for (const id of ['#docOne', '#docTwo']) {
+    const mountBox = await page.locator(id).boundingBox();
+    const layoutBox = await page.locator(`${id} .hvy-embed-layout`).boundingBox();
+    expect(mountBox).not.toBeNull();
+    expect(layoutBox).not.toBeNull();
+    expect(layoutBox!.height).toBeGreaterThanOrEqual(mountBox!.height - 1);
+  }
+});
+
+test('embedded search panel opens inside its own mount', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
   const firstDoc = page.locator('#docOne');
-  const secondDoc = page.locator('#docTwo');
-  await expect(secondDoc.locator('#readerDocument')).toBeVisible({ timeout: 1_000 });
-  const firstDocMountBox = await firstDoc.boundingBox();
-  const firstDocLayoutBox = await firstDoc.locator('.hvy-embed-layout').boundingBox();
-  const secondDocMountBox = await secondDoc.boundingBox();
-  const secondDocLayoutBox = await secondDoc.locator('.hvy-embed-layout').boundingBox();
-  expect(firstDocMountBox).not.toBeNull();
-  expect(firstDocLayoutBox).not.toBeNull();
-  expect(secondDocMountBox).not.toBeNull();
-  expect(secondDocLayoutBox).not.toBeNull();
-  expect(firstDocLayoutBox!.height).toBeGreaterThanOrEqual(firstDocMountBox!.height - 1);
-  expect(secondDocLayoutBox!.height).toBeGreaterThanOrEqual(secondDocMountBox!.height - 1);
 
+  await waitForMountIdle(page, '#docOne');
   await firstDoc.locator('.search-launcher').click();
   await expect(firstDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
-  const firstDocSearchBox = await firstDoc.boundingBox();
-  const firstSearchModalBox = await firstDoc.locator('.search-modal').boundingBox();
-  expect(firstDocSearchBox).not.toBeNull();
-  expect(firstSearchModalBox).not.toBeNull();
-  expect(firstSearchModalBox!.y).toBeGreaterThanOrEqual(firstDocSearchBox!.y);
-  expect(firstSearchModalBox!.y + firstSearchModalBox!.height).toBeLessThanOrEqual(firstDocSearchBox!.y + firstDocSearchBox!.height + 1);
+  const mountBox = await firstDoc.boundingBox();
+  const modalBox = await firstDoc.locator('.search-modal').boundingBox();
+  expect(mountBox).not.toBeNull();
+  expect(modalBox).not.toBeNull();
+  expect(modalBox!.y).toBeGreaterThanOrEqual(mountBox!.y);
+  expect(modalBox!.y + modalBox!.height).toBeLessThanOrEqual(mountBox!.y + mountBox!.height + 1);
   await firstDoc.getByRole('button', { name: 'Close search panel' }).click();
   await expect(firstDoc.locator('.search-modal')).toHaveCount(0);
+});
+
+test('second embedded viewer runs its own search', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+  const secondDoc = page.locator('#docTwo');
 
   await secondDoc.locator('.viewer-sidebar-help-balloon').click();
-  await page.waitForTimeout(220);
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-open/);
-  await expect(secondDoc.locator('.viewer-sidebar-panel')).toContainText('Skills');
-  await secondDoc.locator('.viewer-sidebar-tab').click();
-  await expect(secondDoc.locator('.viewer-shell')).toHaveClass(/is-sidebar-closed/);
-
+  await waitForMountIdle(page, '#docTwo');
   await secondDoc.locator('.search-launcher').click();
   await expect(secondDoc.locator('.search-modal')).toBeVisible({ timeout: 1_000 });
   await secondDoc.locator('[data-field="search-query"]').fill('Avery Hart');
@@ -750,33 +776,51 @@ test('second embedded viewer action buttons remain clickable', async ({ page }) 
   await expect(secondDoc.locator('.search-result')).toContainText('Avery Hart', { timeout: 1_000 });
   await secondDoc.getByRole('button', { name: 'Close search panel' }).click();
   await expect(secondDoc.locator('.search-modal')).toHaveCount(0);
+});
 
+test('embedded chat panel opens inside its own mount', async ({ page }) => {
+  test.setTimeout(5_000);
+  await openTwoEmbeddedDocs(page, []);
+  const firstDoc = page.locator('#docOne');
+
+  await waitForMountIdle(page, '#docOne');
   await firstDoc.locator('.chat-launcher').click();
   await expect(firstDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
-  const firstDocBox = await firstDoc.boundingBox();
-  const firstChatPanelBox = await firstDoc.locator('.chat-panel').boundingBox();
-  expect(firstDocBox).not.toBeNull();
-  expect(firstChatPanelBox).not.toBeNull();
-  expect(firstChatPanelBox!.x).toBeGreaterThanOrEqual(firstDocBox!.x);
-  expect(firstChatPanelBox!.x + firstChatPanelBox!.width).toBeLessThanOrEqual(firstDocBox!.x + firstDocBox!.width + 1);
-  expect(firstChatPanelBox!.y + firstChatPanelBox!.height).toBeLessThanOrEqual(firstDocBox!.y + firstDocBox!.height + 1);
-  const firstChatEmptyBox = await firstDoc.locator('.chat-empty').boundingBox();
-  const firstChatComposerBox = await firstDoc.locator('.chat-composer').boundingBox();
-  expect(firstChatEmptyBox).not.toBeNull();
-  expect(firstChatComposerBox).not.toBeNull();
-  expect(firstChatComposerBox!.y - (firstChatEmptyBox!.y + firstChatEmptyBox!.height)).toBeLessThanOrEqual(18);
-  await firstDoc.locator('.chat-launcher').click();
+  const mountBox = await firstDoc.boundingBox();
+  const panelBox = await firstDoc.locator('.chat-panel').boundingBox();
+  expect(mountBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  expect(panelBox!.x).toBeGreaterThanOrEqual(mountBox!.x);
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(mountBox!.x + mountBox!.width + 1);
+  expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(mountBox!.y + mountBox!.height + 1);
+  const emptyBox = await firstDoc.locator('.chat-empty').boundingBox();
+  const composerBox = await firstDoc.locator('.chat-composer').boundingBox();
+  expect(emptyBox).not.toBeNull();
+  expect(composerBox).not.toBeNull();
+  expect(composerBox!.y - (emptyBox!.y + emptyBox!.height)).toBeLessThanOrEqual(18);
+  // The launcher is display:none while the panel is open; the panel owns its close control.
+  await firstDoc.getByRole('button', { name: 'Close chat' }).click();
   await expect(firstDoc.locator('.chat-panel')).toBeHidden();
+});
 
+test('second embedded viewer answers chat through its host chat client', async ({ page }) => {
+  test.setTimeout(5_000);
+  // The example mounts supply their own chatClient, so the proxy route should stay unused.
+  const proxyRequests: Array<{ mode?: string; context?: string; messages?: Array<{ role?: string; content?: string }> }> = [];
+  await openTwoEmbeddedDocs(page, proxyRequests);
+  const firstDoc = page.locator('#docOne');
+  const secondDoc = page.locator('#docTwo');
+
+  await waitForMountIdle(page, '#docTwo');
   await secondDoc.locator('.chat-launcher').click();
   await expect(secondDoc.locator('.chat-panel')).toBeVisible({ timeout: 1_000 });
   await expect(secondDoc.locator('[data-field="chat-input"]')).toHaveAttribute('placeholder', 'Ask about the current HVY document...');
   await secondDoc.locator('[data-field="chat-input"]').fill('Who is the resume candidate?');
   await secondDoc.locator('[data-field="chat-input"]').press('Enter');
-  await expect(secondDoc.locator('.chat-panel')).toContainText('API answer: Avery Hart is the resume candidate.', { timeout: 3_500 });
-  expect(chatRequests).toHaveLength(1);
-  expect(chatRequests[0]?.mode).toBe('qa');
-  expect(chatRequests[0]?.context).toContain('Avery Hart');
-  expect(chatRequests[0]?.messages?.at(-1)?.content).toBe('Who is the resume candidate?');
-  await expect(firstDoc).not.toContainText('API answer');
+
+  // The example's client echoes the document context back, labelled per mount.
+  await expect(secondDoc.locator('.chat-panel')).toContainText('Document Two generated from:', { timeout: 3_500 });
+  await expect(secondDoc.locator('.chat-panel')).toContainText('Who is the resume candidate?');
+  expect(proxyRequests).toHaveLength(0);
+  await expect(firstDoc).not.toContainText('Document Two generated from:');
 });

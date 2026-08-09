@@ -29,7 +29,10 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_QWEN_MODEL = 'qwen-plus';
 export const DEFAULT_OPENAI_COMPACTION_MODEL = 'gpt-5.4-nano';
 export const HVY_AI_RESPONSE_FORMAT_INSTRUCTIONS = aiResponseFormatInstructions;
-export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 20_000;
+// Characters, not tokens: roughly 15k tokens of English prose, well inside every current
+// model's window. This is a cost and latency guard, not a provider limit, and hosts can
+// raise or lower it per mount through chatContext.maxContextChars.
+export const MAX_PROXY_COMPLETION_CONTEXT_CHARS = 60_000;
 export const ENABLE_CHAT_MODEL_DEBUG_CONTROLS = import.meta.env?.DEV === true || import.meta.env?.VITE_HVY_ENABLE_CHAT_MODEL_PICKER === 'true';
 export const ENABLE_CHAT_CLI_SIM = import.meta.env?.DEV === true;
 const ENABLE_CHAT_PROXY_DEBUG_LOGS = import.meta.env?.VITE_HVY_ENABLE_CHAT_PROXY_DEBUG_LOGS === 'true';

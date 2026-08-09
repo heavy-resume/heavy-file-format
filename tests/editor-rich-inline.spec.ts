@@ -755,10 +755,14 @@ component_defs:
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  // The sort value lives in a text block inside the expandable's stub; activating the
-  // list item alone leaves that text passive, so the inner block has to be activated.
+  // The sort value sits in a text block inside the expandable's stub. Activating the list
+  // item renders the stub's pane toggle, opening the pane makes its children editable, and
+  // only then does activating the inner text produce a rich editor around the sort value.
   await page.locator('.editor-block-passive', { hasText: 'Date:' }).last().click();
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
+  await page.locator('[data-action="toggle-expandable-editor-panel"][data-expandable-panel="stub"]').first().click();
+  await page.locator('.editor-block-passive', { hasText: 'Date:' }).last().click();
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]')
+    .filter({ has: page.locator('[data-field="block-rich"] [data-hvy-sort-value="true"]') }).last();
   const editedBlockId = await activeBlock.getAttribute('data-block-id');
   const sortValue = activeBlock.locator('[data-hvy-sort-value="true"]');
   await sortValue.evaluate((node) => {

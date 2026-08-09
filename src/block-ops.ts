@@ -3506,10 +3506,26 @@ function insertListItemFragmentAtEditableListSelection(editable: HTMLElement, ra
   return true;
 }
 
+/**
+ * Pasted list items reach us either bare or wrapped in a list: external HTML is normalized
+ * through markdown and comes back inside a `ul`/`ol`. Unwrap that single wrapper so a
+ * pasted list still lands as sibling bullets instead of nesting inside the current item.
+ */
+function getPastedListItemNodes(fragment: DocumentFragment): Node[] {
+  const children = Array.from(fragment.childNodes);
+  const meaningful = children.filter(
+    (node) => !(node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length === 0)
+  );
+  const sole = meaningful.length === 1 ? meaningful[0] : null;
+  return sole instanceof HTMLUListElement || sole instanceof HTMLOListElement
+    ? Array.from(sole.childNodes)
+    : children;
+}
+
 function getTopLevelPastedListItems(fragment: DocumentFragment): HTMLLIElement[] | null {
   const items: HTMLLIElement[] = [];
   const removableNodes: Node[] = [];
-  for (const child of Array.from(fragment.childNodes)) {
+  for (const child of getPastedListItemNodes(fragment)) {
     if (child.nodeType === Node.TEXT_NODE && (child.textContent ?? '').trim().length === 0) {
       removableNodes.push(child);
       continue;

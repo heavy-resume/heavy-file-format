@@ -153,7 +153,7 @@ test('Asteroids example launches on the canvas and initializes its SQL high-scor
   await expect(page.locator('.hvy-canvas-toolbar:visible')).toHaveCount(0);
   await page.getByRole('button', { name: 'Enable power script' }).click();
 
-  await expect(page.locator('.db-table-frame-readonly')).toBeVisible();
+  await expect(page.locator('.db-table-table-frame')).toBeVisible();
   const beforeLaunch = await page.locator('[data-hvy-canvas-id="asteroids-canvas"] canvas').evaluate(
     (canvas) => (canvas as HTMLCanvasElement).toDataURL()
   );

@@ -2,6 +2,26 @@ import { expect, test, type Page } from '@playwright/test';
 
 const defaultDocumentText = 'This default HVY document is a lightweight workspace';
 
+/**
+ * Waits until a mount stops re-rendering. Switching example modes remounts the document,
+ * and focusing or typing into a node that is about to be replaced loses the input.
+ */
+async function waitForMountIdle(page: Page, selector: string, quietMs = 250): Promise<void> {
+  await page.locator(selector).evaluate((root, quiet) => new Promise<void>((resolve) => {
+    let timer = window.setTimeout(finish, quiet as number);
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(finish, quiet as number);
+    });
+    function finish(): void {
+      observer.disconnect();
+      resolve();
+    }
+    observer.observe(root, { subtree: true, childList: true, attributes: true });
+  }), quietMs);
+}
+
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
@@ -294,6 +314,7 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   const editableTextEditor = page.locator('#embedTextEditorMount .hvy-editable-text-reader [data-field="hvy-plugin-text-editor"]');
   await expect(editableTextEditor).toBeVisible();
   await expect(editableTextEditor).toContainText('This plugin text editor stays editable in Viewer mode.');
+  await waitForMountIdle(page, '#embedTextEditorMount');
   await editableTextEditor.evaluate((node) => {
     const paragraph = node.querySelector('p')!;
     const selection = window.getSelection();

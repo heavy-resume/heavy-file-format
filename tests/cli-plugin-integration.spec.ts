@@ -138,7 +138,8 @@ test('form database scripts store Brython None parameters as SQLite NULL', async
   await page.goto('/');
   await page.evaluate(async () => {
     document.body.innerHTML = '<div id="nullableMount"></div>';
-    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed.ts');
+    // Built-in plugins are opt-in per mount, so the form plugin has to be requested.
+    const { deserializeDocumentBytes, mountHvy, plugins } = await import('/src/embed-full.ts');
     const source = `---
 hvy_version: 0.1
 ---
@@ -157,7 +158,12 @@ scripts:
 `;
     const visualDocument = deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy');
     (window as Window & { __nullableDocument?: typeof visualDocument }).__nullableDocument = visualDocument;
-    mountHvy({ root: document.querySelector<HTMLElement>('#nullableMount')!, document: visualDocument, mode: 'viewer' });
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#nullableMount')!,
+      document: visualDocument,
+      mode: 'viewer',
+      plugins: [plugins.form],
+    });
   });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await waitForScriptingIdle(page);

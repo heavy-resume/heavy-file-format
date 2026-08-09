@@ -3861,9 +3861,9 @@ test('cli-created expanded history record can be closed and followed by another 
 
   await openDocument(page, 'Resume Template');
   await page.getByRole('button', { name: 'CLI' }).click();
-  await runCliCommand(page, 'hvy insert 0 history-record /body/history/component-list-2 --id history-reproco-founder --using-template \'{"years":"","organization":"","role":"","location":"","date_range":"","description":""}\'');
-  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
-  await runCliCommand(page, writeFileCommand('/body/history/component-list-2/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
+  await runCliCommand(page, 'hvy insert 0 history-record /body/history/history-list --id history-reproco-founder --using-template \'{"role":"","organization":"","date_range":"","location":"","description":"","accomplishments":""}\'');
+  await runCliCommand(page, writeFileCommand('/body/history/history-list/history-reproco-founder/expandable-stub/table-0/tableRows.json', '[{"cells":["2025-2026","ReproCo","Founder"]}]'));
+  await runCliCommand(page, writeFileCommand('/body/history/history-list/history-reproco-founder/expandable-content/text-0/text.txt', '### ReproCo'));
 
   await page.getByRole('button', { name: 'AI' }).click();
   const aiRecord = page.locator('#aiReaderDocument .reader-block', { hasText: 'ReproCo' }).first();
@@ -3872,7 +3872,7 @@ test('cli-created expanded history record can be closed and followed by another 
   await page.getByRole('button', { name: 'Editor' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
 
-  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first()).toBeVisible();
   const passiveRecord = page.locator('.editor-block-passive', { hasText: 'ReproCo' }).last();
   await expect(passiveRecord).not.toContainText('Empty text');
 
@@ -3882,12 +3882,17 @@ test('cli-created expanded history record can be closed and followed by another 
   }).last();
   await expect(activeRecord).not.toContainText('Empty text');
   await activeRecord.locator('> .editor-block-done-row > [data-action="deactivate-block"]').click();
-  await page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row > [data-action="deactivate-block"]').click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(0);
-  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first()).toBeVisible();
+  // Activating a nested record leaves its ancestors active too, so close whatever remains
+  // rather than assuming a fixed nesting depth.
+  const activeBlocks = page.locator('.editor-block[data-active-editor-block="true"]');
+  for (let remaining = await activeBlocks.count(); remaining > 0; remaining = await activeBlocks.count()) {
+    await activeBlocks.locator('> .editor-block-done-row > [data-action="deactivate-block"]').first().click();
+  }
+  await expect(activeBlocks).toHaveCount(0);
+  await expect(page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first()).toBeVisible();
 
-  await page.locator('.passive-list-add-ghost', { hasText: 'Add History' }).first().click();
-  await page.locator('.modal-panel', { hasText: 'history-record' }).getByRole('button', { name: 'Insert' }).click();
+  await page.locator('.passive-list-add-ghost', { hasText: 'Add Job' }).first().click();
+  await page.locator('.modal-panel', { hasText: 'Add History Record' }).getByRole('button', { name: 'Add', exact: true }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw.match(/<!--hvy:history-record/g) ?? []).toHaveLength(2);

@@ -572,12 +572,19 @@ HVY.mountHvyViewer({
     },
     store() {},
     remove() {},
-    resolveUrl(id) {
-      return id === 'image:hero.png' ? '/assets/hvy/hero.png' : null;
+    async resolveUrl(id) {
+      if (id !== 'image:hero.png') return null;
+      const encrypted = await fetch('/assets/hvy/hero.png.encrypted').then((response) => response.arrayBuffer());
+      const decrypted = await decryptAttachment(encrypted);
+      return new Blob([decrypted], { type: 'image/png' });
     },
   },
 });
 ```
+
+`resolveUrl` may return a URL string or a `Blob`, either immediately or through
+a promise. Blob results are converted to object URLs and revoked by the mounted
+client when its image URL cache is cleared.
 
 Hosts can also use async serialization when attachment recall or final byte
 assembly belongs to another runtime, such as a local/native serializer:

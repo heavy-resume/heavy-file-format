@@ -14,7 +14,7 @@ export interface HvyAttachmentHostAdapter {
   recall(id: string): MaybePromise<Uint8Array | Blob | ArrayBuffer | null>;
   store(id: string, bytes: Uint8Array, meta: JsonObject): MaybePromise<void | HvyAttachmentDescriptor>;
   remove(id: string): MaybePromise<void>;
-  resolveUrl?(id: string): MaybePromise<string | null>;
+  resolveUrl?(id: string): MaybePromise<string | Blob | null>;
 }
 
 export interface AttachmentStoreEntry {

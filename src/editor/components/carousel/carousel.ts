@@ -8,7 +8,7 @@ import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
-import { getImageAttachmentReferenceCount, getImageBlobUrl, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, storeImageAttachment } from '../image/image';
+import { getImageAttachmentReferenceCount, getImageBlobUrl, hasImageAttachmentSource, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, resolveImageBlobUrl, storeImageAttachment } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { downloadBlob } from '../../../utils';
 
@@ -131,7 +131,9 @@ function renderEditorImageRow(
   const url = getImageBlobUrl(image.imageFile);
   const thumb = url
     ? `<img src="${helpers.escapeAttr(url)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
-    : `<span>Missing</span>`;
+    : hasImageAttachmentSource(image.imageFile)
+      ? `<img data-hvy-lazy-image="true" data-image-filename="${helpers.escapeAttr(image.imageFile)}" alt="${helpers.escapeAttr(image.imageAlt || image.imageFile)}">`
+      : `<span>Missing</span>`;
   const download = url
     ? `<button type="button" class="hvy-carousel-download" data-action="carousel-download" data-carousel-index="${index}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}">Download</button>`
     : '';
@@ -519,13 +521,13 @@ function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
   });
 }
 
-function hydrateCarouselSlideImage(slide: HTMLElement | undefined): void {
+async function hydrateCarouselSlideImage(slide: HTMLElement | undefined): Promise<void> {
   const image = slide?.querySelector<HTMLImageElement>('img[data-hvy-carousel-lazy-image="true"]');
   if (!image || image.getAttribute('src')) {
     return;
   }
   const filename = image.dataset.imageFilename ?? '';
-  const url = getImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename);
   if (url) {
     image.src = url;
     return;

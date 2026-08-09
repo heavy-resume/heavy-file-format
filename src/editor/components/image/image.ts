@@ -1,8 +1,9 @@
 import './image.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderHelpers } from '../../component-helpers';
 import type { VisualBlock, VisualSection } from '../../types';
+import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
-import { getAttachmentDescriptors } from '../../../attachment-store';
+import { getAttachmentDescriptors, type HvyAttachmentHostAdapter } from '../../../attachment-store';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -17,7 +18,14 @@ import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } f
 
 export { mergeImagePresetCss } from './image-preset-css';
 
-const blobUrlCache = new Map<string, { url: string; bytes: Uint8Array }>();
+type HostImageUrlResolution =
+  | { status: 'pending'; promise: Promise<string | null> }
+  | { status: 'resolved'; url: string | null };
+
+let documentBlobUrlCache = new WeakMap<VisualDocument, Map<string, { url: string; bytes: Uint8Array }>>();
+let hostImageUrlCache = new WeakMap<HvyAttachmentHostAdapter, Map<string, HostImageUrlResolution>>();
+const managedBlobUrls = new Set<string>();
+let imageUrlCacheVersion = 0;
 const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
 const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
 const imageAttachmentPickerStates = new WeakMap<HTMLElement, { expanded: boolean; observer: ResizeObserver | null }>();
@@ -43,26 +51,115 @@ export function getImageBlobUrl(filename: string): string | null {
     return null;
   }
   const attachmentId = getImageAttachmentId(filename);
-  const hostUrl = state.attachmentHost?.resolveUrl?.(attachmentId);
-  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+  const hostUrl = getHostImageUrl(state.attachmentHost, attachmentId);
+  if (typeof hostUrl === 'string') {
     return hostUrl;
   }
-  const attachment = getImageAttachment(state.document, filename);
+  return getDocumentImageBlobUrl(state.document, filename);
+}
+
+export async function resolveImageBlobUrl(filename: string): Promise<string | null> {
+  if (!filename) {
+    return null;
+  }
+  const attachmentHost = state.attachmentHost;
+  const document = state.document;
+  const hostUrl = getHostImageUrl(attachmentHost, getImageAttachmentId(filename));
+  const resolvedHostUrl = typeof hostUrl === 'string' ? hostUrl : await hostUrl;
+  return resolvedHostUrl ?? getDocumentImageBlobUrl(document, filename);
+}
+
+function getDocumentImageBlobUrl(document: VisualDocument, filename: string): string | null {
+  const attachment = getImageAttachment(document, filename);
   if (!attachment || attachment.bytes.length === 0) {
     return null;
   }
-  const cached = blobUrlCache.get(filename);
+  let cache = documentBlobUrlCache.get(document);
+  if (!cache) {
+    cache = new Map();
+    documentBlobUrlCache.set(document, cache);
+  }
+  const cached = cache.get(filename);
   if (cached && cached.bytes === attachment.bytes) {
     return cached.url;
   }
   if (cached) {
     URL.revokeObjectURL(cached.url);
+    managedBlobUrls.delete(cached.url);
   }
   const mediaType = typeof attachment.meta.mediaType === 'string' ? attachment.meta.mediaType : 'application/octet-stream';
   const blob = new Blob([Uint8Array.from(attachment.bytes)], { type: mediaType });
   const url = URL.createObjectURL(blob);
-  blobUrlCache.set(filename, { url, bytes: attachment.bytes });
+  managedBlobUrls.add(url);
+  cache.set(filename, { url, bytes: attachment.bytes });
   return url;
+}
+
+function getHostImageUrl(
+  host: typeof state.attachmentHost,
+  attachmentId: string,
+): string | Promise<string | null> | null {
+  if (!host?.resolveUrl) {
+    return null;
+  }
+  let cache = hostImageUrlCache.get(host);
+  if (!cache) {
+    cache = new Map();
+    hostImageUrlCache.set(host, cache);
+  }
+  const cached = cache.get(attachmentId);
+  if (cached?.status === 'resolved') {
+    return cached.url;
+  }
+  if (cached?.status === 'pending') {
+    return cached.promise;
+  }
+  const cacheVersion = imageUrlCacheVersion;
+  let result: string | Blob | null | Promise<string | Blob | null>;
+  try {
+    result = host.resolveUrl(attachmentId);
+  } catch {
+    cache.set(attachmentId, { status: 'resolved', url: null });
+    return null;
+  }
+  if (!isPromiseLike(result)) {
+    const url = normalizeHostImageUrl(result);
+    cache.set(attachmentId, { status: 'resolved', url });
+    return url;
+  }
+  const promise = Promise.resolve(result)
+    .then((resolved) => {
+      if (cacheVersion !== imageUrlCacheVersion) {
+        return null;
+      }
+      const url = normalizeHostImageUrl(resolved);
+      cache?.set(attachmentId, { status: 'resolved', url });
+      return url;
+    })
+    .catch(() => {
+      if (cacheVersion === imageUrlCacheVersion) {
+        cache?.set(attachmentId, { status: 'resolved', url: null });
+      }
+      return null;
+    });
+  cache.set(attachmentId, { status: 'pending', promise });
+  return promise;
+}
+
+function normalizeHostImageUrl(value: string | Blob | null): string | null {
+  if (typeof value === 'string') {
+    return value.length > 0 ? value : null;
+  }
+  if (!(value instanceof Blob)) {
+    return null;
+  }
+  const url = URL.createObjectURL(value);
+  managedBlobUrls.add(url);
+  return url;
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Promise<T> | null)?.then === 'function';
 }
 
 export function hasImageAttachmentSource(filename: string): boolean {
@@ -70,8 +167,7 @@ export function hasImageAttachmentSource(filename: string): boolean {
     return false;
   }
   const id = getImageAttachmentId(filename);
-  const hostUrl = state.attachmentHost?.resolveUrl?.(id);
-  if (typeof hostUrl === 'string' && hostUrl.length > 0) {
+  if (state.attachmentHost?.resolveUrl) {
     return true;
   }
   return getAttachmentDescriptors(state.document).some((descriptor) => descriptor.id === id);
@@ -96,15 +192,18 @@ export function renderImageElement(options: {
   const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
   const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
   const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
-  const imageLazyAttr = shouldDeferSrc && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
+  const imageLazyAttr = !url && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
   return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
-  for (const entry of blobUrlCache.values()) {
-    URL.revokeObjectURL(entry.url);
+  imageUrlCacheVersion += 1;
+  for (const url of managedBlobUrls) {
+    URL.revokeObjectURL(url);
   }
-  blobUrlCache.clear();
+  managedBlobUrls.clear();
+  documentBlobUrlCache = new WeakMap();
+  hostImageUrlCache = new WeakMap();
 }
 
 export function bindLazyImageHydration(root: ParentNode): void {
@@ -169,13 +268,13 @@ export function bindLazyImageHydration(root: ParentNode): void {
   });
 }
 
-function hydrateLazyImage(image: HTMLImageElement): void {
+async function hydrateLazyImage(image: HTMLImageElement): Promise<void> {
   if (image.getAttribute('src')) {
     return;
   }
   const startedAt = nowMs();
   const filename = image.dataset.imageFilename ?? '';
-  const url = getImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename);
   if (url) {
     observeHydratedImageLoad(image, filename, startedAt);
     image.src = url;
@@ -338,11 +437,11 @@ function updateImageAttachmentPicker(
   toggle.textContent = stateForPicker.expanded ? 'Show fewer images' : `Show ${hiddenCount} more image${hiddenCount === 1 ? '' : 's'}`;
 }
 
-function hydrateImageAttachmentPickerPreview(choice: HTMLElement): void {
+async function hydrateImageAttachmentPickerPreview(choice: HTMLElement): Promise<void> {
   const image = choice.querySelector<HTMLImageElement>('img[data-image-attachment-picker-preview]');
   if (!image || image.src) return;
   const filename = image.dataset.imageFilename ?? '';
-  const url = getImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename);
   if (url) {
     image.src = url;
     return;

@@ -1602,6 +1602,74 @@ hvy_version: 0.1
   expect(result.missing).toBe(false);
 });
 
+test('embedded viewer asynchronously resolves host image attachments from blobs', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="viewerMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:image {"imageFile":"decrypted-photo.svg","imageAlt":"Decrypted Photo"}-->
+`;
+    const root = document.querySelector<HTMLElement>('#viewerMount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    let resolveCalls = 0;
+    mountHvyViewer({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      attachmentStore: {
+        list: () => [{ id: 'image:decrypted-photo.svg', meta: { mediaType: 'image/svg+xml' }, length: 12 }],
+        recall: () => null,
+        store: () => {},
+        remove: () => {},
+        resolveUrl: async (id: string) => {
+          resolveCalls += 1;
+          if (id !== 'image:decrypted-photo.svg') return null;
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
+          return new Blob([
+            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="3"><rect width="2" height="3" fill="red"/></svg>',
+          ], { type: 'image/svg+xml' });
+        },
+      },
+    });
+    const image = root.querySelector<HTMLImageElement>('img[data-image-filename="decrypted-photo.svg"]');
+    if (!image) {
+      throw new Error('Image missing.');
+    }
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1000;
+      const poll = () => {
+        if (image.complete && image.naturalWidth > 0) resolve();
+        else if (Date.now() > deadline) reject(new Error('Resolved image did not load.'));
+        else window.setTimeout(poll, 10);
+      };
+      poll();
+    });
+    return {
+      src: image.getAttribute('src') ?? '',
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      resolveCalls,
+      missing: root.textContent?.includes('Missing attachment') ?? false,
+    };
+  });
+
+  expect(result.src).toMatch(/^blob:/);
+  expect(result.width).toBe(2);
+  expect(result.height).toBe(3);
+  expect(result.resolveCalls).toBe(1);
+  expect(result.missing).toBe(false);
+});
+
 test('embedded async serializer delegates to host serializer and recall api', async ({ page }) => {
   await page.goto('/');
 

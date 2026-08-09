@@ -1,4 +1,24 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+
+/**
+ * Waits until a surface stops re-rendering. Scroll positions captured while the AI view is
+ * still settling drift by a few pixels afterwards, which breaks scroll-preservation checks.
+ */
+async function waitForSurfaceIdle(page: Page, selector: string, quietMs = 250): Promise<void> {
+  await page.locator(selector).evaluate((root, quiet) => new Promise<void>((resolve) => {
+    let timer = window.setTimeout(finish, quiet as number);
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(finish, quiet as number);
+    });
+    function finish(): void {
+      observer.disconnect();
+      resolve();
+    }
+    observer.observe(root, { subtree: true, childList: true, attributes: true });
+  }), quietMs);
+}
 
 test('active table editor shows placeholders only for wholly empty rows', async ({ page }) => {
   await page.goto('/');
@@ -210,6 +230,7 @@ test('AI static table activation preserves scroll and Tab advances to the next c
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   const reader = page.locator('#aiReaderDocument');
   const table = reader.locator('.reader-table', { hasText: 'Applied' });
+  await waitForSurfaceIdle(page, '#aiReaderDocument');
   await table.click({ button: 'right' });
   const expectedResult = await reader.evaluate((node) => node.scrollTop);
   await page.getByRole('button', { name: 'Edit component' }).click();

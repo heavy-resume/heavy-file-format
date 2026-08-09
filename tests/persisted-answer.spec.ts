@@ -1,4 +1,25 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Waits until the active block stops re-rendering. Coordinates measured while the block is
+ * still settling can point outside the text area — at the Done button, for instance — so
+ * the click lands on the wrong element entirely.
+ */
+async function waitForActiveBlockIdle(page: Page, quietMs = 250): Promise<void> {
+  await page.locator('.editor-block[data-active-editor-block="true"]').first()
+    .evaluate((root, quiet) => new Promise<void>((resolve) => {
+      let timer = window.setTimeout(finish, quiet as number);
+      const observer = new MutationObserver(() => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(finish, quiet as number);
+      });
+      function finish(): void {
+        observer.disconnect();
+        resolve();
+      }
+      observer.observe(root, { subtree: true, childList: true, attributes: true });
+    }), quietMs);
+}
 
 test('survey example presents persisted single and multiple answers', async ({ page }) => {
   await page.goto('/');
@@ -201,6 +222,7 @@ test('clicking past an answer label places the caret at the end of that line', a
   await page.locator('.document-menu-panel').getByRole('button', { name: 'Survey Example', exact: true }).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Communication' }).click();
+  await waitForActiveBlockIdle(page);
   const communicationRow = page.locator(
     '.editor-block[data-active-editor-block="true"] .hvy-inline-checkbox-line',
     { hasText: 'Communication' }

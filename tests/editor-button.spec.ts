@@ -490,6 +490,9 @@ test('generated pronunciation can be converted back into a clean fill-in', async
 
   await page.locator('[data-component-id="resume-pronunciation"]').first().click();
   await expect(page.locator('.rich-editor[data-field="block-rich"]')).toBeVisible();
+  // A re-render landing between setting the selection and acting on it collapses it, which
+  // hides the selection-driven "Use as..." control.
+  await waitForMountIdle(page, '#editorTree');
   await page.locator('.rich-editor[data-field="block-rich"]').evaluate((editable) => {
     editable.innerHTML = '<p>[FILL ME IN]</p>';
     editable.dispatchEvent(new InputEvent('input', { bubbles: true }));

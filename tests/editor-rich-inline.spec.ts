@@ -726,7 +726,8 @@ test('Done points to an invalid formatted date sort value and closes after corre
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 component_defs:
-  - name: text
+  - name: application-entry
+    baseType: expandable
     sortValueDefs:
       Date:
         type: date
@@ -754,13 +755,18 @@ component_defs:
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
-  await page.locator('[data-action="activate-block"]', { hasText: 'Date:' }).last().dispatchEvent('click');
+  // The sort value lives in a text block inside the expandable's stub; activating the
+  // list item alone leaves that text passive, so the inner block has to be activated.
+  await page.locator('.editor-block-passive', { hasText: 'Date:' }).last().click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').last();
   const editedBlockId = await activeBlock.getAttribute('data-block-id');
   const sortValue = activeBlock.locator('[data-hvy-sort-value="true"]');
   await sortValue.evaluate((node) => {
     node.textContent = '02/30/2026';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    // The editor's input handler keys off the rich editor element, so dispatch from there.
+    (node.closest('[data-field="block-rich"]') ?? node).dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertText' })
+    );
   });
   await activeBlock.getByRole('button', { name: 'Done' }).click();
 
@@ -771,7 +777,10 @@ component_defs:
 
   await sortValue.evaluate((node) => {
     node.textContent = '03/27/2026';
-    node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    // The editor's input handler keys off the rich editor element, so dispatch from there.
+    (node.closest('[data-field="block-rich"]') ?? node).dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertText' })
+    );
   });
   await activeBlock.getByRole('button', { name: 'Done' }).click();
   await expect(page.locator(`.editor-block[data-active-editor-block="true"][data-block-id="${editedBlockId}"]`)).toHaveCount(0);

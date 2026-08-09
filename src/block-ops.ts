@@ -3309,13 +3309,14 @@ export function handleRichEditorCopy(event: ClipboardEvent, editable: HTMLElemen
   const container = document.createElement('div');
   container.appendChild(range.cloneContents());
   removeEditorCaretAnchors(container);
+  container.querySelectorAll('.hvy-text-line-style-marker').forEach((marker) => marker.remove());
   const html = container.innerHTML;
   if (!html) {
     return false;
   }
   clipboard.setData(HVY_RICH_CLIPBOARD_TYPE, html);
   clipboard.setData('text/html', html);
-  clipboard.setData('text/plain', removeEditorCaretAnchorsFromText(range.toString()));
+  clipboard.setData('text/plain', container.textContent ?? '');
   event.preventDefault();
   return true;
 }

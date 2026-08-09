@@ -1775,6 +1775,39 @@ test('rich copy omits editor caret anchors from copied line', async ({ page }) =
   expect(expectedResult.after.targetText).toBe('Target Copied line');
 });
 
+test('rich copy omits paragraph style markers from external clipboard formats', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<div class="hvy-text-line-style" data-hvy-text-line-style="indented" style="padding-left: 1rem;"><span class="hvy-text-line-style-marker" contenteditable="false">^indented^</span><p>Copied line</p></div>';
+    const styledLine = node.querySelector<HTMLElement>('[data-hvy-text-line-style="indented"]')!;
+    const selection = window.getSelection();
+    const selectedRange = document.createRange();
+    selectedRange.selectNodeContents(styledLine);
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer });
+    node.dispatchEvent(copyEvent);
+
+    return {
+      copyPrevented: copyEvent.defaultPrevented,
+      html: transfer.getData('text/html'),
+      plainText: transfer.getData('text/plain'),
+    };
+  });
+
+  expect(expectedResult.copyPrevented).toBe(true);
+  expect(expectedResult.plainText).toBe('Copied line');
+  expect(expectedResult.html).not.toContain('hvy-text-line-style-marker');
+  expect(expectedResult.html).not.toContain('^indented^');
+});
+
 test('native plain paste uses text instead of rich html', async ({ page }) => {
   await page.goto('/');
 

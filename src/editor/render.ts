@@ -140,6 +140,7 @@ interface EditorRenderState {
   } | null;
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
+  searchRevealedAncestors: Record<string, boolean>;
   editorSidebarHelpDismissed: boolean;
   currentView: 'editor' | 'viewer' | 'ai';
   crossDocumentLinksEnabled?: boolean;

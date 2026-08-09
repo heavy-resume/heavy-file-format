@@ -615,6 +615,12 @@ export interface AppState {
   expandableEditorPanels: Record<string, { stubOpen: boolean; expandedOpen: boolean }>;
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  /**
+   * Ancestors force-opened to reveal a search result. Unlike the reader*State maps this is
+   * not viewer browsing state: a search runs on whichever surface you are on, so editing
+   * surfaces honour it too.
+   */
+  searchRevealedAncestors: Record<string, boolean>;
   readerDeferredSectionBodies: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;

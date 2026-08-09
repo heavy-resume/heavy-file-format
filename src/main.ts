@@ -202,6 +202,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     gridAddComponentByBlock: {},
     expandableEditorPanels: {},
     readerExpandableState: {},
+    searchRevealedAncestors: {},
     readerContainerState: {},
     readerDeferredSectionBodies: {},
     readerView: {},
@@ -474,6 +475,9 @@ editorRenderer = createEditorRenderer(
     get readerExpandableState() {
       return state.readerExpandableState;
     },
+    get searchRevealedAncestors() {
+      return state.searchRevealedAncestors;
+    },
     get editorSidebarHelpDismissed() {
       return state.editorSidebarHelpDismissed;
     },
@@ -625,6 +629,9 @@ readerRenderer = createReaderRenderer(
     },
     get readerExpandableState() {
       return state.readerExpandableState;
+    },
+    get searchRevealedAncestors() {
+      return state.searchRevealedAncestors;
     },
     get readerContainerState() {
       return state.readerContainerState;

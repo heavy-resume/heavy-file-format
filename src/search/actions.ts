@@ -259,6 +259,8 @@ function revealEditorSearchTargetInState(result: HvySearchResult): void {
     }
     const readerStateKey = `${section.key}:${block.id}`;
     state.readerExpandableState[readerStateKey] = true;
+    // Editing surfaces ignore reader session state, so the reveal is recorded separately.
+    state.searchRevealedAncestors[readerStateKey] = true;
     const editorStateKey = `${section.key}:${block.id}`;
     const current = state.expandableEditorPanels[editorStateKey] ?? { stubOpen: false, expandedOpen: false };
     state.expandableEditorPanels[editorStateKey] = {

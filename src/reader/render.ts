@@ -88,6 +88,7 @@ interface ReaderRenderState {
   responsivePreview: 'full' | 'phone' | 'tablet' | 'desktop';
   readerExpandableState: Record<string, boolean>;
   readerContainerState: Record<string, boolean>;
+  searchRevealedAncestors: Record<string, boolean>;
   readerDeferredSectionBodies?: Record<string, boolean>;
   readerView: ReaderViewFilter;
   readerViewActivatedTargets: Set<string>;
@@ -428,9 +429,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isReaderViewPrioritized(viewContext, targetKey);
     const searchDimmed = isBlockSearchDeprioritized(searchContext, block);
     const forceSearchExpanded = searchContext.filtering && searchContext.filterMode === 'hide' && !searchDimmed;
+    const searchRevealed = state.searchRevealedAncestors[`${section.key}:${block.id}`] === true;
     const readerExpanded = base === 'expandable' && !options.ignoreReaderSessionState
       ? getReaderExpandableExpanded(section.key, block, forceSearchExpanded ? true : modifiers.has('collapse') ? false : prioritized ? true : block.schema.expandableExpanded)
-      : block.schema.expandableExpanded;
+      : searchRevealed || block.schema.expandableExpanded;
     const blockDomId = getBlockDomId(block);
     const idAttr = blockDomId ? ` id="${deps.escapeAttr(blockDomId)}"` : '';
     const dimmed = modifiers.has('dimmed') && !state.readerViewActivatedTargets.has(targetKey);
@@ -526,7 +528,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       }
       const containerKey = `${section.key}:${block.id}`;
       const expanded = options.ignoreReaderSessionState
-        ? readerBlock.schema.containerExpanded
+        ? state.searchRevealedAncestors[containerKey] === true || readerBlock.schema.containerExpanded
         : helpers.getReaderContainerExpanded(containerKey, readerBlock.schema.containerExpanded);
       const containerToggleAttrs = hasContainerBorderCss(readerBlock.schema.css) && !expanded
         ? ` data-reader-action="toggle-container" data-container-key="${deps.escapeAttr(containerKey)}" aria-expanded="false"`

@@ -437,6 +437,7 @@
 .hvy-document .component-placement-target {
   position: relative;
   display: block;
+  box-sizing: border-box;
   width: 100%;
   height: 2.8rem;
   min-height: 0;
@@ -448,6 +449,35 @@
   cursor: pointer;
   touch-action: manipulation;
   z-index: 3;
+}
+
+/*
+ * Placement targets are 2.8rem hit bands collapsed to zero layout height, so nested
+ * insertion points land within a few pixels of each other and their bands overlap almost
+ * entirely. Each nesting scope insets its targets so every level keeps an exclusive,
+ * visibly distinct strip, and raises them above their ancestors so the innermost
+ * destination wins wherever the bands still overlap. Without this the winner is decided by
+ * DOM order, which differs between before and after placements and leaves the inner
+ * "after" target unclickable. Depth is expressed by repeating the scope selector rather
+ * than a custom-property counter, since a self-referential custom property is invalid at
+ * computed-value time.
+ */
+.hvy-document :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) .component-placement-target {
+  margin-left: 0.85rem;
+  width: calc(100% - 0.85rem);
+  z-index: 4;
+}
+
+.hvy-document :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) .component-placement-target {
+  margin-left: 1.7rem;
+  width: calc(100% - 1.7rem);
+  z-index: 5;
+}
+
+.hvy-document :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) :is(.reader-grid-cell, .reader-container-body, .container-inner-blocks, .expandable-reader-pane) .component-placement-target {
+  margin-left: 2.55rem;
+  width: calc(100% - 2.55rem);
+  z-index: 6;
 }
 
 .hvy-document .component-placement-target::before {

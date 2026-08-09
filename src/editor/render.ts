@@ -829,8 +829,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       deps.ensureExpandableBlocks(block);
       // Editing surfaces follow the document: the editor's own toggle writes
       // expandableExpanded, while readerExpandableState is ephemeral viewer session state
-      // that must not decide what the editor shows.
-      const expanded = block.schema.expandableExpanded;
+      // that must not decide what the editor shows. Search reveal is the exception, since
+      // a search runs on the surface you are already looking at.
+      const expanded = state.searchRevealedAncestors[`${sectionKey}:${block.id}`] === true
+        || block.schema.expandableExpanded;
       const alwaysShowStub = block.schema.expandableAlwaysShowStub;
       const stubPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableStubCss));
       const contentPaneStyle = deps.escapeAttr(sanitizeInlineCss(block.schema.expandableContentCss));

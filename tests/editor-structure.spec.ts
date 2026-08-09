@@ -4009,7 +4009,7 @@ test('resume reader view buttons apply filters without changing edit mode', asyn
     page.locator('#tools-technologies .reader-container', { hasText: 'AI / Agent Tooling' }).first()
   ).toHaveClass(/is-expanded/);
   const sidebarSectionIds = await page.locator('#readerSidebarSections section[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
-  expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies']);
+  expect(sidebarSectionIds).toEqual(['locations', 'skills', 'tools-technologies', 'languages']);
 
   await page.getByRole('button', { name: 'Editor' }).click();
   await expect(page.locator('#editorTree .is-reader-view-dimmed')).toHaveCount(0);

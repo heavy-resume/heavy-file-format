@@ -591,6 +591,7 @@ export function resetTransientUiState(): void {
   state.gridAddComponentByBlock = {};
   state.readerExpandableState = {};
   state.readerContainerState = {};
+  state.searchRevealedAncestors = {};
   state.readerDeferredSectionBodies = {};
   state.readerView = {};
   state.readerViewActivatedTargets = new Set<string>();

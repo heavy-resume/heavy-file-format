@@ -2706,7 +2706,10 @@ hvy_version: 0.1
   await fillIn.focus();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
   await page.keyboard.type('Line two');
-  await expect(fillIn).toContainText(/Line one\s+Line two/);
+  // The editor parks a zero-width caret anchor in the fill-in whose position varies; it is
+  // stripped on serialization, so compare the text without it.
+  await expect.poll(async () => (await fillIn.evaluate((node) => node.textContent ?? '')).replaceAll('\u200b', ''))
+    .toMatch(/Line one\s+Line two/);
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-field="text-fill-in-value"]:focus')).toHaveCount(0);
 

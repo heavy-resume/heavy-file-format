@@ -168,18 +168,21 @@ scripts:
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await waitForScriptingIdle(page);
 
-  const expectedResult = await page.evaluate(async () => {
+  // waitForScriptingIdle only waits for the runtime map to empty, which is already true if
+  // the submit script has not started yet, so poll for the row the script actually writes.
+  await expect.poll(() => page.evaluate(async () => {
     const { createScriptingDbRuntime } = await import('/src/plugins/db-table.ts');
     const visualDocument = (window as Window & { __nullableDocument?: Parameters<typeof createScriptingDbRuntime>[0] }).__nullableDocument;
     if (!visualDocument) throw new Error('Nullable test document missing.');
     const database = await createScriptingDbRuntime(visualDocument);
     try {
       return database.api.query('SELECT optional_value FROM example');
+    } catch {
+      return null;
     } finally {
       database.dispose();
     }
-  });
-  expect(expectedResult).toEqual([{ optional_value: null, '0': null }]);
+  }), { timeout: SCRIPTING_IDLE_TIMEOUT_MS }).toEqual([{ optional_value: null, '0': null }]);
 });
 
 test('scripting globals do not expose browser globals or wrapper internals', async ({ page }) => {

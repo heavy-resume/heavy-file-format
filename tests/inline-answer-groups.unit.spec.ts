@@ -11,6 +11,7 @@ import {
   stripRadioGroupDirectives,
 } from '../src/inline-answer-groups';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
+import { deserializeDocument } from '../src/serialization';
 
 function makeTextBlock(id: string, text: string): VisualBlock {
   return {
@@ -119,6 +120,53 @@ describe('resolveBlockAnswerGroups', () => {
 });
 
 describe('buildInlineAnswerGroupIndex', () => {
+  test('a named group spans text components in separate grid cells', () => {
+    const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:grid {"gridColumns":4}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"q02-answer-1"}-->
+    <!--hvy:radio-group q02-->
+    ( )
+    Strongly disagree
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"q02-answer-2"}-->
+    ( )
+    Disagree
+
+  <!--hvy:grid:2 {}-->
+
+   <!--hvy:text {"id":"q02-answer-3"}-->
+    ( )
+    Agree
+
+  <!--hvy:grid:3 {}-->
+
+   <!--hvy:text {"id":"q02-answer-4"}-->
+    ( )
+    Strongly Agree
+`, '.hvy');
+
+    const gridItems = document.sections[0]!.blocks[0]!.schema.gridItems;
+    const expectedResult = buildInlineAnswerGroupIndex(document.sections);
+
+    expect(gridItems.map((item) => getBlockAnswerGroups(expectedResult, document.sections[0]!.key, item.block.id).get(0))).toEqual([
+      'name:q02',
+      'name:q02',
+      'name:q02',
+      'name:q02',
+    ]);
+    expect(expectedResult.byKey.get('name:q02')?.members).toHaveLength(4);
+  });
+
   test('a named group spans components and collects every member', () => {
     const expectedResult = buildInlineAnswerGroupIndex(
       makeSections([

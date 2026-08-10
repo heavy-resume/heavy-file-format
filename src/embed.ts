@@ -1,5 +1,9 @@
 import './default-theme.css';
-import { invalidateInlineAnswerGroupIndex } from './inline-answer-groups';
+import {
+  getBlockAnswerGroups,
+  getInlineAnswerGroupIndex,
+  invalidateInlineAnswerGroupIndex,
+} from './inline-answer-groups';
 import './host-overrides.css';
 import './style.css';
 
@@ -449,18 +453,27 @@ function getMarkdownBlockStyle(markdown: string): string {
   return 'paragraph';
 }
 
-function renderComponentFragment(componentName: string, content: string, block: { schema: { codeLanguage?: string; fillIn?: boolean } }): string {
+function renderComponentFragment(
+  componentName: string,
+  content: string,
+  block: { id: string; schema: { codeLanguage?: string; fillIn?: boolean } },
+  sectionKey = ''
+): string {
   if (componentName === 'code') {
     const language = block.schema.codeLanguage?.trim() || 'text';
     return `<pre class="code-reader"><code data-language="${escapeAttr(language)}">${escapeHtml(content)}</code></pre>`;
   }
   const source = componentName === 'text' && block.schema.fillIn ? removeTextFillInMarkers(content) : content;
-  return renderTextFragment(source);
+  const answerGroups = componentName === 'text'
+    ? getBlockAnswerGroups(getInlineAnswerGroupIndex(state.document.sections), sectionKey, block.id)
+    : undefined;
+  return renderTextFragment(source, answerGroups);
 }
 
-function renderTextFragment(content: string): string {
+function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
   const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
   return addExternalLinkTargets(markdownToReaderHtml(normalized, {
+    answerGroups,
     crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
   }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true });
 }

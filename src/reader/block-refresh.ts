@@ -84,7 +84,10 @@ export function refreshReaderBlockDom(options: ReaderBlockRefreshOptions): boole
   }
   let replaced = 0;
   targets.forEach((target) => {
-    const html = options.readerRenderer.renderReaderBlock(section, block);
+    const renderOptions = target.dataset.readerTrimVerticalEdgeMargin === 'true'
+      ? { trimVerticalEdgeMargin: true }
+      : undefined;
+    const html = options.readerRenderer.renderReaderBlock(section, block, renderOptions);
     if (!html.trim()) {
       return;
     }

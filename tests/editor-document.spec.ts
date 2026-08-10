@@ -1021,6 +1021,103 @@ test('reader block refresh normalizes table stripes inside the affected section'
   });
 });
 
+test('reader block refresh preserves direct grid cell edge-margin trimming', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = `<div id="root">
+      <div class="reader-grid-cell">
+        <div class="reader-block" data-section-key="section-a" data-block-id="block-a" data-reader-trim-vertical-edge-margin="true" style="margin: 0.5rem 0; margin-top: 0; margin-bottom: 0;"></div>
+      </div>
+    </div>`;
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    const { refreshReaderBlockDom } = await import(/* @vite-ignore */ '/src/reader/block-refresh.ts');
+    state.document.sections = [{
+      key: 'section-a',
+      blocks: [{ id: 'block-a', schema: {} }],
+    }];
+    let receivedOptions: { trimVerticalEdgeMargin?: boolean } | undefined;
+    refreshReaderBlockDom({
+      root: document.querySelector('#root')!,
+      sections: state.document.sections,
+      sectionKey: 'section-a',
+      blockId: 'block-a',
+      readerRenderer: {
+        renderReaderBlock: (_section, _block, options) => {
+          receivedOptions = options;
+          return `<div class="reader-block" data-section-key="section-a" data-block-id="block-a"></div>`;
+        },
+      },
+    });
+    return receivedOptions;
+  });
+
+  expect(result).toEqual({ trimVerticalEdgeMargin: true });
+});
+
+test('lightweight embedded viewer keeps a named radio group exclusive across grid cells', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="embedded-root"></div>';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvyViewer({
+      root: document.querySelector('#embedded-root')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:grid {"gridColumns":4}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"q02-answer-1"}-->
+    <!--hvy:radio-group q02-->
+    ( )
+    Strongly disagree
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"q02-answer-2"}-->
+    ( )
+    Disagree
+
+  <!--hvy:grid:2 {}-->
+
+   <!--hvy:text {"id":"q02-answer-3"}-->
+    ( )
+    Agree
+
+  <!--hvy:grid:3 {}-->
+
+   <!--hvy:text {"id":"q02-answer-4"}-->
+    ( )
+    Strongly Agree
+`), '.hvy'),
+    });
+    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('#embedded-root input[type="radio"]'));
+    const namesBefore = radios.map((radio) => radio.name);
+    const thirdTopBefore = radios[2]!.closest('.reader-block')!.getBoundingClientRect().top;
+    radios[0]!.click();
+    radios[2]!.click();
+    const currentRadios = Array.from(document.querySelectorAll<HTMLInputElement>('#embedded-root input[type="radio"]'));
+    return {
+      namesBefore,
+      namesAfter: currentRadios.map((radio) => radio.name),
+      checkedAfter: currentRadios.map((radio) => radio.checked),
+      thirdTopBefore,
+      thirdTopAfter: currentRadios[2]!.closest('.reader-block')!.getBoundingClientRect().top,
+    };
+  });
+
+  expect(result.namesBefore).toEqual(Array(4).fill('hvy-inline-radio-name_q02'));
+  expect(result.namesAfter).toEqual(Array(4).fill('hvy-inline-radio-name_q02'));
+  expect(result.checkedAfter).toEqual([false, false, true, false]);
+  expect(result.thirdTopAfter).toBe(result.thirdTopBefore);
+});
+
 test('reader surface refresh can target only sidebar sections', async ({ page }) => {
   await page.goto('/');
 

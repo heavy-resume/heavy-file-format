@@ -169,6 +169,74 @@ hvy_version: 0.1
   });
 });
 
+test('a named radio group stays mutually exclusive across grid cells and partial refreshes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').evaluate((textarea, value) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Raw editor textarea missing.');
+    textarea.value = value;
+    textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+  }, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:grid {"gridColumns":4}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"q02-answer-1"}-->
+    <!--hvy:radio-group q02-->
+    ( )
+    Strongly disagree
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"q02-answer-2"}-->
+    ( )
+    Disagree
+
+  <!--hvy:grid:2 {}-->
+
+   <!--hvy:text {"id":"q02-answer-3"}-->
+    ( )
+    Agree
+
+  <!--hvy:grid:3 {}-->
+
+   <!--hvy:text {"id":"q02-answer-4"}-->
+    ( )
+    Strongly Agree
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const radios = page.locator('#readerDocument input[type="radio"]');
+  await expect(radios).toHaveCount(4);
+  expect(await radios.evaluateAll((inputs) => inputs.map((input) => input.getAttribute('name')))).toEqual([
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+  ]);
+  const topBefore = await radios.nth(2).evaluate((input) => input.closest('.reader-block')?.getBoundingClientRect().top);
+
+  await radios.nth(0).check();
+  await radios.nth(2).check();
+
+  await expect(radios.nth(0)).not.toBeChecked();
+  await expect(radios.nth(2)).toBeChecked();
+  expect(await radios.evaluateAll((inputs) => inputs.map((input) => input.getAttribute('name')))).toEqual([
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+    'hvy-inline-radio-name_q02',
+  ]);
+  expect(await radios.nth(2).evaluate((input) => input.closest('.reader-block')?.getBoundingClientRect().top)).toBe(topBefore);
+});
+
 test('viewer selections write through to inline checkbox and radio marker source', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();

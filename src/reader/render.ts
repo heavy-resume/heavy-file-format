@@ -466,7 +466,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const blockStyle = base === 'image'
       ? ''
       : sanitizeReaderBlockCss(responsiveCss.inlineCss, options);
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs} style="${deps.escapeAttr(blockStyle)}"`;
+    const refreshRenderContextAttrs = options.trimVerticalEdgeMargin
+      ? ' data-reader-trim-vertical-edge-margin="true"'
+      : '';
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string, extraAttrs = ''): string => {
       const query = searchContext.filtering ? '' : searchContext.query;

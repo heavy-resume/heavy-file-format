@@ -35,8 +35,9 @@ test('survey example presents persisted single and multiple answers', async ({ p
   await expect(reader.getByRole('checkbox')).toHaveCount(7);
   const firstRatingBounds = await reader.getByRole('radio').nth(0).locator('..').boundingBox();
   const secondRatingBounds = await reader.getByRole('radio').nth(1).locator('..').boundingBox();
-  if (!firstRatingBounds || !secondRatingBounds) throw new Error('Survey rating rows were not measurable.');
-  expect(secondRatingBounds.y - (firstRatingBounds.y + firstRatingBounds.height)).toBeLessThanOrEqual(1);
+  if (!firstRatingBounds || !secondRatingBounds) throw new Error('Survey rating options were not measurable.');
+  expect(Math.abs(secondRatingBounds.y - firstRatingBounds.y)).toBeLessThanOrEqual(1);
+  expect(secondRatingBounds.x).toBeGreaterThan(firstRatingBounds.x + firstRatingBounds.width);
   const goodRadio = reader.getByRole('radio').nth(1);
   await expect(goodRadio).toHaveCSS('appearance', 'none');
   await expect(goodRadio).toHaveCSS('border-radius', '50%');

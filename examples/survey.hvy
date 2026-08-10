@@ -27,11 +27,28 @@ section_defaults:
  <!--hvy:text {"css":"margin-bottom: 0.25rem;"}-->
   **How would you rate the overall experience?**
 
- <!--hvy:text {"id":"overall-rating"}-->
-  ( ) Excellent
-  ( ) Good
-  ( ) Fair
-  ( ) Poor
+ <!--hvy:grid {"id":"overall-rating","gridColumns":4}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {"id":"overall-rating-excellent"}-->
+    <!--hvy:radio-group overall-rating-->
+    ( ) Excellent
+
+  <!--hvy:grid:1 {}-->
+
+   <!--hvy:text {"id":"overall-rating-good"}-->
+    ( ) Good
+
+  <!--hvy:grid:2 {}-->
+
+   <!--hvy:text {"id":"overall-rating-fair"}-->
+    ( ) Fair
+
+  <!--hvy:grid:3 {}-->
+
+   <!--hvy:text {"id":"overall-rating-poor"}-->
+    ( ) Poor
+    <!--hvy:radio-group-->
 
  <!--hvy:text {"css":"margin-top: 1rem; margin-bottom: 0.25rem;"}-->
   **Which areas worked well? Select all that apply.**

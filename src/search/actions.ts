@@ -222,7 +222,13 @@ function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement,
     });
     return;
   }
-  scrollEditorSearchTargetIntoView(target);
+  const marker = findEditorSearchMarker(target, result.matchedText);
+  const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(result.matchedText?.trim());
+  if (wantsSearchMarker && !marker && attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
+    window.setTimeout(() => navigateToEditorSearchTarget(result, app, attempt + 1), 60);
+    return;
+  }
+  scrollEditorSearchTargetIntoView(marker ?? target);
   target.classList.add('is-temp-highlighted');
   window.setTimeout(() => {
     target.classList.remove('is-temp-highlighted');
@@ -286,15 +292,49 @@ function findEditorSearchTarget(result: HvySearchResult, app: HTMLElement): HTML
 function scrollEditorSearchTargetIntoView(target: HTMLElement): void {
   const container = target.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
   if (container) {
-    const targetRect = target.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    container.scrollTo({
-      top: Math.max(0, container.scrollTop + targetRect.top - (containerRect.top + containerRect.height / 2)),
-      behavior: 'smooth',
-    });
+    scrollEditorSearchTargetAfterLayoutSettles(target, container);
     return;
   }
   target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+const EDITOR_SEARCH_LAYOUT_SAMPLE_MS = 50;
+const EDITOR_SEARCH_STABLE_SAMPLES = 4;
+const EDITOR_SEARCH_MAX_LAYOUT_SAMPLES = 24;
+
+function scrollEditorSearchTargetAfterLayoutSettles(
+  target: HTMLElement,
+  container: HTMLElement,
+  sample = 0,
+  stableSamples = 0,
+  previousGeometry = ''
+): void {
+  if (!target.isConnected || !container.isConnected) {
+    return;
+  }
+  const targetRect = target.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const geometry = `${container.scrollHeight}:${Math.round(targetRect.top - containerRect.top + container.scrollTop)}`;
+  const nextStableSamples = geometry === previousGeometry ? stableSamples + 1 : 1;
+  if (nextStableSamples < EDITOR_SEARCH_STABLE_SAMPLES && sample < EDITOR_SEARCH_MAX_LAYOUT_SAMPLES) {
+    window.setTimeout(() => {
+      scrollEditorSearchTargetAfterLayoutSettles(target, container, sample + 1, nextStableSamples, geometry);
+    }, EDITOR_SEARCH_LAYOUT_SAMPLE_MS);
+    return;
+  }
+  container.scrollTo({
+    top: Math.max(0, container.scrollTop + targetRect.top - (containerRect.top + containerRect.height / 2)),
+    behavior: 'smooth',
+  });
+}
+
+function findEditorSearchMarker(target: HTMLElement, matchText?: string): HTMLElement | null {
+  const markers = [...target.querySelectorAll<HTMLElement>('.search-match-marker')];
+  const normalized = matchText?.trim().toLocaleLowerCase();
+  if (!normalized) {
+    return markers[0] ?? null;
+  }
+  return markers.find((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized) ?? markers[0] ?? null;
 }
 
 export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1): void {

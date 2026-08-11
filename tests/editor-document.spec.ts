@@ -320,8 +320,16 @@ hvy_version: 0.1
 <!--hvy: {"id":"target"}-->
 #! Target
 
- <!--hvy:text {"id":"intro"}-->
+<!--hvy:text {"id":"intro"}-->
+  First line in the target.
+  Second line in the target.
   Find this editor-only needle.
+  Fourth line in the target.
+
+<!--hvy: {"id":"after-target"}-->
+#! After target
+
+ ${Array.from({ length: 12 }, (_line, lineIndex) => `Following spacer ${lineIndex + 1}.`).join('\n ')}
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Basic' }).click();
@@ -331,6 +339,16 @@ hvy_version: 0.1
   await page.keyboard.press('Enter');
   await page.waitForSelector('.search-result');
   await page.locator('.search-result').first().click();
+  await page.evaluate(() => {
+    window.setTimeout(() => {
+      const target = document.querySelector<HTMLElement>('.editor-block-passive[data-block-id="intro"]');
+      if (target) {
+        target.style.marginTop = '700px';
+      }
+    }, 80);
+  });
+  await page.waitForTimeout(130);
+  expect(await page.locator('#editorTree').evaluate((container) => container.scrollTop)).toBe(0);
 
   await expect(page.locator('#editorTree')).toBeVisible();
   await expect(page.locator('#readerDocument')).toHaveCount(0);
@@ -348,6 +366,17 @@ hvy_version: 0.1
   ).toBeLessThan(140);
   const editorScroll = await page.locator('#editorTree').evaluate((container) => container.scrollTop);
   expect(editorScroll).toBeGreaterThan(200);
+  await expect.poll(async () =>
+    page.locator('#editorTree .search-match-marker').evaluate((marker) => {
+      const container = marker.closest<HTMLElement>('.editor-tree');
+      if (!container) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const markerRect = marker.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      return Math.abs(markerRect.top - (containerRect.top + containerRect.height / 2));
+    })
+  ).toBeLessThan(80);
 
   await page.locator('.search-collapsed-main').click();
   await page.locator('[data-action="close-search"]').last().click();

@@ -31,6 +31,8 @@ import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization 
 import { classifyXrefTarget } from './workspace-links';
 import { validateDocumentMetadata } from './document-metadata';
 import { parseStaticTableValueMarkdown, serializeStaticTableValueMarkdown } from './table-value-markdown';
+import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './plugins/declarations';
+import { visitBlocks } from './section-ops';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -1019,6 +1021,10 @@ export async function serializeDocumentBytesAsync(
 
 export function serializeDocumentHeaderYaml(document: VisualDocument): string {
   const serializedMeta: JsonObject = { ...document.meta };
+  const builtInPluginDeclarations = collectBuiltInPluginDeclarations(document);
+  if (builtInPluginDeclarations.length > 0) {
+    serializedMeta.plugins = builtInPluginDeclarations;
+  }
   if (Array.isArray(serializedMeta.component_defs)) {
     serializedMeta.component_defs = (serializedMeta.component_defs as unknown[])
       .filter((def): def is JsonObject => !!def && typeof def === 'object')
@@ -1034,6 +1040,21 @@ export function serializeDocumentHeaderYaml(document: VisualDocument): string {
     hvy_version: document.meta.hvy_version ?? 0.1,
   }) as JsonObject;
   return stringifyYaml(headerMeta).trim();
+}
+
+function collectBuiltInPluginDeclarations(document: VisualDocument): JsonObject[] {
+  const declarations = normalizeHvyPluginDeclarations(document.meta.plugins);
+  const declaredIds = new Set(declarations.flatMap((declaration) => (
+    typeof declaration.id === 'string' && declaration.id.trim() ? [declaration.id.trim()] : []
+  )));
+  visitBlocks(document.sections, (block) => {
+    if (block.schema.kind !== 'plugin') return;
+    const pluginId = block.schema.plugin.trim();
+    if (!isReservedHvyPluginName(pluginId) || declaredIds.has(pluginId)) return;
+    declarations.push({ id: pluginId });
+    declaredIds.add(pluginId);
+  });
+  return declarations;
 }
 
 function serializeSectionDef(raw: JsonObject): JsonObject {

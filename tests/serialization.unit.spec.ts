@@ -660,6 +660,54 @@ plugins:
   expect(output).not.toContain('"pluginUrl"');
 });
 
+test('adds declarations for used built-in plugins when serializing', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: example.preserved
+    uuid: example-preserved-primary
+---
+
+<!--hvy: {"id":"plugins"}-->
+#! Plugins
+
+<!--hvy:grid {"gridColumns":1}-->
+
+ <!--hvy:grid:0 {}-->
+
+  <!--hvy:plugin {"plugin":"hvy.qr-code"}-->
+  https://example.invalid/qr-code
+
+<!--hvy:plugin {"plugin":"example.undeclared"}-->
+`, '.phvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult).toContain('  - id: example.preserved');
+  expect(expectedResult).toContain('  - id: hvy.qr-code');
+  expect(expectedResult.match(/id: hvy\.qr-code/g)).toHaveLength(1);
+  expect(expectedResult).not.toContain('  - id: example.undeclared');
+});
+
+test('does not duplicate an existing built-in plugin declaration when serializing', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+plugins:
+  - id: hvy.qr-code
+---
+
+<!--hvy: {"id":"plugins"}-->
+#! Plugins
+
+<!--hvy:plugin {"plugin":"hvy.qr-code"}-->
+https://example.invalid/qr-code
+`, '.phvy');
+
+  const expectedResult = serializeDocument(document);
+
+  expect(expectedResult.match(/id: hvy\.qr-code/g)).toHaveLength(1);
+});
+
 test('serializes only fields owned by the block component', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

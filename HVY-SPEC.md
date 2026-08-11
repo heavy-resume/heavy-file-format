@@ -1250,6 +1250,13 @@ plugins:
   - id: hvy.form
 ```
 
+Readers MUST also accept a document that uses a reserved `hvy.*` built-in
+plugin without declaring it in front matter. This omission is supported for
+compatibility with built-in plugin blocks written before declarations were
+maintained consistently. When serializing such a document, writers MUST add
+the current ID-only declaration for every used, undeclared built-in plugin.
+Third-party plugin blocks still require an explicit declaration.
+
 Readers MUST accept the legacy built-in declaration shape where the built-in
 name was stored in `id`, with or without a `builtin://` source:
 
@@ -1450,7 +1457,9 @@ Use the `plugin` block when a document embeds a client-resolved plugin instance 
 ```
 
 Plugin block fields:
-- `plugin`: REQUIRED plugin identifier matching a declaration's `id`
+- `plugin`: REQUIRED plugin identifier matching a declaration's `id`, except
+  that readers accept an undeclared reserved `hvy.*` built-in as described in
+  the built-in compatibility rule above
 - `pluginConfig`: optional object interpreted only by that plugin
 
 HVY core only standardizes the envelope. The meaning of `pluginConfig` is plugin-specific.

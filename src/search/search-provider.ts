@@ -3,6 +3,8 @@ import type { VisualSection } from '../editor/types';
 import { findVirtualDirectoryForBlock } from '../cli-core/virtual-file-system';
 import { getSectionId } from '../section-ops';
 import { getTextCaptionMarkdown } from '../caption';
+import { markdownToReaderHtml } from '../markdown';
+import { renderedMarkdownHtmlToSearchText } from '../rendered-markdown-text';
 import {
   getPluginVisualDescription,
   PLUGIN_VISUAL_DESCRIPTION_FIELD,
@@ -146,7 +148,7 @@ function addMatches(options: {
   locationLabel?: string;
   contextLabel: string;
   documentOrder: number;
-  candidates: Array<{ field: string; label: string; value: string }>;
+  candidates: SearchCandidate[];
 }): void {
   const query = options.request.query.trim();
   if (!query) {
@@ -154,7 +156,11 @@ function addMatches(options: {
   }
   const matches: HvySearchMatch[] = [];
   for (const candidate of options.candidates) {
-    const matchIndex = findMatchIndex(candidate.value, query, options.request.caseSensitive);
+    const rawMatchIndex = findMatchIndex(candidate.value, query, options.request.caseSensitive);
+    const matchValue = rawMatchIndex >= 0 ? candidate.value : candidate.searchValue ?? candidate.value;
+    const matchIndex = rawMatchIndex >= 0
+      ? rawMatchIndex
+      : findMatchIndex(matchValue, query, options.request.caseSensitive);
     if (matchIndex < 0) {
       continue;
     }
@@ -172,8 +178,8 @@ function addMatches(options: {
     matches.push({
       field: candidate.field,
       label: candidate.label,
-      preview: createPreview(candidate.value, matchIndex, query.length),
-      matchedText: candidate.value.slice(matchIndex, matchIndex + query.length),
+      preview: createPreview(matchValue, matchIndex, query.length),
+      matchedText: matchValue.slice(matchIndex, matchIndex + query.length),
     });
   }
   if (matches.length === 0) {
@@ -225,7 +231,14 @@ function createPreview(value: string, matchIndex: number, length: number): strin
   return `${start > 0 ? '...' : ''}${cleanSearchResultText(value.slice(start, end))}${end < value.length ? '...' : ''}`;
 }
 
-function getSectionCandidates(section: VisualSection, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
+interface SearchCandidate {
+  field: string;
+  label: string;
+  value: string;
+  searchValue?: string;
+}
+
+function getSectionCandidates(section: VisualSection, category: SearchCategory): SearchCandidate[] {
   if (category === 'tags') {
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: section.tags }];
   }
@@ -235,7 +248,7 @@ function getSectionCandidates(section: VisualSection, category: SearchCategory):
   return [{ field: 'title', label: FIELD_LABELS.title, value: section.title }];
 }
 
-function getBlockCandidates(document: HvySearchRequest['document'], block: VisualBlock, category: SearchCategory): Array<{ field: string; label: string; value: string }> {
+function getBlockCandidates(document: HvySearchRequest['document'], block: VisualBlock, category: SearchCategory): SearchCandidate[] {
   if (category === 'tags') {
     return [{ field: 'tags', label: FIELD_LABELS.tags, value: block.schema.tags ?? '' }];
   }
@@ -247,12 +260,22 @@ function getBlockCandidates(document: HvySearchRequest['document'], block: Visua
     ];
   }
   return [
-    { field: 'text', label: FIELD_LABELS.text, value: block.text },
+    {
+      field: 'text',
+      label: FIELD_LABELS.text,
+      value: block.text,
+      searchValue: renderedMarkdownHtmlToSearchText(markdownToReaderHtml(block.text)),
+    },
     { field: 'xrefTitle', label: FIELD_LABELS.xrefTitle, value: block.schema.xrefTitle ?? '' },
     { field: 'xrefDetail', label: FIELD_LABELS.xrefDetail, value: block.schema.xrefDetail ?? '' },
     { field: 'containerTitle', label: FIELD_LABELS.containerTitle, value: block.schema.containerTitle ?? '' },
     { field: 'imageAlt', label: FIELD_LABELS.imageAlt, value: block.schema.imageAlt ?? '' },
-    { field: 'caption', label: FIELD_LABELS.caption, value: getTextCaptionMarkdown(block.schema.caption) },
+    {
+      field: 'caption',
+      label: FIELD_LABELS.caption,
+      value: getTextCaptionMarkdown(block.schema.caption),
+      searchValue: renderedMarkdownHtmlToSearchText(markdownToReaderHtml(getTextCaptionMarkdown(block.schema.caption))),
+    },
     { field: 'tableColumns', label: FIELD_LABELS.tableColumns, value: (block.schema.tableColumns ?? []).join(' ') },
     { field: 'tableCells', label: FIELD_LABELS.tableCells, value: (block.schema.tableRows ?? []).flatMap((row) => row.cells).join(' ') },
     { field: 'pluginConfig', label: FIELD_LABELS.pluginConfig, value: JSON.stringify(block.schema.pluginConfig ?? {}) },

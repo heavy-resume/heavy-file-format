@@ -5,6 +5,7 @@ import { getTextLineStyleLabel, sanitizeTextLineStyleCss, type TextLineStyles } 
 import { createTextFillInMarker } from './text-fill-in';
 import { renderWorkspaceLinksInHtml } from './workspace-links';
 import { formatSortValueAnnotation, replaceSortValueAnnotations } from './sort-values';
+import { normalizeRenderedMarkdownSoftBreaks } from './rendered-markdown-text';
 import {
   answerGroupInputName,
   normalizeRadioGroupName,
@@ -246,14 +247,14 @@ export function markdownToReaderHtml(markdown: string, options: MarkdownRenderOp
 function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRenderOptions, 'textLineStyles' | 'textLineStyleMode'>>): string {
   const segments = splitTextLineStyleSegments(markdown);
   if (segments.length === 1 && segments[0]?.kind === 'markdown') {
-    return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string);
+    return renderSanitizedMarkdownHtml(markdown);
   }
   return segments
     .map((segment) => {
       if (segment.kind === 'markdown') {
-        return sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+        return renderSanitizedMarkdownHtml(segment.markdown);
       }
-      const lineHtml = sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(segment.markdown))) as string);
+      const lineHtml = renderSanitizedMarkdownHtml(segment.markdown);
       const style = options.textLineStyles[segment.name];
       if (!style && options.textLineStyleMode !== 'editor') {
         return lineHtml;
@@ -267,6 +268,12 @@ function renderMarkdownHtml(markdown: string, options: Required<Pick<MarkdownRen
       return `<div class="hvy-text-line-style${unknown}" data-hvy-text-line-style="${escapeHtml(segment.name)}" data-hvy-text-line-style-label="${escapeHtml(label)}" style="${escapeHtml(css)}">${marker}${lineHtml}</div>`;
     })
     .join('');
+}
+
+function renderSanitizedMarkdownHtml(markdown: string): string {
+  return normalizeRenderedMarkdownSoftBreaks(
+    sanitizeHtml(marked.parse(applyUnderlineSyntax(escapeRawHtml(markdown))) as string)
+  );
 }
 
 type TextLineStyleSegment =

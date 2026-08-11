@@ -11,6 +11,7 @@ import {
   removeNonTextContentFromRichEditor,
   turndown,
 } from '../src/markdown';
+import { renderedMarkdownHtmlToSearchText } from '../src/rendered-markdown-text';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
 test('normalizes fully indented text so indentation alone does not imply code', () => {
@@ -44,7 +45,7 @@ test('folds orphan wrapped bullet paragraphs back into the previous list item', 
   );
 
   expect(html).toContain('<ul>');
-  expect(html).toContain('<li>First bullet starts here\nand this is the wrapped remainder</li>');
+  expect(html).toContain('<li>First bullet starts here and this is the wrapped remainder</li>');
   expect(html).toContain('<li>Second bullet</li>');
   expect(html).not.toContain('</ul>\n<p>and this is the wrapped remainder</p>');
 });
@@ -53,6 +54,23 @@ test('keeps a paragraph after a completed list as its own paragraph', () => {
   expect(normalizeMarkdownLists('- First bullet\n\nThis paragraph follows the list.')).toBe(
     '- First bullet\n\nThis paragraph follows the list.'
   );
+});
+
+test('expected result: rendered prose soft wraps use spaces in DOM text', () => {
+  expect(markdownToReaderHtml('_Players\nchasing_')).toContain('<em>Players chasing</em>');
+  expect(markdownToReaderHtml('_Players_\n_chasing_')).toContain('<em>Players</em> <em>chasing</em>');
+});
+
+test('expected result: rendered prose keeps explicit hard breaks', () => {
+  expect(markdownToReaderHtml('Players  \nchasing')).toContain('Players<br>chasing');
+});
+
+test('expected result: searchable Markdown joins soft wraps but preserves structural boundaries', () => {
+  const searchText = (markdown: string): string => renderedMarkdownHtmlToSearchText(markdownToReaderHtml(markdown));
+  expect(searchText('Players\nchasing')).toBe('Players chasing');
+  expect(searchText('Players\n\nchasing')).toBe('Players\n\nchasing');
+  expect(searchText('- Players\n- chasing')).toBe('Players\n\nchasing');
+  expect(searchText('```text\nPlayers\nchasing\n```')).toBe('Players\nchasing');
 });
 
 test('renders bare inline checkbox markers as checkbox controls in reader html', () => {

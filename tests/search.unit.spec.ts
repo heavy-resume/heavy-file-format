@@ -124,6 +124,8 @@ hvy_version: 0.1
 
   expect(expectedResult).toHaveLength(1);
   expect(expectedResult[0]?.targetId).toBe('body-copy');
+  expect(expectedResult[0]?.preview).toContain('Players chasing');
+  expect(expectedResult[0]?.matchedText).toBe('Players chasing');
 });
 
 test('built-in search finds nested container content', async () => {

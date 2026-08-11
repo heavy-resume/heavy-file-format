@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { deserializeDocument } from '../src/serialization';
+import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
@@ -98,6 +98,32 @@ hvy_version: 0.1
   });
 
   expect(expectedResult).toHaveLength(0);
+});
+
+test('built-in search finds a phrase across a serialized prose soft wrap', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"impact"}-->
+#! Impact
+
+<!--hvy:text {"id":"body-copy"}-->
+ _Ferns, moss, young trees, and extensive vegetation will be cleared to make fairways, greens, and tees. Players chasing their discs will create new trails. This will turn Petrovitsky Park's undeveloped patch of forest into a trail sprawl that will grow over time._
+`, '.hvy');
+
+  const serialized = serializeDocument(document);
+  expect(serialized).toMatch(/Players\n\s+chasing/);
+
+  const expectedResult = await builtInSearchProvider({
+    document: deserializeDocument(serialized, '.hvy'),
+    query: 'Players chasing',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]?.targetId).toBe('body-copy');
 });
 
 test('built-in search finds nested container content', async () => {

@@ -267,6 +267,42 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(() => (window as unknown as { __copiedHtml?: string }).__copiedHtml)).toContain('<h2>Copy Heading</h2>');
 });
 
+test('native copy from rendered prose treats a Markdown soft wrap as a space', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard shortcut coverage is chromium-only here.');
+  test.setTimeout(5000);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await setRawEditorText(page, `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"impact"}-->
+#! Impact
+
+<!--hvy:text {"id":"body-copy"}-->
+ _Players
+ chasing their discs will create new trails._
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const renderedText = page.locator('[data-component-id="body-copy"] em');
+  await expect(renderedText).toHaveText('Players chasing their discs will create new trails.');
+  await renderedText.evaluate((paragraph) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+  const expectedResult = await page.evaluate(() => navigator.clipboard.readText());
+
+  expect(expectedResult).toBe('Players chasing their discs will create new trails.');
+});
+
 test('study tools flashcards form remains mounted after sidebar reader refresh', async ({ page }) => {
   test.setTimeout(5000);
   await page.route('**/api/chat', async (route) => {

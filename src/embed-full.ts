@@ -1114,6 +1114,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     initialState,
     persistSessionState ? loadSessionState(options.storageKey) : null
   );
+  hydrateHostAttachmentDescriptorsSync(runtimeState.document, options.attachmentStore ?? null);
   applyChatSessionState(runtimeState, options.initialChatState ?? null);
   if (options.chatSettings) {
     runtimeState.chat.settings = {

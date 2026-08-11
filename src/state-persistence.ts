@@ -50,6 +50,7 @@ interface SessionStatePayload {
   documentBase64?: string;
   documentTextBase64?: string;
   documentTailStorage?: 'indexeddb';
+  documentAttachmentSource?: 'host';
   activeEditor?: SavedActiveEditorState;
 }
 
@@ -445,6 +446,9 @@ function loadSavedDocument(
   if (typeof parsed.documentTextBase64 !== 'string') {
     return undefined;
   }
+  if (parsed.documentAttachmentSource === 'host') {
+    return deserializeDocumentBytes(base64ToBytes(parsed.documentTextBase64), detectExtension(filename));
+  }
   if (parsed.documentTailStorage === 'indexeddb') {
     return undefined;
   }
@@ -463,6 +467,15 @@ function loadSavedDocument(
 function persistDocumentPayload(payload: SessionStatePayload, state: AppState): void {
   const store = ensureDocumentAttachmentStore(state.document);
   const descriptors = store.listDescriptors();
+  if (state.attachmentHost) {
+    payload.documentTextBase64 = bytesToBase64(new TextEncoder().encode(serializeDocument(state.document)));
+    payload.documentAttachmentSource = 'host';
+    window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));
+    attachmentTailSessionCache.delete(getAttachmentTailStorageKey(state.sessionStorageKey));
+    pendingAttachmentTailWrites.delete(getAttachmentTailStorageKey(state.sessionStorageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(state.sessionStorageKey)).catch(() => {});
+    return;
+  }
   if (descriptors.length === 0) {
     payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));

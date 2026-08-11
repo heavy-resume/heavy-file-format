@@ -2860,6 +2860,73 @@ hvy_version: 0.1
   expect(result.hasDefaultStorage).toBe(true);
 });
 
+test('embedded session restoration keeps host attachments external and recalls them after remount', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    sessionStorage.clear();
+    document.body.innerHTML = '<div id="mount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import('/src/embed-full.ts');
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Host attachments
+
+<!--hvy:image {"imageFile":"host.png","imageAlt":"Host image"}-->
+<!--hvy:tail {"id":"image:host.png","mediaType":"image/png","length":8}-->
+--HVY-TAIL--
+`;
+    const bytes = new TextEncoder().encode(source);
+    const root = document.querySelector<HTMLElement>('#mount')!;
+    let recallCount = 0;
+    const attachmentStore = {
+      list: () => [{ id: 'image:host.png', meta: { mediaType: 'image/png' }, length: 8 }],
+      recall: () => {
+        recallCount += 1;
+        return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      },
+      store: () => {},
+      remove: () => {},
+    };
+    const first = mountHvy({
+      root,
+      document: deserializeDocumentBytes(bytes, '.hvy'),
+      mode: 'editor',
+      storageKey: 'host-backed',
+      persistSessionState: true,
+      attachmentStore,
+    });
+    first.getDocument().sections[0]!.title = 'Restored host attachments';
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    first.destroy();
+    const second = mountHvy({
+      root,
+      document: deserializeDocumentBytes(bytes, '.hvy'),
+      mode: 'editor',
+      storageKey: 'host-backed',
+      persistSessionState: true,
+      attachmentStore,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return {
+      title: second.getDocument().sections[0]?.title,
+      recallCount,
+      attachmentTailDuplicated: sessionStorage.getItem('hvy-editor-session-state-v1:host-backed:attachments') !== null,
+      resolutionFailed: Boolean(root.querySelector('[data-hvy-attachment-resolution="failed"]')),
+    };
+  });
+
+  expect(result).toEqual({
+    title: 'Restored host attachments',
+    recallCount: expect.any(Number),
+    attachmentTailDuplicated: false,
+    resolutionFailed: false,
+  });
+  expect(result.recallCount).toBeGreaterThan(0);
+});
+
 test('embedded editor storage key does not override explicit viewer mode', async ({ page }) => {
   await page.goto('/');
 

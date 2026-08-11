@@ -549,7 +549,9 @@ test('Escape closes collapsed search after result navigation moves focus outside
 
 test('quick search distinguishes and advances the current match within one component', async ({ page }) => {
   await page.goto('/');
-  await page.setContent('<div id="root" style="height: 720px"></div>');
+  await page.locator('body').evaluate((body) => {
+    body.innerHTML = '<div id="root" style="height: 720px"></div>';
+  });
   await page.evaluate(async () => {
     const modulePath = '/src/embed-full.ts';
     const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
@@ -581,6 +583,13 @@ hvy_version: 0.1
   await expect(markers.nth(0)).toHaveClass(/is-current-search-match/, { timeout: 1_000 });
   await expect(markers.nth(1)).not.toHaveClass(/is-current-search-match/);
   await expect(page.locator('.is-temp-highlighted')).toHaveCount(0);
+  expect(await markers.evaluateAll((matches) => matches.map((match) => ({
+    background: getComputedStyle(match).backgroundColor,
+    border: getComputedStyle(match).boxShadow,
+  })))).toEqual([
+    expect.objectContaining({ background: expect.not.stringMatching(/^rgba?\(0, 0, 0(?:, 0)?\)$/), border: 'none' }),
+    expect.objectContaining({ background: 'rgba(0, 0, 0, 0)', border: expect.stringContaining('inset') }),
+  ]);
 
   const readerDocumentBeforeNext = await page.locator('#readerDocument').elementHandle();
   await page.getByRole('button', { name: 'Next' }).click();

@@ -587,14 +587,14 @@
 
 .hvy-document .search-match-marker {
   border-radius: 0.25em;
-  background: var(--hvy-highlight-1);
+  background: transparent;
   color: inherit;
+  box-shadow: inset 0 0 0 3px var(--hvy-highlight-2);
 }
 
 .hvy-document .search-match-marker.is-current-search-match {
-  background:
-    linear-gradient(var(--hvy-highlight-2), var(--hvy-highlight-2)),
-    var(--hvy-highlight-1);
+  background: var(--hvy-highlight-2);
+  box-shadow: none;
 }
 
 .hvy-document .reader-search-empty {

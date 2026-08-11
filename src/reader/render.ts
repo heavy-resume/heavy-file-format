@@ -1059,12 +1059,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           className: 'theme-preview-highlight-card',
           variables: ['--hvy-highlight-1', '--hvy-highlight-2', '--hvy-button-bg', '--hvy-surface'],
           states: [
-            { id: 'search', label: 'Search', variables: ['--hvy-highlight-1'] },
+            { id: 'search', label: 'Search Border', variables: ['--hvy-highlight-2'] },
             { id: 'active', label: 'Active', variables: ['--hvy-highlight-2'] },
             { id: 'jump', label: 'Xref Jump', variables: ['--hvy-button-bg', '--hvy-surface'] },
           ],
           html: `<div class="theme-demo-highlight">
-          <button type="button" class="theme-demo-target" data-theme-demo-state="search" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-1" title="Filter to inline highlight colors">Filtered match</button>
+          <button type="button" class="theme-demo-target" data-theme-demo-state="search" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-2" title="Filter to search match border color">Matched result</button>
           <button type="button" class="theme-demo-target theme-demo-highlight-active" data-theme-demo-state="active" data-action="theme-filter-to-colors" data-theme-filter="--hvy-highlight-2" title="Filter to active search result colors">active result</button>
           <button type="button" class="theme-demo-target theme-demo-highlight-jump" data-theme-demo-state="jump" data-action="theme-filter-to-colors" data-theme-filter="--hvy-button-bg --hvy-surface" title="Filter to xref jump flash colors">xref jump</button>
         </div>`,

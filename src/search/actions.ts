@@ -180,8 +180,10 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   state.search.navigationResultIds = getSearchNavigationResults(app).map((candidate) => candidate.id);
   state.search.activeResultId = result.id;
   state.search.open = true;
+  const isEnteringQuickSearch = !state.search.resultsCollapsed;
   state.search.resultsCollapsed = true;
-  const requiresFullRender = state.currentView === 'editor' && revealEditorSearchTargetInState(result);
+  const requiresEditorReveal = state.currentView === 'editor' && revealEditorSearchTargetInState(result);
+  const requiresFullRender = isEnteringQuickSearch || requiresEditorReveal;
   const navigate = () => {
     if (state.currentView === 'editor') {
       navigateToEditorSearchTarget(result, app);

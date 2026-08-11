@@ -21,15 +21,14 @@ describe('reader highlight styling', () => {
     expect(expectedResult).not.toMatch(/rgba\(255,\s*(?:198|218),/);
   });
 
-  test('layers the active search color over the soft match color', () => {
+  test('uses the strong highlight as a flat match border and current-match fill', () => {
     const source = readFileSync(new URL('../src/search/search.css', import.meta.url), 'utf8');
     const ordinaryMatch = source.match(/\.hvy-document \.search-match-marker\s*\{([^}]*)\}/)?.[1] ?? '';
     const currentMatch = source.match(/\.hvy-document \.search-match-marker\.is-current-search-match\s*\{([^}]*)\}/)?.[1] ?? '';
 
-    expect(ordinaryMatch).toContain('background: var(--hvy-highlight-1)');
-    expect(currentMatch).toContain('linear-gradient(var(--hvy-highlight-2), var(--hvy-highlight-2))');
-    expect(currentMatch).toContain('var(--hvy-highlight-1)');
-    expect(ordinaryMatch).not.toContain('box-shadow');
-    expect(currentMatch).not.toContain('box-shadow');
+    expect(ordinaryMatch).toContain('background: transparent');
+    expect(ordinaryMatch).toContain('box-shadow: inset 0 0 0 3px var(--hvy-highlight-2)');
+    expect(currentMatch).toContain('background: var(--hvy-highlight-2)');
+    expect(currentMatch).toContain('box-shadow: none');
   });
 });

@@ -20,6 +20,39 @@
   color: var(--hvy-text-alt);
 }
 
+.hvy-reference-app .reference-rerender-controls {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.3rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--hvy-surface) 82%, transparent);
+}
+
+.hvy-reference-app .reference-rerender-label {
+  padding: 0 0.25rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hvy-reference-app .reference-rerender-button {
+  min-height: 1.8rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.76rem;
+}
+
+.hvy-reference-app .reference-hot-reload-button {
+  border-color: var(--hvy-warning-border);
+  background: var(--hvy-warning-bg);
+  color: var(--hvy-warning-text);
+}
+
 .hvy-reference-app .toolbar {
   display: flex;
   align-items: center;

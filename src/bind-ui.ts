@@ -18,6 +18,7 @@ import {
   getRefreshReaderBlock,
   getRefreshReaderPanels,
   getRefreshReaderSection,
+  getRefreshSearchSurface,
   runWithStateRuntime,
   runWithStateRuntimeAsync,
 } from './state';
@@ -38,7 +39,7 @@ import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
-import { saveSessionState } from './state-persistence';
+import { saveSessionState, saveSessionStateAsync } from './state-persistence';
 import { createDocumentFilterSnapshot } from './search/document-filter';
 import { createDefaultSearchState } from './search/state';
 import { externalSearchSnapshotToDocumentState } from './search/snapshot';
@@ -295,9 +296,27 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterComposer = app.querySelector<HTMLFormElement>('#metaFilterComposer');
   const metaFilterQuery = app.querySelector<HTMLInputElement>('#metaFilterQuery');
   const clearMetaFilterButton = app.querySelector<HTMLButtonElement>('[data-action="clear-meta-filter"]');
+  const rerenderSearchButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-search"]');
+  const rerenderReaderButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-reader"]');
+  const rerenderAppButton = app.querySelector<HTMLButtonElement>('[data-action="reference-rerender-app"]');
+  const hotReloadButton = app.querySelector<HTMLButtonElement>('[data-action="reference-hot-reload"]');
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
+
+  rerenderSearchButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRefreshSearchSurface()(app));
+  });
+  rerenderReaderButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRefreshReaderPanels()({ surface: 'all' }));
+  });
+  rerenderAppButton?.addEventListener('click', () => {
+    runInBoundRuntime(() => getRenderApp()());
+  });
+  hotReloadButton?.addEventListener('click', async () => {
+    await runInBoundRuntimeAsync(() => saveSessionStateAsync(state));
+    window.location.reload();
+  });
 
   const clearPendingAiReaderAction = (): void => {
     if (pendingAiReaderAction !== null) {

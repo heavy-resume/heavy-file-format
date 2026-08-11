@@ -3,7 +3,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderH
 import type { VisualBlock, VisualSection } from '../../types';
 import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
-import { getAttachmentDescriptors, type HvyAttachmentHostAdapter } from '../../../attachment-store';
+import { getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
 import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -21,6 +21,11 @@ export { mergeImagePresetCss } from './image-preset-css';
 type HostImageUrlResolution =
   | { status: 'pending'; promise: Promise<string | null> }
   | { status: 'resolved'; url: string | null };
+
+export interface ImageAttachmentResolutionContext {
+  document: VisualDocument;
+  attachmentHost: HvyAttachmentHostAdapter | null;
+}
 
 let documentBlobUrlCache = new WeakMap<VisualDocument, Map<string, { url: string; bytes: Uint8Array }>>();
 let hostImageUrlCache = new WeakMap<HvyAttachmentHostAdapter, Map<string, HostImageUrlResolution>>();
@@ -58,15 +63,50 @@ export function getImageBlobUrl(filename: string): string | null {
   return getDocumentImageBlobUrl(state.document, filename);
 }
 
-export async function resolveImageBlobUrl(filename: string): Promise<string | null> {
+export function captureImageAttachmentResolutionContext(): ImageAttachmentResolutionContext {
+  return {
+    document: state.document,
+    attachmentHost: state.attachmentHost ?? null,
+  };
+}
+
+export async function resolveImageBlobUrl(
+  filename: string,
+  context = captureImageAttachmentResolutionContext()
+): Promise<string | null> {
   if (!filename) {
     return null;
   }
-  const attachmentHost = state.attachmentHost;
-  const document = state.document;
-  const hostUrl = getHostImageUrl(attachmentHost, getImageAttachmentId(filename));
+  const { attachmentHost, document } = context;
+  const attachmentId = getImageAttachmentId(filename);
+  const hostUrl = getHostImageUrl(attachmentHost, attachmentId);
   const resolvedHostUrl = typeof hostUrl === 'string' ? hostUrl : await hostUrl;
-  return resolvedHostUrl ?? getDocumentImageBlobUrl(document, filename);
+  if (resolvedHostUrl) {
+    return resolvedHostUrl;
+  }
+  const documentUrl = getDocumentImageBlobUrl(document, filename);
+  if (documentUrl || !attachmentHost) {
+    return documentUrl;
+  }
+  try {
+    const recalled = await attachmentHost.recall(attachmentId);
+    if (!recalled) {
+      return null;
+    }
+    const url = recalled instanceof Blob
+      ? normalizeHostImageUrl(recalled)
+      : createManagedImageBlobUrl(
+          await normalizeAttachmentBytes(recalled),
+          getAttachmentDescriptors(document).find((descriptor) => descriptor.id === attachmentId)?.meta.mediaType
+            ?? inferImageMediaType(filename)
+        );
+    if (url) {
+      cacheResolvedHostImageUrl(attachmentHost, attachmentId, url);
+    }
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 function getDocumentImageBlobUrl(document: VisualDocument, filename: string): string | null {
@@ -119,26 +159,34 @@ function getHostImageUrl(
   try {
     result = host.resolveUrl(attachmentId);
   } catch {
-    cache.set(attachmentId, { status: 'resolved', url: null });
+    cache.delete(attachmentId);
     return null;
   }
   if (!isPromiseLike(result)) {
     const url = normalizeHostImageUrl(result);
-    cache.set(attachmentId, { status: 'resolved', url });
+    if (url) {
+      cache.set(attachmentId, { status: 'resolved', url });
+    } else {
+      cache.delete(attachmentId);
+    }
     return url;
   }
   const promise = Promise.resolve(result)
     .then((resolved) => {
       if (cacheVersion !== imageUrlCacheVersion) {
-        return null;
+        return getHostImageUrl(host, attachmentId);
       }
       const url = normalizeHostImageUrl(resolved);
-      cache?.set(attachmentId, { status: 'resolved', url });
+      if (url) {
+        cache?.set(attachmentId, { status: 'resolved', url });
+      } else {
+        cache?.delete(attachmentId);
+      }
       return url;
     })
     .catch(() => {
       if (cacheVersion === imageUrlCacheVersion) {
-        cache?.set(attachmentId, { status: 'resolved', url: null });
+        cache?.delete(attachmentId);
       }
       return null;
     });
@@ -158,6 +206,24 @@ function normalizeHostImageUrl(value: string | Blob | null): string | null {
   return url;
 }
 
+function createManagedImageBlobUrl(bytes: Uint8Array, mediaType: unknown): string {
+  const blob = new Blob([Uint8Array.from(bytes)], {
+    type: typeof mediaType === 'string' ? mediaType : 'application/octet-stream',
+  });
+  const url = URL.createObjectURL(blob);
+  managedBlobUrls.add(url);
+  return url;
+}
+
+function cacheResolvedHostImageUrl(host: HvyAttachmentHostAdapter, attachmentId: string, url: string): void {
+  let cache = hostImageUrlCache.get(host);
+  if (!cache) {
+    cache = new Map();
+    hostImageUrlCache.set(host, cache);
+  }
+  cache.set(attachmentId, { status: 'resolved', url });
+}
+
 function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof (value as Promise<T> | null)?.then === 'function';
 }
@@ -167,7 +233,7 @@ export function hasImageAttachmentSource(filename: string): boolean {
     return false;
   }
   const id = getImageAttachmentId(filename);
-  if (state.attachmentHost?.resolveUrl) {
+  if (state.attachmentHost) {
     return true;
   }
   return getAttachmentDescriptors(state.document).some((descriptor) => descriptor.id === id);
@@ -207,7 +273,8 @@ export function clearImageBlobUrlCache(): void {
 }
 
 export function bindLazyImageHydration(root: ParentNode): void {
-  initializeImageAttachmentPickers(root);
+  const attachmentContext = captureImageAttachmentResolutionContext();
+  initializeImageAttachmentPickers(root, attachmentContext);
   const startedAt = nowMs();
   lazyImageHydrationObservers.get(root)?.forEach((observer) => observer.disconnect());
   lazyImageHydrationObservers.delete(root);
@@ -216,8 +283,9 @@ export function bindLazyImageHydration(root: ParentNode): void {
   if (images.length === 0) {
     return;
   }
+  const hydrateImage = (image: HTMLImageElement) => hydrateLazyImage(image, attachmentContext);
   if (typeof IntersectionObserver === 'undefined') {
-    images.forEach(hydrateLazyImage);
+    images.forEach(hydrateImage);
     logPerfTrace('image-lazy-hydration:bind', {
       elapsedMs: elapsedMs(startedAt),
       imageCount: images.length,
@@ -247,7 +315,7 @@ export function bindLazyImageHydration(root: ParentNode): void {
           return;
         }
         observer.unobserve(entry.target);
-        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateLazyImage);
+        (imagesByTarget.get(entry.target) ?? []).forEach(hydrateImage);
       });
     }, {
       root: scroller,
@@ -268,17 +336,19 @@ export function bindLazyImageHydration(root: ParentNode): void {
   });
 }
 
-async function hydrateLazyImage(image: HTMLImageElement): Promise<void> {
+async function hydrateLazyImage(image: HTMLImageElement, context: ImageAttachmentResolutionContext): Promise<void> {
   if (image.getAttribute('src')) {
     return;
   }
+  image.dataset.hvyAttachmentResolution = 'pending';
   const startedAt = nowMs();
   const filename = image.dataset.imageFilename ?? '';
-  const url = await resolveImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename, context);
   if (url) {
     observeHydratedImageLoad(image, filename, startedAt);
     image.src = url;
     image.dataset.hvyLazyImage = 'loaded';
+    image.dataset.hvyAttachmentResolution = 'resolved';
     logPerfTrace('image-lazy-hydration:src-set', {
       filename,
       elapsedMs: elapsedMs(startedAt),
@@ -290,7 +360,8 @@ async function hydrateLazyImage(image: HTMLImageElement): Promise<void> {
   }
   const missing = image.ownerDocument.createElement('div');
   missing.className = 'image-empty muted';
-  missing.textContent = `Missing attachment: ${filename}`;
+  missing.dataset.hvyAttachmentResolution = 'failed';
+  missing.textContent = `Attachment resolution failed: ${filename}`;
   image.replaceWith(missing);
   logPerfTrace('image-lazy-hydration:missing', {
     filename,
@@ -391,12 +462,15 @@ export function renderImageAttachmentPicker(options: {
   </div>`;
 }
 
-export function initializeImageAttachmentPickers(root: ParentNode): void {
+export function initializeImageAttachmentPickers(
+  root: ParentNode,
+  attachmentContext = captureImageAttachmentResolutionContext()
+): void {
   root.querySelectorAll<HTMLElement>('[data-image-attachment-picker-shell]').forEach((shell) => {
     if (imageAttachmentPickerStates.has(shell)) return;
     const stateForPicker = { expanded: false, observer: null as ResizeObserver | null };
     imageAttachmentPickerStates.set(shell, stateForPicker);
-    const update = () => updateImageAttachmentPicker(shell, stateForPicker);
+    const update = () => updateImageAttachmentPicker(shell, stateForPicker, attachmentContext);
     const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
     toggle?.addEventListener('click', () => {
       stateForPicker.expanded = !stateForPicker.expanded;
@@ -420,6 +494,7 @@ export function initializeImageAttachmentPickers(root: ParentNode): void {
 function updateImageAttachmentPicker(
   shell: HTMLElement,
   stateForPicker: { expanded: boolean; observer: ResizeObserver | null },
+  attachmentContext: ImageAttachmentResolutionContext,
 ): void {
   const picker = shell.querySelector<HTMLElement>('[data-image-attachment-picker]');
   const toggle = shell.querySelector<HTMLButtonElement>('[data-image-attachment-picker-toggle]');
@@ -429,7 +504,7 @@ function updateImageAttachmentPicker(
   const collapsedCount = Math.min(choices.length, columnCount * IMAGE_ATTACHMENT_PICKER_ROWS);
   choices.forEach((choice, index) => {
     choice.hidden = !stateForPicker.expanded && index >= collapsedCount;
-    if (!choice.hidden) hydrateImageAttachmentPickerPreview(choice);
+    if (!choice.hidden) hydrateImageAttachmentPickerPreview(choice, attachmentContext);
   });
   const hiddenCount = choices.length - collapsedCount;
   toggle.hidden = hiddenCount <= 0;
@@ -437,17 +512,23 @@ function updateImageAttachmentPicker(
   toggle.textContent = stateForPicker.expanded ? 'Show fewer images' : `Show ${hiddenCount} more image${hiddenCount === 1 ? '' : 's'}`;
 }
 
-async function hydrateImageAttachmentPickerPreview(choice: HTMLElement): Promise<void> {
+async function hydrateImageAttachmentPickerPreview(
+  choice: HTMLElement,
+  attachmentContext: ImageAttachmentResolutionContext
+): Promise<void> {
   const image = choice.querySelector<HTMLImageElement>('img[data-image-attachment-picker-preview]');
   if (!image || image.src) return;
+  image.dataset.hvyAttachmentResolution = 'pending';
   const filename = image.dataset.imageFilename ?? '';
-  const url = await resolveImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename, attachmentContext);
   if (url) {
     image.src = url;
+    image.dataset.hvyAttachmentResolution = 'resolved';
     return;
   }
   const missing = document.createElement('span');
-  missing.textContent = 'Missing';
+  missing.dataset.hvyAttachmentResolution = 'failed';
+  missing.textContent = 'Resolution failed';
   image.replaceWith(missing);
 }
 

@@ -8,7 +8,7 @@ import { recordHistory } from '../../../history';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { getRefreshReaderPanels, getRenderApp, state } from '../../../state';
 import { arrowDownIcon, arrowLeftIcon, arrowRightIcon, arrowUpIcon, cameraIcon, closeIcon } from '../../../icons';
-import { getImageAttachmentReferenceCount, getImageBlobUrl, hasImageAttachmentSource, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, resolveImageBlobUrl, storeImageAttachment } from '../image/image';
+import { captureImageAttachmentResolutionContext, getImageAttachmentReferenceCount, getImageBlobUrl, hasImageAttachmentSource, IMAGE_ATTACHMENT_ACCEPT, openImageCameraCapture, removeImageAttachmentIfLastReference, renderImageAttachmentPicker, renderImageElement, resolveImageBlobUrl, storeImageAttachment, type ImageAttachmentResolutionContext } from '../image/image';
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { downloadBlob } from '../../../utils';
 
@@ -20,6 +20,7 @@ interface CarouselRuntimeState {
   scrollFrame: number | null;
   scrollSettleTimer: number | null;
   isJumping: boolean;
+  attachmentContext: ImageAttachmentResolutionContext;
 }
 
 const runtimeState = new WeakMap<HTMLElement, CarouselRuntimeState>();
@@ -183,6 +184,7 @@ export function initializeCarouselReaders(root: ParentNode): void {
       scrollFrame: null,
       scrollSettleTimer: null,
       isJumping: false,
+      attachmentContext: captureImageAttachmentResolutionContext(),
     };
     runtimeState.set(frame, stateForFrame);
     const track = frame.querySelector<HTMLElement>('.hvy-carousel-track');
@@ -514,27 +516,36 @@ function hydrateCarouselImagesAround(frame: HTMLElement, index: number): void {
   if (count === 0) {
     return;
   }
+  const attachmentContext = runtimeState.get(frame)?.attachmentContext ?? captureImageAttachmentResolutionContext();
   [index - 1, index, index + 1].forEach((rawIndex) => {
     const normalized = ((rawIndex % count) + count) % count;
-    hydrateCarouselSlideImage(slides[normalized]);
-    track.querySelectorAll<HTMLElement>(`.hvy-carousel-slide[data-carousel-real-index="${normalized}"][data-carousel-clone]`).forEach(hydrateCarouselSlideImage);
+    hydrateCarouselSlideImage(slides[normalized], attachmentContext);
+    track.querySelectorAll<HTMLElement>(`.hvy-carousel-slide[data-carousel-real-index="${normalized}"][data-carousel-clone]`).forEach((slide) => {
+      hydrateCarouselSlideImage(slide, attachmentContext);
+    });
   });
 }
 
-async function hydrateCarouselSlideImage(slide: HTMLElement | undefined): Promise<void> {
+async function hydrateCarouselSlideImage(
+  slide: HTMLElement | undefined,
+  attachmentContext: ImageAttachmentResolutionContext
+): Promise<void> {
   const image = slide?.querySelector<HTMLImageElement>('img[data-hvy-carousel-lazy-image="true"]');
   if (!image || image.getAttribute('src')) {
     return;
   }
+  image.dataset.hvyAttachmentResolution = 'pending';
   const filename = image.dataset.imageFilename ?? '';
-  const url = await resolveImageBlobUrl(filename);
+  const url = await resolveImageBlobUrl(filename, attachmentContext);
   if (url) {
     image.src = url;
+    image.dataset.hvyAttachmentResolution = 'resolved';
     return;
   }
   const missing = image.ownerDocument.createElement('div');
   missing.className = 'hvy-carousel-missing';
-  missing.textContent = `Missing attachment: ${filename}`;
+  missing.dataset.hvyAttachmentResolution = 'failed';
+  missing.textContent = `Attachment resolution failed: ${filename}`;
   image.replaceWith(missing);
 }
 

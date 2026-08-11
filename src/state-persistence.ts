@@ -4,6 +4,11 @@ import { createDefaultSearchState } from './search/state';
 import type { HvySearchMatch, HvySearchResult, SearchCategory, SearchResultCategory, SearchFilterQueryMode, SearchState } from './search/types';
 import { detectExtension } from './utils';
 import { ensureDocumentAttachmentStore } from './attachment-store';
+import {
+  loadSessionAttachmentTail,
+  removeSessionAttachmentTail,
+  storeSessionAttachmentTail,
+} from './session-attachment-tail-storage';
 
 const SESSION_STORAGE_KEY = 'hvy-editor-session-state-v1';
 const CHAT_SESSION_STORAGE_SUFFIX = ':chat';
@@ -44,6 +49,7 @@ interface SessionStatePayload {
   };
   documentBase64?: string;
   documentTextBase64?: string;
+  documentTailStorage?: 'indexeddb';
   activeEditor?: SavedActiveEditorState;
 }
 
@@ -122,6 +128,38 @@ export function loadSessionState(storageKey?: string | null): LoadedSessionState
   }
 }
 
+export async function loadSessionStateAsync(storageKey?: string | null): Promise<LoadedSessionState | null> {
+  const loaded = loadSessionState(storageKey);
+  if (!loaded || loaded.document) {
+    return loaded;
+  }
+  try {
+    const raw = window.sessionStorage?.getItem(getSessionStorageKey(storageKey));
+    const parsed = raw ? JSON.parse(raw) as Partial<SessionStatePayload> : null;
+    if (parsed?.documentTailStorage !== 'indexeddb' || typeof parsed.documentTextBase64 !== 'string') {
+      return loaded;
+    }
+    const tailBytes = await loadSessionAttachmentTail(getAttachmentTailStorageKey(storageKey));
+    if (!tailBytes) {
+      return loaded;
+    }
+    const textBytes = base64ToBytes(parsed.documentTextBase64);
+    const bytes = new Uint8Array(textBytes.length + tailBytes.length);
+    bytes.set(textBytes, 0);
+    bytes.set(tailBytes, textBytes.length);
+    loaded.document = deserializeDocumentBytes(bytes, detectExtension(loaded.filename));
+    const store = ensureDocumentAttachmentStore(loaded.document);
+    attachmentTailSessionCache.set(getAttachmentTailStorageKey(storageKey), {
+      signature: `${store.getVersion()}:${JSON.stringify(store.listDescriptors())}`,
+      base64: '',
+      storage: 'indexeddb',
+    });
+    return loaded;
+  } catch {
+    return loaded;
+  }
+}
+
 export function saveSessionState(state: AppState): void {
   if (state.sessionStorageKey === null) {
     return;
@@ -167,6 +205,14 @@ export function saveSessionState(state: AppState): void {
     removeLegacySessionState();
   } catch (error) {
     console.warn('[hvy:session] failed to save state', error);
+  }
+}
+
+export async function saveSessionStateAsync(state: AppState): Promise<void> {
+  saveSessionState(state);
+  const pendingTailWrite = pendingAttachmentTailWrites.get(getAttachmentTailStorageKey(state.sessionStorageKey));
+  if (pendingTailWrite) {
+    await pendingTailWrite;
   }
 }
 
@@ -302,6 +348,8 @@ export function clearSessionState(storageKey?: string | null): void {
   }
   try {
     attachmentTailSessionCache.delete(getAttachmentTailStorageKey(storageKey));
+    pendingAttachmentTailWrites.delete(getAttachmentTailStorageKey(storageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(storageKey)).catch(() => {});
     window.sessionStorage?.removeItem(getSessionStorageKey(storageKey));
     window.sessionStorage?.removeItem(getChatSessionStorageKey(storageKey));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(storageKey));
@@ -379,7 +427,12 @@ function loadSavedChatState(parsed: Partial<SessionStatePayload>, storageKey?: s
   }
 }
 
-const attachmentTailSessionCache = new Map<string, { signature: string; base64: string }>();
+const attachmentTailSessionCache = new Map<string, {
+  signature: string;
+  base64: string;
+  storage: 'session' | 'indexeddb';
+}>();
+const pendingAttachmentTailWrites = new Map<string, Promise<void>>();
 
 function loadSavedDocument(
   parsed: Partial<SessionStatePayload>,
@@ -390,6 +443,9 @@ function loadSavedDocument(
     return deserializeDocumentBytes(base64ToBytes(parsed.documentBase64), detectExtension(filename));
   }
   if (typeof parsed.documentTextBase64 !== 'string') {
+    return undefined;
+  }
+  if (parsed.documentTailStorage === 'indexeddb') {
     return undefined;
   }
   const textBytes = base64ToBytes(parsed.documentTextBase64);
@@ -410,6 +466,7 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
   if (descriptors.length === 0) {
     payload.documentBase64 = bytesToBase64(serializeDocumentBytes(state.document));
     window.sessionStorage?.removeItem(getAttachmentTailStorageKey(state.sessionStorageKey));
+    void removeSessionAttachmentTail(getAttachmentTailStorageKey(state.sessionStorageKey)).catch(() => {});
     return;
   }
 
@@ -417,8 +474,14 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
   const storageKey = getAttachmentTailStorageKey(state.sessionStorageKey);
   const signature = `${store.getVersion()}:${JSON.stringify(descriptors)}`;
   const cached = attachmentTailSessionCache.get(storageKey);
-  if (cached?.signature === signature && window.sessionStorage?.getItem(storageKey) !== null) {
-    return;
+  if (cached?.signature === signature) {
+    if (cached.storage === 'indexeddb') {
+      payload.documentTailStorage = 'indexeddb';
+      return;
+    }
+    if (window.sessionStorage?.getItem(storageKey) !== null) {
+      return;
+    }
   }
   const attachments = store.list();
   const tailLength = attachments.reduce((sum, attachment) => sum + attachment.bytes.length, 0);
@@ -429,8 +492,29 @@ function persistDocumentPayload(payload: SessionStatePayload, state: AppState): 
     offset += attachment.bytes.length;
   }
   const base64 = bytesToBase64(tailBytes);
-  attachmentTailSessionCache.set(storageKey, { signature, base64 });
-  setSessionStorageItem(storageKey, base64);
+  try {
+    setSessionStorageItem(storageKey, base64);
+    attachmentTailSessionCache.set(storageKey, { signature, base64, storage: 'session' });
+    pendingAttachmentTailWrites.delete(storageKey);
+    void removeSessionAttachmentTail(storageKey).catch(() => {});
+  } catch {
+    window.sessionStorage?.removeItem(storageKey);
+    payload.documentTailStorage = 'indexeddb';
+    attachmentTailSessionCache.set(storageKey, { signature, base64, storage: 'indexeddb' });
+    const pendingWrite = storeSessionAttachmentTail(storageKey, tailBytes).catch((error) => {
+      const cachedEntry = attachmentTailSessionCache.get(storageKey);
+      if (cachedEntry?.signature === signature && cachedEntry.storage === 'indexeddb') {
+        attachmentTailSessionCache.delete(storageKey);
+      }
+      throw error;
+    }).finally(() => {
+      if (pendingAttachmentTailWrites.get(storageKey) === pendingWrite) {
+        pendingAttachmentTailWrites.delete(storageKey);
+      }
+    });
+    pendingAttachmentTailWrites.set(storageKey, pendingWrite);
+    void pendingWrite.catch(() => {});
+  }
 }
 
 function setSessionStorageItem(key: string, value: string): void {

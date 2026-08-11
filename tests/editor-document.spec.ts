@@ -60,6 +60,73 @@ test('reference app uses embedded runtime boundary for themed controls', async (
   await expect(page.locator('.editor-sidebar-panel')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
+test('reference rerender diagnostics exercise search, reader, and full app render paths', async ({ page }) => {
+  await page.goto('/');
+
+  const controls = page.getByRole('group', { name: 'Reference rerender diagnostics' });
+  await expect(controls).toBeVisible();
+
+  await page.locator('.search-launcher').click();
+  const searchInput = page.locator('[data-field="search-query"]');
+  await searchInput.fill('attachment');
+  await controls.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(searchInput).toHaveValue('attachment');
+
+  const readerRefreshCount = await page.evaluate(async () => (await import('/src/state.ts')).refreshReaderCount);
+  await controls.getByRole('button', { name: 'Reader', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).refreshReaderCount)).toBeGreaterThan(readerRefreshCount);
+
+  const appRenderCount = await page.evaluate(async () => (await import('/src/state.ts')).renderCount);
+  await controls.getByRole('button', { name: 'App', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).renderCount)).toBeGreaterThan(appRenderCount);
+  await expect(page.getByRole('group', { name: 'Reference rerender diagnostics' })).toBeVisible();
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('group', { name: 'Reference rerender diagnostics' }).getByRole('button', { name: 'Hot Reload', exact: true }).click(),
+  ]);
+  await expect(page.getByRole('group', { name: 'Reference rerender diagnostics' })).toBeVisible();
+  await expect(page.locator('[data-field="search-query"]')).toHaveValue('attachment');
+});
+
+test('reference hot reload restores an attachment tail larger than session storage quota', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+  await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptyBlock }, { setImageAttachment }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+      import('/src/attachments.ts'),
+    ]);
+    const image = createEmptyBlock('image');
+    image.id = 'large-session-image';
+    image.schema.imageFile = 'large-session-image.png';
+    image.schema.imageAlt = 'Large session attachment';
+    state.document.sections[0]!.blocks.push(image);
+    const bytes = new Uint8Array(6 * 1024 * 1024);
+    bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+    setImageAttachment(state.document, 'large-session-image.png', 'image/png', bytes);
+    getRenderApp()();
+  });
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Hot Reload', exact: true }).click(),
+  ]);
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.attachments.find((attachment) => attachment.id === 'image:large-session-image.png')?.bytes.length;
+  })).toBe(6 * 1024 * 1024);
+
+  await page.locator('.search-launcher').click();
+  await page.locator('[data-field="search-query"]').fill('Large session attachment');
+  await page.locator('#searchComposer').press('Enter');
+  await page.locator('.search-result').first().click();
+  await expect(page.locator('[data-hvy-attachment-resolution="failed"]')).toHaveCount(0);
+});
+
 test('native dropdown options use themed colors on UFO palette controls', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem('hvy-palette-override-v1', 'ufo');
@@ -1726,6 +1793,93 @@ hvy_version: 0.1
   expect(result.src).toBe('/assets/static-photo.png');
   expect(result.alt).toBe('Static Photo');
   expect(result.missing).toBe(false);
+});
+
+test('embedded search rerenders hydrate images from their owning attachment store', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="firstMount"></div><div id="secondMount"></div>';
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"gallery"}-->
+#! Gallery
+
+<!--hvy:text-->
+Search attachment needle.
+
+<!--hvy:image {"imageFile":"owned-photo.svg","imageAlt":"Owned Photo"}-->
+`;
+    const calls = { first: 0, second: 0 };
+    const createAttachmentStore = (
+      owner: 'first' | 'second',
+      url: string | null,
+      recalledBytes: Uint8Array | null = null
+    ) => ({
+      list: () => [{ id: 'image:owned-photo.svg', meta: { mediaType: 'image/svg+xml' }, length: 10 }],
+      recall: () => recalledBytes,
+      store: () => {},
+      remove: () => {},
+      resolveUrl: async () => {
+        calls[owner] += 1;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
+        return url;
+      },
+    });
+    const firstRoot = document.querySelector<HTMLElement>('#firstMount');
+    const secondRoot = document.querySelector<HTMLElement>('#secondMount');
+    if (!firstRoot || !secondRoot) {
+      throw new Error('Mount roots missing.');
+    }
+    mountHvy({
+      root: firstRoot,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      controls: true,
+      attachmentStore: createAttachmentStore(
+        'first',
+        null,
+        new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>')
+      ),
+    });
+    mountHvy({
+      root: secondRoot,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+      controls: true,
+      attachmentStore: createAttachmentStore(
+        'second',
+        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>'
+      ),
+    });
+    (window as typeof window & { attachmentOwnerCalls?: typeof calls }).attachmentOwnerCalls = calls;
+  });
+
+  const secondRoot = page.locator('#secondMount');
+  await secondRoot.locator('.search-launcher').click({ force: true });
+  await secondRoot.locator('[data-field="search-query"]').fill('Search attachment needle');
+  await secondRoot.locator('#searchComposer').press('Enter');
+  await secondRoot.locator('.search-result').click({ force: true });
+  await page.waitForTimeout(200);
+  const result = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('#secondMount');
+    const firstRoot = document.querySelector<HTMLElement>('#firstMount');
+    return {
+      calls: (window as typeof window & { attachmentOwnerCalls?: { first: number; second: number } }).attachmentOwnerCalls,
+      missing: root?.textContent?.includes('Missing attachment') ?? false,
+      src: root?.querySelector<HTMLImageElement>('img[data-image-filename="owned-photo.svg"]')?.getAttribute('src') ?? '',
+      recalledSrc: firstRoot?.querySelector<HTMLImageElement>('img[data-image-filename="owned-photo.svg"]')?.getAttribute('src') ?? '',
+    };
+  });
+
+  expect(result.calls?.second).toBeGreaterThan(0);
+  expect(result.missing).toBe(false);
+  expect(result.src).toContain('data:image/svg+xml');
+  expect(result.recalledSrc).toMatch(/^blob:/);
 });
 
 test('embedded clients cache asynchronous host image blob resolution', async ({ page }) => {

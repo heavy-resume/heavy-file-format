@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { getCarouselSlideScrollLeft, getNearestCarouselSlide, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
-import { bindImageDragAndDrop, renderImageEditor, renderImageReader } from '../src/editor/components/image/image';
+import { bindImageDragAndDrop, clearImageBlobUrlCache, renderImageEditor, renderImageReader, resolveImageBlobUrl } from '../src/editor/components/image/image';
 import { ensureDocumentAttachmentStore } from '../src/attachment-store';
 import { createHostedAttachmentAdapter } from '../src/hosted-attachments';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
@@ -46,6 +46,65 @@ const helpers: ComponentRenderHelpers = {
 };
 
 describe('image editor render controls', () => {
+  test('expected result: cache invalidation during hosted image resolution retries without reporting it missing', async () => {
+    let releaseResolution: ((value: string) => void) | null = null;
+    const document = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    }).document;
+    let resolveCalls = 0;
+    const attachmentHost = {
+      list: () => [{ id: 'image:race.svg', meta: { mediaType: 'image/svg+xml' }, length: 10 }],
+      recall: () => null,
+      store: () => {},
+      remove: () => {},
+      resolveUrl: () => {
+        resolveCalls += 1;
+        if (resolveCalls > 1) {
+          return '/attachments/race.svg';
+        }
+        return new Promise<string>((resolve) => {
+          releaseResolution = resolve;
+        });
+      },
+    };
+
+    const pendingResolution = resolveImageBlobUrl('race.svg', { document, attachmentHost });
+    clearImageBlobUrlCache();
+    releaseResolution?.('/attachments/race.svg');
+
+    await expect(pendingResolution).resolves.toBe('/attachments/race.svg');
+    expect(resolveCalls).toBe(2);
+  });
+
+  test('expected result: hosted image resolution recalls authoritative bytes when its optional url path fails', async () => {
+    const document = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    }).document;
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL');
+
+    const expectedResult = await resolveImageBlobUrl('recalled.svg', {
+      document,
+      attachmentHost: {
+        list: () => [{ id: 'image:recalled.svg', meta: { mediaType: 'image/svg+xml' }, length: 6 }],
+        recall: () => new Uint8Array([60, 115, 118, 103, 47, 62]),
+        store: () => {},
+        remove: () => {},
+        resolveUrl: () => null,
+      },
+    });
+
+    expect(expectedResult).toMatch(/^blob:/);
+    expect(createObjectUrl).toHaveBeenCalledOnce();
+    expect(createObjectUrl.mock.calls[0]?.[0]).toBeInstanceOf(Blob);
+    createObjectUrl.mockRestore();
+  });
+
   test('expected result: image editor offers camera capture and attached picture reuse', () => {
     const block: VisualBlock = createEmptyBlock('image');
     block.id = 'photo';

@@ -326,6 +326,6 @@ hvy_version: 0.1
   await expect(passiveTable.locator('.reader-table tbody tr')).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toHaveValue(/"tableRows":\[\{"cells":\["Alpha","Open"\]\}\]/);
+  await expect(page.locator('#rawEditor')).toHaveValue(/\| Alpha \| Open \|/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/"cells":\["",""\]/);
 });

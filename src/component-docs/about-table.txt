@@ -3,5 +3,6 @@ Static table data rendered from configured rows and columns.
 In the CLI, tableColumns.json is a JSON array of strings and tableRows.json is a JSON array of row objects.
 In raw HVY schema, tableColumns is the same JSON/YAML array of strings.
 tableShowHeader controls whether the header row is shown.
-In raw HVY schema, tableRows is the same array of row objects, and each row contains only cells, for example {"cells":["Example","Open"]}.
+In raw HVY, tableColumns stays in the component directive. Static row values are written in the component body as a GFM table, one row per line. The GFM header is structural; inline tableColumns remains authoritative.
+Older inline tableRows arrays are still accepted and take precedence when present, including an explicitly empty array.
 Tables are non-interactive; use surrounding components when rows need narrative detail or reveal/hide behavior.

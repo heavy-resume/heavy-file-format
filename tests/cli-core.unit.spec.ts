@@ -1094,7 +1094,8 @@ hvy_version: 0.1
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Task | Done\nTrash | No\nDishes | Yes\n');
   expect(serializeDocument(document)).toContain('"tableColumns":["Task","Done"]');
-  expect(serializeDocument(document)).toContain('"tableRows":[{"cells":["Trash","No"]},{"cells":["Dishes","Yes"]}]');
+  expect(serializeDocument(document)).toContain('| Trash | No |');
+  expect(serializeDocument(document)).toContain('| Dishes | Yes |');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
     'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'
@@ -2492,7 +2493,7 @@ test('hvy insert section applies reusable section template variables', async () 
   expect(expectedResult).toContain('# Awards');
   expect((await executeHvyCliCommand(document, session, `cat ${created.output}/component-list-2/component-list.json`)).output).toContain('"componentListComponent": "resume-section-row"');
   expect(expectedResult).toContain('"tableColumns":["ITEM","SUMMARY"]');
-  expect(expectedResult).toContain('"tableRows":[{"cells":["Best Paper","2024"]}]');
+  expect(expectedResult).toContain('| Best Paper | 2024 |');
   expect(expectedResult).toContain('Presented at the annual conference.');
   expect(expectedResult).toContain('Delete this starter row if it is not needed.');
   expect((await executeHvyCliCommand(document, session, `cat ${created.output}/section.json`)).output).toContain('"templateKey": "tabular-resume-section"');
@@ -2801,7 +2802,7 @@ test('cli commands can create a chore chart with tables and form plugins', async
   const serialized = serializeDocument(document);
   expect(serialized).toContain('<!--hvy:plugin {"id":"assign-chore-form","plugin":"hvy.form"');
   expect(serialized).toContain('<!--hvy:plugin {"id":"weekly-leaders","plugin":"hvy.db-table"');
-  expect(serialized).toContain('"tableRows":[{"cells":["Dishes","","","Child"]}');
+  expect(serialized).toContain('| Dishes |  |  | Child |');
 });
 
 test('raw plugin creation rejects command aliases and accepts canonical plugin ids', async () => {

@@ -30,6 +30,7 @@ import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEnc
 import { decryptEncryptedComponents, prepareEncryptedComponentsForSerialization } from './encrypted-components';
 import { classifyXrefTarget } from './workspace-links';
 import { validateDocumentMetadata } from './document-metadata';
+import { parseStaticTableValueMarkdown, serializeStaticTableValueMarkdown } from './table-value-markdown';
 
 export interface HvyDiagnostic {
   severity: 'warning' | 'error';
@@ -271,6 +272,7 @@ function parseBlocks(
   const blocks: VisualBlock[] = [];
   const frames: StructuredFrame[] = [];
   const componentListOrder = new WeakMap<VisualBlock, Array<{ block: VisualBlock; slotIndex: number | null; sequence: number }>>();
+  const schemasWithInlineTableRows = new WeakSet<BlockSchema>();
   let currentText: string[] = [];
   let currentSchema: BlockSchema = defaultBlockSchema();
   let currentAttach: BlockAttach = { kind: 'top' };
@@ -292,7 +294,11 @@ function parseBlocks(
     const defs = Array.isArray(documentMeta.component_defs) ? (documentMeta.component_defs as JsonObject[]) : [];
     const def = defs.find((item) => item && typeof item.name === 'string' && item.name === componentName);
     const defSchema = def?.schema && typeof def.schema === 'object' && !Array.isArray(def.schema) ? (def.schema as JsonObject) : null;
-    return schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
+    const schema = schemaFromUnknown({ ...(defSchema ?? {}), ...parsed, component: componentName }, new WeakSet<object>(), documentMeta);
+    if (Object.prototype.hasOwnProperty.call(parsed, 'tableRows')) {
+      schemasWithInlineTableRows.add(schema);
+    }
+    return schema;
   };
 
   const flush = (): void => {
@@ -310,9 +316,15 @@ function parseBlocks(
     if (!currentHasDirective && effectiveAttach.kind === 'top') {
       effectiveAttach = getCurrentAttach();
     }
+    const parsedTableRows = currentSchema.kind === 'table'
+      ? parseStaticTableValueMarkdown(normalizedText, currentSchema.tableColumns.length)
+      : null;
+    if (parsedTableRows && !schemasWithInlineTableRows.has(currentSchema)) {
+      currentSchema.tableRows = parsedTableRows;
+    }
     const block: VisualBlock = {
       id: makeId('block'),
-      text: normalizedText,
+      text: parsedTableRows ? '' : normalizedText,
       schema: currentSchema,
       schemaMode: false,
     };
@@ -1390,6 +1402,7 @@ function serializeBlockSchema(
     omitComponentListBlocks?: boolean;
     omitExpandableBlocks?: boolean;
     omitGridItems?: boolean;
+    omitTableRows?: boolean;
   } = {},
   documentMeta: JsonObject | null = null
 ): JsonObject {
@@ -1485,7 +1498,7 @@ function serializeBlockSchema(
   if (component === 'table') {
     addArrayIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
-    if (schema.tableRows.length > 0) {
+    if (!options.omitTableRows && schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));
     }
   }
@@ -1545,7 +1558,10 @@ function serializeBlock(
   const blockDirective = override ?? serializeBlockDirective(block, documentMeta);
   const schemaDirective = `${' '.repeat(indent)}<!--hvy:${blockDirective.name} ${JSON.stringify(blockDirective.schema)}-->`;
   const nested = serializeNestedBlocks(block, indent + 1, documentMeta);
-  const text = serializeBlockText(block, indent + 1, documentMeta);
+  const baseComponent = resolveBaseComponentFromMeta(block.schema.component, documentMeta);
+  const text = baseComponent === 'table' && block.text.trim().length === 0
+    ? indentMultiline(serializeStaticTableValueMarkdown(block.schema.tableColumns, block.schema.tableRows), indent + 1)
+    : serializeBlockText(block, indent + 1, documentMeta);
   return [schemaDirective, text, nested].filter((part) => part.length > 0).join('\n');
 }
 
@@ -1553,15 +1569,16 @@ function serializeBlockDirective(block: VisualBlock, documentMeta: JsonObject | 
   const schema = block.schema;
   const component = schema.component.trim();
   const omitId = block.idGenerated === true;
+  const omitTableRows = resolveBaseComponentFromMeta(component, documentMeta) === 'table' && block.text.trim().length === 0;
   if (/^[a-z][a-z0-9-]*$/i.test(component) && !['block', 'doc', 'css', 'subsection'].includes(component)) {
     return {
       name: component,
-      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+      schema: serializeBlockSchema(schema, { omitId, omitComponent: true, omitTableRows, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
     };
   }
   return {
     name: 'block',
-    schema: serializeBlockSchema(schema, { omitId, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
+    schema: serializeBlockSchema(schema, { omitId, omitTableRows, ...nestedBlockOmitOptions(schema, documentMeta) }, documentMeta),
   };
 }
 

@@ -107,7 +107,7 @@ export function getAiEditComponentGuidance(block: VisualBlock): string {
       '- In the CLI, edit tableColumns.json and tableRows.json for static table data; table.txt is only a read-only preview.',
       '- tableColumns.json is a JSON array of strings, for example ["Name","Status"].',
       '- tableRows.json is a JSON array of row objects, for example [{"cells":["Alpha","Open"]}].',
-      '- Raw HVY schema/config uses the same tableColumns and tableRows shapes as the CLI JSON files.',
+      '- Raw HVY keeps tableColumns in the component directive and writes static row values as a GFM table body; legacy inline tableRows remains accepted and takes precedence.',
       '- Do not invent row-level interaction or detail fields for tables.',
       '- Do not invent columns or rows keys.',
       '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',

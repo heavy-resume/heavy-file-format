@@ -677,7 +677,8 @@ Plain text
   const output = serializeWithState(document);
 
   expect(output).toContain('<!--hvy:text {"id":"plain"}-->');
-  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"],"tableRows":[{"cells":["Ada"]}]}-->');
+  expect(output).toContain('<!--hvy:table {"id":"facts","tableColumns":["Name"]}-->');
+  expect(output).toContain('| Ada |');
   expect(output).not.toContain('"plugin":"hvy.db-table"');
   expect(output).not.toContain('"pluginConfig"');
   expect(output).not.toContain('"imageFile":"wrong.png"');
@@ -721,7 +722,8 @@ Custom text
   expect(output).toContain('name: fake-table-card');
   expect(output).toContain('tableColumns:');
   expect(output).toContain('<!--hvy:fake-text-card {"id":"plain"}-->');
-  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts","tableRows":[{"cells":["Grace"]}]}-->');
+  expect(output).toContain('<!--hvy:fake-table-card {"id":"facts"}-->');
+  expect(output).toContain('| Grace |');
   expect(output).not.toContain('pluginConfig:');
   expect(output).not.toContain('imageFile: wrong.png');
   expect(output).not.toContain('"pluginConfig"');

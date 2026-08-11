@@ -3275,7 +3275,8 @@ component_defs:
   expect(context).toContain('<!--hvy:grid:0 {"id":"example-left"}-->');
   expect(context).toContain('<!--hvy:grid:1 {"id":"example-right"}-->');
   expect(context).toContain('Component: example-table');
-  expect(context).toContain('<!--hvy:example-table {"tableColumns":["Example","Detail"],"tableRows":[{"cells":["Example value","Detail value"]}]}-->');
+  expect(context).toContain('<!--hvy:example-table {"tableColumns":["Example","Detail"]}-->');
+  expect(context).toContain('| Example value | Detail value |');
   expect(context).toContain('Component: example-text');
   expect(context).toContain('Example source-backed text.');
 });

@@ -673,7 +673,7 @@ The `children` array uses the same recursive block object shape as other nested 
 
 An expandable with empty `expandableStubBlocks.children` and populated `expandableContentBlocks.children` uses the content pane as its collapsed preview. Readers SHOULD omit the empty stub pane entirely, render a non-editing clipped preview of the first visible content while collapsed, and expand/collapse when the expandable is activated. This differs from a collapsed container preview: activating an expandable toggles it open and closed, while container preview activation opens the container.
 
-The built-in `table` component is static document data stored in `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `hvy.db-table` when rows should come from a backend query.
+The built-in `table` component is static document data represented in memory by `tableColumns` and `tableRows`. Use a dynamic data-backed plugin such as `hvy.db-table` when rows should come from a backend query.
 
 For static tables, `tableColumns` is a JSON/YAML array of strings:
 
@@ -681,11 +681,36 @@ For static tables, `tableColumns` is a JSON/YAML array of strings:
 tableColumns: ["Column A", "Column B"]
 ```
 
-Each `tableRows` entry contains only:
+Each in-memory `tableRows` entry contains only:
 
 ```yaml
 - cells: ["Cell A", "Cell B"]
 ```
+
+In inline HVY, `tableColumns` remains in the component directive and is the authoritative column definition. Static row values SHOULD be serialized in the component body as a GitHub-Flavored Markdown table:
+
+```markdown
+<!--hvy:table {"tableColumns":["Column A","Column B"],"tableShowHeader":true}-->
+| Column A | Column B |
+| --- | --- |
+| Value A1 | Value B1 |
+| Value A2 | Value B2 |
+```
+
+The GFM header row exists so the body remains a valid Markdown table, but it does not define or override `tableColumns`. `tableShowHeader` controls whether an HVY renderer displays the authoritative inline columns; it does not remove the structural GFM header from the file. Only GFM body rows after the delimiter provide `tableRows` values.
+
+For compatibility, readers MUST continue to accept a `tableRows` array in the inline component directive. Presence of inline `tableRows`, including an explicitly empty array, takes precedence over GFM body values. When inline `tableRows` is absent, readers MUST derive row values from the GFM body. Authoring tools SHOULD emit the GFM body form and omit inline `tableRows` when saving a static table.
+
+HVY table bodies use a reversible GFM cell encoding so stored Markdown, responsive annotations, and line breaks survive round trips. Writers MUST apply these replacements in order:
+
+- `&` becomes `&amp;`.
+- `|` becomes `&#124;`.
+- carriage return, line feed, and tab become `&#13;`, `&#10;`, and `&#9;` respectively.
+- Leading and trailing ASCII spaces become `&#32;` per space so GFM trimming does not discard them.
+
+Readers reverse those canonical entities after separating GFM cells. Markdown punctuation and backslashes otherwise remain authored cell content. Readers MUST use a GFM-aware table parser rather than splitting rows directly on `|`.
+
+Search, descriptions, embeddings, and other content indexes MUST operate on the decoded `tableColumns` and `tableRows` values. They MUST NOT index the GFM header, delimiter, encoded entities, or other table-body serialization scaffolding as generic block text.
 
 Static tables do not have intrinsic row expansion, row click behavior, or row-attached detail blocks in HVY v0.1. Use an enclosing `expandable` when the table should reveal additional information.
 

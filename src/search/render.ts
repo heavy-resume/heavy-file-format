@@ -7,6 +7,7 @@ import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { closeIcon, funnelIcon, magnifyingGlassIcon } from '../icons';
 import { renderTagEditor } from '../editor/tag-editor';
+import { expandSearchMatchResults, getSearchComponentResultId } from './match-navigation';
 
 interface SearchRenderDeps {
   escapeAttr: (value: string) => string;
@@ -127,12 +128,13 @@ function getCollapsedSearchPosition(search: SearchState): string {
 }
 
 function getSearchNavigationResults(search: SearchState): HvySearchResult[] {
-  const byId = new Map(search.results.map((result) => [result.id, result]));
+  const expandedResults = expandSearchMatchResults(search.results);
+  const byId = new Map(expandedResults.map((result) => [result.id, result]));
   const ordered = search.navigationResultIds.map((id) => byId.get(id)).filter((result): result is HvySearchResult => Boolean(result));
-  if (ordered.length === search.results.length) {
+  if (ordered.length === expandedResults.length) {
     return ordered;
   }
-  return [...search.results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0));
+  return expandSearchMatchResults([...search.results].sort((left, right) => (left.documentOrder ?? 0) - (right.documentOrder ?? 0)));
 }
 
 export function focusSearchInput(app: ParentNode): void {
@@ -310,7 +312,7 @@ function renderSearchResults(search: SearchState, document: VisualDocument, deps
 }
 
 function renderSearchResult(result: HvySearchResult, search: SearchState, document: VisualDocument, deps: SearchRenderDeps): string {
-  const active = search.activeResultId === result.id;
+  const active = getSearchComponentResultId(search.activeResultId ?? '') === result.id;
   const target = result.locationLabel?.trim() ? null : resolveResultTarget(result, document);
   const locationLabel = getResultLocationLabel(result, target);
   const context = result.contextLabel || result.sourceFile || '';

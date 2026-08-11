@@ -15,6 +15,8 @@ import { focusSearchInput } from './render';
 import { resolveBaseComponentFromMeta } from '../component-defs';
 import { searchSnapshotToState } from './snapshot';
 import { parseTags, serializeTags } from '../editor/tag-editor';
+import { expandSearchMatchResults } from './match-navigation';
+import { setCurrentSearchMatch } from './current-match';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 export function openSearch(app: HTMLElement): void {
@@ -48,6 +50,9 @@ export function closeSearch(app?: HTMLElement): void {
   state.search.requestNonce += 1;
   state.search.isLoading = false;
   state.search.semanticProgress = null;
+  if (app) {
+    setCurrentSearchMatch(app, null);
+  }
   refreshSearchUi(app);
 }
 
@@ -143,7 +148,7 @@ export async function submitSearch(app?: ParentNode): Promise<void> {
       return;
     }
     state.search.results = normalizeSearchResults(results);
-    state.search.navigationResultIds = getDocumentOrderSearchResults(state.search.results).map((result) => result.id);
+    state.search.navigationResultIds = expandSearchMatchResults(getDocumentOrderSearchResults(state.search.results)).map((result) => result.id);
     if (state.search.filterEnabled && state.currentView === 'editor') {
       state.currentView = 'viewer';
       app = undefined;
@@ -168,7 +173,7 @@ export async function submitSearch(app?: ParentNode): Promise<void> {
 }
 
 export function selectSearchResult(app: HTMLElement, resultId: string): void {
-  const result = state.search.results.find((candidate) => candidate.id === resultId);
+  const result = expandSearchMatchResults(state.search.results).find((candidate) => candidate.id === resultId);
   if (!result) {
     return;
   }
@@ -176,11 +181,8 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
   state.search.activeResultId = result.id;
   state.search.open = true;
   state.search.resultsCollapsed = true;
-  if (state.currentView === 'editor') {
-    revealEditorSearchTargetInState(result);
-  }
-  getRenderApp()();
-  runAfterSearchResultRender(() => {
+  const requiresFullRender = state.currentView === 'editor' && revealEditorSearchTargetInState(result);
+  const navigate = () => {
     if (state.currentView === 'editor') {
       navigateToEditorSearchTarget(result, app);
       return;
@@ -190,8 +192,15 @@ export function selectSearchResult(app: HTMLElement, resultId: string): void {
       sectionKey: result.sectionKey,
       blockId: result.blockId,
       matchText: result.matchedText,
+      matchOrdinal: result.matchOrdinal,
     }, app);
-  });
+  };
+  if (requiresFullRender || !getRefreshSearchSurface()(app)) {
+    getRenderApp()();
+    runAfterSearchResultRender(navigate);
+    return;
+  }
+  navigate();
 }
 
 function runAfterSearchResultRender(callback: () => void): void {
@@ -222,17 +231,20 @@ function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement,
     });
     return;
   }
-  const marker = findEditorSearchMarker(target, result.matchedText);
+  const marker = findEditorSearchMarker(target, result.matchedText, result.matchOrdinal);
   const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(result.matchedText?.trim());
   if (wantsSearchMarker && !marker && attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
     window.setTimeout(() => navigateToEditorSearchTarget(result, app, attempt + 1), 60);
     return;
   }
+  setCurrentSearchMatch(app, marker);
   scrollEditorSearchTargetIntoView(marker ?? target);
-  target.classList.add('is-temp-highlighted');
-  window.setTimeout(() => {
-    target.classList.remove('is-temp-highlighted');
-  }, 1400);
+  if (!marker) {
+    target.classList.add('is-temp-highlighted');
+    window.setTimeout(() => {
+      target.classList.remove('is-temp-highlighted');
+    }, 1400);
+  }
 }
 
 function alignEditorSidebarToSearchResult(result: HvySearchResult, app: HTMLElement): void {
@@ -246,19 +258,19 @@ function alignEditorSidebarToSearchResult(result: HvySearchResult, app: HTMLElem
   }
 }
 
-function revealEditorSearchTargetInState(result: HvySearchResult): void {
+function revealEditorSearchTargetInState(result: HvySearchResult): boolean {
   const section = findSectionByKeyDeep(state.document.sections, result.sectionKey);
   if (!section) {
-    return;
+    return false;
   }
-  state.editorSidebarOpen = section.location === 'sidebar';
   if (!result.blockId) {
-    return;
+    return false;
   }
   const path = findBlockPathInList(section.blocks, result.blockId);
   if (!path) {
-    return;
+    return false;
   }
+  let requiresFullRender = false;
   for (const block of path.slice(0, -1)) {
     if (resolveBaseComponentFromMeta(block.schema.component, state.document.meta) !== 'expandable') {
       continue;
@@ -266,15 +278,22 @@ function revealEditorSearchTargetInState(result: HvySearchResult): void {
     const readerStateKey = `${section.key}:${block.id}`;
     state.readerExpandableState[readerStateKey] = true;
     // Editing surfaces ignore reader session state, so the reveal is recorded separately.
+    if (!state.searchRevealedAncestors[readerStateKey]) {
+      requiresFullRender = true;
+    }
     state.searchRevealedAncestors[readerStateKey] = true;
     const editorStateKey = `${section.key}:${block.id}`;
     const current = state.expandableEditorPanels[editorStateKey] ?? { stubOpen: false, expandedOpen: false };
+    if (!current.stubOpen || !current.expandedOpen) {
+      requiresFullRender = true;
+    }
     state.expandableEditorPanels[editorStateKey] = {
       ...current,
       stubOpen: true,
       expandedOpen: true,
     };
   }
+  return requiresFullRender;
 }
 
 function findEditorSearchTarget(result: HvySearchResult, app: HTMLElement): HTMLElement | null {
@@ -328,13 +347,14 @@ function scrollEditorSearchTargetAfterLayoutSettles(
   });
 }
 
-function findEditorSearchMarker(target: HTMLElement, matchText?: string): HTMLElement | null {
+function findEditorSearchMarker(target: HTMLElement, matchText?: string, matchOrdinal = 0): HTMLElement | null {
   const markers = [...target.querySelectorAll<HTMLElement>('.search-match-marker')];
   const normalized = matchText?.trim().toLocaleLowerCase();
   if (!normalized) {
-    return markers[0] ?? null;
+    return markers[matchOrdinal] ?? markers[0] ?? null;
   }
-  return markers.find((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized) ?? markers[0] ?? null;
+  const matchingMarkers = markers.filter((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized);
+  return matchingMarkers[matchOrdinal] ?? matchingMarkers[0] ?? markers[0] ?? null;
 }
 
 export function selectAdjacentSearchResult(app: HTMLElement, direction: 1 | -1): void {
@@ -636,10 +656,10 @@ function normalizeSearchResults(results: HvySearchResult[]): HvySearchResult[] {
 
 function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
   if (!shouldUseRenderedSearchOrder()) {
-    return getDocumentOrderSearchResults(state.search.results);
+    return expandSearchMatchResults(getDocumentOrderSearchResults(state.search.results));
   }
   const viewOrder = getRenderedSearchTargetOrder(app);
-  return [...state.search.results].sort((left, right) => {
+  const orderedComponents = [...state.search.results].sort((left, right) => {
     const leftKey = getSearchResultTargetKey(left);
     const rightKey = getSearchResultTargetKey(right);
     const leftViewOrder = viewOrder.get(leftKey);
@@ -649,6 +669,7 @@ function getSearchNavigationResults(app: HTMLElement): HvySearchResult[] {
     }
     return (left.documentOrder ?? 0) - (right.documentOrder ?? 0);
   });
+  return expandSearchMatchResults(orderedComponents);
 }
 
 function getDocumentOrderSearchResults(results: HvySearchResult[]): HvySearchResult[] {

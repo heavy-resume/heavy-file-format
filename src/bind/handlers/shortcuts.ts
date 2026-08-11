@@ -1,6 +1,6 @@
-import { getActiveStateRuntime, runWithStateRuntime, type StateRuntime } from '../../state';
+import { getActiveStateRuntime, runWithStateRuntime, state, type StateRuntime } from '../../state';
 import { undoStateAsync, redoStateAsync } from './_imports';
-import { openSearch } from '../../search/actions';
+import { closeSearch, openSearch } from '../../search/actions';
 import { consumeNextNativeUndoSuppressed, consumeNextRedoTargetsDocument, consumeNextUndoTargetsDocument, routeNextRedoToDocument, routeNextUndoToDocument, suppressNextNativeUndo } from '../../edit-command-routing';
 
 const shortcutRoots = new WeakSet<HTMLElement>();
@@ -36,6 +36,12 @@ export function bindShortcuts(_app: HTMLElement): void {
       return;
     }
     const handleShortcut = () => {
+      if (event.key === 'Escape' && state.search.open && !_app.querySelector('#modalRoot')) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSearch(_app);
+        return;
+      }
       const meta = event.metaKey || event.ctrlKey;
       if (!meta) {
         return;

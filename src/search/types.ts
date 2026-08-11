@@ -29,6 +29,7 @@ export interface HvySearchResult {
   locationLabel?: string;
   preview: string;
   matchedText: string;
+  matchOrdinal?: number;
   sourceField: string;
   contextLabel?: string;
   matches?: HvySearchMatch[];
@@ -43,6 +44,7 @@ export interface HvySearchMatch {
   label: string;
   preview: string;
   matchedText: string;
+  matchOrdinal?: number;
 }
 
 export type HvySearchProvider = (request: HvySearchRequest) => Promise<HvySearchResult[]> | HvySearchResult[];

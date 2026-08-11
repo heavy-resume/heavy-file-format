@@ -532,6 +532,63 @@ hvy_version: 0.1
   await expect(page.locator('.search-results-empty')).toContainText('Search results will appear here.');
 });
 
+test('Escape closes collapsed search after result navigation moves focus outside the app', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.search-launcher').click();
+  await page.locator('[data-field="search-query"]').fill('plugin');
+  await page.locator('#searchComposer').press('Enter');
+  await page.locator('.search-result').first().click();
+  await expect(page.locator('.search-collapsed-bar')).toBeVisible({ timeout: 1_000 });
+
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Escape');
+
+  await expect(page.locator('.search-collapsed-bar')).toHaveCount(0, { timeout: 1_000 });
+  await expect(page.locator('.search-launcher')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('quick search distinguishes and advances the current match within one component', async ({ page }) => {
+  await page.goto('/');
+  await page.setContent('<div id="root" style="height: 720px"></div>');
+  await page.evaluate(async () => {
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"sample"}-->
+#! Sample
+
+<!--hvy:text {"id":"repeated"}-->
+ needle between needle
+`;
+    mountHvy({
+      root: document.querySelector('#root') as HTMLElement,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'viewer',
+    });
+  });
+
+  await page.locator('.search-launcher').click();
+  await page.locator('[data-field="search-query"]').fill('needle');
+  await page.locator('#searchComposer').press('Enter');
+  await expect(page.locator('.search-result')).toHaveCount(1, { timeout: 1_000 });
+  await page.locator('.search-result').click();
+
+  const markers = page.locator('.search-match-marker');
+  await expect(markers).toHaveCount(2, { timeout: 1_000 });
+  await expect(markers.nth(0)).toHaveClass(/is-current-search-match/, { timeout: 1_000 });
+  await expect(markers.nth(1)).not.toHaveClass(/is-current-search-match/);
+  await expect(page.locator('.is-temp-highlighted')).toHaveCount(0);
+
+  const readerDocumentBeforeNext = await page.locator('#readerDocument').elementHandle();
+  await page.getByRole('button', { name: 'Next' }).click();
+  expect(await page.evaluate((readerDocument) => readerDocument === document.querySelector('#readerDocument'), readerDocumentBeforeNext)).toBe(true);
+  await expect(markers.nth(0)).not.toHaveClass(/is-current-search-match/, { timeout: 1_000 });
+  await expect(markers.nth(1)).toHaveClass(/is-current-search-match/, { timeout: 1_000 });
+});
+
 test('raw HVY editor keeps native find and fills its surface', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

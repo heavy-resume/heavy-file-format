@@ -1,0 +1,157 @@
+---
+hvy_version: 0.1
+title: HVY File And Attachment Save/Load Lifecycle
+reader_max_width: 72rem
+plugins:
+  - id: hvy.diagram
+section_defaults:
+  css: "margin: 0 0 1rem;"
+---
+
+<!--hvy: {"id":"overview","expanded":true}-->
+#! Overview
+
+ <!--hvy:text {}-->
+  # HVY File And Attachment Save/Load Lifecycle
+
+  A saved `.hvy` file is one byte stream. Its readable HVY text comes first, followed by an optional attachment envelope
+  and opaque binary payloads. Attachments are not separate sidecar files unless a host deliberately publishes them that
+  way.
+
+ <!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  flowchart LR
+    text[HVY text body] --> directives[Tail directives]
+    directives --> sentinel[--HVY-TAIL-- sentinel]
+    sentinel --> payloads[Concatenated attachment bytes]
+
+<!--hvy: {"id":"file-layout","expanded":true}-->
+#! Saved File Layout
+
+ <!--hvy:text {}-->
+  # Saved File Layout
+
+  Each `hvy:tail` directive records a stable attachment `id`, metadata such as `mediaType`, and the byte `length`. The
+  payloads follow the sentinel in directive order. The length values define the byte slices, so payload bytes never need
+  to be interpreted as text.
+
+  Common IDs include `image:<filename>`, `db`, `encrypted:<keyId>`, and derived embedding-index IDs. IDs are unique within
+  a document. Writing an existing ID replaces that attachment while preserving a single canonical entry.
+
+ <!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  flowchart TD
+    body[Serialized header, sections, and components]
+    d1[hvy:tail id image:cover.png length N]
+    d2[hvy:tail id db length M]
+    marker[--HVY-TAIL--]
+    imageBytes[N image bytes]
+    dbBytes[M database bytes]
+    body --> d1 --> d2 --> marker --> imageBytes --> dbBytes
+
+<!--hvy: {"id":"loading","expanded":true}-->
+#! Loading A HVY File
+
+ <!--hvy:text {}-->
+  # Loading A HVY File
+
+  File-backed HVY documents must be loaded as bytes with `deserializeDocumentBytes`. The loader locates the tail
+  boundary, parses only the preceding text as HVY, and indexes each payload as a lazy byte slice in the document's
+  `AttachmentStore`. Listing descriptors therefore does not materialize every attachment. Calling `get`, `recall`, or a
+  component-specific attachment helper materializes only the requested bytes.
+
+  Loading a real `.hvy` file as raw text is incorrect: decoding binary tail bytes can corrupt them or expose them in the
+  visible document. Text deserialization is suitable only when the caller actually has a text-only representation.
+
+ <!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  flowchart TD
+    bytes[Complete HVY byte stream] --> encrypted{Encrypted envelope?}
+    encrypted -->|Yes| decrypt[Decrypt to standard HVY bytes]
+    encrypted -->|No| split[Find tail directives and sentinel]
+    decrypt --> split
+    split --> text[Decode and parse text region]
+    split --> slices[Index lazy attachment byte slices]
+    text --> document[VisualDocument]
+    slices --> store[AttachmentStore]
+    store --> document
+    document --> render[Components request attachments by stable ID]
+
+<!--hvy: {"id":"in-memory-store","expanded":true}-->
+#! In-Memory Attachment Store
+
+ <!--hvy:text {}-->
+  # In-Memory Attachment Store
+
+  Every loaded document is attached to one `AttachmentStore`. The document's `attachments` property is a compatibility
+  view backed by that store; the store is the authoritative in-memory index. Descriptors contain `id`, metadata, and
+  length. Entries may hold materialized bytes or a reference to a slice of the original file bytes.
+
+  Components and plugins should use stable IDs rather than retaining independent byte copies. Image and carousel
+  components both resolve `image:<filename>`. Plugin-owned data uses plugin-defined stable IDs and metadata.
+
+<!--hvy: {"id":"saving","expanded":true}-->
+#! Saving A HVY File
+
+ <!--hvy:text {}-->
+  # Saving A HVY File
+
+  `serializeDocumentBytes` serializes the document text, appends tail directives built from the current attachment
+  descriptors, writes the sentinel, and then appends every attachment payload in the same order. Unknown attachment
+  types are preserved because serialization copies their bytes without interpreting them.
+
+  A save request does not itself choose storage. The reference app writes to the current writable file when available
+  and otherwise asks before downloading. Embedded hosts receive the serialized byte stream and decide whether to write a
+  file, database record, object-store object, or another destination.
+
+ <!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  flowchart TD
+    edit[Document, component, or plugin edit] --> store[Update AttachmentStore by ID]
+    store --> request[Explicit save or serialization request]
+    request --> prepare[Prepare encrypted and derived attachments]
+    prepare --> serialize[Serialize HVY text and attachment descriptors]
+    serialize --> recall[Recall attachment bytes in descriptor order]
+    recall --> output[Complete HVY byte stream]
+    output --> destination{Save destination}
+    destination -->|Reference app| file[Writable source file or download]
+    destination -->|Embedded host| host[Host-managed persistence]
+
+<!--hvy: {"id":"host-managed-attachments","expanded":true}-->
+#! Host-Managed Attachments
+
+ <!--hvy:text {}-->
+  # Host-Managed Attachments
+
+  Embedded hosts may provide an attachment adapter with `list`, `recall`, `store`, and `remove`. An optional `resolveUrl`
+  lets image renderers use a host URL without first downloading bytes into the document. This is useful for large or
+  remotely stored assets.
+
+  When attachment recall or final serialization is asynchronous, hosts use `serializeDocumentBytesAsync` and may supply
+  a serializer adapter. The serializer receives the text body, ordered descriptors, and a recall function. The required
+  result is still a complete valid HVY byte stream unless the host is intentionally producing the documented hosted
+  extraction layout.
+
+ <!--hvy:plugin {"plugin":"hvy.diagram","pluginConfig":{"syntax":"mermaid"}}-->
+  sequenceDiagram
+    participant HVY as Mounted HVY client
+    participant Adapter as Attachment adapter
+    participant Host as Host serializer/storage
+    HVY->>Adapter: list descriptors
+    HVY->>Host: text body + ordered tail descriptors
+    Host->>HVY: recallAttachment(id)
+    HVY->>Adapter: recall(id)
+    Adapter-->>HVY: attachment bytes
+    HVY-->>Host: attachment bytes
+    Host-->>HVY: complete saved HVY bytes
+
+<!--hvy: {"id":"invariants","expanded":true}-->
+#! Required Invariants
+
+ <!--hvy:text {}-->
+  # Required Invariants
+
+  - Load file-backed HVY documents from bytes, not raw text.
+  - Keep one attachment store attached to the active document.
+  - Address attachments by stable, document-unique IDs.
+  - Preserve unknown descriptors, metadata, order, and bytes on save.
+  - Keep descriptor lengths synchronized with the bytes that will be written.
+  - Serialize text, directives, sentinel, and payload bytes as one coherent stream.
+  - Use asynchronous serialization whenever attachment recall or host serialization is asynchronous.
+  - Do not treat rendering failure as permission to delete or omit an attachment.

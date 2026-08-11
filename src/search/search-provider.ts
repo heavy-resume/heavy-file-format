@@ -156,37 +156,41 @@ function addMatches(options: {
   }
   const matches: HvySearchMatch[] = [];
   for (const candidate of options.candidates) {
-    const rawMatchIndex = findMatchIndex(candidate.value, query, options.request.caseSensitive);
-    const matchValue = rawMatchIndex >= 0 ? candidate.value : candidate.searchValue ?? candidate.value;
-    const matchIndex = rawMatchIndex >= 0
-      ? rawMatchIndex
-      : findMatchIndex(matchValue, query, options.request.caseSensitive);
-    if (matchIndex < 0) {
+    const rawMatchIndices = findMatchIndices(candidate.value, query, options.request.caseSensitive);
+    const matchValue = rawMatchIndices.length > 0 ? candidate.value : candidate.searchValue ?? candidate.value;
+    const matchIndices = rawMatchIndices.length > 0
+      ? rawMatchIndices
+      : findMatchIndices(matchValue, query, options.request.caseSensitive);
+    if (matchIndices.length === 0) {
       continue;
     }
-    const key = [
-      options.category,
-      options.targetKind,
-      options.section.key,
-      options.block?.id ?? '',
-      candidate.field,
-    ].join(':');
-    if (options.seen.has(key)) {
-      continue;
+    for (const matchIndex of matchIndices) {
+      const key = [
+        options.category,
+        options.targetKind,
+        options.section.key,
+        options.block?.id ?? '',
+        candidate.field,
+        matchIndex,
+      ].join(':');
+      if (options.seen.has(key)) {
+        continue;
+      }
+      options.seen.add(key);
+      matches.push({
+        field: candidate.field,
+        label: candidate.label,
+        preview: createPreview(matchValue, matchIndex, query.length),
+        matchedText: matchValue.slice(matchIndex, matchIndex + query.length),
+        matchOrdinal: matches.length,
+      });
     }
-    options.seen.add(key);
-    matches.push({
-      field: candidate.field,
-      label: candidate.label,
-      preview: createPreview(matchValue, matchIndex, query.length),
-      matchedText: matchValue.slice(matchIndex, matchIndex + query.length),
-    });
   }
   if (matches.length === 0) {
     return;
   }
-  const firstMatch = matches[0]!;
   const targetPath = options.targetPath ?? (options.block ? findVirtualDirectoryForBlock(options.request.document, options.block) ?? undefined : undefined);
+  const firstMatch = matches[0]!;
   options.results.push({
     id: `search-${options.results.length + 1}`,
     category: options.category,
@@ -200,6 +204,7 @@ function addMatches(options: {
     contextLabel: options.contextLabel,
     preview: firstMatch.preview,
     matchedText: firstMatch.matchedText,
+    matchOrdinal: firstMatch.matchOrdinal,
     sourceField: summarizeMatches(matches, options.category),
     matches,
     documentOrder: options.documentOrder,
@@ -216,8 +221,20 @@ function getExpandableLocationLabel(block: VisualBlock, pane: 'stub' | 'expanded
     : (block.schema.expandableContentDescription ?? '').trim();
 }
 
-function findMatchIndex(value: string, query: string, caseSensitive: boolean): number {
-  return caseSensitive ? value.indexOf(query) : value.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+function findMatchIndices(value: string, query: string, caseSensitive: boolean): number[] {
+  const haystack = caseSensitive ? value : value.toLocaleLowerCase();
+  const needle = caseSensitive ? query : query.toLocaleLowerCase();
+  const indices: number[] = [];
+  let fromIndex = 0;
+  while (fromIndex <= haystack.length - needle.length) {
+    const matchIndex = haystack.indexOf(needle, fromIndex);
+    if (matchIndex < 0) {
+      break;
+    }
+    indices.push(matchIndex);
+    fromIndex = matchIndex + needle.length;
+  }
+  return indices;
 }
 
 function createPreview(value: string, matchIndex: number, length: number): string {

@@ -11,6 +11,7 @@ import { createDefaultSearchState } from './search/state';
 import { restoreVirtualizedSection } from './section-virtualizer';
 import type { VisualDocument } from './types';
 import { resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
+import { setCurrentSearchMatch } from './search/current-match';
 
 const READER_SECTION_EXPANDED_STATE_PREFIX = 'reader-section-expanded:';
 
@@ -87,7 +88,7 @@ export function navigateToSection(sectionId: string, app: HTMLElement): void {
 }
 
 export function navigateToReaderTarget(
-  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
   app: HTMLElement
 ): void {
   const targetId = target.targetId?.trim() ?? '';
@@ -169,7 +170,7 @@ export function getReaderTargetIds(app: HTMLElement): string[] {
 
 function requestTargetHighlight(
   app: HTMLElement,
-  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string },
+  target: { targetId?: string; sectionKey?: string; blockId?: string; matchText?: string; matchOrdinal?: number },
   context: { sectionFound: boolean; blockFound: boolean; sectionKey?: string },
   attempt = 0
 ): void {
@@ -196,19 +197,24 @@ function requestTargetHighlight(
 
     alignSidebarToResolvedTarget(app, element);
     const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(target.matchText?.trim());
-    const marker = findSearchMarkerInTarget(element, target.matchText);
+    const marker = findSearchMarkerInTarget(element, target.matchText, target.matchOrdinal);
     if (wantsSearchMarker && !marker && attempt < 8) {
       requestTargetHighlight(app, target, context, attempt + 1);
       return;
     }
 
     const scrollTarget = marker ?? element;
-    element.classList.add('is-temp-highlighted');
+    setCurrentSearchMatch(app, marker);
+    if (!marker) {
+      element.classList.add('is-temp-highlighted');
+    }
     revealReaderAncestors(scrollTarget);
     scrollReaderTargetIntoView(scrollTarget);
-    window.setTimeout(() => {
-      element.classList.remove('is-temp-highlighted');
-    }, 1400);
+    if (!marker) {
+      window.setTimeout(() => {
+        element.classList.remove('is-temp-highlighted');
+      }, 1400);
+    }
   };
   if (attempt === 0) {
     window.requestAnimationFrame(() => {
@@ -341,16 +347,17 @@ function getReaderSurfaces(app: HTMLElement): HTMLElement[] {
   ].filter((surface): surface is HTMLElement => Boolean(surface));
 }
 
-function findSearchMarkerInTarget(element: HTMLElement, matchText?: string): HTMLElement | null {
+function findSearchMarkerInTarget(element: HTMLElement, matchText?: string, matchOrdinal = 0): HTMLElement | null {
   const markers = [...element.querySelectorAll<HTMLElement>('.search-match-marker')];
   if (markers.length === 0) {
     return null;
   }
   const normalized = matchText?.trim().toLocaleLowerCase();
   if (!normalized) {
-    return markers[0] ?? null;
+    return markers[matchOrdinal] ?? markers[0] ?? null;
   }
-  return markers.find((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized) ?? markers[0] ?? null;
+  const matchingMarkers = markers.filter((marker) => marker.textContent?.trim().toLocaleLowerCase() === normalized);
+  return matchingMarkers[matchOrdinal] ?? matchingMarkers[0] ?? markers[0] ?? null;
 }
 
 interface ExpandResult {

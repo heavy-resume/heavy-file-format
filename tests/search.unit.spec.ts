@@ -4,7 +4,7 @@ import { deserializeDocument, serializeDocument } from '../src/serialization';
 import { builtInSearchProvider } from '../src/search/search-provider';
 import { createSearchFilterContext, orderSearchFilteredSections } from '../src/search/filter';
 import { highlightPlainText } from '../src/search/highlight';
-import { renderSearchModal } from '../src/search/render';
+import { renderCollapsedSearchBar, renderSearchModal } from '../src/search/render';
 import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSemanticFilterWindows, buildSemanticRetrievalChunks } from '../src/search/semantic-candidates';
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { searchDocuments } from '../src/search/documents';
@@ -16,6 +16,8 @@ import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
 import { highlightEditorSearchMatches } from '../src/block-ops';
+import { expandSearchMatchResults } from '../src/search/match-navigation';
+import { createDefaultSearchState } from '../src/search/state';
 
 afterEach(() => {
   setReferenceAppConfig(null);
@@ -151,7 +153,7 @@ hvy_version: 0.1
   expect(expectedResult.some((result) => result.targetId === 'inner-text')).toBe(true);
 });
 
-test('built-in search groups multiple field matches within one component', async () => {
+test('built-in search groups every field match within one component result', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
 ---
@@ -172,6 +174,51 @@ hvy_version: 0.1
   expect(expectedResult).toHaveLength(1);
   expect(expectedResult[0]!.sourceField).toBe('2 matches in Title + Detail');
   expect(expectedResult[0]!.matches?.map((match) => match.label)).toEqual(['Title', 'Detail']);
+  expect(expectedResult[0]!.matches?.map((match) => match.matchOrdinal)).toEqual([0, 1]);
+});
+
+test('built-in search groups repeated matches for per-occurrence navigation', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"alpha"}-->
+#! Alpha
+
+<!--hvy:text {"id":"repeated"}-->
+ needle between needle
+`, '.hvy');
+
+  const expectedResult = await builtInSearchProvider({
+    document,
+    query: 'needle',
+    caseSensitive: false,
+    categories: ['contents'],
+  });
+
+  expect(expectedResult).toHaveLength(1);
+  expect(expectedResult[0]!.matches).toHaveLength(2);
+  expect(expectedResult[0]!.matches?.map((match) => match.matchOrdinal)).toEqual([0, 1]);
+
+  const expectedNavigationResults = expandSearchMatchResults(expectedResult);
+  expect(expectedNavigationResults).toHaveLength(2);
+  expect(expectedNavigationResults.map((result) => result.matchOrdinal)).toEqual([0, 1]);
+
+  const search = createDefaultSearchState();
+  search.open = true;
+  search.queryDraft = 'needle';
+  search.submittedQuery = 'needle';
+  search.results = expectedResult;
+  search.navigationResultIds = expectedNavigationResults.map((result) => result.id);
+  expect(renderSearchModal(search, document, {
+    escapeAttr: escapeHtml,
+    escapeHtml,
+    readerRenderer: null as never,
+  })).toContain('>1 result</div>');
+
+  search.resultsCollapsed = true;
+  search.activeResultId = expectedNavigationResults[1]!.id;
+  expect(renderCollapsedSearchBar(search, { escapeHtml })).toContain('>2 of 2</span>');
 });
 
 test('built-in search preserves document order within each category', async () => {

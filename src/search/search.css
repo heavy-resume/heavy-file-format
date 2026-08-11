@@ -587,9 +587,14 @@
 
 .hvy-document .search-match-marker {
   border-radius: 0.25em;
-  background: color-mix(in srgb, var(--hvy-highlight-2) 72%, #fff176);
+  background: var(--hvy-highlight-1);
   color: inherit;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hvy-highlight-2) 30%, transparent);
+}
+
+.hvy-document .search-match-marker.is-current-search-match {
+  background:
+    linear-gradient(var(--hvy-highlight-2), var(--hvy-highlight-2)),
+    var(--hvy-highlight-1);
 }
 
 .hvy-document .reader-search-empty {

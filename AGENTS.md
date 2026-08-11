@@ -117,3 +117,5 @@ Before adding something see if it already exists first.
 
 Don't make changes that would possibly undo a performance refactor. We are no longer at the point
 where we want lazily thought out changes quickly and need quality changes now.
+
+Always repro before fixing! Always test adjacent tests when changing things!

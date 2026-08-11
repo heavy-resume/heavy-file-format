@@ -19,6 +19,11 @@ export const DEFAULT_DIAGRAM_CONFIG: DiagramConfig = {
   syntax: DEFAULT_DIAGRAM_SYNTAX,
 };
 
+export const MERMAID_RENDER_CONFIG = {
+  // Keep labels as SVG text so the SVG-only sanitizer does not discard them.
+  htmlLabels: false,
+} as const;
+
 let mermaidModulePromise: Promise<MermaidApi> | null = null;
 let diagramRenderCounter = 0;
 
@@ -48,6 +53,7 @@ function configureMermaid(mermaid: MermaidApi, root: HTMLElement): void {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'base',
+    ...MERMAID_RENDER_CONFIG,
     themeVariables: {
       background: read('--hvy-surface', '#ffffff'),
       mainBkg: read('--hvy-surface', '#ffffff'),

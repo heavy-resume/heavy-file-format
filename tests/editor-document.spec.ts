@@ -596,6 +596,10 @@ hvy_version: 0.1
   expect(await page.evaluate((readerDocument) => readerDocument === document.querySelector('#readerDocument'), readerDocumentBeforeNext)).toBe(true);
   await expect(markers.nth(0)).not.toHaveClass(/is-current-search-match/, { timeout: 1_000 });
   await expect(markers.nth(1)).toHaveClass(/is-current-search-match/, { timeout: 1_000 });
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.search-match-marker')).toHaveCount(0, { timeout: 1_000 });
+  expect(await page.evaluate((readerDocument) => readerDocument === document.querySelector('#readerDocument'), readerDocumentBeforeNext)).toBe(true);
 });
 
 test('raw HVY editor keeps native find and fills its surface', async ({ page }) => {

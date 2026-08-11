@@ -6,3 +6,11 @@ export function setCurrentSearchMatch(root: ParentNode, marker: HTMLElement | nu
   });
   marker?.classList.add(CURRENT_SEARCH_MATCH_CLASS);
 }
+
+export function clearRenderedSearchMatches(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.search-match-marker').forEach((marker) => {
+    const parent = marker.parentNode;
+    marker.replaceWith(...Array.from(marker.childNodes));
+    parent?.normalize();
+  });
+}

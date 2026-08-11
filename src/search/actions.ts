@@ -16,7 +16,7 @@ import { resolveBaseComponentFromMeta } from '../component-defs';
 import { searchSnapshotToState } from './snapshot';
 import { parseTags, serializeTags } from '../editor/tag-editor';
 import { expandSearchMatchResults } from './match-navigation';
-import { setCurrentSearchMatch } from './current-match';
+import { clearRenderedSearchMatches, setCurrentSearchMatch } from './current-match';
 
 const CATEGORY_ORDER: SearchCategory[] = ['tags', 'contents', 'description'];
 export function openSearch(app: HTMLElement): void {
@@ -52,6 +52,9 @@ export function closeSearch(app?: HTMLElement): void {
   state.search.semanticProgress = null;
   if (app) {
     setCurrentSearchMatch(app, null);
+    if (!keepFilter) {
+      clearRenderedSearchMatches(app);
+    }
   }
   refreshSearchUi(app);
 }

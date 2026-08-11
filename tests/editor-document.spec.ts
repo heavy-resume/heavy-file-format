@@ -125,6 +125,85 @@ test('reference hot reload restores an attachment tail larger than session stora
   await page.locator('#searchComposer').press('Enter');
   await page.locator('.search-result').first().click();
   await expect(page.locator('[data-hvy-attachment-resolution="failed"]')).toHaveCount(0);
+
+  const recoveryRecord = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('hvy-reference-session-v1', 2);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction(['attachment-tails', 'session-leases'], 'readonly');
+    const tail = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+      const request = transaction.objectStore('attachment-tails').get('hvy-editor-session-state-v1:attachments');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const leases = await new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
+      const request = transaction.objectStore('session-leases').getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return {
+      hasCiphertext: tail?.ciphertext instanceof ArrayBuffer,
+      hasPlaintextBytes: 'bytes' in (tail ?? {}),
+      sessionId: tail?.sessionId,
+      leaseSessionIds: leases.map((lease) => lease.sessionId),
+      hasSessionKey: Boolean(sessionStorage.getItem('hvy-recovery-encryption-key-v1')),
+    };
+  });
+  expect(recoveryRecord.hasCiphertext).toBe(true);
+  expect(recoveryRecord.hasPlaintextBytes).toBe(false);
+  expect(recoveryRecord.hasSessionKey).toBe(true);
+  expect(recoveryRecord.leaseSessionIds).toContain(recoveryRecord.sessionId);
+});
+
+test('reference recovery deletes encrypted records after a 48-hour stale lease', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('hvy-reference-session-v1', 2);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction(['attachment-tails', 'session-leases'], 'readwrite');
+    transaction.objectStore('attachment-tails').put({
+      sessionId: 'expired-session',
+      iv: new Uint8Array(12).buffer,
+      ciphertext: new Uint8Array([1, 2, 3]).buffer,
+      updatedAt: Date.now() - 48 * 60 * 60 * 1000 - 1,
+    }, 'expired-tail');
+    transaction.objectStore('session-leases').put({
+      sessionId: 'expired-session',
+      lastHeartbeat: Date.now() - 48 * 60 * 60 * 1000 - 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+  const expiredRecords = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('hvy-reference-session-v1', 2);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction(['attachment-tails', 'session-leases'], 'readonly');
+    const tailRequest = transaction.objectStore('attachment-tails').get('expired-tail');
+    const leaseRequest = transaction.objectStore('session-leases').get('expired-session');
+    const result = await Promise.all([
+      new Promise((resolve) => { tailRequest.onsuccess = () => resolve(tailRequest.result); }),
+      new Promise((resolve) => { leaseRequest.onsuccess = () => resolve(leaseRequest.result); }),
+    ]);
+    database.close();
+    return result.map(Boolean);
+  });
+  expect(expiredRecords).toEqual([false, false]);
 });
 
 test('native dropdown options use themed colors on UFO palette controls', async ({ page }) => {

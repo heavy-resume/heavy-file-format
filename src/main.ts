@@ -61,6 +61,7 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
 import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyIndicator } from './reference-document-dirty';
+import { initializeSessionAttachmentRecovery } from './session-attachment-tail-storage';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -1393,6 +1394,7 @@ initCallbacks({
 });
 
 async function bootstrap(): Promise<void> {
+  await initializeSessionAttachmentRecovery();
   const savedSession = await loadSessionStateAsync();
   setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();

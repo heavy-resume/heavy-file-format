@@ -65,3 +65,33 @@ test('expected result: reference-only CSS is absent from shared style imports', 
   expect(referenceEntry).toContain("import './layout/reference-application-controls.css';");
   expect(referenceEntry).toContain("app.classList.add('hvy-reference-app', 'hvy-document');");
 });
+
+test('expected result: shared editor block shells do not style plugin-owned form elements', () => {
+  const failures: Array<{ file: string; selector: string; shell: string; element: string }> = [];
+  const protectedShells = ['.editor-block', '.editor-block-content', '.hvy-plugin-mount'];
+
+  for (const file of listCssFiles(sourceRoot)) {
+    const relativePath = relative(sourceRoot, file);
+    postcss.parse(readFileSync(file, 'utf8'), { from: file }).walkRules((rule) => {
+      if (isInsideKeyframes(rule)) return;
+      for (const selector of rule.selectors) {
+        for (const shell of protectedShells) {
+          const shellPosition = selector.indexOf(shell);
+          if (shellPosition < 0) continue;
+          const descendantSelector = selector.slice(shellPosition + shell.length);
+          const elementMatch = descendantSelector.match(/(?:^|[\s>+~])(?:input|select|textarea|label)(?=$|[\s.#[:>+~])/);
+          if (elementMatch) {
+            failures.push({
+              file: relativePath,
+              selector,
+              shell,
+              element: elementMatch[0].trim(),
+            });
+          }
+        }
+      }
+    });
+  }
+
+  expect(failures).toEqual([]);
+});

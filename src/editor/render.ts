@@ -530,7 +530,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderPassiveEditorBlock(sectionKey, block, rootSections ?? []);
     }
 
-    const contentEditor = renderBlockContentEditor(sectionKey, block);
+    const contentEditor = addCoreEditorControlClasses(renderBlockContentEditor(sectionKey, block));
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey
@@ -2435,6 +2435,26 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     renderBlockMetaFields,
     renderComponentPlacementTarget,
   };
+}
+
+function addCoreEditorControlClasses(markup: string): string {
+  // Plugins render an empty mount placeholder here and attach their own DOM later,
+  // so only controls emitted by core editor renderers receive these ownership classes.
+  return markup.replace(/<(input|select|textarea)\b[^>]*>/g, (tag, elementName: string) => {
+    const controlClass = elementName === 'select'
+      ? 'hvy-editor-select-control'
+      : 'hvy-editor-field-control';
+    const classAttribute = tag.match(/\bclass=(['"])(.*?)\1/);
+    if (!classAttribute) {
+      return tag.replace(/^<([a-z]+)/, `<$1 class="${controlClass}"`);
+    }
+    const currentClasses = classAttribute[2].split(/\s+/);
+    if (currentClasses.includes(controlClass)) {
+      return tag;
+    }
+    const nextClassAttribute = `class=${classAttribute[1]}${classAttribute[2]} ${controlClass}${classAttribute[1]}`;
+    return tag.replace(classAttribute[0], nextClassAttribute);
+  });
 }
 
 function highlightCode(code: string, language: string, escapeHtml: (value: string) => string): string {

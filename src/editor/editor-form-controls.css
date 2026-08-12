@@ -114,13 +114,12 @@
 .hvy-document .editor-grid select,
 .hvy-document .modal-panel input:not([type='checkbox']),
 .hvy-document .modal-panel select,
-.hvy-document .editor-block input:not([type='checkbox']),
-.hvy-document .editor-block textarea,
 .hvy-document .modal-panel textarea,
 .hvy-document .component-def input:not([type='checkbox']),
 .hvy-document .component-def select,
 .hvy-document .component-def textarea,
-.hvy-document .schema-save-card input:not([type='checkbox']) {
+.hvy-document .schema-save-card input:not([type='checkbox']),
+.hvy-document .hvy-editor-field-control:not([type='checkbox']):not([type='radio']) {
   width: 100%;
   border: 1px solid var(--hvy-border-input);
   border-radius: 7px;
@@ -144,7 +143,7 @@
   min-height: 5.5rem;
 }
 
-.hvy-document .editor-block select,
+.hvy-document .hvy-editor-select-control,
 .hvy-document .grid-add-bar select,
 .hvy-document .table-details-add select,
 .hvy-document .expandable-part select {
@@ -241,4 +240,3 @@
 .hvy-document .meta-toggle {
   margin: 0.35rem 0;
 }
-

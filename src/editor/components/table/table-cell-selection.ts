@@ -145,6 +145,7 @@ export function bindStaticTableCellSelection(app: HTMLElement, roots: Array<HTML
     if (!text || !event.clipboardData) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    event.clipboardData.clearData();
     event.clipboardData.setData('text/plain', text);
   }, { capture: true });
 }

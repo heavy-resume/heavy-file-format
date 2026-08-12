@@ -5527,6 +5527,7 @@ hvy_version: 0.1
   await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read()).flatMap((item) => item.types))).toEqual(['text/plain']);
   const bodyTargetCopy = await page.evaluate(() => {
     const transfer = new DataTransfer();
+    transfer.setData('text/html', '<span style="background: rgb(200, 200, 200)">stale styled selection</span>');
     document.body.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer }));
     return { text: transfer.getData('text/plain'), types: Array.from(transfer.types) };
   });

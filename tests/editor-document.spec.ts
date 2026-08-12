@@ -5458,6 +5458,154 @@ hvy_version: 0.1
   await expect(table.locator('td').nth(1)).toHaveAttribute('title', 'Responsive table text should wrap inside the phone preview instead of pushing the table wider than its container.');
 });
 
+test('truncated static table cells open their contents while cross-column selections remain selectable', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard shortcut coverage is chromium-only here.');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-cell-modal-test"}-->
+#! Table Cell Modal Test
+
+<!--hvy:table {"id":"cell-modal-header","tableColumns":["Name","Details"],"tableShowHeader":true,"tableRows":[]}-->
+
+<!--hvy:table {"id":"cell-modal-alpha","tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Alpha","This deliberately long cell value should be truncated inside a narrow preview and shown in full only when clicked."]}]}-->
+
+<!--hvy:table {"id":"cell-modal-bravo","tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Bravo","Second row details"]}]}-->
+
+<!--hvy:table {"id":"cell-modal-charlie","tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Charlie","Third row details"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+
+  const cells = page.locator('#readerDocument .reader-table td');
+  await cells.first().click();
+  await expect(page.locator('[data-static-table-cell-modal]')).toHaveCount(0);
+
+  await cells.nth(1).click();
+  const modal = page.locator('[data-static-table-cell-modal]');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.static-table-cell-modal-content')).toContainText('This deliberately long cell value');
+  await expect.poll(async () => {
+    const shellBox = await page.locator('.viewer-shell').boundingBox();
+    const modalBox = await modal.boundingBox();
+    return Boolean(shellBox && modalBox
+      && modalBox.x >= shellBox.x
+      && modalBox.y >= shellBox.y
+      && modalBox.x + modalBox.width <= shellBox.x + shellBox.width
+      && modalBox.y + modalBox.height <= shellBox.y + shellBox.height);
+  }).toBe(true);
+  await modal.getByRole('button', { name: 'Close cell contents' }).click();
+
+  const firstCellBox = await cells.nth(0).boundingBox();
+  const lastFirstColumnCellBox = await cells.nth(4).boundingBox();
+  if (!firstCellBox || !lastFirstColumnCellBox) throw new Error('Expected static table cells to be visible.');
+  await page.mouse.move(firstCellBox.x + firstCellBox.width / 2, firstCellBox.y + firstCellBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lastFirstColumnCellBox.x + lastFirstColumnCellBox.width / 2, lastFirstColumnCellBox.y + lastFirstColumnCellBox.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator('[data-static-table-cell-modal]')).toHaveCount(0);
+  await expect(page.locator('.is-static-table-cell-selected')).toHaveCount(3);
+  await expect(page.locator('.is-static-table-cell-selected')).toHaveText(['Alpha', 'Bravo', 'Charlie']);
+
+  const lastCellBox = await cells.nth(5).boundingBox();
+  if (!lastCellBox) throw new Error('Expected the last static table cell to be visible.');
+  await page.mouse.move(firstCellBox.x + firstCellBox.width / 2, firstCellBox.y + firstCellBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lastCellBox.x + lastCellBox.width / 2, lastCellBox.y + lastCellBox.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator('.is-static-table-cell-selected')).toHaveCount(6);
+  await page.evaluate(() => navigator.clipboard.writeText('Stack Width'));
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+  const copiedCells = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copiedCells).toBe('Alpha\tThis deliberately long cell value should be truncated inside a narrow preview and shown in full only when clicked.\nBravo\tSecond row details\nCharlie\tThird row details');
+  await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read()).flatMap((item) => item.types))).toEqual(['text/plain']);
+  const bodyTargetCopy = await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    document.body.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: transfer }));
+    return { text: transfer.getData('text/plain'), types: Array.from(transfer.types) };
+  });
+  expect(bodyTargetCopy).toEqual({ text: copiedCells, types: ['text/plain'] });
+
+  await page.locator('[data-action="switch-view"][data-view="ai"]').click();
+  const aiLongCell = page.locator('#aiReaderDocument .reader-table td').nth(1);
+  await aiLongCell.click();
+  await expect(page.locator('[data-static-table-cell-modal]')).toBeVisible();
+});
+
+test('lightweight embedded viewer selects and copies static rows composed from separate tables', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard shortcut coverage is chromium-only here.');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="embedded-table-root" style="width: 32rem; height: 32rem;"></div>';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvyViewer({
+      root: document.querySelector<HTMLElement>('#embedded-table-root')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"embedded-table-test"}-->
+#! Embedded Table Test
+
+<!--hvy:table {"tableColumns":["Name","Details"],"tableShowHeader":true,"tableRows":[]}-->
+
+<!--hvy:table {"tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Alpha","First details"]}]}-->
+
+<!--hvy:table {"tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Bravo","Second details"]}]}-->
+
+<!--hvy:table {"tableColumns":["Name","Details"],"tableShowHeader":false,"tableRows":[{"cells":["Charlie","Third details"]}]}-->
+`), '.hvy'),
+    });
+  });
+
+  const cells = page.locator('#embedded-table-root .reader-table td');
+  const firstCellBox = await cells.first().boundingBox();
+  const lastCellBox = await cells.last().boundingBox();
+  if (!firstCellBox || !lastCellBox) throw new Error('Expected embedded static table cells to be visible.');
+  await page.mouse.move(firstCellBox.x + firstCellBox.width / 2, firstCellBox.y + firstCellBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lastCellBox.x + lastCellBox.width / 2, lastCellBox.y + lastCellBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+
+  await expect(page.locator('#embedded-table-root .is-static-table-cell-selected')).toHaveCount(6);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'Alpha\tFirst details\nBravo\tSecond details\nCharlie\tThird details'
+  );
+});
+
+test('resume viewer vertical drag selects the same column across composed static row tables', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard shortcut coverage is chromium-only here.');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Resume Example');
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const heavyStack = page.locator('#readerDocument .reader-table td', { hasText: 'Heavy Stack' });
+  const hackathon = page.locator('#readerDocument .reader-table td', { hasText: 'Autonomous Agent Hackathon' });
+  await heavyStack.scrollIntoViewIfNeeded();
+  const heavyStackBox = await heavyStack.boundingBox();
+  const hackathonBox = await hackathon.boundingBox();
+  if (!heavyStackBox || !hackathonBox) throw new Error('Expected composed resume table rows to be visible.');
+  await page.mouse.move(heavyStackBox.x + heavyStackBox.width / 2, heavyStackBox.y + heavyStackBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hackathonBox.x + hackathonBox.width / 2, hackathonBox.y + hackathonBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+
+  const selectedCells = page.locator('#readerDocument .is-static-table-cell-selected');
+  await expect(selectedCells).toHaveCount(2);
+  await expect(selectedCells).toHaveText(['Heavy Stack', 'Autonomous Agent Hackathon']);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Heavy Stack\nAutonomous Agent Hackathon');
+});
+
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {
   await page.goto('/');
 

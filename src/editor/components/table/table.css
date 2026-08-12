@@ -357,6 +357,47 @@
   min-height: 1ch;
 }
 
+.hvy-document .reader-table .table-main-row > td {
+  cursor: cell;
+  user-select: none;
+}
+
+.hvy-document .reader-table .table-main-row > td.is-static-table-cell-selected {
+  position: relative;
+  outline: 2px solid var(--hvy-accent-1);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--hvy-accent-1) 18%, var(--hvy-table-row-bg-1));
+}
+
+.hvy-document .reader-table.has-static-table-cell-selection {
+  user-select: none;
+}
+
+.hvy-document .static-table-cell-modal {
+  width: min(45rem, calc(100% - 2rem));
+}
+
+.hvy-document .static-table-cell-modal-content {
+  margin-top: 0.75rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 10px;
+  background: var(--hvy-surface-alt);
+  padding: 0.8rem;
+  color: var(--hvy-text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: normal;
+}
+
+.hvy-document .static-table-cell-modal-content .hvy-alt-full {
+  display: inline;
+}
+
+.hvy-document .static-table-cell-modal-content .hvy-alt-compact {
+  display: none;
+}
+
 .hvy-document .reader-table th {
   background: var(--hvy-table-header);
 }

@@ -37,6 +37,7 @@ import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/image';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
 import { saveSessionState, saveSessionStateAsync } from './state-persistence';
@@ -303,6 +304,7 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
+  bindStaticTableReaderInteractions(app, [readerDocument, readerSidebarSections, aiReaderDocument, aiSidebarSections]);
 
   rerenderSearchButton?.addEventListener('click', () => {
     runInBoundRuntime(() => getRefreshSearchSurface()(app));

@@ -20,6 +20,7 @@ import { syncReusableTemplateForBlock } from './reusable';
 import { bindResponsiveSidebarShells } from './responsive-sidebar-tab';
 import { findSectionByKey } from './section-ops';
 import { dismissSidebarHelpBalloon, scheduleSidebarHelpAutoClose } from './sidebar-help';
+import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { getActiveStateRuntime, getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, runWithStateRuntime, state } from './state';
 
 const readerAppControlsBound = new WeakSet<HTMLElement>();
@@ -73,6 +74,7 @@ export function bindReaderUi(app: HTMLElement): void {
   bindResponsiveSidebarShells(app);
   scheduleSidebarHelpAutoClose(app);
   bindReaderAppControls(app);
+  bindStaticTableReaderInteractions(app, [...readerDocuments, ...readerSidebarSections]);
 
   const toggleComponentListReverse = (reverseList: HTMLElement): void => {
     const sectionKey = reverseList.dataset.sectionKey;

@@ -638,6 +638,8 @@ const mount = HVY.mountHvy({
   root,
   document,
   mode: 'editor',
+  // Defaults to false. Enable only when the host manages generated keys.
+  showComponentEncryptionControls: true,
   encryption: {
     keyring,
     onKeyGenerated({ keyId, key }) {

@@ -533,6 +533,7 @@ export interface AppState {
   };
   paneScroll: PaneScrollState;
   showAdvancedEditor: boolean;
+  showComponentEncryptionControls?: boolean;
   rawEditorText: string;
   rawEditorError: string | null;
   rawEditorDiagnostics: RawEditorDiagnostic[];

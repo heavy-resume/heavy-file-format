@@ -167,6 +167,7 @@ export interface HvyMountOptions {
   plugins?: HvyPluginInput[];
   databaseSources?: HvyDatabaseTableSource[];
   showAdvancedEditor?: boolean;
+  showComponentEncryptionControls?: boolean;
   chatClient?: HostChatClient | null;
   chatSettings?: Partial<ChatSettings> | null;
   initialChatState?: HvyChatSessionState | null;
@@ -242,6 +243,7 @@ function createEmbedState(
   mode: HvyEmbedMode,
   persistSessionState: boolean,
   showAdvancedEditor = false,
+  showComponentEncryptionControls = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
@@ -282,6 +284,7 @@ function createEmbedState(
     },
     paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
+    showComponentEncryptionControls,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
     rawEditorDiagnostics: [],
@@ -482,6 +485,7 @@ function ensureRenderers(): void {
       get imageAttachmentReductionStatus() { return state.imageAttachmentReductionStatus; },
       get documentSections() { return state.document.sections; },
       get showAdvancedEditor() { return state.showAdvancedEditor; },
+      get showComponentEncryptionControls() { return state.showComponentEncryptionControls; },
       get addComponentBySection() { return state.addComponentBySection; },
       get activeEditorBlock() { return state.activeEditorBlock; },
       get aiEditorHostBlock() { return state.aiEditorHostBlock; },
@@ -1106,6 +1110,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.mode ?? 'viewer',
     persistSessionState,
     options.showAdvancedEditor ?? false,
+    options.showComponentEncryptionControls ?? false,
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
     options.attachmentStore ?? null,

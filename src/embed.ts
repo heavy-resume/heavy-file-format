@@ -140,6 +140,7 @@ export interface HvyMountOptions {
   plugins?: HvyPluginInput[];
   databaseSources?: HvyDatabaseTableSource[];
   showAdvancedEditor?: boolean;
+  showComponentEncryptionControls?: boolean;
   chatClient?: HostChatClient | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;
@@ -256,6 +257,7 @@ function createDefaultSearchState(): AppState['search'] {
 function createEmbedState(
   document: VisualDocument,
   showAdvancedEditor = false,
+  showComponentEncryptionControls = false,
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
@@ -296,6 +298,7 @@ function createEmbedState(
     },
     paneScroll: { fullPaneTop: 0, editorTop: 0, editorSidebarTop: 0, viewerSidebarTop: 0, readerTop: 0, windowLeft: 0, windowTop: 0 },
     showAdvancedEditor,
+    showComponentEncryptionControls,
     rawEditorText: serializeDocument(document),
     rawEditorError: null,
     rawEditorDiagnostics: [],
@@ -1082,6 +1085,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   const runtime = createStateRuntime(createEmbedState(
     options.document,
     options.showAdvancedEditor ?? false,
+    options.showComponentEncryptionControls ?? false,
     options.imageAttachmentMaxDimensions,
     options.persistSessionState === true ? options.storageKey : null,
     options.attachmentStore ?? null,
@@ -1285,6 +1289,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           root: options.root,
           document: state.document,
           mode: 'editor',
+          showComponentEncryptionControls: state.showComponentEncryptionControls,
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,
@@ -1302,6 +1307,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
           root: options.root,
           document: state.document,
           mode: 'editor',
+          showComponentEncryptionControls: state.showComponentEncryptionControls,
           imageAttachmentMaxDimensions: state.imageAttachmentMaxDimensions,
           attachmentStore: state.attachmentHost,
           serializer: options.serializer ?? null,

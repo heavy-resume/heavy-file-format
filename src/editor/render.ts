@@ -123,6 +123,7 @@ interface EditorRenderState {
   imageAttachmentReductionStatus?: { state: 'reducing' | 'reduced' | 'unchanged' | 'error'; message: string } | null;
   documentSections: VisualSection[];
   showAdvancedEditor: boolean;
+  showComponentEncryptionControls?: boolean;
   addComponentBySection: Record<string, string>;
   activeEditorBlock: { sectionKey: string; blockId: string } | null;
   aiEditorHostBlock?: { sectionKey: string; blockId: string } | null;
@@ -557,7 +558,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
-    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition && encryptedEditorDepth === 0
+    const encryptionAction = state.showAdvancedEditor && state.showComponentEncryptionControls !== false && isActiveFrame && !editingReusableDefinition && encryptedEditorDepth === 0
       ? block.schema.kind === 'encrypted'
         ? `<button type="button" class="secondary" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypted</button>`
         : `<button type="button" class="ghost" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`

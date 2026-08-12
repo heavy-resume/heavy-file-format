@@ -3828,6 +3828,50 @@ hvy_version: 0.1
   expect(Number.parseFloat(cameraStyles.width)).toBeCloseTo(608, 0);
 });
 
+test('embedded hosts must opt into component encryption controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="defaultMount"></div><div id="enabledMount"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed-full.ts');
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:text {"id":"summary-text"}-->
+  Encryption control visibility.
+`;
+    const mount = (rootId: string, showComponentEncryptionControls?: boolean) => mountHvy({
+      root: document.querySelector<HTMLElement>(`#${rootId}`)!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      mode: 'editor',
+      showAdvancedEditor: true,
+      ...(showComponentEncryptionControls === undefined ? {} : { showComponentEncryptionControls }),
+    });
+    mount('defaultMount');
+    mount('enabledMount', true);
+  });
+
+  const defaultMount = page.locator('#defaultMount');
+  const enabledMount = page.locator('#enabledMount');
+
+  // BEFORE
+  await defaultMount.locator('[data-action="activate-block"]').click();
+  await enabledMount.locator('[data-action="activate-block"]').click();
+  await expect(defaultMount.locator('[data-action="open-component-meta"]')).toHaveCount(1);
+  await expect(defaultMount.locator('[data-action="open-encryption-modal"]')).toHaveCount(0);
+
+  // TOOL CALL
+  await defaultMount.locator('[data-action="open-component-meta"]').click();
+
+  // AFTER
+  await expect(defaultMount.locator('.component-meta-modal')).toBeVisible();
+  await expect(enabledMount.locator('[data-action="open-encryption-modal"]')).toHaveCount(1);
+});
+
 test('an embedded host can register the built-in graph plugin', async ({ page }) => {
   await page.goto('/');
 

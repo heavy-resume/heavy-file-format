@@ -22,7 +22,7 @@ class TestInputElement {
   closest = () => null;
 }
 
-function createHelpers(): ComponentRenderHelpers {
+function createHelpers(advanced = false): ComponentRenderHelpers {
   return {
     escapeAttr: (value) => value,
     escapeHtml: (value) => value,
@@ -52,7 +52,7 @@ function createHelpers(): ComponentRenderHelpers {
     getComponentListReaderViewId: () => '',
     getReaderContainerExpanded: (_key, fallback) => fallback,
     isExpandableEditorPanelOpen: () => false,
-    isAdvancedEditorMode: () => false,
+    isAdvancedEditorMode: () => advanced,
     isMobileAdjustmentMode: () => false,
   };
 }
@@ -111,7 +111,7 @@ test('grid editor renders a newly added blank text item without reading other co
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
-test('expected result: grid editor stores cell CSS without applying it to editor rows', () => {
+test('expected result: advanced grid cell meta stores CSS without applying it to editor rows', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
     id: 'photo',
@@ -119,14 +119,32 @@ test('expected result: grid editor stores cell CSS without applying it to editor
     block: createEmptyBlock('image'),
   });
 
-  const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers(true));
 
+  expect(expectedResult).toContain('class="grid-cell-meta-button" aria-label="Cell Meta"');
   expect(expectedResult).toContain('data-field="block-grid-item-css"');
   expect(expectedResult).toContain('display: none; max-md:order: -1;');
   expect(expectedResult).toContain('<div class="grid-field-row">');
   expect(expectedResult).not.toContain('@container hvy-surface');
   expect(expectedResult).not.toContain('class="grid-field-row grid-item-responsive-');
   expect(expectedResult).not.toContain('class="grid-field-row" style=');
+});
+
+test('grid cell meta only renders in advanced mode', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'grid-item',
+    css: 'padding: 1rem;',
+    block: createEmptyBlock('text'),
+  });
+
+  const basicResult = renderGridEditor('section-summary', grid, createHelpers());
+  const advancedResult = renderGridEditor('section-summary', grid, createHelpers(true));
+
+  expect(basicResult).not.toContain('grid-cell-meta-button');
+  expect(basicResult).not.toContain('data-field="block-grid-item-css"');
+  expect(advancedResult).toContain('grid-cell-meta-button');
+  expect(advancedResult).toContain('data-field="block-grid-item-css"');
 });
 
 test('grid editor renders default stack width as blank and never as a disabled checkbox state', () => {

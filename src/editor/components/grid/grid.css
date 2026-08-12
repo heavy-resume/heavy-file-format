@@ -15,11 +15,90 @@
   background: var(--hvy-surface-alt);
 }
 
+.hvy-document .grid-field-row:has(> .grid-field-head .grid-cell-meta[open]) {
+  position: relative;
+  z-index: 40;
+}
+
 .hvy-document .grid-field-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.4rem;
+}
+
+.hvy-document .grid-field-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hvy-document .grid-cell-meta {
+  position: relative;
+}
+
+.hvy-document .grid-cell-meta-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  padding: 0.16rem 0.42rem;
+  border: 1px solid var(--hvy-border-alt);
+  border-radius: 999px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hvy-document .grid-cell-meta-button::-webkit-details-marker {
+  display: none;
+}
+
+.hvy-document .grid-cell-meta[open] .grid-cell-meta-button {
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
+}
+
+.hvy-document .grid-cell-meta-body {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  gap: 0.5rem;
+  width: min(20rem, calc(100cqw - 2rem));
+  border: 1px solid var(--hvy-border);
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-surface-alt) 14%);
+  box-shadow: 0 12px 28px var(--hvy-shadow);
+}
+
+.hvy-document .grid-cell-meta-title,
+.hvy-document .grid-cell-css-field {
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.hvy-document .grid-cell-css-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.hvy-document .grid-cell-css-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 7px;
+  padding: 0.44rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  font: inherit;
+  resize: vertical;
 }
 
 .hvy-document .grid-item-controls,

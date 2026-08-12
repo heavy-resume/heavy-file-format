@@ -8,6 +8,7 @@ import { compileSurfaceResponsiveCss } from '../../../surface-responsive-css';
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
+  const advanced = helpers.isAdvancedEditorMode();
   const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
   const stackWidthInputValue = getGridStackWidthInputValue(stackWidth);
   const stackNever = stackWidth === 'never';
@@ -80,6 +81,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             placement: 'after',
             targetGridItemId: item.id,
           });
+          const cellMeta = advanced ? renderGridCellMeta(sectionKey, block.id, item, helpers) : '';
           // Cell CSS belongs to the rendered document. Applying it to this
           // authoring row can hide or reorder the controls away from source order.
           return `<div class="grid-field-row">
@@ -95,11 +97,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                 )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(item.id)}" aria-label="Move grid item down">▼</button>
               </div>
             </div>
-            <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
-              sectionKey
-            )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
-              item.id
-            )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
+            <div class="grid-field-head-actions">
+              ${cellMeta}
+              <button type="button" class="danger remove-x" data-action="remove-grid-item" data-section-key="${helpers.escapeAttr(
+                sectionKey
+              )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-item-id="${helpers.escapeAttr(
+                item.id
+              )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
+            </div>
           </div>
           <div class="grid-item-controls">
             ${
@@ -111,14 +116,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
                   </select>`
                 : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
             }
-            <label>
-              <span>Cell CSS</span>
-              <textarea data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-                block.id
-              )}" data-field="block-grid-item-css" data-grid-item-id="${helpers.escapeAttr(item.id)}" spellcheck="false">${helpers.escapeHtml(
-                item.css ?? ''
-              )}</textarea>
-            </label>
           </div>
           <div class="grid-item-editor-shell">
             ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
@@ -133,6 +130,28 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   </div>
 `;
 };
+
+function renderGridCellMeta(
+  sectionKey: string,
+  blockId: string,
+  item: GridItem,
+  helpers: Parameters<ComponentEditorRenderer>[2]
+): string {
+  return `<details class="grid-cell-meta">
+    <summary class="grid-cell-meta-button" aria-label="Cell Meta">Meta</summary>
+    <div class="grid-cell-meta-body">
+      <div class="grid-cell-meta-title">Cell Meta</div>
+      <label class="grid-cell-css-field">
+        <span>CSS</span>
+        <textarea rows="3" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          blockId
+        )}" data-field="block-grid-item-css" data-grid-item-id="${helpers.escapeAttr(item.id)}" spellcheck="false">${helpers.escapeHtml(
+          item.css ?? ''
+        )}</textarea>
+      </label>
+    </div>
+  </details>`;
+}
 
 function isBlankDefaultGridItem(block: VisualBlock): boolean {
   if ((block.schema.component || 'text') !== 'text') {

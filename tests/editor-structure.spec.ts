@@ -1717,6 +1717,90 @@ hvy_version: 0.1
   await expect(activeBlock.locator('.expandable-part-expanded .expandable-header .expandable-pane-meta-button')).toBeVisible();
 });
 
+test('grid cell CSS moves into advanced-only cell meta', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":1}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:text {}-->
+    Grid content
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.editor-grid-passive-preview') }).click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await expect(activeBlock.locator('.grid-cell-meta-button')).toHaveCount(0);
+  await expect(activeBlock.getByText('Cell CSS', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await activeBlock.locator('.grid-cell-meta-button').click();
+  await activeBlock.locator('[data-field="block-grid-item-css"]').fill('padding: 0.5rem;');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:grid:0 {"css":"padding: 0.5rem;"}-->');
+});
+
+test('grid cell meta paints above nested active component controls', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":1}-->
+  <!--hvy:grid:0 {}-->
+
+   <!--hvy:container {"id":"details"}-->
+
+    <!--hvy:text {}-->
+     Nested content
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  await page.locator('.editor-block-passive', { has: page.locator('.editor-grid-passive-preview') }).click();
+  const gridBlock = page.locator('.editor-block', { has: page.locator('.grid-fields') }).first();
+  await gridBlock.locator('.grid-cell-meta-button').click();
+
+  const metaBody = gridBlock.locator('.grid-cell-meta-body');
+  const nestedActions = gridBlock.locator('.grid-item-editor-shell .editor-block-context-actions').first();
+  await expect(metaBody).toBeVisible();
+  await expect(nestedActions).toBeVisible();
+  const metaBox = await metaBody.boundingBox();
+  const actionsBox = await nestedActions.boundingBox();
+  expect(metaBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  const overlapLeft = Math.max(metaBox!.x, actionsBox!.x);
+  const overlapRight = Math.min(metaBox!.x + metaBox!.width, actionsBox!.x + actionsBox!.width);
+  const overlapTop = Math.max(metaBox!.y, actionsBox!.y);
+  const overlapBottom = Math.min(metaBox!.y + metaBox!.height, actionsBox!.y + actionsBox!.height);
+  expect(overlapRight).toBeGreaterThan(overlapLeft);
+  expect(overlapBottom).toBeGreaterThan(overlapTop);
+
+  const topLayer = await page.evaluate(({ x, y }) => {
+    return document.elementFromPoint(x, y)?.closest('.grid-cell-meta-body')?.className ?? '';
+  }, {
+    x: (overlapLeft + overlapRight) / 2,
+    y: (overlapTop + overlapBottom) / 2,
+  });
+  expect(topLayer).toContain('grid-cell-meta-body');
+});
+
 test('editor-only scripting maintenance section only renders in advanced mode', async ({ page }) => {
   await page.goto('/');
 

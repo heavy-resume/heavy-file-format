@@ -47,6 +47,12 @@
   width: 100%;
 }
 
+.hvy-document .block-style-buttons > button,
+.hvy-document .block-style-buttons > .align-buttons .icon-button {
+  height: 2rem;
+  min-height: 2rem;
+}
+
 .hvy-document .format-buttons {
   align-items: center;
 }
@@ -58,6 +64,11 @@
 
 .hvy-document .align-buttons {
   margin: 0;
+}
+
+.hvy-document .block-style-buttons > .align-buttons {
+  margin-left: auto;
+  margin-right: 1.35rem;
 }
 
 .hvy-document .rich-toolbar .icon-button {
@@ -461,4 +472,3 @@
     display: block;
   }
 }
-

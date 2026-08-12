@@ -13,6 +13,7 @@ import { renderCarouselEditor } from './components/carousel/carousel';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
+import { renderTextToolbarDismissButton } from './components/text/text-toolbar-layout';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
 import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
 import { renderTagEditor } from './tag-editor';
@@ -1022,15 +1023,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs, sectionKey, blockId);
     return `
       <div class="rich-toolbar">
+        ${renderTextToolbarDismissButton()}
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
           <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-2')}" data-rich-action="heading-2" ${richButtonAttrs} title="Heading 2">H2</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-3')}" data-rich-action="heading-3" ${richButtonAttrs} title="Heading 3">H3</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-4')}" data-rich-action="heading-4" ${richButtonAttrs} title="Heading 4">H4</button>
+          ${alignControls}
         </div>
         <div class="toolbar-segment format-buttons" role="group" aria-label="Text formatting">
-          ${alignControls}
           <button type="button" class="icon-button ghost" data-rich-action="bold" ${richButtonAttrs} aria-label="Bold" title="Bold (${hotkeyModifier}+B)"><strong>B</strong></button>
           <button type="button" class="icon-button ghost" data-rich-action="italic" ${richButtonAttrs} aria-label="Italic" title="Italic (${hotkeyModifier}+I)"><span class="toolbar-icon italic-icon" aria-hidden="true">I</span></button>
           <button type="button" class="icon-button ghost" data-rich-action="underline" ${richButtonAttrs} aria-label="Underline" title="Underline (${hotkeyModifier}+U)"><span class="toolbar-icon underline-icon" aria-hidden="true">U</span></button>

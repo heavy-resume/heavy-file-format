@@ -113,7 +113,7 @@ import { materializePreparedEmbeddingAttachments } from './chat/embedding-contex
 import { createHostedAttachmentAdapter } from './hosted-attachments';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
-import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
+import { renderTextToolbarDismissButton, syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import { decryptEncryptedComponents, encryptComponentInDocument, decryptComponentInDocument } from './encrypted-components';
 import { decryptDocumentEnvelopeBytes, encryptDocumentBytes, generateEncryptionKey, rememberEncryptionKey, type HvyEncryptionOptions, type HvyGeneratedEncryptionKey } from './encryption';
 import { buildDocumentRichTextCopyPayload } from './rich-text-copy';
@@ -406,6 +406,7 @@ function renderLightweightRichToolbar(
   const hotkeyModifier = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
   return `
     <div class="rich-toolbar">
+      ${renderTextToolbarDismissButton()}
       <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
         <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
         <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>

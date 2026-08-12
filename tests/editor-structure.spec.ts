@@ -2489,7 +2489,7 @@ hvy_version: 0.1
   expect(fillInToolbarLayout.boundsPosition).toBe('absolute');
   expect(fillInToolbarLayout.slotDisplay).toBe('grid');
   expect(fillInToolbarLayout.slotHeight).toBeGreaterThan(fillInToolbarLayout.firstToolbarHeight);
-  expect(fillInToolbarLayout.spacerHeight).toBe(fillInToolbarLayout.slotHeight);
+  expect(fillInToolbarLayout.spacerHeight).toBe(0);
   await activeBlock.locator('[data-field="text-fill-in-value"]').evaluate((fillIn) => {
     const range = document.createRange();
     range.selectNode(fillIn);

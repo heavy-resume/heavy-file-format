@@ -197,6 +197,7 @@ test('double Enter keeps paragraph break inside one text component', async ({ pa
     selection?.addRange(range);
     (node as HTMLElement).focus();
   });
+  await editor.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
   await page.keyboard.type('Alpha paragraph');
   await page.keyboard.press('Enter');
@@ -428,8 +429,8 @@ hvy_version: 0.1
     const spacerBox = spacer.getBoundingClientRect();
     const editorBox = editor.getBoundingClientRect();
     return toolbarHeight > 0
-      && Math.abs(spacerBox.height - toolbarHeight) <= 1
-      && editorBox.top >= spacerBox.bottom;
+      && spacerBox.height === 0
+      && Math.abs(editorBox.top - shell.getBoundingClientRect().top) <= 1;
   }, null, { timeout: 1000 });
   const toolbarMetrics = await pluginShell.evaluate((shell) => {
     const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
@@ -444,14 +445,14 @@ hvy_version: 0.1
     return {
       toolbarHeight: toolbarBox.height,
       spacerHeight: spacerBox.height,
+      shellTop: shell.getBoundingClientRect().top,
       editorTop: editorBox.top,
-      spacerBottom: spacerBox.bottom,
     };
   });
   expect(toolbarMetrics).not.toBeNull();
   expect(toolbarMetrics!.toolbarHeight).toBeGreaterThan(0);
-  expect(Math.abs(toolbarMetrics!.spacerHeight - toolbarMetrics!.toolbarHeight)).toBeLessThanOrEqual(1);
-  expect(toolbarMetrics!.editorTop).toBeGreaterThanOrEqual(toolbarMetrics!.spacerBottom);
+  expect(toolbarMetrics!.spacerHeight).toBe(0);
+  expect(Math.abs(toolbarMetrics!.editorTop - toolbarMetrics!.shellTop)).toBeLessThanOrEqual(1);
   await pluginEditor.evaluate((node) => {
     node.innerHTML = '<p>Plugin alpha</p><p>Plugin beta</p>';
     node.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -557,6 +558,8 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
   await expect(extraInput).toHaveValue('Input fixture value');
 
   await editor.click();
+  await page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first().getByRole('button', { name: 'Hide text controls' }).click();
+  await editor.click();
   await page.keyboard.type('Viewer toolbar target');
   await expect(editor).toContainText('Viewer toolbar target');
   await expect(editor).toBeFocused();
@@ -598,10 +601,13 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
   await expect(editor).toContainText('Plain viewer line');
   await expect(viewerTextButton).toHaveClass(/secondary/);
   await expect(viewerHeadingButton).not.toHaveClass(/secondary/);
+  await page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first().getByRole('button', { name: 'Hide text controls' }).click();
 
   const secondEditor = editorWithInput.locator('[data-field="hvy-plugin-text-editor"]');
   const secondTextButton = editorWithInput.locator('[data-rich-action="paragraph"]').first();
   const secondHeadingButton = editorWithInput.locator('[data-rich-action="heading-1"]').first();
+  await secondEditor.click();
+  await editorWithInput.getByRole('button', { name: 'Hide text controls' }).click();
   await secondEditor.click();
   await page.keyboard.type('Input sibling target');
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
@@ -1032,6 +1038,7 @@ text_line_styles:
   await toolbar.getByRole('button', { name: 'Gamma Note' }).click();
   await expect(toolbar.locator('.paragraph-style-recent [data-rich-action="text-line-style"]').first()).toHaveText('Gamma Note');
 
+  await activeEditorBlock.getByRole('button', { name: 'Hide text controls' }).click();
   await page.locator('.editor-block-content[data-component-id="second-text"]').click();
   activeEditorBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
@@ -1081,22 +1088,196 @@ test('paragraph style toolbar compacts inside phone preview', async ({ page }) =
   expect(Math.ceil(modalBox!.x + modalBox!.width)).toBeLessThanOrEqual(Math.ceil(shellBox!.x + shellBox!.width));
 });
 
-test('sticky text toolbar is visibly inset from the text editor shell', async ({ page }) => {
+test('floating text toolbar is centered, shrink-wrapped, and keeps alignment beside block styles', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Expected result toolbar inset');
 
   await page.locator('[data-action="activate-block"]').first().click();
 
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
-  const shellBox = await activeBlock.locator('.text-editor-shell').boundingBox();
-  const toolbarBox = await activeBlock.locator('.text-editor-toolbar-slot').boundingBox();
-  expect(shellBox).not.toBeNull();
-  expect(toolbarBox).not.toBeNull();
-  expect(Math.floor(toolbarBox!.x - shellBox!.x)).toBeGreaterThanOrEqual(8);
-  expect(Math.floor(shellBox!.x + shellBox!.width - (toolbarBox!.x + toolbarBox!.width))).toBeGreaterThanOrEqual(8);
+  const metrics = await activeBlock.locator('.text-editor-shell').evaluate((shell) => {
+    const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const richToolbar = toolbar?.querySelector<HTMLElement>('.rich-toolbar');
+    const blockStyles = toolbar?.querySelector<HTMLElement>('.block-style-buttons');
+    const formatButtons = toolbar?.querySelector<HTMLElement>('.format-buttons');
+    const headingButton = blockStyles?.querySelector<HTMLElement>('[data-rich-action="heading-1"]');
+    const alignButton = blockStyles?.querySelector<HTMLElement>('[data-action="set-block-align"]');
+    const alignButtons = blockStyles?.querySelector<HTMLElement>('.align-buttons');
+    const dismissButton = richToolbar?.querySelector<HTMLElement>('[data-text-toolbar-dismiss]');
+    if (!toolbar || !richToolbar || !blockStyles || !formatButtons || !headingButton || !alignButton || !alignButtons || !dismissButton) {
+      return null;
+    }
+    const shellBox = shell.getBoundingClientRect();
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const richToolbarBox = richToolbar.getBoundingClientRect();
+    const widestButtonRow = Math.max(blockStyles.scrollWidth, formatButtons.scrollWidth);
+    const headingBox = headingButton.getBoundingClientRect();
+    const alignBox = alignButton.getBoundingClientRect();
+    const alignButtonsBox = alignButtons.getBoundingClientRect();
+    const dismissBox = dismissButton.getBoundingClientRect();
+    return {
+      centerDelta: Math.abs((toolbarBox.left + (toolbarBox.width / 2)) - (shellBox.left + (shellBox.width / 2))),
+      unusedWidth: richToolbarBox.width - widestButtonRow,
+      headingTop: headingBox.top,
+      alignTop: alignBox.top,
+      headingHeight: headingBox.height,
+      alignHeight: alignBox.height,
+      alignRightGap: richToolbarBox.right - alignButtonsBox.right,
+      dismissOverlap: alignButtonsBox.right - dismissBox.left,
+      dismissShapeDelta: Math.abs(dismissBox.width - dismissBox.height),
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.centerDelta).toBeLessThanOrEqual(1);
+  expect(metrics!.unusedWidth).toBeLessThanOrEqual(16);
+  expect(Math.abs(metrics!.headingTop - metrics!.alignTop)).toBeLessThanOrEqual(1);
+  expect(Math.abs(metrics!.headingHeight - metrics!.alignHeight)).toBeLessThanOrEqual(1);
+  expect(metrics!.alignRightGap).toBeGreaterThanOrEqual(12);
+  expect(metrics!.dismissOverlap).toBeLessThanOrEqual(-4);
+  expect(metrics!.dismissShapeDelta).toBeLessThanOrEqual(1);
 });
 
-test('sticky text toolbar allocates bottom clearance without adding editor gap', async ({ page }) => {
+test('short text near the top places its floating toolbar below the component without reserving space', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result toolbar below');
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  const passiveBlock = page.locator('[data-action="activate-block"]').first();
+  await passiveBlock.evaluate((block) => {
+    const scroller = block.closest<HTMLElement>('.editor-tree');
+    if (scroller) {
+      scroller.scrollTop += block.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 2;
+    }
+  });
+  await passiveBlock.click();
+
+  const shell = page.locator('.editor-block[data-active-editor-block="true"] .text-editor-shell').first();
+  await expect(shell).toHaveClass(/is-text-toolbar-below/);
+  const metrics = await shell.evaluate((shell) => {
+    const toolbar = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const editor = shell.querySelector<HTMLElement>('.rich-editor');
+    const spacer = shell.querySelector<HTMLElement>('.text-editor-toolbar-spacer');
+    if (!toolbar || !editor || !spacer) {
+      return null;
+    }
+    return {
+      toolbarTop: toolbar.getBoundingClientRect().top,
+      editorBottom: editor.getBoundingClientRect().bottom,
+      spacerHeight: spacer.getBoundingClientRect().height,
+      isBelow: shell.classList.contains('is-text-toolbar-below'),
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.isBelow).toBe(true);
+  expect(metrics!.toolbarTop).toBeGreaterThanOrEqual(metrics!.editorBottom + 4);
+  expect(metrics!.spacerHeight).toBe(0);
+});
+
+test('floating text toolbar can be hidden and returns when the text is clicked', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result dismissible controls');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const shell = page.locator('.editor-block[data-active-editor-block="true"] .text-editor-shell').first();
+  const editor = shell.locator('.rich-editor');
+  const toolbar = shell.locator('.text-editor-toolbar-slot > .rich-toolbar');
+  await editor.focus();
+  await expect(editor).toBeFocused();
+  await shell.getByRole('button', { name: 'Hide text controls' }).click();
+
+  await expect(toolbar).toBeHidden();
+  await expect(editor).toBeFocused();
+  await editor.click();
+  await expect(shell).not.toHaveClass(/is-text-toolbar-hidden/);
+  await expect(toolbar).toBeVisible();
+});
+
+test('grid text editor uses an unsquashed floating toolbar that stays inside the editor surface', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"layout","gridColumns":3,"gridStackWidth":"never"}-->
+  <!--hvy:grid:0 {"id":"first-cell"}-->
+   <!--hvy:text {"id":"first-text"}-->
+    First cell
+
+  <!--hvy:grid:1 {"id":"second-cell"}-->
+   <!--hvy:text {"id":"second-text"}-->
+    Second cell
+
+  <!--hvy:grid:2 {"id":"third-cell"}-->
+   <!--hvy:text {"id":"grid-text"}-->
+${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1}`).join('\n\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.reader-grid-cell .editor-block-passive', { hasText: 'Expected result line 1' }).click();
+
+  const activeTextBlock = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="grid-text"]'),
+  });
+  const metrics = await activeTextBlock.evaluate((block) => {
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const gridCell = block.closest<HTMLElement>('.grid-field-row');
+    const editorBody = block.closest<HTMLElement>('.editor-tree-body');
+    const scroller = block.closest<HTMLElement>('.editor-tree');
+    if (!toolbar || !gridCell || !editorBody || !scroller) {
+      return null;
+    }
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const gridCellBox = gridCell.getBoundingClientRect();
+    const editorBodyBox = editorBody.getBoundingClientRect();
+    scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + 180);
+    const scrolledToolbarBox = toolbar.getBoundingClientRect();
+    const scrollerBox = scroller.getBoundingClientRect();
+    return {
+      toolbarWidth: toolbarBox.width,
+      gridCellWidth: gridCellBox.width,
+      toolbarLeft: toolbarBox.left,
+      toolbarRight: toolbarBox.right,
+      gridCellRight: gridCellBox.right,
+      editorBodyLeft: editorBodyBox.left,
+      editorBodyRight: editorBodyBox.right,
+      scrolledToolbarTop: scrolledToolbarBox.top,
+      scrollerTop: scrollerBox.top,
+      scrollerBottom: scrollerBox.bottom,
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.toolbarWidth).toBeGreaterThan(metrics!.gridCellWidth);
+  expect(metrics!.toolbarLeft).toBeGreaterThanOrEqual(metrics!.editorBodyLeft);
+  expect(metrics!.toolbarRight).toBeLessThanOrEqual(metrics!.editorBodyRight);
+  expect(Math.abs(metrics!.toolbarRight - metrics!.gridCellRight)).toBeLessThanOrEqual(1);
+  expect(metrics!.scrolledToolbarTop).toBeGreaterThanOrEqual(metrics!.scrollerTop);
+  expect(metrics!.scrolledToolbarTop).toBeLessThan(metrics!.scrollerBottom);
+
+  await page.getByRole('button', { name: 'Done', exact: true }).last().click();
+  await page.locator('.reader-grid-cell .editor-block-passive', { hasText: 'First cell' }).click();
+  const leftGridMetrics = await page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="first-text"]'),
+  }).evaluate((block) => {
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    const gridCell = block.closest<HTMLElement>('.grid-field-row');
+    return toolbar && gridCell
+      ? {
+          toolbarLeft: toolbar.getBoundingClientRect().left,
+          gridCellLeft: gridCell.getBoundingClientRect().left,
+        }
+      : null;
+  });
+  expect(leftGridMetrics).not.toBeNull();
+  expect(Math.abs(leftGridMetrics!.toolbarLeft - leftGridMetrics!.gridCellLeft)).toBeLessThanOrEqual(1);
+});
+
+test('floating text toolbar reserves no space above the editor and keeps bottom clearance while scrolling', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, Array.from({ length: 16 }, (_, index) => `Expected result line ${index + 1}`).join('\n\n'));
 
@@ -1115,23 +1296,25 @@ test('sticky text toolbar allocates bottom clearance without adding editor gap',
     const toolbarBoundsBox = toolbarBounds.getBoundingClientRect();
     const toolbarBox = toolbar.getBoundingClientRect();
     const spacerBox = spacer.getBoundingClientRect();
+    const shellBox = shell.getBoundingClientRect();
     const editorBox = editor.getBoundingClientRect();
     const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
     return {
       boundsGap: editorBox.bottom - toolbarBoundsBox.bottom,
       spacerHeight: spacerBox.height,
       toolbarHeight: toolbarBox.height,
-      editorGap: editorBox.top - spacerBox.bottom,
+      editorTopGap: editorBox.top - shellBox.top,
       minimumGap: lineHeight * 5,
-      singleLineGap: lineHeight,
+      toolbarTop: toolbarBox.top,
+      editorTop: editorBox.top,
     };
   });
 
   expect(metrics).not.toBeNull();
   expect(metrics!.boundsGap).toBeGreaterThanOrEqual(metrics!.minimumGap);
-  expect(Math.abs(metrics!.spacerHeight - metrics!.toolbarHeight)).toBeLessThanOrEqual(1);
-  expect(metrics!.editorGap).toBeGreaterThanOrEqual(0);
-  expect(metrics!.editorGap).toBeLessThan(metrics!.singleLineGap);
+  expect(metrics!.spacerHeight).toBe(0);
+  expect(Math.abs(metrics!.editorTopGap)).toBeLessThanOrEqual(1);
+  expect(metrics!.toolbarTop).toBeLessThan(metrics!.editorTop);
 
   const scrolledMetrics = await activeBlock.evaluate((block) => {
     const scroller = block.closest<HTMLElement>('.editor-tree');
@@ -1141,18 +1324,26 @@ test('sticky text toolbar allocates bottom clearance without adding editor gap',
     if (!scroller || !toolbar || !lastParagraph || !editor) {
       return null;
     }
-    scroller.scrollTop = scroller.scrollHeight;
+    scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + 180);
     const toolbarBox = toolbar.getBoundingClientRect();
+    const stickyToolbarTop = toolbarBox.top;
+    const scrollerTop = scroller.getBoundingClientRect().top;
+    scroller.scrollTop = scroller.scrollHeight;
+    const bottomToolbarBox = toolbar.getBoundingClientRect();
     const lastParagraphBox = lastParagraph.getBoundingClientRect();
     const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
     return {
-      toolbarBottom: toolbarBox.bottom,
+      toolbarBottom: bottomToolbarBox.bottom,
+      stickyToolbarTop,
+      scrollerTop,
       lastParagraphTop: lastParagraphBox.top,
       minimumGap: lineHeight * 4,
     };
   });
 
   expect(scrolledMetrics).not.toBeNull();
+  expect(scrolledMetrics!.stickyToolbarTop).toBeGreaterThanOrEqual(scrolledMetrics!.scrollerTop);
+  expect(scrolledMetrics!.stickyToolbarTop - scrolledMetrics!.scrollerTop).toBeLessThanOrEqual(48);
   expect(scrolledMetrics!.lastParagraphTop - scrolledMetrics!.toolbarBottom).toBeGreaterThanOrEqual(scrolledMetrics!.minimumGap);
 });
 

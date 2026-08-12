@@ -10,8 +10,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   const advanced = helpers.isAdvancedEditorMode();
   const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
-  const stackWidthInputValue = getGridStackWidthInputValue(stackWidth);
-  const stackNever = stackWidth === 'never';
   const stackClass = getGridStackClass(block.id, stackWidth);
   const layoutClasses = [
     'grid-fields',
@@ -49,22 +47,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
         String(block.schema.gridColumns)
       )}" />
     </label>
-    <div class="grid-stack-width-field">
-      <label>
-        <span>Stack Width</span>
-        <input class="grid-stack-width-input" type="text" inputmode="text" spellcheck="false" placeholder="${DEFAULT_GRID_STACK_WIDTH}" data-section-key="${helpers.escapeAttr(
-          sectionKey
-        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-stack-width" value="${helpers.escapeAttr(
-          stackWidthInputValue
-        )}" ${stackNever ? 'disabled' : ''} />
-      </label>
-      <label class="checkbox-label grid-stack-never-toggle">
-        <span>Never</span>
-        <input type="checkbox" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-          block.id
-        )}" data-field="block-grid-stack-never" ${stackNever ? 'checked' : ''} />
-      </label>
-    </div>
   </div>
   ${stackCss}
   <div class="${helpers.escapeAttr(layoutClasses)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
@@ -217,10 +199,6 @@ function getGridStackClass(blockId: string, stackWidth: string): string {
 
 function getGridItemResponsiveClass(blockId: string, itemId: string): string {
   return `grid-item-responsive-${hashGridStackKey(`${blockId}:${itemId}`)}`;
-}
-
-function getGridStackWidthInputValue(stackWidth: string): string {
-  return stackWidth === DEFAULT_GRID_STACK_WIDTH || stackWidth === 'never' ? '' : stackWidth;
 }
 
 function hashGridStackKey(value: string): string {

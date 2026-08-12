@@ -165,6 +165,14 @@
   white-space: nowrap;
 }
 
+.hvy-document .grid-stack-width-description {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--hvy-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 .hvy-document .grid-item-ghost {
   min-height: 118px;
 }

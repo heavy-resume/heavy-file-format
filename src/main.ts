@@ -62,6 +62,8 @@ import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
 import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyIndicator } from './reference-document-dirty';
 import { initializeSessionAttachmentRecovery } from './session-attachment-tail-storage';
+import { decryptEncryptedComponents } from './encrypted-components';
+import { createReferenceEncryptionOptions } from './reference-encryption-keyring';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -105,7 +107,7 @@ async function createDefaultDocument() {
   return deserializeDocumentBytes(bytes, '.hvy');
 }
 
-function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>): AppState {
+function createInitialState(document: ReturnType<typeof deserializeDocumentBytes>, encryption: NonNullable<AppState['encryption']>): AppState {
   return {
     document,
     filename: 'example.hvy',
@@ -118,6 +120,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     chatSearchCache: null,
     embeddingProvider: createProxyEmbeddingProvider(),
     crossDocumentLinksEnabled: false,
+    encryption,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
     search: createDefaultSearchState(),
@@ -191,6 +194,7 @@ function createInitialState(document: ReturnType<typeof deserializeDocumentBytes
     future: [],
     isRestoring: false,
     componentMetaModal: null,
+    encryptionModal: null,
     dbTableRowComponentModal: null,
     dbTableQueryModal: null,
     pdfExportPlanModal: null,
@@ -604,6 +608,9 @@ readerRenderer = createReaderRenderer(
     },
     get componentMetaModal() {
       return state.componentMetaModal;
+    },
+    get encryptionModal() {
+      return state.encryptionModal;
     },
     get themeModalOpen() {
       return state.themeModalOpen;
@@ -1398,7 +1405,8 @@ async function bootstrap(): Promise<void> {
   const savedSession = await loadSessionStateAsync();
   setHostPlugins([...builtInPlugins, skillRatingExamplePlugin, resumeOutputGeneratorsPlugin]);
   resetPluginDocumentHookState();
-  initState(applySessionState(createInitialState(await createDefaultDocument()), savedSession));
+  initState(applySessionState(createInitialState(await createDefaultDocument(), createReferenceEncryptionOptions()), savedSession));
+  await decryptEncryptedComponents(state.document, state.encryption);
   initializeReferenceDocumentDirtyTracking();
   bindSessionPersistence();
   saveSessionState(state);

@@ -654,6 +654,7 @@ function shouldClearTemplateHideForAction(action: string): boolean {
   return !new Set([
     'focus-modal',
     'open-component-meta',
+    'open-encryption-modal',
     'start-component-move',
     'start-component-copy',
     'cancel-component-placement',

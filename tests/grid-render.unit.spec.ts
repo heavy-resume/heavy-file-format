@@ -147,23 +147,21 @@ test('grid cell meta only renders in advanced mode', () => {
   expect(advancedResult).toContain('data-field="block-grid-item-css"');
 });
 
-test('grid editor renders default stack width as blank and never as a disabled checkbox state', () => {
+test('grid editor keeps stack width controls in component meta', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
 
   const defaultResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(defaultResult).toContain('data-field="block-grid-stack-width" value=""');
-  expect(defaultResult).toContain('data-field="block-grid-stack-never"');
-  expect(defaultResult).toContain('<span>Never</span>');
-  expect(defaultResult).not.toContain('Never Stack');
-  expect(defaultResult).not.toContain('data-field="block-grid-stack-width" value="" disabled');
+  expect(defaultResult).not.toContain('Stack Width');
+  expect(defaultResult).not.toContain('data-field="block-grid-stack-width"');
+  expect(defaultResult).not.toContain('data-field="block-grid-stack-never"');
 
   grid.schema.gridStackWidth = 'never';
 
   const neverResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(neverResult).toContain('data-field="block-grid-stack-width" value="" disabled');
-  expect(neverResult).toContain('data-field="block-grid-stack-never" checked');
+  expect(neverResult).not.toContain('data-field="block-grid-stack-width"');
+  expect(neverResult).not.toContain('data-field="block-grid-stack-never"');
 });
 
 test('text editor omits inline style for default-left alignment', () => {

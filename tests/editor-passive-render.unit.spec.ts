@@ -235,6 +235,7 @@ test('block meta fields include grid stack width for grid components', () => {
   const expectedResult = renderer.renderBlockMetaFields(section.key, block);
 
   expect(expectedResult).toContain('Stack Width');
+  expect(expectedResult).toContain('The minimum width before grid elements are displayed vertically.');
   expect(expectedResult).toContain('data-field="block-grid-stack-width"');
   expect(expectedResult).toContain('value="30rem"');
   expect(expectedResult).toContain('<span>Never</span>');

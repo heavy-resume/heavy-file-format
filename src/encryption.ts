@@ -9,6 +9,7 @@ export interface HvyEncryptionOptions extends HvyEncryptionKeyring {
   keyId?: string;
   key?: string;
   onKeyGenerated?(key: HvyGeneratedEncryptionKey): void;
+  onKeyRemoved?(keyId: string): void;
 }
 
 export interface HvyGeneratedEncryptionKey {
@@ -66,6 +67,19 @@ export function rememberEncryptionKey(options: HvyEncryptionOptions | null | und
     keyring[generated.keyId] = generated.key;
   }
   options?.onKeyGenerated?.(generated);
+}
+
+export function forgetEncryptionKey(options: HvyEncryptionOptions | null | undefined, keyId: string): void {
+  const keyring = options?.keyring ?? options?.keys;
+  if (keyring instanceof Map) {
+    keyring.delete(keyId);
+  } else if (Array.isArray(keyring)) {
+    const index = keyring.findIndex((item) => item[0] === keyId);
+    if (index >= 0) keyring.splice(index, 1);
+  } else if (keyring && typeof keyring === 'object') {
+    delete keyring[keyId];
+  }
+  options?.onKeyRemoved?.(keyId);
 }
 
 export async function fernetEncryptBytes(plainBytes: Uint8Array, key: string, now = Date.now()): Promise<Uint8Array> {

@@ -51,6 +51,8 @@ When a renderer has the key for an encrypted component, it SHOULD decrypt the at
 
 Authoring tools that encrypt a component MUST generate a fresh UUID and Fernet key unless the host explicitly provides them. The tool MUST return or report both the UUID and key to the host so the host can persist a UUID-to-key mapping. Encrypting a component MUST NOT cause a whole-document encrypted envelope to be re-decrypted.
 
+Changing an encrypted component's key MUST generate a fresh UUID and Fernet key, re-encrypt the component payload under that key, remove the previous encrypted attachment, and report that the previous key mapping can be discarded. Removing component encryption MUST restore the decrypted component in place, remove its encrypted attachment, and report that its key mapping can be discarded. An authoring tool MUST NOT offer either operation when it cannot decrypt the component payload.
+
 ## 3. Compatibility Model
 
 ### 3.1 Markdown compatibility

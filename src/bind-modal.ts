@@ -22,6 +22,8 @@ import { extractReusableTemplateVariablesFromDefinition } from './reusable-templ
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 import type { JsonObject } from './hvy/types';
+import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
+import { showTransientNotice } from './transient-notice';
 
 const loadDbTableRuntime = () => import('./plugins/db-table');
 
@@ -43,6 +45,24 @@ export function bindModal(app: HTMLElement): void {
     if (closeBtn) {
       closeModal();
       getRenderApp()();
+      return;
+    }
+
+    const changeEncryptionKeyBtn = target.closest<HTMLButtonElement>('[data-modal-action="change-encryption-key"]');
+    if (changeEncryptionKeyBtn && state.encryptionModal && !changeEncryptionKeyBtn.disabled) {
+      void changeEncryptionKeyFromModal(modalRoot, changeEncryptionKeyBtn);
+      return;
+    }
+
+    const generateEncryptionBtn = target.closest<HTMLButtonElement>('[data-modal-action="generate-component-encryption"]');
+    if (generateEncryptionBtn && state.encryptionModal && !generateEncryptionBtn.disabled) {
+      void generateEncryptionFromModal(modalRoot, generateEncryptionBtn);
+      return;
+    }
+
+    const removeEncryptionBtn = target.closest<HTMLButtonElement>('[data-modal-action="remove-component-encryption"]');
+    if (removeEncryptionBtn && state.encryptionModal && !removeEncryptionBtn.disabled) {
+      void removeEncryptionFromModal(modalRoot, removeEncryptionBtn);
       return;
     }
 
@@ -448,6 +468,64 @@ export function bindModal(app: HTMLElement): void {
     getRefreshReaderPanels()();
     getRefreshModalPreview()();
   });
+}
+
+async function changeEncryptionKeyFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:change-encryption-key`);
+    const result = await changeEncryptedComponentKeyInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption ?? null);
+    closeModal();
+    showTransientNotice(`Changed encryption key to ${result.keyId}.`);
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Encryption key could not be changed.');
+    getRenderApp()();
+  }
+}
+
+async function generateEncryptionFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:encrypt`);
+    if (!state.encryption) state.encryption = { keyring: {} };
+    const result = await encryptComponentInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption);
+    closeModal();
+    setActiveEditorBlock(modal.sectionKey, result.encryptedBlockId);
+    showTransientNotice(`Encrypted component with key ${result.keyId}.`);
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Component could not be encrypted.');
+    getRenderApp()();
+  }
+}
+
+async function removeEncryptionFromModal(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): Promise<void> {
+  const modal = state.encryptionModal;
+  if (!modal) return;
+  const encrypted = findBlockByIds(modal.sectionKey, modal.blockId);
+  const decryptedBlockId = encrypted?.schema.kind === 'encrypted' ? encrypted.schema.encryptedBlock?.id ?? '' : '';
+  setEncryptionModalBusy(modalRoot, actionButton);
+  try {
+    recordHistory(`component:${modal.blockId}:remove-encryption`);
+    await decryptComponentInDocument(state.document, modal.sectionKey, modal.blockId, state.encryption ?? null);
+    closeModal();
+    if (decryptedBlockId) setActiveEditorBlock(modal.sectionKey, decryptedBlockId);
+    showTransientNotice('Removed component encryption.');
+    getRenderApp()();
+  } catch (error) {
+    showTransientNotice(error instanceof Error ? error.message : 'Encryption could not be removed.');
+    getRenderApp()();
+  }
+}
+
+function setEncryptionModalBusy(modalRoot: HTMLDivElement, actionButton: HTMLButtonElement): void {
+  modalRoot.querySelectorAll<HTMLButtonElement>('button').forEach((button) => { button.disabled = true; });
+  actionButton.textContent = 'Working…';
 }
 
 function setupReusableTemplateGeneratorControls(modalRoot: HTMLDivElement): void {

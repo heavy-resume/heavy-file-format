@@ -315,6 +315,58 @@ export function findBlockContainerById(
   return findBlockContainerInList(section.blocks, blockId, null);
 }
 
+export function replaceBlockById(
+  sections: VisualSection[],
+  sectionKey: string,
+  blockId: string,
+  replacement: VisualBlock
+): boolean {
+  const section = findSectionByKey(sections, sectionKey);
+  return section ? replaceBlockInList(section.blocks, blockId, replacement, new Set<VisualBlock>()) : false;
+}
+
+function replaceBlockInList(
+  blocks: VisualBlock[],
+  blockId: string,
+  replacement: VisualBlock,
+  seen: Set<VisualBlock>
+): boolean {
+  const index = blocks.findIndex((block) => block.id === blockId);
+  if (index >= 0) {
+    blocks[index] = replacement;
+    return true;
+  }
+  for (const block of blocks) {
+    if (seen.has(block)) continue;
+    seen.add(block);
+    if (
+      replaceBlockInList(block.schema.containerBlocks ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.componentListBlocks ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.expandableStubBlocks?.children ?? [], blockId, replacement, seen)
+      || replaceBlockInList(block.schema.expandableContentBlocks?.children ?? [], blockId, replacement, seen)
+    ) {
+      return true;
+    }
+    for (const item of block.schema.gridItems ?? []) {
+      if (item.block.id === blockId) {
+        item.block = replacement;
+        return true;
+      }
+      if (replaceBlockInList([item.block], blockId, replacement, seen)) {
+        return true;
+      }
+    }
+    if (block.schema.encryptedBlock?.id === blockId) {
+      block.schema.encryptedBlock = replacement;
+      return true;
+    }
+    if (block.schema.encryptedBlock && replaceBlockInList([block.schema.encryptedBlock], blockId, replacement, seen)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function findBlockContainerInList(
   blocks: VisualBlock[],
   blockId: string,

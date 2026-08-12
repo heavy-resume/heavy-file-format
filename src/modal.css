@@ -45,6 +45,85 @@
   width: min(20rem, calc(100% - 2rem));
 }
 
+.hvy-document .encryption-management-modal {
+  width: min(34rem, calc(100% - 2rem));
+}
+
+.hvy-document .encryption-management-modal .modal-head > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.hvy-document .encryption-management-modal h3,
+.hvy-document .encryption-management-modal p {
+  margin: 0;
+}
+
+.hvy-document .encryption-key-card {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 10px;
+  background: var(--hvy-input-bg);
+  padding: 0.8rem;
+}
+
+.hvy-document .encryption-key-card > span {
+  color: var(--hvy-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.hvy-document .encryption-key-card code {
+  overflow-wrap: anywhere;
+  color: var(--hvy-text);
+}
+
+.hvy-document .encryption-management-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.hvy-document .encryption-management-actions > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  border: 1px solid var(--hvy-border);
+  border-radius: 10px;
+  background: var(--hvy-surface-alt);
+  padding: 0.75rem;
+}
+
+.hvy-document .encryption-management-actions strong,
+.hvy-document .encryption-management-actions span {
+  grid-column: 1;
+}
+
+.hvy-document .encryption-management-actions span {
+  color: var(--hvy-muted);
+  font-size: 0.85rem;
+}
+
+.hvy-document .encryption-management-actions button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.hvy-document .encryption-management-actions .encryption-remove-action {
+  border-color: color-mix(in srgb, var(--hvy-danger) 45%, var(--hvy-border));
+}
+
+.hvy-document .encryption-creation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .hvy-document .template-picker-modal,
 .hvy-document .template-picker-modal {
   width: min(20rem, calc(100% - 2rem));

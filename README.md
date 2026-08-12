@@ -643,6 +643,9 @@ const mount = HVY.mountHvy({
     onKeyGenerated({ keyId, key }) {
       keyring[keyId] = key;
     },
+    onKeyRemoved(keyId) {
+      delete keyring[keyId];
+    },
   },
 });
 
@@ -650,6 +653,12 @@ const generated = await mount.encryptComponentAsync(sectionKey, blockId);
 keyring[generated.keyId] = generated.key;
 const savedBytes = await mount.serializeDocumentBytesAsync();
 ```
+
+The reference application acts as a host by keeping its generated keyring in
+the current tab's `sessionStorage`. This preserves access across page and Hot
+Reload cycles; closing the tab ends that reference-app session. Production
+hosts should choose storage appropriate to their own security and recovery
+requirements.
 
 Whole-document encryption wraps the serialized HVY byte stream in an encrypted
 envelope. Use the async byte APIs for encrypted documents:

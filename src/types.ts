@@ -602,6 +602,7 @@ export interface AppState {
   future: string[];
   isRestoring: boolean;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  encryptionModal?: { sectionKey: string; blockId: string } | null;
   dbTableRowComponentModal: DbTableRowComponentModalState | null;
   dbTableQueryModal: DbTableQueryModalState | null;
   pdfExportPlanModal: PdfExportPlanModalState | null;

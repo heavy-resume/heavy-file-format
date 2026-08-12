@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 
 import { ensureDocumentAttachmentStore } from '../src/attachment-store';
-import { encryptComponentInDocument } from '../src/encrypted-components';
+import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from '../src/encrypted-components';
 import { decryptDocumentEnvelopeBytes, encryptDocumentBytes, fernetDecryptBytes, fernetEncryptBytes, generateFernetKey } from '../src/encryption';
 import {
   deserializeDocument,
@@ -143,4 +143,96 @@ hvy_version: 0.1
 
   expect(serializeDocument(opened)).not.toContain('Secret component text');
   expect(serializeDocument(opened)).toContain('<!--hvy:encrypted');
+});
+
+test('expected result: changing an encrypted component key replaces its key and attachment', async () => {
+  const keyring: Record<string, string> = {};
+  const removedKeyIds: string[] = [];
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"private"}-->
+#! Private
+
+ <!--hvy:text {}-->
+  Secret component text
+`, '.hvy');
+
+  const before = await encryptComponentInDocument(document, document.sections[0]!.key, document.sections[0]!.blocks[0]!.id, { keyring });
+  const expectedResult = await changeEncryptedComponentKeyInDocument(document, document.sections[0]!.key, before.encryptedBlockId, {
+    keyring,
+    onKeyRemoved(keyId) {
+      removedKeyIds.push(keyId);
+    },
+  });
+  const after = serializeDocument(document);
+
+  expect(expectedResult.keyId).not.toBe(before.keyId);
+  expect(after).toContain(`<!--hvy:encrypted {"keyId":"${expectedResult.keyId}"}-->`);
+  expect(after).not.toContain(before.keyId);
+  expect(ensureDocumentAttachmentStore(document).get(before.attachmentId)).toBeNull();
+  expect(ensureDocumentAttachmentStore(document).get(expectedResult.attachmentId)?.bytes.length).toBeGreaterThan(0);
+  expect(keyring[before.keyId]).toBeUndefined();
+  expect(keyring[expectedResult.keyId]).toBe(expectedResult.key);
+  expect(removedKeyIds).toEqual([before.keyId]);
+});
+
+test('expected result: removing component encryption restores content and drops its key and attachment', async () => {
+  const keyring: Record<string, string> = {};
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"private"}-->
+#! Private
+
+ <!--hvy:text {}-->
+  Secret component text
+`, '.hvy');
+
+  const before = await encryptComponentInDocument(document, document.sections[0]!.key, document.sections[0]!.blocks[0]!.id, { keyring });
+  await decryptComponentInDocument(document, document.sections[0]!.key, before.encryptedBlockId, { keyring });
+  const after = serializeDocument(document);
+
+  expect(after).not.toContain('<!--hvy:encrypted');
+  expect(after).toContain('Secret component text');
+  expect(ensureDocumentAttachmentStore(document).get(before.attachmentId)).toBeNull();
+  expect(keyring[before.keyId]).toBeUndefined();
+});
+
+test('expected result: a container occupying a grid cell is replaced by encryption and restored in place', async () => {
+  const keyring: Record<string, string> = {};
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"private"}-->
+#! Private
+
+ <!--hvy:grid {}-->
+  <!--hvy:grid:0 {"id":"private-cell"}-->
+   <!--hvy:container {"id":"private-container"}-->
+
+    <!--hvy:text {}-->
+     Secret grid container text
+`, '.hvy');
+  const gridItem = document.sections[0]?.blocks[0]?.schema.gridItems?.[0];
+  if (!gridItem) throw new Error('Expected grid item.');
+
+  // BEFORE
+  expect(gridItem.block.schema.kind).toBe('container');
+
+  // TOOL CALL
+  const encrypted = await encryptComponentInDocument(document, document.sections[0]!.key, gridItem.block.id, { keyring });
+
+  // AFTER
+  expect(gridItem.block.id).toBe(encrypted.encryptedBlockId);
+  expect(gridItem.block.schema.kind).toBe('encrypted');
+  expect(serializeDocument(document)).not.toContain('Secret grid container text');
+
+  await decryptComponentInDocument(document, document.sections[0]!.key, encrypted.encryptedBlockId, { keyring });
+
+  expect(gridItem.block.schema.kind).toBe('container');
+  expect(serializeDocument(document)).toContain('Secret grid container text');
 });

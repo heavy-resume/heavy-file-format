@@ -79,6 +79,7 @@ interface ReaderRenderState {
   reusableDefinitionEditModal?: ReusableDefinitionEditModalState | null;
   sectionTemplateFlavorModal: SectionTemplateFlavorModalState | null;
   componentMetaModal: { sectionKey: string; blockId: string } | null;
+  encryptionModal?: { sectionKey: string; blockId: string } | null;
   themeModalOpen: boolean;
   themeModalMode: 'full' | 'advanced';
   paletteOverrideId: string | null;
@@ -1386,6 +1387,69 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (state.captionTextModal) {
       return renderCaptionTextModal();
+    }
+    if (state.encryptionModal) {
+      const block = deps.findBlockByIds(state.encryptionModal.sectionKey, state.encryptionModal.blockId);
+      if (!block) {
+        return '';
+      }
+      if (block.schema.kind !== 'encrypted') {
+        return `
+          <div id="modalRoot" class="modal-root">
+            <div class="modal-overlay" data-modal-action="close-overlay"></div>
+            <section class="modal-panel component-meta-modal encryption-management-modal" role="dialog" aria-modal="true" aria-labelledby="encryptionCreationTitle">
+              <div class="modal-head">
+                <div>
+                  <h3 id="encryptionCreationTitle">Encrypt component</h3>
+                  <p class="muted">Generate a new key and protect this component.</p>
+                </div>
+                <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close encryption setup" title="Close">${closeIcon()}</button>
+              </div>
+              <div class="encryption-key-card">
+                <span>Key ID</span>
+                <code>Generated when encrypted</code>
+              </div>
+              <p class="muted">The key ID is stored in the HVY document. The encryption key is returned to the host and must be retained separately.</p>
+              <div class="encryption-creation-actions">
+                <button type="button" class="ghost" data-modal-action="close">Cancel</button>
+                <button type="button" class="secondary" data-modal-action="generate-component-encryption">Generate key &amp; encrypt</button>
+              </div>
+            </section>
+          </div>
+        `;
+      }
+      const unlocked = Boolean(block.schema.encryptedBlock);
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="close-overlay"></div>
+          <section class="modal-panel component-meta-modal encryption-management-modal" role="dialog" aria-modal="true" aria-labelledby="encryptionManagementTitle">
+            <div class="modal-head">
+              <div>
+                <h3 id="encryptionManagementTitle">Encrypted component</h3>
+                <p class="muted">Manage the encryption protecting this component.</p>
+              </div>
+              <button type="button" class="ghost remove-x" data-modal-action="close" aria-label="Close encryption settings" title="Close">${closeIcon()}</button>
+            </div>
+            <div class="encryption-key-card">
+              <span>Key ID</span>
+              <code>${deps.escapeHtml(block.schema.keyId || '(missing)')}</code>
+            </div>
+            ${unlocked ? '' : '<p class="raw-editor-error" role="alert">The encryption key is unavailable. Supply the key before changing or removing encryption.</p>'}
+            <div class="encryption-management-actions">
+              <div>
+                <strong>Change key</strong>
+                <span>Generate a new key and discard the current key.</span>
+                <button type="button" class="secondary" data-modal-action="change-encryption-key" ${unlocked ? '' : 'disabled'}>Change key</button>
+              </div>
+              <div class="encryption-remove-action">
+                <strong>Remove encryption</strong>
+                <span>Restore the component as ordinary HVY content and discard its key.</span>
+                <button type="button" class="danger" data-modal-action="remove-component-encryption" ${unlocked ? '' : 'disabled'}>Remove encryption</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      `;
     }
     if (state.pdfTemplateImportModal) {
       const modal = state.pdfTemplateImportModal;

@@ -220,6 +220,7 @@ export interface EditorRenderer {
 }
 
 export function createEditorRenderer(state: EditorRenderState, deps: EditorRenderDeps): EditorRenderer {
+  let encryptedEditorDepth = 0;
   function isPdfEditorDocument(): boolean {
     return state.documentExtension === '.phvy';
   }
@@ -556,10 +557,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const placement = state.componentPlacement;
     const isPlacementSource = placement?.sectionKey === sectionKey && placement.blockId === block.id;
     const showActiveBlockDoneRow = isActiveFrame && !editingReusableDefinition;
-    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition
+    const encryptionAction = state.showAdvancedEditor && isActiveFrame && !editingReusableDefinition && encryptedEditorDepth === 0
       ? block.schema.kind === 'encrypted'
-        ? `<button type="button" class="ghost" data-action="decrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Decrypt</button>`
-        : `<button type="button" class="ghost" data-action="encrypt-component" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
+        ? `<button type="button" class="secondary" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypted</button>`
+        : `<button type="button" class="ghost" data-action="open-encryption-modal" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}">Encrypt</button>`
       : '';
     const placementActions = canRemove
       ? isPlacementSource
@@ -1732,9 +1733,14 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderEncryptedComponentEditor(sectionKey: string, block: VisualBlock): string {
     if (block.schema.encryptedBlock) {
-      return `<div class="encrypted-component-editor">
-        ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
-      </div>`;
+      encryptedEditorDepth += 1;
+      try {
+        return `<div class="encrypted-component-editor">
+          ${renderEditorBlock(sectionKey, block.schema.encryptedBlock, state.documentSections)}
+        </div>`;
+      } finally {
+        encryptedEditorDepth -= 1;
+      }
     }
     const keyId = block.schema.keyId.trim() || '(missing)';
     const attachmentId = block.schema.encryptedAttachmentId.trim() || `encrypted:${keyId}`;
@@ -1757,6 +1763,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const isScriptingPlugin = component === 'plugin' && block.schema.plugin === SCRIPTING_PLUGIN_ID;
     const scriptingLibraries = Array.isArray(block.schema.pluginConfig?.libraries) ? block.schema.pluginConfig.libraries : [];
     const gridStackWidth = component === 'grid' ? coerceGridStackWidth(block.schema.gridStackWidth) : DEFAULT_GRID_STACK_WIDTH;
+    const gridStackWidthDescriptionId = `grid-stack-width-description-${sectionKey}-${block.id}`;
     const textMetaFields = component === 'text'
       ? `<label class="schema-meta-checkbox">
           <input
@@ -1778,6 +1785,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               data-section-key="${deps.escapeAttr(sectionKey)}"
               data-block-id="${deps.escapeAttr(block.id)}"
               data-field="block-grid-stack-width"
+              aria-describedby="${deps.escapeAttr(gridStackWidthDescriptionId)}"
               placeholder="${DEFAULT_GRID_STACK_WIDTH}"
               value="${deps.escapeAttr(gridStackWidth === DEFAULT_GRID_STACK_WIDTH || gridStackWidth === 'never' ? '' : gridStackWidth)}"
               ${gridStackWidth === 'never' ? 'disabled' : ''}
@@ -1793,6 +1801,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               ${gridStackWidth === 'never' ? 'checked' : ''}
             />
           </label>
+          <p class="grid-stack-width-description" id="${deps.escapeAttr(gridStackWidthDescriptionId)}">The minimum width before grid elements are displayed vertically.</p>
         </div>`
       : '';
     const scriptingVersionField =

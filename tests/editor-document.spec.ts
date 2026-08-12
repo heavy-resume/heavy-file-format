@@ -158,6 +158,62 @@ test('reference hot reload restores an attachment tail larger than session stora
   expect(recoveryRecord.leaseSessionIds).toContain(recoveryRecord.sessionId);
 });
 
+test('reference hot reload restores session encryption keys and unlocked component content', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"private"}-->
+#! Private
+
+<!--hvy:container {}-->
+
+ <!--hvy:text {}-->
+  Secret hot reload text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  const blockId = await page.evaluate(async () => (await import('/src/state.ts')).state.document.sections[0]!.blocks[0]!.id);
+
+  // BEFORE
+  await page.locator(`.editor-block-passive[data-block-id="${blockId}"]`).click();
+  await page.locator(`button[data-action="open-encryption-modal"][data-block-id="${blockId}"]`).click();
+
+  // TOOL CALL
+  await page.getByRole('button', { name: 'Generate key & encrypt', exact: true }).click();
+  const expectedKeyId = await page.evaluate(async () => Object.keys((await import('/src/state.ts')).state.encryption?.keyring ?? {})[0]);
+  expect(expectedKeyId).toMatch(/^[0-9a-f-]{36}$/);
+  await expect.poll(() => page.evaluate(() => Boolean(sessionStorage.getItem('hvy-reference-encryption-keyring-v1')))).toBe(true);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Hot Reload', exact: true }).click(),
+  ]);
+
+  // AFTER
+  await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
+  await expect(page.locator('.editor-block-passive', { hasText: 'Secret hot reload text' }).first()).toBeVisible();
+  await expect(page.locator('.encrypted-component-placeholder')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => Boolean((await import('/src/state.ts')).state.document.sections[0]?.blocks[0]?.schema.encryptedBlock))).toBe(true);
+  await expect.poll(() => page.evaluate(async () => Object.keys((await import('/src/state.ts')).state.encryption?.keyring ?? {}))).toEqual([expectedKeyId]);
+  await page.locator('.editor-block-passive', { hasText: 'Secret hot reload text' }).first().click();
+  const encryptionActions = page.locator('button[data-action="open-encryption-modal"]');
+  await expect(encryptionActions).toHaveCount(1);
+  await expect(encryptionActions).toHaveText('Encrypted');
+  await expect(encryptionActions).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return { currentView: state.currentView, editorMode: state.editorMode };
+  })).toEqual({ currentView: 'editor', editorMode: 'advanced' });
+  await encryptionActions.click();
+  await expect(page.locator('.encryption-management-modal h3')).toHaveText('Encrypted component');
+});
+
 test('reference recovery deletes encrypted records after a 48-hour stale lease', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('group', { name: 'Reference rerender diagnostics' }).waitFor();
@@ -4368,6 +4424,98 @@ hvy_version: 0.1
   });
   expect(showCopyLayout.inputLeft).toBeLessThan(showCopyLayout.textLeft);
   expect(Math.abs(showCopyLayout.inputTop - showCopyLayout.textTop)).toBeLessThan(4);
+});
+
+test('encrypted container button manages key changes and encryption removal', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"private"}-->
+#! Private
+
+<!--hvy:container {"id":"private-container"}-->
+
+ <!--hvy:text {}-->
+  Secret container text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+
+  // BEFORE
+  const containerBlockId = await page.evaluate(async () => (await import('/src/state.ts')).state.document.sections[0]?.blocks.find((block) => block.schema.kind === 'container')?.id ?? '');
+  await page.locator(`.editor-block-passive[data-block-id="${containerBlockId}"]`).click();
+  const activeEncryptionButton = page.locator(`button[data-action="open-encryption-modal"][data-block-id="${containerBlockId}"]`);
+  await expect(activeEncryptionButton).toBeVisible();
+
+  // TOOL CALL
+  await activeEncryptionButton.click();
+  const encryptionCreationModal = page.locator('.encryption-management-modal', { hasText: 'Encrypt component' });
+  await expect(encryptionCreationModal.locator('.encryption-key-card')).toContainText('Generated when encrypted');
+  await encryptionCreationModal.getByRole('button', { name: 'Generate key & encrypt', exact: true }).click();
+
+  // AFTER
+  const encryptedButton = page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-head [data-action="open-encryption-modal"]');
+  await expect(encryptedButton).toHaveText('Encrypted');
+  await expect(encryptedButton).toBeVisible();
+  await expect(activeEncryptionButton).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return { currentView: state.currentView, editorMode: state.editorMode };
+  })).toEqual({ currentView: 'editor', editorMode: 'advanced' });
+  await encryptedButton.click();
+  const firstKeyId = await page.locator('.encryption-key-card code').textContent();
+  expect(firstKeyId).toMatch(/^[0-9a-f-]{36}$/);
+
+  await page.getByRole('button', { name: 'Change key', exact: true }).click();
+  await encryptedButton.click();
+  const secondKeyId = await page.locator('.encryption-key-card code').textContent();
+  expect(secondKeyId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(secondKeyId).not.toBe(firstKeyId);
+  await expect.poll(() => page.evaluate(async () => Object.keys((await import('/src/state.ts')).state.encryption?.keyring ?? {}))).toEqual([secondKeyId]);
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.document.attachments.map((item) => item.id).filter((id) => id.startsWith('encrypted:')))).toEqual([`encrypted:${secondKeyId}`]);
+
+  await page.getByRole('button', { name: 'Remove encryption', exact: true }).click();
+  await expect(encryptedButton).toHaveText('Encrypt');
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Secret container text');
+  await expect.poll(() => page.evaluate(async () => Object.keys((await import('/src/state.ts')).state.encryption?.keyring ?? {}))).toEqual([]);
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.document.attachments.map((item) => item.id).filter((id) => id.startsWith('encrypted:')))).toEqual([]);
+});
+
+test('Guide grid container remains active and encrypted after generating its key', async ({ page }) => {
+  await page.goto('/');
+  await selectDocumentMenuItem(page, 'Guide');
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.locator('.editor-grid-passive-preview .reader-grid-cell').nth(1).click();
+  const containerBlockId = await page.evaluate(async () => (await import('/src/state.ts')).state.activeEditorBlockPath[1]?.blockId ?? '');
+
+  // BEFORE
+  const containerEncryptionButton = page.locator(`button[data-action="open-encryption-modal"][data-block-id="${containerBlockId}"]`);
+  await expect(containerEncryptionButton).toBeVisible();
+  await containerEncryptionButton.click();
+
+  // TOOL CALL
+  await page.getByRole('button', { name: 'Generate key & encrypt', exact: true }).click();
+
+  // AFTER
+  const encryptedButton = page.getByRole('button', { name: 'Encrypted', exact: true });
+  await expect(encryptedButton).toBeVisible();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const grid = state.document.sections.flatMap((section) => section.blocks).find((block) => block.schema.kind === 'grid');
+    return {
+      currentView: state.currentView,
+      editorMode: state.editorMode,
+      activePathLength: state.activeEditorBlockPath.length,
+      encryptedGridItems: grid?.schema.gridItems?.filter((item) => item.block.schema.kind === 'encrypted').length ?? 0,
+    };
+  })).toEqual({ currentView: 'editor', editorMode: 'advanced', activePathLength: 2, encryptedGridItems: 1 });
+  await encryptedButton.click();
+  await expect(page.locator('.encryption-management-modal h3')).toHaveText('Encrypted component');
 });
 
 test('AI mode shows add section ghost and opens the new section inline', async ({ page }) => {

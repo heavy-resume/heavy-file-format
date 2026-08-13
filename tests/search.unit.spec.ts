@@ -1266,7 +1266,7 @@ title: Semantic Test
     targetPath: '/body/skills/typescript',
     targetRef: 'typescript',
   });
-  expect(expectedResult.instructionPrompt).toContain('--- filter prompt ---\nFind frontend language work\n--- end filter prompt ---');
+  expect(expectedResult.instructionPrompt).toContain('--- begin filter prompt ---\nFind frontend language work\n--- end filter prompt ---');
   expect(expectedResult.instructionPrompt.indexOf('Candidate list as XML-like structured text:')).toBeLessThan(
     expectedResult.instructionPrompt.indexOf('Selection contract:')
   );
@@ -2133,6 +2133,18 @@ test('semantic provider parser keeps only valid candidate ids', () => {
   }]);
 });
 
+test('semantic provider parser restores an omitted component candidate prefix', () => {
+  const expectedResult = parseSemanticFilterResponse(
+    '["C84","C86"]',
+    new Set(['component:C84', 'component:C86']),
+  );
+
+  expect(expectedResult).toEqual([
+    { candidateId: 'component:C84' },
+    { candidateId: 'component:C86' },
+  ]);
+});
+
 test('semantic provider parser reads the final JSON array after short selection notes', () => {
   const expectedResult = parseSemanticFilterResponse(
     [
@@ -2276,6 +2288,54 @@ hvy_version: 0.1
     candidates: provider.mock.calls[0]![0].candidates,
   });
   expect(expectedResult.results.map((result) => result.targetId)).toEqual(['typescript']);
+});
+
+test('semantic filter supports an ordered variable-length provider attempt ladder', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  const provider = vi.fn((providerRequest: HvySemanticFilterRequest) => {
+    if (providerRequest.attempt?.number === 1 && !providerRequest.repair) {
+      return 'Fast model returned prose only.';
+    }
+    if (providerRequest.attempt?.number === 1) {
+      expect(providerRequest.repair?.previousResponse).toBe('Fast model returned prose only.');
+      return 'Fast model repair was still invalid.';
+    }
+    if (!providerRequest.repair) {
+      return 'Mid-range model fresh response was invalid.';
+    }
+    expect(providerRequest.repair.previousResponse).toBe('Mid-range model fresh response was invalid.');
+    return JSON.stringify([
+      providerRequest.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId,
+    ]);
+  });
+
+  const expectedResult = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    semanticFilterProvider: provider,
+    semanticFilterMaxAttempts: 2,
+  });
+
+  expect(expectedResult.results.map((result) => result.targetId)).toEqual(['typescript']);
+  expect(provider.mock.calls.map(([providerRequest]) => ({
+    attempt: providerRequest.attempt,
+    repair: Boolean(providerRequest.repair),
+  }))).toEqual([
+    { attempt: { number: 1, total: 2 }, repair: false },
+    { attempt: { number: 1, total: 2 }, repair: true },
+    { attempt: { number: 2, total: 2 }, repair: false },
+    { attempt: { number: 2, total: 2 }, repair: true },
+  ]);
 });
 
 test('semantic filter preserves the parser error after one failed repair attempt', async () => {

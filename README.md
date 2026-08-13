@@ -946,6 +946,8 @@ Embedded hosts can also enable semantic filtering by providing a callback that
 selects candidate IDs from the AI-friendly request packet:
 
 ```js
+const semanticModels = ['fast-model', 'balanced-model', 'strong-model'];
+
 async function semanticFilterProvider(request) {
   const messages = [{ role: 'user', content: request.instructionPrompt }];
   if (request.repair) {
@@ -954,7 +956,10 @@ async function semanticFilterProvider(request) {
       { role: 'user', content: request.repair.instruction },
     );
   }
-  return llm.complete({ messages });
+  return llm.complete({
+    model: semanticModels[request.attempt.number - 1],
+    messages,
+  });
 }
 
 HVY.mountHvyViewer({
@@ -962,6 +967,7 @@ HVY.mountHvyViewer({
   document,
   semanticFilterProvider,
   semanticFilterConcurrency: 3,
+  semanticFilterMaxAttempts: semanticModels.length,
 });
 ```
 
@@ -969,20 +975,30 @@ HVY.mountHvyViewer({
 document's semantic-filter windows. It defaults to `3` and must be a positive
 integer. The same option is available on `createDocumentFilterSnapshot(...)`.
 
+`semanticFilterMaxAttempts` controls the number of model slots tried for each
+semantic window and defaults to `1`. Every provider request includes
+`attempt.number` (one-based) and `attempt.total`, so hosts can select an ordered
+model ladder. The option is also available on
+`createDocumentFilterSnapshot(...)` and `searchDocuments(...)`.
+
 The request includes structured `candidates` and a deterministic
 `instructionPrompt`. Providers can return the raw model response; HVY extracts
 the final JSON candidate-ID array and validates it against the request. Providers
 that already use structured output can instead return an array of
 `{ candidateId, reason?, score? }` matches.
 
-If raw model output cannot be parsed, HVY calls the provider one more time with
-the same request and a `repair` object containing `previousResponse` and
-`instruction`. Hosts can append those as assistant and user messages, preserving
-the original prompt prefix for provider caching. If the repaired response is
-also invalid, HVY throws the detailed parsing error. If the repair request
-itself fails, the error identifies it as a repair failure and retains the
-provider error as its cause. Any terminal semantic-window failure aborts the
-remaining in-flight windows and stops further progress updates.
+Each model slot starts with a fresh request. If that output cannot be parsed,
+the same `attempt.number` is called once more with a `repair` object containing
+that model's `previousResponse` and a specific validation `instruction`. Only
+after that repair remains invalid does HVY increment `attempt.number` and send a
+fresh request to the next model without repair history. Shorthand component IDs
+such as `C84` are accepted and normalized to canonical IDs such as
+`component:C84`; canonical prefixes remain in the candidate packet to prevent
+collisions between target kinds. If all model slots and repairs are invalid,
+HVY throws the detailed parsing error. If a repair request itself fails, the
+error identifies it as a repair failure and retains the provider error as its
+cause. Any terminal semantic-window failure aborts the remaining in-flight
+windows and stops further progress updates.
 
 Hosts can also search across many HVY documents without mounting them. Keyword
 mode uses the built-in search provider unless a host supplies one. Semantic mode

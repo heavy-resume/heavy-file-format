@@ -121,6 +121,7 @@ async function searchDocumentsSemantically(
     provider,
     windows: packet.windows,
     signal: request.signal,
+    maxAttempts: request.semanticFilterMaxAttempts ?? getReferenceAppConfig().semanticFilterMaxAttempts,
   });
   throwIfAborted(request.signal);
 
@@ -246,6 +247,7 @@ async function runDocumentSemanticWindows(options: {
   provider: HvySemanticFilterProvider;
   windows: HvySemanticFilterCandidateWindow[];
   signal?: AbortSignal;
+  maxAttempts?: number;
 }): Promise<HvySemanticFilterMatch[]> {
   const matches: HvySemanticFilterMatch[] = [];
   for (const window of options.windows) {
@@ -253,7 +255,9 @@ async function runDocumentSemanticWindows(options: {
     const providerRequest = buildSemanticFilterWindowRequest(options.prompt, window, {
       ...(options.signal ? { signal: options.signal } : {}),
     });
-    const windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest);
+    const windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest, {
+      maxAttempts: options.maxAttempts,
+    });
     matches.push(...windowMatches);
   }
   return matches;

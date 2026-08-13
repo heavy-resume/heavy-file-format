@@ -106,7 +106,7 @@ import type {
 } from './ai-document-edit';
 import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
-import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
@@ -149,6 +149,7 @@ export interface HvyMountOptions {
   embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
   semanticFilterConcurrency?: number;
+  semanticFilterMaxAttempts?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -1136,6 +1137,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterConcurrency' in options) {
     setRuntimeSemanticFilterConcurrency(options.semanticFilterConcurrency ?? null);
   }
+  if ('semanticFilterMaxAttempts' in options) {
+    setRuntimeSemanticFilterMaxAttempts(options.semanticFilterMaxAttempts ?? null);
+  }
   setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
@@ -1172,6 +1176,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
         setRuntimeSemanticFilterConcurrency(null);
+        setRuntimeSemanticFilterMaxAttempts(null);
         resetPluginDocumentHookState();
         clearPowerScriptingMode(runtime);
         clearPluginAuthorization(runtime);

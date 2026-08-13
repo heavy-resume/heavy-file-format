@@ -19,6 +19,7 @@ export async function runSemanticFilterWindows(options: {
   traceRunId?: string;
   signal?: AbortSignal;
   concurrency?: number;
+  maxAttempts?: number;
   onWindowComplete?: (progress: { completedWindows: number; matchedCandidates: number }) => void;
 }): Promise<HvySemanticFilterMatch[]> {
   const runAbortController = new AbortController();
@@ -50,7 +51,9 @@ export async function runSemanticFilterWindows(options: {
       });
       let windowMatches: HvySemanticFilterMatch[];
       try {
-        windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest);
+        windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest, {
+          maxAttempts: options.maxAttempts,
+        });
       } catch (error) {
         if (!runSignal.aborted) {
           runAbortController.abort(error);

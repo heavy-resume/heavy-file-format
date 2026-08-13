@@ -110,6 +110,10 @@ export interface HvySemanticFilterRequest {
   windowLabel?: string;
   traceRunId?: string;
   signal?: AbortSignal;
+  attempt?: {
+    number: number;
+    total: number;
+  };
   repair?: {
     previousResponse: string;
     instruction: string;
@@ -144,6 +148,7 @@ export interface HvyDocumentSearchRequest {
   categories?: SearchCategory[];
   searchProvider?: HvySearchProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  semanticFilterMaxAttempts?: number;
   embeddingProvider?: HvyEmbeddingProvider | null;
   embeddingModel?: string;
   embeddingDimensions?: number;

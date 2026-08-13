@@ -6,6 +6,7 @@ import {
   getReferenceAppConfig,
   setReferenceAppConfig,
   setRuntimeSemanticFilterConcurrency,
+  setRuntimeSemanticFilterMaxAttempts,
 } from '../src/reference-config';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
@@ -13,6 +14,7 @@ registerSerializationTestState();
 
 afterEach(() => {
   setRuntimeSemanticFilterConcurrency(null);
+  setRuntimeSemanticFilterMaxAttempts(null);
   setReferenceAppConfig(null);
 });
 
@@ -86,4 +88,14 @@ test('semantic filter concurrency can be scoped to the active embedded runtime',
 
   setRuntimeSemanticFilterConcurrency(null);
   expect(getReferenceAppConfig().semanticFilterConcurrency).toBe(3);
+});
+
+test('semantic filter maximum attempts default to one and can be runtime scoped', () => {
+  expect(getReferenceAppConfig().semanticFilterMaxAttempts).toBe(1);
+
+  setRuntimeSemanticFilterMaxAttempts(3);
+  expect(getReferenceAppConfig().semanticFilterMaxAttempts).toBe(3);
+
+  setRuntimeSemanticFilterMaxAttempts(null);
+  expect(getReferenceAppConfig().semanticFilterMaxAttempts).toBe(1);
 });

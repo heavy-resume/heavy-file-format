@@ -132,6 +132,10 @@
   opacity: 0.72;
 }
 
+.hvy-document .text-editor-shell.is-disabled .text-editor-toolbar-bounds {
+  display: none;
+}
+
 .hvy-document .text-editor-shell.is-disabled .rich-toolbar button {
   cursor: not-allowed;
 }

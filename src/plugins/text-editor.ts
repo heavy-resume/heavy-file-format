@@ -23,7 +23,7 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
   let currentMarkdown = options.value;
   let savedSelection: Range | null = null;
   const shell = ownerDocument.createElement('div');
-  shell.className = 'text-editor-shell hvy-plugin-text-editor';
+  shell.className = 'text-editor-shell hvy-plugin-text-editor is-text-toolbar-focus-controlled is-text-toolbar-hidden';
   const toolbarBounds = ownerDocument.createElement('div');
   toolbarBounds.className = 'text-editor-toolbar-bounds';
   const toolbarSlot = ownerDocument.createElement('div');
@@ -48,6 +48,9 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
 
   const syncDisabledState = (): void => {
     shell.classList.toggle('is-disabled', disabled);
+    if (disabled) {
+      shell.classList.add('is-text-toolbar-hidden');
+    }
     shell.dataset.disabled = disabled ? 'true' : 'false';
     editable.contentEditable = disabled ? 'false' : 'true';
     editable.setAttribute('aria-disabled', disabled ? 'true' : 'false');
@@ -66,17 +69,13 @@ export function mountPluginTextEditor(options: HvyPluginTextEditorMountOptions):
       includeFillIn: options.includeFillIn === true,
       align: options.align ?? 'left',
       currentMarkdown: markdown,
-      textLineStyles: helpers.getTextLineStyles?.() ?? {},
     });
     syncDisabledState();
     syncTextToolbarLayout(shell);
   };
 
   const writeEditable = (markdown: string): void => {
-    editable.innerHTML = markdownToEditorHtml(markdown, {
-      textLineStyles: getCachedComponentRenderHelpers().getTextLineStyles?.() ?? {},
-      textLineStyleMode: 'editor',
-    });
+    editable.innerHTML = markdownToEditorHtml(markdown);
   };
 
   const readMarkdown = (): string => {

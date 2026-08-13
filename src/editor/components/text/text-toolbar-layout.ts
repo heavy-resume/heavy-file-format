@@ -190,8 +190,27 @@ function bindTextToolbarVisibility(shell: HTMLElement): void {
       shell.classList.add('is-text-toolbar-hidden');
       return;
     }
+    if (target?.closest('.rich-editor') && !shell.classList.contains('is-disabled')) {
+      shell.classList.remove('is-text-toolbar-hidden');
+    }
+  });
+  shell.addEventListener('focusin', (event) => {
+    if (!shell.classList.contains('is-text-toolbar-focus-controlled')
+      || shell.classList.contains('is-disabled')) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('.rich-editor')) {
       shell.classList.remove('is-text-toolbar-hidden');
+    }
+  });
+  shell.addEventListener('focusout', (event) => {
+    if (!shell.classList.contains('is-text-toolbar-focus-controlled')) {
+      return;
+    }
+    const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+    if (!nextTarget || !shell.contains(nextTarget)) {
+      shell.classList.add('is-text-toolbar-hidden');
     }
   });
 }

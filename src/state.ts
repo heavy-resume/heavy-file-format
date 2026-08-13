@@ -6,6 +6,10 @@ export interface ReaderPanelRefreshOptions {
   runDocumentHooks?: boolean;
   surface?: ReaderPanelRefreshSurface;
 }
+export interface SearchSurfaceRefreshOptions {
+  focusInput?: boolean;
+  progressOnly?: boolean;
+}
 
 export const HISTORY_GROUP_WINDOW_MS = 1200;
 export const REUSABLE_SECTION_PREFIX = '__reusable__:';
@@ -43,7 +47,7 @@ export function incrementRecordHistoryCount(): number { return ++recordHistoryCo
 type RuntimeCallbacks = {
   renderApp: () => void;
   refreshChatSurface: () => boolean;
-  refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
+  refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
@@ -78,7 +82,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
 
 let _renderApp: () => void = () => { throw new Error('renderApp not initialized'); };
 let _refreshChatSurface: () => boolean = () => false;
-let _refreshSearchSurface: (root: ParentNode, options?: { focusInput?: boolean }) => boolean = () => false;
+let _refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean = () => false;
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
@@ -89,7 +93,7 @@ let _componentRenderHelpers: any = null;
 
 export function getRenderApp(): () => void { return _renderApp; }
 export function getRefreshChatSurface(): () => boolean { return _refreshChatSurface; }
-export function getRefreshSearchSurface(): (root: ParentNode, options?: { focusInput?: boolean }) => boolean { return _refreshSearchSurface; }
+export function getRefreshSearchSurface(): (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean { return _refreshSearchSurface; }
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
@@ -114,7 +118,7 @@ export function getReaderRenderer(): any {
 export function initCallbacks(callbacks: {
   renderApp: () => void;
   refreshChatSurface?: () => boolean;
-  refreshSearchSurface?: (root: ParentNode, options?: { focusInput?: boolean }) => boolean;
+  refreshSearchSurface?: (root: ParentNode, options?: SearchSurfaceRefreshOptions) => boolean;
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;

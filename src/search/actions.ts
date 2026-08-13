@@ -406,7 +406,7 @@ export function setSearchFilterQueryMode(mode: SearchFilterQueryMode, app?: HTML
   refreshSearchUi(app, { focusInput: true });
 }
 
-export async function applySearchFilter(options: { enabled?: boolean } = {}): Promise<void> {
+export async function applySearchFilter(options: { enabled?: boolean; root?: ParentNode } = {}): Promise<void> {
   const enabled = options.enabled ?? !state.search.filterEnabled;
   if (!enabled) {
     state.search.filterEnabled = false;
@@ -428,7 +428,7 @@ export async function applySearchFilter(options: { enabled?: boolean } = {}): Pr
     getRefreshReaderPanels()();
   }
   if (state.search.filterQueryMode === 'semantic') {
-    await submitSemanticFilter();
+    await submitSemanticFilter(options.root);
   } else if (queryChanged) {
     await submitSearch();
   }
@@ -489,7 +489,7 @@ function refreshSearchUi(app?: ParentNode, options: { focusInput?: boolean } = {
   }
 }
 
-async function submitSemanticFilter(): Promise<void> {
+async function submitSemanticFilter(root?: ParentNode): Promise<void> {
   const prompt = state.search.queryDraft.trim();
   state.search.submittedQuery = prompt;
   state.search.submittedFilterQueryMode = 'semantic';
@@ -506,7 +506,7 @@ async function submitSemanticFilter(): Promise<void> {
     state.search.navigationResultIds = [];
     state.search.isLoading = false;
     state.search.semanticProgress = null;
-    getRenderApp()();
+    refreshSearchUi(root);
     return;
   }
 
@@ -516,7 +516,7 @@ async function submitSemanticFilter(): Promise<void> {
   state.search.abortController = abortController;
   state.search.isLoading = true;
   state.search.semanticProgress = null;
-  getRenderApp()();
+  refreshSearchUi(root, { focusInput: true });
 
   try {
     const traceRunId = `semantic-filter:${requestNonce}:${Date.now().toString(36)}`;
@@ -533,7 +533,9 @@ async function submitSemanticFilter(): Promise<void> {
           return;
         }
         state.search.semanticProgress = progress;
-        getRenderApp()();
+        if (!root || !getRefreshSearchSurface()(root, { progressOnly: true })) {
+          getRenderApp()();
+        }
       },
     });
     if (state.search.requestNonce !== requestNonce || abortController.signal.aborted) {
@@ -555,6 +557,7 @@ async function submitSemanticFilter(): Promise<void> {
     }
     state.search.results = [];
     state.search.navigationResultIds = [];
+    state.search.semanticProgress = null;
     state.search.error = error instanceof Error ? error.message : 'Semantic filtering failed.';
   } finally {
     if (state.search.requestNonce !== requestNonce) {
@@ -562,7 +565,7 @@ async function submitSemanticFilter(): Promise<void> {
     }
     state.search.isLoading = false;
     state.search.abortController = null;
-    getRenderApp()();
+    refreshSearchUi(root);
   }
 }
 

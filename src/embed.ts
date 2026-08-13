@@ -91,6 +91,7 @@ import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingInd
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
+import { refreshSearchSurface } from './search/surface-refresh';
 import {
   createDocumentSearchSnapshot,
   normalizeSearchSnapshotInput,
@@ -105,7 +106,7 @@ import type {
 } from './ai-document-edit';
 import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
 import { removeTextFillInMarkers } from './text-fill-in';
-import { setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
@@ -147,6 +148,7 @@ export interface HvyMountOptions {
   chatSearchCache?: HvyChatSearchCache | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  semanticFilterConcurrency?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -835,6 +837,11 @@ function ensureEmbedRuntime(
       setThemeRoot(root);
       renderApp();
     }),
+    refreshSearchSurface: (target, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshSearchSurface(target, options);
+    }),
     refreshReaderPanels: (options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
@@ -1126,6 +1133,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
+  if ('semanticFilterConcurrency' in options) {
+    setRuntimeSemanticFilterConcurrency(options.semanticFilterConcurrency ?? null);
+  }
   setEditorClipboardHost(options.editorClipboard ?? null);
   currentRoot = options.root;
   options.root.classList.add('hvy-document');
@@ -1161,6 +1171,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setHostDatabaseTableSources([]);
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
+        setRuntimeSemanticFilterConcurrency(null);
         resetPluginDocumentHookState();
         clearPowerScriptingMode(runtime);
         clearPluginAuthorization(runtime);

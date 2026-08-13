@@ -89,7 +89,7 @@ import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
-import { setRuntimeSemanticFilterProvider } from './reference-config';
+import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
 import { createDocumentFilterSnapshot } from './search/document-filter';
@@ -176,6 +176,7 @@ export interface HvyMountOptions {
   chatSearchCache?: HvyChatSearchCache | null;
   embeddingProvider?: HvyEmbeddingProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  semanticFilterConcurrency?: number;
   linkObserver?: HvyLinkObserver | null;
   crossDocumentLinks?: boolean;
   controls?: boolean;
@@ -1181,6 +1182,9 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   if ('semanticFilterProvider' in options) {
     setRuntimeSemanticFilterProvider(options.semanticFilterProvider ?? null);
   }
+  if ('semanticFilterConcurrency' in options) {
+    setRuntimeSemanticFilterConcurrency(options.semanticFilterConcurrency ?? null);
+  }
   bindRuntimeActivation(options.root, runtime);
   // Built-in plugins are opt-in per mount: some of them execute document-supplied
   // code, so a host that asks for nothing gets nothing.
@@ -1201,6 +1205,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         setHostChatClient(null);
         setEditorClipboardHost(null);
         setRuntimeSemanticFilterProvider(null);
+        setRuntimeSemanticFilterConcurrency(null);
         setHostPlugins([]);
         setHostDatabaseTableSources([]);
         resetPluginDocumentHookState();

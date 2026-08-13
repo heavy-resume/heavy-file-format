@@ -71,8 +71,8 @@ const setSearchFilterQueryModeAction: AppActionHandler = ({ app, actionButton })
   }
 };
 
-const applySearchFilterAction: AppActionHandler = () => {
-  void applySearchFilter({ enabled: !isSearchFilterApplied() });
+const applySearchFilterAction: AppActionHandler = ({ app }) => {
+  void applySearchFilter({ enabled: !isSearchFilterApplied(), root: app });
 };
 
 export const searchActions: Record<string, AppActionHandler> = {

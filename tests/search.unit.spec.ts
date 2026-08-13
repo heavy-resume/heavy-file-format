@@ -9,11 +9,12 @@ import { buildSemanticFilterRequest, buildSemanticFilterWindowRequest, buildSema
 import { parseSemanticFilterResponse } from '../src/search/semantic-provider';
 import { chatSemanticFilterProvider } from '../src/search/semantic-provider';
 import { requestSemanticFilterMatches } from '../src/search/semantic-response';
+import { runSemanticFilterWindows } from '../src/search/semantic-filter';
 import { searchDocuments } from '../src/search/documents';
 import { createDocumentFilterSnapshot } from '../src/search/document-filter';
 import { createDocumentSearchSnapshot, searchSnapshotToState } from '../src/search/snapshot';
 import { applySearchFilter, clearFilteringForTarget, stopSearchRequest } from '../src/search/actions';
-import { renderSearchFloatingSurface } from '../src/search/surface-refresh';
+import { refreshSearchSurface, renderSearchFloatingSurface } from '../src/search/surface-refresh';
 import { initCallbacks, initState, state } from '../src/state';
 import { createTestState } from './serialization-test-helpers';
 import { setReferenceAppConfig } from '../src/reference-config';
@@ -21,6 +22,7 @@ import { highlightEditorSearchMatches } from '../src/block-ops';
 import { expandSearchMatchResults } from '../src/search/match-navigation';
 import { createDefaultSearchState } from '../src/search/state';
 import { setHostChatClient } from '../src/chat/chat';
+import type { HvySemanticFilterRequest } from '../src/search/types';
 
 afterEach(() => {
   setReferenceAppConfig(null);
@@ -1371,6 +1373,54 @@ hvy_version: 0.1
   expect(expectedResult.windows[0]!.candidates.every((candidate) => candidate.targetKind === 'block')).toBe(true);
 });
 
+test('semantic filter window concurrency defaults to three and accepts an override', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+  const packet = buildSemanticFilterWindows({ document, prompt: 'Find skills' });
+  const windows = Array.from({ length: 4 }, (_, windowIndex) => ({
+    ...packet.windows[0]!,
+    windowIndex,
+    windowCount: 4,
+  }));
+
+  const runWithConcurrency = async (concurrency?: number): Promise<number[]> => {
+    const releases: Array<() => void> = [];
+    let activeCalls = 0;
+    const observedActiveCalls: number[] = [];
+    const run = runSemanticFilterWindows({
+      prompt: 'Find skills',
+      windows,
+      ...(concurrency !== undefined ? { concurrency } : {}),
+      provider: () => new Promise((resolve) => {
+        activeCalls += 1;
+        observedActiveCalls.push(activeCalls);
+        releases.push(() => {
+          activeCalls -= 1;
+          resolve([]);
+        });
+      }),
+    });
+    while (releases.length > 0) {
+      releases.splice(0).forEach((release) => release());
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    await run;
+    return observedActiveCalls;
+  };
+
+  expect(Math.max(...await runWithConcurrency())).toBe(3);
+  expect(Math.max(...await runWithConcurrency(1))).toBe(1);
+});
+
 test('semantic filter windows include late section candidates past the single request budget', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1720,6 +1770,73 @@ hvy_version: 0.1
   expect(expectedContext.visibleSections.has(document.sections[1]!.key)).toBe(false);
 });
 
+test('semantic filter progress refreshes locally without rebuilding the page per window', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"one"}-->
+#! One
+
+<!--hvy: {"id":"two"}-->
+#! Two
+
+<!--hvy: {"id":"three"}-->
+#! Three
+`, '.hvy');
+  initState(createTestState(document));
+  state.search.open = true;
+  state.search.activeTab = 'filter';
+  state.search.filterQueryMode = 'semantic';
+  state.search.queryDraft = 'Find sections';
+  const renderApp = vi.fn();
+  const refreshSearchSurface = vi.fn(() => true);
+  initCallbacks({
+    renderApp,
+    refreshSearchSurface,
+    refreshReaderPanels: vi.fn(),
+    refreshModalPreview: vi.fn(),
+    componentRenderHelpers: null,
+    readerRenderer: null,
+  });
+  setReferenceAppConfig({ semanticFilterProvider: () => [] });
+
+  await applySearchFilter({ enabled: true, root: {} as ParentNode });
+
+  expect(refreshSearchSurface.mock.calls.filter((call) => call[1]?.progressOnly)).toHaveLength(4);
+  expect(renderApp).toHaveBeenCalledOnce();
+});
+
+test('semantic progress-only refresh mutates the existing progress elements', () => {
+  initState(createTestState(deserializeDocument(`---
+hvy_version: 0.1
+---
+`, '.hvy')));
+  state.search.semanticProgress = {
+    completedWindows: 2,
+    totalWindows: 4,
+    matchedCandidates: 7,
+    includedCandidates: 4,
+    totalCandidates: 4,
+  };
+  const track = { style: { width: '0%' } };
+  const labels = [{ textContent: '' }, { textContent: '' }];
+  const current = {
+    querySelector: (selector: string) => selector === '.search-semantic-progress-track span' ? track : null,
+    querySelectorAll: () => labels,
+  };
+  const panel = {
+    querySelector: (selector: string) => selector === '.search-semantic-progress' ? current : null,
+  };
+  const root = {
+    querySelector: (selector: string) => selector === '.search-filter-panel' ? panel : null,
+  } as unknown as ParentNode;
+
+  expect(refreshSearchSurface(root, { progressOnly: true })).toBe(true);
+  expect(track.style.width).toBe('50%');
+  expect(labels.map((label) => label.textContent)).toEqual(['2/4 windows', '7 matches']);
+});
+
 test('public document filter snapshot matches in-document semantic filter results', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1
@@ -1948,6 +2065,7 @@ hvy_version: 0.1
 
   expect(state.search.filterEnabled).toBe(false);
   expect(state.search.error).toBe('Server error');
+  expect(state.search.semanticProgress).toBe(null);
   const expectedMarkup = renderSearchModal(state.search, document, {
     escapeAttr: escapeHtml,
     escapeHtml,
@@ -2180,6 +2298,87 @@ hvy_version: 0.1
   expect(provider.mock.calls[1]![0].repair).toMatchObject({
     previousResponse: 'Still not JSON.',
   });
+});
+
+test('semantic filter explains when the repair request fails', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+`, '.hvy');
+  const request = buildSemanticFilterRequest({ document, prompt: 'Find skills' });
+  const repairFailure = new Error('Server returned 500.');
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const provider = vi.fn()
+    .mockResolvedValueOnce('Skills are relevant.')
+    .mockRejectedValueOnce(repairFailure);
+
+  await expect(requestSemanticFilterMatches(provider, request)).rejects.toMatchObject({
+    message: 'Semantic filtering returned an invalid response, and the repair request could not be completed. Try again.',
+    cause: repairFailure,
+  });
+  expect(provider).toHaveBeenCalledTimes(2);
+  expect(consoleError).toHaveBeenCalledOnce();
+  expect(consoleError).toHaveBeenCalledWith(
+    '[HVY] Semantic filter repair request failed.',
+    repairFailure,
+  );
+});
+
+test('semantic window failure aborts sibling requests and suppresses later progress', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"one"}-->
+#! One
+
+<!--hvy: {"id":"two"}-->
+#! Two
+
+<!--hvy: {"id":"three"}-->
+#! Three
+`, '.hvy');
+  const packet = buildSemanticFilterWindows({
+    document,
+    prompt: 'Find sections',
+    maxWindowCandidateChars: 1,
+  });
+  const windows = packet.windows.slice(0, 3).map((window, windowIndex) => ({
+    ...window,
+    windowIndex,
+    windowCount: 3,
+  }));
+  expect(windows).toHaveLength(3);
+  const requests: HvySemanticFilterRequest[] = [];
+  const siblingResolvers: Array<() => void> = [];
+  const progress = vi.fn();
+  const terminalFailure = new Error('Terminal window failure.');
+  const provider = vi.fn((request) => {
+    requests.push(request);
+    if (request.windowIndex === 0) {
+      return Promise.reject(terminalFailure);
+    }
+    return new Promise<Array<{ candidateId: string }>>((resolve) => {
+      siblingResolvers.push(() => resolve([{ candidateId: request.candidates[0]!.candidateId }]));
+    });
+  });
+
+  await expect(runSemanticFilterWindows({
+    prompt: 'Find sections',
+    provider,
+    windows,
+    onWindowComplete: progress,
+  })).rejects.toBe(terminalFailure);
+
+  expect(requests).toHaveLength(3);
+  expect(requests.every((request) => request.signal?.aborted === true)).toBe(true);
+  siblingResolvers.forEach((resolve) => resolve());
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(progress).not.toHaveBeenCalled();
 });
 
 test('chat semantic provider sends malformed output back as a repair conversation', async () => {

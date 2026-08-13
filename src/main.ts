@@ -1428,7 +1428,7 @@ async function refreshRestoredSearch(savedSession: Awaited<ReturnType<typeof loa
     await submitSearch();
   }
   if (savedSearch.filterEnabled) {
-    await applySearchFilter({ enabled: true });
+    await applySearchFilter({ enabled: true, root: app });
   }
   saveSessionState(state);
 }

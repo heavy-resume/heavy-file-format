@@ -27,6 +27,7 @@ export interface HvyDocumentFilterSnapshotRequest {
   categories?: SearchCategory[];
   searchProvider?: HvySearchProvider | null;
   semanticFilterProvider?: HvySemanticFilterProvider | null;
+  semanticFilterConcurrency?: number;
   maxCandidateSummaryChars?: number;
   maxTotalCandidateChars?: number;
   traceRunId?: string;
@@ -123,6 +124,7 @@ async function createSemanticDocumentFilterSnapshot(
     documentTitle: typeof document.meta.title === 'string' ? document.meta.title : undefined,
     ...(request.traceRunId ? { traceRunId: request.traceRunId } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
+    concurrency: request.semanticFilterConcurrency ?? getReferenceAppConfig().semanticFilterConcurrency,
     onWindowComplete: (progress) => request.onSemanticProgress?.({
       completedWindows: progress.completedWindows,
       totalWindows: packet.windows.length,

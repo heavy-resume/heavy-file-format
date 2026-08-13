@@ -46,7 +46,7 @@ export function bindSubmit(app: HTMLElement): void {
     if (form?.id === 'searchComposer') {
       event.preventDefault();
       if (state.search.activeTab === 'filter') {
-        await applySearchFilter({ enabled: true });
+        await applySearchFilter({ enabled: true, root: app });
         return;
       }
       await submitSearch(app);

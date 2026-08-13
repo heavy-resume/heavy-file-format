@@ -258,7 +258,7 @@ function renderFilterTab(search: SearchState, deps: SearchRenderDeps): string {
   </section>`;
 }
 
-function renderSemanticProgress(progress: NonNullable<SearchState['semanticProgress']>): string {
+export function renderSemanticProgress(progress: NonNullable<SearchState['semanticProgress']>): string {
   const total = Math.max(1, progress.totalWindows);
   const percent = Math.max(0, Math.min(100, Math.round(progress.completedWindows / total * 100)));
   return `<div class="search-semantic-progress" aria-label="Semantic filter progress">

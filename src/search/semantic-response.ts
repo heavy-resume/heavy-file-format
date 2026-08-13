@@ -31,7 +31,16 @@ export async function requestSemanticFilterMatches(
         instruction: SEMANTIC_FILTER_REPAIR_INSTRUCTION,
       },
     };
-    const repairedResponse = await provider(repairRequest);
+    let repairedResponse: HvySemanticFilterProviderResponse;
+    try {
+      repairedResponse = await provider(repairRequest);
+    } catch (repairRequestError) {
+      console.error('[HVY] Semantic filter repair request failed.', repairRequestError);
+      throw new Error(
+        'Semantic filtering returned an invalid response, and the repair request could not be completed. Try again.',
+        { cause: repairRequestError },
+      );
+    }
     try {
       return normalizeAndTraceSemanticFilterResponse(repairedResponse, repairRequest);
     } catch (repairError) {

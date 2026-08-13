@@ -961,8 +961,13 @@ HVY.mountHvyViewer({
   root,
   document,
   semanticFilterProvider,
+  semanticFilterConcurrency: 3,
 });
 ```
+
+`semanticFilterConcurrency` limits simultaneous provider calls for a mounted
+document's semantic-filter windows. It defaults to `3` and must be a positive
+integer. The same option is available on `createDocumentFilterSnapshot(...)`.
 
 The request includes structured `candidates` and a deterministic
 `instructionPrompt`. Providers can return the raw model response; HVY extracts
@@ -974,7 +979,10 @@ If raw model output cannot be parsed, HVY calls the provider one more time with
 the same request and a `repair` object containing `previousResponse` and
 `instruction`. Hosts can append those as assistant and user messages, preserving
 the original prompt prefix for provider caching. If the repaired response is
-also invalid, HVY throws the detailed parsing error.
+also invalid, HVY throws the detailed parsing error. If the repair request
+itself fails, the error identifies it as a repair failure and retains the
+provider error as its cause. Any terminal semantic-window failure aborts the
+remaining in-flight windows and stops further progress updates.
 
 Hosts can also search across many HVY documents without mounting them. Keyword
 mode uses the built-in search provider unless a host supplies one. Semantic mode

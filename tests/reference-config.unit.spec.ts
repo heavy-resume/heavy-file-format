@@ -1,12 +1,18 @@
 import { afterEach, expect, test } from 'vitest';
 
 import { getComponentOptions } from '../src/component-defs';
-import { getAiEditorDoubleClickDelayMs, getReferenceAppConfig, setReferenceAppConfig } from '../src/reference-config';
+import {
+  getAiEditorDoubleClickDelayMs,
+  getReferenceAppConfig,
+  setReferenceAppConfig,
+  setRuntimeSemanticFilterConcurrency,
+} from '../src/reference-config';
 import { registerSerializationTestState } from './serialization-test-helpers';
 
 registerSerializationTestState();
 
 afterEach(() => {
+  setRuntimeSemanticFilterConcurrency(null);
   setReferenceAppConfig(null);
 });
 
@@ -63,4 +69,21 @@ test('semantic filter provider can be supplied through reference config', () => 
   });
 
   expect(getReferenceAppConfig().semanticFilterProvider).toBe(semanticFilterProvider);
+});
+
+test('semantic filter concurrency defaults to three and can be configured', () => {
+  expect(getReferenceAppConfig().semanticFilterConcurrency).toBe(3);
+
+  setReferenceAppConfig({ semanticFilterConcurrency: 2 });
+
+  expect(getReferenceAppConfig().semanticFilterConcurrency).toBe(2);
+});
+
+test('semantic filter concurrency can be scoped to the active embedded runtime', () => {
+  setRuntimeSemanticFilterConcurrency(1);
+
+  expect(getReferenceAppConfig().semanticFilterConcurrency).toBe(1);
+
+  setRuntimeSemanticFilterConcurrency(null);
+  expect(getReferenceAppConfig().semanticFilterConcurrency).toBe(3);
 });

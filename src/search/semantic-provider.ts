@@ -2,7 +2,6 @@ import { requestProxyCompletion } from '../chat/chat';
 import { state } from '../state';
 import type { HvySemanticFilterProvider } from './types';
 import { traceSemanticFilterEvent } from './semantic-trace';
-import { parseSemanticFilterResponse } from './semantic-response';
 
 export { parseSemanticFilterResponse } from './semantic-response';
 
@@ -16,13 +15,28 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     candidateBudget: request.candidateBudget,
     candidates: request.candidates,
   });
+  const messages: Parameters<typeof requestProxyCompletion>[0]['messages'] = [{
+    id: 'semantic-filter',
+    role: 'user',
+    content: 'Select the relevant candidates now.',
+  }];
+  if (request.repair) {
+    messages.push(
+      {
+        id: 'semantic-filter-invalid-response',
+        role: 'assistant',
+        content: request.repair.previousResponse,
+      },
+      {
+        id: 'semantic-filter-repair',
+        role: 'user',
+        content: request.repair.instruction,
+      },
+    );
+  }
   const output = await requestProxyCompletion({
     settings: state.chat.settings,
-    messages: [{
-      id: 'semantic-filter',
-      role: 'user',
-      content: 'Select the relevant candidates now.',
-    }],
+    messages,
     context: request.instructionPrompt,
     responseInstructions: [
       'Follow the semantic filter selection contract in the context exactly.',
@@ -41,25 +55,5 @@ export const chatSemanticFilterProvider: HvySemanticFilterProvider = async (requ
     windowLabel: request.windowLabel,
     output,
   });
-  try {
-    const matches = parseSemanticFilterResponse(output, new Set(request.candidates.map((candidate) => candidate.candidateId)));
-    traceSemanticFilterEvent(request, 'semantic_filter_parsed_matches', {
-      prompt: request.prompt,
-      windowIndex: request.windowIndex,
-      windowCount: request.windowCount,
-      windowLabel: request.windowLabel,
-      matches,
-    });
-    return matches;
-  } catch (error) {
-    traceSemanticFilterEvent(request, 'semantic_filter_parse_error', {
-      prompt: request.prompt,
-      windowIndex: request.windowIndex,
-      windowCount: request.windowCount,
-      windowLabel: request.windowLabel,
-      output,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+  return output;
 };

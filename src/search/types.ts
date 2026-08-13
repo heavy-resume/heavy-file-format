@@ -110,6 +110,10 @@ export interface HvySemanticFilterRequest {
   windowLabel?: string;
   traceRunId?: string;
   signal?: AbortSignal;
+  repair?: {
+    previousResponse: string;
+    instruction: string;
+  };
 }
 
 export interface HvySemanticFilterMatch {

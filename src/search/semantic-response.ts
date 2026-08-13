@@ -1,4 +1,45 @@
-import type { HvySemanticFilterMatch, HvySemanticFilterProviderResponse } from './types';
+import type {
+  HvySemanticFilterMatch,
+  HvySemanticFilterProvider,
+  HvySemanticFilterProviderResponse,
+  HvySemanticFilterRequest,
+} from './types';
+import { traceSemanticFilterEvent } from './semantic-trace';
+
+const SEMANTIC_FILTER_REPAIR_INSTRUCTION = [
+  'This response does not follow the required format.',
+  'End with one JSON array containing only candidate IDs from the supplied candidate list.',
+  'Return the corrected response now.',
+].join(' ');
+
+export async function requestSemanticFilterMatches(
+  provider: HvySemanticFilterProvider,
+  request: HvySemanticFilterRequest,
+): Promise<HvySemanticFilterMatch[]> {
+  const response = await provider(request);
+  try {
+    return normalizeAndTraceSemanticFilterResponse(response, request);
+  } catch (error) {
+    traceSemanticFilterParseError(response, request, error);
+    if (typeof response !== 'string' || request.repair) {
+      throw error;
+    }
+    const repairRequest: HvySemanticFilterRequest = {
+      ...request,
+      repair: {
+        previousResponse: response,
+        instruction: SEMANTIC_FILTER_REPAIR_INSTRUCTION,
+      },
+    };
+    const repairedResponse = await provider(repairRequest);
+    try {
+      return normalizeAndTraceSemanticFilterResponse(repairedResponse, repairRequest);
+    } catch (repairError) {
+      traceSemanticFilterParseError(repairedResponse, repairRequest, repairError);
+      throw repairError;
+    }
+  }
+}
 
 export function normalizeSemanticFilterProviderResponse(
   response: HvySemanticFilterProviderResponse,
@@ -7,6 +48,40 @@ export function normalizeSemanticFilterProviderResponse(
   return typeof response === 'string'
     ? parseSemanticFilterResponse(response, validCandidateIds)
     : response;
+}
+
+function getValidCandidateIds(request: HvySemanticFilterRequest): ReadonlySet<string> {
+  return new Set(request.candidates.map((candidate) => candidate.candidateId));
+}
+
+function normalizeAndTraceSemanticFilterResponse(
+  response: HvySemanticFilterProviderResponse,
+  request: HvySemanticFilterRequest,
+): HvySemanticFilterMatch[] {
+  const matches = normalizeSemanticFilterProviderResponse(response, getValidCandidateIds(request));
+  traceSemanticFilterEvent(request, 'semantic_filter_parsed_matches', {
+    prompt: request.prompt,
+    windowIndex: request.windowIndex,
+    windowCount: request.windowCount,
+    windowLabel: request.windowLabel,
+    matches,
+  });
+  return matches;
+}
+
+function traceSemanticFilterParseError(
+  response: HvySemanticFilterProviderResponse,
+  request: HvySemanticFilterRequest,
+  error: unknown,
+): void {
+  traceSemanticFilterEvent(request, 'semantic_filter_parse_error', {
+    prompt: request.prompt,
+    windowIndex: request.windowIndex,
+    windowCount: request.windowCount,
+    windowLabel: request.windowLabel,
+    output: response,
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 export function parseSemanticFilterResponse(source: string, validCandidateIds: ReadonlySet<string>): HvySemanticFilterMatch[] {

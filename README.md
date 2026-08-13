@@ -946,12 +946,21 @@ Embedded hosts can also enable semantic filtering by providing a callback that
 selects candidate IDs from the AI-friendly request packet:
 
 ```js
+async function semanticFilterProvider(request) {
+  const messages = [{ role: 'user', content: request.instructionPrompt }];
+  if (request.repair) {
+    messages.push(
+      { role: 'assistant', content: request.repair.previousResponse },
+      { role: 'user', content: request.repair.instruction },
+    );
+  }
+  return llm.complete({ messages });
+}
+
 HVY.mountHvyViewer({
   root,
   document,
-  async semanticFilterProvider(request) {
-    return llm.complete(request.instructionPrompt);
-  },
+  semanticFilterProvider,
 });
 ```
 
@@ -960,6 +969,12 @@ The request includes structured `candidates` and a deterministic
 the final JSON candidate-ID array and validates it against the request. Providers
 that already use structured output can instead return an array of
 `{ candidateId, reason?, score? }` matches.
+
+If raw model output cannot be parsed, HVY calls the provider one more time with
+the same request and a `repair` object containing `previousResponse` and
+`instruction`. Hosts can append those as assistant and user messages, preserving
+the original prompt prefix for provider caching. If the repaired response is
+also invalid, HVY throws the detailed parsing error.
 
 Hosts can also search across many HVY documents without mounting them. Keyword
 mode uses the built-in search provider unless a host supplies one. Semantic mode
@@ -977,9 +992,7 @@ const snapshot = await HVY.createDocumentFilterSnapshot({
   mode: 'semantic',
   view: 'viewer',
   filterMode: 'hide',
-  async semanticFilterProvider(request) {
-    return llm.complete(request.instructionPrompt);
-  },
+  semanticFilterProvider,
 });
 
 mount.setSearchSnapshot(snapshot);
@@ -993,9 +1006,7 @@ const response = await HVY.searchDocuments({
     { documentId: 'resume', documentTitle: 'Resume', document: resumeDocument },
     { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
   ],
-  async semanticFilterProvider(request) {
-    return llm.complete(request.instructionPrompt);
-  },
+  semanticFilterProvider,
 });
 
 for (const result of response.results) {

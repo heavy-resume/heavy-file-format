@@ -22,7 +22,7 @@ import {
   type HvySemanticFilterCandidateWindow,
 } from './semantic-candidates';
 import { createDocumentSearchResponseSnapshot } from './snapshot';
-import { normalizeSemanticFilterProviderResponse } from './semantic-response';
+import { requestSemanticFilterMatches } from './semantic-response';
 
 const DEFAULT_SEARCH_CATEGORIES: SearchCategory[] = ['tags', 'contents', 'description'];
 
@@ -253,10 +253,7 @@ async function runDocumentSemanticWindows(options: {
     const providerRequest = buildSemanticFilterWindowRequest(options.prompt, window, {
       ...(options.signal ? { signal: options.signal } : {}),
     });
-    const windowMatches = normalizeSemanticFilterProviderResponse(
-      await options.provider(providerRequest),
-      new Set(providerRequest.candidates.map((candidate) => candidate.candidateId)),
-    );
+    const windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest);
     matches.push(...windowMatches);
   }
   return matches;

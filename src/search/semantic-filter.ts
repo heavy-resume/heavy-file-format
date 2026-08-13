@@ -8,7 +8,7 @@ import type {
   HvySemanticFilterMatch,
   HvySemanticFilterProvider,
 } from './types';
-import { normalizeSemanticFilterProviderResponse } from './semantic-response';
+import { requestSemanticFilterMatches } from './semantic-response';
 
 const SEMANTIC_FILTER_WINDOW_CONCURRENCY = 3;
 
@@ -39,10 +39,7 @@ export async function runSemanticFilterWindows(options: {
         ...(options.traceRunId ? { traceRunId: options.traceRunId } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
       });
-      const windowMatches = normalizeSemanticFilterProviderResponse(
-        await options.provider(providerRequest),
-        new Set(providerRequest.candidates.map((candidate) => candidate.candidateId)),
-      );
+      const windowMatches = await requestSemanticFilterMatches(options.provider, providerRequest);
       matches.push(...windowMatches);
       completedWindows += 1;
       matchedCandidates += windowMatches.length;

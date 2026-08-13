@@ -2087,6 +2087,38 @@ test('semantic provider parser errors when returned matches have no valid ids', 
   )).toThrow('Semantic filtering response did not include any valid candidate IDs.');
 });
 
+test('semantic filter provider can return raw model output', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"typescript"}-->
+ TypeScript tooling.
+`, '.hvy');
+
+  const expectedResult = await createDocumentFilterSnapshot({
+    document,
+    query: 'Find TypeScript experience',
+    mode: 'semantic',
+    semanticFilterProvider: (request) => [
+      'First pass: the TypeScript component is relevant.',
+      JSON.stringify([
+        request.candidates.find((candidate) => candidate.targetId === 'typescript')!.candidateId,
+        'invented-candidate',
+      ]),
+    ].join('\n'),
+  });
+
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]).toMatchObject({
+    category: 'semantic',
+    targetId: 'typescript',
+  });
+});
+
 test('document search returns keyword matches across many documents', async () => {
   const firstDocument = deserializeDocument(`---
 hvy_version: 0.1
@@ -2257,6 +2289,36 @@ title: Template Search
   });
 
   expect(expectedResult.results.map((result) => result.targetId)).toEqual(['visible-note']);
+});
+
+test('document semantic search accepts raw model output from embed providers', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+title: Searchable
+---
+
+<!--hvy: {"id":"projects"}-->
+#! Projects
+
+<!--hvy:text {"id":"database-project"}-->
+ Database migration tooling.
+`, '.hvy');
+
+  const expectedResult = await searchDocuments({
+    query: 'Find database work',
+    mode: 'semantic',
+    documents: [{ documentId: 'searchable', document }],
+    semanticFilterProvider: (request) => JSON.stringify([
+      request.candidates.find((candidate) => candidate.targetId === 'database-project')!.candidateId,
+    ]),
+  });
+
+  expect(expectedResult.results).toHaveLength(1);
+  expect(expectedResult.results[0]).toMatchObject({
+    documentId: 'searchable',
+    category: 'semantic',
+    targetId: 'database-project',
+  });
 });
 
 test('document search snapshot can be reduced to one selected document', async () => {

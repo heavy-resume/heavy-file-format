@@ -2,6 +2,7 @@ import { closeIcon } from '../../../icons';
 import { state } from '../../../state';
 
 const TABLE_CELL_MODAL_SELECTOR = '[data-static-table-cell-modal]';
+const TABLE_CELL_CLICK_INSET = 4;
 
 export function isStaticTableCellTruncated(cell: HTMLTableCellElement): boolean {
   return cell.scrollWidth - cell.clientWidth > 1 || cell.scrollHeight - cell.clientHeight > 1;
@@ -29,20 +30,17 @@ function openStaticTableCellModal(app: HTMLElement, cell: HTMLTableCellElement):
   panel.className = 'modal-panel static-table-cell-modal';
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'true');
-  panel.setAttribute('aria-labelledby', 'staticTableCellModalTitle');
+  panel.setAttribute('aria-label', 'Cell contents');
 
   const head = document.createElement('div');
-  head.className = 'modal-head';
-  const title = document.createElement('h3');
-  title.id = 'staticTableCellModalTitle';
-  title.textContent = 'Cell contents';
+  head.className = 'modal-head static-table-cell-modal-head';
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.className = 'ghost remove-x';
   closeButton.dataset.staticTableCellModalAction = 'close';
   closeButton.setAttribute('aria-label', 'Close cell contents');
   closeButton.innerHTML = closeIcon();
-  head.append(title, closeButton);
+  head.append(closeButton);
 
   const content = document.createElement('div');
   content.className = 'static-table-cell-modal-content';
@@ -79,6 +77,17 @@ export function handleStaticTableCellClick(app: HTMLElement, event: Event): bool
   const cell = target.closest<HTMLTableCellElement>('.reader-table .table-main-row > td');
   if (!cell) {
     return false;
+  }
+  if (event instanceof MouseEvent && event.detail > 0) {
+    const rect = cell.getBoundingClientRect();
+    if (
+      event.clientX < rect.left + TABLE_CELL_CLICK_INSET
+      || event.clientX > rect.right - TABLE_CELL_CLICK_INSET
+      || event.clientY < rect.top + TABLE_CELL_CLICK_INSET
+      || event.clientY > rect.bottom - TABLE_CELL_CLICK_INSET
+    ) {
+      return false;
+    }
   }
   if (!isStaticTableCellTruncated(cell)) {
     return false;

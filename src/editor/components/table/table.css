@@ -377,8 +377,12 @@
   width: min(45rem, calc(100% - 2rem));
 }
 
+.hvy-document .static-table-cell-modal-head {
+  justify-content: flex-end;
+}
+
 .hvy-document .static-table-cell-modal-content {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   border: 1px solid var(--hvy-border);
   border-radius: 10px;
   background: var(--hvy-surface-alt);

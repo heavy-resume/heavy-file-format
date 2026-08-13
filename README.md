@@ -950,15 +950,16 @@ HVY.mountHvyViewer({
   root,
   document,
   async semanticFilterProvider(request) {
-    const response = await llm.complete(request.instructionPrompt);
-    return JSON.parse(response).matches;
+    return llm.complete(request.instructionPrompt);
   },
 });
 ```
 
 The request includes structured `candidates` and a deterministic
-`instructionPrompt`; hosts should return only candidate IDs supplied by the
-request.
+`instructionPrompt`. Providers can return the raw model response; HVY extracts
+the final JSON candidate-ID array and validates it against the request. Providers
+that already use structured output can instead return an array of
+`{ candidateId, reason?, score? }` matches.
 
 Hosts can also search across many HVY documents without mounting them. Keyword
 mode uses the built-in search provider unless a host supplies one. Semantic mode
@@ -977,8 +978,7 @@ const snapshot = await HVY.createDocumentFilterSnapshot({
   view: 'viewer',
   filterMode: 'hide',
   async semanticFilterProvider(request) {
-    const response = await llm.complete(request.instructionPrompt);
-    return JSON.parse(response).matches;
+    return llm.complete(request.instructionPrompt);
   },
 });
 
@@ -994,8 +994,7 @@ const response = await HVY.searchDocuments({
     { documentId: 'portfolio', documentTitle: 'Portfolio', document: portfolioDocument },
   ],
   async semanticFilterProvider(request) {
-    const response = await llm.complete(request.instructionPrompt);
-    return JSON.parse(response).matches;
+    return llm.complete(request.instructionPrompt);
   },
 });
 

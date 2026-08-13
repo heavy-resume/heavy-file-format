@@ -5490,6 +5490,8 @@ hvy_version: 0.1
   await cells.nth(1).click();
   const modal = page.locator('[data-static-table-cell-modal]');
   await expect(modal).toBeVisible();
+  await expect(modal.getByRole('dialog', { name: 'Cell contents' })).toBeVisible();
+  await expect(modal.getByRole('heading', { name: 'Cell contents' })).toHaveCount(0);
   await expect(modal.locator('.static-table-cell-modal-content')).toContainText('This deliberately long cell value');
   await expect.poll(async () => {
     const shellBox = await page.locator('.viewer-shell').boundingBox();
@@ -5605,6 +5607,14 @@ test('resume viewer vertical drag selects the same column across composed static
   await expect(selectedCells).toHaveText(['Heavy Stack', 'Autonomous Agent Hackathon']);
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Heavy Stack\nAutonomous Agent Hackathon');
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await hackathon.scrollIntoViewIfNeeded();
+  const compactHackathonBox = await hackathon.boundingBox();
+  if (!compactHackathonBox) throw new Error('Expected the compact expandable table row to be visible.');
+  await page.mouse.click(compactHackathonBox.x + 2, compactHackathonBox.y + compactHackathonBox.height / 2);
+  await expect(page.locator('#project-autonomous-agent-hackathon')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-static-table-cell-modal]')).toHaveCount(0);
 });
 
 test('document ai context is editable metadata and keeps focus while typing', async ({ page }) => {

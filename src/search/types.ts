@@ -118,7 +118,11 @@ export interface HvySemanticFilterMatch {
   score?: number;
 }
 
-export type HvySemanticFilterProvider = (request: HvySemanticFilterRequest) => Promise<HvySemanticFilterMatch[]> | HvySemanticFilterMatch[];
+export type HvySemanticFilterProviderResponse = HvySemanticFilterMatch[] | string;
+
+export type HvySemanticFilterProvider = (
+  request: HvySemanticFilterRequest
+) => Promise<HvySemanticFilterProviderResponse> | HvySemanticFilterProviderResponse;
 
 export interface HvyDocumentSearchDocument {
   documentId: string;

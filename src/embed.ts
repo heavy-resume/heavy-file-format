@@ -1423,6 +1423,7 @@ export type {
   HvySemanticFilterCandidateBudget,
   HvySemanticFilterMatch,
   HvySemanticFilterProvider,
+  HvySemanticFilterProviderResponse,
   HvySemanticFilterRequest,
   HvySearchSnapshot,
   HvySearchSnapshotInput,

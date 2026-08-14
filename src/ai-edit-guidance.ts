@@ -104,13 +104,15 @@ export function getAiEditComponentGuidance(block: VisualBlock): string {
   }
   if (base === 'table') {
     return [
-      '- In the CLI, edit tableColumns.json and tableRows.json for static table data; table.txt is only a read-only preview.',
+      '- In the CLI, edit tableColumns.json and tableRows.json for static table data, and tableColumnProperties.json for presentation; table.txt is only a read-only preview.',
       '- tableColumns.json is a JSON array of strings, for example ["Name","Status"].',
+      '- tableColumnProperties.json is a sparse JSON object keyed by the exact column string. It supports width (a CSS width), wrap (true), truncate (false disables reader ellipsis), align, and headerAlign; omit defaults and empty entries.',
       '- tableRows.json is a JSON array of row objects, for example [{"cells":["Alpha","Open"]}].',
       '- Raw HVY keeps tableColumns in the component directive and writes static row values as a GFM table body; legacy inline tableRows remains accepted and takes precedence.',
       '- Do not invent row-level interaction or detail fields for tables.',
       '- Do not invent columns or rows keys.',
-      '- Tables are non-interactive. If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
+      '- Table data is non-interactive. Column presentation can be changed without replacing the table or its string columns.',
+      '- If the user asks for reveal/hide behavior, extra narrative detail, or expandable content, replace the table with an `expandable` or another better-fitting component instead of forcing the table schema.',
       '- Do not write YAML, Markdown tables, or pipe-delimited rows into table.txt.',
       '- If converting a table to nested expandables, keep the column header in the outer expandable stub only.',
       '- Put one expandable per data row inside the outer expandable content, and do not wrap the header as its own row expandable.',

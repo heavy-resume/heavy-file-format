@@ -1,5 +1,13 @@
-import type { BlockSchema, TableRow } from './editor/types';
+import type { BlockSchema, TableColumnProperties, TableRow } from './editor/types';
 import { moveItem } from './utils';
+
+export const DEFAULT_TABLE_COLUMN_PROPERTIES: Required<TableColumnProperties> = {
+  width: 'auto',
+  wrap: false,
+  truncate: true,
+  align: 'left',
+  headerAlign: 'center',
+};
 
 export function normalizeTableColumns(columns: string[]): string[] {
   const cleaned = columns.map((column) => column.trim());
@@ -12,9 +20,56 @@ export function getTableColumns(schema: BlockSchema): string[] {
   return normalizeTableColumns(schema.tableColumns);
 }
 
+export function getTableColumnProperties(schema: BlockSchema, column: string): Required<TableColumnProperties> {
+  return {
+    ...DEFAULT_TABLE_COLUMN_PROPERTIES,
+    ...(schema.tableColumnProperties?.[column] ?? {}),
+  };
+}
+
+export function setTableColumnProperties(
+  schema: BlockSchema,
+  column: string,
+  patch: Partial<TableColumnProperties>
+): void {
+  schema.tableColumnProperties ??= {};
+  const current = schema.tableColumnProperties[column] ?? {};
+  const next: TableColumnProperties = { ...current, ...patch };
+  if (!next.width || next.width.trim() === 'auto') delete next.width;
+  else next.width = next.width.trim();
+  if (next.wrap !== true) delete next.wrap;
+  if (next.truncate !== false) delete next.truncate;
+  if (!next.align || next.align === DEFAULT_TABLE_COLUMN_PROPERTIES.align) delete next.align;
+  if (!next.headerAlign || next.headerAlign === DEFAULT_TABLE_COLUMN_PROPERTIES.headerAlign) delete next.headerAlign;
+  if (Object.keys(next).length === 0) {
+    delete schema.tableColumnProperties[column];
+    return;
+  }
+  schema.tableColumnProperties[column] = next;
+}
+
 export function setTableColumns(schema: BlockSchema, columns: string[]): void {
+  schema.tableColumnProperties ??= {};
+  const previousColumns = getTableColumns(schema);
   const normalized = normalizeTableColumns(columns);
+  previousColumns.forEach((previousColumn, index) => {
+    const nextColumn = normalized[index];
+    if (!nextColumn || nextColumn === previousColumn || !schema.tableColumnProperties[previousColumn]) {
+      return;
+    }
+    const previousWasUnique = previousColumns.filter((column) => column === previousColumn).length === 1;
+    const nextIsUnique = normalized.filter((column) => column === nextColumn).length === 1;
+    if (previousWasUnique && nextIsUnique && !schema.tableColumnProperties[nextColumn]) {
+      schema.tableColumnProperties[nextColumn] = schema.tableColumnProperties[previousColumn];
+      delete schema.tableColumnProperties[previousColumn];
+    }
+  });
   schema.tableColumns = normalized;
+  for (const column of Object.keys(schema.tableColumnProperties)) {
+    if (!normalized.includes(column)) {
+      delete schema.tableColumnProperties[column];
+    }
+  }
   schema.tableRows = schema.tableRows.map((row) => ({
     ...row,
     cells: normalized.map((_, index) => row.cells[index] ?? ''),

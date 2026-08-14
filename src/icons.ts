@@ -67,3 +67,9 @@ export function refreshIcon(): string {
     <path d="M18.2 9A7 7 0 0 0 6.1 6.7L4 8.8M5.8 15A7 7 0 0 0 17.9 17.3L20 15.2" />
   </svg>`;
 }
+
+export function settingsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-settings" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" />
+  </svg>`;
+}

@@ -5,7 +5,7 @@ import { makeId, sanitizeOptionalId } from './utils';
 import { getComponentDefs, getComponentDefsFromMeta, getSectionDefs, getSectionTemplateKey, isBuiltinComponentName, resolveBaseComponent, resolveBaseComponentFromMeta } from './component-defs';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH, parseGridItems as _parseGridItems } from './grid-ops';
 import { applyReusableSectionTemplateValues, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from './reusable-template-values';
-import { getTableColumns } from './table-ops';
+import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
@@ -87,7 +87,14 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         expandableContentBlocks: { lock: false, children: [] },
       } as unknown as BlockSchema;
     case 'table':
-      return { ...base, kind: 'table', tableColumns: ['Column 1', 'Column 2'], tableShowHeader: true, tableRows: [] } as unknown as BlockSchema;
+      return {
+        ...base,
+        kind: 'table',
+        tableColumns: ['Column 1', 'Column 2'],
+        tableColumnProperties: {},
+        tableShowHeader: true,
+        tableRows: [],
+      } as unknown as BlockSchema;
     case 'image':
       return { ...base, kind: 'image', css: DEFAULT_IMAGE_BLOCK_CSS, imageFile: '', imageAlt: '', caption: null, allowDocumentImageReuse: true } as unknown as BlockSchema;
     case 'carousel':
@@ -439,6 +446,7 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
   }
   if (schema.kind === 'table') {
     schema.tableColumns = parseTableColumns(candidate.tableColumns, schema.tableColumns);
+    schema.tableColumnProperties = parseTableColumnProperties(candidate.tableColumnProperties);
     schema.tableShowHeader = candidate.tableShowHeader !== false;
     schema.tableRows = rows.map((row) => {
       const mapped = row as JsonObject;
@@ -561,9 +569,42 @@ function parsePositiveNumber(raw: unknown, fallback: number): number {
 
 function parseTableColumns(raw: unknown, fallback: string[]): string[] {
   if (Array.isArray(raw)) {
-    return raw.map((column) => String(column ?? ''));
+    return normalizeTableColumns(raw.map((column) => String(column ?? '')));
   }
   return [...fallback];
+}
+
+export function parseTableColumnProperties(raw: unknown): BlockSchema['tableColumnProperties'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const properties: BlockSchema['tableColumnProperties'] = {};
+  for (const [column, value] of Object.entries(raw as JsonObject)) {
+    if (!column || !value || typeof value !== 'object' || Array.isArray(value)) {
+      continue;
+    }
+    const candidate = value as JsonObject;
+    const entry: BlockSchema['tableColumnProperties'][string] = {};
+    if (typeof candidate.width === 'string' && candidate.width.trim() && candidate.width.trim() !== 'auto') {
+      entry.width = candidate.width.trim();
+    }
+    if (candidate.wrap === true) {
+      entry.wrap = true;
+    }
+    if (candidate.truncate === false) {
+      entry.truncate = false;
+    }
+    if (candidate.align === 'center' || candidate.align === 'right') {
+      entry.align = candidate.align;
+    }
+    if (candidate.headerAlign === 'left' || candidate.headerAlign === 'right') {
+      entry.headerAlign = candidate.headerAlign;
+    }
+    if (Object.keys(entry).length > 0) {
+      properties[column] = entry;
+    }
+  }
+  return properties;
 }
 
 // Internal helper for grid/table callbacks that always skip component defaults

@@ -44,6 +44,7 @@ import {
 } from '../../history';
 import dbTableDocumentation from './about-db-table.txt?raw';
 import { inferDocumentChangeSource, notifyDocumentMayHaveChanged } from '../../document-change';
+import { clampTableColumnWidth, measureTableColumnTextSamples, type TableColumnTextSample } from '../../table-column-sizing';
 
 import './db-table-component.css';
 
@@ -299,7 +300,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       if (moveEvent.pointerId !== event.pointerId) return;
       const delta = moveEvent.clientX - startX;
       if (Math.abs(delta) > 1) moved = true;
-      nextWidth = Math.max(64, Math.min(startWidth + delta, maximumWidth));
+      nextWidth = clampTableColumnWidth(startWidth + delta, 64, maximumWidth);
       column.style.width = `${nextWidth}px`;
     };
     const finish = (upEvent: PointerEvent) => {
@@ -620,21 +621,10 @@ function measureDbTableColumnContent(root: HTMLElement, columnName: string, conf
   const table = column.closest('table');
   const header = table?.querySelectorAll<HTMLTableCellElement>('thead th')[columnIndex];
   if (!table || !header) return null;
-  const measurer = document.createElement('span');
-  measurer.className = 'db-table-content-measurer';
-  const sample = (text: string, source: Element) => {
-    const style = getComputedStyle(source);
-    measurer.style.font = style.font;
-    measurer.style.letterSpacing = style.letterSpacing;
-    measurer.textContent = text || ' ';
-    root.append(measurer);
-    const width = measurer.getBoundingClientRect().width;
-    measurer.remove();
-    return width;
-  };
+  const samples: TableColumnTextSample[] = [];
   const headerLabel = header.querySelector<HTMLElement>('.db-table-column-name-input, .db-table-header-content > span:first-child');
   const headerText = headerLabel instanceof HTMLInputElement ? headerLabel.value : headerLabel?.textContent ?? '';
-  let contentWidth = headerLabel ? sample(headerText, headerLabel) + 52 : 64;
+  if (headerLabel) samples.push({ source: headerLabel, text: headerText, padding: 52 });
   for (const row of table.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
     const cell = row.cells[columnIndex];
     if (!cell) continue;
@@ -644,9 +634,11 @@ function measureDbTableColumnContent(root: HTMLElement, columnName: string, conf
       : control instanceof HTMLInputElement
         ? control.value
         : cell.textContent ?? '';
-    contentWidth = Math.max(contentWidth, sample(text, control ?? cell) + 20);
+    samples.push({ source: control ?? cell, text, padding: 20 });
   }
-  return Math.round(Math.max(64, Math.min(contentWidth, resolveDbTableMaximumColumnWidth(root, configuredMaximum))));
+  return measureTableColumnTextSamples(root, samples, {
+    maximum: resolveDbTableMaximumColumnWidth(root, configuredMaximum),
+  });
 }
 
 function renderCell(

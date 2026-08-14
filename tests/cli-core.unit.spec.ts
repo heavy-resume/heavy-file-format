@@ -1076,14 +1076,20 @@ hvy_version: 0.1
   const listing = await executeHvyCliCommand(document, session, 'ls /body/quality/chores');
   expect(listing.output).toContain('file table.txt [ro]');
   expect(listing.output).toContain('file tableColumns.json [w]');
+  expect(listing.output).toContain('file tableColumnProperties.json [w]');
   expect(listing.output).toContain('file tableRows.json [w]');
 
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toBe('{}\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  {\n    "cells": [\n      "Dishes",\n      "Mom"\n    ]\n  }\n]\n');
 
   await expect(executeHvyCliCommand(document, session, 'echo "Chore | Owner" > /body/quality/chores/table.txt')).rejects.toThrow(
-    'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead'
+    'table.txt is a read-only preview for static table components. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json instead'
+  );
+
+  expect((await executeHvyCliCommand(document, session, 'echo \'{"Chore":{"width":"10rem","wrap":true}}\' > /body/quality/chores/tableColumnProperties.json')).output).toBe(
+    '/body/quality/chores/tableColumnProperties.json: written'
   );
 
   expect((await executeHvyCliCommand(document, session, 'echo \'["Task","Done"]\' > /body/quality/chores/tableColumns.json')).output).toBe(
@@ -1094,8 +1100,17 @@ hvy_version: 0.1
   );
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Task | Done\nTrash | No\nDishes | Yes\n');
   expect(serializeDocument(document)).toContain('"tableColumns":["Task","Done"]');
+  expect(serializeDocument(document)).toContain('"tableColumnProperties":{"Task":{"width":"10rem","wrap":true}}');
   expect(serializeDocument(document)).toContain('| Trash | No |');
   expect(serializeDocument(document)).toContain('| Dishes | Yes |');
+  await executeHvyCliCommand(document, session, 'echo \'{"id":"chores","tableShowHeader":false}\' > /body/quality/chores/table.json');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toContain('"Task"');
+
+  await executeHvyCliCommand(document, session, 'echo \'{"Missing":{"width":"10rem"}}\' > /body/quality/chores/tableColumnProperties.json');
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain(
+    'table column properties key "Missing" does not exactly match a table column'
+  );
+  await executeHvyCliCommand(document, session, 'echo \'{}\' > /body/quality/chores/tableColumnProperties.json');
 
   await expect(executeHvyCliCommand(document, session, 'echo "- id: item-1" > /body/quality/empty-list.txt')).rejects.toThrow(
     'component-list.txt is a read-only preview until list items exist. component-list.json defines the item type and children-order.json controls item order.'

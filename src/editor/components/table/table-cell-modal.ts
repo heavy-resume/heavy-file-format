@@ -66,7 +66,11 @@ function openStaticTableCellModal(app: HTMLElement, cell: HTMLTableCellElement):
   closeButton.focus({ preventScroll: true });
 }
 
-export function handleStaticTableCellClick(app: HTMLElement, event: Event): boolean {
+export function handleStaticTableCellClick(
+  app: HTMLElement,
+  event: Event,
+  runAction: (action: () => void) => void = (action) => action(),
+): boolean {
   if (state.currentView !== 'viewer' && state.currentView !== 'ai') {
     return false;
   }
@@ -93,6 +97,6 @@ export function handleStaticTableCellClick(app: HTMLElement, event: Event): bool
     return false;
   }
   event.stopPropagation();
-  openStaticTableCellModal(app, cell);
+  runAction(() => openStaticTableCellModal(app, cell));
   return true;
 }

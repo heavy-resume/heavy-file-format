@@ -1,6 +1,72 @@
 import { state } from './_imports';
+import { findBlockByIds, refreshReaderPanelsOutsideActiveEditor } from '../../block-ops';
+import { recordHistory } from '../../history';
+import { syncReusableTemplateForBlock } from '../../reusable';
+import { getTableColumns, setTableColumnProperties } from '../../table-ops';
+import { clampTableColumnWidth, measureTableColumnTextSamples, type TableColumnTextSample } from '../../table-column-sizing';
 
 export function bindResize(app: HTMLElement): void {
+  app.addEventListener('pointerdown', (event) => {
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.table-column-resize-handle');
+    if (!handle || event.button !== 0) return;
+    const sectionKey = handle.dataset.sectionKey ?? '';
+    const blockId = handle.dataset.blockId ?? '';
+    const columnIndex = Number.parseInt(handle.dataset.columnIndex ?? '', 10);
+    const block = findBlockByIds(sectionKey, blockId);
+    const table = handle.closest<HTMLTableElement>('.table-editor-grid');
+    const header = handle.closest<HTMLTableCellElement>('th');
+    const column = block ? getTableColumns(block.schema)[columnIndex] : '';
+    if (!block || !table || !header || !column) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const matchingIndexes = getTableColumns(block.schema)
+      .map((candidate, index) => candidate === column ? index : -1)
+      .filter((index) => index >= 0);
+    const startX = event.clientX;
+    const startWidth = header.getBoundingClientRect().width;
+    let nextWidth = startWidth;
+    let moved = false;
+    handle.classList.add('is-resizing');
+
+    const onPointerMove = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const delta = moveEvent.clientX - startX;
+      if (!moved && Math.abs(delta) > 1) {
+        moved = true;
+        recordHistory(`table-column-width:${sectionKey}:${blockId}:${column}`);
+      }
+      nextWidth = clampTableColumnWidth(startWidth + delta);
+      applyTableColumnPixelWidth(table, matchingIndexes, nextWidth);
+    };
+    const finish = (upEvent: PointerEvent): void => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      handle.classList.remove('is-resizing');
+      if (!moved) return;
+      setTableColumnProperties(block.schema, column, { width: `${Math.round(nextWidth)}px` });
+      syncReusableTemplateForBlock(sectionKey, block.id);
+      refreshReaderPanelsOutsideActiveEditor(table);
+      table.querySelectorAll<HTMLInputElement>('[data-field="table-column-width"]').forEach((input) => {
+        const index = Number.parseInt(input.dataset.columnIndex ?? '', 10);
+        if (matchingIndexes.includes(index)) input.value = `${Math.round(nextWidth)}px`;
+      });
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  });
+
+  app.addEventListener('dblclick', (event) => {
+    const handle = (event.target as Element | null)?.closest<HTMLElement>('.table-column-resize-handle');
+    if (!handle) return;
+    event.preventDefault();
+    event.stopPropagation();
+    autoFitStaticTableColumn(handle);
+  });
+
   app.addEventListener('mousedown', (event) => {
     if (event.button !== 0) {
       return;
@@ -60,4 +126,53 @@ export function bindResize(app: HTMLElement): void {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   });
+}
+
+export function autoFitStaticTableColumn(target: HTMLElement): boolean {
+  const sectionKey = target.dataset.sectionKey ?? '';
+  const blockId = target.dataset.blockId ?? '';
+  const columnIndex = Number.parseInt(target.dataset.columnIndex ?? '', 10);
+  const block = findBlockByIds(sectionKey, blockId);
+  const table = target.closest<HTMLTableElement>('.table-editor-grid');
+  const column = block ? getTableColumns(block.schema)[columnIndex] : '';
+  if (!block || !table || !column) return false;
+  const matchingIndexes = getTableColumns(block.schema)
+    .map((candidate, index) => candidate === column ? index : -1)
+    .filter((index) => index >= 0);
+  const width = measureTableColumnContent(table, matchingIndexes);
+  recordHistory(`table-column-fit:${sectionKey}:${blockId}:${column}`);
+  setTableColumnProperties(block.schema, column, { width: `${width}px` });
+  applyTableColumnPixelWidth(table, matchingIndexes, width);
+  table.querySelectorAll<HTMLInputElement>('[data-field="table-column-width"]').forEach((input) => {
+    const index = Number.parseInt(input.dataset.columnIndex ?? '', 10);
+    if (matchingIndexes.includes(index)) input.value = `${width}px`;
+  });
+  syncReusableTemplateForBlock(sectionKey, block.id);
+  refreshReaderPanelsOutsideActiveEditor(table);
+  return true;
+}
+
+function applyTableColumnPixelWidth(table: HTMLTableElement, columnIndexes: number[], width: number): void {
+  columnIndexes.forEach((columnIndex) => {
+    const col = table.querySelector<HTMLTableColElement>(`col[data-table-column-index="${columnIndex}"]`);
+    if (col) col.style.width = `${Math.round(width)}px`;
+    table.querySelectorAll<HTMLElement>(`th[data-table-column-index="${columnIndex}"], td[data-table-column-index="${columnIndex}"]`)
+      .forEach((cell) => cell.classList.add('table-column-fixed'));
+  });
+}
+
+function measureTableColumnContent(table: HTMLTableElement, columnIndexes: number[]): number {
+  const root = table.closest<HTMLElement>('.table-editor') ?? table;
+  const samples: TableColumnTextSample[] = [];
+  columnIndexes.forEach((columnIndex) => {
+    table.querySelectorAll<HTMLTableCellElement>(`th[data-table-column-index="${columnIndex}"], td[data-table-column-index="${columnIndex}"]`)
+      .forEach((cell) => {
+        const source = cell.tagName === 'TH'
+          ? cell.querySelector<HTMLElement>('.table-column-name')
+          : cell.querySelector<HTMLElement>('.table-inline-text');
+        if (!source) return;
+        samples.push({ source, text: source.textContent ?? '', padding: cell.tagName === 'TH' ? 76 : 24 });
+      });
+  });
+  return measureTableColumnTextSamples(root, samples);
 }

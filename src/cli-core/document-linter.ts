@@ -114,6 +114,12 @@ async function lintComponentFile(document: VisualDocument, fs: HvyVirtualFileSys
   const body = readFile(fs, textPath);
   const config = readJsonFile(fs, jsonPath);
   if (component === 'table') {
+    const tableColumns = readJsonFileValue(fs, `${directory}/tableColumns.json`);
+    if (Array.isArray(tableColumns)) config.tableColumns = tableColumns;
+    const tableColumnProperties = readJsonFileValue(fs, `${directory}/tableColumnProperties.json`);
+    if (tableColumnProperties && typeof tableColumnProperties === 'object' && !Array.isArray(tableColumnProperties)) {
+      config.tableColumnProperties = tableColumnProperties as JsonObject;
+    }
     const tableRows = readJsonFileValue(fs, `${directory}/tableRows.json`);
     if (Array.isArray(tableRows)) {
       config.tableRows = tableRows.map((row) => {
@@ -289,6 +295,17 @@ function lintCoreComponent(params: { path: string; component: string; baseCompon
     }
   }
   if (params.baseComponent === 'table') {
+    const columns = Array.isArray(params.config.tableColumns)
+      ? params.config.tableColumns.filter((column): column is string => typeof column === 'string')
+      : [];
+    const properties = params.config.tableColumnProperties;
+    if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+      Object.keys(properties).forEach((column) => {
+        if (!columns.includes(column)) {
+          issues.push(createLintIssue(params, `orphan-table-column-properties-${column}`, `table column properties key ${JSON.stringify(column)} does not exactly match a table column.`));
+        }
+      });
+    }
     const rows = Array.isArray(params.config.tableRows) ? params.config.tableRows : [];
     rows.forEach((row, index) => {
       const cells = row && typeof row === 'object' && !Array.isArray(row) && Array.isArray((row as { cells?: unknown }).cells)

@@ -1,4 +1,4 @@
-import type { TableRow, VisualBlock } from './editor/types';
+import type { TableColumnAlignment, TableRow, VisualBlock } from './editor/types';
 import type { ComponentRenderHelpers } from './editor/component-helpers';
 import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueDefinition, SortValueType } from './types';
@@ -9,7 +9,7 @@ import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } f
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
 import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
-import { getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumns } from './table-ops';
+import { getTableColumnProperties, getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumnProperties, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
@@ -38,6 +38,7 @@ import { normalizeTextCaption, renderTextCaptionHtml, updateTextCaptionText } fr
 import type { TextCaptionPayload } from './editor/types';
 import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
 import { highlightSearchHtml } from './search/highlight';
+import { sanitizeInlineCss } from './css-sanitizer';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -583,6 +584,35 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     return true;
   }
 
+  if (
+    field === 'table-column-width'
+    || field === 'table-column-wrap'
+    || field === 'table-column-truncate'
+    || field === 'table-column-align'
+    || field === 'table-column-header-align'
+  ) {
+    const columnIndex = Number.parseInt(target.dataset.columnIndex ?? '', 10);
+    const column = getTableColumns(block.schema)[columnIndex];
+    if (!column) {
+      return true;
+    }
+    if (field === 'table-column-width' && target instanceof HTMLInputElement) {
+      setTableColumnProperties(block.schema, column, { width: target.value.trim() || 'auto' });
+    } else if (field === 'table-column-wrap' && target instanceof HTMLInputElement) {
+      setTableColumnProperties(block.schema, column, { wrap: target.checked });
+    } else if (field === 'table-column-truncate' && target instanceof HTMLInputElement) {
+      setTableColumnProperties(block.schema, column, { truncate: target.checked });
+    } else if (field === 'table-column-align' && target instanceof HTMLSelectElement) {
+      setTableColumnProperties(block.schema, column, { align: coerceTableColumnAlignment(target.value, 'left') });
+    } else if (field === 'table-column-header-align' && target instanceof HTMLSelectElement) {
+      setTableColumnProperties(block.schema, column, { headerAlign: coerceTableColumnAlignment(target.value, 'center') });
+    }
+    syncTableColumnPresentationDom(target, block, column);
+    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+    refreshReaderPanelsOutsideActiveEditor(target);
+    return true;
+  }
+
   if (field === 'table-column') {
     const columnIndex = Number.parseInt(target.dataset.columnIndex ?? '', 10);
     if (!Number.isNaN(columnIndex)) {
@@ -637,6 +667,45 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   }
 
   return false;
+}
+
+function coerceTableColumnAlignment(value: string, fallback: TableColumnAlignment): TableColumnAlignment {
+  return value === 'left' || value === 'center' || value === 'right' ? value : fallback;
+}
+
+function syncTableColumnPresentationDom(target: HTMLElement, block: VisualBlock, column: string): void {
+  const table = target.closest<HTMLTableElement>('.table-editor-grid');
+  if (!table) return;
+  const columns = getTableColumns(block.schema);
+  const properties = getTableColumnProperties(block.schema, column);
+  columns.forEach((candidate, index) => {
+    if (candidate !== column) return;
+    const col = table.querySelector<HTMLTableColElement>(`col[data-table-column-index="${index}"]`);
+    if (col) {
+      const style = properties.width === 'auto' ? '' : sanitizeInlineCss(`width: ${properties.width};`);
+      if (style) col.setAttribute('style', style);
+      else col.removeAttribute('style');
+    }
+    table.querySelectorAll<HTMLElement>(`[data-table-column-index="${index}"]`).forEach((cell) => {
+      cell.classList.toggle('table-column-fixed', properties.width !== 'auto');
+      cell.classList.toggle('table-column-wrap', properties.wrap);
+      cell.classList.toggle('table-column-no-truncate', !properties.truncate);
+      for (const alignment of ['left', 'center', 'right']) {
+        cell.classList.toggle(`table-column-align-${alignment}`, cell.tagName === 'TD' && properties.align === alignment);
+        cell.classList.toggle(`table-column-header-align-${alignment}`, cell.tagName === 'TH' && properties.headerAlign === alignment);
+      }
+    });
+    const widthInput = table.querySelector<HTMLInputElement>(`[data-field="table-column-width"][data-column-index="${index}"]`);
+    if (widthInput && widthInput !== target) widthInput.value = properties.width;
+    const wrapInput = table.querySelector<HTMLInputElement>(`[data-field="table-column-wrap"][data-column-index="${index}"]`);
+    if (wrapInput && wrapInput !== target) wrapInput.checked = properties.wrap;
+    const truncateInput = table.querySelector<HTMLInputElement>(`[data-field="table-column-truncate"][data-column-index="${index}"]`);
+    if (truncateInput && truncateInput !== target) truncateInput.checked = properties.truncate;
+    const bodyAlign = table.querySelector<HTMLSelectElement>(`[data-field="table-column-align"][data-column-index="${index}"]`);
+    if (bodyAlign && bodyAlign !== target) bodyAlign.value = properties.align;
+    const headerAlign = table.querySelector<HTMLSelectElement>(`[data-field="table-column-header-align"][data-column-index="${index}"]`);
+    if (headerAlign && headerAlign !== target) headerAlign.value = properties.headerAlign;
+  });
 }
 
 function syncXrefEditorAfterTargetInput(target: HTMLElement, block: VisualBlock): void {

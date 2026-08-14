@@ -632,7 +632,7 @@ Component-owned fields are:
 - `plugin`: `plugin`, `pluginConfig`
 - `xref-card`: `xrefTarget`, `xrefTargetTagFilter`
 - `expandable`: `expandableAlwaysShowStub`, `expandableExpanded`, `expandableStubCss`, `expandableStubDescription`, `expandableStubBlocks`, `expandableContentCss`, `expandableContentDescription`, `expandableContentBlocks`
-- `table`: `tableColumns`, `tableShowHeader`, `tableRows`
+- `table`: `tableColumns`, `tableColumnProperties`, `tableShowHeader`, `tableRows`
 - `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
 - `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
@@ -690,6 +690,44 @@ Each in-memory `tableRows` entry contains only:
 ```yaml
 - cells: ["Cell A", "Cell B"]
 ```
+
+`tableColumnProperties` is an optional sparse object keyed by the exact authored
+string in `tableColumns`. It controls column presentation without changing the
+searchable column labels or row values:
+
+```yaml
+tableColumnProperties:
+  Column A:
+    width: 12rem
+    wrap: true
+  Column B:
+    width: 8rem
+    align: right
+```
+
+Each entry MAY contain `width`, `wrap`, `truncate`, `align`, and `headerAlign`. `width` is a
+CSS width string or `"auto"`; absent or `"auto"` means the column participates
+in automatic layout. When every column is automatic, columns divide the table
+width equally. When authored widths use more space than the rendered table
+surface provides, HTML renderers MUST keep the overflow inside a horizontally
+scrollable table frame rather than widening the document surface. `wrap`
+defaults to `false`. `truncate` defaults to `true` and controls whether
+non-wrapped reader cells use overflow ellipsis; wrapping takes precedence over
+truncation. Editors MUST expose complete header and cell text while it is being
+edited, regardless of this reader presentation setting. `align` defaults to `"left"` for body cells and
+`headerAlign` defaults to `"center"`; alignment values MUST be `"left"`,
+`"center"`, or `"right"`.
+
+Property keys match the exact stored column string, including Markdown or HVY
+inline annotations. Renderers MUST NOT use rendered text, aliases, or fuzzy
+matching. Duplicate column strings share one property entry. Authoring tools
+SHOULD move a property entry when its uniquely named column is renamed and
+SHOULD remove an entry when its last matching column is removed.
+
+Authoring tools SHOULD keep this map sparse: properties equal to their implicit
+defaults, empty entries, and an empty `tableColumnProperties` object SHOULD be
+omitted when serializing. Search, descriptions, embeddings, and other content
+indexes MUST NOT treat property keys or values as document content.
 
 In inline HVY, `tableColumns` remains in the component directive and is the authoritative column definition. Static row values SHOULD be serialized in the component body as a GitHub-Flavored Markdown table:
 

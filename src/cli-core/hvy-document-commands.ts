@@ -109,7 +109,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy insert INDEX section PARENT_PATH ID TITLE', 'Create a blank section.'),
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs, such as blip-section. Section templates with variables require exact JSON values with --using-template.'),
       formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Create a blank text component. Edit text.txt after creation.'),
-      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json and tableRows.json after creation.'),
+      formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Create a blank static table component. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json after creation.'),
       formatCommandHelp('hvy remove PATH [--prune-xref]', 'Remove a section or component directory. Alias: hvy delete PATH.'),
       formatCommandHelp('hvy prune-xref TARGET_ID', 'Remove xref-card components pointing to TARGET_ID.'),
       formatCommandHelp('hvy preview PATH', 'Show the raw HVY preview for a component, capped at 100 lines.'),
@@ -151,7 +151,7 @@ export function hvyDocumentCommandHelp(topic = ''): string {
       formatCommandHelp('hvy insert INDEX section PARENT_PATH --from-template TEMPLATE_KEY [--using-template JSON]', 'Clone a section template from section_defs. Lookup prefers exact key, then exact name. Templates with variables require exact JSON values. Non-repeatable templates can be inserted once.'),
     ].join('\n'),
     text: formatCommandHelp('hvy insert INDEX text PARENT_PATH [ID|--id ID]', 'Insert a blank text block. Edit text.txt after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
-    table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
+    table: formatCommandHelp('hvy insert INDEX table PARENT_PATH [ID|--id ID]', 'Insert a blank static table block. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json after creation. INDEX is zero-based and supports Python-style negative indexes; 0 is the front, -1 is the back.'),
     request_structure: formatCommandHelp('hvy request_structure [COMPONENT_ID] [--collapse] [--describe]', 'Show the component directory map, optionally scoped to one component id. --collapse compacts anonymous leaf components. --describe includes non-empty descriptions.'),
     'search': formatCommandHelp('hvy search QUERY [--max N] [--json]', 'Search semantic section/component descriptions, ids, paths, roles, and previews for likely edit locations.'),
     cheatsheet: [

@@ -24,6 +24,7 @@ import {
   getDefaultSectionContained,
   normalizeReusableComponentDefinitions,
   normalizeReusableSectionDefinitions,
+  parseTableColumnProperties,
 } from './document-factory';
 import { isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { decryptDocumentEnvelopeBytes, isEncryptedDocumentBytes, markDocumentEncrypted, type HvyEncryptionOptions } from './encryption';
@@ -1518,6 +1519,10 @@ function serializeBlockSchema(
   }
   if (component === 'table') {
     addArrayIfChanged(payload, 'tableColumns', schema.tableColumns, defaults.tableColumns);
+    const tableColumnProperties = parseTableColumnProperties(schema.tableColumnProperties);
+    if (Object.keys(tableColumnProperties).length > 0) {
+      payload.tableColumnProperties = tableColumnProperties;
+    }
     addIfChanged(payload, 'tableShowHeader', schema.tableShowHeader, defaults.tableShowHeader);
     if (!options.omitTableRows && schema.tableRows.length > 0) {
       payload.tableRows = schema.tableRows.map((row) => serializeTableRow(row));

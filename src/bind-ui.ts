@@ -304,7 +304,6 @@ export function bindUi(app: HTMLElement): void {
   const metaFilterModeButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-mode"]');
   const metaFilterBehaviorButtons = app.querySelectorAll<HTMLButtonElement>('[data-action="set-meta-filter-behavior"]');
   let pendingAiReaderAction: number | null = null;
-  bindStaticTableReaderInteractions(app, [readerDocument, readerSidebarSections, aiReaderDocument, aiSidebarSections]);
 
   rerenderSearchButton?.addEventListener('click', () => {
     runInBoundRuntime(() => getRefreshSearchSurface()(app));
@@ -343,6 +342,12 @@ export function bindUi(app: HTMLElement): void {
       });
     }, getAiEditorDoubleClickDelayMs());
   };
+
+  bindStaticTableReaderInteractions(
+    app,
+    [readerDocument, readerSidebarSections, aiReaderDocument, aiSidebarSections],
+    runReaderAction,
+  );
 
   const scheduleReaderSectionBodyHydration = (sectionKey: string): void => {
     window.requestAnimationFrame(() => {

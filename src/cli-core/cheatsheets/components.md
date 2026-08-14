@@ -46,7 +46,7 @@ cat /body/demo-area/widget-list/component-list.json
 
 Set item `sortKeys` on child component JSON for sorting, for example `{"Example Rank":92}`. Set item `groupKeys` for grouping, for example `{"Example Group":"Blue"}`. Set `componentListDefaultSortKey`, `componentListDefaultSortDirection`, and `componentListDefaultGroupKey` on the component-list JSON. Set `componentListGroupsExpanded` to `true` to expand virtual groups by default. Grouped reader display creates virtual containers only in the reader; `children-order.json` stays the source item order.
 
-`hvy insert INDEX table` creates a blank static document table. Rows and columns are stored directly on the component in `tableColumns.json` and `tableRows.json`. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
+`hvy insert INDEX table` creates a blank static document table. Rows and columns are stored directly on the component in `tableColumns.json` and `tableRows.json`; sparse width, wrapping, reader truncation, and alignment overrides live in `tableColumnProperties.json`, keyed by exact column name. Use `hvy insert INDEX plugin db-table` for dynamic data-backed rows.
 
 Inspect before editing:
 

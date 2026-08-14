@@ -20,6 +20,70 @@ async function waitForSurfaceIdle(page: Page, selector: string, quietMs = 250): 
   }), quietMs);
 }
 
+test('static table columns resize, auto-fit, reset, and contain wide overflow', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-column-presentation"}-->
+#! Table Column Presentation
+
+<!--hvy:table {"tableColumns":["Name","Details","Status"],"tableColumnProperties":{"Name":{"width":"500px"},"Details":{"width":"500px","wrap":true},"Status":{"width":"500px","align":"right"}}}-->
+| Name | Details | Status |
+| --- | --- | --- |
+| Alpha | Deliberately long details for automatic sizing | Open |
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const passive = page.locator('.editor-block-passive', { hasText: 'Deliberately long details' }).first();
+  await expect.poll(() => passive.locator('.reader-table-frame').evaluate((frame) => frame.scrollWidth > frame.clientWidth)).toBe(true);
+  await passive.click();
+
+  const editorCellTextStyle = await page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]').evaluate((cell) => ({
+    overflow: getComputedStyle(cell).overflow,
+    textOverflow: getComputedStyle(cell).textOverflow,
+    whiteSpace: getComputedStyle(cell).whiteSpace,
+  }));
+  expect(editorCellTextStyle).toEqual({ overflow: 'visible', textOverflow: 'clip', whiteSpace: 'pre-wrap' });
+
+  const settings = page.locator('.table-column-settings').first();
+  await settings.locator('summary').click();
+  await settings.locator('[data-field="table-column-truncate"]').uncheck();
+  await expect(page.locator('.table-editor-grid tbody td[data-table-column-index="0"]').first()).toHaveClass(/table-column-no-truncate/);
+  await settings.locator('[data-field="table-column-wrap"]').check();
+  await settings.locator('[data-field="table-column-align"]').selectOption('right');
+  await settings.locator('[data-field="table-column-header-align"]').selectOption('left');
+  await expect(page.locator('.table-editor-grid tbody td[data-table-column-index="0"]').first()).toHaveClass(/table-column-wrap/);
+  await expect(page.locator('.table-editor-grid tbody td[data-table-column-index="0"]').first()).toHaveClass(/table-column-align-right/);
+  await expect(page.locator('.table-editor-grid thead th[data-table-column-index="0"]')).toHaveClass(/table-column-header-align-left/);
+  const widthInput = settings.locator('[data-field="table-column-width"]');
+  await widthInput.fill('620px');
+  await expect(widthInput).toBeFocused();
+  await expect(widthInput).toHaveValue('620px');
+  await settings.locator('summary').click();
+
+  const handle = page.locator('.table-column-resize-handle').first();
+  const box = await handle.boundingBox();
+  if (!box) throw new Error('Expected a static table resize handle.');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2);
+  await page.mouse.up();
+  await expect(widthInput).not.toHaveValue('620px');
+
+  await handle.dblclick();
+  await expect(widthInput).toHaveValue(/^[0-9]+px$/);
+  await settings.locator('summary').click();
+  await settings.getByRole('button', { name: 'Fit to contents' }).click();
+  await expect(widthInput).toHaveValue(/^[0-9]+px$/);
+  await settings.getByRole('button', { name: 'Automatic width' }).click();
+  await expect(widthInput).toHaveValue('auto');
+  await expect(page.locator('.table-editor-grid col[data-table-column-index="0"]')).not.toHaveAttribute('style');
+});
+
 test('active table editor shows placeholders only for wholly empty rows', async ({ page }) => {
   await page.goto('/');
 

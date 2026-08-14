@@ -5588,7 +5588,15 @@ hvy_version: 0.1
   await page.locator('[data-action="switch-view"][data-view="ai"]').click();
   const aiLongCell = page.locator('#aiReaderDocument .reader-table td').nth(1);
   await aiLongCell.click();
-  await expect(page.locator('[data-static-table-cell-modal]')).toBeVisible();
+  await expect(page.locator('[data-static-table-cell-modal]')).toHaveCount(0);
+  await expect(page.locator('[data-static-table-cell-modal]')).toBeVisible({ timeout: 1_000 });
+  await page.getByRole('button', { name: 'Close cell contents' }).click();
+
+  await aiLongCell.dblclick();
+  await expect(page.locator('[data-static-table-cell-modal]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit component' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  await expect(page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"]')).toBeVisible();
 });
 
 test('lightweight embedded viewer selects and copies static rows composed from separate tables', async ({ page, context, browserName }) => {

@@ -1,11 +1,12 @@
 import { getRenderApp } from '../../state';
-import { findBlockByIds, resolveBlockContext, setActiveEditorBlock } from '../../block-ops';
+import { findBlockByIds, refreshReaderPanelsOutsideActiveEditor, resolveBlockContext, setActiveEditorBlock } from '../../block-ops';
 import { createDefaultTableRow } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
-import { addTableColumn, removeTableColumn, getTableColumns } from '../../table-ops';
+import { addTableColumn, removeTableColumn, getTableColumns, setTableColumnProperties } from '../../table-ops';
 import { areTablesEnabled } from '../../reference-config';
 import type { ActionHandler } from './types';
+import { autoFitStaticTableColumn } from '../handlers/resize';
 
 const addTableRowAction: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   if (!blockId || !areTablesEnabled()) {
@@ -67,9 +68,37 @@ const removeTableRowAction: ActionHandler = ({ actionButton, sectionKey, blockId
   getRenderApp()();
 };
 
+const resetTableColumnWidthAction: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+  const columnIndex = Number.parseInt(actionButton.dataset.columnIndex ?? '', 10);
+  const block = findBlockByIds(sectionKey, blockId);
+  const column = block ? getTableColumns(block.schema)[columnIndex] : '';
+  if (!block || !column) return;
+  recordHistory(`table-column-width-reset:${sectionKey}:${blockId}:${column}`);
+  setTableColumnProperties(block.schema, column, { width: 'auto' });
+  const table = actionButton.closest<HTMLTableElement>('.table-editor-grid');
+  if (table) {
+    getTableColumns(block.schema).forEach((candidate, index) => {
+      if (candidate !== column) return;
+      table.querySelector<HTMLTableColElement>(`col[data-table-column-index="${index}"]`)?.removeAttribute('style');
+      table.querySelectorAll<HTMLElement>(`th[data-table-column-index="${index}"], td[data-table-column-index="${index}"]`)
+        .forEach((cell) => cell.classList.remove('table-column-fixed'));
+      const widthInput = table.querySelector<HTMLInputElement>(`[data-field="table-column-width"][data-column-index="${index}"]`);
+      if (widthInput) widthInput.value = 'auto';
+    });
+    refreshReaderPanelsOutsideActiveEditor(table);
+  }
+  syncReusableTemplateForBlock(sectionKey, block.id);
+};
+
+const autoFitTableColumnAction: ActionHandler = ({ actionButton }) => {
+  autoFitStaticTableColumn(actionButton);
+};
+
 export const tableActions: Record<string, ActionHandler> = {
   'add-table-row': addTableRowAction,
   'add-table-column': addTableColumnAction,
   'remove-table-column': removeTableColumnAction,
   'remove-table-row': removeTableRowAction,
+  'reset-table-column-width': resetTableColumnWidthAction,
+  'auto-fit-table-column': autoFitTableColumnAction,
 };

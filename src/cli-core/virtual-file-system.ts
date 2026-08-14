@@ -6,7 +6,7 @@ import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, getHostPlugin, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { parseFormSpec, serializeFormSpec } from '../plugins/form';
-import { getTableColumns } from '../table-ops';
+import { getTableColumns, setTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
@@ -16,7 +16,7 @@ import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
 import { measurePhase } from '../perf-trace';
-import { defaultBlockSchema } from '../document-factory';
+import { defaultBlockSchema, parseTableColumnProperties } from '../document-factory';
 import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
 
 export interface HvyVirtualFile {
@@ -1085,6 +1085,7 @@ function formatComponentDirectoryMapping(component: string, baseComponent: strin
     lines.push('- grid/children-order.json reorders grid items.');
   } else if (baseComponent === 'table') {
     lines.push('- tableColumns.json and tableRows.json are writable static table data files.');
+    lines.push('- tableColumnProperties.json is a writable sparse presentation map keyed by exact column name.');
   } else if (baseComponent === 'plugin') {
     lines.push('- plugin.txt is plugin-owned body text; plugin.json contains plugin id and config.');
   }
@@ -1200,7 +1201,7 @@ function applyBlockSchemaJson(
   if (typeof value.xrefDetail === 'string') schema.xrefDetail = value.xrefDetail;
   if (typeof value.xrefTarget === 'string') schema.xrefTarget = value.xrefTarget;
   if (typeof value.xrefTargetTagFilter === 'string') schema.xrefTargetTagFilter = value.xrefTargetTagFilter;
-  if (Array.isArray(value.tableColumns)) schema.tableColumns = parseStringList(value.tableColumns);
+  if (Array.isArray(value.tableColumns)) setTableColumns(schema, parseStringList(value.tableColumns));
   if (typeof value.tableShowHeader === 'boolean') schema.tableShowHeader = value.tableShowHeader;
   if (Array.isArray(value.tableRows)) schema.tableRows = value.tableRows as unknown as BlockSchema['tableRows'];
   if (typeof value.imageFile === 'string') schema.imageFile = value.imageFile;
@@ -1261,7 +1262,17 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, meta: JsonObje
     path: `${blockPath}/tableColumns.json`,
     read: () => `${JSON.stringify(getTableColumns(block.schema), null, 2)}\n`,
     write: (content) => {
-      block.schema.tableColumns = parseJsonStringArray(content, `${blockPath}/tableColumns.json`);
+      setTableColumns(block.schema, parseJsonStringArray(content, `${blockPath}/tableColumns.json`));
+    },
+  });
+  entries.set(`${blockPath}/tableColumnProperties.json`, {
+    kind: 'file',
+    path: `${blockPath}/tableColumnProperties.json`,
+    read: () => `${JSON.stringify(block.schema.tableColumnProperties ?? {}, null, 2)}\n`,
+    write: (content) => {
+      block.schema.tableColumnProperties = parseTableColumnProperties(
+        parseJsonObject(content, `${blockPath}/tableColumnProperties.json`)
+      );
     },
   });
   entries.set(`${blockPath}/tableRows.json`, {
@@ -1278,7 +1289,7 @@ function writeBlockBodyText(block: VisualBlock, meta: JsonObject, content: strin
   const baseComponent = getBlockBaseComponent(meta, block);
   if (baseComponent === 'table') {
     throw new Error(
-      'table.txt is a read-only preview for static table components. Edit tableColumns.json and tableRows.json instead.'
+      'table.txt is a read-only preview for static table components. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json instead.'
     );
   }
 

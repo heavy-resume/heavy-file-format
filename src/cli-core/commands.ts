@@ -2285,7 +2285,7 @@ function virtualFileWriteInvalidatesFileSystem(path: string): boolean {
     return true;
   }
   if (/\.(?:ya?ml|json)$/i.test(filename)) {
-    return filename !== 'tableRows.json' && filename !== 'tableColumns.json';
+    return filename !== 'tableRows.json' && filename !== 'tableColumns.json' && filename !== 'tableColumnProperties.json';
   }
   return false;
 }
@@ -3819,6 +3819,9 @@ function formatFileEntryDescription(fs: ReturnType<typeof buildHvyVirtualFileSys
   }
   if (filename === 'tableColumns.json') {
     return 'static table column names as a JSON string array';
+  }
+  if (filename === 'tableColumnProperties.json') {
+    return 'sparse static table presentation properties keyed by exact column name';
   }
   if (filename === 'tableRows.json') {
     return 'static table rows as a JSON array of row objects with cells arrays';

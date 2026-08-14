@@ -131,8 +131,32 @@ test('reader table renders inline cell content without paragraph wrappers', () =
 
   expect(html).not.toContain('<p>');
   expect(html).not.toContain('</p>');
-  expect(html).toContain('<td title="Staff Engineer">Staff Engineer</td>');
-  expect(html).toContain('<td title="Platform">Platform</td>');
+  expect(html).toContain('title="Staff Engineer">Staff Engineer</td>');
+  expect(html).toContain('title="Platform">Platform</td>');
+});
+
+test('table column presentation renders through colgroups and cell classes', () => {
+  const helpers = createHelpers();
+  const block = createTableBlock([['Staff Engineer', 'Platform']], { showHeader: true });
+  block.schema.tableColumnProperties = {
+    Role: { width: '12rem', wrap: true, truncate: false, align: 'right', headerAlign: 'left' },
+  };
+
+  const readerHtml = renderTableReader(section, block, helpers);
+  const editorHtml = renderTableEditor(section.key, block, helpers);
+
+  expect(readerHtml).toContain('<col data-table-column-index="0" data-table-column-name="Role" style="width: 12rem;">');
+  expect(readerHtml).toContain('table-column-header-align-left');
+  expect(readerHtml).toContain('table-column-align-right');
+  expect(readerHtml).toContain('table-column-no-truncate');
+  expect(editorHtml).toContain('data-field="table-column-width"');
+  expect(editorHtml).toContain('data-field="table-column-truncate"');
+  expect(editorHtml).toContain('value="12rem"');
+  expect(editorHtml).toContain('table-column-resize-handle');
+  const firstHeaderStart = editorHtml.indexOf('<div class="table-column-head">');
+  const firstHeader = editorHtml.slice(firstHeaderStart, editorHtml.indexOf('</th>', firstHeaderStart));
+  expect(firstHeader.indexOf('<details class="table-column-settings">')).toBeLessThan(firstHeader.indexOf('class="inline-editable table-inline-text table-column-name"'));
+  expect(firstHeader.indexOf('class="inline-editable table-inline-text table-column-name"')).toBeLessThan(firstHeader.indexOf('data-action="remove-table-column"'));
 });
 
 test('reader table header title uses alt full text instead of raw annotation', () => {
@@ -174,7 +198,7 @@ test('reader table placeholders are available only for wholly empty rows', () =>
 
   const html = renderTableReader(section, block, helpers);
 
-  expect(html).toContain('<td></td>');
+  expect(html).toContain('data-table-column-index="1"></td>');
   expect(html).toContain('table-main-row-empty');
   expect(html).toContain('data-placeholder="ORGANIZATION"');
   expect(html).toContain('data-placeholder-compact="ORG"');

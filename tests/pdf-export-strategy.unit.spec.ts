@@ -247,6 +247,23 @@ describe('PDF export strategy', () => {
     expect(serialized).toContain('ORGANIZATION');
   });
 
+  test('uses static table column widths and alignments in PDF output', () => {
+    const document = createDocument();
+    const table = createEmptyBlock('table');
+    table.schema.tableColumns = ['Name', 'Status'];
+    table.schema.tableColumnProperties = {
+      Name: { width: '12rem', align: 'right', headerAlign: 'left' },
+    };
+    table.schema.tableRows = [{ cells: ['Alpha', 'Open'] }];
+    document.sections[0].blocks.push(table);
+
+    const serialized = JSON.stringify(buildPdfExportDocDefinition(document).content);
+
+    expect(serialized).toContain('"widths":[144,"*"]');
+    expect(serialized).toContain('"alignment":"left"');
+    expect(serialized).toContain('"alignment":"right"');
+  });
+
   test('collapses soft-wrapped text lines before PDF layout', () => {
     const document = createDocument();
     document.sections[0].blocks[0].text = [

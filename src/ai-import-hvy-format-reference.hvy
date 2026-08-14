@@ -205,7 +205,7 @@ text_line_styles:
     ## table
 
    <!--hvy:text {}-->
-    Use `table` for static tabular document data. `tableColumns` is an inline array of authoritative column labels. Put row values in the component body as a GFM table; its header is structural and does not override `tableColumns`. Legacy inline `tableRows` is accepted and takes precedence when present. Tables do not contain nested detail blocks; wrap a table in an expandable if details need to be revealed.
+    Use `table` for static tabular document data. `tableColumns` is an inline array of authoritative column labels. Optional sparse `tableColumnProperties` is keyed by each exact column string and supports `width`, `wrap`, `truncate`, `align`, and `headerAlign`; omit defaults. Put row values in the component body as a GFM table; its header is structural and does not override `tableColumns`. Legacy inline `tableRows` is accepted and takes precedence when present. Tables do not contain nested detail blocks; wrap a table in an expandable if details need to be revealed.
 
    <!--hvy:text {}-->
     Example:

@@ -107,6 +107,53 @@ hvy_version: 0.1
   expect(serializeDocument(roundTripped)).toBe(serialized);
 });
 
+test('static table column presentation round trips sparsely without entering search content', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:table {"id":"facts","tableColumns":["Name","Status"],"tableColumnProperties":{"Name":{"width":" 12rem ","wrap":true,"truncate":true,"align":"left","headerAlign":"center"},"Status":{"width":"auto","truncate":false,"align":"right"},"Unused":{}}}-->
+| Name | Status |
+| --- | --- |
+| Alpha | Open |
+`, '.hvy');
+
+  expect(document.sections[0]?.blocks[0]?.schema.tableColumnProperties).toEqual({
+    Name: { width: '12rem', wrap: true },
+    Status: { truncate: false, align: 'right' },
+  });
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('"tableColumnProperties":{"Name":{"width":"12rem","wrap":true},"Status":{"truncate":false,"align":"right"}}');
+  expect(serialized).not.toContain('"width":"auto"');
+  expect(await builtInSearchProvider({ document, query: '12rem', caseSensitive: false, categories: ['contents'] })).toEqual([]);
+});
+
+test('annotated duplicate column labels share one exact-key presentation entry', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"data"}-->
+#! Data
+
+<!--hvy:table {"id":"facts","tableColumns":["A"]}-->
+`, '.hvy');
+  const table = document.sections[0]?.blocks[0];
+  if (!table) throw new Error('expected table');
+  const annotated = '<!--hvy:alt {"compact":"ORG"}-->ORGANIZATION<!--/hvy:alt-->';
+  table.schema.tableColumns = [annotated, annotated];
+  table.schema.tableColumnProperties = { [annotated]: { width: '9rem' } };
+
+  const roundTripped = deserializeDocument(serializeDocument(document), '.hvy');
+
+  expect(roundTripped.sections[0]?.blocks[0]?.schema.tableColumnProperties).toEqual({
+    [annotated]: { width: '9rem' },
+  });
+});
+
 test('non-GFM legacy static table text remains preserved alongside inline values', () => {
   const input = `---
 hvy_version: 0.1

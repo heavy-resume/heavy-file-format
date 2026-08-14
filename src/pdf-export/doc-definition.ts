@@ -223,7 +223,7 @@ function renderBlock(
       node = renderExpandableBlock(document, resolved, block, decision, layout);
       break;
     case 'table':
-      node = renderTableBlock(block);
+      node = renderTableBlock(block, layout);
       break;
     case 'image':
       node = renderImageBlock(document, resolved, block, layout);
@@ -719,15 +719,23 @@ function resolveExpandablePane(
     : 'stubOnly';
 }
 
-function renderTableBlock(block: VisualBlock): HvyPdfMakeNodeObject {
+function renderTableBlock(block: VisualBlock, layout: PdfLayoutContext): HvyPdfMakeNodeObject {
   const header = block.schema.tableShowHeader
-    ? [block.schema.tableColumns.map((column) => ({ text: normalizePdfTextInline(column), style: 'tableHeader' }))]
+    ? [block.schema.tableColumns.map((column) => ({
+        text: normalizePdfTextInline(column),
+        style: 'tableHeader',
+        alignment: block.schema.tableColumnProperties?.[column]?.headerAlign ?? 'center',
+      }))]
     : [];
-  const rows = block.schema.tableRows.map((row) => row.cells.map((cell) => ({ text: normalizePdfTextInline(cell), style: 'paragraph' })));
+  const rows = block.schema.tableRows.map((row) => row.cells.map((cell, index) => ({
+    text: normalizePdfTextInline(cell),
+    style: 'paragraph',
+    alignment: block.schema.tableColumnProperties?.[block.schema.tableColumns[index] ?? '']?.align ?? 'left',
+  })));
   return {
     table: {
       headerRows: header.length,
-      widths: block.schema.tableColumns.map(() => '*'),
+      widths: resolvePdfTableColumnWidths(block, layout.availableWidth),
       dontBreakRows: true,
       keepWithHeaderRows: header.length ? 1 : 0,
       body: header.concat(rows),
@@ -735,6 +743,37 @@ function renderTableBlock(block: VisualBlock): HvyPdfMakeNodeObject {
     layout: 'lightHorizontalLines',
     margin: [0, 0, 0, 8],
   };
+}
+
+function resolvePdfTableColumnWidths(block: VisualBlock, availableWidth: number): Array<string | number> {
+  const widths = block.schema.tableColumns.map((column) => parsePdfTableColumnWidth(
+    block.schema.tableColumnProperties?.[column]?.width,
+    availableWidth
+  ));
+  const fixedTotal = widths.reduce<number>((total, width) => total + (typeof width === 'number' ? width : 0), 0);
+  if (fixedTotal <= availableWidth || fixedTotal <= 0) return widths;
+  const automaticCount = widths.filter((width) => width === '*').length;
+  const fixedBudget = availableWidth * (automaticCount > 0 ? 0.8 : 1);
+  const scale = fixedBudget / fixedTotal;
+  return widths.map((width) => typeof width === 'number' ? Math.max(1, width * scale) : width);
+}
+
+function parsePdfTableColumnWidth(width: string | undefined, availableWidth: number): string | number {
+  const value = width?.trim().toLowerCase() ?? '';
+  if (!value || value === 'auto') return '*';
+  const match = value.match(/^([0-9]+(?:\.[0-9]+)?)(px|pt|rem|em|in|cm|mm|%)$/);
+  if (!match) return '*';
+  const amount = Number.parseFloat(match[1]);
+  const unit = match[2];
+  if (!Number.isFinite(amount)) return '*';
+  if (unit === '%') return availableWidth * amount / 100;
+  const factor = unit === 'px' ? 0.75
+    : unit === 'pt' ? 1
+    : unit === 'rem' || unit === 'em' ? PDF_CSS_REM_IN_POINTS
+    : unit === 'in' ? 72
+    : unit === 'cm' ? 72 / 2.54
+    : 72 / 25.4;
+  return amount * factor;
 }
 
 function renderCarouselBlock(

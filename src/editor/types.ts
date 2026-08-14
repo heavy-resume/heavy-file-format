@@ -121,9 +121,22 @@ export interface ExpandableBlockSchema extends BaseBlockSchema {
 export interface TableBlockSchema extends BaseBlockSchema {
   kind: 'table';
   tableColumns: string[];
+  tableColumnProperties: TableColumnPropertiesMap;
   tableShowHeader: boolean;
   tableRows: TableRow[];
 }
+
+export type TableColumnAlignment = 'left' | 'center' | 'right';
+
+export interface TableColumnProperties {
+  width?: string;
+  wrap?: boolean;
+  truncate?: boolean;
+  align?: TableColumnAlignment;
+  headerAlign?: TableColumnAlignment;
+}
+
+export type TableColumnPropertiesMap = Record<string, TableColumnProperties>;
 
 export interface ImageBlockSchema extends BaseBlockSchema {
   kind: 'image';
@@ -234,6 +247,7 @@ interface RuntimeSchemaFieldAccess {
   expandableContentDescription: string;
   expandableContentBlocks: ExpandablePart;
   tableColumns: string[];
+  tableColumnProperties: TableColumnPropertiesMap;
   tableShowHeader: boolean;
   tableRows: TableRow[];
   imageFile: string;

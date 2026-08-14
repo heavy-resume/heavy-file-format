@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { createBlankDocument, createEmptyBlock, createEmptySectionWithMeta } from '../src/document-factory';
+import { createBlankDocument, createEmptyBlock, createEmptySectionWithMeta, ensureGridItems } from '../src/document-factory';
 
 test('createBlankDocument uses the default reader max width', () => {
   const document = createBlankDocument();
@@ -32,4 +32,38 @@ test('createEmptySectionWithMeta uses document section contained default', () =>
   });
 
   expect(expectedResult.contained).toBe(false);
+});
+
+test('expected result: grid item normalization preserves slot metadata', () => {
+  const grid = createEmptyBlock('grid');
+  grid.schema.gridItems = [{
+    id: 'support-argument',
+    idGenerated: false,
+    css: 'order: 1;',
+    block: createEmptyBlock('text'),
+  }];
+
+  ensureGridItems(grid.schema);
+
+  expect(grid.schema.gridItems[0]).toMatchObject({
+    id: 'support-argument',
+    idGenerated: false,
+    css: 'order: 1;',
+  });
+});
+
+test('expected result: grid item normalization keeps generated ids non-authored', () => {
+  const grid = createEmptyBlock('grid');
+  grid.schema.gridItems = [{
+    id: 'generated-grid-item',
+    idGenerated: true,
+    block: createEmptyBlock('text'),
+  }];
+
+  ensureGridItems(grid.schema);
+
+  expect(grid.schema.gridItems[0]).toMatchObject({
+    id: 'generated-grid-item',
+    idGenerated: true,
+  });
 });

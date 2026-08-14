@@ -122,12 +122,28 @@ test('expected result: advanced grid cell meta stores CSS without applying it to
   const expectedResult = renderGridEditor('section-summary', grid, createHelpers(true));
 
   expect(expectedResult).toContain('class="grid-cell-meta-button" aria-label="Cell Meta"');
+  expect(expectedResult).toContain('data-field="block-grid-item-id"');
+  expect(expectedResult).toContain('value="photo"');
   expect(expectedResult).toContain('data-field="block-grid-item-css"');
   expect(expectedResult).toContain('display: none; max-md:order: -1;');
   expect(expectedResult).toContain('<div class="grid-field-row">');
   expect(expectedResult).not.toContain('@container hvy-surface');
   expect(expectedResult).not.toContain('class="grid-field-row grid-item-responsive-');
   expect(expectedResult).not.toContain('class="grid-field-row" style=');
+});
+
+test('expected result: grid cell meta does not present a generated id as authored metadata', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'generated-grid-item',
+    idGenerated: true,
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridEditor('section-summary', grid, createHelpers(true));
+
+  expect(expectedResult).toContain('data-field="block-grid-item-id"');
+  expect(expectedResult).toContain('placeholder="grid-cell-id" value=""');
 });
 
 test('grid cell meta only renders in advanced mode', () => {
@@ -240,6 +256,47 @@ test('grid blank item component switch creates a complete schema for the selecte
   expect(expectedResult.schema.kind).toBe('image');
   expect(expectedResult.schema.component).toBe('image');
   expect(expectedResult.schema.imageFile).toBe('');
+});
+
+test('expected result: grid cell id input creates authored slot metadata', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'generated-grid-item',
+    idGenerated: true,
+    block: createEmptyBlock('text'),
+  });
+  const input = new TestInputElement() as unknown as HTMLInputElement;
+  input.dataset.field = 'block-grid-item-id';
+  input.dataset.sectionKey = 'section-summary';
+  input.dataset.blockId = 'grid-block';
+  input.dataset.gridItemId = 'generated-grid-item';
+  input.value = 'Support Argument';
+
+  handleBlockFieldInput(input);
+
+  expect(grid.schema.gridItems[0]!.id).toBe('support-argument');
+  expect(grid.schema.gridItems[0]!.idGenerated).toBe(false);
+  expect(input.dataset.gridItemId).toBe('support-argument');
+});
+
+test('expected result: clearing grid cell id restores omitted generated metadata', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.gridItems.push({
+    id: 'support-argument',
+    idGenerated: false,
+    block: createEmptyBlock('text'),
+  });
+  const input = new TestInputElement() as unknown as HTMLInputElement;
+  input.dataset.field = 'block-grid-item-id';
+  input.dataset.sectionKey = 'section-summary';
+  input.dataset.blockId = 'grid-block';
+  input.dataset.gridItemId = 'support-argument';
+  input.value = '';
+
+  handleBlockFieldInput(input);
+
+  expect(grid.schema.gridItems[0]!.id).toBe('support-argument');
+  expect(grid.schema.gridItems[0]!.idGenerated).toBe(true);
 });
 
 test('grid stack width input can be cleared to use the default without rewriting the field', () => {

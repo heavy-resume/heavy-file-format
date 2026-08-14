@@ -940,6 +940,7 @@ export function ensureGridItems(schema: BlockSchema): void {
     return {
       id: item.id || makeId('griditem'),
       idGenerated: item.idGenerated === true || generated,
+      ...(typeof item.css === 'string' ? { css: item.css } : {}),
       block: item.block && typeof item.block === 'object' && 'id' in item.block && 'schema' in item.block
         ? item.block
         : item.block ? _parseBlock(item.block) : _createBlock('text', true),

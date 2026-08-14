@@ -1745,10 +1745,18 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Advanced' }).click();
   activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
   await activeBlock.locator('.grid-cell-meta-button').click();
+  await activeBlock.locator('[data-field="block-grid-item-id"]').fill('content-cell');
+  await expect(activeBlock.locator('[data-field="block-grid-item-id"]')).toHaveValue('content-cell');
   await activeBlock.locator('[data-field="block-grid-item-css"]').fill('padding: 0.5rem;');
 
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.grid-fields') });
+  await activeBlock.locator('.grid-cell-meta-button').click();
+  await expect(activeBlock.locator('[data-field="block-grid-item-id"]')).toHaveValue('content-cell');
+
   await page.getByRole('button', { name: 'Raw' }).click();
-  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:grid:0 {"css":"padding: 0.5rem;"}-->');
+  await expect(page.locator('#rawEditor')).toContainText('<!--hvy:grid:0 {"id":"content-cell","css":"padding: 0.5rem;"}-->');
 });
 
 test('grid cell meta paints above nested active component controls', async ({ page }) => {

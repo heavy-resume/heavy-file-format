@@ -14,7 +14,7 @@ import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } fro
 import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
-import { escapeAttr, escapeHtml, getInlineEditableText, renderOption } from './utils';
+import { escapeAttr, escapeHtml, getInlineEditableText, renderOption, sanitizeOptionalId } from './utils';
 import { recordHistory } from './history';
 import { routeNextUndoToDocument } from './edit-command-routing';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
@@ -483,6 +483,31 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     const item = block.schema.gridItems.find((candidate) => candidate.id === target.dataset.gridItemId);
     if (item) {
       item.css = target.value;
+      syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
+      refreshReaderPanelsOutsideActiveEditor(target);
+    }
+    return true;
+  }
+
+  if (field === 'block-grid-item-id' && target instanceof HTMLInputElement) {
+    const currentId = target.dataset.gridItemId;
+    const item = block.schema.gridItems.find((candidate) => candidate.id === currentId);
+    if (item) {
+      const nextId = sanitizeOptionalId(target.value);
+      if (nextId) {
+        item.id = nextId;
+        item.idGenerated = false;
+        target.closest<HTMLElement>('.grid-field-row')
+          ?.querySelectorAll<HTMLElement>('[data-grid-item-id]')
+          .forEach((element) => {
+            if (element.dataset.gridItemId === currentId) {
+              element.dataset.gridItemId = nextId;
+            }
+          });
+        target.dataset.gridItemId = nextId;
+      } else {
+        item.idGenerated = true;
+      }
       syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
       refreshReaderPanelsOutsideActiveEditor(target);
     }

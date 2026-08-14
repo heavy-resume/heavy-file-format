@@ -77,18 +77,21 @@
 }
 
 .hvy-document .grid-cell-meta-title,
+.hvy-document .grid-cell-id-field,
 .hvy-document .grid-cell-css-field {
   color: var(--hvy-text-alt);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
+.hvy-document .grid-cell-id-field,
 .hvy-document .grid-cell-css-field {
   display: grid;
   gap: 0.25rem;
   min-width: 0;
 }
 
+.hvy-document .grid-cell-id-field input,
 .hvy-document .grid-cell-css-field textarea {
   width: 100%;
   min-width: 0;

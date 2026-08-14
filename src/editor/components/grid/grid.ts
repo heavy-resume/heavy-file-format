@@ -123,6 +123,14 @@ function renderGridCellMeta(
     <summary class="grid-cell-meta-button" aria-label="Cell Meta">Meta</summary>
     <div class="grid-cell-meta-body">
       <div class="grid-cell-meta-title">Cell Meta</div>
+      <label class="grid-cell-id-field">
+        <span>ID</span>
+        <input data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          blockId
+        )}" data-field="block-grid-item-id" data-grid-item-id="${helpers.escapeAttr(item.id)}" placeholder="grid-cell-id" value="${helpers.escapeAttr(
+          item.idGenerated ? '' : item.id
+        )}" />
+      </label>
       <label class="grid-cell-css-field">
         <span>CSS</span>
         <textarea rows="3" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(

@@ -18,6 +18,10 @@
   text-align: center;
 }
 
+.hvy-document .ai-view-shell:has(.component-picker[data-open="true"], .component-picker:focus-within) .ai-view-hint {
+  display: none;
+}
+
 .hvy-document .ai-view-hint:hover,
 .hvy-document .ai-view-hint:focus-visible {
   color: var(--hvy-text);

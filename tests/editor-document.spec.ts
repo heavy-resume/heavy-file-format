@@ -3949,6 +3949,56 @@ hvy_version: 0.1
   await expect(page.locator('.ai-edit-popover [data-field="ai-model"]')).toHaveCount(0);
 });
 
+test('AI editing tip stays out of the way of an open component picker', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ <!--hvy:container {"id":"box","containerTitle":"Box"}-->
+
+  <!--hvy:text {"id":"inside"}-->
+   Inside container
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'AI' }).click();
+  await page.evaluate(async () => {
+    const { state, getRenderApp } = await import('/src/state.ts');
+    const { setActiveEditorBlock, setAiEditorHostBlock } = await import('/src/block-ops.ts');
+    const section = state.document.sections[0];
+    const container = section?.blocks[0];
+    if (!section || !container) {
+      throw new Error('Container reproduction document is missing.');
+    }
+    state.aiModeTipDismissed = false;
+    setActiveEditorBlock(section.key, container.id, { targetOnly: true });
+    setAiEditorHostBlock(section.key, container.id);
+    getRenderApp()();
+  });
+
+  // BEFORE
+  await expect(page.locator('.ai-view-hint')).toBeVisible();
+
+  // TOOL CALL
+  await page.locator('.component-picker-trigger').click();
+
+  // AFTER
+  await expect(page.locator('.component-picker[data-open="true"]')).toBeVisible();
+  await expect(page.locator('.ai-view-hint')).toBeHidden();
+
+  await page.locator('.component-picker-pane-root').dispatchEvent('click');
+  await expect(page.locator('.ai-view-hint')).toBeVisible();
+  await page.locator('.ai-view-hint').click();
+  await page.locator('.component-picker-trigger').click();
+  await expect(page.locator('.component-picker[data-open="true"]')).toBeVisible();
+  await expect(page.locator('.ai-view-hint')).toHaveCount(0);
+});
+
 test('blank image offers its image editor in AI mode but not viewer mode', async ({ page }) => {
   await page.goto('/');
 

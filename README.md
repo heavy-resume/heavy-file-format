@@ -119,7 +119,11 @@ The reference app's Ask This Document panel can switch between full-document,
 keyword retrieval, and embedding retrieval context. Choose Embedding retrieval,
 optionally edit the embedding model, then click Build Embeddings to prepare an
 embedding cache that will be attached the next time the current `.hvy` file is
-saved.
+saved. Viewer chat uses one read-only agent workflow in every context mode. It
+can answer directly, retrieve ranked candidates, exhaustively walk visible
+content with continuation cursors, inspect a known HVY path, or query attached
+SQLite data. Only full-document mode inserts document content up front;
+retrieval modes add evidence as tool results when the agent requests it.
 
 Embedded hosts can apply branding without changing the mounted document by
 passing `themeOverrides`. Values are applied after the selected built-in palette
@@ -154,7 +158,7 @@ Embedded hosts can use the same embedding-based RAG path instead of the built-in
 keyword retrieval. Hosts may provide any embedding provider callback; if they
 expose an OpenAI-compatible `/api/embeddings` endpoint, they can reuse HVY's
 proxy provider helper. HVY builds document chunks, ranks vectors in JavaScript,
-and packs the retrieved evidence into the chat context:
+and returns retrieved evidence to the read-only Viewer agent as tool results:
 
 ```js
 const mount = HVY.mountHvy({

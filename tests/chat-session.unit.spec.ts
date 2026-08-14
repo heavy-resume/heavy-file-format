@@ -4,11 +4,10 @@ import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEdit
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings, HvyEmbeddingProvider } from '../src/types';
 
-const { requestChatCompletionMock, requestProxyCompletionMock, requestProxyToolTurnMock, runQaToolLoopMock, writeChatCliCommandTraceMock, writeChatCliFailedCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
-  requestChatCompletionMock: vi.fn(),
+const { requestProxyCompletionMock, requestProxyToolTurnMock, runViewerAgentMock, writeChatCliCommandTraceMock, writeChatCliFailedCommandTraceMock, writeChatCliUserQueryTraceMock } = vi.hoisted(() => ({
   requestProxyCompletionMock: vi.fn(),
   requestProxyToolTurnMock: vi.fn(),
-  runQaToolLoopMock: vi.fn(),
+  runViewerAgentMock: vi.fn(),
   writeChatCliCommandTraceMock: vi.fn(),
   writeChatCliFailedCommandTraceMock: vi.fn(),
   writeChatCliUserQueryTraceMock: vi.fn(),
@@ -31,13 +30,12 @@ vi.mock('../src/chat/chat', () => ({
       ],
     };
   },
-  requestChatCompletion: requestChatCompletionMock,
   requestProxyCompletion: requestProxyCompletionMock,
   requestProxyToolTurn: requestProxyToolTurnMock,
 }));
 
-vi.mock('../src/ai-qa', () => ({
-  runQaToolLoop: runQaToolLoopMock,
+vi.mock('../src/chat/viewer-agent', () => ({
+  runViewerAgent: runViewerAgentMock,
 }));
 
 vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
@@ -48,7 +46,6 @@ vi.mock('../src/chat-cli/chat-cli-dev-trace', () => ({
 }));
 
 beforeEach(() => {
-  requestChatCompletionMock.mockReset();
   requestProxyCompletionMock.mockReset();
   requestProxyToolTurnMock.mockReset();
   requestProxyToolTurnMock.mockImplementation(async (params: { settings: ChatSettings }) => ({
@@ -62,7 +59,7 @@ beforeEach(() => {
       ? { provider: 'qwen', messages: [] }
       : { provider: 'openai', input: [] },
   }));
-  runQaToolLoopMock.mockReset();
+  runViewerAgentMock.mockReset();
   writeChatCliCommandTraceMock.mockReset();
   writeChatCliFailedCommandTraceMock.mockReset();
   writeChatCliUserQueryTraceMock.mockReset();
@@ -91,7 +88,7 @@ test('appendUserChatMessage appends a new user message', () => {
 });
 
 test('requestChatTurn returns assistant answer on success', async () => {
-  requestChatCompletionMock.mockResolvedValue('HVY is a document format.');
+  runViewerAgentMock.mockResolvedValue({ answer: 'HVY is a document format.' });
 
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy');
@@ -104,7 +101,7 @@ test('requestChatTurn returns assistant answer on success', async () => {
     question: 'What is HVY?',
   });
 
-  expect(requestChatCompletionMock).toHaveBeenCalledWith(expect.objectContaining({
+  expect(runViewerAgentMock).toHaveBeenCalledWith(expect.objectContaining({
     settings,
     document,
     messages: [
@@ -125,37 +122,32 @@ test('requestChatTurn returns assistant answer on success', async () => {
   );
 });
 
-test('requestChatTurn escalates an ambiguous verification follow-up to document inspection', async () => {
-  requestChatCompletionMock.mockResolvedValue(
-    'inspect_document Verify whether TypeScript still appears anywhere in the resume.'
-  );
-  requestProxyCompletionMock.mockResolvedValue('done TypeScript still appears in the Top Skills section.');
+test('requestChatTurn keeps Viewer follow-ups in one read-only agent conversation', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'The supplied document already contains the exact choices.' });
 
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
-    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Top Skills\n\nTypeScript\n', '.hvy'),
+    document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Initial Questions\n\nExact choices are here.\n', '.hvy'),
     messages: [
-      { id: 'u1', role: 'user', content: 'Did you remove TypeScript everywhere?' },
-      { id: 'a1', role: 'assistant', content: 'Yes, it is gone.' },
+      { id: 'u1', role: 'user', content: 'Do the choices introduce bias?' },
+      { id: 'a1', role: 'assistant', content: 'I would need to see the exact choices.' },
     ],
-    question: 'Can you check again?',
+    question: 'They are already in the document.',
+    chatContext: { mode: 'full-document' },
   });
 
   expect(result.error).toBeNull();
-  expect(result.messages.at(-1)?.content).toBe('TypeScript still appears in the Top Skills section.');
-  expect(requestProxyCompletionMock).toHaveBeenCalled();
-  expect(requestProxyCompletionMock.mock.calls[0]?.[0]?.messages).toEqual(expect.arrayContaining([
-    expect.objectContaining({ role: 'user', content: 'Can you check again?' }),
-    expect.objectContaining({
-      role: 'user',
-      content: expect.stringContaining('Verify whether TypeScript still appears anywhere in the resume.'),
-    }),
-  ]));
+  expect(result.messages.at(-1)?.content).toBe('The supplied document already contains the exact choices.');
+  expect(runViewerAgentMock).toHaveBeenCalledWith(expect.objectContaining({
+    messages: expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'Do the choices introduce bias?' }),
+      expect.objectContaining({ role: 'assistant', content: 'I would need to see the exact choices.' }),
+      expect.objectContaining({ role: 'user', content: 'They are already in the document.' }),
+    ]),
+  }));
 });
 
 test('requestChatTurn refuses document changes in viewer mode without calling the provider', async () => {
-  requestChatCompletionMock.mockResolvedValue('Should not be called.');
-
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy'),
@@ -165,13 +157,10 @@ test('requestChatTurn refuses document changes in viewer mode without calling th
 
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(requestChatCompletionMock).not.toHaveBeenCalled();
-  expect(runQaToolLoopMock).not.toHaveBeenCalled();
+  expect(runViewerAgentMock).not.toHaveBeenCalled();
 });
 
 test('requestChatTurn refuses DB-backed viewer change requests before QA routing', async () => {
-  runQaToolLoopMock.mockResolvedValue('Should not be called.');
-
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
     document: deserializeDocument(DOC_WITH_DB_TABLE, '.hvy'),
@@ -181,12 +170,11 @@ test('requestChatTurn refuses DB-backed viewer change requests before QA routing
 
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('I can’t change the document from Viewer mode. Switch to AI mode or Editor mode to make changes.');
-  expect(requestChatCompletionMock).not.toHaveBeenCalled();
-  expect(runQaToolLoopMock).not.toHaveBeenCalled();
+  expect(runViewerAgentMock).not.toHaveBeenCalled();
 });
 
 test('requestChatTurn still answers informational viewer questions about changes', async () => {
-  requestChatCompletionMock.mockResolvedValue('Use AI mode to edit.');
+  runViewerAgentMock.mockResolvedValue({ answer: 'Use AI mode to edit.' });
 
   const result = await requestChatTurn({
     settings: { provider: 'openai', model: 'gpt-5-mini' },
@@ -197,13 +185,13 @@ test('requestChatTurn still answers informational viewer questions about changes
 
   expect(result.error).toBeNull();
   expect(result.messages.at(-1)?.content).toBe('Use AI mode to edit.');
-  expect(requestChatCompletionMock).toHaveBeenCalledOnce();
+  expect(runViewerAgentMock).toHaveBeenCalledOnce();
 });
 
 test('requestChatTurn attaches token usage to assistant answers', async () => {
-  requestChatCompletionMock.mockImplementation(async (params: { onTokenUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void }) => {
-    params.onTokenUsage?.({ inputTokens: 42, outputTokens: 7 });
-    return 'HVY is a document format.';
+  runViewerAgentMock.mockResolvedValue({
+    answer: 'HVY is a document format.',
+    tokenUsage: { inputTokens: 42, outputTokens: 7 },
   });
 
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
@@ -226,8 +214,8 @@ test('requestChatTurn attaches token usage to assistant answers', async () => {
   );
 });
 
-test('requestChatTurn routes through runQaToolLoop when the document has DB tables', async () => {
-  runQaToolLoopMock.mockResolvedValue('Tool-loop answer.');
+test('requestChatTurn keeps DB-backed questions in the read-only Viewer agent', async () => {
+  runViewerAgentMock.mockResolvedValue({ answer: 'Tool-loop answer.' });
 
   const settings: ChatSettings = { provider: 'openai', model: 'gpt-5-mini' };
   const document = deserializeDocument(DOC_WITH_DB_TABLE, '.hvy');
@@ -239,8 +227,7 @@ test('requestChatTurn routes through runQaToolLoop when the document has DB tabl
     question: 'How many rows?',
   });
 
-  expect(runQaToolLoopMock).toHaveBeenCalledTimes(1);
-  expect(requestChatCompletionMock).not.toHaveBeenCalled();
+  expect(runViewerAgentMock).toHaveBeenCalledTimes(1);
   expect(result.error).toBeNull();
   expect(result.messages[1]).toEqual(
     expect.objectContaining({ role: 'assistant', content: 'Tool-loop answer.' })
@@ -248,7 +235,7 @@ test('requestChatTurn routes through runQaToolLoop when the document has DB tabl
 });
 
 test('requestChatTurn returns assistant error message on failure', async () => {
-  requestChatCompletionMock.mockRejectedValue(new Error('Proxy unavailable.'));
+  runViewerAgentMock.mockRejectedValue(new Error('Proxy unavailable.'));
 
   const settings: ChatSettings = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
   const document = deserializeDocument('---\nhvy_version: 0.1\n---\n\n#! Summary\n', '.hvy');

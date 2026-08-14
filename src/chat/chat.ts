@@ -870,7 +870,7 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
   }
 
   const typed = payload as ProxyChatResponse | null;
-  if (!typed?.toolState || !Array.isArray(typed.toolCalls) || !Array.isArray(typed.nativeMessages)) {
+  if (!typed || typeof typed !== 'object') {
     throw new Error('Proxy returned an invalid native tool turn.');
   }
   const responsePayload = measurePhase('chat.proxyTool.normalize', { debugLabel }, () => {
@@ -889,9 +889,9 @@ export async function requestProxyToolTurn(params: ProxyToolTurnParams): Promise
     output: responsePayload.output,
     reasoningSummary: responsePayload.reasoningSummary,
     ...(responsePayload.usage ? { usage: responsePayload.usage } : {}),
-    toolCalls: typed.toolCalls,
-    nativeMessages: typed.nativeMessages,
-    toolState: typed.toolState,
+    toolCalls: Array.isArray(typed.toolCalls) ? typed.toolCalls : [],
+    nativeMessages: Array.isArray(typed.nativeMessages) ? typed.nativeMessages : [],
+    toolState: typed.toolState ?? createEmptyHostToolState(params.settings.provider),
   };
 }
 

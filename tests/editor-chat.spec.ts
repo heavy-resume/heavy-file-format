@@ -204,6 +204,98 @@ test('viewer question updates chat without rerendering the app', async ({ page }
   expect(renderAppLogCount).toBe(0);
 });
 
+test('Viewer follow-up inspects a known path inside the cache-stable read-only agent', async ({ page }) => {
+  const chatRequests: Array<{
+    mode?: string;
+    context?: string;
+    messages?: Array<{ role?: string; content?: string }>;
+    tools?: Array<{ name?: string }>;
+    toolState?: unknown;
+  }> = [];
+  await page.route('**/api/chat', async (route) => {
+    chatRequests.push(route.request().postDataJSON());
+    const response = chatRequests.length === 1
+      ? {
+          output: 'The answer choices may affect the response.',
+          reasoningSummary: '',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai', input: [] },
+        }
+      : chatRequests.length === 2
+      ? {
+          output: '',
+          reasoningSummary: '',
+          toolCalls: [{
+            id: 'inspect-choices',
+            name: 'inspect_hvy_path',
+            arguments: { path: '/id/top-skills-list' },
+          }],
+          nativeMessages: [{
+            type: 'function_call',
+            call_id: 'inspect-choices',
+            name: 'inspect_hvy_path',
+            arguments: '{"path":"/id/top-skills-list"}',
+          }],
+          toolState: { provider: 'openai', input: [] },
+        }
+      : {
+          output: 'The requested content is already present in the inspected component.',
+          reasoningSummary: '',
+          toolCalls: [],
+          nativeMessages: [],
+          toolState: { provider: 'openai', input: [] },
+        };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...response,
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.document-menu').evaluate((menu) => {
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = true;
+    }
+  });
+  await page.locator('.document-menu-panel').getByRole('button', { name: 'Resume Example', exact: true }).click({ force: true });
+  await page.locator('[data-action="switch-view"][data-view="viewer"]').click();
+  await page.getByRole('button', { name: 'Open chat' }).click();
+  await page.getByLabel('Chat context method').selectOption('full-document');
+
+  await page.locator('[data-field="chat-input"]').fill('Do the answer choices introduce bias?');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('.chat-bubble', { hasText: 'The answer choices may affect the response.' })).toBeVisible();
+
+  await page.locator('[data-field="chat-input"]').fill('They are already in the document.');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('.chat-bubble', { hasText: 'The requested content is already present in the inspected component.' })).toBeVisible();
+
+  expect(chatRequests).toHaveLength(3);
+  expect(chatRequests.every((request) => request.mode === 'qa')).toBe(true);
+  expect(chatRequests[1]?.context).toBe(chatRequests[0]?.context);
+  expect(chatRequests[2]?.context).toBe(chatRequests[1]?.context);
+  expect(chatRequests[1]?.tools?.map((tool) => tool.name)).toEqual([
+    'search_hvy_document',
+    'walk_hvy_document',
+    'inspect_hvy_path',
+    'query_db_table',
+    'answer_user',
+  ]);
+  expect(chatRequests[1]?.tools?.map((tool) => tool.name)).not.toContain('run_hvy_cli');
+  expect(chatRequests[1]?.tools?.map((tool) => tool.name)).not.toContain('apply_hvy_patch');
+  expect(chatRequests[1]?.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ role: 'user', content: 'Do the answer choices introduce bias?' }),
+    expect.objectContaining({ role: 'assistant', content: 'The answer choices may affect the response.' }),
+    expect.objectContaining({ role: 'user', content: 'They are already in the document.' }),
+  ]));
+  expect(JSON.stringify(chatRequests[2]?.toolState)).toContain('Component preview');
+});
+
 test('AI mode informational question uses QA chat instead of document edit CLI', async ({ page }) => {
   const chatRequests: Array<{ mode?: string; messages?: Array<{ content?: string }> }> = [];
   await page.route('**/api/chat', async (route) => {

@@ -1,9 +1,7 @@
-import { buildProxyChatRequest, requestChatCompletion, type ProxyToolTurn } from './chat';
+import { buildProxyChatRequest, type ProxyToolTurn } from './chat';
 import { buildProviderProxyRequest, type ProviderProxyChatRequest } from './chat-provider-payload';
 import { buildProviderToolProxyRequest, type ProviderToolProxyChatRequest } from './provider-tools';
-import { hasDocumentDatabaseTables } from '../plugins/database-table-targets';
-import { runQaToolLoop } from '../ai-qa';
-import type { ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, ChatTokenUsage, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
+import type { ChatAttachment, ChatAttachmentReference, ChatMessage, ChatSettings, ChatWorkState, HvyChatContextOptions, HvyChatContextPreparationCallback, HvyChatContextProvider, HvyChatSearchCache, HvyEmbeddingProvider, VisualDocument } from '../types';
 import type { VisualSection } from '../editor/types';
 import { deserializeDocumentWithDiagnostics, wrapHvyFragmentAsDocument } from '../serialization';
 import {
@@ -15,6 +13,7 @@ import {
   type ChatCliSelectedComponentFocus,
   type ChatCliSimTurnState,
 } from '../chat-cli/chat-cli-edit-loop';
+import { runViewerAgent } from './viewer-agent';
 
 export interface ChatTurnResult {
   messages: ChatMessage[];
@@ -88,73 +87,27 @@ export async function requestChatTurn(params: {
       error: null,
     };
   }
-  let reasoningSummary = '';
-  let tokenUsage: ChatTokenUsage | null = null;
-
   try {
-    const answer = params.allowDbQaTools !== false && hasDocumentDatabaseTables(params.document)
-      ? await runQaToolLoop({
-          settings: params.settings,
-          document: params.document,
-          messages: nextMessages,
-          question: params.question,
-          signal: params.signal,
-        })
-      : await requestChatCompletion({
-          settings: params.settings,
-          document: params.document,
-          messages: nextMessages,
-          question: params.question,
-          chatContext: params.chatContext,
-          chatContextProvider: params.chatContextProvider,
-          chatSearchCache: params.chatSearchCache,
-          embeddingProvider: params.embeddingProvider,
-          onContextPreparation: params.onContextPreparation,
-          onReasoningSummary: (summary) => {
-            reasoningSummary = summary;
-          },
-          onTokenUsage: (usage) => {
-            tokenUsage = usage;
-          },
-          signal: params.signal,
-        });
-    const inspection = parseDocumentInspectionEscalation(answer);
-    if (inspection) {
-      const inspected = await runChatCliEditLoop({
-        settings: params.settings,
-        document: params.document,
-        request: [
-          'Read-only document inspection request. Do not change, create, remove, move, or rewrite anything.',
-          `Inspect the document using search and read commands, then answer the user: ${inspection.query}`,
-        ].join('\n'),
-        priorMessages: nextMessages,
-        chatContext: params.chatContext,
-        embeddingProvider: params.embeddingProvider,
-        signal: params.signal,
-      });
-      return {
-        messages: [
-          ...nextMessages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: inspected.summary,
-            ...(inspected.tokenUsage ? { tokenUsage: inspected.tokenUsage } : {}),
-          },
-        ],
-        error: null,
-        awaitingUser: inspected.asked,
-      };
-    }
+    const result = await runViewerAgent({
+      settings: params.settings,
+      document: params.document,
+      messages: nextMessages,
+      question: params.question,
+      chatContext: params.chatContext,
+      chatContextProvider: params.chatContextProvider,
+      embeddingProvider: params.embeddingProvider,
+      onContextPreparation: params.onContextPreparation,
+      signal: params.signal,
+    });
     return {
       messages: [
         ...nextMessages,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: answer,
-          ...(reasoningSummary ? { reasoning: reasoningSummary } : {}),
-          ...(tokenUsage ? { tokenUsage } : {}),
+          content: result.answer,
+          ...(result.reasoningSummary ? { reasoning: result.reasoningSummary } : {}),
+          ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
         },
       ],
       error: null,
@@ -174,16 +127,6 @@ export async function requestChatTurn(params: {
       error: message,
     };
   }
-}
-
-function parseDocumentInspectionEscalation(source: string): { query: string } | null {
-  const prefix = 'inspect_document ';
-  const cleaned = source.trim();
-  if (!cleaned.startsWith(prefix)) {
-    return null;
-  }
-  const query = cleaned.slice(prefix.length).trim();
-  return query && !query.includes('\n') ? { query } : null;
 }
 
 function isLikelyViewerChangeRequest(question: string): boolean {

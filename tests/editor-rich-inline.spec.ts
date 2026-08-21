@@ -1345,6 +1345,45 @@ test('link keyboard shortcut opens the link modal and applies links', async ({ p
   await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(0);
 });
 
+test('link button preserves a mailto subject containing spaces after rerender', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><a href="mailto:KCParks.SEPA@kingcounty.gov">KCParks.SEPA@kingcounty.gov</a></p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const textNode = node.querySelector('a')?.firstChild;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    (node as HTMLElement).focus();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await page.getByRole('button', { name: 'Link' }).first().click();
+  const linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill(
+    'mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky Park Disc Golf Course'
+  );
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText(
+    '[KCParks.SEPA@kingcounty.gov](mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course)'
+  );
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await expect(editor.locator('a')).toHaveAttribute(
+    'href',
+    'mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course'
+  );
+  await expect(editor.locator('a')).toHaveText('KCParks.SEPA@kingcounty.gov');
+});
+
 test('link modal apply with an empty value removes the selected link', async ({ page }) => {
   await page.goto('/');
 

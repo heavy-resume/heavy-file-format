@@ -245,6 +245,19 @@ test('serializes mailto links and drops empty editor links to plain text', () =>
   expect(turndown.turndown('<p><a>person@example.com</a></p>')).toBe('person@example.com');
 });
 
+test('round trips a mailto link whose subject contains spaces', () => {
+  const markdown = turndown.turndown(
+    '<p><a href="mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky Park Disc Golf Course">KCParks.SEPA@kingcounty.gov</a></p>'
+  );
+
+  expect(markdown).toBe(
+    '[KCParks.SEPA@kingcounty.gov](mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course)'
+  );
+  expect(markdownToReaderHtml(markdown)).toContain(
+    '<a href="mailto:KCParks.SEPA@kingcounty.gov?subject=Petrovitsky%20Park%20Disc%20Golf%20Course">KCParks.SEPA@kingcounty.gov</a>'
+  );
+});
+
 test('renders mailto links from text markdown', () => {
   expect(markdownToReaderHtml('[person@example.com](mailto:person@example.com)')).toContain(
     '<a href="mailto:person@example.com">person@example.com</a>'

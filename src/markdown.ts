@@ -59,9 +59,15 @@ turndown.addRule('hvy-link', {
   filter: (node) => node.nodeName === 'A',
   replacement: (content, node) => {
     const href = (node as HTMLAnchorElement).getAttribute('href')?.trim() ?? '';
-    return href.length > 0 ? `[${content}](${href})` : content;
+    return href.length > 0 ? `[${content}](${serializeMarkdownLinkDestination(href)})` : content;
   },
 });
+
+function serializeMarkdownLinkDestination(href: string): string {
+  return href
+    .replace(/\s/g, (whitespace) => encodeURIComponent(whitespace))
+    .replace(/([<>()])/g, '\\$1');
+}
 
 turndown.addRule('non-text-media', {
   filter: (node) => isNonTextMediaElement(node),

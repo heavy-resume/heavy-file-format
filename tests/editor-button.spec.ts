@@ -592,6 +592,10 @@ test('advanced editor exposes anchored button configuration as a component card'
   expect(buttonBox!.y + buttonBox!.height).toBeLessThan(visibleScriptBox!.y);
   expect(buttonBox!.y).toBeGreaterThanOrEqual(previewBox!.y);
 
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('[aria-label="Button settings"]') })).toBeVisible();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+
   await page.locator('.editor-block[data-active-editor-block="true"] [data-action="open-component-meta"]').click();
   await expect(page.locator('#modalRoot')).toBeVisible();
   await page.locator('.component-meta-modal [data-modal-action="close"]').click();

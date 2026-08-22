@@ -490,6 +490,7 @@ function ensureRenderers(): void {
       get showComponentEncryptionControls() { return state.showComponentEncryptionControls; },
       get addComponentBySection() { return state.addComponentBySection; },
       get activeEditorBlock() { return state.activeEditorBlock; },
+      get activeEditorBlockSnapshots() { return state.activeEditorBlockSnapshots; },
       get aiEditorHostBlock() { return state.aiEditorHostBlock; },
       get aiEditorHostSectionKey() { return state.aiEditorHostSectionKey; },
       get componentPlacement() { return state.componentPlacement; },

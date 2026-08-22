@@ -4725,6 +4725,38 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index 
   await expect(page.locator('#editorTree .editor-section-card').filter({ has: page.getByRole('button', { name: 'Virtual 1', exact: true }) })).toBeVisible();
 });
 
+test('open component editors survive sibling activation and section virtualization', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"open-virtual-${index + 1}"}-->
+#! Open Virtual ${index + 1}
+
+ <!--hvy:text {"id":"open-text-${index + 1}"}-->
+  Open component ${index + 1}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const firstSection = page.locator('.editor-section-card', { hasText: 'Open Virtual 1' }).first();
+  const secondSection = page.locator('.editor-section-card', { hasText: 'Open Virtual 2' }).first();
+  await firstSection.locator('.editor-block-passive').click();
+  await secondSection.locator('.editor-block-passive').click();
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(2);
+
+  const editorTree = page.locator('#editorTree');
+  await editorTree.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect.poll(() => page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').count()).toBeGreaterThan(0);
+
+  await editorTree.evaluate((element) => { element.scrollTop = 0; });
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(2);
+});
+
 test('section remove requires confirmation', async ({ page }) => {
   await page.goto('/');
 

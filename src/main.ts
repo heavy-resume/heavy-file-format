@@ -460,6 +460,9 @@ editorRenderer = createEditorRenderer(
     get activeEditorBlock() {
       return state.activeEditorBlock;
     },
+    get activeEditorBlockSnapshots() {
+      return state.activeEditorBlockSnapshots;
+    },
     get aiEditorHostBlock() {
       return state.aiEditorHostBlock;
     },

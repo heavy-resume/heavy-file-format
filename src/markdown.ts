@@ -187,6 +187,11 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
     checkbox.removeAttribute('disabled');
     checkbox.setAttribute('contenteditable', 'false');
   });
+  if (!template.content.hasChildNodes()) {
+    const paragraph = document.createElement('p');
+    paragraph.appendChild(document.createElement('br'));
+    template.content.appendChild(paragraph);
+  }
   return template.innerHTML;
 }
 

@@ -143,7 +143,6 @@ function restoreVirtualSection(
 
 function shouldKeepSectionMounted(section: HTMLElement): boolean {
   return section.contains(section.ownerDocument.activeElement)
-    || Boolean(section.querySelector('.editor-block[data-active-editor-block="true"]'))
     || Boolean(section.querySelector('.component-picker[data-open="true"], .component-picker:focus-within'))
     || section.classList.contains('is-temp-highlighted')
     || Boolean(section.querySelector('.is-temp-highlighted, .is-context-menu-target'));

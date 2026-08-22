@@ -1845,6 +1845,9 @@ hvy_version: 0.1
   await page.locator('#editorTree .editor-block-passive', { hasText: 'maintenance script' }).click();
   await expect(page.locator('#editorTree .hvy-scripting-head')).toContainText('Python');
   await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await expect(page.locator('#editorTree .hvy-scripting-editor-script-label')).toHaveText('editor script');
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
   const scriptEditor = page.getByRole('textbox', { name: 'Python script' });
   const highlightedScript = page.locator('#editorTree .hvy-scripting-highlight');
   await expect(page.locator('#editorTree .hvy-scripting-highlight .hljs-built_in')).toHaveText('print');

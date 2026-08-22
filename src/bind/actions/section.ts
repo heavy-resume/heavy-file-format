@@ -1,6 +1,6 @@
 import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
 import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
-import { setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
+import { clearOpenEditorSection, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { closeModalIfTarget, navigateToSection } from '../../navigation';
@@ -121,9 +121,7 @@ const removeSubsectionAction: ActionHandler = ({ section, sectionKey }) => {
   if (state.activeEditorSectionTitleKey === sectionKey) {
     state.activeEditorSectionTitleKey = null;
   }
-  if (state.activeEditorBlock?.sectionKey === sectionKey) {
-    state.activeEditorBlock = null;
-  }
+  clearOpenEditorSection(sectionKey);
   if (state.aiEditorHostBlock?.sectionKey === sectionKey) {
     state.aiEditorHostBlock = null;
   }
@@ -146,9 +144,7 @@ const removeSection: ActionHandler = ({ section, sectionKey }) => {
   if (state.activeEditorSectionTitleKey === sectionKey) {
     state.activeEditorSectionTitleKey = null;
   }
-  if (state.activeEditorBlock?.sectionKey === sectionKey) {
-    state.activeEditorBlock = null;
-  }
+  clearOpenEditorSection(sectionKey);
   if (state.aiEditorHostBlock?.sectionKey === sectionKey) {
     state.aiEditorHostBlock = null;
   }

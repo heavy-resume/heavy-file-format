@@ -1,5 +1,7 @@
-import type { VisualSection } from '../editor/types';
+import type { VisualBlock, VisualSection } from '../editor/types';
 import type { ReaderRenderer } from './render';
+import type { ReaderBlockRenderOptions } from '../editor/component-helpers';
+import type { ReaderRenderTreeWindowOptions } from './reader-render-tree-window';
 import { findSectionByKey } from '../section-ops';
 import { findBlockByIds } from '../block-ops';
 import { captureVisibilityStates, restoreVisibilityStates } from './refresh-surfaces';
@@ -40,26 +42,57 @@ function normalizeReaderTableStripesNear(element: HTMLElement): void {
   normalizeReaderTableStripes(element.closest('.reader-section') ?? element);
 }
 
+export function createReaderSectionElement(
+  ownerDocument: Document,
+  readerRenderer: ReaderRenderer,
+  section: VisualSection,
+  blockWindowOptions?: ReaderRenderTreeWindowOptions
+): HTMLElement | null {
+  const html = readerRenderer.renderReaderSection(section, blockWindowOptions);
+  if (!html.trim()) {
+    return null;
+  }
+  const template = ownerDocument.createElement('template');
+  template.innerHTML = html.trim();
+  const element = template.content.firstElementChild;
+  return element instanceof HTMLElement ? element : null;
+}
+
+export function createReaderBlockElement(
+  ownerDocument: Document,
+  readerRenderer: ReaderRenderer,
+  section: VisualSection,
+  block: VisualBlock,
+  renderOptions?: ReaderBlockRenderOptions
+): HTMLElement | null {
+  const html = readerRenderer.renderReaderBlock(section, block, renderOptions);
+  if (!html.trim()) {
+    return null;
+  }
+  const template = ownerDocument.createElement('template');
+  template.innerHTML = html.trim();
+  const element = template.content.firstElementChild;
+  return element instanceof HTMLElement ? element : null;
+}
+
 export function refreshReaderSectionDom(options: ReaderSectionRefreshOptions): boolean {
   const section = findSectionByKey(options.sections, options.sectionKey);
   if (!section) {
     return false;
   }
-  const selector = `.reader-section[data-section-key="${CSS.escape(options.sectionKey)}"]`;
+  const escapedSectionKey = CSS.escape(options.sectionKey);
+  const selector = [
+    `.reader-section[data-section-key="${escapedSectionKey}"]`,
+    `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"][data-section-key="${escapedSectionKey}"]`,
+  ].join(', ');
   const targets = Array.from(options.root.querySelectorAll<HTMLElement>(selector));
   if (targets.length === 0) {
     return false;
   }
   let replaced = 0;
   targets.forEach((target) => {
-    const html = options.readerRenderer.renderReaderSection(section);
-    if (!html.trim()) {
-      return;
-    }
-    const template = target.ownerDocument.createElement('template');
-    template.innerHTML = html.trim();
-    const replacement = template.content.firstElementChild;
-    if (!(replacement instanceof HTMLElement)) {
+    const replacement = createReaderSectionElement(target.ownerDocument, options.readerRenderer, section);
+    if (!replacement) {
       return;
     }
     restoreVisibilityStates(replacement, captureVisibilityStates(target));
@@ -77,7 +110,12 @@ export function refreshReaderBlockDom(options: ReaderBlockRefreshOptions): boole
   if (!section || !block) {
     return false;
   }
-  const selector = `.reader-block[data-section-key="${CSS.escape(options.sectionKey)}"][data-block-id="${CSS.escape(options.blockId)}"]`;
+  const escapedSectionKey = CSS.escape(options.sectionKey);
+  const escapedBlockId = CSS.escape(options.blockId);
+  const selector = [
+    `.reader-block[data-section-key="${escapedSectionKey}"][data-block-id="${escapedBlockId}"]`,
+    `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"][data-section-key="${escapedSectionKey}"][data-block-id="${escapedBlockId}"]`,
+  ].join(', ');
   const targets = Array.from(options.root.querySelectorAll<HTMLElement>(selector));
   if (targets.length === 0) {
     return false;
@@ -87,14 +125,8 @@ export function refreshReaderBlockDom(options: ReaderBlockRefreshOptions): boole
     const renderOptions = target.dataset.readerTrimVerticalEdgeMargin === 'true'
       ? { trimVerticalEdgeMargin: true }
       : undefined;
-    const html = options.readerRenderer.renderReaderBlock(section, block, renderOptions);
-    if (!html.trim()) {
-      return;
-    }
-    const template = target.ownerDocument.createElement('template');
-    template.innerHTML = html.trim();
-    const replacement = template.content.firstElementChild;
-    if (!(replacement instanceof HTMLElement)) {
+    const replacement = createReaderBlockElement(target.ownerDocument, options.readerRenderer, section, block, renderOptions);
+    if (!replacement) {
       return;
     }
     restoreVisibilityStates(replacement, captureVisibilityStates(target));

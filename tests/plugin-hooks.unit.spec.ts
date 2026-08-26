@@ -136,14 +136,16 @@ test('document edits made by hooks update the lifecycle signature', async () => 
   ]);
   bootstrap();
 
-  await runPluginDocumentHooks('load');
+  const loadResult = await runPluginDocumentHooks('load');
   const section = state.document.sections[0];
   if (!section) throw new Error('Expected section');
   section.title = 'Changed before hook';
-  await runPluginDocumentHooks('edit');
+  const changeResult = await runPluginDocumentHooks('edit');
   await runPluginDocumentHooks('unknown');
 
   expect(expectedResult).toEqual(['load', 'change']);
+  expect(loadResult).toEqual({ ran: true, documentChanged: false });
+  expect(changeResult).toEqual({ ran: true, documentChanged: true });
 });
 
 test('document hook context includes the current document view', async () => {

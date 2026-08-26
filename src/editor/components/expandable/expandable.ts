@@ -213,37 +213,11 @@ function renderExpandablePlacementBlockList(
   helpers: Parameters<ComponentEditorRenderer>[2],
   locked: boolean
 ): string {
-  const output: string[] = [];
-  if (!locked && blocks.length > 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container,
-      sectionKey,
-      parentBlockId,
-      placement: 'before',
-      targetBlockId: blocks[0]?.id,
-    }));
-  }
-  for (const innerBlock of blocks) {
-    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
-    if (!locked) {
-      output.push(helpers.renderComponentPlacementTarget({
-        container,
-        sectionKey,
-        parentBlockId,
-        placement: 'after',
-        targetBlockId: innerBlock.id,
-      }));
-    }
-  }
-  if (!locked && blocks.length === 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container,
-      sectionKey,
-      parentBlockId,
-      placement: 'end',
-    }));
-  }
-  return output.join('');
+  return helpers.renderEditorNestedBlocks(sectionKey, blocks, {
+    container,
+    parentBlockId,
+    locked,
+  });
 }
 
 function renderExpandablePaneMeta(

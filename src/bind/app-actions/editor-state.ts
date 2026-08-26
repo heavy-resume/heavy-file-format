@@ -1,8 +1,8 @@
-import { state, getRenderApp, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { captureEditorDeactivationAnchor, capturePaneScroll } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll, scrollPendingEditorActivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -46,7 +46,11 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       suppressFocus: clickedSortValueKey ? true : state.pendingEditorActivation.suppressFocus,
     };
   }
-  getRenderApp()();
+  if (!getRefreshEditorSection()(sectionKey)) {
+    getRenderApp()();
+  } else {
+    scrollPendingEditorActivation(app);
+  }
   if (clickedSortValueKey) {
     openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey);
   }
@@ -149,9 +153,14 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  getRenderApp()();
+  const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
+  if (!refreshedEditorSection) {
+    getRenderApp()();
+  } else {
+    state.pendingEditorDeactivation = null;
+  }
   if ((result === 'closed' || result === 'removed') && (blockChanged || result === 'removed' || sortValuesChanged)) {
-    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app));
+    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app), undefined, sectionKey);
   }
 };
 
@@ -185,7 +194,12 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
         state.activeEditorBlockReturnScroll = null;
       }
       getRefreshReaderPanels()();
-      getRenderApp()();
+      const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
+      if (!refreshedEditorSection) {
+        getRenderApp()();
+      } else {
+        state.pendingEditorDeactivation = null;
+      }
     }, app);
     return;
   }
@@ -194,7 +208,12 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
     state.activeEditorBlockReturnScroll = null;
   }
   getRefreshReaderPanels()();
-  getRenderApp()();
+  const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
+  if (!refreshedEditorSection) {
+    getRenderApp()();
+  } else {
+    state.pendingEditorDeactivation = null;
+  }
 };
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {

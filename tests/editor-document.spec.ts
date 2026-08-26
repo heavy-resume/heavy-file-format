@@ -4713,6 +4713,8 @@ ${Array.from({ length: 42 }, (_item, index) => `<!--hvy: {"id":"virtual-${index 
   await page.getByRole('button', { name: 'Basic' }).click();
 
   const editorTree = page.locator('#editorTree');
+  await expect.poll(() => page.locator('#editorTree [data-hvy-virtual-placeholder="true"]').count()).toBeGreaterThan(0);
+  expect(await page.locator('#editorTree .editor-section-card:not(.editor-subsection-card)').count()).toBeLessThan(42);
   await editorTree.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });

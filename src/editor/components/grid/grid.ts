@@ -26,6 +26,14 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
     targetGridItemId: block.schema.gridItems[0]?.id,
   });
   const placementMode = firstPlacementTarget.length > 0;
+  const renderedGridBlocks = new Map(
+    helpers.renderEditorGridBlocks(
+      sectionKey,
+      block.schema.gridItems.map((item) => item.block),
+      1,
+      locked
+    ).map((entry) => [entry.block, entry.html])
+  );
   const addGridGhost = locked || placementMode
     ? ''
     : `<div class="ghost-section-card add-ghost grid-add-ghost">
@@ -100,7 +108,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
             }
           </div>
           <div class="grid-item-editor-shell">
-            ${helpers.renderEditorBlock(sectionKey, item.block, locked)}
+            ${renderedGridBlocks.get(item.block) ?? ''}
           </div>
           ${afterPlacementTarget}
         </div>
@@ -168,10 +176,15 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
   ].filter(Boolean).join(' ');
   const stackCss = renderGridStackCss(stackClass, stackWidth, helpers);
   const itemsByBlock = new Map(block.schema.gridItems.map((item) => [item.block, item]));
-  const visibleCells = helpers.orderReaderBlocks(block.schema.gridItems.map((item) => item.block))
-    .map((orderedBlock) => {
-      const item = itemsByBlock.get(orderedBlock);
-      return item ? { item, html: helpers.renderReaderBlock(_section, orderedBlock, { trimVerticalEdgeMargin: true }) } : null;
+  const visibleCells = helpers.renderReaderGridBlocks(
+    _section,
+    block.schema.gridItems.map((item) => item.block),
+    columns,
+    { trimVerticalEdgeMargin: true }
+  )
+    .map((rendered) => {
+      const item = itemsByBlock.get(rendered.block);
+      return item ? { item, html: rendered.html } : null;
     })
     .filter((item): item is { item: GridItem; html: string } => item !== null)
     .filter((item) => item.html.trim().length > 0);

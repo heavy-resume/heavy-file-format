@@ -34,7 +34,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { compileSurfaceResponsiveCss, getSurfaceResponsiveClass } from '../surface-responsive-css';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
-import { visitBlocks } from '../section-ops';
+import { visitBlocks, visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
@@ -57,6 +57,19 @@ import {
   type ReaderViewContext,
   type ReaderViewTargetKey,
 } from './view-filter';
+import {
+  createChildRenderTreeWindowOptions,
+  createRenderTreeHeightLedger,
+  type RenderTreeWindowEntry,
+} from '../render-tree-window';
+import {
+  createReaderBlockRenderTreeNode,
+  createReaderSectionRenderTreeNode,
+  READER_BLOCK_TREE_LAYOUT,
+  READER_SECTION_TREE_LAYOUT,
+  type ReaderRenderTreeItem,
+  type ReaderRenderTreeWindowOptions,
+} from './reader-render-tree-window';
 
 interface ReaderRenderState {
   documentMeta: VisualDocument['meta'];
@@ -121,11 +134,12 @@ interface ReaderRenderDeps {
 
 export interface ReaderRenderer {
   renderNavigation: (sections: VisualSection[]) => string;
-  renderReaderSections: (sections: VisualSection[]) => string;
+  renderReaderSections: (sections: VisualSection[], windowOptions?: ReaderRenderTreeWindowOptions) => string;
   renderSidebarSections: (sections: VisualSection[]) => string;
   renderSidebarHelpBalloon: (sections: VisualSection[]) => string;
-  renderReaderSection: (section: VisualSection) => string;
+  renderReaderSection: (section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
+  renderReaderGridBlocks: ComponentRenderHelpers['renderReaderGridBlocks'];
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];
@@ -135,11 +149,15 @@ export interface ReaderRenderer {
   renderModal: () => string;
   renderLinkInlineModal: () => string;
   renderWarnings: () => string;
+  recordReaderSectionHeight: (sectionKey: string, height: number) => void;
+  recordReaderBlockHeight: (sectionKey: string, blockId: string, height: number) => void;
 }
 
 export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRenderDeps): ReaderRenderer {
   let activeReaderViewContext: ReaderViewContext | null = null;
   let activeSearchFilterContext: SearchFilterContext | null = null;
+  const readerRenderTreeHeightLedger = createRenderTreeHeightLedger();
+  let activeReaderRenderTreeWindowOptions: ReaderRenderTreeWindowOptions | null = null;
 
   function withReaderViewContext(render: () => string): string {
     const previous = activeReaderViewContext;
@@ -212,7 +230,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     });
   }
 
-  function renderReaderSections(sections: VisualSection[]): string {
+  function renderReaderSections(sections: VisualSection[], windowOptions?: ReaderRenderTreeWindowOptions): string {
     return withReaderViewContext(() => {
       resetReaderTableStripeSequence();
       const realSections = orderReaderSections(
@@ -230,8 +248,46 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
       const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
       const pageGuides = state.documentExtension === '.phvy' && state.currentView === 'viewer' ? renderPdfDocumentPageGuides({ meta: state.documentMeta }) : '';
-      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${pageGuides}${realSections.map((section) => renderReaderSection(section)).join('')}${topLevelAddGhost}</div></div>`;
+      const canWindow = state.currentView === 'viewer'
+        && state.documentExtension !== '.phvy'
+        && realSections.every(hasReaderSectionContentCandidate);
+      const effectiveWindowOptions = canWindow ? windowOptions : undefined;
+      const sectionPlan = readerRenderTreeHeightLedger.plan(
+        realSections.map(createReaderSectionRenderTreeNode),
+        effectiveWindowOptions,
+        READER_SECTION_TREE_LAYOUT
+      );
+      const sectionsHtml = sectionPlan.map(({ node, estimatedHeight, offsetTop, shouldRender }) => shouldRender
+        ? renderReaderSection(
+          node.item as VisualSection,
+          createChildRenderTreeWindowOptions(effectiveWindowOptions, offsetTop, 44)
+        )
+        : renderReaderSectionPlaceholder(node.item as VisualSection, estimatedHeight)
+      ).join('');
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${pageGuides}${sectionsHtml}${topLevelAddGhost}</div></div>`;
     });
+  }
+
+  function hasReaderSectionContentCandidate(section: VisualSection): boolean {
+    return section.blocks.length > 0 || section.children.some(hasReaderSectionContentCandidate);
+  }
+
+  function renderReaderSectionPlaceholder(section: VisualSection, estimatedHeight: number): string {
+    return `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader" data-section-key="${deps.escapeAttr(section.key)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`;
+  }
+
+  function recordReaderSectionHeight(sectionKey: string, height: number): void {
+    const section = deps.findSectionByKey(state.documentSections, sectionKey);
+    if (section) {
+      readerRenderTreeHeightLedger.record(createReaderSectionRenderTreeNode(section), height);
+    }
+  }
+
+  function recordReaderBlockHeight(sectionKey: string, blockId: string, height: number): void {
+    const block = deps.findBlockByIds(sectionKey, blockId);
+    if (block) {
+      readerRenderTreeHeightLedger.record(createReaderBlockRenderTreeNode(block), height);
+    }
   }
 
   function renderAiTopLevelSectionAddGhost(location: 'main' | 'sidebar'): string {
@@ -303,7 +359,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     </div>`;
   }
 
-  function renderReaderSection(section: VisualSection): string {
+  function renderReaderSection(section: VisualSection, windowOptions?: ReaderRenderTreeWindowOptions): string {
     if (isViewerHiddenSection(section)) {
       return '';
     }
@@ -324,7 +380,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const prioritized = isSectionReaderPriority(section, viewContext, targetKey);
     const viewCollapseKey = `reader-view-collapse:${targetKey}`;
     const viewExpanded = state.readerContainerState[viewCollapseKey] ?? !modifiers.has('collapse');
-    const authoredOrNavigationExpanded = getReaderSectionExpandedOverride(section) ?? section.expanded;
+    const authoredOrNavigationExpanded = getReaderSectionExpandedOverride(section, state.readerContainerState) ?? section.expanded;
     const autoExpanded = !modifiers.has('collapse') && !authoredOrNavigationExpanded && shouldAutoExpandAuthoringSection(section);
     const sectionExpanded = modifiers.has('collapse') ? viewExpanded : prioritized || autoExpanded ? true : authoredOrNavigationExpanded;
     const classList = [
@@ -349,12 +405,8 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const renderCheapPreview = shouldRenderCheapSectionBody(sectionExpanded, deferExpandedBody, searchContext);
     const blocksHtml = renderCheapPreview
       ? renderReaderPreviewBlocks(section, section.blocks)
-      : renderReaderBlocks(section, section.blocks);
-    const childrenHtml = renderCheapPreview
-      ? ''
-      : orderReaderSections(
-        section.children.filter((child) => !child.isGhost && !isViewerHiddenSection(child))
-      ).map((child) => renderReaderSection(child)).join('');
+      : renderReaderSectionChildren(section, windowOptions);
+    const childrenHtml = '';
     if (!blocksHtml.trim() && !childrenHtml.trim() && !isSectionSearchMatch(searchContext, section)) {
       return '';
     }
@@ -404,6 +456,94 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       deps.resolveBaseComponent(block.schema.component) === 'component-list'
       && !hasComponentListItems(block)
     );
+  }
+
+  function renderReaderSectionChildren(
+    section: VisualSection,
+    windowOptions?: ReaderRenderTreeWindowOptions
+  ): string {
+    const blocks = getVisibleReaderBlocks(section, section.blocks, false);
+    const viewContext = getActiveReaderViewContext();
+    const searchContext = getActiveSearchFilterContext();
+    const children = orderReaderSections(section.children.filter((child) => (
+      !child.isGhost
+      && !isViewerHiddenSection(child)
+      && !hasReaderViewModifier(viewContext, getSectionReaderViewTargetKey(child), 'hidden')
+      && isSectionSearchVisible(searchContext, child)
+    )));
+    const activeResult = state.search.results.find((result) => result.id === state.search.activeResultId);
+    const forceNodeKeys = new Set<string>();
+    if (activeResult) {
+      blocks.forEach((block) => {
+        if (block.id === activeResult.blockId || containsReaderBlockId(block, activeResult.blockId)) {
+          forceNodeKeys.add(block.id);
+        }
+      });
+      children.forEach((child) => {
+        if (child.key === activeResult.sectionKey || containsReaderSectionKey(child, activeResult.sectionKey)) {
+          forceNodeKeys.add(child.key);
+        }
+      });
+    }
+    const effectiveWindowOptions = windowOptions ? { ...windowOptions, forceNodeKeys } : undefined;
+    const nodes = [
+      ...blocks.map(createReaderBlockRenderTreeNode),
+      ...children.map(createReaderSectionRenderTreeNode),
+    ];
+    const entries = readerRenderTreeHeightLedger.plan(
+      nodes,
+      effectiveWindowOptions,
+      children.length > 0 ? READER_SECTION_TREE_LAYOUT : READER_BLOCK_TREE_LAYOUT
+    );
+    const output: string[] = [];
+    for (let index = 0; index < entries.length;) {
+      const entry = entries[index];
+      if (!entry) break;
+      if (entry.node.kind === 'section') {
+        const child = entry.node.item as VisualSection;
+        output.push(entry.shouldRender
+          ? renderReaderSection(
+            child,
+            createChildRenderTreeWindowOptions(effectiveWindowOptions, entry.offsetTop, 44)
+          )
+          : renderReaderSectionPlaceholder(child, entry.estimatedHeight)
+        );
+        index += 1;
+        continue;
+      }
+      if (entry.shouldRender) {
+        output.push(withReaderRenderTreeWindow(entry, effectiveWindowOptions, () => (
+          renderReaderBlock(section, entry.node.item as VisualBlock)
+        )));
+        index += 1;
+        continue;
+      }
+      const chunk: Array<RenderTreeWindowEntry<ReaderRenderTreeItem>> = [];
+      while (index + chunk.length < entries.length && chunk.length < 20) {
+        const candidate = entries[index + chunk.length];
+        if (!candidate || candidate.node.kind !== 'block' || candidate.shouldRender) break;
+        chunk.push(candidate);
+      }
+      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
+      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      index += Math.max(1, chunk.length);
+    }
+    return output.join('');
+  }
+
+  function containsReaderBlockId(block: VisualBlock, blockId: string | undefined): boolean {
+    if (!blockId) return false;
+    let found = false;
+    visitBlocksInList([block], (candidate) => {
+      if (candidate !== block && candidate.id === blockId) found = true;
+    });
+    return found;
+  }
+
+  function containsReaderSectionKey(section: VisualSection, sectionKey: string | undefined): boolean {
+    if (!sectionKey) return false;
+    return section.children.some((child) => child.key === sectionKey || containsReaderSectionKey(child, sectionKey));
   }
 
   function renderReaderBlock(section: VisualSection, block: VisualBlock, options: ReaderBlockRenderOptions = {}): string {
@@ -470,7 +610,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const refreshRenderContextAttrs = options.trimVerticalEdgeMargin
       ? ' data-reader-trim-vertical-edge-margin="true"'
       : '';
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs} style="${deps.escapeAttr(blockStyle)}"`;
+    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs} style="${deps.escapeAttr(blockStyle)}"`;
     const helpers = deps.getComponentRenderHelpers();
     const renderBlockShell = (body: string, extraAttrs = ''): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
@@ -645,11 +785,89 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return false;
   }
 
-  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[]): string {
-    return orderReaderBlocks(blocks)
-      .filter((block) => !isAnchoredReaderButton(section, block))
-      .map((block) => renderReaderBlock(section, block))
-      .join('');
+  function renderReaderBlocks(section: VisualSection, blocks: VisualBlock[], windowOptions?: ReaderRenderTreeWindowOptions): string {
+    const visibleBlocks = getVisibleReaderBlocks(section, blocks, false);
+    const inheritedWindowOptions = windowOptions ?? (activeReaderRenderTreeWindowOptions ? {
+      ...activeReaderRenderTreeWindowOptions,
+      layoutOffsetTop: (activeReaderRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 64,
+    } : undefined);
+    const activeResultBlockId = state.search.results.find((result) => result.id === state.search.activeResultId)?.blockId;
+    const forceNodeKeys = new Set(visibleBlocks
+      .filter((block) => block.id === activeResultBlockId || containsReaderBlockId(block, activeResultBlockId))
+      .map((block) => block.id));
+    const effectiveWindowOptions = inheritedWindowOptions
+      ? { ...inheritedWindowOptions, forceNodeKeys }
+      : inheritedWindowOptions;
+    return renderReaderBlockPlan(
+      section,
+      readerRenderTreeHeightLedger.plan(
+        visibleBlocks.map(createReaderBlockRenderTreeNode),
+        effectiveWindowOptions,
+        READER_BLOCK_TREE_LAYOUT
+      ),
+      effectiveWindowOptions
+    );
+  }
+
+  function getVisibleReaderBlocks(
+    section: VisualSection,
+    blocks: VisualBlock[],
+    listOrdering: boolean
+  ): VisualBlock[] {
+    const viewContext = getActiveReaderViewContext();
+    const searchContext = getActiveSearchFilterContext();
+    return (listOrdering ? orderReaderListBlocks(blocks) : orderReaderBlocks(blocks)).filter((block) => (
+      !isAnchoredReaderButton(section, block)
+      && !isViewerHiddenBlock(block)
+      && !hasReaderViewModifier(viewContext, getBlockReaderViewTargetKey(block), 'hidden')
+      && isBlockSearchVisible(searchContext, block)
+    ));
+  }
+
+  function renderReaderBlockPlan(
+    section: VisualSection,
+    entries: Array<RenderTreeWindowEntry<ReaderRenderTreeItem>>,
+    windowOptions?: ReaderRenderTreeWindowOptions
+  ): string {
+    const output: string[] = [];
+    for (let index = 0; index < entries.length;) {
+      const entry = entries[index];
+      if (!entry) break;
+      if (entry.shouldRender) {
+        output.push(withReaderRenderTreeWindow(entry, windowOptions, () => renderReaderBlock(section, entry.node.item as VisualBlock)));
+        index += 1;
+        continue;
+      }
+      const chunk: Array<RenderTreeWindowEntry<ReaderRenderTreeItem>> = [];
+      while (index + chunk.length < entries.length && chunk.length < 20) {
+        const candidate = entries[index + chunk.length];
+        if (!candidate || candidate.shouldRender) break;
+        chunk.push(candidate);
+      }
+      if (chunk.length === 0) {
+        index += 1;
+        continue;
+      }
+      const estimatedHeight = chunk.reduce((total, candidate) => total + candidate.estimatedHeight, 0);
+      const blockIds = chunk.map((candidate) => (candidate.node.item as VisualBlock).id).join(' ');
+      output.push(`<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block-range" data-section-key="${deps.escapeAttr(section.key)}" data-block-ids="${deps.escapeAttr(blockIds)}" style="min-height: ${Math.ceil(estimatedHeight)}px;" aria-hidden="true"></div>`);
+      index += chunk.length;
+    }
+    return output.join('');
+  }
+
+  function withReaderRenderTreeWindow(
+    entry: RenderTreeWindowEntry<ReaderRenderTreeItem>,
+    windowOptions: ReaderRenderTreeWindowOptions | undefined,
+    render: () => string
+  ): string {
+    const previous = activeReaderRenderTreeWindowOptions;
+    activeReaderRenderTreeWindowOptions = createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop) ?? null;
+    try {
+      return render();
+    } finally {
+      activeReaderRenderTreeWindowOptions = previous;
+    }
   }
 
   function renderReaderPreviewBlocks(section: VisualSection, blocks: VisualBlock[]): string {
@@ -661,7 +879,46 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderReaderListBlocks(section: VisualSection, blocks: VisualBlock[]): string {
-    return orderReaderListBlocks(blocks).map((block) => renderReaderBlock(section, block)).join('');
+    const visibleBlocks = getVisibleReaderBlocks(section, blocks, true);
+    const inheritedWindowOptions = activeReaderRenderTreeWindowOptions ? {
+      ...activeReaderRenderTreeWindowOptions,
+      layoutOffsetTop: (activeReaderRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 64,
+    } : undefined;
+    return renderReaderBlockPlan(
+      section,
+      readerRenderTreeHeightLedger.plan(
+        visibleBlocks.map(createReaderBlockRenderTreeNode),
+        inheritedWindowOptions,
+        READER_BLOCK_TREE_LAYOUT
+      ),
+      inheritedWindowOptions
+    );
+  }
+
+  function renderReaderGridBlocks(
+    section: VisualSection,
+    blocks: VisualBlock[],
+    columns: number,
+    renderOptions?: ReaderBlockRenderOptions
+  ): Array<{ block: VisualBlock; html: string }> {
+    const visibleBlocks = getVisibleReaderBlocks(section, blocks, false);
+    const activeResultBlockId = state.search.results.find((result) => result.id === state.search.activeResultId)?.blockId;
+    const nestedWindowOptions = activeReaderRenderTreeWindowOptions ? {
+      ...activeReaderRenderTreeWindowOptions,
+      layoutOffsetTop: (activeReaderRenderTreeWindowOptions.layoutOffsetTop ?? 0) + 64,
+      layoutColumns: columns,
+      ...(activeResultBlockId ? { forceNodeKeys: new Set([activeResultBlockId]) } : {}),
+    } : undefined;
+    return readerRenderTreeHeightLedger.plan(
+      visibleBlocks.map(createReaderBlockRenderTreeNode),
+      nestedWindowOptions,
+      READER_BLOCK_TREE_LAYOUT
+    ).map((entry) => ({
+      block: entry.node.item as VisualBlock,
+      html: entry.shouldRender
+        ? withReaderRenderTreeWindow(entry, nestedWindowOptions, () => renderReaderBlock(section, entry.node.item as VisualBlock, renderOptions))
+        : `<div class="hvy-section-virtual-placeholder" data-hvy-virtual-placeholder="true" data-hvy-virtual-kind="reader-block" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr((entry.node.item as VisualBlock).id)}"${renderOptions?.trimVerticalEdgeMargin ? ' data-reader-trim-vertical-edge-margin="true"' : ''} style="min-height: ${Math.ceil(entry.estimatedHeight)}px;" aria-hidden="true"></div>`,
+    }));
   }
 
   function orderReaderSections(sections: VisualSection[]): VisualSection[] {
@@ -2218,6 +2475,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderSidebarHelpBalloon,
     renderReaderSection,
     renderReaderBlock,
+    renderReaderGridBlocks,
     renderReaderBlocks,
     renderReaderListBlocks,
     orderReaderBlocks,
@@ -2227,5 +2485,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     renderModal,
     renderLinkInlineModal,
     renderWarnings,
+    recordReaderSectionHeight,
+    recordReaderBlockHeight,
   };
 }

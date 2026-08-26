@@ -721,7 +721,7 @@ hvy_version: 0.1
   const runtime = createScriptingRuntime({ document });
 
   expect(runtime.doc.cli.run('cat /id/note/raw.hvy')).toContain('Before');
-  expect(runtime.doc.cli.write('/id/note/text.json', '{ "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
+  expect(runtime.doc.cli.write('/id/note/text.json', '{ "id": "note", "css": "margin: 0;" }')).toBe('/id/note/text.json: written');
   expect(() => runtime.doc.cli.write('/id/note/raw.hvy', '<!--hvy:text {"id":"note"}-->\n After')).toThrow(
     'doc.cli.write does not write raw.hvy files.'
   );

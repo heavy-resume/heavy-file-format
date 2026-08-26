@@ -1251,12 +1251,15 @@ export function isActiveEditorSectionTitle(sectionKey: string): boolean {
 export function getComponentRenderHelpers(editorRenderer: {
   renderRichToolbar: ComponentRenderHelpers['renderRichToolbar'];
   renderEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[], parentLocked?: boolean) => string;
+  renderEditorNestedBlocks: ComponentRenderHelpers['renderEditorNestedBlocks'];
+  renderEditorGridBlocks: ComponentRenderHelpers['renderEditorGridBlocks'];
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock, sections: import('./editor/types').VisualSection[]) => string;
   renderTextFragment: ComponentRenderHelpers['renderTextFragment'];
   renderComponentFragment: ComponentRenderHelpers['renderComponentFragment'];
   renderComponentPlacementTarget: ComponentRenderHelpers['renderComponentPlacementTarget'];
 }, readerRenderer: {
   renderReaderBlock: ComponentRenderHelpers['renderReaderBlock'];
+  renderReaderGridBlocks: ComponentRenderHelpers['renderReaderGridBlocks'];
   renderReaderBlocks: ComponentRenderHelpers['renderReaderBlocks'];
   renderReaderListBlocks: ComponentRenderHelpers['renderReaderListBlocks'];
   orderReaderBlocks: ComponentRenderHelpers['orderReaderBlocks'];
@@ -1292,8 +1295,11 @@ export function getComponentRenderHelpers(editorRenderer: {
     })),
     renderRichToolbar: editorRenderer.renderRichToolbar,
     renderEditorBlock: (sectionKey, block, parentLocked) => editorRenderer.renderEditorBlock(sectionKey, block, state.document.sections, parentLocked),
+    renderEditorNestedBlocks: editorRenderer.renderEditorNestedBlocks,
+    renderEditorGridBlocks: editorRenderer.renderEditorGridBlocks,
     renderPassiveEditorBlock: (sectionKey, block) => editorRenderer.renderPassiveEditorBlock(sectionKey, block, state.document.sections),
     renderReaderBlock: readerRenderer.renderReaderBlock,
+    renderReaderGridBlocks: readerRenderer.renderReaderGridBlocks,
     renderReaderBlocks: readerRenderer.renderReaderBlocks,
     renderReaderListBlocks: readerRenderer.renderReaderListBlocks,
     orderReaderBlocks: readerRenderer.orderReaderBlocks,

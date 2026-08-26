@@ -73,37 +73,11 @@ function renderContainerPlacementBlockList(
 ): string {
   const blocks = block.schema.containerBlocks;
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
-  const output: string[] = [];
-  if (!locked && blocks.length > 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container: 'container',
-      sectionKey,
-      parentBlockId: block.id,
-      placement: 'before',
-      targetBlockId: blocks[0]?.id,
-    }));
-  }
-  for (const innerBlock of blocks) {
-    output.push(helpers.renderEditorBlock(sectionKey, innerBlock, locked));
-    if (!locked) {
-      output.push(helpers.renderComponentPlacementTarget({
-        container: 'container',
-        sectionKey,
-        parentBlockId: block.id,
-        placement: 'after',
-        targetBlockId: innerBlock.id,
-      }));
-    }
-  }
-  if (!locked && blocks.length === 0) {
-    output.push(helpers.renderComponentPlacementTarget({
-      container: 'container',
-      sectionKey,
-      parentBlockId: block.id,
-      placement: 'end',
-    }));
-  }
-  return output.join('');
+  return helpers.renderEditorNestedBlocks(sectionKey, blocks, {
+    container: 'container',
+    parentBlockId: block.id,
+    locked,
+  });
 }
 
 export const renderContainerReader: ComponentReaderRenderer = (section, block, helpers) => {

@@ -56,8 +56,8 @@ import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from '
 import { recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
-import { virtualizeRenderedSections } from './section-virtualizer';
-import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
+import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import {
   createDocumentChangeApi,
   type HvyDocumentChangeCallback,
@@ -382,6 +382,8 @@ function localGetComponentRenderHelpers() {
     {
       renderRichToolbar: renderLightweightRichToolbar,
       renderEditorBlock: () => '',
+      renderEditorNestedBlocks: () => '',
+      renderEditorGridBlocks: () => [],
       renderPassiveEditorBlock: () => '',
       renderTextFragment,
       renderComponentFragment,
@@ -582,6 +584,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const renderer = ensureReaderRenderer();
   const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
   const capturedScroll = captureRenderScroll(root, state.paneScroll, pendingPaneScrollRestore);
+  const readerViewportHeight = root.querySelector<HTMLElement>('#readerDocument')?.clientHeight ?? window.innerHeight;
   state.paneScroll = capturedScroll.paneScroll;
   state.pendingPaneScrollRestore = null;
   applyTheme();
@@ -606,7 +609,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${readerSidebarSectionsHtml}</div>
                 </div>
               </aside>` : ''}
-            <div id="readerDocument" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface">${renderer.renderReaderSections(state.document.sections)}</div>
+            <div id="readerDocument" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface">${renderer.renderReaderSections(state.document.sections, {
+              scrollTop: capturedScroll.paneScroll.readerTop,
+              viewportHeight: readerViewportHeight,
+            })}</div>
           </div>
         </div>
       </section>
@@ -623,12 +629,14 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
-    afterRestore: (scope) => {
+    materializeSection: (placeholder) => runWithStateRuntime(runtime, () => materializeReaderVirtualSection(placeholder, renderer)),
+    onSectionMeasured: (sectionKey, kind, height, blockId) => runWithStateRuntime(runtime, () => recordReaderVirtualSectionHeight(renderer, sectionKey, kind, height, blockId)),
+    afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
-      void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
-    },
+      void runButtonVisibilityScriptsIfNeeded(scope);
+    }),
   });
   bindLazyImageHydration(root);
   syncTextToolbarLayout(root);
@@ -680,7 +688,10 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   }
   if (reader && surface !== 'sidebar') {
     let phaseStartedAt = nowMs();
-    const readerHtml = renderer.renderReaderSections(state.document.sections);
+    const readerHtml = renderer.renderReaderSections(state.document.sections, {
+      scrollTop: reader.scrollTop,
+      viewportHeight: reader.clientHeight,
+    });
     readerRenderMs = elapsedMs(phaseStartedAt);
     phaseStartedAt = nowMs();
     reader.innerHTML = readerHtml;
@@ -697,14 +708,16 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   const lazyStartedAt = nowMs();
   virtualizeRenderedSections({
     root: currentRoot,
-    afterRestore: (scope) => {
+    materializeSection: (placeholder) => runWithStateRuntime(runtime, () => materializeReaderVirtualSection(placeholder, renderer)),
+    onSectionMeasured: (sectionKey, kind, height, blockId) => runWithStateRuntime(runtime, () => recordReaderVirtualSectionHeight(renderer, sectionKey, kind, height, blockId)),
+    afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
-        void runWithStateRuntime(runtime, () => runButtonVisibilityScriptsIfNeeded(scope));
+        void runButtonVisibilityScriptsIfNeeded(scope);
       }
-    },
+    }),
   });
   lazyMs = elapsedMs(lazyStartedAt);
   bindLazyImageHydration(currentRoot);
@@ -728,6 +741,48 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
     surface,
   });
+}
+
+function materializeReaderVirtualSection(placeholder: HTMLElement, renderer: ReaderRenderer): HTMLElement | HTMLElement[] | null {
+  const sectionKey = placeholder.dataset.sectionKey ?? '';
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader') {
+    const scroller = placeholder.closest<HTMLElement>('.reader-document');
+    return createReaderSectionElement(placeholder.ownerDocument, renderer, section, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 44,
+    } : undefined);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block') {
+    const block = findBlockByIds(sectionKey, placeholder.dataset.blockId ?? '');
+    return block ? createReaderBlockElement(placeholder.ownerDocument, renderer, section, block) : null;
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block-range') {
+    return (placeholder.dataset.blockIds?.split(' ').filter(Boolean) ?? []).flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block ? createReaderBlockElement(placeholder.ownerDocument, renderer, section, block) : null;
+      return element ? [element] : [];
+    });
+  }
+  return null;
+}
+
+function recordReaderVirtualSectionHeight(
+  renderer: ReaderRenderer,
+  sectionKey: string,
+  kind: string,
+  height: number,
+  blockId?: string
+): void {
+  if (kind === 'reader') {
+    renderer.recordReaderSectionHeight(sectionKey, height);
+  } else if (kind === 'reader-block' && blockId) {
+    renderer.recordReaderBlockHeight(sectionKey, blockId, height);
+  }
 }
 
 function refreshReaderBlock(root: ParentNode, sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {

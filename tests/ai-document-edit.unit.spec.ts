@@ -5170,8 +5170,8 @@ hvy_version: 0.1
   expect(result.error).toBeNull();
   const grepResult = lastToolResultBeforeCall(1);
   expect(grepResult).toContain('Match 1 of 1 (component_id="long-text")');
-  expect(grepResult).toContain(`  12 | ${' '.repeat(2)}${'a'.repeat(398)}`);
-  expect(grepResult).toContain(`  13 | ${'a'.repeat(12)}wrapped-needle`);
+  expect(grepResult).toContain(`  13 | ${' '.repeat(2)}${'a'.repeat(398)}`);
+  expect(grepResult).toContain(`  14 | ${'a'.repeat(12)}wrapped-needle`);
 });
 
 test('requestAiDocumentEditTurn can get css and css properties for ids', async () => {
@@ -5308,7 +5308,7 @@ title: Existing
 
   expect(() => executePatchHeaderTool({
     tool: 'patch_header',
-    edits: [{ op: 'replace', start_line: 3, end_line: 4, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
+    edits: [{ op: 'replace', start_line: 4, end_line: 5, text: 'section_defaults:\n  wrapper_style: "margin-bottom: 24px;"' }],
   }, document)).toThrow('section_defaults only supports the "css" and "contained" fields. Unsupported field: wrapper_style.');
   expect(document.meta.section_defaults).toEqual({ css: 'margin: 0 0 0.5rem;' });
   expect(document.meta.title).toBe('Existing');
@@ -5392,6 +5392,7 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toBe(`---
 hvy_version: 0.1
 reader_max_width: 60rem
+sidebar_max_width: 40rem
 section_defaults:
   css: "margin: 0 0 0.5rem;"
 ---
@@ -5910,7 +5911,7 @@ hvy_version: 0.1
   expect(helpResult).toContain('Tool result for get_help:');
   expect(helpResult).toContain('Form (hvy.form)');
   expect(helpResult).toContain('Supported form YAML keys include `fields`');
-  expect(helpResult).toContain('Form-level behavior keys live in pluginConfig');
+  expect(helpResult).toContain('Form-level behavior and styling keys live in pluginConfig');
   expect(helpResult).toContain('Form scripts receive `doc` plus `doc.form`');
   expect(helpResult).toContain('Use `doc.form.get_value`');
   expect(helpResult).not.toContain('doc.db.query');

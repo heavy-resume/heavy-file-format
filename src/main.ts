@@ -53,10 +53,11 @@ import { setReferenceAppConfig } from './reference-config';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createEditorBlockElement, createEditorSectionElement, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
-import { virtualizeRenderedSections } from './section-virtualizer';
+import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { renderNewDocumentModal } from './new-document-modal';
 import { normalizePdfStylePresets } from './pdf-style-presets';
@@ -703,6 +704,8 @@ function renderApp(): void {
   let stepStartedAt = performance.now();
   const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
   const capturedScroll = captureRenderScroll(app, state.paneScroll, pendingPaneScrollRestore);
+  const editorViewportHeight = app.querySelector<HTMLElement>('#editorTree')?.clientHeight ?? window.innerHeight;
+  const readerViewportHeight = app.querySelector<HTMLElement>('#readerDocument')?.clientHeight ?? window.innerHeight;
   state.paneScroll = capturedScroll.paneScroll;
   state.pendingPaneScrollRestore = null;
   captureMs = performance.now() - stepStartedAt;
@@ -807,7 +810,10 @@ function renderApp(): void {
                         ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
                       </div>
                     </aside>`}
-                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
+                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections, {
+                    scrollTop: capturedScroll.paneScroll.editorTop,
+                    viewportHeight: editorViewportHeight,
+                  })}</div>
                 </div>`}`
       : `<div${renderResponsivePreviewFrameAttrs(
         `viewer-shell ${pdfDocument && !isAiView ? 'phvy-viewer-shell ' : ''}${isAiView ? 'ai-view-shell ' : ''}${state.contextMenu ? 'is-context-menu-open ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}`,
@@ -824,7 +830,10 @@ function renderApp(): void {
                          <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                        </div>
                      </aside>` : ''}
-                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections, isViewerView ? {
+                     scrollTop: capturedScroll.paneScroll.readerTop,
+                     viewportHeight: readerViewportHeight,
+                   } : undefined)}</div>
                    ${isAiView ? renderAiModeHint(state, { escapeAttr, escapeHtml }) : ''}
                    ${renderContextMenu()}
                    ${isAiView
@@ -880,6 +889,8 @@ function renderApp(): void {
   scheduleReaderHighlightGlow(app);
   virtualizeRenderedSections({
     root: app,
+    materializeSection: materializeVirtualSection,
+    onSectionMeasured: recordVirtualSectionHeight,
     afterRestore: (scope) => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
@@ -1206,6 +1217,8 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
     const lazyStartedAt = nowMs();
     virtualizeRenderedSections({
       root: app,
+      materializeSection: materializeVirtualSection,
+      onSectionMeasured: recordVirtualSectionHeight,
       afterRestore: (scope) => {
         reconcilePluginMounts(scope, { prune: false });
         syncTextToolbarLayout(scope);
@@ -1304,6 +1317,109 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
   return refreshed;
 }
 
+function refreshEditorSection(sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const refreshed = refreshEditorSectionDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  if (refreshed) {
+    virtualizeRenderedSections({
+      root: app,
+      materializeSection: materializeVirtualSection,
+      onSectionMeasured: recordVirtualSectionHeight,
+      afterRestore: (scope) => {
+        reconcilePluginMounts(scope, { prune: false });
+        syncTextToolbarLayout(scope);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(scope);
+        }
+        initializeCarouselReaders(scope);
+        bindLazyImageHydration(scope);
+      },
+    });
+  }
+  return refreshed;
+}
+
+function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTMLElement[] | null {
+  const sectionKey = placeholder.dataset.sectionKey ?? '';
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
+  if (placeholder.dataset.hvyVirtualKind === 'editor') {
+    const scroller = placeholder.closest<HTMLElement>('.editor-tree');
+    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
+      || !state.document.sections.some((candidate) => candidate === section);
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,
+    } : undefined);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader') {
+    const scroller = placeholder.closest<HTMLElement>('.reader-document');
+    return createReaderSectionElement(placeholder.ownerDocument, readerRenderer, section, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 44,
+    } : undefined);
+  }
+  const rangeBlockIds = placeholder.dataset.blockIds?.split(' ').filter(Boolean) ?? [];
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block
+        ? createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked)
+        : null;
+      return element ? [element] : [];
+    });
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block ? createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block) : null;
+      return element ? [element] : [];
+    });
+  }
+  const blockId = placeholder.dataset.blockId ?? '';
+  const block = blockId ? findBlockByIds(sectionKey, blockId) : null;
+  if (!block) {
+    return null;
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block') {
+    return createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block') {
+    return createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block);
+  }
+  return null;
+}
+
+function recordVirtualSectionHeight(sectionKey: string, kind: string, height: number, blockId?: string): void {
+  if (kind === 'editor') {
+    editorRenderer.recordEditorSectionHeight(sectionKey, height);
+  } else if (kind === 'reader') {
+    readerRenderer.recordReaderSectionHeight(sectionKey, height);
+  } else if (kind === 'editor-block' && blockId) {
+    editorRenderer.recordEditorBlockHeight(sectionKey, blockId, height);
+  } else if (kind === 'reader-block' && blockId) {
+    readerRenderer.recordReaderBlockHeight(sectionKey, blockId, height);
+  }
+}
+
 function refreshModalPreview(): void {
   if (!state.modalSectionKey) {
     return;
@@ -1397,6 +1513,7 @@ initCallbacks({
   refreshReaderPanels,
   refreshReaderSection,
   refreshReaderBlock,
+  refreshEditorSection,
   refreshModalPreview,
   observeLinks: () => { },
   componentRenderHelpers: localGetComponentRenderHelpers(),

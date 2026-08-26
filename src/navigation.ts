@@ -3,12 +3,12 @@ import { state } from './state';
 import { getSectionId } from './section-ops';
 import { resolveBaseComponent } from './component-defs';
 import { createBlankDocument } from './document-factory';
-import { getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
+import { getRefreshReaderBlock, getRefreshReaderPanels, getRefreshReaderSection, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { clearChatConversation } from './chat/chat';
 import { serializeDocument } from './serialization';
 import { saveSessionState } from './state-persistence';
 import { createDefaultSearchState } from './search/state';
-import { restoreVirtualizedSection } from './section-virtualizer';
+import { restoreVirtualizedBlock, restoreVirtualizedSection } from './section-virtualizer';
 import type { VisualDocument } from './types';
 import { resetReferenceDocumentDirtyBaseline } from './reference-document-dirty';
 import { setCurrentSearchMatch } from './search/current-match';
@@ -28,8 +28,11 @@ function setReaderSectionExpanded(section: VisualSection, expanded: boolean): vo
   state.readerContainerState[key] = expanded;
 }
 
-export function getReaderSectionExpandedOverride(section: VisualSection): boolean | undefined {
-  return state.readerContainerState[`${READER_SECTION_EXPANDED_STATE_PREFIX}${section.key}`];
+export function getReaderSectionExpandedOverride(
+  section: VisualSection,
+  readerContainerState: Record<string, boolean> = state.readerContainerState,
+): boolean | undefined {
+  return readerContainerState[`${READER_SECTION_EXPANDED_STATE_PREFIX}${section.key}`];
 }
 
 /**
@@ -176,7 +179,26 @@ function requestTargetHighlight(
 ): void {
   const run = () => {
     if (context.sectionKey) {
-      restoreVirtualizedSection(app, context.sectionKey);
+      const placeholder = app.querySelector<HTMLElement>(
+        `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader"][data-section-key="${CSS.escape(context.sectionKey)}"]`
+      );
+      if (placeholder && !getRefreshReaderSection()(app, context.sectionKey, { runVisibilityScripts: false })) {
+        restoreVirtualizedSection(app, context.sectionKey);
+      }
+      if (target.blockId) {
+        const directBlockPlaceholder = app.querySelector<HTMLElement>(
+          `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block"][data-section-key="${CSS.escape(context.sectionKey)}"][data-block-id="${CSS.escape(target.blockId)}"]`
+        );
+        const rangeBlockPlaceholder = Array.from(app.querySelectorAll<HTMLElement>(
+          `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="reader-block-range"][data-section-key="${CSS.escape(context.sectionKey)}"]`
+        )).find((candidate) => candidate.dataset.blockIds?.split(' ').includes(target.blockId ?? ''));
+        const refreshedDirectBlock = directBlockPlaceholder
+          ? getRefreshReaderBlock()(app, context.sectionKey, target.blockId, { runVisibilityScripts: false })
+          : false;
+        if ((directBlockPlaceholder || rangeBlockPlaceholder) && !refreshedDirectBlock) {
+          restoreVirtualizedBlock(app, context.sectionKey, target.blockId);
+        }
+      }
     }
     const element = findReaderTargetElement(app, target);
     if (!element) {

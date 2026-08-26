@@ -240,6 +240,7 @@ test('reader view rendering applies hidden, dimmed, highlight, and generic colla
     responsivePreview: 'full' as const,
     readerExpandableState: {},
     readerContainerState: {},
+    searchRevealedAncestors: {},
     readerView: {
       first: ['dimmed'],
       second: ['hidden'],
@@ -349,6 +350,7 @@ print("maintenance script")
     responsivePreview: 'full' as const,
     readerExpandableState: {},
     readerContainerState: {},
+    searchRevealedAncestors: {},
     readerView: {},
     search: createDefaultSearchState(),
     readerViewActivatedTargets: new Set<string>(),

@@ -4,7 +4,7 @@ import type { VisualBlock, VisualSection } from '../../types';
 import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
 import { getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
-import { state, getRefreshReaderPanels, getRenderApp } from '../../../state';
+import { state, getRefreshEditorSection, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
 import { recordHistory } from '../../../history';
@@ -803,6 +803,12 @@ export const renderImageReader: ComponentReaderRenderer = (_section, block, help
   return `<div class="image-reader">${renderPreview(block, helpers)}</div>`;
 };
 
+function refreshImageEditorSection(sectionKey: string): void {
+  if (!getRefreshEditorSection()(sectionKey)) {
+    getRenderApp()();
+  }
+}
+
 export function applyImagePreset(sectionKey: string, blockId: string, preset: string): void {
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) return;
@@ -812,7 +818,7 @@ export function applyImagePreset(sectionKey: string, blockId: string, preset: st
   block.schema.css = merged;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export function useExistingImageAttachment(sectionKey: string, blockId: string, filename: string): void {
@@ -825,7 +831,7 @@ export function useExistingImageAttachment(sectionKey: string, blockId: string, 
   }
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export function deleteUnusedImageAttachment(filename: string): void {
@@ -868,7 +874,7 @@ export function deleteCurrentImageAttachment(sectionKey: string, blockId: string
   block.schema.caption = null;
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
-  getRenderApp()();
+  refreshImageEditorSection(sectionKey);
 }
 
 function countSectionImageReferences(section: VisualSection, filename: string): number {
@@ -910,7 +916,8 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   }
   clearImageBlobUrlCache();
   syncReusableTemplateForBlock(sectionKey, blockId);
-  getRenderApp()();
+  getRefreshReaderPanels()();
+  refreshImageEditorSection(sectionKey);
 }
 
 export async function storeImageAttachment(filename: string, mediaType: string, bytes: Uint8Array): Promise<void> {

@@ -41,6 +41,12 @@
   margin-inline: auto;
 }
 
+.hvy-document .editor-document-tail {
+  width: 1px;
+  height: 0;
+  pointer-events: none;
+}
+
 .hvy-document .editor-sidebar {
   position: absolute;
   inset: 0 auto 0 0;
@@ -379,4 +385,3 @@
 .hvy-document .editor-sidebar-empty {
   padding: 0.5rem 0;
 }
-

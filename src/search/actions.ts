@@ -2,8 +2,8 @@ import { builtInSearchProvider } from './search-provider';
 import { createDocumentFilterSnapshot } from './document-filter';
 import { getReferenceAppConfig } from '../reference-config';
 import { navigateToReaderTarget, setEditorSidebarOpen } from '../navigation';
-import { restoreVirtualizedSection } from '../section-virtualizer';
-import { state, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
+import { restoreVirtualizedBlock, restoreVirtualizedSection } from '../section-virtualizer';
+import { state, getRefreshEditorSection, getRenderApp, getRefreshReaderPanels, getRefreshSearchSurface } from '../state';
 import type {
   HvySearchResult,
   SearchCategory,
@@ -223,7 +223,15 @@ const EDITOR_SEARCH_TARGET_ATTEMPTS = 8;
 
 function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement, attempt = 0): void {
   alignEditorSidebarToSearchResult(result, app);
-  restoreVirtualizedSection(app, result.sectionKey);
+  const sectionPlaceholder = app.querySelector<HTMLElement>(
+    `.hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"][data-section-key="${CSS.escape(result.sectionKey)}"]`
+  );
+  if (sectionPlaceholder && !getRefreshEditorSection()(result.sectionKey)) {
+    restoreVirtualizedSection(app, result.sectionKey);
+  }
+  if (result.blockId) {
+    restoreVirtualizedBlock(app, result.sectionKey, result.blockId);
+  }
   const target = findEditorSearchTarget(result, app);
   if (!target) {
     if (attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
@@ -236,6 +244,7 @@ function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement,
     });
     return;
   }
+  pinEditorSearchTarget(target);
   const marker = findEditorSearchMarker(target, result.matchedText, result.matchOrdinal);
   const wantsSearchMarker = state.search.submittedQuery.trim().length > 0 && Boolean(result.matchedText?.trim());
   if (wantsSearchMarker && !marker && attempt < EDITOR_SEARCH_TARGET_ATTEMPTS) {
@@ -244,12 +253,16 @@ function navigateToEditorSearchTarget(result: HvySearchResult, app: HTMLElement,
   }
   setCurrentSearchMatch(app, marker);
   scrollEditorSearchTargetIntoView(marker ?? target);
-  if (!marker) {
-    target.classList.add('is-temp-highlighted');
-    window.setTimeout(() => {
-      target.classList.remove('is-temp-highlighted');
-    }, 1400);
+}
+
+function pinEditorSearchTarget(target: HTMLElement): void {
+  if (target.classList.contains('is-temp-highlighted')) {
+    return;
   }
+  target.classList.add('is-temp-highlighted');
+  window.setTimeout(() => {
+    target.classList.remove('is-temp-highlighted');
+  }, 1400);
 }
 
 function alignEditorSidebarToSearchResult(result: HvySearchResult, app: HTMLElement): void {

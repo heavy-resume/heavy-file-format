@@ -29,8 +29,23 @@ function createHelpers(advanced = false): ComponentRenderHelpers {
     markdownToEditorHtml: (markdown) => markdown,
     renderRichToolbar: () => '',
     renderEditorBlock: (_sectionKey, block) => `<div data-rendered="${block.schema.component}"></div>`,
+    renderEditorNestedBlocks(sectionKey, blocks, options) {
+      return blocks.map((block) => this.renderEditorBlock(sectionKey, block, options.locked)).join('');
+    },
+    renderEditorGridBlocks(sectionKey, blocks, _columns, parentLocked) {
+      return blocks.map((block) => ({
+        block,
+        html: this.renderEditorBlock(sectionKey, block, parentLocked),
+      }));
+    },
     renderPassiveEditorBlock: () => '',
     renderReaderBlock: () => '',
+    renderReaderGridBlocks(section, blocks, _columns, options) {
+      return blocks.map((block) => ({
+        block,
+        html: this.renderReaderBlock(section, block, options),
+      }));
+    },
     renderReaderBlocks: () => '',
     renderReaderListBlocks: () => '',
     orderReaderBlocks: (blocks) => blocks,

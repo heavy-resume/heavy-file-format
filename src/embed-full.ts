@@ -113,10 +113,11 @@ import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
-import { refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
+import { createEditorBlockElement, createEditorSectionElement, refreshEditorSectionDom } from './editor/surface-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
-import { virtualizeRenderedSections } from './section-virtualizer';
+import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import {
   buildImportPlanForDocument,
@@ -608,6 +609,8 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const runtime = getActiveStateRuntime();
   const pendingPaneScrollRestore = state.pendingPaneScrollRestore;
   const capturedScroll = captureRenderScroll(root, state.paneScroll, pendingPaneScrollRestore);
+  const editorViewportHeight = root.querySelector<HTMLElement>('#editorTree')?.clientHeight ?? window.innerHeight;
+  const readerViewportHeight = root.querySelector<HTMLElement>('#readerDocument')?.clientHeight ?? window.innerHeight;
   state.paneScroll = capturedScroll.paneScroll;
   state.pendingPaneScrollRestore = null;
   applyTheme();
@@ -644,7 +647,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                         ${editorRenderer.renderSidebarEditorSections(state.document.sections)}
                       </div>
                     </aside>`}
-                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections)}</div>
+                  <div id="editorTree" class="editor-tree">${editorRenderer.renderSectionEditorTree(state.document.sections, {
+                    scrollTop: capturedScroll.paneScroll.editorTop,
+                    viewportHeight: editorViewportHeight,
+                  })}</div>
                 </div>`
               : `<div class="viewer-shell ${pdfDocument && !isAi ? 'phvy-viewer-shell ' : ''}${isAi ? 'ai-view-shell ' : ''}${hasViewerSidebar ? (state.viewerSidebarOpen ? 'is-sidebar-open' : 'is-sidebar-closed') : 'has-no-sidebar'}"${pdfDocument && !isAi ? ` style="${renderPdfDocumentViewerThemeStyle(state.document, escapeAttr)}"` : ''}>
                   ${renderTransientNotice()}
@@ -657,7 +663,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                         <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                       </div>
                     </aside>` : ''}
-                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections)}</div>
+                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections, state.currentView === 'viewer' ? {
+                    scrollTop: capturedScroll.paneScroll.readerTop,
+                    viewportHeight: readerViewportHeight,
+                  } : undefined)}</div>
                   ${isAi ? `${renderAiModeHint(state, { escapeAttr, escapeHtml })}${renderAiEditPopover(state, { escapeAttr, escapeHtml, surface: 'embedded' })}` : ''}
                 </div>`
           }
@@ -696,12 +705,14 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   restoreRenderScroll(root, capturedScroll);
   virtualizeRenderedSections({
     root,
-    afterRestore: (scope) => {
+    materializeSection: (placeholder) => runWithStateRuntime(runtime, () => materializeVirtualSection(placeholder)),
+    onSectionMeasured: (sectionKey, kind, height, blockId) => runWithStateRuntime(runtime, () => recordVirtualSectionHeight(sectionKey, kind, height, blockId)),
+    afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
-      void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
-    },
+      void runButtonVisibilityScripts(scope);
+    }),
   });
   bindLazyImageHydration(root);
   centerPendingEditorSection(root);
@@ -867,14 +878,16 @@ function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   const lazyStartedAt = nowMs();
   virtualizeRenderedSections({
     root: currentRoot,
-    afterRestore: (scope) => {
+    materializeSection: (placeholder) => runWithStateRuntime(runtime, () => materializeVirtualSection(placeholder)),
+    onSectionMeasured: (sectionKey, kind, height, blockId) => runWithStateRuntime(runtime, () => recordVirtualSectionHeight(sectionKey, kind, height, blockId)),
+    afterRestore: (scope) => runWithStateRuntime(runtime, () => {
       reconcilePluginMounts(scope, { prune: false });
       syncTextToolbarLayout(scope);
       bindLazyImageHydration(scope);
       if (options.runVisibilityScripts !== false) {
-        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(scope));
+        void runButtonVisibilityScripts(scope);
       }
-    },
+    }),
   });
   lazyMs = elapsedMs(lazyStartedAt);
   bindLazyImageHydration(currentRoot);
@@ -962,6 +975,112 @@ function refreshReaderSection(root: ParentNode, sectionKey: string, options: { r
     visibilityScriptsSkipped: options.runVisibilityScripts === false,
   });
   return refreshed;
+}
+
+function refreshEditorSection(sectionKey: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  if (!currentRoot) {
+    return false;
+  }
+  const runtime = getActiveStateRuntime();
+  const refreshed = refreshEditorSectionDom({
+    root: currentRoot,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  if (refreshed) {
+    virtualizeRenderedSections({
+      root: currentRoot,
+      materializeSection: (placeholder) => runWithStateRuntime(runtime, () => materializeVirtualSection(placeholder)),
+      onSectionMeasured: (sectionKey, kind, height, blockId) => runWithStateRuntime(runtime, () => recordVirtualSectionHeight(sectionKey, kind, height, blockId)),
+      afterRestore: (scope) => runWithStateRuntime(runtime, () => {
+        reconcilePluginMounts(scope, { prune: false });
+        syncTextToolbarLayout(scope);
+        bindLazyImageHydration(scope);
+        if (options.runVisibilityScripts !== false) {
+          void runButtonVisibilityScripts(scope);
+        }
+      }),
+    });
+  }
+  return refreshed;
+}
+
+function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTMLElement[] | null {
+  const sectionKey = placeholder.dataset.sectionKey ?? '';
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
+    return null;
+  }
+  const parentLocked = section.lock || placeholder.dataset.parentLocked === 'true';
+  if (placeholder.dataset.hvyVirtualKind === 'editor') {
+    const scroller = placeholder.closest<HTMLElement>('.editor-tree');
+    const isSubsection = placeholder.dataset.hvyVirtualSubsection === 'true'
+      || !state.document.sections.some((candidate) => candidate === section);
+    return createEditorSectionElement(placeholder.ownerDocument, editorRenderer, section, state.document.sections, isSubsection, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 90,
+    } : undefined);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader') {
+    const scroller = placeholder.closest<HTMLElement>('.reader-document');
+    return createReaderSectionElement(placeholder.ownerDocument, readerRenderer, section, scroller ? {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight,
+      layoutOffsetTop: getVirtualElementLayoutOffsetTop(placeholder, scroller) + 44,
+    } : undefined);
+  }
+  const rangeBlockIds = placeholder.dataset.blockIds?.split(' ').filter(Boolean) ?? [];
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block
+        ? createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked)
+        : null;
+      return element ? [element] : [];
+    });
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block-range') {
+    return rangeBlockIds.flatMap((blockId) => {
+      const block = findBlockByIds(sectionKey, blockId);
+      const element = block ? createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block) : null;
+      return element ? [element] : [];
+    });
+  }
+  const blockId = placeholder.dataset.blockId ?? '';
+  const block = blockId ? findBlockByIds(sectionKey, blockId) : null;
+  if (!block) {
+    return null;
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'editor-block') {
+    return createEditorBlockElement(placeholder.ownerDocument, editorRenderer, sectionKey, block, state.document.sections, parentLocked);
+  }
+  if (placeholder.dataset.hvyVirtualKind === 'reader-block') {
+    return createReaderBlockElement(placeholder.ownerDocument, readerRenderer, section, block);
+  }
+  return null;
+}
+
+function recordVirtualSectionHeight(sectionKey: string, kind: string, height: number, blockId?: string): void {
+  if (kind === 'editor') {
+    editorRenderer.recordEditorSectionHeight(sectionKey, height);
+  } else if (kind === 'reader') {
+    readerRenderer.recordReaderSectionHeight(sectionKey, height);
+  } else if (kind === 'editor-block' && blockId) {
+    editorRenderer.recordEditorBlockHeight(sectionKey, blockId, height);
+  } else if (kind === 'reader-block' && blockId) {
+    readerRenderer.recordReaderBlockHeight(sectionKey, blockId, height);
+  }
 }
 
 function setLinkObserver(observer: HvyLinkObserver | null): void {
@@ -1084,6 +1203,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderBlock(target, sectionKey, blockId, options);
+    }),
+    refreshEditorSection: (sectionKey, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshEditorSection(sectionKey, options);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
       currentRoot = root;

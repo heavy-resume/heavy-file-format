@@ -29,8 +29,29 @@ export interface ComponentRenderHelpers {
   ) => string;
   renderRichToolbar: (sectionKey: string, blockId: string, options?: RichToolbarOptions) => string;
   renderEditorBlock: (sectionKey: string, block: VisualBlock, parentLocked?: boolean) => string;
+  renderEditorNestedBlocks: (
+    sectionKey: string,
+    blocks: VisualBlock[],
+    options: {
+      container: 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
+      parentBlockId: string;
+      locked: boolean;
+    }
+  ) => string;
+  renderEditorGridBlocks: (
+    sectionKey: string,
+    blocks: VisualBlock[],
+    columns: number,
+    parentLocked: boolean
+  ) => Array<{ block: VisualBlock; html: string }>;
   renderPassiveEditorBlock: (sectionKey: string, block: VisualBlock) => string;
   renderReaderBlock: (section: VisualSection, block: VisualBlock, options?: ReaderBlockRenderOptions) => string;
+  renderReaderGridBlocks: (
+    section: VisualSection,
+    blocks: VisualBlock[],
+    columns: number,
+    options?: ReaderBlockRenderOptions
+  ) => Array<{ block: VisualBlock; html: string }>;
   renderReaderBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   renderReaderListBlocks: (section: VisualSection, blocks: VisualBlock[]) => string;
   orderReaderBlocks: (blocks: VisualBlock[]) => VisualBlock[];

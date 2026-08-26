@@ -3616,7 +3616,7 @@ hvy_version: 0.1
   expect(afterDoneScrollTop).toBeGreaterThan(0);
 });
 
-test('cancel only compensates for expanded editor height traversed by downward scrolling', async ({ page }) => {
+test('cancel preserves the viewport anchor across editor height changes', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -3649,30 +3649,18 @@ hvy_version: 0.1
   await target.click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') });
   await expect(activeBlock).toBeVisible();
-  const unscrolledEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  const unscrolledExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  expect(Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(unscrolledEditorTop))).toBeLessThanOrEqual(2);
+  expect(Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unscrolledExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
-  const unchangedDoneEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  const unchangedDoneExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Done' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(unchangedDoneEditorTop))).toBeLessThanOrEqual(2);
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unchangedDoneExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
@@ -3680,23 +3668,13 @@ hvy_version: 0.1
     const { state } = await import(/* @vite-ignore */ '/src/state.ts');
     return state.pendingEditorActivation;
   })).toBeNull();
-  await tree.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'up';
-    delete node.dataset.activeEditorUserScrollStartTop;
-  });
   await tree.evaluate((node) => {
     node.scrollTop -= 100;
   });
-  const upwardEditorTop = await activeBlock.locator('.rich-editor').evaluate((node) => node.getBoundingClientRect().top);
+  const upwardExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.abs(Math.round(await target.evaluate((root) => {
-    const text = root.querySelector('.reader-block')?.firstChild;
-    if (!text) return Number.NaN;
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    return range.getBoundingClientRect().top;
-  })) - Math.round(upwardEditorTop))).toBeLessThanOrEqual(2);
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(upwardExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();
@@ -3704,24 +3682,15 @@ hvy_version: 0.1
     const { state } = await import(/* @vite-ignore */ '/src/state.ts');
     return state.pendingEditorActivation;
   })).toBeNull();
-  const cancelScrollStart = await tree.evaluate((node) => node.scrollTop);
-  await tree.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'down';
-    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
-  });
   await tree.evaluate((node) => {
     node.scrollTop += 300;
   });
   const cancelScrollBeforeClose = await tree.evaluate((node) => node.scrollTop);
-  const cancelExpectedResult = cancelScrollBeforeClose - Math.min(
-    cancelScrollBeforeClose - cancelScrollStart,
-    Math.max(0, await activeBlock.evaluate((node) => node.getBoundingClientRect().height) - passiveHeight)
-  );
   await expect(activeBlock).toHaveAttribute('data-passive-block-height', String(passiveHeight));
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
 
   await expect(target).toBeVisible();
-  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelExpectedResult));
+  await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelScrollBeforeClose));
 });
 
 test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
@@ -3787,8 +3756,6 @@ hvy_version: 0.1
     scroller.scrollTop += Math.max(0, editorRect.bottom - visibleBottom + 10);
   });
   await reader.evaluate((node) => {
-    node.dataset.activeEditorUserScrollDirection = 'down';
-    node.dataset.activeEditorUserScrollStartTop = String(node.scrollTop);
     node.scrollTop += 5;
   });
   const fullyVisibleScrollTop = await reader.evaluate((node) => node.scrollTop);

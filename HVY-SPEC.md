@@ -546,7 +546,7 @@ Image blocks reference a binary attachment stored in the document tail:
 Image block fields:
 - `imageFile`: REQUIRED string naming the attached file. The bytes are stored as a tail attachment with `id` `image:<imageFile>` (see §7.6). Filenames are unique per document; writing an image with an existing filename overwrites the prior bytes.
 - `imageAlt`: optional alternate text for the rendered image.
-- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component. Authoring tools SHOULD default caption schemas to centered text.
+- `caption`: optional text caption payload shaped as `{"text": string, "schema": text component schema}`. Caption text uses the same Markdown and styling behavior as a text component, including the text schema's inline `css`. Authoring tools SHOULD default caption schemas to centered text. Renderers SHOULD display caption text smaller than ordinary body text when the caption schema does not specify a `font-size`.
 - `allowDocumentImageReuse`: optional boolean controlling authoring UI. It
   defaults to `true`. When `false`, editors MUST omit controls that browse or
   select image attachments used elsewhere in the document while preserving

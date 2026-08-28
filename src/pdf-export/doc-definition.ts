@@ -23,6 +23,7 @@ import { resolvePdfExportStrategy } from './strategy';
 import {
   hasRenderablePdfTextBlock,
   normalizePdfTextInline,
+  renderPdfInlineMarkdown,
   renderPdfTextBlock,
   type PdfHeadingTextStyles,
   type PdfTextBlockStyle,
@@ -34,6 +35,7 @@ const PDF_SIDEBAR_WIDTH = 180;
 const PDF_SIDEBAR_COLUMN_GAP = 24;
 const PDF_CSS_REM_IN_POINTS = 12;
 const PDF_IMAGE_CSS_REM_IN_POINTS = 8;
+const PDF_DEFAULT_CAPTION_FONT_SIZE = 8;
 interface PdfLayoutContext {
   availableWidth: number;
 }
@@ -722,13 +724,13 @@ function resolveExpandablePane(
 function renderTableBlock(block: VisualBlock, layout: PdfLayoutContext): HvyPdfMakeNodeObject {
   const header = block.schema.tableShowHeader
     ? [block.schema.tableColumns.map((column) => ({
-        text: normalizePdfTextInline(column),
+        text: renderPdfInlineMarkdown(normalizePdfTextInline(column)),
         style: 'tableHeader',
         alignment: block.schema.tableColumnProperties?.[column]?.headerAlign ?? 'center',
       }))]
     : [];
   const rows = block.schema.tableRows.map((row) => row.cells.map((cell, index) => ({
-    text: normalizePdfTextInline(cell),
+    text: renderPdfInlineMarkdown(normalizePdfTextInline(cell)),
     style: 'paragraph',
     alignment: block.schema.tableColumnProperties?.[block.schema.tableColumns[index] ?? '']?.align ?? 'left',
   })));
@@ -802,7 +804,14 @@ function renderImageBlock(
   const image = renderImageNode(document, block.schema.imageFile, block.schema.imageAlt, resolved, layout, block.schema.css, hasCaption);
   const captionPayload = normalizeTextCaption(block.schema.caption);
   const caption = hasCaption && captionPayload
-    ? [renderPdfTextBlock(captionPayload.text, '', createCaptionPdfDecision(), captionPayload.schema.align)]
+    ? [renderPdfTextBlock(
+        captionPayload.text,
+        '',
+        createCaptionPdfDecision(),
+        captionPayload.schema.align,
+        getPdfCaptionTextStyle(document, captionPayload.schema.css),
+        getPdfHeadingTextStyles(document)
+      )]
     : [];
   const bounds = resolved.defaults.debugPageBounds ? [renderPdfDebugImageBounds(image, layout, hasCaption)] : [];
   return { stack: [...bounds, image, ...caption], unbreakable: true };
@@ -818,6 +827,13 @@ function createCaptionPdfDecision(): HvyPdfExportDecision {
     pageBreakBefore: false,
     pageBreakAfter: false,
     pdfStyle: {},
+  };
+}
+
+function getPdfCaptionTextStyle(document: VisualDocument, css: string): PdfTextBlockStyle {
+  return {
+    fontSize: PDF_DEFAULT_CAPTION_FONT_SIZE,
+    ...getPdfCssTextStyle(document, css),
   };
 }
 

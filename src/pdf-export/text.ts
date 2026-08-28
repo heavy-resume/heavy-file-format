@@ -193,7 +193,7 @@ function parsePdfTextLine(line: string): PdfTextLine | null {
   return { styleName: null, text: line };
 }
 
-function renderPdfInlineMarkdown(text: string): PdfInlineText {
+export function renderPdfInlineMarkdown(text: string): PdfInlineText {
   const inlineTokens = getMarkedInlineTokens(text);
   if (!inlineTokens.length) {
     return text;

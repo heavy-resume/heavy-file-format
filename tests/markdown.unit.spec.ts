@@ -14,6 +14,14 @@ import {
 import { renderedMarkdownHtmlToSearchText } from '../src/rendered-markdown-text';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 
+test('expected result: single tildes remain literal text in text components', () => {
+  expect(markdownToReaderHtml('Keep ~this~ literal')).toContain('<p>Keep ~this~ literal</p>');
+});
+
+test('expected result: double tildes render intentional strikethrough in text components', () => {
+  expect(markdownToReaderHtml('Strike ~~this~~ text')).toContain('<p>Strike <del>this</del> text</p>');
+});
+
 test('normalizes fully indented text so indentation alone does not imply code', () => {
   expect(normalizeMarkdownIndentation('    Seattle, WA')).toBe('Seattle, WA');
 });

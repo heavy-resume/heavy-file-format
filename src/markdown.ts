@@ -19,6 +19,13 @@ marked.use({
   renderer: {
     image: () => '',
   },
+  tokenizer: {
+    del: (source) => {
+      // Returning false delegates intentional double-tilde markup to Marked's
+      // tokenizer; returning nothing lets a single tilde remain ordinary text.
+      return source.startsWith('~~') ? false : undefined;
+    },
+  },
 });
 
 export const turndown = new TurndownService({

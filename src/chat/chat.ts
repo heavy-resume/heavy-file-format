@@ -997,7 +997,21 @@ export function traceAgentLoopEvent(params: AgentLoopTraceEventParams): void {
   });
 }
 
-export function getEnvChatSettings(env: ImportMetaEnv = import.meta.env): ChatSettings {
+interface ChatSettingsEnvironment {
+  VITE_HVY_CHAT_PROVIDER?: 'openai' | 'anthropic' | 'qwen';
+  VITE_HVY_CHAT_MODEL?: string;
+  VITE_HVY_CHAT_COMPACTION_PROVIDER?: string;
+  VITE_HVY_CHAT_COMPACTION_MODEL?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS?: string;
+  VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS?: string;
+  VITE_OPENAI_MODEL?: string;
+  VITE_ANTHROPIC_MODEL?: string;
+  VITE_QWEN_MODEL?: string;
+}
+
+export function getEnvChatSettings(env: ChatSettingsEnvironment): ChatSettings {
   const provider = env.VITE_HVY_CHAT_PROVIDER === 'anthropic' || env.VITE_HVY_CHAT_PROVIDER === 'qwen' ? env.VITE_HVY_CHAT_PROVIDER : 'openai';
   const providerDefaultModel = getDefaultModelForProvider(provider);
   const providerSpecificModel = provider === 'anthropic' ? env.VITE_ANTHROPIC_MODEL : provider === 'qwen' ? env.VITE_QWEN_MODEL : env.VITE_OPENAI_MODEL;
@@ -1020,7 +1034,19 @@ export function getDefaultModelForProvider(provider: ChatSettings['provider']): 
 }
 
 function getDefaultChatSettings(): ChatSettings {
-  return getEnvChatSettings();
+  return getEnvChatSettings({
+    VITE_HVY_CHAT_PROVIDER: import.meta.env.VITE_HVY_CHAT_PROVIDER,
+    VITE_HVY_CHAT_MODEL: import.meta.env.VITE_HVY_CHAT_MODEL,
+    VITE_HVY_CHAT_COMPACTION_PROVIDER: import.meta.env.VITE_HVY_CHAT_COMPACTION_PROVIDER,
+    VITE_HVY_CHAT_COMPACTION_MODEL: import.meta.env.VITE_HVY_CHAT_COMPACTION_MODEL,
+    VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES,
+    VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES,
+    VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_LATEST_TOOL_RESULT_CONTEXT_CHARS,
+    VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS: import.meta.env.VITE_HVY_CHAT_TOOL_LOOP_TOOL_RESULT_CHAT_CHARS,
+    VITE_OPENAI_MODEL: import.meta.env.VITE_OPENAI_MODEL,
+    VITE_ANTHROPIC_MODEL: import.meta.env.VITE_ANTHROPIC_MODEL,
+    VITE_QWEN_MODEL: import.meta.env.VITE_QWEN_MODEL,
+  });
 }
 
 function sanitizeChatSettings(settings: Partial<ChatSettings> | null | undefined, defaults: ChatSettings): ChatSettings {
@@ -1073,7 +1099,7 @@ function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-function readEnvToolLoopCompaction(env: ImportMetaEnv): ChatSettings['toolLoopCompaction'] | undefined {
+function readEnvToolLoopCompaction(env: ChatSettingsEnvironment): ChatSettings['toolLoopCompaction'] | undefined {
   const toolLoopCompaction = {
     compactAfterMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_COMPACT_AFTER_MESSAGES),
     keepRecentMessages: readOptionalEnvInteger(env.VITE_HVY_CHAT_TOOL_LOOP_KEEP_RECENT_MESSAGES),

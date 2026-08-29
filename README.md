@@ -113,7 +113,7 @@ VITE_HVY_CHAT_MODEL=gpt-5.4-mini
 Notes:
 - The browser only sees provider/model defaults.
 - API keys are consumed by the isolated local proxy in [`proxy/chat-proxy.ts`](proxy/chat-proxy.ts).
-- `VITE_OPENAI_API_KEY` / `VITE_ANTHROPIC_API_KEY` are still accepted as a dev fallback, but `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are preferred so keys are not exposed to the client bundle.
+- API-key variables must never use the `VITE_` prefix. The proxy accepts only the server-side `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `QWEN_API_KEY`, or `DASHSCOPE_API_KEY` names.
 
 The reference app's Ask This Document panel can switch between full-document,
 keyword retrieval, and embedding retrieval context. Choose Embedding retrieval,

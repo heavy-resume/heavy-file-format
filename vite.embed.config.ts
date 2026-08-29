@@ -1,12 +1,19 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { createBrythonMinimalVfsPlugin } from './src/plugins/scripting/brython-minimal-vfs-plugin';
 import { createHvyBuiltInPluginsPlugin } from './vite.config';
 
-export default defineConfig(({ mode }) => {
-  const env = { ...loadEnv(mode, '.', ''), HVY_LAZY_BUILT_INS: 'true' };
+export const HVY_EMBED_ENVIRONMENT_BOUNDARY = {
+  envDir: false,
+  envPrefix: [],
+} satisfies Pick<UserConfig, 'envDir' | 'envPrefix'>;
 
+export default defineConfig(() => {
   return {
-    plugins: [createBrythonMinimalVfsPlugin(), createHvyBuiltInPluginsPlugin(env)],
+    ...HVY_EMBED_ENVIRONMENT_BOUNDARY,
+    plugins: [
+      createBrythonMinimalVfsPlugin(),
+      createHvyBuiltInPluginsPlugin({ HVY_LAZY_BUILT_INS: 'true' }),
+    ],
     build: {
       outDir: 'dist-embed',
       emptyOutDir: true,

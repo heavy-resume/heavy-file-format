@@ -460,7 +460,7 @@ async function requestOpenAi(
   signal: AbortSignal | undefined,
   runId: string
 ): Promise<ProviderCompletion> {
-  const apiKey = resolveProviderApiKey('openai', env);
+  const apiKey = resolveServerProviderApiKey('openai', env);
   const upstreamRequest = buildOpenAiProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream openai request', upstreamRequest);
   writeTrace({
@@ -515,7 +515,7 @@ async function requestProviderToolTurn(
   signal: AbortSignal | undefined,
   runId: string
 ): Promise<ProviderCompletion> {
-  const apiKey = resolveProviderApiKey(body.provider, env);
+  const apiKey = resolveServerProviderApiKey(body.provider, env);
   const toolRequest = body as ProviderToolProxyChatRequest;
   const toolState = buildInitialProviderToolState(toolRequest);
   const upstreamRequest = buildProviderToolProxyRequest({
@@ -581,7 +581,7 @@ async function requestAnthropic(
   signal: AbortSignal | undefined,
   runId: string
 ): Promise<ProviderCompletion> {
-  const apiKey = resolveProviderApiKey('anthropic', env);
+  const apiKey = resolveServerProviderApiKey('anthropic', env);
   const upstreamRequest = buildAnthropicProxyRequest(body);
   console.debug('[hvy:chat-proxy] upstream anthropic request', upstreamRequest);
   writeTrace({
@@ -637,7 +637,7 @@ async function requestQwen(
   signal: AbortSignal | undefined,
   runId: string
 ): Promise<ProviderCompletion> {
-  const apiKey = resolveProviderApiKey('qwen', env);
+  const apiKey = resolveServerProviderApiKey('qwen', env);
   const upstreamRequest = buildProviderToolProxyRequest({
     ...(body as ProviderToolProxyChatRequest),
     tools: [],
@@ -673,12 +673,12 @@ async function requestQwen(
   return { output: turn.output, reasoningSummary: '', ...(usage ? { usage } : {}) };
 }
 
-function resolveProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
+export function resolveServerProviderApiKey(provider: ProxyChatRequest['provider'], env: Record<string, string | undefined>): string {
   const key = provider === 'openai'
-    ? firstNonEmptyString(env.OPENAI_API_KEY, env.VITE_OPENAI_API_KEY)
+    ? firstNonEmptyString(env.OPENAI_API_KEY)
     : provider === 'anthropic'
-    ? firstNonEmptyString(env.ANTHROPIC_API_KEY, env.VITE_ANTHROPIC_API_KEY)
-    : firstNonEmptyString(env.QWEN_API_KEY, env.DASHSCOPE_API_KEY, env.VITE_QWEN_API_KEY, env.VITE_DASHSCOPE_API_KEY);
+    ? firstNonEmptyString(env.ANTHROPIC_API_KEY)
+    : firstNonEmptyString(env.QWEN_API_KEY, env.DASHSCOPE_API_KEY);
 
   if (!key) {
     throw new Error(
@@ -708,7 +708,7 @@ async function requestOpenAiEmbeddings(
   env: Record<string, string | undefined>,
   signal: AbortSignal
 ): Promise<Record<string, unknown>> {
-  const apiKey = resolveProviderApiKey('openai', env);
+  const apiKey = resolveServerProviderApiKey('openai', env);
   const upstreamRequest = {
     model: body.model,
     input: body.input,

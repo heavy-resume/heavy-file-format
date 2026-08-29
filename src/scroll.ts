@@ -367,7 +367,7 @@ function isTextSelectionInput(target: HTMLElement): target is HTMLInputElement {
   if (!(target instanceof HTMLInputElement)) {
     return false;
   }
-  return ['email', 'number', 'password', 'search', 'tel', 'text', 'url'].includes(target.type);
+  return ['password', 'search', 'tel', 'text', 'url'].includes(target.type);
 }
 
 function getCaretRangeFromPoint(clientX: number, clientY: number): Range | null {

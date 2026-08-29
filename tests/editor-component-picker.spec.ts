@@ -223,6 +223,9 @@ test('component picker adds a selected plugin directly', async ({ page }) => {
 });
 
 test('component picker adds carousel from images category', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(`${error.name}: ${error.message}`));
+
   await page.goto('/');
   await page.waitForTimeout(300);
 
@@ -237,6 +240,7 @@ test('component picker adds carousel from images category', async ({ page }) => 
 
   await expect(page.locator('.editor-block-title', { hasText: 'Carousel' }).first()).toBeVisible();
   await expect(page.locator('.hvy-carousel-editor').first()).toBeVisible();
+  expect(pageErrors).toHaveLength(0);
 });
 
 test('component picker adds graph plugin and renders a chart canvas', async ({ page }) => {

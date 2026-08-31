@@ -4,6 +4,7 @@ import { closeSearch } from '../../search/actions';
 import { closeAiEditPopover } from '../../ai-edit-popover';
 import { closeModal } from '../../navigation';
 import { getRenderApp, state } from '../../state';
+import { dismissTextToolbarForEscape } from '../../editor/components/text/text-toolbar-layout';
 
 export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean {
   if (event.key !== 'Escape') {
@@ -27,6 +28,11 @@ export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean
     event.stopPropagation();
     closeChatPanel(state.chat);
     getRenderApp()();
+    return true;
+  }
+  if (dismissTextToolbarForEscape(event.target)) {
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   }
   if (closeActiveSidebar(app)) {

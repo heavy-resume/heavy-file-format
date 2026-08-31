@@ -22,6 +22,87 @@
   margin-bottom: 0.4rem;
 }
 
+.hvy-document .rich-toolbar:has(> .text-toolbar-compact):not(.is-text-toolbar-expanded) > .toolbar-segment {
+  display: none;
+}
+
+.hvy-document .text-toolbar-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+}
+
+.hvy-document .rich-toolbar.is-text-toolbar-expanded > .text-toolbar-compact {
+  display: none;
+}
+
+.hvy-document .text-toolbar-compact-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: nowrap;
+}
+
+.hvy-document .text-toolbar-compact-actions > button {
+  box-sizing: border-box;
+  flex: 0 0 2.1rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  min-width: 2.1rem;
+  max-width: 2.1rem;
+  height: 2rem;
+  min-height: 2rem;
+  max-height: 2rem;
+  padding: 0.2rem;
+  align-content: center;
+  justify-content: center;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.hvy-document .text-toolbar-compact-actions > button > * {
+  line-height: 1;
+}
+
+.hvy-document .rich-toolbar .text-toolbar-expand {
+  box-sizing: border-box;
+  flex: 0 0 1rem;
+  width: 1rem;
+  min-width: 1rem;
+  max-width: 1rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--hvy-text-muted);
+}
+
+.hvy-document .rich-toolbar .text-toolbar-expand:hover,
+.hvy-document .rich-toolbar .text-toolbar-expand:focus-visible {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--hvy-accent-1);
+}
+
+.hvy-document .text-editor-toolbar-slot > .rich-toolbar:has(> .text-toolbar-compact .text-toolbar-expand:hover),
+.hvy-document .text-editor-toolbar-slot > .rich-toolbar:has(> .text-toolbar-compact .text-toolbar-expand:focus-visible) {
+  border-color: var(--hvy-accent-1);
+  background: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-accent-1) 8%);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--hvy-accent-1) 24%, var(--hvy-shadow) 76%);
+}
+
+.hvy-document .text-toolbar-expand .hvy-ui-icon {
+  width: 0.9rem;
+  height: 1.2rem;
+}
+
 .hvy-document .rich-toolbar button {
   min-width: 2rem;
   padding: 0.25rem 0.45rem;

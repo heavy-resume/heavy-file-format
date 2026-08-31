@@ -4,6 +4,7 @@ import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
 import { handleEscapeKey } from './escape';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
+import { promoteTextToolbarHotkeyAction } from '../../editor/components/text/text-toolbar-layout';
 
 export function bindKeydown(app: HTMLElement): void {
   let pendingSortSelectExit: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
@@ -242,24 +243,28 @@ export function bindKeydown(app: HTMLElement): void {
     if (key === 'b') {
       event.preventDefault();
       applyRichAction('bold', richTarget);
+      promoteTextToolbarHotkeyAction('bold', richTarget);
       return;
     }
 
     if (key === 'i') {
       event.preventDefault();
       applyRichAction('italic', richTarget);
+      promoteTextToolbarHotkeyAction('italic', richTarget);
       return;
     }
 
     if (key === 'u') {
       event.preventDefault();
       applyRichAction('underline', richTarget);
+      promoteTextToolbarHotkeyAction('underline', richTarget);
       return;
     }
 
     if (key === 'k') {
       event.preventDefault();
       openLinkInlineModal(app, richTarget);
+      promoteTextToolbarHotkeyAction('link', richTarget);
     }
   });
 }

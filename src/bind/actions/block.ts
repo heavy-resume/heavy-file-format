@@ -200,7 +200,7 @@ const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }
     }
   }
   actionButton
-    .closest('.align-buttons')
+    .closest('.rich-toolbar')
     ?.querySelectorAll<HTMLButtonElement>('[data-align-value]')
     .forEach((button) => {
       const selected = button.dataset.alignValue === align;

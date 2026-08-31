@@ -1,4 +1,4 @@
-import { closeIcon } from '../../../icons';
+import { chevronLeftIcon, chevronRightIcon, closeIcon } from '../../../icons';
 
 const textToolbarResizeObservers = new WeakMap<HTMLElement, ResizeObserver>();
 const textToolbarVisibilityBindings = new WeakSet<HTMLElement>();
@@ -14,6 +14,16 @@ const textToolbarPendingMeasurements = new WeakMap<HTMLElement, {
 
 const FLOATING_TOOLBAR_EDGE_INSET_PX = 10;
 const FLOATING_TOOLBAR_GAP_PX = 8;
+const COMPACT_TEXT_TOOLBAR_ACTION_LIMIT = 5;
+const DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS = [
+  'rich:heading-1',
+  'rich:heading-2',
+  'rich:bold',
+  'rich:italic',
+  'rich:underline',
+];
+let recentTextToolbarActionKeys: string[] = [...DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS];
+let recentTextToolbarRevision = 0;
 
 export function renderTextToolbarDismissButton(): string {
   return `<button type="button" class="ghost text-toolbar-dismiss" data-text-toolbar-dismiss="true" aria-label="Hide text controls" title="Hide text controls">${closeIcon()}</button>`;
@@ -37,6 +47,7 @@ export function syncTextToolbarLayout(root: ParentNode): void {
       return;
     }
 
+    syncCompactTextToolbar(shell, toolbarSlot);
     bindTextToolbarVisibility(shell);
     bindTextToolbarScroll(shell);
     updateTextToolbarLayout(shell, toolbarSlot);
@@ -52,6 +63,133 @@ export function syncTextToolbarLayout(root: ParentNode): void {
     }
     textToolbarResizeObservers.set(shell, observer);
   });
+}
+
+function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): void {
+  const toolbar = toolbarSlot.querySelector<HTMLElement>(':scope > .rich-toolbar');
+  if (!toolbar?.querySelector('[data-text-toolbar-dismiss]')) {
+    return;
+  }
+
+  let compact = toolbar.querySelector<HTMLElement>(':scope > .text-toolbar-compact');
+  if (!compact) {
+    compact = shell.ownerDocument.createElement('div');
+    compact.className = 'text-toolbar-compact';
+    compact.setAttribute('role', 'group');
+    compact.setAttribute('aria-label', 'Recent text controls');
+    compact.innerHTML = `<button type="button" class="ghost icon-button text-toolbar-expand text-toolbar-expand-left" data-text-toolbar-expand="true" aria-label="Show all text controls">${chevronLeftIcon()}</button>
+      <span class="text-toolbar-compact-actions"></span>
+      <button type="button" class="ghost icon-button text-toolbar-expand text-toolbar-expand-right" data-text-toolbar-expand="true" aria-label="Show all text controls">${chevronRightIcon()}</button>`;
+    toolbar.querySelector(':scope > [data-text-toolbar-dismiss]')?.after(compact);
+  }
+
+  const revision = String(recentTextToolbarRevision);
+  if (compact.dataset.textToolbarRecentRevision === revision) {
+    return;
+  }
+
+  const actions = compact.querySelector<HTMLElement>('.text-toolbar-compact-actions');
+  if (!actions) {
+    return;
+  }
+  const nextButtons = getCompactTextToolbarButtons(toolbar);
+  const currentKeys = Array.from(actions.children).map((button) => getTextToolbarActionKey(button as HTMLElement));
+  const nextKeys = nextButtons.map((button) => getTextToolbarActionKey(button));
+  if (currentKeys.length === nextKeys.length && currentKeys.every((key, index) => key === nextKeys[index])) {
+    compact.dataset.textToolbarRecentRevision = revision;
+    return;
+  }
+  actions.replaceChildren(...nextButtons);
+  compact.dataset.textToolbarRecentRevision = revision;
+}
+
+function getCompactTextToolbarButtons(toolbar: HTMLElement): HTMLButtonElement[] {
+  const sourceButtons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>(
+    ':scope > .toolbar-segment button[data-rich-action], :scope > .toolbar-segment button[data-action="set-block-align"]'
+  )).filter((button) => !button.closest('.paragraph-style-toolbar'));
+  const sourceByKey = new Map<string, HTMLButtonElement>();
+  sourceButtons.forEach((button) => {
+    const key = getTextToolbarActionKey(button);
+    if (key && !sourceByKey.has(key)) {
+      sourceByKey.set(key, button);
+    }
+  });
+  const requestedKeys = [
+    ...recentTextToolbarActionKeys,
+    ...DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS.filter((key) => !recentTextToolbarActionKeys.includes(key)),
+  ];
+  return requestedKeys
+    .flatMap((key) => {
+      const source = sourceByKey.get(key);
+      if (!source) {
+        return [];
+      }
+      const clone = source.cloneNode(true) as HTMLButtonElement;
+      clone.dataset.textToolbarCompactAction = 'true';
+      return [clone];
+    })
+    .slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT);
+}
+
+function getTextToolbarActionKey(button: HTMLElement): string | null {
+  const richAction = button.dataset.richAction;
+  if (richAction && richAction !== 'text-line-style') {
+    return `rich:${richAction}`;
+  }
+  if (button.dataset.action === 'set-block-align' && button.dataset.alignValue) {
+    return `align:${button.dataset.alignValue}`;
+  }
+  return null;
+}
+
+function rememberTextToolbarAction(button: HTMLElement, shell: HTMLElement): void {
+  if (button.closest('.paragraph-style-toolbar')) {
+    return;
+  }
+  const key = getTextToolbarActionKey(button);
+  if (!key) {
+    return;
+  }
+  promoteTextToolbarActionKey(key, shell);
+}
+
+export function promoteTextToolbarHotkeyAction(action: string, editable: HTMLElement): void {
+  const shell = editable.closest<HTMLElement>('.text-editor-shell');
+  const toolbar = shell?.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+  const source = toolbar ? getFullTextToolbarButton(toolbar, `rich:${action}`) : null;
+  if (!shell || !source) {
+    return;
+  }
+  promoteTextToolbarActionKey(`rich:${action}`, shell);
+}
+
+export function dismissTextToolbarForEscape(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+  const shell = element?.closest<HTMLElement>('.text-editor-shell');
+  const toolbar = shell?.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+  if (!shell || !toolbar?.querySelector('[data-text-toolbar-dismiss]') || shell.classList.contains('is-text-toolbar-hidden')) {
+    return false;
+  }
+  hideTextToolbar(shell, toolbar);
+  return true;
+}
+
+function promoteTextToolbarActionKey(key: string, shell: HTMLElement): void {
+  recentTextToolbarActionKeys = [
+    key,
+    ...recentTextToolbarActionKeys.filter((recentKey) => recentKey !== key),
+  ].slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT);
+  recentTextToolbarRevision += 1;
+  const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+  if (toolbarSlot) {
+    queueMicrotask(() => {
+      if (!shell.isConnected || !toolbarSlot.isConnected) {
+        return;
+      }
+      syncCompactTextToolbar(shell, toolbarSlot);
+      updateTextToolbarLayout(shell, toolbarSlot);
+    });
+  }
 }
 
 function updateTextToolbarLayout(shell: HTMLElement, toolbarSlot: HTMLElement): void {
@@ -176,7 +314,7 @@ function bindTextToolbarVisibility(shell: HTMLElement): void {
   textToolbarVisibilityBindings.add(shell);
   shell.addEventListener('mousedown', (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    if (!target?.closest('[data-text-toolbar-dismiss]')) {
+    if (!target?.closest('[data-text-toolbar-dismiss], [data-text-toolbar-expand]')) {
       return;
     }
     event.preventDefault();
@@ -187,8 +325,33 @@ function bindTextToolbarVisibility(shell: HTMLElement): void {
     if (target?.closest('[data-text-toolbar-dismiss]')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      shell.classList.add('is-text-toolbar-hidden');
+      hideTextToolbar(shell, target.closest<HTMLElement>('.rich-toolbar'));
       return;
+    }
+    if (target?.closest('[data-text-toolbar-expand]')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const toolbar = target.closest<HTMLElement>('.rich-toolbar');
+      toolbar?.classList.add('is-text-toolbar-expanded');
+      const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+      if (toolbarSlot) {
+        updateTextToolbarLayout(shell, toolbarSlot);
+      }
+      return;
+    }
+    const toolbarAction = target?.closest<HTMLElement>('[data-rich-action], [data-action="set-block-align"]');
+    if (toolbarAction?.closest('.rich-toolbar')) {
+      if (toolbarAction.dataset.textToolbarCompactAction === 'true') {
+        const toolbar = toolbarAction.closest<HTMLElement>('.rich-toolbar');
+        const source = toolbar ? getFullTextToolbarButton(toolbar, getTextToolbarActionKey(toolbarAction)) : null;
+        if (source) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          source.click();
+          return;
+        }
+      }
+      rememberTextToolbarAction(toolbarAction, shell);
     }
     if (target?.closest('.rich-editor') && !shell.classList.contains('is-disabled')) {
       shell.classList.remove('is-text-toolbar-hidden');
@@ -213,6 +376,27 @@ function bindTextToolbarVisibility(shell: HTMLElement): void {
       shell.classList.add('is-text-toolbar-hidden');
     }
   });
+}
+
+function hideTextToolbar(shell: HTMLElement, toolbar: HTMLElement | null): void {
+  toolbar?.classList.remove('is-text-toolbar-expanded');
+  toolbar?.querySelectorAll<HTMLElement>('.paragraph-style-toolbar').forEach((paragraphToolbar) => {
+    paragraphToolbar.classList.remove('is-picker-open', 'is-style-edit-open');
+    paragraphToolbar.querySelector<HTMLElement>('[data-action="open-paragraph-style-picker"]')?.setAttribute('aria-expanded', 'false');
+    paragraphToolbar.querySelectorAll<HTMLElement>('.paragraph-style-edit-panel').forEach((panel) => {
+      panel.hidden = true;
+    });
+  });
+  shell.classList.add('is-text-toolbar-hidden');
+}
+
+function getFullTextToolbarButton(toolbar: HTMLElement, key: string | null): HTMLButtonElement | null {
+  if (!key) {
+    return null;
+  }
+  return Array.from(toolbar.querySelectorAll<HTMLButtonElement>(
+    ':scope > .toolbar-segment button[data-rich-action], :scope > .toolbar-segment button[data-action="set-block-align"]'
+  )).find((button) => !button.closest('.paragraph-style-toolbar') && getTextToolbarActionKey(button) === key) ?? null;
 }
 
 function bindTextToolbarScroll(shell: HTMLElement): void {

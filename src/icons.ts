@@ -54,6 +54,18 @@ export function arrowRightIcon(): string {
   </svg>`;
 }
 
+export function chevronLeftIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-chevron-left" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m15 5-7 7 7 7" />
+  </svg>`;
+}
+
+export function chevronRightIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-chevron-right" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m9 5 7 7-7 7" />
+  </svg>`;
+}
+
 export function cameraIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-camera" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M9 5l1.5-2h3L15 5h3.5A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5H9Z" />

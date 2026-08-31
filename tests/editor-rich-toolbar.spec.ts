@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const defaultDocumentText = 'This default HVY document is a lightweight workspace';
 
@@ -21,6 +21,12 @@ async function waitForMountIdle(page: Page, selector: string, quietMs = 250): Pr
   }), quietMs);
 }
 
+async function expandTextToolbar(toolbar: Locator): Promise<void> {
+  if (!await toolbar.evaluate((node) => node.classList.contains('is-text-toolbar-expanded'))) {
+    await toolbar.locator('[data-text-toolbar-expand]').last().click();
+  }
+}
+
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -35,8 +41,9 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
-  const quoteButton = page.locator('[data-rich-action="quote"]').first();
-  const codeBlockButton = page.locator('[data-rich-action="code-block"]').first();
+  const richToolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  const quoteButton = richToolbar.locator(':scope > .format-buttons [data-rich-action="quote"]');
+  const codeBlockButton = richToolbar.locator(':scope > .format-buttons [data-rich-action="code-block"]');
 
   await editor.evaluate((node) => {
     const textNode = node.querySelector('p')?.firstChild;
@@ -48,6 +55,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
+  await expandTextToolbar(richToolbar);
   await quoteButton.click();
   await expect(editor.locator('blockquote')).toContainText('Quoted');
   await expect(quoteButton).toHaveClass(/secondary/);
@@ -123,6 +131,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
+  await expandTextToolbar(richToolbar);
   await page.getByRole('button', { name: 'Strikethrough' }).first().click();
   await expect(editor.locator('s, strike, del')).toContainText('Removed');
   await expect(page.locator('[data-rich-action="link"] .link-icon').first()).toBeEmpty();
@@ -139,6 +148,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
+  await expandTextToolbar(richToolbar);
   await page.getByRole('button', { name: 'Underline' }).first().click();
   await expect(editor.locator('u')).toContainText('Underlined');
 
@@ -155,6 +165,7 @@ test('toolbar exposes quote and code block actions', async ({ page }) => {
     (node as HTMLElement).focus();
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
+  await expandTextToolbar(richToolbar);
   await codeBlockButton.click();
   await expect(editor.locator('pre code')).toHaveCount(1);
   await expect(editor.locator('pre')).toHaveAttribute('data-code-language', '');
@@ -268,8 +279,8 @@ test('isolated embed example exposes matching text editors for plugin authors', 
   await expect(normalEditor).toContainText('Normal editor updated');
 
   await page.locator('.editor-block-passive', { hasText: 'Write plugin-owned Markdown here. This body is stored with ctx.setText.' }).click();
+  await waitForMountIdle(page, '.example-rich-note-editor');
   const pluginToolbar = page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) .rich-toolbar');
-  await expect(pluginToolbar).toBeHidden();
   const pluginEditor = page.locator('.example-rich-note-editor .hvy-plugin-text-editor:not(.is-disabled) [data-field="hvy-plugin-text-editor"]');
   await expect(pluginEditor).toBeVisible();
   await expect(pluginEditor).toHaveAttribute('data-placeholder', 'Write plugin-owned Markdown here. This body is stored with ctx.setText.');
@@ -573,10 +584,18 @@ test('lightweight embed includes editable text controls', async ({ page }) => {
   await expect(editor).toBeVisible();
   await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar')).toBeHidden();
   await editor.click();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar')).toBeVisible();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar [data-rich-action="bold"]')).toBeVisible();
-  await expect(page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar [data-rich-action="list"]')).toBeVisible();
+  const toolbar = page.locator('#lightweightTextEditorMount .hvy-editable-text-reader .rich-toolbar');
+  await expect(toolbar).toBeVisible();
+  await expect(toolbar.locator('[data-rich-action="bold"]:visible')).toBeVisible();
+  await expandTextToolbar(toolbar);
+  await expect(toolbar.locator('[data-rich-action="list"]:visible')).toBeVisible();
   await expect(editor).toContainText('This lightweight editable text should show the text editor toolbar.');
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toBeHidden();
+  await expect(editor).toBeFocused();
+  await editor.click();
+  await expect(toolbar.locator('.text-toolbar-compact')).toBeVisible();
+  await expect(toolbar).not.toHaveClass(/is-text-toolbar-expanded/);
 });
 
 test('lightweight viewer-only text editor applies heading toolbar actions', async ({ page }) => {
@@ -610,7 +629,7 @@ test('lightweight viewer-only text editor applies heading toolbar actions', asyn
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   });
   const firstViewerNote = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
-  await firstViewerNote.locator('[data-rich-action="heading-1"]').click();
+  await firstViewerNote.locator('[data-rich-action="heading-1"]:visible').click();
 
   await expect(editor.locator('h1')).toContainText('Viewer toolbar target');
   const viewerTextButton = firstViewerNote.locator('[data-rich-action="paragraph"]').first();
@@ -736,6 +755,7 @@ test('quote toolbar action formats every selected paragraph and list block', asy
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   await editor.evaluate((node) => {
     const firstText = node.querySelector('p')?.firstChild;
@@ -789,6 +809,7 @@ test('link toolbar only defaults selected text that looks like a link target', a
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const linkButton = page.getByRole('button', { name: 'Link' }).first();
   const linkInput = page.locator('#linkInlineInput');
 
@@ -907,6 +928,7 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
   const textButton = page.locator('[data-rich-action="paragraph"]').first();
+  const richToolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
 
   for (const item of [
     { button: 'H1', tag: 'h1' },
@@ -914,7 +936,8 @@ test('toolbar heading buttons transform text and preserve typing', async ({ page
     { button: 'H3', tag: 'h3' },
     { button: 'H4', tag: 'h4' },
   ]) {
-    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
+    await expandTextToolbar(richToolbar);
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]:visible`).first();
     await editor.evaluate((node) => {
       node.innerHTML = '<p>Heading text</p>';
       node.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -971,6 +994,7 @@ test('text line style editor feeds the rich text toolbar', async ({ page }) => {
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Foo</p><p>moo cow</p>';
@@ -1017,6 +1041,7 @@ test('paragraph style picker shows two recent choices and opens the full list', 
 
   await page.getByRole('button', { name: 'Document Meta' }).click();
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   const activeEditorBlock = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]');
   const toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
@@ -1067,6 +1092,7 @@ text_line_styles:
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('.editor-block-content[data-component-id="first-text"]').click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   let activeEditorBlock = page.locator('.editor-block[data-active-editor-block="true"]');
   let toolbar = activeEditorBlock.locator('.paragraph-style-toolbar').first();
   await toolbar.getByRole('button', { name: 'More paragraph styles' }).click();
@@ -1101,6 +1127,7 @@ test('paragraph style toolbar compacts inside phone preview', async ({ page }) =
   await page.getByRole('button', { name: 'Document Meta' }).click();
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   const toolbar = page.locator('[data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
   await expect(toolbar.locator('.text-line-style-toolbar-label')).toBeHidden();
@@ -1128,6 +1155,7 @@ test('floating text toolbar is centered, shrink-wrapped, and keeps alignment bes
   await loadRichTextDocument(page, 'Expected result toolbar inset');
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
   const metrics = await activeBlock.locator('.text-editor-shell').evaluate((shell) => {
@@ -1226,6 +1254,216 @@ test('floating text toolbar can be hidden and returns when the text is clicked',
   await editor.click();
   await expect(shell).not.toHaveClass(/is-text-toolbar-hidden/);
   await expect(toolbar).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toBeHidden();
+  await expect(editor).toBeFocused();
+  await editor.click();
+  await expect(toolbar.locator('.text-toolbar-compact')).toBeVisible();
+
+  await expandTextToolbar(toolbar);
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toBeHidden();
+  await expect(toolbar).not.toHaveClass(/is-text-toolbar-expanded/);
+  await expect(editor).toBeFocused();
+  await editor.click();
+  await expect(toolbar.locator('.text-toolbar-compact')).toBeVisible();
+});
+
+test('floating text toolbar starts compact, expands from either side, and keeps recent actions', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result compact text controls');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const shell = page.locator('.editor-block[data-active-editor-block="true"] .text-editor-shell').first();
+  const toolbar = shell.locator('.text-editor-toolbar-slot > .rich-toolbar');
+  const compact = toolbar.locator('.text-toolbar-compact');
+  const compactActions = compact.locator('.text-toolbar-compact-actions > button');
+
+  await expect(compact).toBeVisible();
+  await expect(compactActions).toHaveCount(5);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+    'underline',
+  ]);
+  const compactActionSizes = await compactActions.evaluateAll((buttons) => buttons.map((button) => {
+    const box = button.getBoundingClientRect();
+    return { width: box.width, height: box.height };
+  }));
+  expect(new Set(compactActionSizes.map(({ width }) => width)).size).toBe(1);
+  expect(new Set(compactActionSizes.map(({ height }) => height)).size).toBe(1);
+  const leftBracket = compact.locator('.text-toolbar-expand-left');
+  await expect(leftBracket.locator('.hvy-ui-icon-chevron-left')).toHaveCount(1);
+  await expect(compact.locator('.hvy-ui-icon-arrow-left, .hvy-ui-icon-arrow-right')).toHaveCount(0);
+  expect(await leftBracket.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return {
+      borderWidth: style.borderTopWidth,
+      backgroundColor: style.backgroundColor,
+    };
+  })).toEqual({
+    borderWidth: '0px',
+    backgroundColor: 'rgba(0, 0, 0, 0)',
+  });
+  const toolbarHighlightBefore = await toolbar.evaluate((node) => getComputedStyle(node).boxShadow);
+  await leftBracket.hover();
+  await expect.poll(() => toolbar.evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe(toolbarHighlightBefore);
+  await expect(compact.locator('.paragraph-style-card')).toHaveCount(0);
+  await expect(toolbar.locator(':scope > .block-style-buttons')).toBeHidden();
+  await expect(toolbar.locator(':scope > .format-buttons')).toBeHidden();
+
+  await compact.locator('[data-rich-action="underline"]').click();
+  await expect(compactActions).toHaveCount(5);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'underline',
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+  ]);
+
+  await compact.locator('.text-toolbar-expand-left').click();
+  await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
+  await expect(toolbar.locator(':scope > .block-style-buttons')).toBeVisible();
+  await expect(toolbar.locator(':scope > .format-buttons')).toBeVisible();
+
+  await toolbar.locator(':scope > .format-buttons [data-rich-action="quote"]').click();
+  await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
+  await expect(compact).toBeHidden();
+  await expect(compactActions).toHaveCount(5);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'quote',
+    'underline',
+    'heading-1',
+    'heading-2',
+    'bold',
+  ]);
+
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toBeHidden();
+  await shell.locator('.rich-editor').click();
+  await expect(compact).toBeVisible();
+  await compact.locator('.text-toolbar-expand-right').click();
+  await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
+  await shell.getByRole('button', { name: 'Hide text controls' }).click();
+  await shell.locator('.rich-editor').click();
+  await expect(toolbar).not.toHaveClass(/is-text-toolbar-expanded/);
+  await expect(compact).toBeVisible();
+});
+
+test('compact text action labels stay vertically centered', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result aligned compact labels');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const shell = page.locator('.editor-block[data-active-editor-block="true"] .text-editor-shell').first();
+  const toolbar = shell.locator('.rich-toolbar').first();
+  await expandTextToolbar(toolbar);
+  await toolbar.locator(':scope > .block-style-buttons [data-rich-action="heading-3"]').click();
+  await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
+  await toolbar.locator(':scope > .block-style-buttons [data-rich-action="paragraph"]').click();
+  await expect(toolbar).toHaveClass(/is-text-toolbar-expanded/);
+  await page.keyboard.press('Escape');
+  await shell.locator('.rich-editor').click();
+
+  const compactActions = toolbar.locator('.text-toolbar-compact-actions > button');
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'paragraph',
+    'heading-3',
+    'heading-1',
+    'heading-2',
+    'bold',
+  ]);
+  const centerDeltas = await compactActions.evaluateAll((buttons) => buttons.map((button) => {
+    const textNode = document.createTreeWalker(button, NodeFilter.SHOW_TEXT).nextNode();
+    const textRange = document.createRange();
+    textRange.selectNodeContents(textNode ?? button);
+    const buttonBox = button.getBoundingClientRect();
+    const textBox = textRange.getBoundingClientRect();
+    return Math.abs((buttonBox.top + (buttonBox.height / 2)) - (textBox.top + (textBox.height / 2)));
+  }));
+  centerDeltas.forEach((delta) => expect(delta).toBeLessThanOrEqual(1));
+});
+
+test('default compact history evicts underline first when it was not promoted', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result default recent stack');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  await expandTextToolbar(toolbar);
+  await toolbar.locator(':scope > .format-buttons [data-rich-action="quote"]').click();
+
+  const compactActions = toolbar.locator('.text-toolbar-compact-actions > button');
+  await expect(compactActions).toHaveCount(5);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'quote',
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+  ]);
+});
+
+test('rich text hotkeys promote their actions in compact history', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result hotkey recent stack');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor').first();
+  const compactActions = page.locator('.editor-block[data-active-editor-block="true"] .text-toolbar-compact-actions > button');
+  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+  await editor.focus();
+
+  await page.keyboard.press(`${modifier}+U`);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'underline',
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+  ]);
+
+  await page.keyboard.press(`${modifier}+B`);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'bold',
+    'underline',
+    'heading-1',
+    'heading-2',
+    'italic',
+  ]);
+
+  await page.keyboard.press(`${modifier}+K`);
+  await expect(page.locator('#linkInlineModal')).toBeVisible();
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'link',
+    'bold',
+    'underline',
+    'heading-1',
+    'heading-2',
+  ]);
+});
+
+test('plugin text editor hotkeys promote their actions in compact history', async ({ page }) => {
+  await page.goto('/examples/lightweight-viewer-text-editor.html');
+
+  const editorShell = page.locator('#lightweightViewerOnlyMount .hvy-editable-text-reader').first();
+  const editor = editorShell.locator('[data-field="hvy-plugin-text-editor"]');
+  await editor.click();
+  await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+I`);
+
+  const compactActions = editorShell.locator('.text-toolbar-compact-actions > button');
+  await expect(compactActions).toHaveCount(5);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'italic',
+    'heading-1',
+    'heading-2',
+    'bold',
+    'underline',
+  ]);
 });
 
 test('grid text editor uses an unsquashed floating toolbar that stays inside the editor surface', async ({ page }) => {
@@ -1258,6 +1496,7 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
   const activeTextBlock = page.locator('.editor-block[data-active-editor-block="true"]', {
     has: page.locator(':scope > .editor-block-content[data-component-id="grid-text"]'),
   });
+  await expandTextToolbar(activeTextBlock.locator('.rich-toolbar').first());
   const metrics = await activeTextBlock.evaluate((block) => {
     const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
     const gridCell = block.closest<HTMLElement>('.grid-field-row');
@@ -1417,6 +1656,7 @@ text_line_styles:
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.locator('.editor-sidebar-tab').click();
   await page.locator('.editor-sidebar [data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   const toolbar = page.locator('.editor-sidebar [data-field="block-rich"]').first().locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " editor-block ")][1]').locator('.paragraph-style-toolbar').first();
   await toolbar.getByRole('button', { name: 'Normal' }).click();
@@ -1442,6 +1682,7 @@ test('normal after enter from paragraph style keeps the previous line styled', a
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Styled line</p>';
@@ -1477,6 +1718,7 @@ test('paragraph style after enter keeps caret on the empty new line', async ({ p
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p><br></p>';
@@ -1552,6 +1794,7 @@ test('arrowing back to a continued paragraph style line keeps caret after typed 
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p><br></p>';
@@ -1611,6 +1854,7 @@ test('enter keeps paragraph style active on the new line', async ({ page }) => {
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Styled line</p>';
@@ -1645,6 +1889,7 @@ test('enter on a styled continuation line inserts one styled line', async ({ pag
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Styled line</p>';
@@ -1685,6 +1930,7 @@ test('enter in the middle of a paragraph style splits into two styled lines', as
   await page.getByRole('button', { name: 'Document Meta' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
   const editor = page.locator('[data-field="block-rich"]').first();
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Styled line</p>';
@@ -1723,6 +1969,7 @@ test('heading enter exits to normal text and updates toolbar state', async ({ pa
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  const richToolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
   const h1Button = page.locator('[data-rich-action="heading-1"]').first();
   const textButton = page.locator('[data-rich-action="paragraph"]').first();
 
@@ -1756,6 +2003,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  const richToolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
 
   for (const item of [
     { button: 'H1', tag: 'h1' },
@@ -1763,6 +2011,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
     { button: 'H3', tag: 'h3' },
     { button: 'H4', tag: 'h4' },
   ]) {
+    await expandTextToolbar(richToolbar);
     await editor.evaluate((node) => {
       node.innerHTML = '<p><br></p>';
       node.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -1777,7 +2026,7 @@ test('empty heading buttons keep the caret available for typing', async ({ page 
       node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     });
 
-    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]`).first();
+    const headingButton = page.locator(`[data-rich-action="${item.tag.replace('h', 'heading-')}"]:visible`).first();
     await headingButton.click();
     await expect(headingButton).toHaveClass(/secondary/);
     await page.keyboard.type(item.button);
@@ -1795,6 +2044,7 @@ test('toolbar alignment buttons update alignment and selected state', async ({ p
     { button: 'Align right', value: 'right' },
     { button: 'Align left', value: 'left' },
   ]) {
+    await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
     await page.getByRole('button', { name: item.button }).first().click();
     const button = page.getByRole('button', { name: item.button }).first();
     await expect(button).toHaveClass(/secondary/);
@@ -1807,6 +2057,7 @@ test('toolbar buttons expose platform hotkeys in titles', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
 
   await expect(page.getByRole('button', { name: 'Bold' }).first()).toHaveAttribute('title', /Bold \((Cmd|Ctrl)\+B\)/);
   await expect(page.getByRole('button', { name: 'Italic' }).first()).toHaveAttribute('title', /Italic \((Cmd|Ctrl)\+I\)/);

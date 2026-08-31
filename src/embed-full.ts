@@ -114,7 +114,7 @@ import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
-import { createEditorBlockElement, createEditorSectionElement, refreshEditorSectionDom } from './editor/surface-refresh';
+import { createEditorBlockElement, createEditorSectionElement, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
@@ -1015,6 +1015,33 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
   return refreshed;
 }
 
+function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  if (!currentRoot) {
+    return false;
+  }
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return false;
+  }
+  const runtime = getActiveStateRuntime();
+  return refreshEditorBlockDom({
+    root: currentRoot,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    block,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      if (options.runVisibilityScripts !== false) {
+        void runWithStateRuntime(runtime, () => runButtonVisibilityScripts(element));
+      }
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+}
+
 function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTMLElement[] | null {
   const sectionKey = placeholder.dataset.sectionKey ?? '';
   const section = findSectionByKey(state.document.sections, sectionKey);
@@ -1203,6 +1230,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshReaderBlock(target, sectionKey, blockId, options);
+    }),
+    refreshEditorBlock: (sectionKey, blockId, options) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return refreshEditorBlock(sectionKey, blockId, options);
     }),
     refreshEditorSection: (sectionKey, options) => runWithStateRuntime(runtime, () => {
       currentRoot = root;

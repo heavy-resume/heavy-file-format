@@ -1,3 +1,7 @@
 @import './text-reader-presentation.css';
 @import './text-editor-toolbar.css';
 @import './text-rich-content.css';
+
+.hvy-document .editor-block-text-done-row {
+  justify-content: space-between;
+}

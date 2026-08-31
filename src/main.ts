@@ -54,7 +54,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
-import { createEditorBlockElement, createEditorSectionElement, refreshEditorSectionDom } from './editor/surface-refresh';
+import { createEditorBlockElement, createEditorSectionElement, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
@@ -1353,6 +1353,29 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
   return refreshed;
 }
 
+function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block) {
+    return false;
+  }
+  return refreshEditorBlockDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    block,
+    afterReplace: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      if (options.runVisibilityScripts !== false) {
+        void runButtonVisibilityScripts(element);
+      }
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+}
+
 function materializeVirtualSection(placeholder: HTMLElement): HTMLElement | HTMLElement[] | null {
   const sectionKey = placeholder.dataset.sectionKey ?? '';
   const section = findSectionByKey(state.document.sections, sectionKey);
@@ -1514,6 +1537,7 @@ initCallbacks({
   refreshReaderPanels,
   refreshReaderSection,
   refreshReaderBlock,
+  refreshEditorBlock,
   refreshEditorSection,
   refreshModalPreview,
   observeLinks: () => { },

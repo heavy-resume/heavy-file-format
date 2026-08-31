@@ -920,7 +920,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           ${anchorAttrs.overlay}
         </div>
         ${showActiveBlockDoneRow
-        ? `<div class="editor-block-done-row">
+        ? `<div class="editor-block-done-row${component === 'text' ? ' editor-block-text-done-row' : ''}">
                 <button type="button" class="ghost editor-block-cancel-button" data-action="cancel-block-edit" data-section-key="${deps.escapeAttr(
           sectionKey
         )}" data-block-id="${deps.escapeAttr(block.id)}">Cancel</button>

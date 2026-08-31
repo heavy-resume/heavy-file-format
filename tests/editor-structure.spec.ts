@@ -2904,7 +2904,7 @@ test('section highlight control lives in section meta next to contained', async 
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
-test('active component done and cancel buttons are centered below the editor body', async ({ page }) => {
+test('active text component places cancel and done at opposite lower corners', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
@@ -2925,9 +2925,13 @@ test('active component done and cancel buttons are centered below the editor bod
   expect(blockBox).not.toBeNull();
   expect(cancelBox).not.toBeNull();
   expect(doneBox).not.toBeNull();
-  const actionGroupLeft = cancelBox?.x ?? 0;
-  const actionGroupRight = (doneBox?.x ?? 0) + (doneBox?.width ?? 0);
-  expect(Math.abs((actionGroupLeft + (actionGroupRight - actionGroupLeft) / 2) - ((blockBox?.x ?? 0) + (blockBox?.width ?? 0) / 2))).toBeLessThan(4);
+  const actionRowBox = await activeBlock.locator('.editor-block-done-row').boundingBox();
+  expect(actionRowBox).not.toBeNull();
+  expect(Math.abs((cancelBox?.x ?? 0) - (actionRowBox?.x ?? 0))).toBeLessThan(4);
+  expect(Math.abs(
+    ((doneBox?.x ?? 0) + (doneBox?.width ?? 0))
+      - ((actionRowBox?.x ?? 0) + (actionRowBox?.width ?? 0))
+  )).toBeLessThan(4);
 });
 
 test('active component remove button is anchored to the editor frame corner', async ({ page }) => {

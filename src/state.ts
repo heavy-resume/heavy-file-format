@@ -51,6 +51,7 @@ type RuntimeCallbacks = {
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
@@ -74,6 +75,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
     refreshReaderPanels: () => { throw new Error('refreshReaderPanels not initialized'); },
     refreshReaderSection: () => false,
     refreshReaderBlock: () => false,
+    refreshEditorBlock: () => false,
     refreshEditorSection: () => false,
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
     observeLinks: () => {},
@@ -88,6 +90,7 @@ let _refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOpti
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
+let _refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
@@ -100,6 +103,7 @@ export function getRefreshSearchSurface(): (root: ParentNode, options?: SearchSu
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
+export function getRefreshEditorBlock(): (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorBlock; }
 export function getRefreshEditorSection(): (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorSection; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
@@ -126,6 +130,7 @@ export function initCallbacks(callbacks: {
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock?: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorSection?: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;
@@ -147,6 +152,7 @@ export function initCallbacks(callbacks: {
     refreshSearchSurface: callbacks.refreshSearchSurface ?? (() => false),
     refreshReaderSection: callbacks.refreshReaderSection ?? (() => false),
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
+    refreshEditorBlock: callbacks.refreshEditorBlock ?? (() => false),
     refreshEditorSection: callbacks.refreshEditorSection ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
   };
@@ -195,6 +201,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   _refreshReaderPanels = runtime.callbacks.refreshReaderPanels;
   _refreshReaderSection = runtime.callbacks.refreshReaderSection;
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
+  _refreshEditorBlock = runtime.callbacks.refreshEditorBlock;
   _refreshEditorSection = runtime.callbacks.refreshEditorSection;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
   _observeLinks = runtime.callbacks.observeLinks;

@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
+import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
@@ -32,6 +32,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
     state.aiModeTipDismissed = true;
   }
   setActiveEditorBlock(sectionKey, blockId, { targetOnly: aiPlaceholderActivation, textEditorMode });
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   if (state.currentView === 'ai') {
     setAiEditorHostBlock(sectionKey, blockId);
   }
@@ -48,7 +49,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       ...(preferredEditorTarget ? { preferredEditorTarget } : {}),
     };
   }
-  if (!getRefreshEditorSection()(sectionKey)) {
+  if (!getRefreshEditorBlock()(sectionKey, refreshBlockId) && !getRefreshEditorSection()(sectionKey)) {
     getRenderApp()();
   } else {
     scrollPendingEditorActivation(app);
@@ -161,6 +162,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   }
   event.stopPropagation();
   const block = findBlockByIds(sectionKey, blockId);
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   const editorBlock = actionButton.closest?.<HTMLElement>('.editor-block') ?? null;
   if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
     return;
@@ -182,8 +184,9 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
-  if (!refreshedEditorSection) {
+  const refreshedEditorSurface = (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId))
+    || getRefreshEditorSection()(sectionKey);
+  if (!refreshedEditorSurface) {
     getRenderApp()();
   } else {
     state.pendingEditorDeactivation = null;
@@ -220,6 +223,7 @@ const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKe
     return;
   }
   event.stopPropagation();
+  const refreshBlockId = state.activeEditorBlockPath[0]?.blockId ?? blockId;
   const deactivationAnchor = captureEditorDeactivationAnchor(
     app,
     sectionKey,
@@ -234,8 +238,9 @@ const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKe
   );
   const refreshAfterCancel = (): void => {
     getRefreshReaderPanels()();
-    const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
-    if (!refreshedEditorSection) {
+    const refreshedEditorSurface = getRefreshEditorBlock()(sectionKey, refreshBlockId)
+      || getRefreshEditorSection()(sectionKey);
+    if (!refreshedEditorSurface) {
       getRenderApp()();
       if (restoreActivationViewport && activationReturnScroll && deactivationAnchor) {
         restoreEditorActivationScrollTop(app, deactivationAnchor, activationReturnScroll);

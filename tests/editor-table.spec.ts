@@ -100,17 +100,27 @@ ${Array.from({ length: 24 }, (_item, index) => `  Trailing paragraph ${index + 1
     top: element.getBoundingClientRect().top,
     scrollTop: element.closest<HTMLElement>('.editor-tree')?.scrollTop ?? -1,
   }));
+  await passiveTable.evaluate((element) => {
+    element.closest('.editor-section-card')?.setAttribute('data-editor-section-identity', 'preserved');
+    element.previousElementSibling?.setAttribute('data-editor-sibling-identity', 'preserved');
+  });
 
   // ACTION: activate a body cell and cancel without editing or scrolling.
   await passiveTable.locator('.reader-table tbody td').first().dispatchEvent('click');
   const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  await expect(page.locator('[data-editor-section-identity="preserved"]')).toHaveCount(1);
+  await expect(page.locator('[data-editor-sibling-identity="preserved"]')).toHaveCount(1);
   await expect.poll(() => page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
     return state.pendingEditorActivation;
   })).toBeNull();
   await activeTable.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
 
-  // AFTER: Cancel reverses activation's automatic scroll adjustment.
+  // AFTER: the surrounding DOM stays mounted while the table animates back to its original position.
+  await expect(page.locator('[data-editor-section-identity="preserved"]')).toHaveCount(1);
+  await expect(page.locator('[data-editor-sibling-identity="preserved"]')).toHaveCount(1);
+  expect(await passiveTable.evaluate((element) => element.getAnimations()
+    .some((animation) => animation.id === 'hvy-editor-block-collapse'))).toBe(true);
   await expect.poll(() => passiveTable.evaluate((element, expected) => ({
     topDelta: Math.abs(element.getBoundingClientRect().top - expected.top),
     scrollTopDelta: Math.abs((element.closest<HTMLElement>('.editor-tree')?.scrollTop ?? -1) - expected.scrollTop),

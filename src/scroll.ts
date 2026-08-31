@@ -100,6 +100,7 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
     return;
   }
   if (pending.suppressFocus) {
+    recordEditorActivationScrollTop(app, pending);
     state.pendingEditorActivation = null;
     return;
   }
@@ -211,6 +212,43 @@ export function restoreCapturedEditorDeactivationScrollTop(
   });
 }
 
+export function hasEditorViewportMovedSinceActivation(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>
+): boolean {
+  const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+  const activationScrollTop = scrollContainer?.dataset.activeEditorActivationScrollTop;
+  if (!scrollContainer || activationScrollTop === undefined) {
+    return true;
+  }
+  return Math.abs(scrollContainer.scrollTop - Number(activationScrollTop)) > 0.5;
+}
+
+export function restoreEditorActivationScrollTop(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>,
+  returnScroll: PaneScrollState
+): void {
+  const scrollTop = captured.scrollSurface === 'editor'
+    ? returnScroll.editorTop
+    : captured.scrollSurface === 'editor-sidebar'
+      ? returnScroll.editorSidebarTop
+      : captured.scrollSurface === 'reader'
+        ? returnScroll.readerTop
+        : returnScroll.viewerSidebarTop;
+  const restore = (): void => {
+    const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollTop;
+    }
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 function applyPendingEditorDeactivationScroll(
   app: HTMLElement,
   pending: NonNullable<typeof state.pendingEditorDeactivation>
@@ -306,7 +344,23 @@ function focusPendingEditorActivation(
   }
   const target = preferredTarget ?? getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
+  recordEditorActivationScrollTop(app, pending);
   state.pendingEditorActivation = null;
+}
+
+function recordEditorActivationScrollTop(
+  app: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorActivation>
+): void {
+  const block = app.querySelector<HTMLElement>(
+    `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(pending.blockId)}"]`
+  );
+  const scrollContainer = block?.closest<HTMLElement>(
+    '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
+  if (scrollContainer) {
+    scrollContainer.dataset.activeEditorActivationScrollTop = String(scrollContainer.scrollTop);
+  }
 }
 
 function resolvePreferredEditorActivationTarget(

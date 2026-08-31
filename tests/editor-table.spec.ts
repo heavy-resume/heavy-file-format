@@ -64,6 +64,59 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block', { hasText: 'Alpha' })).toBeVisible();
 });
 
+test('canceling an untouched static table restores its pre-activation viewport position', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-viewport-anchor"}-->
+#! Table Viewport Anchor
+
+<!--hvy:text {}-->
+${Array.from({ length: 24 }, (_item, index) => `  Spacer paragraph ${index + 1}.\n`).join('\n')}
+
+<!--hvy:table {"tableColumns":["Neighborhood","Formally Opposed"]}-->
+| Neighborhood | Formally Opposed |
+| --- | --- |
+| Trovitsky Park | Yes |
+| Lake Desire | No |
+| Woodside | Yes |
+| The Parks | No |
+| Fairwood Greens | No |
+| Carriage Wood | No |
+| Candlewood Ridge | No |
+
+<!--hvy:text {}-->
+${Array.from({ length: 24 }, (_item, index) => `  Trailing paragraph ${index + 1}.\n`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Formally Opposed' });
+  await passiveTable.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  const expectedResult = await passiveTable.evaluate((element) => ({
+    top: element.getBoundingClientRect().top,
+    scrollTop: element.closest<HTMLElement>('.editor-tree')?.scrollTop ?? -1,
+  }));
+
+  // ACTION: activate a body cell and cancel without editing or scrolling.
+  await passiveTable.locator('.reader-table tbody td').first().dispatchEvent('click');
+  const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.pendingEditorActivation;
+  })).toBeNull();
+  await activeTable.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
+
+  // AFTER: Cancel reverses activation's automatic scroll adjustment.
+  await expect.poll(() => passiveTable.evaluate((element, expected) => ({
+    topDelta: Math.abs(element.getBoundingClientRect().top - expected.top),
+    scrollTopDelta: Math.abs((element.closest<HTMLElement>('.editor-tree')?.scrollTop ?? -1) - expected.scrollTop),
+  }), expectedResult)).toEqual({ topDelta: 0, scrollTopDelta: 0 });
+});
+
 test('static table columns resize, auto-fit, reset, and contain wide overflow', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

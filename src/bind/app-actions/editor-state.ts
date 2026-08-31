@@ -2,7 +2,7 @@ import { state, getRenderApp, getRefreshEditorSection, getRefreshReaderPanels } 
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { captureEditorDeactivationAnchor, capturePaneScroll, restoreCapturedEditorDeactivationScrollTop, scrollPendingEditorActivation } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -226,41 +226,46 @@ const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKe
     blockId,
     actionButton.closest?.<HTMLElement>('.editor-block') ?? null
   );
+  const activationReturnScroll = state.activeEditorBlockReturnScroll;
+  const restoreActivationViewport = Boolean(
+    activationReturnScroll
+    && deactivationAnchor
+    && !hasEditorViewportMovedSinceActivation(app, deactivationAnchor)
+  );
+  const refreshAfterCancel = (): void => {
+    getRefreshReaderPanels()();
+    const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
+    if (!refreshedEditorSection) {
+      getRenderApp()();
+      if (restoreActivationViewport && activationReturnScroll && deactivationAnchor) {
+        restoreEditorActivationScrollTop(app, deactivationAnchor, activationReturnScroll);
+      }
+      return;
+    }
+    state.pendingEditorDeactivation = null;
+    if (restoreActivationViewport && activationReturnScroll && deactivationAnchor) {
+      restoreEditorActivationScrollTop(app, deactivationAnchor, activationReturnScroll);
+    } else if (deactivationAnchor) {
+      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+    }
+  };
   const result = cancelEditorBlockEdit(sectionKey, blockId);
   if (result === 'needs-confirmation') {
     openRemoveConfirmationModal(() => {
       const confirmedResult = cancelEditorBlockEdit(sectionKey, blockId, { confirmChangedNewBlock: true });
       if (confirmedResult === 'closed' || confirmedResult === 'removed') {
-        state.pendingEditorDeactivation = deactivationAnchor;
+        state.pendingEditorDeactivation = restoreActivationViewport ? null : deactivationAnchor;
         state.activeEditorBlockReturnScroll = null;
       }
-      getRefreshReaderPanels()();
-      const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
-      if (!refreshedEditorSection) {
-        getRenderApp()();
-      } else {
-        state.pendingEditorDeactivation = null;
-        if (deactivationAnchor) {
-          restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
-        }
-      }
+      refreshAfterCancel();
     }, app);
     return;
   }
   if (result === 'closed' || result === 'removed') {
-    state.pendingEditorDeactivation = deactivationAnchor;
+    state.pendingEditorDeactivation = restoreActivationViewport ? null : deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
   }
-  getRefreshReaderPanels()();
-  const refreshedEditorSection = getRefreshEditorSection()(sectionKey);
-  if (!refreshedEditorSection) {
-    getRenderApp()();
-  } else {
-    state.pendingEditorDeactivation = null;
-    if (deactivationAnchor) {
-      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
-    }
-  }
+  refreshAfterCancel();
 };
 
 const toggleEditorExpandable: AppActionHandler = ({ event, sectionKey, blockId }) => {

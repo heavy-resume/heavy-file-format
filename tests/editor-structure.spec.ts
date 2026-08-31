@@ -3646,14 +3646,14 @@ hvy_version: 0.1
   await tree.evaluate((node) => {
     node.scrollTop = Math.max(0, node.scrollTop - 180);
   });
-  await target.click();
+  const cancelReturnExpectedResult = await tree.evaluate((node) => node.scrollTop);
+  await target.dispatchEvent('click');
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.rich-editor') });
   await expect(activeBlock).toBeVisible();
-  const unscrolledExpectedResult = await tree.evaluate((node) => node.scrollTop);
   await activeBlock.getByRole('button', { name: 'Cancel' }).dispatchEvent('click');
   await expect(target).toBeVisible();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  expect(Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(unscrolledExpectedResult));
+  expect(Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelReturnExpectedResult));
 
   await target.click();
   await expect(activeBlock).toBeVisible();

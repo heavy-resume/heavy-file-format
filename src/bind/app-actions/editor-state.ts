@@ -25,6 +25,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
   const passiveBlock = targetElement?.closest<HTMLElement>('.editor-block-passive');
   const passiveContent = targetElement?.closest<HTMLElement>('.reader-block') ?? passiveBlock?.querySelector<HTMLElement>('.reader-block');
   const anchor = passiveBlock ? getPassiveTextAnchor(passiveContent, targetElement) : undefined;
+  const preferredEditorTarget = capturePreferredEditorActivationTarget(targetElement);
   const aiPlaceholderActivation = state.currentView === 'ai' && Boolean(targetElement?.closest('.editor-passive-empty-text.has-placeholder'));
   state.activeEditorBlockReturnScroll = capturePaneScroll(state.paneScroll, app);
   if (aiPlaceholderActivation) {
@@ -44,6 +45,7 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
       preferTextFocus: true,
       immediateFocus: aiPlaceholderActivation ? true : state.pendingEditorActivation.immediateFocus,
       suppressFocus: clickedSortValueKey ? true : state.pendingEditorActivation.suppressFocus,
+      ...(preferredEditorTarget ? { preferredEditorTarget } : {}),
     };
   }
   if (!getRefreshEditorSection()(sectionKey)) {
@@ -55,6 +57,31 @@ const activateBlock: AppActionHandler = ({ app, event, sectionKey, blockId }) =>
     openActivatedEnumSortValue(app, sectionKey, blockId, clickedSortValueKey);
   }
 };
+
+function capturePreferredEditorActivationTarget(
+  targetElement: HTMLElement | null
+): NonNullable<typeof state.pendingEditorActivation>['preferredEditorTarget'] | null {
+  const tableCell = targetElement?.closest<HTMLTableCellElement>('.reader-table .table-main-row > td');
+  const tableRow = tableCell?.closest<HTMLTableRowElement>('.table-main-row');
+  const tableBody = tableRow?.parentElement;
+  if (tableCell && tableRow && tableBody) {
+    const rowIndex = Array.from(tableBody.querySelectorAll<HTMLTableRowElement>(':scope > .table-main-row')).indexOf(tableRow);
+    if (rowIndex >= 0) {
+      return {
+        field: 'table-cell',
+        rowIndex,
+        cellIndex: tableCell.cellIndex,
+      };
+    }
+  }
+  const tableColumn = targetElement?.closest<HTMLTableCellElement>('.reader-table thead > tr > th');
+  return tableColumn
+    ? {
+        field: 'table-column',
+        columnIndex: tableColumn.cellIndex,
+      }
+    : null;
+}
 
 function openActivatedEnumSortValue(app: HTMLElement, sectionKey: string, blockId: string, key: string): void {
   const activeBlock = [...app.querySelectorAll<HTMLElement>('.editor-block[data-active-editor-block="true"]')]

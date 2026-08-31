@@ -311,6 +311,46 @@ test('AI static table activation preserves scroll and Tab advances to the next c
   await expect.poll(async () => Math.round(await reader.evaluate((node) => node.scrollTop))).toBe(Math.round(expectedResult));
 });
 
+test('clicking a static table cell opens that cell in place', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-cell-activation"}-->
+#! Table Cell Activation
+
+ <!--hvy:text {}-->
+  ${'Generic content above the table. '.repeat(40)}
+
+ <!--hvy:table {"id":"activation-table","tableColumns":["Label","Value"]}-->
+  | Label | Value |
+  | --- | --- |
+${Array.from({ length: 12 }, (_item, index) => `  | Generic row ${index + 1} | ${index === 8 ? 'Clicked cell target' : `Generic value ${index + 1}`} |`).join('\n')}
+
+ <!--hvy:text {}-->
+  ${'Generic content below the table. '.repeat(40)}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const passiveCell = page.getByRole('cell', { name: 'Clicked cell target', exact: true });
+  await passiveCell.scrollIntoViewIfNeeded();
+  const passiveTop = await passiveCell.evaluate((element) => element.getBoundingClientRect().top);
+  await passiveCell.click();
+
+  const expectedResult = page.locator(
+    '[data-field="table-cell"][data-row-index="8"][data-cell-index="1"]'
+  );
+  await expect(expectedResult).toBeFocused();
+  await expect.poll(async () => {
+    const activeTop = await expectedResult.evaluate((element) => element.getBoundingClientRect().top);
+    return Math.abs(activeTop - passiveTop);
+  }).toBeLessThanOrEqual(3);
+});
+
 test('active table editor Enter advances rows and Shift Enter inserts a cell line break', async ({ page }) => {
   await page.goto('/');
 

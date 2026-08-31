@@ -573,6 +573,12 @@ export interface AppState {
     preferTextFocus?: boolean;
     immediateFocus?: boolean;
     passiveHeight?: number;
+    preferredEditorTarget?: {
+      field: 'table-cell' | 'table-column';
+      rowIndex?: number;
+      cellIndex?: number;
+      columnIndex?: number;
+    };
   } | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;

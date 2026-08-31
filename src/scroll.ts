@@ -290,21 +290,46 @@ function focusPendingEditorActivation(
     return;
   }
   const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
+  const preferredTarget = resolvePreferredEditorActivationTarget(block, pending);
+  const anchorTarget = preferredTarget ?? fallbackTarget;
   const scrollContainer = block.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
   );
   if (typeof pending.anchorTop === 'number') {
-    const editableTop = fallbackTarget.isContentEditable
-      ? getFirstRenderedTextTop(fallbackTarget) ?? fallbackTarget.getBoundingClientRect().top
-      : fallbackTarget.getBoundingClientRect().top;
+    const editableTop = anchorTarget.isContentEditable
+      ? getFirstRenderedTextTop(anchorTarget) ?? anchorTarget.getBoundingClientRect().top
+      : anchorTarget.getBoundingClientRect().top;
     const displacement = editableTop - pending.anchorTop;
     if (scrollContainer && Math.abs(displacement) > 0.5) {
       scrollContainer.scrollTop += displacement;
     }
   }
-  const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
+  const target = preferredTarget ?? getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
   state.pendingEditorActivation = null;
+}
+
+function resolvePreferredEditorActivationTarget(
+  block: HTMLElement,
+  pending: NonNullable<typeof state.pendingEditorActivation>
+): HTMLElement | null {
+  const preferred = pending.preferredEditorTarget;
+  if (!preferred) {
+    return null;
+  }
+  if (preferred.field === 'table-cell'
+    && typeof preferred.rowIndex === 'number'
+    && typeof preferred.cellIndex === 'number') {
+    return block.querySelector<HTMLElement>(
+      `[data-field="table-cell"][data-row-index="${preferred.rowIndex}"][data-cell-index="${preferred.cellIndex}"]`
+    );
+  }
+  if (preferred.field === 'table-column' && typeof preferred.columnIndex === 'number') {
+    return block.querySelector<HTMLElement>(
+      `[data-field="table-column"][data-column-index="${preferred.columnIndex}"]`
+    );
+  }
+  return null;
 }
 
 function getEditorActivationTarget(

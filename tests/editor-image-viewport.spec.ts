@@ -306,3 +306,60 @@ ${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"trailing-section
     { timeout: 1000 }
   ).toBeLessThanOrEqual(2);
 });
+
+test('before, an image and nested list item are open, after: moving the item keeps the viewport position', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"nested-move-target"}-->
+#! Nested Move Target
+
+ <!--hvy:image {"id":"nested-move-image","imageAlt":"Nested move neighbor"}-->
+
+ <!--hvy:component-list {"id":"nested-move-list","componentListComponent":"text","componentListItemLabel":"entry"}-->
+
+${Array.from({ length: 10 }, (_item, index) => `  <!--hvy:component-list:${index} {}-->
+
+   <!--hvy:text {"id":"nested-move-entry-${index + 1}"}-->
+    Nested move entry ${index + 1} ${'generic content '.repeat(20)}
+`).join('\n')}
+${Array.from({ length: 6 }, (_item, index) => `<!--hvy: {"id":"nested-move-tail-${index + 1}"}-->
+#! Nested Move Tail ${index + 1}
+
+ <!--hvy:text {}-->
+  ${'Generic trailing content. '.repeat(28)}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+
+  const target = page.locator('.editor-block-passive', { hasText: 'Nested move entry 10' }).last();
+  await target.scrollIntoViewIfNeeded({ timeout: 1000 });
+  await target.click({ timeout: 1000 });
+  const activeItem = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Nested move entry 10' }).last();
+  await expect(activeItem).toBeVisible({ timeout: 1000 });
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import(/* @vite-ignore */ '/src/state.ts');
+    return state.pendingEditorActivation;
+  }), { timeout: 1000 }).toBeNull();
+
+  const beforeMoveScrollTop = await page.locator('#editorTree').evaluate((element) => element.scrollTop);
+  await activeItem.getByRole('button', { name: 'Move block up' }).dispatchEvent('click');
+
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  await expect.poll(
+    () => page.locator('#editorTree').evaluate(
+      (element, expectedScrollTop) => Math.abs(element.scrollTop - expectedScrollTop),
+      beforeMoveScrollTop
+    ),
+    { timeout: 1000 }
+  ).toBeLessThanOrEqual(2);
+});

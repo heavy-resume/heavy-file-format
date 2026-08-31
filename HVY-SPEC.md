@@ -1685,6 +1685,7 @@ Tail format:
 Tail directive fields:
 - `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
 - `mediaType`: RECOMMENDED IANA media type of the decoded payload.
+- `pixelWidth` and `pixelHeight`: REQUIRED positive integer intrinsic pixel dimensions for image attachments. Writers MUST include both fields so readers can reserve the image's aspect ratio before retrieving or decoding its bytes.
 - `length`: REQUIRED non-negative integer byte count for that attachment's slice. When omitted on the last directive, the slice consumes all remaining tail bytes.
 - `encoding`: optional. When `"gzip"`, the attachment bytes are gzip-compressed and clients MUST decompress before handing them to the consumer.
 - `plugin`: optional. Names the plugin that owns the attachment.

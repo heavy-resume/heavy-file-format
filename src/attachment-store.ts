@@ -1,5 +1,6 @@
 import type { JsonObject } from './hvy/types';
 import type { DocumentAttachment, VisualDocument } from './types';
+import { addImageIntrinsicDimensions } from './image-intrinsic-dimensions';
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -97,12 +98,12 @@ export class AttachmentStore {
     this.entries = [];
     this.index.clear();
     attachments.forEach((attachment) => {
-      this.entries.push({
+      this.entries.push(normalizeAttachmentStoreEntry({
         id: attachment.id,
         meta: attachment.meta,
         length: attachment.bytes.length,
         bytes: attachment.bytes,
-      });
+      }));
     });
     this.rebuildIndex();
     this.version += 1;
@@ -208,9 +209,12 @@ export function hydrateHostAttachmentDescriptorsSync(
 
 function normalizeAttachmentStoreEntry(entry: AttachmentStoreEntry): AttachmentStoreEntry {
   const length = Math.max(0, Math.floor(entry.length));
+  const bytes = entry.bytes ?? (entry.source
+    ? entry.source.bytes.subarray(entry.source.offset, entry.source.offset + length)
+    : undefined);
   return {
     id: entry.id,
-    meta: entry.meta,
+    meta: addImageIntrinsicDimensions(entry.id, entry.meta, bytes),
     length,
     ...(entry.bytes ? { bytes: entry.bytes } : {}),
     ...(entry.source ? { source: { ...entry.source, length } } : {}),

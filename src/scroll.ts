@@ -268,12 +268,16 @@ function focusPendingEditorActivation(
     return;
   }
   const fallbackTarget = getPrimaryEditorActivationTarget(block) ?? block;
-  const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');
+  const scrollContainer = block.closest<HTMLElement>(
+    '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
   if (typeof pending.anchorTop === 'number') {
-    const editableTop = fallbackTarget.getBoundingClientRect().top;
-    const pushedDownBy = editableTop - pending.anchorTop;
-    if (editorTree && pushedDownBy > 0) {
-      editorTree.scrollTop += pushedDownBy;
+    const editableTop = fallbackTarget.isContentEditable
+      ? getFirstRenderedTextTop(fallbackTarget) ?? fallbackTarget.getBoundingClientRect().top
+      : fallbackTarget.getBoundingClientRect().top;
+    const displacement = editableTop - pending.anchorTop;
+    if (scrollContainer && Math.abs(displacement) > 0.5) {
+      scrollContainer.scrollTop += displacement;
     }
   }
   const target = getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);

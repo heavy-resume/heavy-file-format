@@ -15,6 +15,7 @@ import type { JsonObject } from '../../../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
 import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
+import { addImageIntrinsicDimensions, getImageIntrinsicDimensions } from '../../../image-intrinsic-dimensions';
 
 export { mergeImagePresetCss } from './image-preset-css';
 
@@ -257,9 +258,15 @@ export function renderImageElement(options: {
   const srcAttr = url ? ` src="${options.helpers.escapeAttr(url)}"` : '';
   const loadingAttr = options.lazy ?? true ? ' loading="lazy"' : '';
   const styleAttr = options.style ? ` style="${options.helpers.escapeAttr(options.style)}"` : '';
+  const descriptor = getAttachmentDescriptors(state.document)
+    .find((candidate) => candidate.id === getImageAttachmentId(options.filename));
+  const dimensions = descriptor ? getImageIntrinsicDimensions(descriptor.meta) : null;
+  const dimensionsAttr = dimensions
+    ? ` width="${dimensions.width}" height="${dimensions.height}"`
+    : '';
   const lazyAttr = options.lazyCarousel ? ' data-hvy-carousel-lazy-image="true"' : '';
   const imageLazyAttr = !url && !options.lazyCarousel ? ' data-hvy-lazy-image="true"' : '';
-  return `<img${classAttr}${srcAttr}${loadingAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
+  return `<img${classAttr}${srcAttr}${loadingAttr}${dimensionsAttr} alt="${options.helpers.escapeAttr(options.alt)}" data-image-filename="${options.helpers.escapeAttr(options.filename)}"${lazyAttr}${imageLazyAttr}${styleAttr} />`;
 }
 
 export function clearImageBlobUrlCache(): void {
@@ -922,7 +929,7 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
 
 export async function storeImageAttachment(filename: string, mediaType: string, bytes: Uint8Array): Promise<void> {
   const id = getImageAttachmentId(filename);
-  const meta: JsonObject = { mediaType };
+  const meta = addImageIntrinsicDimensions(id, { mediaType }, bytes);
   const descriptor = await state.attachmentHost?.store(id, bytes, meta);
   const nextMeta = descriptor && typeof descriptor === 'object' ? descriptor.meta : meta;
   setAttachment(state.document, id, nextMeta, bytes);
@@ -955,7 +962,12 @@ export async function reduceExistingImageAttachments(): Promise<{ reduced: numbe
     }
     reduced.push({
       id: getImageAttachmentId(filename),
-      meta: { ...attachment.meta, mediaType: prepared.mediaType },
+      meta: addImageIntrinsicDimensions(
+        getImageAttachmentId(filename),
+        { ...attachment.meta, mediaType: prepared.mediaType },
+        prepared.bytes,
+        true
+      ),
       bytes: prepared.bytes,
     });
   }

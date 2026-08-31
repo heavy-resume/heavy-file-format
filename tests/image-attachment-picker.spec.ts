@@ -48,6 +48,30 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="image-alt"]')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Use an attached image...' })).toBeFocused();
 
+  await page.getByRole('button', { name: 'Rename image attachment photo-1.png' }).click({ timeout: 1000 });
+  const filenameInput = page.getByRole('textbox', { name: 'Image attachment filename for photo-1.png' });
+  await expect(filenameInput).toBeFocused();
+  await filenameInput.fill('portrait.png');
+  await page.locator('[data-field="image-alt"]').click({ timeout: 1000 });
+  await expect(page.getByRole('button', { name: 'Rename image attachment portrait.png' })).toHaveText('portrait.png');
+  await expect(page.locator('[data-field="image-alt"]')).toBeFocused();
+  await expect.poll(() => page.evaluate(async () => {
+    const { listImageFilenames } = await import('/src/attachments.ts');
+    const { state } = await import('/src/state.ts');
+    return {
+      imageFile: state.document.sections[0]?.blocks[0]?.schema.imageFile,
+      filenames: listImageFilenames(state.document),
+    };
+  })).toEqual({
+    imageFile: 'portrait.png',
+    filenames: expect.arrayContaining(['portrait.png']),
+  });
+  await expect.poll(() => page.evaluate(async () => {
+    const { listImageFilenames } = await import('/src/attachments.ts');
+    const { state } = await import('/src/state.ts');
+    return listImageFilenames(state.document).includes('photo-1.png');
+  })).toBe(false);
+
   await page.getByRole('button', { name: 'Add caption' }).click({ timeout: 1000 });
   await expect(page.getByRole('dialog', { name: 'Image Caption' })).toBeVisible({ timeout: 1000 });
   await page.getByRole('button', { name: 'Close Image Caption' }).click({ timeout: 1000 });

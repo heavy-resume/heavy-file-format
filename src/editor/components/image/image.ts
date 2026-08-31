@@ -841,7 +841,15 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             data-block-id="${helpers.escapeAttr(block.id)}"
           >${plusIcon()}<span>Use an attached image...</span></button>` : ''}
         </div>
-        <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
+        ${filename ? `<button
+          type="button"
+          class="image-filename muted"
+          data-image-filename-editor
+          data-section-key="${helpers.escapeAttr(sectionKey)}"
+          data-block-id="${helpers.escapeAttr(block.id)}"
+          title="Rename image attachment"
+          aria-label="Rename image attachment ${helpers.escapeAttr(filename)}"
+        >${helpers.escapeHtml(filename)}</button>` : '<div class="image-filename muted">No file selected</div>'}
       </div>
       <div class="image-alt-label-container">
         <label class="image-alt-label">

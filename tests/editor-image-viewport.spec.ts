@@ -222,3 +222,83 @@ hvy_version: 0.1
   expect(Math.abs(reservedImageSize.width / reservedImageSize.height - 1.5)).toBeLessThanOrEqual(0.01);
   expect(Math.abs(afterHydrationTop - beforeHydrationTop)).toBeLessThanOrEqual(2);
 });
+
+test('before, an image and table are open, after: closing the table keeps its viewport anchor', async ({ page }) => {
+  test.setTimeout(5000);
+  test.fail(true, 'Closing an expanded table over-corrects the shared editor scroll position.');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"mixed-editor-target"}-->
+#! Mixed Editor Target
+
+ <!--hvy:image {"id":"synthetic-neighbor-image","imageFile":"synthetic-table-neighbor.svg","imageAlt":"Synthetic table neighbor"}-->
+
+ <!--hvy:table {"id":"synthetic-neighbor-table","tableColumns":["Label","Value"]}-->
+  | Label | Value |
+  | --- | --- |
+${Array.from({ length: 8 }, (_item, index) => `  | Generic row ${index + 1} | Generic value ${index + 1} |`).join('\n')}
+
+${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"trailing-section-${index + 1}"}-->
+#! Trailing Section ${index + 1}
+
+ <!--hvy:text {}-->
+  ${'Synthetic trailing content. '.repeat(24)}
+`).join('\n')}
+`);
+  await page.getByRole('button', { name: 'Apply' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Basic' }).click({ timeout: 1000 });
+  await page.evaluate(async () => {
+    const [{ state, getRefreshEditorSection }, { setImageAttachment }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/attachments.ts'),
+    ]);
+    setImageAttachment(
+      state.document,
+      'synthetic-table-neighbor.svg',
+      'image/svg+xml',
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>')
+    );
+    const targetSection = state.document.sections.find((section) => section.customId === 'mixed-editor-target');
+    if (!targetSection) throw new Error('Synthetic target section missing.');
+    getRefreshEditorSection()(targetSection.key);
+  });
+
+  const imageElement = page.getByRole('img', { name: 'Synthetic table neighbor' });
+  await expect.poll(() => imageElement.evaluate((element: HTMLImageElement) => element.naturalHeight), { timeout: 1000 })
+    .toBeGreaterThan(0);
+  const image = page.locator('.editor-block-passive', { has: imageElement });
+  await expect(image).toBeVisible({ timeout: 1000 });
+  await image.click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Generic row 1' });
+  await passiveTable.evaluate((element) => {
+    const editor = element.closest('.editor-tree');
+    if (!(editor instanceof HTMLElement)) throw new Error('Editor scroll surface missing.');
+    editor.scrollTop += element.getBoundingClientRect().top - (editor.getBoundingClientRect().bottom - 45);
+    editor.dispatchEvent(new Event('scroll'));
+  });
+  await passiveTable.click({ timeout: 1000 });
+  const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  const firstCell = activeTable.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]');
+  await firstCell.click({ timeout: 1000 });
+  await expect(firstCell).toBeFocused({ timeout: 1000 });
+  await firstCell.type('x', { timeout: 1000 });
+  await expect(firstCell).toBeFocused({ timeout: 1000 });
+
+  await activeTable.hover({ timeout: 1000 });
+  await page.mouse.wheel(0, 300);
+  await page.mouse.wheel(0, -300);
+  const beforeCloseTop = await activeTable.evaluate((element) => element.getBoundingClientRect().top);
+  await activeTable.getByRole('button', { name: 'Done', exact: true }).click({ timeout: 1000 });
+  await expect(passiveTable).toBeVisible({ timeout: 1000 });
+  const afterCloseTop = await passiveTable.evaluate((element) => element.getBoundingClientRect().top);
+
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  expect(Math.abs(afterCloseTop - beforeCloseTop)).toBeLessThanOrEqual(2);
+});

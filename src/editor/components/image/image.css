@@ -141,6 +141,33 @@
   word-break: break-all;
 }
 
+.hvy-document button.image-filename {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  background: none;
+  cursor: text;
+  text-align: center;
+}
+
+.hvy-document .image-filename-input {
+  box-sizing: border-box;
+  display: block;
+  width: min(100%, 28rem);
+  margin: 0 auto;
+  padding: 0.34rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--hvy-accent-1) 72%, var(--hvy-border));
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--hvy-code-bg) 72%, var(--hvy-surface));
+  color: var(--hvy-text);
+  box-shadow: 0 0 0 0.18rem color-mix(in srgb, var(--hvy-accent-1) 16%, transparent);
+  outline: none;
+}
+
 .hvy-document .image-figure {
   margin: 0;
   text-align: center;

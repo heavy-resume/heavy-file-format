@@ -143,6 +143,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).not.toContain('Edit caption');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');
+    expect(expectedResult).toContain('data-image-filename-editor');
+    expect(expectedResult).toContain('aria-label="Rename image attachment avatar.jpg"');
   });
 
   test('expected result: an empty image caption renders as a clickable placeholder', () => {

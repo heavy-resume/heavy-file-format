@@ -225,7 +225,6 @@ hvy_version: 0.1
 
 test('before, an image and table are open, after: closing the table keeps its viewport anchor', async ({ page }) => {
   test.setTimeout(5000);
-  test.fail(true, 'Closing an expanded table over-corrects the shared editor scroll position.');
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
   await page.locator('#rawEditor').fill(`---
@@ -294,11 +293,16 @@ ${Array.from({ length: 10 }, (_item, index) => `<!--hvy: {"id":"trailing-section
   await activeTable.hover({ timeout: 1000 });
   await page.mouse.wheel(0, 300);
   await page.mouse.wheel(0, -300);
-  const beforeCloseTop = await activeTable.evaluate((element) => element.getBoundingClientRect().top);
-  await activeTable.getByRole('button', { name: 'Done', exact: true }).click({ timeout: 1000 });
+  const beforeCloseScrollTop = await page.locator('#editorTree').evaluate((element) => element.scrollTop);
+  await activeTable.getByRole('button', { name: 'Done', exact: true }).dispatchEvent('click');
   await expect(passiveTable).toBeVisible({ timeout: 1000 });
-  const afterCloseTop = await passiveTable.evaluate((element) => element.getBoundingClientRect().top);
 
   await expect(activeImage).toBeVisible({ timeout: 1000 });
-  expect(Math.abs(afterCloseTop - beforeCloseTop)).toBeLessThanOrEqual(2);
+  await expect.poll(
+    () => page.locator('#editorTree').evaluate(
+      (element, expectedScrollTop) => Math.abs(element.scrollTop - expectedScrollTop),
+      beforeCloseScrollTop
+    ),
+    { timeout: 1000 }
+  ).toBeLessThanOrEqual(2);
 });

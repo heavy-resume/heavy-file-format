@@ -121,11 +121,16 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
 export function captureEditorDeactivationAnchor(
   app: HTMLElement,
   sectionKey: string,
-  blockId: string
+  blockId: string,
+  sourceBlock?: HTMLElement | null
 ): NonNullable<typeof state.pendingEditorDeactivation> | null {
-  const block = app.querySelector<HTMLElement>(
+  const block = sourceBlock?.matches(
     `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
-  );
+  )
+    ? sourceBlock
+    : app.querySelector<HTMLElement>(
+        `.editor-block[data-active-editor-block="true"][data-active-block-id="${CSS.escape(blockId)}"]`
+      );
   const scrollContainer = block?.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
   );
@@ -189,6 +194,23 @@ export function scrollPendingEditorDeactivation(app: HTMLElement): void {
   });
 }
 
+export function restoreCapturedEditorDeactivationScrollTop(
+  app: HTMLElement,
+  captured: NonNullable<typeof state.pendingEditorDeactivation>
+): void {
+  const restore = (): void => {
+    const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
+    if (scrollContainer) {
+      scrollContainer.scrollTop = captured.scrollTopBeforeClose;
+    }
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 function applyPendingEditorDeactivationScroll(
   app: HTMLElement,
   pending: NonNullable<typeof state.pendingEditorDeactivation>
@@ -198,7 +220,7 @@ function applyPendingEditorDeactivationScroll(
     return;
   }
   if (typeof pending.resolvedScrollTop !== 'number') {
-    const passiveBlock = app.querySelector<HTMLElement>(
+    const passiveBlock = scrollContainer.querySelector<HTMLElement>(
       `.editor-block-passive[data-section-key="${CSS.escape(pending.sectionKey)}"][data-block-id="${CSS.escape(pending.blockId)}"]`
     );
     const passiveAnchorTop = passiveBlock

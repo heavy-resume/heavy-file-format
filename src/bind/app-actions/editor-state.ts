@@ -2,7 +2,7 @@ import { state, getRenderApp, getRefreshEditorSection, getRefreshReaderPanels } 
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { captureEditorDeactivationAnchor, capturePaneScroll, scrollPendingEditorActivation } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll, restoreCapturedEditorDeactivationScrollTop, scrollPendingEditorActivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -138,7 +138,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (block && editorBlock && showInvalidSortValues(editorBlock, getSortValueDefsForBlock(state.document, block))) {
     return;
   }
-  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId, editorBlock);
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);
   const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
@@ -146,6 +146,8 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
     ? syncSortValuesForDocument(state.document)
     : false;
+  const runsDocumentEditHooks = (result === 'closed' || result === 'removed')
+    && (blockChanged || result === 'removed' || sortValuesChanged);
   if (result === 'closed' || result === 'removed') {
     state.pendingEditorDeactivation = deactivationAnchor;
     state.activeEditorBlockReturnScroll = null;
@@ -158,9 +160,16 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
     getRenderApp()();
   } else {
     state.pendingEditorDeactivation = null;
+    if (deactivationAnchor) {
+      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+    }
   }
-  if ((result === 'closed' || result === 'removed') && (blockChanged || result === 'removed' || sortValuesChanged)) {
-    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app), undefined, sectionKey);
+  if (runsDocumentEditHooks) {
+    runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app), () => {
+      if (deactivationAnchor) {
+        restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+      }
+    }, sectionKey);
   }
 };
 
@@ -179,12 +188,17 @@ function commitActiveInlineTableEdit(sectionKey: string, blockId: string): void 
   commitInlineTableEdit(activeElement);
 }
 
-const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) => {
+const cancelBlockEdit: AppActionHandler = ({ app, actionButton, event, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
   event.stopPropagation();
-  const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId);
+  const deactivationAnchor = captureEditorDeactivationAnchor(
+    app,
+    sectionKey,
+    blockId,
+    actionButton.closest?.<HTMLElement>('.editor-block') ?? null
+  );
   const result = cancelEditorBlockEdit(sectionKey, blockId);
   if (result === 'needs-confirmation') {
     openRemoveConfirmationModal(() => {
@@ -199,6 +213,9 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
         getRenderApp()();
       } else {
         state.pendingEditorDeactivation = null;
+        if (deactivationAnchor) {
+          restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+        }
       }
     }, app);
     return;
@@ -213,6 +230,9 @@ const cancelBlockEdit: AppActionHandler = ({ app, event, sectionKey, blockId }) 
     getRenderApp()();
   } else {
     state.pendingEditorDeactivation = null;
+    if (deactivationAnchor) {
+      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
+    }
   }
 };
 

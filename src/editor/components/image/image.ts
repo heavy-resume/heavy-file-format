@@ -14,7 +14,7 @@ import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
 import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
-import { getTextCaptionMarkdown, normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
+import { normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
 import { addImageIntrinsicDimensions, getImageIntrinsicDimensions } from '../../../image-intrinsic-dimensions';
 
 export { mergeImagePresetCss } from './image-preset-css';
@@ -415,7 +415,7 @@ function observeHydratedImageLoad(image: HTMLImageElement, filename: string, sta
 }
 
 export function renderImageAttachmentPicker(options: {
-  helpers: ComponentRenderHelpers;
+  helpers: Pick<ComponentRenderHelpers, 'escapeAttr' | 'escapeHtml'>;
   action: string;
   actionLabel: string;
   sectionKey: string;
@@ -467,6 +467,59 @@ export function renderImageAttachmentPicker(options: {
     </div>
     <button type="button" class="ghost image-attachment-picker-toggle" data-image-attachment-picker-toggle aria-expanded="false" hidden></button>
   </div>`;
+}
+
+export function openImageAttachmentPickerModal(
+  app: HTMLElement,
+  sectionKey: string,
+  blockId: string,
+): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'image' || !block.schema.allowDocumentImageReuse) {
+    return;
+  }
+  app.querySelectorAll<HTMLElement>('.image-attachment-modal-root').forEach((openModal) => openModal.remove());
+  const modal = document.createElement('div');
+  modal.className = 'modal-root image-attachment-modal-root';
+  modal.innerHTML = `
+    <div class="modal-overlay" data-image-attachment-modal-close="true"></div>
+    <section class="modal-panel image-attachment-modal" role="dialog" aria-modal="true" aria-label="Use an attached image">
+      <div class="image-attachment-modal-header">
+        <h3>Use an attached image</h3>
+        <button type="button" class="ghost image-attachment-modal-close" data-image-attachment-modal-close="true">${closeIcon()}<span>Close</span></button>
+      </div>
+      ${renderImageAttachmentPicker({
+        helpers: { escapeAttr: escapeModalAttr, escapeHtml: escapeModalHtml },
+        action: 'image-use-existing',
+        actionLabel: 'Use image',
+        sectionKey,
+        blockId,
+        selectedFilename: block.schema.imageFile.trim(),
+        selectedLabel: 'Current image',
+        emptyText: 'No attached images yet.',
+      })}
+    </section>
+  `;
+  const close = () => {
+    modal.remove();
+    app.querySelector<HTMLButtonElement>(
+      `[data-action="open-image-attachment-modal"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+    )?.focus();
+  };
+  modal.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-image-attachment-modal-close="true"]')) {
+      close();
+    }
+  });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      close();
+    }
+  });
+  app.appendChild(modal);
+  initializeImageAttachmentPickers(modal);
+  modal.querySelector<HTMLButtonElement>('.image-attachment-modal-close')?.focus();
 }
 
 export function initializeImageAttachmentPickers(
@@ -678,17 +731,20 @@ function escapeModalAttr(value: string): string {
   return escapeModalHtml(value).replace(/'/g, '&#39;');
 }
 
-function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): string {
+function renderPreview(
+  block: VisualBlock,
+  helpers: ComponentRenderHelpers,
+  editableCaption?: { sectionKey: string; blockId: string },
+): string {
   const filename = block.schema.imageFile.trim();
-  const alt = block.schema.imageAlt || filename || 'Image';
+  const alt = block.schema.imageAlt;
+  const captionHtml = editableCaption
+    ? renderEditableImageCaption(block, helpers, editableCaption)
+    : renderReadonlyImageCaption(block, helpers);
   if (!filename) {
-    return '<div class="image-empty muted">No image</div>';
+    const empty = '<div class="image-empty muted">No image</div>';
+    return editableCaption ? `<figure class="image-figure">${empty}${captionHtml}</figure>` : empty;
   }
-  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
-  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
-  const captionHtml = captionContent
-    ? `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`
-    : '';
   const image = renderImageElement({
     filename,
     alt,
@@ -698,9 +754,35 @@ function renderPreview(block: VisualBlock, helpers: ComponentRenderHelpers): str
     lazy: true,
   });
   if (!image) {
-    return `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
+    const missing = `<div class="image-empty muted">Missing attachment: ${helpers.escapeHtml(filename)}</div>`;
+    return editableCaption ? `<figure class="image-figure">${missing}${captionHtml}</figure>` : missing;
   }
   return `<figure class="image-figure">${image}${captionHtml}</figure>`;
+}
+
+function renderReadonlyImageCaption(block: VisualBlock, helpers: ComponentRenderHelpers): string {
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  if (!captionContent) return '';
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  return `<figcaption class="image-caption" style="text-align: ${helpers.escapeAttr(captionAlign)};">${captionContent}</figcaption>`;
+}
+
+function renderEditableImageCaption(
+  block: VisualBlock,
+  helpers: ComponentRenderHelpers,
+  target: { sectionKey: string; blockId: string },
+): string {
+  const captionContent = renderTextCaptionHtml(block.schema.caption, helpers);
+  const captionAlign = normalizeTextCaption(block.schema.caption)?.schema.align ?? 'center';
+  return `<figcaption class="image-caption image-caption-editor" style="text-align: ${helpers.escapeAttr(captionAlign)};">
+    <button
+      type="button"
+      class="image-caption-trigger${captionContent ? '' : ' is-placeholder'}"
+      data-action="open-image-caption-modal"
+      data-section-key="${helpers.escapeAttr(target.sectionKey)}"
+      data-block-id="${helpers.escapeAttr(target.blockId)}"
+    >${captionContent || '<span class="image-caption-placeholder">Add caption</span>'}</button>
+  </figcaption>`;
 }
 
 export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
@@ -740,7 +822,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           title="Delete image attachment"
           aria-label="Delete image attachment ${helpers.escapeAttr(filename)}"
         >${closeIcon()}</button>` : ''}
-        ${renderPreview(block, helpers)}
+        ${renderPreview(block, helpers, { sectionKey, blockId: block.id })}
         <div class="image-dropzone-hint">
           <span>Drop an image here or</span>
           <label class="image-pick-label">
@@ -751,6 +833,13 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
         </div>
         <div class="image-camera-row">
           <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
+          ${block.schema.allowDocumentImageReuse ? `<button
+            type="button"
+            class="image-pick-button image-camera-button image-attachment-open-button"
+            data-action="open-image-attachment-modal"
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+          >${plusIcon()}<span>Use an attached image...</span></button>` : ''}
         </div>
         <div class="image-filename muted">${filename ? helpers.escapeHtml(filename) : 'No file selected'}</div>
       </div>
@@ -765,30 +854,7 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             placeholder="Describe the image"
           >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
         </label>
-        <div class="image-alt-label">
-          <span>Caption</span>
-          <button
-            type="button"
-            class="image-pick-button image-caption-edit-button"
-            data-action="open-image-caption-modal"
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-          >${getTextCaptionMarkdown(block.schema.caption).trim() ? 'Edit caption' : 'Add caption'}</button>
-        </div>
       </div>
-      ${block.schema.allowDocumentImageReuse ? `<div class="image-attachment-panel">
-        <div class="image-attachment-panel-title">Use an attached image</div>
-        ${renderImageAttachmentPicker({
-          helpers,
-          action: 'image-use-existing',
-          actionLabel: 'Use image',
-          sectionKey,
-          blockId: block.id,
-          selectedFilename: filename,
-          selectedLabel: 'Current image',
-          emptyText: 'No attached images yet.',
-        })}
-      </div>` : ''}
     </div>
   `;
 };
@@ -833,9 +899,6 @@ export function useExistingImageAttachment(sectionKey: string, blockId: string, 
   if (!block || !listImageFilenames(state.document).includes(filename)) return;
   recordHistory(`image-existing:${blockId}`);
   block.schema.imageFile = filename;
-  if (!block.schema.imageAlt) {
-    block.schema.imageAlt = filename;
-  }
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();
   refreshImageEditorSection(sectionKey);
@@ -918,9 +981,6 @@ export async function handleImageUpload(target: HTMLElement, file: File): Promis
   recordHistory(`image-upload:${blockId}`);
   await storeImageAttachment(filename, prepared.mediaType, prepared.bytes);
   block.schema.imageFile = filename;
-  if (!block.schema.imageAlt) {
-    block.schema.imageAlt = filename;
-  }
   clearImageBlobUrlCache();
   syncReusableTemplateForBlock(sectionKey, blockId);
   getRefreshReaderPanels()();

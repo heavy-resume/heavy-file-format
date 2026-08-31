@@ -61,41 +61,42 @@
   color: var(--hvy-link-color);
 }
 
-.hvy-document .image-caption-edit-button {
-  box-sizing: border-box;
-  width: 10rem;
-  align-self: center;
-  min-height: 2.5rem;
-  border: 1px solid color-mix(in srgb, var(--hvy-button-bg) 68%, var(--hvy-border));
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: color-mix(in srgb, var(--hvy-button-bg) 18%, var(--hvy-surface));
-  color: var(--hvy-text);
+.hvy-document .image-caption-trigger {
+  display: block;
+  width: 100%;
+  min-height: 1.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  background: transparent;
+  color: inherit;
   font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hvy-button-bg) 10%, transparent);
+  text-align: inherit;
+  cursor: pointer;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
-    box-shadow 140ms ease,
-    color 140ms ease,
-    transform 140ms ease;
+    box-shadow 140ms ease;
 }
 
-.hvy-document .image-caption-edit-button:hover,
-.hvy-document .image-caption-edit-button:focus-visible {
+.hvy-document .image-caption-trigger:hover,
+.hvy-document .image-caption-trigger:focus-visible {
   border-color: var(--hvy-focus);
-  background: color-mix(in srgb, var(--hvy-button-bg) 30%, var(--hvy-surface));
+  background: color-mix(in srgb, var(--hvy-button-bg) 14%, transparent);
   color: var(--hvy-text);
   box-shadow:
-    0 0.35rem 0.9rem color-mix(in srgb, var(--hvy-button-bg) 18%, transparent),
     0 0 0 0.18rem var(--hvy-focus-ring);
-  transform: translateY(-1px);
+}
+
+.hvy-document .image-caption-placeholder {
+  color: var(--hvy-text-muted);
+  font-style: italic;
 }
 
 .hvy-document .image-camera-row {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   width: 100%;
   justify-content: center;
 }
@@ -198,21 +199,6 @@
   gap: 0.75rem;
   justify-content: center;
   width: 100%;
-}
-
-.hvy-document .image-attachment-panel {
-  display: grid;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.65rem;
-  border: 1px solid var(--hvy-border);
-  background: color-mix(in srgb, var(--hvy-surface) 92%, var(--hvy-bg-alt) 8%);
-}
-
-.hvy-document .image-attachment-panel-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--hvy-text-alt);
 }
 
 .hvy-document .image-attachment-picker {
@@ -345,6 +331,52 @@
   box-shadow:
     0 0.32rem 0.8rem color-mix(in srgb, var(--hvy-danger) 26%, transparent),
     0 0 0 0.16rem color-mix(in srgb, var(--hvy-danger) 18%, transparent);
+}
+
+.hvy-document .image-attachment-modal {
+  width: min(50rem, calc(100% - 1rem));
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hvy-document .image-attachment-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hvy-document .image-attachment-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.hvy-document .image-attachment-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 999px;
+  padding: 0.38rem 0.7rem;
+  background: color-mix(in srgb, var(--hvy-surface) 88%, var(--hvy-button-bg) 12%);
+  color: var(--hvy-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hvy-document .image-attachment-modal-close:hover,
+.hvy-document .image-attachment-modal-close:focus-visible {
+  border-color: var(--hvy-focus);
+  background: color-mix(in srgb, var(--hvy-button-hover-bg) 55%, var(--hvy-surface));
+  box-shadow: 0 0 0 0.16rem var(--hvy-focus-ring);
+}
+
+.hvy-document .image-attachment-modal-close .hvy-ui-icon {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .hvy-document .image-camera-modal-root,

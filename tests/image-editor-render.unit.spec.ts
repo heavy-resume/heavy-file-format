@@ -129,21 +129,40 @@ describe('image editor render controls', () => {
 
     expect(expectedResult).toContain('data-action="image-take-photo"');
     expect(expectedResult).toMatch(/<div class="image-camera-row">\s*<button[^>]+data-action="image-take-photo"/);
-    expect(expectedResult).toContain('data-action="image-use-existing"');
-    expect(expectedResult).toContain('Use an attached image');
-    expect(expectedResult).toContain('Use image');
-    expect(expectedResult).toContain('Current image');
-    expect(expectedResult).toContain('aria-label="Use image: unused.jpg"');
+    expect(expectedResult).toContain('data-action="open-image-attachment-modal"');
+    expect(expectedResult).toMatch(/<div class="image-camera-row">[\s\S]*data-action="image-take-photo"[\s\S]*data-action="open-image-attachment-modal"[\s\S]*<\/div>/);
+    expect(expectedResult).toContain('class="image-pick-button image-camera-button image-attachment-open-button"');
+    expect(expectedResult).toContain('Use an attached image...');
+    expect(expectedResult).not.toContain('data-action="image-use-existing"');
     expect(expectedResult).toContain('data-image-filename="avatar.jpg"');
     expect(expectedResult).toContain('data-action="image-delete-current"');
-    expect(expectedResult).toContain('data-action="image-delete-unused"');
-    expect(expectedResult).toContain('data-image-filename="unused.jpg"');
+    expect(expectedResult).not.toContain('data-action="image-delete-unused"');
     expect(expectedResult).toContain('data-action="open-image-caption-modal"');
-    expect(expectedResult).toMatch(/<div class="image-alt-label">\s*<span>Caption<\/span>\s*<button/);
-    expect(expectedResult).not.toMatch(/<label class="image-alt-label">\s*<span>Caption<\/span>/);
-    expect(expectedResult).toContain('<figcaption class="image-caption" style="text-align: center;">Team photo</figcaption>');
+    expect(expectedResult).toMatch(/<figcaption class="image-caption image-caption-editor"[^>]*>[\s\S]*<button[^>]+data-action="open-image-caption-modal"[\s\S]*Team photo[\s\S]*<\/button>/);
+    expect(expectedResult).not.toContain('<span>Caption</span>');
+    expect(expectedResult).not.toContain('Edit caption');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');
+  });
+
+  test('expected result: an empty image caption renders as a clickable placeholder', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.id = 'photo';
+    block.schema.imageFile = 'avatar.jpg';
+    initState(createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [
+        { id: 'image:avatar.jpg', meta: { mediaType: 'image/jpeg' }, bytes: new Uint8Array([1, 2, 3]) },
+      ],
+    }));
+
+    const expectedResult = renderImageEditor('profile', block, helpers);
+
+    expect(expectedResult).toContain('class="image-caption-trigger is-placeholder"');
+    expect(expectedResult).toContain('<span class="image-caption-placeholder">Add caption</span>');
+    expect(expectedResult).toContain('data-action="open-image-caption-modal"');
   });
 
   test('expected result: image size picker indicates the current preset', () => {
@@ -182,6 +201,7 @@ describe('image editor render controls', () => {
     const expectedResult = renderImageEditor('profile', block, helpers);
 
     expect(expectedResult).not.toContain('Use an attached image');
+    expect(expectedResult).not.toContain('data-action="open-image-attachment-modal"');
     expect(expectedResult).not.toContain('data-action="image-use-existing"');
     expect(expectedResult).toContain('data-field="image-upload"');
     expect(expectedResult).toContain('data-action="image-take-photo"');

@@ -42,6 +42,7 @@ ${Array.from({ length: 24 }, (_, index) => ` <!--hvy:text {}-->
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
   });
   await expect(page.locator('.editor-block[data-active-editor-block="true"] .image-block-img')).toBeVisible({ timeout: 1000 });
+  await expect(page.locator('[data-field="image-alt"]')).toHaveValue('');
   const afterUpload = await editorTree.evaluate((element) => ({
     scrollTop: element.scrollTop,
     identity: element.dataset.expectedViewportIdentity,

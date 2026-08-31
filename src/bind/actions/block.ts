@@ -4,7 +4,7 @@ import { findBlockContainerById, findBlockContainerInList, findSectionByKey } fr
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
-import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
+import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageAttachmentPickerModal, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
@@ -109,11 +109,23 @@ const imagePreset: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
   applyImagePreset(sectionKey, blockId, preset);
 };
 
-const imageUseExisting: ActionHandler = ({ actionButton, sectionKey, blockId }) => {
+const imageUseExisting: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
   }
+  const attachmentModal = actionButton.closest<HTMLElement>('.image-attachment-modal-root');
   useExistingImageAttachment(sectionKey, blockId, actionButton.dataset.imageFilename ?? '');
+  attachmentModal?.remove();
+  app.querySelector<HTMLButtonElement>(
+    `[data-action="open-image-attachment-modal"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+  )?.focus();
+};
+
+const openImageAttachmentModal: ActionHandler = ({ app, sectionKey, blockId }) => {
+  if (!blockId) {
+    return;
+  }
+  openImageAttachmentPickerModal(app, sectionKey, blockId);
 };
 
 const imageDeleteUnused: ActionHandler = ({ actionButton }) => {
@@ -657,6 +669,7 @@ export const blockActions: Record<string, ActionHandler> = {
   'add-empty-section-heading': addEmptySectionHeading,
   'toggle-schema': toggleSchema,
   'image-preset': imagePreset,
+  'open-image-attachment-modal': openImageAttachmentModal,
   'image-use-existing': imageUseExisting,
   'image-delete-unused': imageDeleteUnused,
   'image-delete-current': imageDeleteCurrent,

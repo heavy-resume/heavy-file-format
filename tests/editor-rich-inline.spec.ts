@@ -208,7 +208,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Basic' }).click();
 
   await page.locator('[data-action="activate-block"]').first().click();
-  await page.locator('.image-caption-edit-button', { hasText: 'Edit caption' }).click();
+  await page.locator('.image-caption-trigger', { hasText: 'Caption text' }).click();
 
   const captionEditor = page.locator('.caption-text-modal .rich-editor');
   await expect(captionEditor).toBeVisible();

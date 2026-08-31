@@ -446,7 +446,7 @@ hvy_version: 0.1
   expect(perfMessages).toHaveLength(0);
 });
 
-test('typing in an AI image editor preserves the active control', async ({ page }) => {
+test('typing in an AI image alt dialog preserves the draft control until done', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -467,10 +467,13 @@ hvy_version: 0.1
   const reader = page.locator('#aiReaderDocument');
   await reader.locator('.editor-block-passive[data-block-id]').getByRole('button', { name: 'Edit', exact: true }).click();
   await reader.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Alt Text' }).click();
-  const alt = reader.locator('.editor-block[data-active-editor-block="true"] [data-field="image-alt"]');
+  const altDialog = page.getByRole('dialog', { name: 'Alt Text' });
+  const alt = altDialog.getByRole('textbox', { name: 'Image description' });
   await alt.fill('Updated alt');
   await expect(alt).toBeFocused();
   await expect(alt).toHaveValue('Updated alt');
+  await altDialog.getByRole('button', { name: 'Done' }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.document.sections[0]?.blocks[0]?.schema.imageAlt)).toBe('Updated alt');
 });
 
 test('ai double click opens component menu without leaving text selected', async ({ page }) => {

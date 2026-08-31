@@ -808,29 +808,22 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           ${renderImageSizePresetButton('fit-height', 'Fit Height', 'Fit height', activeSizePreset, sectionKey, block.id, helpers)}
         </div>
         <div class="image-utility-buttons">
-          ${filename && downloadUrl ? `<a class="ghost image-download-link" href="${helpers.escapeAttr(downloadUrl)}" download="${helpers.escapeAttr(filename)}">Download</a>` : ''}
+          ${filename && downloadUrl ? `<button
+            type="button"
+            class="ghost image-download-button"
+            data-action="download-image"
+            data-image-download-url="${helpers.escapeAttr(downloadUrl)}"
+            data-image-download-filename="${helpers.escapeAttr(filename)}"
+          >Download</button>` : ''}
           <button
             type="button"
             class="ghost image-alt-button"
-            data-action="toggle-image-alt"
+            data-action="open-image-alt-modal"
             data-section-key="${helpers.escapeAttr(sectionKey)}"
             data-block-id="${helpers.escapeAttr(block.id)}"
-            aria-expanded="false"
+            aria-haspopup="dialog"
           >Alt Text</button>
         </div>
-      </div>
-      <div class="image-alt-panel" data-image-alt-panel hidden>
-        <label class="image-alt-label">
-          <span>Alt text</span>
-          <textarea
-            rows="2"
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="image-alt"
-            placeholder="Describe the image"
-            aria-label="Alt text"
-          >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
-        </label>
       </div>
       <div
         class="image-dropzone${filename ? ' has-image' : ''}"
@@ -879,6 +872,91 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
     </div>
   `;
 };
+
+export function openImageAltTextModal(app: HTMLElement, sectionKey: string, blockId: string, trigger: HTMLElement): void {
+  const block = findBlockByIds(sectionKey, blockId);
+  if (!block || block.schema.kind !== 'image') {
+    return;
+  }
+  app.querySelector<HTMLElement>('.image-alt-modal')?.remove();
+  const surface = trigger.closest<HTMLElement>('.editor-shell, .viewer-shell')
+    ?? app.querySelector<HTMLElement>('.editor-shell, .viewer-shell');
+  if (!surface) {
+    return;
+  }
+
+  const modal = document.createElement('section');
+  modal.className = 'image-alt-modal';
+  modal.dataset.draggablePanel = 'true';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'false');
+  modal.setAttribute('aria-label', 'Alt Text');
+  modal.innerHTML = `
+    <div class="image-alt-modal-head">
+      <h3>Alt Text</h3>
+      <span>Drag to relocate</span>
+    </div>
+    <label class="image-alt-modal-field">
+      <span>Image description</span>
+      <textarea rows="4" data-image-alt-draft placeholder="Describe the image">${escapeModalHtml(block.schema.imageAlt)}</textarea>
+    </label>
+    <div class="image-alt-modal-actions">
+      <button type="button" class="ghost" data-image-alt-modal-action="cancel">Cancel</button>
+      <button type="button" class="secondary" data-image-alt-modal-action="done">Done</button>
+    </div>
+  `;
+  surface.append(modal);
+  placeImageAltTextModal(surface, modal, trigger);
+
+  const close = (restoreFocus = true): void => {
+    modal.remove();
+    if (restoreFocus && trigger.isConnected) {
+      trigger.focus();
+    }
+  };
+  const commit = (): void => {
+    const textarea = modal.querySelector<HTMLTextAreaElement>('[data-image-alt-draft]');
+    const nextAlt = textarea?.value ?? '';
+    const currentBlock = findBlockByIds(sectionKey, blockId);
+    if (currentBlock?.schema.kind === 'image' && nextAlt !== currentBlock.schema.imageAlt) {
+      recordHistory(`image-alt:${blockId}`);
+      currentBlock.schema.imageAlt = nextAlt;
+      syncReusableTemplateForBlock(sectionKey, blockId);
+      getRefreshReaderPanels()();
+      trigger.closest<HTMLElement>('.image-editor')?.querySelector<HTMLImageElement>('.image-block-img')?.setAttribute('alt', nextAlt);
+    }
+    close();
+  };
+  modal.addEventListener('click', (event) => {
+    const action = (event.target as HTMLElement).closest<HTMLElement>('[data-image-alt-modal-action]')?.dataset.imageAltModalAction;
+    if (action === 'done') {
+      commit();
+    } else if (action === 'cancel') {
+      close();
+    }
+  });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  });
+  modal.querySelector<HTMLTextAreaElement>('[data-image-alt-draft]')?.focus();
+}
+
+function placeImageAltTextModal(surface: HTMLElement, modal: HTMLElement, trigger: HTMLElement): void {
+  const margin = 8;
+  const surfaceRect = surface.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  const maxX = Math.max(margin, surface.clientWidth - modal.offsetWidth - margin);
+  const maxY = Math.max(margin, surface.clientHeight - modal.offsetHeight - margin);
+  const x = Math.min(Math.max(triggerRect.right - surfaceRect.left - modal.offsetWidth, margin), maxX);
+  const preferredY = triggerRect.bottom - surfaceRect.top + margin;
+  const fallbackY = triggerRect.top - surfaceRect.top - modal.offsetHeight - margin;
+  const y = Math.min(Math.max(preferredY <= maxY ? preferredY : fallbackY, margin), maxY);
+  modal.style.left = `${Math.round(x)}px`;
+  modal.style.top = `${Math.round(y)}px`;
+}
 
 function renderImageSizePresetButton(
   preset: string,

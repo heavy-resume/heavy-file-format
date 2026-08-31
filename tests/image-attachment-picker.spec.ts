@@ -45,7 +45,7 @@ hvy_version: 0.1
   await modal.getByRole('button', { name: 'Use image: photo-1.png' }).click({ timeout: 1000 });
   await expect(modal).toHaveCount(0);
   await expect(page.locator('.image-filename')).toHaveText('photo-1.png');
-  await expect(page.locator('[data-field="image-alt"]')).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Alt Text' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use an attached image...' })).toBeFocused();
 
   await page.getByRole('button', { name: 'Rename image attachment photo-1.png' }).click({ timeout: 1000 });
@@ -53,9 +53,10 @@ hvy_version: 0.1
   await expect(filenameInput).toBeFocused();
   await filenameInput.fill('portrait.png');
   await page.getByRole('button', { name: 'Alt Text' }).click({ timeout: 1000 });
-  await page.locator('[data-field="image-alt"]').click({ timeout: 1000 });
+  const altTextDialog = page.getByRole('dialog', { name: 'Alt Text' });
+  await altTextDialog.getByRole('textbox', { name: 'Image description' }).click({ timeout: 1000 });
   await expect(page.getByRole('button', { name: 'Rename image attachment portrait.png' })).toHaveText('portrait.png');
-  await expect(page.locator('[data-field="image-alt"]')).toBeFocused();
+  await expect(altTextDialog.getByRole('textbox', { name: 'Image description' })).toBeFocused();
   await expect.poll(() => page.evaluate(async () => {
     const { listImageFilenames } = await import('/src/attachments.ts');
     const { state } = await import('/src/state.ts');
@@ -72,6 +73,8 @@ hvy_version: 0.1
     const { state } = await import('/src/state.ts');
     return listImageFilenames(state.document).includes('photo-1.png');
   })).toBe(false);
+
+  await altTextDialog.getByRole('button', { name: 'Cancel' }).click({ timeout: 1000 });
 
   await page.getByRole('button', { name: 'Add caption' }).click({ timeout: 1000 });
   await expect(page.getByRole('dialog', { name: 'Image Caption' })).toBeVisible({ timeout: 1000 });

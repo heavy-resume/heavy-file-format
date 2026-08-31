@@ -72,6 +72,11 @@ export function bindResize(app: HTMLElement): void {
       return;
     }
     const target = event.target as HTMLElement | null;
+    const draggablePanel = target?.closest<HTMLElement>('[data-draggable-panel]');
+    if (draggablePanel && !target?.closest('button, input, select, textarea, a, [contenteditable="true"]')) {
+      beginDraggablePanelMove(app, draggablePanel, event);
+      return;
+    }
     const head = target?.closest<HTMLElement>('.ai-edit-popover-head');
     if (!head) {
       return;
@@ -126,6 +131,36 @@ export function bindResize(app: HTMLElement): void {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   });
+}
+
+function beginDraggablePanelMove(app: HTMLElement, panel: HTMLElement, event: MouseEvent): void {
+  event.preventDefault();
+  const surface = panel.closest<HTMLElement>('.editor-shell, .viewer-shell') ?? app;
+  const startClientX = event.clientX;
+  const startClientY = event.clientY;
+  const startX = panel.offsetLeft;
+  const startY = panel.offsetTop;
+  panel.classList.add('is-dragging');
+
+  const clamp = (x: number, y: number): { x: number; y: number } => ({
+    x: Math.min(Math.max(x, 0), Math.max(0, surface.clientWidth - panel.offsetWidth)),
+    y: Math.min(Math.max(y, 0), Math.max(0, surface.clientHeight - panel.offsetHeight)),
+  });
+  const move = (moveEvent: MouseEvent): void => {
+    const next = clamp(
+      startX + moveEvent.clientX - startClientX,
+      startY + moveEvent.clientY - startClientY
+    );
+    panel.style.left = `${Math.round(next.x)}px`;
+    panel.style.top = `${Math.round(next.y)}px`;
+  };
+  const finish = (): void => {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', finish);
+    panel.classList.remove('is-dragging');
+  };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', finish);
 }
 
 export function autoFitStaticTableColumn(target: HTMLElement): boolean {

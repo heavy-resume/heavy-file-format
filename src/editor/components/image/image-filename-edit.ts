@@ -132,8 +132,8 @@ function updateRenderedImageFilenames(root: ParentNode, filename: string, nextFi
       });
     }
   });
-  root.querySelectorAll<HTMLAnchorElement>('.image-download-link').forEach((link) => {
-    if (link.download === filename) link.download = nextFilename;
+  root.querySelectorAll<HTMLButtonElement>('.image-download-button').forEach((button) => {
+    if (button.dataset.imageDownloadFilename === filename) button.dataset.imageDownloadFilename = nextFilename;
   });
   root.querySelectorAll<HTMLButtonElement>('[data-image-filename-editor]').forEach((button) => {
     if (button.textContent?.trim() !== filename) return;

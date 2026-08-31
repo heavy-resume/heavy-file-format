@@ -4,7 +4,7 @@ import { findBlockContainerById, findBlockContainerInList, findSectionByKey } fr
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
-import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageAttachmentPickerModal, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
+import { applyImagePreset, deleteCurrentImageAttachment, deleteUnusedImageAttachment, handleImageUpload, openImageAltTextModal, openImageAttachmentPickerModal, openImageCameraCapture, useExistingImageAttachment } from '../../editor/components/image/image';
 import { configurePluginBlock } from '../../plugins/plugin-block';
 import { makeId } from '../../utils';
 import { openReusableTemplateModalIfNeeded } from './reusable-template';
@@ -162,18 +162,25 @@ const openImageCaptionModal: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
-const toggleImageAlt: ActionHandler = ({ actionButton }) => {
-  const panel = actionButton.closest<HTMLElement>('.image-editor')?.querySelector<HTMLElement>('[data-image-alt-panel]');
-  if (!panel) {
+const openImageAltModal: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
+  if (blockId) {
+    openImageAltTextModal(app, sectionKey, blockId, actionButton);
+  }
+};
+
+const downloadImage: ActionHandler = ({ actionButton }) => {
+  const url = actionButton.dataset.imageDownloadUrl ?? '';
+  const filename = actionButton.dataset.imageDownloadFilename ?? '';
+  if (!url || !filename) {
     return;
   }
-  const expanded = panel.hidden;
-  panel.hidden = !expanded;
-  actionButton.setAttribute('aria-expanded', String(expanded));
-  actionButton.classList.toggle('is-active', expanded);
-  if (expanded) {
-    panel.querySelector<HTMLTextAreaElement>('[data-field="image-alt"]')?.focus();
-  }
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
 };
 
 const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
@@ -689,7 +696,8 @@ export const blockActions: Record<string, ActionHandler> = {
   'image-delete-current': imageDeleteCurrent,
   'image-take-photo': imageTakePhoto,
   'open-image-caption-modal': openImageCaptionModal,
-  'toggle-image-alt': toggleImageAlt,
+  'open-image-alt-modal': openImageAltModal,
+  'download-image': downloadImage,
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,

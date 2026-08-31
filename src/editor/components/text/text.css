@@ -2,6 +2,41 @@
 @import './text-editor-toolbar.css';
 @import './text-rich-content.css';
 
-.hvy-document .editor-block-text-done-row {
-  justify-content: space-between;
+.hvy-document .editor-block:has(
+  .text-editor-shell.is-text-toolbar-below:not(.is-text-toolbar-hidden)
+  .rich-toolbar:not(.is-text-toolbar-expanded) > .text-toolbar-compact
+) > .editor-block-text-done-row.is-split-around-text-toolbar {
+  position: relative;
+  display: block;
+  min-height: 2rem;
+}
+
+.hvy-document .editor-block:has(
+  .text-editor-shell.is-text-toolbar-below:not(.is-text-toolbar-hidden)
+  .rich-toolbar:not(.is-text-toolbar-expanded) > .text-toolbar-compact
+) > .editor-block-text-done-row.is-split-around-text-toolbar > .editor-block-cancel-button,
+.hvy-document .editor-block:has(
+  .text-editor-shell.is-text-toolbar-below:not(.is-text-toolbar-hidden)
+  .rich-toolbar:not(.is-text-toolbar-expanded) > .text-toolbar-compact
+) > .editor-block-text-done-row.is-split-around-text-toolbar > .editor-block-done-button {
+  position: absolute;
+  top: 0;
+}
+
+.hvy-document .editor-block:has(
+  .text-editor-shell.is-text-toolbar-below:not(.is-text-toolbar-hidden)
+  .rich-toolbar:not(.is-text-toolbar-expanded) > .text-toolbar-compact
+) > .editor-block-text-done-row.is-split-around-text-toolbar > .editor-block-cancel-button {
+  right: calc(100% - var(--text-toolbar-left-in-action-row) + 0.35rem);
+}
+
+.hvy-document .editor-block:has(
+  .text-editor-shell.is-text-toolbar-below:not(.is-text-toolbar-hidden)
+  .rich-toolbar:not(.is-text-toolbar-expanded) > .text-toolbar-compact
+) > .editor-block-text-done-row.is-split-around-text-toolbar > .editor-block-done-button {
+  left: calc(
+    var(--text-toolbar-left-in-action-row)
+    + var(--text-toolbar-width-in-action-row)
+    + 0.35rem
+  );
 }

@@ -13,7 +13,7 @@ import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolve
 import { cameraIcon, closeIcon, plusIcon } from '../../../icons';
 import type { JsonObject } from '../../../hvy/types';
 import { elapsedMs, logPerfTrace, nowMs } from '../../../perf-trace';
-import { getMatchingImagePresetCss, mergeImagePresetCss } from './image-preset-css';
+import { getMatchingImagePresetCss, hasExplicitImageSizeCss, mergeImagePresetCss } from './image-preset-css';
 import { normalizeTextCaption, renderTextCaptionHtml } from '../../../caption';
 import { addImageIntrinsicDimensions, getImageIntrinsicDimensions } from '../../../image-intrinsic-dimensions';
 
@@ -789,7 +789,9 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
   const filename = block.schema.imageFile.trim();
   const downloadUrl = filename ? getImageBlobUrl(filename) : null;
   const canDeleteCurrentImage = filename && getImageAttachmentReferenceCount(filename) === 1;
-  const activeSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
+  const matchedSizePreset = getMatchingImagePresetCss(block.schema.css, IMAGE_SIZE_PRESETS);
+  const activeSizePreset = matchedSizePreset
+    ?? (state.document.extension === '.phvy' && !hasExplicitImageSizeCss(block.schema.css) ? 'fit-width' : null);
   return `
     <div class="image-editor">
       <div class="image-toolbar">
@@ -805,6 +807,30 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           ${renderImageSizePresetButton('fit-width', 'Fit Width', 'Fit width', activeSizePreset, sectionKey, block.id, helpers)}
           ${renderImageSizePresetButton('fit-height', 'Fit Height', 'Fit height', activeSizePreset, sectionKey, block.id, helpers)}
         </div>
+        <div class="image-utility-buttons">
+          ${filename && downloadUrl ? `<a class="ghost image-download-link" href="${helpers.escapeAttr(downloadUrl)}" download="${helpers.escapeAttr(filename)}">Download</a>` : ''}
+          <button
+            type="button"
+            class="ghost image-alt-button"
+            data-action="toggle-image-alt"
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            aria-expanded="false"
+          >Alt Text</button>
+        </div>
+      </div>
+      <div class="image-alt-panel" data-image-alt-panel hidden>
+        <label class="image-alt-label">
+          <span>Alt text</span>
+          <textarea
+            rows="2"
+            data-section-key="${helpers.escapeAttr(sectionKey)}"
+            data-block-id="${helpers.escapeAttr(block.id)}"
+            data-field="image-alt"
+            placeholder="Describe the image"
+            aria-label="Alt text"
+          >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
+        </label>
       </div>
       <div
         class="image-dropzone${filename ? ' has-image' : ''}"
@@ -829,7 +855,6 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
             <input type="file" accept="${IMAGE_ATTACHMENT_ACCEPT}" data-field="image-upload" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" />
             <span class="image-pick-button">choose a file</span>
           </label>
-          ${filename && downloadUrl ? `<a class="image-download-link" href="${helpers.escapeAttr(downloadUrl)}" download="${helpers.escapeAttr(filename)}">download</a>` : ''}
         </div>
         <div class="image-camera-row">
           <button type="button" class="image-pick-button image-camera-button" data-action="image-take-photo" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}">${cameraIcon()}<span>take a photo</span></button>
@@ -850,18 +875,6 @@ export const renderImageEditor: ComponentEditorRenderer = (sectionKey, block, he
           title="Rename image attachment"
           aria-label="Rename image attachment ${helpers.escapeAttr(filename)}"
         >${helpers.escapeHtml(filename)}</button>` : '<div class="image-filename muted">No file selected</div>'}
-      </div>
-      <div class="image-alt-label-container">
-        <label class="image-alt-label">
-          <span>Alt text</span>
-          <textarea
-            rows="2"
-            data-section-key="${helpers.escapeAttr(sectionKey)}"
-            data-block-id="${helpers.escapeAttr(block.id)}"
-            data-field="image-alt"
-            placeholder="Describe the image"
-          >${helpers.escapeHtml(block.schema.imageAlt)}</textarea>
-        </label>
       </div>
     </div>
   `;

@@ -274,7 +274,8 @@ function updateFloatingTextToolbarGeometry(shell: HTMLElement, toolbarSlot: HTML
   const visibleBottom = Math.min(boundaryBox.bottom, scrollportBox?.bottom ?? boundaryBox.bottom);
   const hasRoomAbove = shellBox.top - visibleTop >= toolbarBox.height + FLOATING_TOOLBAR_GAP_PX;
   const hasVisibleComponentBottom = shellBox.bottom <= visibleBottom - FLOATING_TOOLBAR_GAP_PX;
-  shell.classList.toggle('is-text-toolbar-below', !hasRoomAbove && hasVisibleComponentBottom);
+  const toolbarIsBelow = !hasRoomAbove && hasVisibleComponentBottom;
+  shell.classList.toggle('is-text-toolbar-below', toolbarIsBelow);
 
   const preferredLeft = getPreferredTextToolbarLeft(shell, toolbarBox.width, shellBox);
   const minimumLeft = boundaryLeft + FLOATING_TOOLBAR_EDGE_INSET_PX;
@@ -282,6 +283,59 @@ function updateFloatingTextToolbarGeometry(shell: HTMLElement, toolbarSlot: HTML
   const toolbarLeft = Math.min(Math.max(preferredLeft, minimumLeft), maximumLeft);
 
   setStylePropertyIfChanged(shell, '--text-editor-toolbar-offset-x', `${toolbarLeft - shellBox.left}px`);
+  syncTextToolbarActionRow(shell, toolbarSlot, toolbarIsBelow);
+}
+
+function syncTextToolbarActionRow(shell: HTMLElement, toolbarSlot: HTMLElement, toolbarIsBelow: boolean): void {
+  const activeBlock = shell.closest<HTMLElement>('.editor-block[data-active-editor-block="true"]');
+  const actionRow = activeBlock?.querySelector<HTMLElement>(':scope > .editor-block-text-done-row');
+  const toolbar = toolbarSlot.querySelector<HTMLElement>(':scope > .rich-toolbar');
+  const compactToolbar = toolbar?.querySelector<HTMLElement>(':scope > .text-toolbar-compact');
+  if (!actionRow || !toolbar || !compactToolbar || !toolbarIsBelow) {
+    clearTextToolbarActionRow(actionRow);
+    return;
+  }
+
+  const actionRowBox = actionRow.getBoundingClientRect();
+  const toolbarBox = toolbar.getBoundingClientRect();
+  const cancelButton = actionRow.querySelector<HTMLElement>(':scope > .editor-block-cancel-button');
+  const doneButton = actionRow.querySelector<HTMLElement>(':scope > .editor-block-done-button');
+  if (!cancelButton || !doneButton || actionRowBox.width <= 0 || toolbarBox.width <= 0) {
+    clearTextToolbarActionRow(actionRow);
+    return;
+  }
+
+  const actionGap = Number.parseFloat(getComputedStyle(actionRow).columnGap) || 0;
+  const centeredActionsWidth = cancelButton.getBoundingClientRect().width
+    + doneButton.getBoundingClientRect().width
+    + actionGap;
+  const centeredActionsLeft = actionRowBox.left + ((actionRowBox.width - centeredActionsWidth) / 2);
+  const centeredActionsRight = centeredActionsLeft + centeredActionsWidth;
+  const overlapsCenteredActions = toolbarBox.top < actionRowBox.bottom
+    && toolbarBox.bottom > actionRowBox.top
+    && toolbarBox.left < centeredActionsRight
+    && toolbarBox.right > centeredActionsLeft;
+  if (!overlapsCenteredActions) {
+    clearTextToolbarActionRow(actionRow);
+    return;
+  }
+
+  actionRow.classList.add('is-split-around-text-toolbar');
+  setStylePropertyIfChanged(
+    actionRow,
+    '--text-toolbar-left-in-action-row',
+    `${toolbarBox.left - actionRowBox.left}px`
+  );
+  setStylePropertyIfChanged(actionRow, '--text-toolbar-width-in-action-row', `${toolbarBox.width}px`);
+}
+
+function clearTextToolbarActionRow(actionRow: HTMLElement | null | undefined): void {
+  if (!actionRow) {
+    return;
+  }
+  actionRow.classList.remove('is-split-around-text-toolbar');
+  actionRow.style.removeProperty('--text-toolbar-left-in-action-row');
+  actionRow.style.removeProperty('--text-toolbar-width-in-action-row');
 }
 
 function getPreferredTextToolbarLeft(shell: HTMLElement, toolbarWidth: number, shellBox: DOMRect): number {

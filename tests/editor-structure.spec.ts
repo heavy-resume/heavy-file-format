@@ -466,6 +466,7 @@ hvy_version: 0.1
   // so its own Edit affordance is the way in.
   const reader = page.locator('#aiReaderDocument');
   await reader.locator('.editor-block-passive[data-block-id]').getByRole('button', { name: 'Edit', exact: true }).click();
+  await reader.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Alt Text' }).click();
   const alt = reader.locator('.editor-block[data-active-editor-block="true"] [data-field="image-alt"]');
   await alt.fill('Updated alt');
   await expect(alt).toBeFocused();
@@ -2904,13 +2905,14 @@ test('section highlight control lives in section meta next to contained', async 
   await expect(page.locator('#rawEditor')).toContainText('"highlight":true');
 });
 
-test('active text component places cancel and done at opposite lower corners', async ({ page }) => {
+test('active text component centers cancel and done when the floating toolbar is hidden', async ({ page }) => {
   await page.goto('/');
 
   await page.locator('[data-action="activate-block"]').first().click();
   const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
   const cancelButton = activeBlock.locator('.editor-block-cancel-button');
   const doneButton = activeBlock.locator('.editor-block-done-button');
+  await activeBlock.getByRole('button', { name: 'Hide text controls' }).click();
 
   await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Done' })).toHaveCount(0);
   await expect(activeBlock.locator('.editor-block-head').getByRole('button', { name: 'Cancel' })).toHaveCount(0);
@@ -2925,13 +2927,9 @@ test('active text component places cancel and done at opposite lower corners', a
   expect(blockBox).not.toBeNull();
   expect(cancelBox).not.toBeNull();
   expect(doneBox).not.toBeNull();
-  const actionRowBox = await activeBlock.locator('.editor-block-done-row').boundingBox();
-  expect(actionRowBox).not.toBeNull();
-  expect(Math.abs((cancelBox?.x ?? 0) - (actionRowBox?.x ?? 0))).toBeLessThan(4);
-  expect(Math.abs(
-    ((doneBox?.x ?? 0) + (doneBox?.width ?? 0))
-      - ((actionRowBox?.x ?? 0) + (actionRowBox?.width ?? 0))
-  )).toBeLessThan(4);
+  const actionGroupLeft = cancelBox?.x ?? 0;
+  const actionGroupRight = (doneBox?.x ?? 0) + (doneBox?.width ?? 0);
+  expect(Math.abs((actionGroupLeft + (actionGroupRight - actionGroupLeft) / 2) - ((blockBox?.x ?? 0) + (blockBox?.width ?? 0) / 2))).toBeLessThan(4);
 });
 
 test('active component remove button is anchored to the editor frame corner', async ({ page }) => {

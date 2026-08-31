@@ -162,6 +162,20 @@ const openImageCaptionModal: ActionHandler = ({ sectionKey, blockId }) => {
   getRenderApp()();
 };
 
+const toggleImageAlt: ActionHandler = ({ actionButton }) => {
+  const panel = actionButton.closest<HTMLElement>('.image-editor')?.querySelector<HTMLElement>('[data-image-alt-panel]');
+  if (!panel) {
+    return;
+  }
+  const expanded = panel.hidden;
+  panel.hidden = !expanded;
+  actionButton.setAttribute('aria-expanded', String(expanded));
+  actionButton.classList.toggle('is-active', expanded);
+  if (expanded) {
+    panel.querySelector<HTMLTextAreaElement>('[data-field="image-alt"]')?.focus();
+  }
+};
+
 const setBlockAlign: ActionHandler = ({ app, actionButton, sectionKey, blockId }) => {
   if (!blockId) {
     return;
@@ -675,6 +689,7 @@ export const blockActions: Record<string, ActionHandler> = {
   'image-delete-current': imageDeleteCurrent,
   'image-take-photo': imageTakePhoto,
   'open-image-caption-modal': openImageCaptionModal,
+  'toggle-image-alt': toggleImageAlt,
   'set-block-align': setBlockAlign,
   'set-text-fill-in': setTextFillIn,
   'remove-text-fill-in': removeTextFillIn,

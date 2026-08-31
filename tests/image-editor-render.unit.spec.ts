@@ -143,6 +143,8 @@ describe('image editor render controls', () => {
     expect(expectedResult).not.toContain('Edit caption');
     expect(expectedResult).not.toContain('aria-label="Delete unused image avatar.jpg"');
     expect(expectedResult).toContain('download="avatar.jpg"');
+    expect(expectedResult).toMatch(/<div class="image-utility-buttons">[\s\S]*class="ghost image-download-link"[\s\S]*>Download<\/a>[\s\S]*>Alt Text<\/button>[\s\S]*<\/div>/);
+    expect(expectedResult).not.toMatch(/<div class="image-dropzone-hint">[\s\S]*image-download-link/);
     expect(expectedResult).toContain('data-image-filename-editor');
     expect(expectedResult).toContain('aria-label="Rename image attachment avatar.jpg"');
   });
@@ -188,6 +190,41 @@ describe('image editor render controls', () => {
     expect(mediumButton).toContain('aria-pressed="false"');
     expect(smallButton).not.toContain('is-active');
     expect(smallButton).toContain('aria-pressed="false"');
+  });
+
+  test('expected result: PHVY images without explicit sizing indicate fit width', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.id = 'photo';
+    block.schema.css = 'margin: 0.5rem auto; display: block;';
+    initState(createTestState({
+      meta: {},
+      extension: '.phvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    }));
+
+    const expectedResult = renderImageEditor('profile', block, helpers);
+
+    const fitWidthButton = expectedResult.match(/<button(?:(?!<button)[\s\S])*data-image-preset="fit-width"(?:(?!<button)[\s\S])*?>/)?.[0] ?? '';
+    expect(fitWidthButton).toContain('is-active');
+    expect(fitWidthButton).toContain('aria-pressed="true"');
+  });
+
+  test('expected result: Alt Text is a separate toolbar button with a collapsed editor', () => {
+    const block: VisualBlock = createEmptyBlock('image');
+    block.id = 'photo';
+    initState(createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1)],
+      attachments: [],
+    }));
+
+    const expectedResult = renderImageEditor('profile', block, helpers);
+
+    expect(expectedResult).toMatch(/<div class="image-toolbar">[\s\S]*data-image-preset="fit-height"[\s\S]*class="image-utility-buttons">[\s\S]*class="ghost image-alt-button"[\s\S]*>Alt Text<\/button>[\s\S]*<\/div>/);
+    expect(expectedResult).toContain('class="image-alt-panel" data-image-alt-panel hidden');
+    expect(expectedResult).toContain('data-field="image-alt"');
   });
 
   test('expected result: image can disable document-wide attachment reuse', () => {

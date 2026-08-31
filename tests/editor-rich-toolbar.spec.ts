@@ -1235,6 +1235,27 @@ test('short text near the top places its floating toolbar below the component wi
   expect(metrics!.isBelow).toBe(true);
   expect(metrics!.toolbarTop).toBeGreaterThanOrEqual(metrics!.editorBottom + 4);
   expect(metrics!.spacerHeight).toBe(0);
+
+  const actionRow = page.locator('.editor-block[data-active-editor-block="true"] > .editor-block-done-row');
+  await expect(actionRow).toHaveClass(/is-split-around-text-toolbar/);
+  const actionLayout = await actionRow.evaluate((row) => {
+    const toolbar = row.parentElement?.querySelector<HTMLElement>('.text-editor-toolbar-slot > .rich-toolbar');
+    const cancel = row.querySelector<HTMLElement>('.editor-block-cancel-button');
+    const done = row.querySelector<HTMLElement>('.editor-block-done-button');
+    if (!toolbar || !cancel || !done) {
+      return null;
+    }
+    const toolbarBox = toolbar.getBoundingClientRect();
+    const cancelBox = cancel.getBoundingClientRect();
+    const doneBox = done.getBoundingClientRect();
+    return {
+      cancelGap: toolbarBox.left - cancelBox.right,
+      doneGap: doneBox.left - toolbarBox.right,
+    };
+  });
+  expect(actionLayout).not.toBeNull();
+  expect(actionLayout!.cancelGap).toBeGreaterThanOrEqual(4);
+  expect(actionLayout!.doneGap).toBeGreaterThanOrEqual(4);
 });
 
 test('floating text toolbar can be hidden and returns when the text is clicked', async ({ page }) => {

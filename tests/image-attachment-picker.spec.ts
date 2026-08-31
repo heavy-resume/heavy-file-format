@@ -52,6 +52,7 @@ hvy_version: 0.1
   const filenameInput = page.getByRole('textbox', { name: 'Image attachment filename for photo-1.png' });
   await expect(filenameInput).toBeFocused();
   await filenameInput.fill('portrait.png');
+  await page.getByRole('button', { name: 'Alt Text' }).click({ timeout: 1000 });
   await page.locator('[data-field="image-alt"]').click({ timeout: 1000 });
   await expect(page.getByRole('button', { name: 'Rename image attachment portrait.png' })).toHaveText('portrait.png');
   await expect(page.locator('[data-field="image-alt"]')).toBeFocused();

@@ -81,3 +81,8 @@ export function getMatchingImagePresetCss(existingCss: string, presets: readonly
   }
   return null;
 }
+
+export function hasExplicitImageSizeCss(existingCss: string): boolean {
+  const declarations = new Map(parseInlineCssDeclarations(existingCss));
+  return declarations.has('width') || declarations.has('height');
+}

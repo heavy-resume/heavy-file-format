@@ -20,6 +20,50 @@ async function waitForSurfaceIdle(page: Page, selector: string, quietMs = 250): 
   }), quietMs);
 }
 
+test('entering and canceling a static table edit keeps the document saved', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-dirty-state"}-->
+#! Table Dirty State
+
+<!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.evaluate(async () => {
+    const { resetReferenceDocumentDirtyBaseline } = await import('/src/reference-document-dirty.ts');
+    resetReferenceDocumentDirtyBaseline();
+  });
+
+  // BEFORE: the loaded table is saved.
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+
+  // ACTION: enter its inline editor, focus a cell, and cancel without changing content.
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
+  const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  await activeTable.locator('[data-field="table-cell"]').first().click();
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+  await activeTable.getByRole('button', { name: 'Cancel' }).click();
+
+  // AFTER: entering edit mode alone did not mark the document dirty.
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+
+  // ADJACENT: real table input still marks the document dirty and keeps its pre-edit undo state.
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).click();
+  await page.locator('[data-field="table-cell"]').first().fill('Beta');
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Unsaved');
+  await page.evaluate(async () => {
+    const { undoState } = await import('/src/history.ts');
+    undoState();
+  });
+  await expect(page.locator('[data-reference-save-state]')).toHaveText('Saved');
+  await expect(page.locator('.editor-block', { hasText: 'Alpha' })).toBeVisible();
+});
+
 test('static table columns resize, auto-fit, reset, and contain wide overflow', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();

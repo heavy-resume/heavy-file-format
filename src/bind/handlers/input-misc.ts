@@ -127,7 +127,12 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     const blockIdForHistory = target.dataset.blockId ?? '';
-    if (field && field !== 'new-component-type' && field !== 'table-cell' && field !== 'table-column') {
+    if (field === 'table-cell' || field === 'table-column') {
+      const rowIndex = target.dataset.rowIndex ?? '';
+      const cellIndex = target.dataset.cellIndex ?? '';
+      const columnIndex = target.dataset.columnIndex ?? '';
+      recordHistory(`table-edit:${sectionKey}:${blockIdForHistory}:${rowIndex}:${cellIndex}:${columnIndex}`);
+    } else if (field && field !== 'new-component-type') {
       recordHistory(`input:${sectionKey}:${blockIdForHistory}:${field}`);
       clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);
     }

@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, recordHistory, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, commitTagEditorDraft, findBlockByIds, findSectionByKey, commitInlineTableEdit, refreshRichToolbarState, resolveBlockContext, deactivateEditorBlock, tagStateHelpers, assignSectionTitleAndGeneratedId } from './_imports';
 import { commitTextFillInElement } from '../../text-fill-in-commit';
 import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { refreshSearchFilterButton } from '../../search/actions';
@@ -10,12 +10,6 @@ export function bindFocus(app: HTMLElement): void {
       return;
     }
     target.classList.add('is-inline-editing');
-    const sectionKey = target.dataset.sectionKey ?? '';
-    const blockId = target.dataset.blockId ?? '';
-    const rowIndex = target.dataset.rowIndex ?? '';
-    const cellIndex = target.dataset.cellIndex ?? '';
-    const columnIndex = target.dataset.columnIndex ?? '';
-    recordHistory(`table-edit:${sectionKey}:${blockId}:${rowIndex}:${cellIndex}:${columnIndex}`);
     requestAnimationFrame(() => refreshRichToolbarState(target));
   });
 

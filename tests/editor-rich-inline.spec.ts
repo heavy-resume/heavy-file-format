@@ -212,6 +212,8 @@ hvy_version: 0.1
 
   const captionEditor = page.locator('.caption-text-modal .rich-editor');
   await expect(captionEditor).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Image Caption' }).getByRole('button', { name: 'Close Image Caption' })).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'Image Caption' }).getByRole('button', { name: 'Hide text controls' })).toHaveCount(0);
   await captionEditor.locator('p').evaluate((node) => {
     const range = document.createRange();
     range.selectNodeContents(node);
@@ -238,7 +240,7 @@ hvy_version: 0.1
   await captionModal.getByRole('button', { name: 'Underline' }).click();
   await expect(captionEditor.locator('u em, em u')).toHaveText('Caption text');
 
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close Image Caption' }).click();
   await page.getByRole('button', { name: 'Raw' }).click();
   const rawEditor = page.locator('#rawEditor');
   await expect(rawEditor).toContainText('___');

@@ -188,9 +188,37 @@
   width: min(34rem, calc(100vw - 2rem));
 }
 
-.hvy-document .caption-text-modal,
-.hvy-document .caption-text-modal {
+.hvy-document .caption-text-modal-shell {
+  position: relative;
+  z-index: var(--hvy-modal-panel-z, 2);
   width: min(48rem, calc(100vw - 2rem));
+  max-height: min(88vh, calc(100% - 2rem));
+}
+
+.hvy-document .caption-text-modal,
+.hvy-document .caption-text-modal,
+.hvy-document .modal-panel.component-meta-modal.caption-text-modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: inherit;
+}
+
+.hvy-document .caption-text-modal-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  border: 1px solid var(--hvy-border-input);
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  box-shadow: 0 5px 14px var(--hvy-shadow-sm);
+  transform: translate(45%, -45%);
+}
+
+.hvy-document .caption-text-modal-close:hover,
+.hvy-document .caption-text-modal-close:focus-visible {
+  background: var(--hvy-button-hover-bg);
+  color: var(--hvy-button-hover-text);
 }
 
 .hvy-document .caption-text-modal-editor,

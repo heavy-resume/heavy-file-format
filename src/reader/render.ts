@@ -2239,36 +2239,37 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     return `
       <div id="modalRoot" class="modal-root">
         <div class="modal-overlay" data-modal-action="close-overlay"></div>
-        <section class="modal-panel component-meta-modal caption-text-modal">
-          <div class="modal-head">
-            <h3>${deps.escapeHtml(modal.title)}</h3>
-            <div class="modal-head-actions">
-              <button type="button" class="hvy-button" data-modal-action="close">Close</button>
+        <div class="caption-text-modal-shell" role="dialog" aria-modal="true" aria-labelledby="captionTextModalTitle">
+          <section class="modal-panel component-meta-modal caption-text-modal">
+            <div class="modal-head">
+              <h3 id="captionTextModalTitle">${deps.escapeHtml(modal.title)}</h3>
             </div>
-          </div>
-          <div class="caption-text-modal-editor">
-            ${helpers.renderRichToolbar(modal.target.sectionKey, modal.target.blockId, {
+            <div class="caption-text-modal-editor">
+              ${helpers.renderRichToolbar(modal.target.sectionKey, modal.target.blockId, {
       field: 'caption-rich',
+      includeDismiss: false,
       includeAlign: true,
       align,
       currentMarkdown: draft.text,
       textLineStyles: helpers.getTextLineStyles?.() ?? {},
     })}
-            <div
-              class="rich-editor caption-rich-editor"
-              contenteditable="true"
-              spellcheck="true"
-              data-section-key="${deps.escapeAttr(modal.target.sectionKey)}"
-              data-block-id="${deps.escapeAttr(modal.target.blockId)}"
-              data-field="caption-rich"
-              ${alignStyle}
-            >${helpers.markdownToEditorHtml(draft.text)}</div>
-          </div>
-          <div class="caption-text-modal-preview">
-            <div class="caption-text-modal-preview-label">Preview</div>
-            <figcaption class="image-caption"${alignStyle}>${renderTextCaptionHtml(draft, helpers)}</figcaption>
-          </div>
-        </section>
+              <div
+                class="rich-editor caption-rich-editor"
+                contenteditable="true"
+                spellcheck="true"
+                data-section-key="${deps.escapeAttr(modal.target.sectionKey)}"
+                data-block-id="${deps.escapeAttr(modal.target.blockId)}"
+                data-field="caption-rich"
+                ${alignStyle}
+              >${helpers.markdownToEditorHtml(draft.text)}</div>
+            </div>
+            <div class="caption-text-modal-preview">
+              <div class="caption-text-modal-preview-label">Preview</div>
+              <figcaption class="image-caption"${alignStyle}>${renderTextCaptionHtml(draft, helpers)}</figcaption>
+            </div>
+          </section>
+          <button type="button" class="ghost remove-x caption-text-modal-close" data-modal-action="close" aria-label="Close ${deps.escapeAttr(modal.title)}" title="Close">${closeIcon()}</button>
+        </div>
       </div>
     `;
   }

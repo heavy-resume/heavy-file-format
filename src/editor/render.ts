@@ -225,6 +225,7 @@ export interface EditorRenderer {
       field?: string;
       gridItemId?: string;
       rowIndex?: number;
+      includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
       align?: Align;
@@ -1323,6 +1324,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       field?: string;
       gridItemId?: string;
       rowIndex?: number;
+      includeDismiss?: boolean;
       includeAlign?: boolean;
       includeFillIn?: boolean;
       align?: Align;
@@ -1352,7 +1354,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const textLineStyleControls = renderTextLineStyleToolbar(textLineStyles, richButtonAttrs, sectionKey, blockId);
     return `
       <div class="rich-toolbar">
-        ${renderTextToolbarDismissButton()}
+        ${options?.includeDismiss === false ? '' : renderTextToolbarDismissButton()}
         <div class="toolbar-segment block-style-buttons" role="group" aria-label="Block style">
           <button type="button" class="${selectedClass(blockStyle === 'paragraph')}" data-rich-action="paragraph" ${richButtonAttrs} title="Normal text">Text</button>
           <button type="button" class="${selectedClass(blockStyle === 'heading-1')}" data-rich-action="heading-1" ${richButtonAttrs} title="Heading 1">H1</button>

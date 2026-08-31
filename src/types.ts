@@ -443,6 +443,7 @@ export type SelectedExample =
   | 'asteroids'
   | 'plugin-sort-values'
   | 'pdf-template'
+  | 'sepa-recreation'
   | 'meeting-minutes-template'
   | 'resume-template'
   | 'resume-example'

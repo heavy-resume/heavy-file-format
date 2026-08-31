@@ -67,6 +67,7 @@ const resumeViews = bundledResumeViews as Record<string, ReaderViewFilter>;
 const IMPORT_REFERENCE_API_PATH = '/api/import-reference-document';
 const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
+const SEPA_RECREATION_API_PATH = '/api/sepa-recreation-document';
 const IMPORT_REFERENCE_SOURCE_DOCUMENT = {
   apiPath: IMPORT_REFERENCE_API_PATH,
   errorLabel: 'import reference document',
@@ -75,6 +76,10 @@ const SCRIPTING_HELP_SOURCE_DOCUMENT = {
   apiPath: SCRIPTING_HELP_API_PATH,
   errorLabel: 'scripting help document',
 };
+const SEPA_RECREATION_SOURCE_DOCUMENT = {
+  apiPath: SEPA_RECREATION_API_PATH,
+  errorLabel: 'SEPA Recreation document',
+};
 const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: string; errorLabel: string }>> = {
   guide: {
     apiPath: HVY_GUIDE_API_PATH,
@@ -82,6 +87,7 @@ const SOURCE_DOCUMENTS_BY_EXAMPLE: Partial<Record<SelectedExample, { apiPath: st
   },
   'import-reference': IMPORT_REFERENCE_SOURCE_DOCUMENT,
   'scripting-help': SCRIPTING_HELP_SOURCE_DOCUMENT,
+  'sepa-recreation': SEPA_RECREATION_SOURCE_DOCUMENT,
 };
 const acceptedPowerScriptFingerprints = new Set<string>();
 
@@ -185,12 +191,21 @@ async function loadSourceDocumentFromServer(
 }
 
 async function loadDefaultExampleDocument(): Promise<void> {
-  const response = await fetch(bundledExampleHvyUrl, { cache: 'no-store' });
+  await loadBundledBinaryDocument(bundledExampleHvyUrl, 'example.hvy', 'default', 'default example');
+}
+
+async function loadBundledBinaryDocument(
+  assetUrl: string,
+  filename: string,
+  selectedExample: SelectedExample,
+  errorLabel: string
+): Promise<void> {
+  const response = await fetch(assetUrl, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Could not load default example: ${response.status} ${response.statusText}`);
+    throw new Error(`Could not load ${errorLabel}: ${response.status} ${response.statusText}`);
   }
   currentFileHandle = null;
-  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), 'example.hvy', 'default');
+  replaceLoadedDocument(new Uint8Array(await response.arrayBuffer()), filename, selectedExample);
 }
 
 function loadBundledTextDocument(raw: string, filename: string, selectedExample: typeof state.selectedExample): void {
@@ -612,6 +627,22 @@ export function bindUi(app: HTMLElement): void {
   const pdfTemplateExampleBtn = app.querySelector<HTMLButtonElement>('#pdfTemplateExampleBtn');
   pdfTemplateExampleBtn?.addEventListener('click', () => {
     loadBundledTextDocument(bundledPdfTemplatePhvy, 'pdf-template.phvy', 'pdf-template');
+  });
+
+  const sepaRecreationExampleBtn = app.querySelector<HTMLButtonElement>('#sepaRecreationExampleBtn');
+  sepaRecreationExampleBtn?.addEventListener('click', () => {
+    void runInBoundRuntimeAsync(async () => {
+      try {
+        await loadSourceDocumentFromServer(
+          SEPA_RECREATION_SOURCE_DOCUMENT,
+          'SEPA_Recreation.phvy',
+          'sepa-recreation'
+        );
+      } catch (error: unknown) {
+        state.rawEditorError = error instanceof Error ? error.message : 'Could not load the SEPA Recreation example.';
+        getRenderApp()();
+      }
+    });
   });
 
   const resumeTemplateBtn = app.querySelector<HTMLButtonElement>('#resumeTemplateBtn');

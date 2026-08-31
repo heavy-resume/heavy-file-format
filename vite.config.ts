@@ -13,6 +13,8 @@ const HVY_GUIDE_API_PATH = '/api/hvy-guide-document';
 const HVY_GUIDE_FILE_PATH = resolve(process.cwd(), 'hvy-guide.hvy');
 const SCRIPTING_HELP_API_PATH = '/api/scripting-help-document';
 const SCRIPTING_HELP_FILE_PATH = resolve(process.cwd(), 'src/plugins/scripting/help.hvy');
+const SEPA_RECREATION_API_PATH = '/api/sepa-recreation-document';
+const SEPA_RECREATION_FILE_PATH = resolve(process.cwd(), 'examples/SEPA_Recreation.phvy');
 
 export const HVY_BUILT_IN_PLUGIN_IDS = [
   'hvy.db-table',
@@ -276,6 +278,9 @@ function getSourceDocumentForRequest(url: string | undefined): { filePath: strin
   }
   if (url?.startsWith(SCRIPTING_HELP_API_PATH)) {
     return { filePath: SCRIPTING_HELP_FILE_PATH, label: 'scripting help document' };
+  }
+  if (url?.startsWith(SEPA_RECREATION_API_PATH)) {
+    return { filePath: SEPA_RECREATION_FILE_PATH, label: 'SEPA Recreation document' };
   }
   return null;
 }

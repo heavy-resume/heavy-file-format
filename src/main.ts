@@ -87,6 +87,7 @@ const DOCUMENT_MENU_ITEMS: Array<{ id: string; label: string; selectedExample: A
   { id: 'asteroidsExampleBtn', label: 'Asteroids', selectedExample: 'asteroids' },
   { id: 'pluginSortValuesExampleBtn', label: 'Plugin Sort Values', selectedExample: 'plugin-sort-values' },
   { id: 'pdfTemplateExampleBtn', label: 'PDF Template Example', selectedExample: 'pdf-template' },
+  { id: 'sepaRecreationExampleBtn', label: 'SEPA Recreation', selectedExample: 'sepa-recreation' },
   { id: 'meetingMinutesTemplateBtn', label: 'Meeting Minutes Template', selectedExample: 'meeting-minutes-template' },
   { id: 'resumeTemplateBtn', label: 'Resume Template', selectedExample: 'resume-template' },
   { id: 'resumeExampleBtn', label: 'Resume Example', selectedExample: 'resume-example' },

@@ -328,6 +328,20 @@ test('reference app can load the meeting minutes template', async ({ page }) => 
   await expect(page.locator('[data-reference-save-state]')).toHaveText('Unsaved');
 });
 
+test('reference app can load the SEPA Recreation example', async ({ page }) => {
+  await page.goto('/');
+
+  const sourceResponse = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/sepa-recreation-document'
+    && response.request().method() === 'GET'
+  ));
+  await selectDocumentMenuItem(page, 'SEPA Recreation');
+
+  expect((await sourceResponse).status()).toBe(200);
+  await expect(page.locator('#downloadName')).toHaveValue('SEPA_Recreation.phvy');
+  await expect(page.getByText('SEPA Recreation Report', { exact: true }).first()).toBeVisible();
+});
+
 test('embedded meeting minutes form script notifies the host after mutation', async ({ page }) => {
   await page.goto('/');
 

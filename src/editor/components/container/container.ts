@@ -47,7 +47,12 @@ export const renderContainerEditor: ComponentEditorRenderer = (sectionKey, block
         </div>
       </div>
     </div>
-    <div class="container-inner-blocks">
+    <div
+      class="container-inner-blocks"
+      data-image-drop-block-container="container"
+      data-section-key="${helpers.escapeAttr(sectionKey)}"
+      data-block-id="${helpers.escapeAttr(block.id)}"
+    >
       ${innerBlocks}
     </div>
     ${
@@ -176,7 +181,10 @@ function renderContainerReaderBody(options: {
       }">${expanded ? '-' : '+'}</button>`
     : '';
   const header = title ? `<header class="reader-container-head">${title}<div class="reader-container-actions">${toggle}</div></header>` : '';
-  const bodyAttrs = canCollapse && !expanded ? ` ${collapsibleAttrs}` : '';
+  const imageDropAttrs = options.virtualKey
+    ? ''
+    : ` data-image-drop-block-container="container" data-section-key="${options.helpers.escapeAttr(options.section.key)}" data-block-id="${options.helpers.escapeAttr(options.blockId)}"`;
+  const bodyAttrs = `${canCollapse && !expanded ? ` ${collapsibleAttrs}` : ''}${imageDropAttrs}`;
   const rootAttrs = canCollapse && options.virtualKey && !expanded ? ` ${collapsibleAttrs}` : '';
   return `<div class="${options.helpers.escapeAttr(className)}" style="--hvy-container-preview-rem: ${previewRem}rem;"${rootAttrs}>
     ${header}

@@ -1,12 +1,13 @@
-import { describe, expect, test, vi } from 'vitest';
+import { beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { getCarouselSlideScrollLeft, getNearestCarouselSlide, renderCarouselEditor, renderCarouselReader } from '../src/editor/components/carousel/carousel';
-import { bindImageDragAndDrop, clearImageBlobUrlCache, renderImageEditor, renderImageReader, resolveImageBlobUrl } from '../src/editor/components/image/image';
+import { clearImageBlobUrlCache, renderImageEditor, renderImageReader, resolveImageBlobUrl } from '../src/editor/components/image/image';
+import { bindImageDragAndDrop, insertDroppedImageFiles } from '../src/editor/components/image/document-image-drop';
 import { ensureDocumentAttachmentStore } from '../src/attachment-store';
 import { createHostedAttachmentAdapter } from '../src/hosted-attachments';
 import type { ComponentRenderHelpers } from '../src/editor/component-helpers';
 import { createEmptyBlock, createEmptySection } from '../src/document-factory';
-import { initState } from '../src/state';
+import { initCallbacks, initState } from '../src/state';
 import { escapeAttr, escapeHtml } from '../src/utils';
 import type { VisualBlock } from '../src/editor/types';
 import { createTestState } from './serialization-test-helpers';
@@ -46,6 +47,16 @@ const helpers: ComponentRenderHelpers = {
 };
 
 describe('image editor render controls', () => {
+  beforeAll(() => {
+    initCallbacks({
+      renderApp: () => {},
+      refreshReaderPanels: () => {},
+      refreshModalPreview: () => {},
+      componentRenderHelpers: null,
+      readerRenderer: null,
+    });
+  });
+
   test('expected result: cache invalidation during hosted image resolution retries without reporting it missing', async () => {
     let releaseResolution: ((value: string) => void) | null = null;
     const document = createTestState({
@@ -437,5 +448,111 @@ describe('image editor render controls', () => {
       'dragleave',
       'drop',
     ]);
+  });
+
+  test('before, three dropped images, after: image blocks preserve file order in the section', async () => {
+    const testState = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1, '')],
+      attachments: [],
+    });
+    initState(testState);
+
+    const expectedResult = await insertDroppedImageFiles(
+      { kind: 'section-index', sectionKey: testState.document.sections[0]!.key, index: 0 },
+      [
+        new File([new Uint8Array([1])], 'one.png', { type: 'image/png' }),
+        new File([new Uint8Array([2])], 'two.png', { type: 'image/png' }),
+        new File([new Uint8Array([3])], 'three.png', { type: 'image/png' }),
+      ],
+    );
+
+    expect(expectedResult).toBe(true);
+    expect(testState.document.sections[0]?.blocks.map((block) => block.schema.imageFile)).toEqual(['one.png', 'two.png', 'three.png']);
+    expect(testState.document.attachments.map((attachment) => attachment.id)).toEqual(['image:one.png', 'image:two.png', 'image:three.png']);
+  });
+
+  test('before, images dropped below the document, after: one new section contains the images', async () => {
+    const testState = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1, '')],
+      attachments: [],
+    });
+    initState(testState);
+
+    const expectedResult = await insertDroppedImageFiles(
+      { kind: 'new-section' },
+      [
+        new File([new Uint8Array([1])], 'first.webp', { type: 'image/webp' }),
+        new File([new Uint8Array([2])], 'second.webp', { type: 'image/webp' }),
+      ],
+    );
+
+    expect(expectedResult).toBe(true);
+    expect(testState.document.sections).toHaveLength(2);
+    expect(testState.document.sections[1]?.blocks.map((block) => block.schema.imageFile)).toEqual(['first.webp', 'second.webp']);
+  });
+
+  test('before, images dropped into a container, after: they append linearly inside that container', async () => {
+    const section = createEmptySection(1, 'container');
+    section.blocks[0]!.schema.containerBlocks = [createEmptyBlock('text')];
+    const testState = createTestState({ meta: {}, extension: '.hvy', sections: [section], attachments: [] });
+    initState(testState);
+
+    const expectedResult = await insertDroppedImageFiles(
+      { kind: 'container-end', sectionKey: section.key, blockId: section.blocks[0]!.id },
+      [
+        new File([new Uint8Array([1])], 'inside-a.png', { type: 'image/png' }),
+        new File([new Uint8Array([2])], 'inside-b.png', { type: 'image/png' }),
+      ],
+    );
+
+    expect(expectedResult).toBe(true);
+    expect(section.blocks).toHaveLength(1);
+    expect(section.blocks[0]?.schema.containerBlocks.map((block) => block.schema.imageFile)).toEqual([undefined, 'inside-a.png', 'inside-b.png']);
+  });
+
+  test('before, multiple images choose carousel, after: one carousel preserves slide order', async () => {
+    const section = createEmptySection(1, '');
+    const testState = createTestState({ meta: {}, extension: '.hvy', sections: [section], attachments: [] });
+    initState(testState);
+
+    const expectedResult = await insertDroppedImageFiles(
+      { kind: 'section-index', sectionKey: section.key, index: 0 },
+      [
+        new File([new Uint8Array([1])], 'carousel-a.png', { type: 'image/png' }),
+        new File([new Uint8Array([2])], 'carousel-b.png', { type: 'image/png' }),
+      ],
+      'carousel',
+    );
+
+    expect(expectedResult).toBe(true);
+    expect(section.blocks).toHaveLength(1);
+    expect(section.blocks[0]?.schema.kind).toBe('carousel');
+    expect(section.blocks[0]?.schema.carouselImages.map((image) => image.imageFile)).toEqual(['carousel-a.png', 'carousel-b.png']);
+  });
+
+  test('before, mixed files are dropped, after: the whole document drop is rejected', async () => {
+    const testState = createTestState({
+      meta: {},
+      extension: '.hvy',
+      sections: [createEmptySection(1, '')],
+      attachments: [],
+    });
+    initState(testState);
+
+    const expectedResult = await insertDroppedImageFiles(
+      { kind: 'section-index', sectionKey: testState.document.sections[0]!.key, index: 0 },
+      [
+        new File([new Uint8Array([1])], 'image.png', { type: 'image/png' }),
+        new File([new Uint8Array([2])], 'notes.txt', { type: 'text/plain' }),
+      ],
+    );
+
+    expect(expectedResult).toBe(false);
+    expect(testState.document.sections[0]?.blocks).toEqual([]);
+    expect(testState.document.attachments).toEqual([]);
   });
 });

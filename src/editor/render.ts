@@ -264,7 +264,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
     return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="editor-tree-body editor-sidebar-tree-body">
       ${sidebarSections.length === 0 ? '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button, or add one below.</div>' : ''}
-      ${sidebarSections.map((section) => renderEditorSection(section, sections)).join('')}
+      ${sidebarSections.map((section, index) => `${index > 0 ? renderImageSectionDropGap(section) : ''}${renderEditorSection(section, sections)}`).join('')}
       ${renderTopLevelSectionAddGhost('sidebar')}
     </div></div>`;
   }
@@ -307,17 +307,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       mainSections.map(createEditorSectionRenderTreeNode),
       windowOptions,
       EDITOR_SECTION_TREE_LAYOUT
-    ).map((entry) => {
+    ).map((entry, index) => {
       const section = entry.node.item as VisualSection;
-      if (entry.shouldRender || hasOpenEditorInSectionTree(section)) {
-        return renderEditorSection(
+      const card = entry.shouldRender || hasOpenEditorInSectionTree(section)
+        ? renderEditorSection(
           section,
           sections,
           false,
           createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
-        );
-      }
-      return renderEditorSectionPlaceholder(section, entry.estimatedHeight, false);
+        )
+        : renderEditorSectionPlaceholder(section, entry.estimatedHeight, false);
+      return `${index > 0 ? renderImageSectionDropGap(section) : ''}${card}`;
     }).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
@@ -337,6 +337,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       </div>
       <div class="editor-document-tail" aria-hidden="true"></div>
     `;
+  }
+
+  function renderImageSectionDropGap(section: VisualSection): string {
+    return `<div class="image-section-drop-gap" data-image-section-drop-gap="true" data-before-section-key="${deps.escapeAttr(section.key)}" data-section-location="${deps.escapeAttr(section.location)}" aria-hidden="true"></div>`;
   }
 
   function recordEditorSectionHeight(sectionKey: string, height: number): void {
@@ -1138,9 +1142,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (base === 'container') {
       deps.ensureContainerBlocks(block);
       const body = renderPassiveContainerBlocks(sectionKey, block);
+      const imageDropAttrs = `data-image-drop-block-container="container" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}"`;
       return body
-        ? `<div class="reader-container-body">${body}</div>`
-        : '<div class="container-inner-blocks is-empty is-passive-empty"><div class="container-empty-placeholder">Empty container</div></div>';
+        ? `<div class="reader-container-body" ${imageDropAttrs}>${body}</div>`
+        : `<div class="container-inner-blocks is-empty is-passive-empty" ${imageDropAttrs}><div class="container-empty-placeholder">Empty container</div></div>`;
     }
 
     if (base === 'expandable') {

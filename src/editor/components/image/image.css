@@ -46,6 +46,138 @@
   background: var(--hvy-highlight-1);
 }
 
+.hvy-document .image-document-drop-active {
+  position: relative;
+}
+
+.hvy-document .editor-tree-body > .editor-section-card:has(+ .image-section-drop-gap) {
+  margin-bottom: 0;
+}
+
+.hvy-document .editor-tree-body > .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"]:has(+ .image-section-drop-gap) {
+  margin-bottom: 0 !important;
+}
+
+.hvy-document .image-section-drop-gap {
+  position: relative;
+  min-height: 0.55rem;
+}
+
+.hvy-document .image-document-drop-active::after {
+  content: '';
+  position: absolute;
+  z-index: 8;
+  left: 0.7rem;
+  right: 0.7rem;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--hvy-accent-1);
+  box-shadow: 0 0 0 1px var(--hvy-surface), 0 0 12px var(--hvy-accent-1);
+  pointer-events: none;
+}
+
+.hvy-document .image-document-drop-before::after {
+  top: -2px;
+}
+
+.hvy-document .image-document-drop-after::after {
+  bottom: -2px;
+}
+
+.hvy-document .image-section-drop-gap.image-document-drop-active::after {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.hvy-document .hvy-surface:has(> .image-drop-choice-root) {
+  position: relative;
+}
+
+.hvy-document .image-drop-choice-root {
+  padding: 0.75rem;
+}
+
+.hvy-document .modal-panel.image-drop-choice-modal {
+  width: max-content;
+  max-width: calc(100% - 1rem);
+  display: grid;
+  gap: 0.65rem;
+  overflow: hidden;
+}
+
+.hvy-document .modal-panel.image-drop-choice-modal:focus {
+  outline: none;
+}
+
+.hvy-document .image-drop-choice-head {
+  text-align: center;
+}
+
+.hvy-document .image-drop-choice-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.hvy-document .image-drop-choice-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 7rem));
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+.hvy-document .image-drop-choice-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--hvy-input-bg) 82%, var(--hvy-accent-2) 18%);
+  color: var(--hvy-text);
+  padding: 0.7rem;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.hvy-document .image-drop-choice-card:hover,
+.hvy-document .image-drop-choice-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 0.16rem var(--hvy-focus-ring), 0 0.5rem 1rem color-mix(in srgb, var(--hvy-shadow) 40%, transparent);
+}
+
+.hvy-document .image-drop-choice-card strong {
+  position: relative;
+  z-index: 1;
+}
+
+.hvy-document .image-drop-choice-background {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--hvy-accent-2);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.hvy-document .image-drop-choice-background svg {
+  width: calc(100% - 0.5rem);
+  height: calc(100% - 0.5rem);
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  stroke-miterlimit: 8;
+}
+
+.hvy-document .image-drop-choice-cancel {
+  justify-self: center;
+}
+
 .hvy-document .image-dropzone.has-image {
   background: var(--hvy-surface);
 }

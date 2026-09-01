@@ -32,7 +32,6 @@ let documentBlobUrlCache = new WeakMap<VisualDocument, Map<string, { url: string
 let hostImageUrlCache = new WeakMap<HvyAttachmentHostAdapter, Map<string, HostImageUrlResolution>>();
 const managedBlobUrls = new Set<string>();
 let imageUrlCacheVersion = 0;
-const imageDragDropBoundRoots = new WeakSet<HTMLElement>();
 const lazyImageHydrationObservers = new WeakMap<ParentNode, IntersectionObserver[]>();
 const imageAttachmentPickerStates = new WeakMap<HTMLElement, { expanded: boolean; observer: ResizeObserver | null }>();
 const IMAGE_ATTACHMENT_PICKER_ROWS = 2;
@@ -1142,43 +1141,4 @@ export async function reduceExistingImageAttachments(): Promise<{ reduced: numbe
   clearImageBlobUrlCache();
   getRenderApp()();
   return { reduced: reduced.length, skipped };
-}
-
-export function bindImageDragAndDrop(app: HTMLElement): void {
-  if (imageDragDropBoundRoots.has(app)) {
-    return;
-  }
-  imageDragDropBoundRoots.add(app);
-  const overClass = 'image-dropzone-active';
-  app.addEventListener('dragenter', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    dropzone.classList.add(overClass);
-  });
-  app.addEventListener('dragover', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-    dropzone.classList.add(overClass);
-  });
-  app.addEventListener('dragleave', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    if (!dropzone.contains(event.relatedTarget as Node | null)) {
-      dropzone.classList.remove(overClass);
-    }
-  });
-  app.addEventListener('drop', (event) => {
-    const dropzone = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-image-dropzone="true"]');
-    if (!dropzone) return;
-    event.preventDefault();
-    dropzone.classList.remove(overClass);
-    const file = event.dataTransfer?.files?.[0];
-    if (!file || !isAllowedImageAttachmentMediaType(file.type || inferImageMediaType(file.name))) return;
-    void handleImageUpload(dropzone, file);
-  });
 }

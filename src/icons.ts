@@ -54,6 +54,18 @@ export function arrowRightIcon(): string {
   </svg>`;
 }
 
+export function verticalArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-vertical-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 23V1M4 8l8-7 8 7M4 16l8 7 8-7" />
+  </svg>`;
+}
+
+export function horizontalArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-horizontal-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M1 12h22M8 4l-7 8 7 8M16 4l7 8-7 8" />
+  </svg>`;
+}
+
 export function chevronLeftIcon(): string {
   return `<svg class="hvy-ui-icon hvy-ui-icon-chevron-left" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="m15 5-7 7 7 7" />

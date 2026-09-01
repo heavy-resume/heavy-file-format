@@ -35,7 +35,7 @@ import { clearChatConversation } from './chat/chat';
 import { persistPreparedEmbeddingAttachments } from './chat/embedding-context';
 import { restoreDbTableFrameScroll } from './plugins/db-table-model';
 import { bindChatThreadUi } from './chat/chat-thread-ui';
-import { bindImageDragAndDrop } from './editor/components/image/image';
+import { bindImageDragAndDrop } from './editor/components/image/document-image-drop';
 import { bindImageFilenameEditing } from './editor/components/image/image-filename-edit';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';

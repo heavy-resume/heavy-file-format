@@ -117,20 +117,6 @@
   min-width: 0;
 }
 
-.hvy-document .grid-item-component-label {
-  min-height: 1.9rem;
-  display: inline-flex;
-  align-items: center;
-  padding: 0.22rem 0.55rem;
-  border: 1px solid var(--hvy-border);
-  border-radius: 999px;
-  background: var(--hvy-surface);
-  color: var(--hvy-text-alt);
-  font-size: 0.82rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .hvy-document .grid-columns-input,
 .hvy-document .grid-stack-width-input {
   width: 5rem;

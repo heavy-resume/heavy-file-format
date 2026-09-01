@@ -4,6 +4,7 @@ import { rcompare, satisfies, valid } from 'semver';
 import { isReservedHvyPluginName, normalizeHvyPluginDeclarations } from './declarations';
 import type { HvyOutputGenerator, HvyPlugin, HvyPluginInput } from './types';
 import { getLoadedConditionalPlugin } from './authorization/conditional-plugin';
+import { DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH, normalizeComponentEditorMinimumWidth } from '../editor/component-editor-width-value';
 
 export interface DocumentPluginDefinition {
   id: string;
@@ -231,6 +232,12 @@ function validateHostPlugin(plugin: HvyPlugin): void {
   if (!valid(plugin.version)) throw new Error(`Plugin "${plugin.id}" has invalid version "${plugin.version}".`);
   if (plugin.hvyApiVersion !== HVY_PLUGIN_API_VERSION) {
     throw new Error(`Plugin "${plugin.id}" requires unsupported HVY plugin API "${plugin.hvyApiVersion}".`);
+  }
+  if (plugin.minimumEditorWidth !== undefined
+    && (typeof plugin.minimumEditorWidth !== 'string'
+      || (normalizeComponentEditorMinimumWidth(plugin.minimumEditorWidth) === DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH
+        && plugin.minimumEditorWidth.trim() !== DEFAULT_COMPONENT_EDITOR_MINIMUM_WIDTH))) {
+    throw new Error(`Plugin "${plugin.id}" has invalid minimumEditorWidth "${String(plugin.minimumEditorWidth)}".`);
   }
 }
 

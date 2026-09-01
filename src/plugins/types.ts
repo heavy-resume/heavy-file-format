@@ -240,6 +240,10 @@ export interface HvyPlugin {
   hvyApiVersion: string;
   // Human-readable name shown in the plugin selector.
   displayName: string;
+  // Minimum inline size required by this plugin's editor. When less space is
+  // available, the host offers the editor in its scrollable component modal.
+  // Accepts CSS length units (for example, "24rem" or "420px").
+  minimumEditorWidth?: string;
   // Conditional registrations expose metadata without loading executable
   // plugin code. The host calls load only after per-file authorization.
   authorization?: 'required';

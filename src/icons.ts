@@ -97,3 +97,9 @@ export function settingsIcon(): string {
     <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" />
   </svg>`;
 }
+
+export function wrenchIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-wrench" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4l-3 3-3-3 3-3Z" />
+  </svg>`;
+}

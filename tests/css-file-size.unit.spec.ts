@@ -37,6 +37,7 @@ test('expected result: stylesheet entrypoints preserve split-file cascade order'
     "@import './editor-component-picker.css';",
     "@import './editor-form-controls.css';",
     "@import './editor-metadata.css';",
+    "@import './component-editor-modal.css';",
     '',
   ].join('\n'));
   expect(readFileSync(new URL('../src/editor/components/text/text.css', import.meta.url), 'utf8')).toBe([

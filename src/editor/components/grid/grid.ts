@@ -96,17 +96,15 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
               )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
             </div>
           </div>
-          <div class="grid-item-controls">
-            ${
-              canChangeComponent
-                ? `<select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
+          ${canChangeComponent
+            ? `<div class="grid-item-controls">
+                <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
                     block.id
                   )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
                     ${helpers.renderComponentOptions(item.block.schema.component)}
-                  </select>`
-                : `<span class="grid-item-component-label">${helpers.escapeHtml(item.block.schema.component || 'text')}</span>`
-            }
-          </div>
+                </select>
+              </div>`
+            : ''}
           <div class="grid-item-editor-shell">
             ${renderedGridBlocks.get(item.block) ?? ''}
           </div>

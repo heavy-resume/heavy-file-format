@@ -16,11 +16,13 @@ import { bindDnd } from './handlers/dnd';
 import { bindClickMisc } from './handlers/click-misc';
 import { bindResize } from './handlers/resize';
 import { bindResponsiveSidebarShells } from '../responsive-sidebar-tab';
+import { bindComponentEditorModal } from '../editor/component-editor-modal';
 
 const boundAppRoots = new WeakSet<HTMLElement>();
 
 export function bindAppEvents(app: HTMLElement): void {
   bindResponsiveSidebarShells(app);
+  bindComponentEditorModal(app);
   if (boundAppRoots.has(app)) {
     bindShortcuts(app);
     return;

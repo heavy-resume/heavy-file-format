@@ -51,9 +51,10 @@ import { getScriptingPluginMaxSteps, getScriptingPluginVersion } from '../plugin
 import { SCRIPTING_LIBRARY_OPTIONS } from '../plugins/scripting/wrapper';
 import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
-import { closeIcon, plusIcon } from '../icons';
+import { closeIcon, plusIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
+import { getComponentEditorMinimumWidth } from './component-editor-width';
 import {
   formatTextLineStyleCssLines,
   getTextLineStyleLabel,
@@ -881,6 +882,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
 
     const contentEditor = addCoreEditorControlClasses(renderBlockContentEditor(sectionKey, block));
+    const minimumEditorWidth = getComponentEditorMinimumWidth(block);
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
     const isActivatingPath = state.pendingEditorActivation?.sectionKey === sectionKey
@@ -965,7 +967,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
 
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
-          ${contentEditor}
+          <div class="component-editor-width-gate" data-hvy-component-editor-gate="true" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" data-component-label="${deps.escapeAttr(componentLabel)}" style="--hvy-component-editor-minimum-width: ${deps.escapeAttr(minimumEditorWidth)};">
+            <span class="component-editor-minimum-ruler" aria-hidden="true"></span>
+            <button type="button" class="component-editor-compact-button" data-hvy-component-editor-action="open" aria-label="Edit ${deps.escapeAttr(componentLabel)}">${wrenchIcon()}<span>Edit</span></button>
+            <div class="component-editor-inline-content">
+              ${contentEditor}
+            </div>
+          </div>
           ${anchorAttrs.overlay}
         </div>
         ${showActiveBlockDoneRow

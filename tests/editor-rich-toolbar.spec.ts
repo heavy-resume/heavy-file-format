@@ -1488,10 +1488,12 @@ test('plugin text editor hotkeys promote their actions in compact history', asyn
 });
 
 test('grid text editor uses an unsquashed floating toolbar that stays inside the editor surface', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
+reader_max_width: 70rem
 ---
 
 <!--hvy: {"id":"main"}-->

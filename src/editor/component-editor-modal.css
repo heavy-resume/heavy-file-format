@@ -1,0 +1,162 @@
+.hvy-document .component-editor-width-gate {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hvy-document .component-editor-minimum-ruler {
+  position: absolute;
+  width: var(--hvy-component-editor-minimum-width, 300px);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.hvy-document .component-editor-compact-button {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  min-height: 4.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hvy-surface) 54%, transparent);
+  color: var(--hvy-text);
+  font-weight: 750;
+  cursor: pointer;
+  backdrop-filter: blur(1px);
+  text-shadow: 0 1px 2px var(--hvy-surface), 0 0 5px var(--hvy-surface);
+}
+
+.hvy-document .component-editor-compact-button:hover,
+.hvy-document .component-editor-compact-button:focus-visible {
+  border-color: var(--hvy-focus);
+  box-shadow: 0 0 0 3px var(--hvy-focus-ring);
+}
+
+.hvy-document .component-editor-compact-button .hvy-ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.hvy-document .component-editor-width-gate.is-component-editor-too-narrow > .component-editor-compact-button {
+  display: inline-flex;
+}
+
+.hvy-document .component-editor-width-gate.is-component-editor-too-narrow {
+  isolation: isolate;
+  min-height: 4.25rem;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.hvy-document .component-editor-width-gate.is-component-editor-too-narrow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--hvy-surface-alt) 58%, transparent);
+  pointer-events: none;
+}
+
+.hvy-document .component-editor-width-gate.is-component-editor-too-narrow > .component-editor-inline-content {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: var(--hvy-component-editor-minimum-width, 300px);
+  min-width: var(--hvy-component-editor-minimum-width, 300px);
+  max-width: none;
+  transform: translate(-50%, -50%);
+  opacity: 0.72;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hvy-document .component-editor-modal-root {
+  padding: 0.75rem;
+}
+
+.hvy-document .component-editor-modal-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(760px, calc(100% - 1rem));
+  height: min(44rem, calc(100% - 1rem));
+  max-height: calc(100% - 1rem);
+  padding: 0;
+  overflow: hidden;
+}
+
+.hvy-document .component-editor-modal-head {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--hvy-border);
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .component-editor-modal-head h3 {
+  margin: 0;
+  color: var(--hvy-text);
+  font-size: 1rem;
+}
+
+.hvy-document .component-editor-modal-context {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.hvy-document .component-editor-modal-context-item {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  background: var(--hvy-surface);
+  color: var(--hvy-text-alt);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.hvy-document button.component-editor-modal-context-item {
+  cursor: pointer;
+}
+
+.hvy-document button.component-editor-modal-context-item::after {
+  content: '›';
+  margin-left: 0.45rem;
+  color: var(--hvy-muted);
+}
+
+.hvy-document .component-editor-modal-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.9rem;
+  background: var(--hvy-surface);
+}
+
+.hvy-document .component-editor-modal-layer {
+  min-width: var(--hvy-component-editor-minimum-width, 300px);
+}
+
+.hvy-document .component-editor-modal-layer[hidden] {
+  display: none;
+}
+
+.hvy-document .component-editor-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid var(--hvy-border);
+  background: var(--hvy-surface-alt);
+}

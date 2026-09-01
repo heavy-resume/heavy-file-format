@@ -69,6 +69,27 @@ hvy_version: 0.1
   expect(serializeDocument(document)).toContain('<!--hvy: {"id":"ai-features","lock":false,"expanded":true,"highlight":false}-->');
 });
 
+test('round-trips subsection nesting through serialization', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"overview"}-->
+#! Overview
+
+<!--hvy:subsection {"id":"application-pipeline"}-->
+#! Application Pipeline
+`, '.hvy');
+
+  const serialized = serializeDocument(document);
+  const expectedResult = deserializeDocument(serialized, '.hvy');
+
+  expect(serialized).toContain('<!--hvy:subsection {"id":"application-pipeline","lock":false,"expanded":true,"highlight":false}-->');
+  expect(expectedResult.sections).toHaveLength(1);
+  expect(expectedResult.sections[0]?.children).toHaveLength(1);
+  expect(expectedResult.sections[0]?.children[0]?.customId).toBe('application-pipeline');
+});
+
 test('round-trips sort value annotations in text content', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

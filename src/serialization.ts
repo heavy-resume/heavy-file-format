@@ -1401,7 +1401,8 @@ function serializeSection(section: VisualSection, level: number, documentMeta: J
     meta.templateKey = section.templateKey;
   }
 
-  const directive = `<!--hvy: ${JSON.stringify(meta)}-->`;
+  const directiveName = level === 1 ? 'hvy:' : 'hvy:subsection';
+  const directive = `<!--${directiveName} ${JSON.stringify(meta)}-->`;
 
   const blockText = section.blocks
     .map((block) => serializeBlock(block, 1, documentMeta))

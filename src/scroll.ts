@@ -1,6 +1,43 @@
 import { state } from './state';
 import type { PaneScrollState } from './types';
 
+export interface ElementScrollAnchor {
+  elementSelector: string;
+  scrollContainerSelector: string;
+  viewportTop: number;
+}
+
+export function captureElementScrollAnchor(
+  root: HTMLElement,
+  element: HTMLElement,
+  elementSelector: string,
+): ElementScrollAnchor | null {
+  const scrollContainer = element.closest<HTMLElement>('.editor-sidebar-panel, .editor-shell .editor-tree');
+  if (!scrollContainer || !root.contains(scrollContainer)) return null;
+  return {
+    elementSelector,
+    scrollContainerSelector: scrollContainer.classList.contains('editor-sidebar-panel')
+      ? '.editor-sidebar-panel'
+      : '.editor-shell .editor-tree',
+    viewportTop: element.getBoundingClientRect().top,
+  };
+}
+
+export function restoreElementScrollAnchor(root: HTMLElement, anchor: ElementScrollAnchor | null): void {
+  if (!anchor) return;
+  const restore = (): void => {
+    const element = root.querySelector<HTMLElement>(anchor.elementSelector);
+    const scrollContainer = root.querySelector<HTMLElement>(anchor.scrollContainerSelector);
+    if (!element || !scrollContainer) return;
+    scrollContainer.scrollTop += element.getBoundingClientRect().top - anchor.viewportTop;
+  };
+  restore();
+  window.requestAnimationFrame(() => {
+    restore();
+    window.requestAnimationFrame(restore);
+  });
+}
+
 export function capturePaneScroll(previous: PaneScrollState, app: HTMLElement): PaneScrollState {
   const fullPane = app.querySelector<HTMLDivElement>('.full-pane');
   const editorTree = app.querySelector<HTMLDivElement>('.editor-shell .editor-tree');

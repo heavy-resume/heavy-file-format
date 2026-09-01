@@ -91,10 +91,6 @@
   transform: translateY(-50%);
 }
 
-.hvy-document .hvy-surface:has(> .image-drop-choice-root) {
-  position: relative;
-}
-
 .hvy-document .image-drop-choice-root {
   padding: 0.75rem;
 }
@@ -170,9 +166,8 @@
 .hvy-document .image-drop-choice-background svg {
   width: calc(100% - 0.5rem);
   height: calc(100% - 0.5rem);
-  stroke-linecap: butt;
-  stroke-linejoin: miter;
-  stroke-miterlimit: 8;
+  fill: currentColor;
+  stroke: none;
 }
 
 .hvy-document .image-drop-choice-cancel {

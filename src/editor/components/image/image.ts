@@ -3,7 +3,7 @@ import type { ComponentEditorRenderer, ComponentReaderRenderer, ComponentRenderH
 import type { VisualBlock, VisualSection } from '../../types';
 import type { VisualDocument } from '../../../types';
 import { getImageAttachment, getImageAttachmentId, listImageFilenames, removeAttachment, setAttachment, inferImageMediaType } from '../../../attachments';
-import { getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
+import { ensureDocumentAttachmentStore, getAttachmentDescriptors, normalizeAttachmentBytes, type HvyAttachmentHostAdapter } from '../../../attachment-store';
 import { state, getRefreshEditorSection, getRefreshReaderPanels, getRenderApp } from '../../../state';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { findBlockByIds } from '../../../block-ops';
@@ -351,7 +351,7 @@ async function hydrateLazyImage(image: HTMLImageElement, context: ImageAttachmen
   const filename = image.dataset.imageFilename ?? '';
   const url = await resolveImageBlobUrl(filename, context);
   if (url) {
-    observeHydratedImageLoad(image, filename, startedAt);
+    observeHydratedImageLoad(image, filename, context, startedAt);
     image.src = url;
     image.dataset.hvyLazyImage = 'loaded';
     image.dataset.hvyAttachmentResolution = 'resolved';
@@ -375,12 +375,18 @@ async function hydrateLazyImage(image: HTMLImageElement, context: ImageAttachmen
   });
 }
 
-function observeHydratedImageLoad(image: HTMLImageElement, filename: string, startedAt: number): void {
+function observeHydratedImageLoad(
+  image: HTMLImageElement,
+  filename: string,
+  context: ImageAttachmentResolutionContext,
+  startedAt: number
+): void {
   if (image.dataset.hvyLazyImageLoadObserved === 'true') {
     return;
   }
   image.dataset.hvyLazyImageLoadObserved = 'true';
   image.addEventListener('load', () => {
+    preserveLoadedImageIntrinsicDimensions(image, filename, context.document);
     logPerfTrace('image-lazy-hydration:load', {
       filename,
       elapsedMs: elapsedMs(startedAt),
@@ -411,6 +417,34 @@ function observeHydratedImageLoad(image: HTMLImageElement, filename: string, sta
       elapsedMs: elapsedMs(startedAt),
     });
   }, { once: true });
+}
+
+function preserveLoadedImageIntrinsicDimensions(
+  image: HTMLImageElement,
+  filename: string,
+  document: VisualDocument
+): void {
+  const width = Math.round(image.naturalWidth);
+  const height = Math.round(image.naturalHeight);
+  if (!filename || width <= 0 || height <= 0) {
+    return;
+  }
+  if (!image.hasAttribute('width')) {
+    image.setAttribute('width', String(width));
+  }
+  if (!image.hasAttribute('height')) {
+    image.setAttribute('height', String(height));
+  }
+  const attachmentId = getImageAttachmentId(filename);
+  const store = ensureDocumentAttachmentStore(document);
+  const descriptor = store.getDescriptor(attachmentId);
+  if (!descriptor || getImageIntrinsicDimensions(descriptor.meta)) {
+    return;
+  }
+  store.mergeDescriptorMeta(attachmentId, {
+    pixelWidth: width,
+    pixelHeight: height,
+  });
 }
 
 export function renderImageAttachmentPicker(options: {

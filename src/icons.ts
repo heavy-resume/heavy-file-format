@@ -54,15 +54,15 @@ export function arrowRightIcon(): string {
   </svg>`;
 }
 
-export function verticalArrowsIcon(): string {
-  return `<svg class="hvy-ui-icon hvy-ui-icon-vertical-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path d="M12 23V1M4 8l8-7 8 7M4 16l8 7 8-7" />
+export function verticalTriangleArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-vertical-triangle-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 1 2.5 10h19L12 1ZM12 23l9.5-9h-19l9.5 9Z" />
   </svg>`;
 }
 
-export function horizontalArrowsIcon(): string {
-  return `<svg class="hvy-ui-icon hvy-ui-icon-horizontal-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path d="M1 12h22M8 4l-7 8 7 8M16 4l7 8-7 8" />
+export function horizontalTriangleArrowsIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-horizontal-triangle-arrows" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m1 12 9 9V3l-9 9Zm22 0-9-9v18l9-9Z" />
   </svg>`;
 }
 

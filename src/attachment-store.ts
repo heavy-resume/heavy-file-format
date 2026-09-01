@@ -84,6 +84,17 @@ export class AttachmentStore {
     this.setEntry({ id: descriptor.id, meta: descriptor.meta, length: descriptor.length });
   }
 
+  mergeDescriptorMeta(id: string, meta: JsonObject): void {
+    const entry = this.index.get(id);
+    if (!entry) {
+      return;
+    }
+    this.setEntry({
+      ...entry,
+      meta: { ...entry.meta, ...meta },
+    });
+  }
+
   remove(id: string): void {
     const entry = this.index.get(id);
     if (!entry) {

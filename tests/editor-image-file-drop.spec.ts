@@ -39,7 +39,7 @@ test('image file drops preserve order, reject the side, and create a section bel
   });
 
   expect(accepted).toEqual({ dragover: true, drop: true, previewed: true });
-  await expect(page.locator('.hvy-surface > .image-drop-choice-root')).toBeVisible();
+  await expect(page.locator('.editor-shell > .image-drop-choice-root')).toBeVisible();
   await page.getByRole('button', { name: 'Images', exact: true }).click();
   await expect.poll(() => page.evaluate(async ({ sectionKey }) => {
     const { state } = await import('/src/state.ts');
@@ -93,6 +93,100 @@ test('image file drops preserve order, reject the side, and create a section bel
     return state.document.sections.at(-1)?.blocks.map((block) => block.schema.imageFile);
   })).toEqual(['below.png']);
   await expect.poll(() => page.evaluate(async () => (await import('/src/state.ts')).state.document.sections.length)).toBe(before.sectionCount + 1);
+});
+
+test('inserting dropped images preserves the component above the insertion point', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  const target = await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptyBlock, createEmptySectionWithMeta }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+    ]);
+    const section = createEmptySectionWithMeta(1, '', false, state.document.meta);
+    section.blocks = Array.from({ length: 12 }, (_item, index) => {
+      const block = createEmptyBlock('text', false, state.document.meta);
+      block.text = `Scroll anchor component ${index + 1}: ${'Stable content. '.repeat(8)}`;
+      return block;
+    });
+    state.document.sections = [section];
+    getRenderApp()();
+    return {
+      sectionKey: section.key,
+      precedingBlockId: section.blocks[7]!.id,
+      followingBlockId: section.blocks[8]!.id,
+    };
+  });
+
+  const editorTree = page.locator('#editorTree');
+  const preceding = page.locator(`[data-editor-section="${target.sectionKey}"] [data-hvy-virtual-item="editor-block"][data-block-id="${target.precedingBlockId}"]`);
+  const following = page.locator(`[data-editor-section="${target.sectionKey}"] [data-hvy-virtual-item="editor-block"][data-block-id="${target.followingBlockId}"]`);
+  await preceding.scrollIntoViewIfNeeded();
+  await editorTree.evaluate((element) => { element.scrollTop += 80; });
+  const beforeTop = await preceding.evaluate((element) => element.getBoundingClientRect().top);
+
+  const dropImagesBeforeFollowing = () => following.evaluate((block) => {
+    const bounds = block.getBoundingClientRect();
+    const transfer = new DataTransfer();
+    ['anchor-one.png', 'anchor-two.png', 'anchor-three.png'].forEach((name, index) => {
+      transfer.items.add(new File([new Uint8Array([137, 80, 78, 71, index])], name, { type: 'image/png' }));
+    });
+    const options = {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: transfer,
+      clientX: bounds.left + bounds.width / 2,
+      clientY: bounds.top + 1,
+    };
+    const drop = new DragEvent('drop', options);
+    block.dispatchEvent(drop);
+    return drop.defaultPrevented;
+  });
+
+  expect(await dropImagesBeforeFollowing()).toBe(true);
+  const choiceModal = page.locator('.editor-shell > .image-drop-choice-root .image-drop-choice-modal');
+  await expect(choiceModal).toBeVisible();
+  expect(await choiceModal.evaluate((modal) => {
+    const shell = modal.closest<HTMLElement>('.editor-shell');
+    if (!shell) return false;
+    const modalBounds = modal.getBoundingClientRect();
+    const shellBounds = shell.getBoundingClientRect();
+    return modalBounds.top >= shellBounds.top
+      && modalBounds.bottom <= shellBounds.bottom
+      && modalBounds.left >= shellBounds.left
+      && modalBounds.right <= shellBounds.right;
+  })).toBe(true);
+  expect(Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeTop)).toBeLessThanOrEqual(2);
+  await page.getByRole('button', { name: 'Images', exact: true }).click();
+  await expect.poll(() => page.evaluate(async ({ sectionKey }) => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.find((section) => section.key === sectionKey)?.blocks
+      .filter((block) => block.schema.kind === 'image').length;
+  }, target)).toBe(3);
+  await expect.poll(async () => Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeTop))
+    .toBeLessThanOrEqual(2);
+
+  const beforeCancelTop = await preceding.evaluate((element) => element.getBoundingClientRect().top);
+  expect(await dropImagesBeforeFollowing()).toBe(true);
+  await expect(page.locator('.editor-shell > .image-drop-choice-root')).toBeVisible();
+  expect(Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeCancelTop)).toBeLessThanOrEqual(2);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect.poll(async () => Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeCancelTop))
+    .toBeLessThanOrEqual(2);
+  expect(await page.evaluate(async ({ sectionKey }) => {
+    const { state } = await import('/src/state.ts');
+    return state.document.sections.find((section) => section.key === sectionKey)?.blocks
+      .filter((block) => block.schema.kind === 'image').length;
+  }, target)).toBe(3);
+
+  const beforeEscapeTop = await preceding.evaluate((element) => element.getBoundingClientRect().top);
+  expect(await dropImagesBeforeFollowing()).toBe(true);
+  await expect(page.locator('.editor-shell > .image-drop-choice-root')).toBeVisible();
+  expect(Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeEscapeTop)).toBeLessThanOrEqual(2);
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => Math.abs(await preceding.evaluate((element) => element.getBoundingClientRect().top) - beforeEscapeTop))
+    .toBeLessThanOrEqual(2);
+  await expect(page.locator('.editor-shell > .image-drop-choice-root')).toHaveCount(0);
 });
 
 test('image files dropped between top-level sections create a section in that gap', async ({ page }) => {
@@ -436,8 +530,8 @@ test('multiple HVY images can be inserted as one ordered carousel', async ({ pag
   expect((await choiceDialog.boundingBox())?.width).toBeLessThan(400);
   await expect(choiceDialog.locator('.image-drop-choice-count')).toHaveCount(0);
   await expect(choiceDialog.getByText('Keep them as separate components or combine them into one carousel.')).toHaveCount(0);
-  await expect(choiceDialog.getByRole('button', { name: 'Images', exact: true }).locator('.hvy-ui-icon-vertical-arrows')).toHaveCount(1);
-  await expect(choiceDialog.getByRole('button', { name: 'Carousel', exact: true }).locator('.hvy-ui-icon-horizontal-arrows')).toHaveCount(1);
+  await expect(choiceDialog.getByRole('button', { name: 'Images', exact: true }).locator('.hvy-ui-icon-vertical-triangle-arrows')).toHaveCount(1);
+  await expect(choiceDialog.getByRole('button', { name: 'Carousel', exact: true }).locator('.hvy-ui-icon-horizontal-triangle-arrows')).toHaveCount(1);
   await page.mouse.move(0, 0);
   await choiceDialog.focus();
   expect(await choiceDialog.evaluate((dialog) => {
@@ -456,12 +550,13 @@ test('multiple HVY images can be inserted as one ordered carousel', async ({ pag
       background: getComputedStyle(button).backgroundColor,
       iconColor: icon ? getComputedStyle(icon).color : '',
       iconNearEdges: icon ? icon.getBoundingClientRect().width / bounds.width >= 0.9 : false,
-      linecap: icon ? getComputedStyle(icon).strokeLinecap : '',
-      linejoin: icon ? getComputedStyle(icon).strokeLinejoin : '',
+      solidTriangles: icon
+        ? getComputedStyle(icon).fill === getComputedStyle(icon).color && getComputedStyle(icon).stroke === 'none'
+        : false,
     };
   }))).toEqual([
-    expect.objectContaining({ square: true, iconNearEdges: true, linecap: 'butt', linejoin: 'miter' }),
-    expect.objectContaining({ square: true, iconNearEdges: true, linecap: 'butt', linejoin: 'miter' }),
+    expect.objectContaining({ square: true, iconNearEdges: true, solidTriangles: true }),
+    expect.objectContaining({ square: true, iconNearEdges: true, solidTriangles: true }),
   ]);
   const choiceColors = await choiceDialog.locator('.image-drop-choice-card').evaluateAll((buttons) => buttons.map((button) => ({
     background: getComputedStyle(button).backgroundColor,

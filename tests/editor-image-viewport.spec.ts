@@ -223,6 +223,67 @@ hvy_version: 0.1
   expect(Math.abs(afterHydrationTop - beforeHydrationTop)).toBeLessThanOrEqual(2);
 });
 
+test('before, a hosted image without dimension metadata loads, after: closing its editor keeps calculable image geometry', async ({ page }) => {
+  test.setTimeout(5000);
+  await page.goto('/');
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="dimensionlessImageMount" style="width: 30rem; height: 36rem;"></div>';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ '/src/embed.ts');
+    mountHvy({
+      root: document.querySelector<HTMLElement>('#dimensionlessImageMount')!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"dimensionless-hosted-image"}-->
+#! Dimensionless Hosted Image
+
+ <!--hvy:image {"id":"hosted-image","imageFile":"hosted-landscape.svg","imageAlt":"Hosted landscape"}-->
+`), '.hvy'),
+      mode: 'editor',
+      attachmentStore: {
+        list: () => [{
+          id: 'image:hosted-landscape.svg',
+          meta: { mediaType: 'image/svg+xml' },
+          length: 128,
+        }],
+        recall: () => null,
+        store: () => undefined,
+        remove: () => undefined,
+        resolveUrl: () => new Blob([
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#789"/></svg>',
+        ], { type: 'image/svg+xml' }),
+      },
+    });
+  });
+
+  const image = page.getByRole('img', { name: 'Hosted landscape' });
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalHeight), { timeout: 1000 })
+    .toBe(800);
+  await expect(image).toHaveAttribute('width', '1200');
+  await expect(image).toHaveAttribute('height', '800');
+  await image.evaluate((element) => {
+    (window as Window & { preparedHostedImage?: HTMLImageElement }).preparedHostedImage = element;
+  });
+
+  await image.click({ timeout: 1000 });
+  const activeImage = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.image-editor') });
+  await expect(activeImage).toBeVisible({ timeout: 1000 });
+  await activeImage.getByRole('button', { name: 'Done', exact: true }).click({ timeout: 1000 });
+
+  const passiveImage = page.locator('.editor-block-passive').getByRole('img', { name: 'Hosted landscape' });
+  await expect(passiveImage).toHaveAttribute('width', '1200');
+  await expect(passiveImage).toHaveAttribute('height', '800');
+  expect(await passiveImage.evaluate(
+    (element) => (window as Window & { preparedHostedImage?: HTMLImageElement }).preparedHostedImage === element
+  )).toBe(true);
+  const expectedResult = await passiveImage.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.width / bounds.height;
+  });
+  expect(Math.abs(expectedResult - 1.5)).toBeLessThanOrEqual(0.01);
+});
+
 test('before, an image and table are open, after: closing the table keeps its viewport anchor', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');

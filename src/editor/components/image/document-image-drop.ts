@@ -6,8 +6,9 @@ import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolve
 import { recordHistory } from '../../../history';
 import { findBlockByIds } from '../../../block-ops';
 import { buildSectionRenderSequence, findBlockContainerById, findSectionByKey, getSectionInsertionBoundary, insertBlockAtSectionInsertionBoundary } from '../../../section-ops';
-import { horizontalArrowsIcon, verticalArrowsIcon } from '../../../icons';
+import { horizontalTriangleArrowsIcon, verticalTriangleArrowsIcon } from '../../../icons';
 import { readSectionInsertionBoundary } from '../../section-insertion';
+import { captureElementScrollAnchor, restoreElementScrollAnchor, type ElementScrollAnchor } from '../../../scroll';
 import { state, getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntimeAsync } from '../../../state';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { clearImageBlobUrlCache, handleImageUpload, storeImageAttachment } from './image';
@@ -99,10 +100,15 @@ export function bindImageDragAndDrop(app: HTMLElement): void {
     if (!resolved || files.length === 0 || files.some((file) => !isAllowedImageFile(file))) return;
     const runtime = getActiveStateRuntime();
     void runWithStateRuntimeAsync(runtime, async () => {
-      const mode = files.length > 1 && state.document.extension !== '.phvy'
-        ? await requestImageDropInsertMode(app, resolved.previewElement)
-        : 'images';
-      if (mode) await insertDroppedImageFiles(resolved.placement, files, mode);
+      const scrollAnchor = captureDocumentImageInsertionScrollAnchor(app, resolved);
+      try {
+        const mode = files.length > 1 && state.document.extension !== '.phvy'
+          ? await requestImageDropInsertMode(app, resolved.previewElement)
+          : 'images';
+        if (mode) await insertDroppedImageFiles(resolved.placement, files, mode);
+      } finally {
+        restoreElementScrollAnchor(app, scrollAnchor);
+      }
     });
   });
 }
@@ -433,6 +439,41 @@ export async function insertDroppedImageFiles(
   return true;
 }
 
+function captureDocumentImageInsertionScrollAnchor(
+  app: HTMLElement,
+  resolved: ResolvedDocumentImageDrop,
+): ElementScrollAnchor | null {
+  const preview = resolved.previewElement;
+  const previewIsStable = isStableEditorInsertionAnchor(preview);
+  const anchorElement = resolved.previewPosition === 'after' && previewIsStable
+    ? preview
+    : findPreviousStableEditorInsertionAnchor(preview)
+      ?? preview.closest<HTMLElement>('[data-editor-section]');
+  if (!anchorElement) return null;
+  const blockId = anchorElement.dataset.blockId;
+  const sectionKey = anchorElement.dataset.sectionKey;
+  const editorSectionKey = anchorElement.dataset.editorSection;
+  const selector = blockId && sectionKey
+    ? `[data-hvy-virtual-item="editor-block"][data-section-key="${CSS.escape(sectionKey)}"][data-block-id="${CSS.escape(blockId)}"]`
+    : editorSectionKey
+      ? `[data-editor-section="${CSS.escape(editorSectionKey)}"]`
+      : '';
+  return selector ? captureElementScrollAnchor(app, anchorElement, selector) : null;
+}
+
+function findPreviousStableEditorInsertionAnchor(element: HTMLElement): HTMLElement | null {
+  let previous = element.previousElementSibling;
+  while (previous instanceof HTMLElement) {
+    if (isStableEditorInsertionAnchor(previous)) return previous;
+    previous = previous.previousElementSibling;
+  }
+  return null;
+}
+
+function isStableEditorInsertionAnchor(element: HTMLElement): boolean {
+  return element.dataset.hvyVirtualItem === 'editor-block' || element.hasAttribute('data-editor-section');
+}
+
 function createDroppedCarouselBlock(filenames: string[], inheritedTags: string): VisualBlock {
   const block = createEmptyBlock('carousel', false, state.document.meta);
   block.schema.carouselImages = filenames.map((filename) => ({ imageFile: filename, imageAlt: filename, caption: '' }));
@@ -460,11 +501,11 @@ function requestImageDropInsertMode(
         </div>
         <div class="image-drop-choice-actions">
           <button type="button" class="image-drop-choice-card" data-image-drop-choice="images">
-            <span class="image-drop-choice-background">${verticalArrowsIcon()}</span>
+            <span class="image-drop-choice-background">${verticalTriangleArrowsIcon()}</span>
             <strong>Images</strong>
           </button>
           <button type="button" class="image-drop-choice-card" data-image-drop-choice="carousel">
-            <span class="image-drop-choice-background">${horizontalArrowsIcon()}</span>
+            <span class="image-drop-choice-background">${horizontalTriangleArrowsIcon()}</span>
             <strong>Carousel</strong>
           </button>
         </div>
@@ -488,8 +529,8 @@ function requestImageDropInsertMode(
         finish(null);
       }
     });
-    (previewElement.closest<HTMLElement>('.hvy-surface') ?? app).append(root);
-    root.querySelector<HTMLElement>('.image-drop-choice-modal')?.focus();
+    (previewElement.closest<HTMLElement>('.editor-shell') ?? app).append(root);
+    root.querySelector<HTMLElement>('.image-drop-choice-modal')?.focus({ preventScroll: true });
   });
 }
 

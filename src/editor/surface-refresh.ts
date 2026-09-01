@@ -51,6 +51,7 @@ export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boole
     if (!replacementBlock) {
       return;
     }
+    preservePreparedBlockImages(target, replacementBlock);
     removeActiveInsertGhosts(target);
     target.replaceWith(...replacements);
     preserveEditorViewportPosition(scrollContainer, scrollTop);
@@ -61,6 +62,46 @@ export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boole
     replaced += 1;
   });
   return replaced > 0;
+}
+
+function preservePreparedBlockImages(target: HTMLElement, replacement: HTMLElement): void {
+  const preparedImagesByFilename = new Map<string, HTMLImageElement[]>();
+  target.querySelectorAll<HTMLImageElement>('img[data-image-filename]').forEach((image) => {
+    const filename = image.dataset.imageFilename ?? '';
+    if (!filename || !image.getAttribute('src') || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      return;
+    }
+    preparedImagesByFilename.set(filename, [...(preparedImagesByFilename.get(filename) ?? []), image]);
+  });
+  replacement.querySelectorAll<HTMLImageElement>('img[data-image-filename]').forEach((nextImage) => {
+    if (nextImage.getAttribute('src')) {
+      return;
+    }
+    const filename = nextImage.dataset.imageFilename ?? '';
+    const preparedImage = preparedImagesByFilename.get(filename)?.shift();
+    if (!preparedImage) {
+      return;
+    }
+    Array.from(preparedImage.attributes).forEach((attribute) => {
+      if (attribute.name !== 'src') {
+        preparedImage.removeAttribute(attribute.name);
+      }
+    });
+    Array.from(nextImage.attributes).forEach((attribute) => {
+      if (attribute.name !== 'src') {
+        preparedImage.setAttribute(attribute.name, attribute.value);
+      }
+    });
+    if (!preparedImage.hasAttribute('width')) {
+      preparedImage.setAttribute('width', String(preparedImage.naturalWidth));
+    }
+    if (!preparedImage.hasAttribute('height')) {
+      preparedImage.setAttribute('height', String(preparedImage.naturalHeight));
+    }
+    preparedImage.dataset.hvyLazyImage = 'loaded';
+    preparedImage.dataset.hvyAttachmentResolution = 'resolved';
+    nextImage.replaceWith(preparedImage);
+  });
 }
 
 export function refreshEditorSectionDom(options: EditorSectionRefreshOptions): boolean {

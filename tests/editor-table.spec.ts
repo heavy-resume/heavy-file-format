@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 
 /**
@@ -18,6 +18,23 @@ async function waitForSurfaceIdle(page: Page, selector: string, quietMs = 250): 
     }
     observer.observe(root, { subtree: true, childList: true, attributes: true });
   }), quietMs);
+}
+
+async function scrollDownUntilVisible(page: Page, scroller: Locator, target: Locator): Promise<void> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const visibility = await target.evaluate((element) => {
+      const scrollContainer = element.closest<HTMLElement>('#editorTree')!;
+      const elementRect = element.getBoundingClientRect();
+      const scrollRect = scrollContainer.getBoundingClientRect();
+      return elementRect.top >= scrollRect.top && elementRect.bottom <= scrollRect.bottom;
+    });
+    if (visibility) return;
+    const scrollerBox = await scroller.boundingBox();
+    if (!scrollerBox) throw new Error('Expected the editor scroll surface.');
+    await page.mouse.move(scrollerBox.x + scrollerBox.width / 2, scrollerBox.y + scrollerBox.height / 2);
+    await page.mouse.wheel(0, 300);
+  }
+  throw new Error('Expected the editor control to become visible while scrolling down.');
 }
 
 test('entering and canceling a static table edit keeps the document saved', async ({ page }) => {
@@ -539,4 +556,65 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Raw' }).click();
   await expect(page.locator('#rawEditor')).toHaveValue(/\| Alpha \| Open \|/);
   await expect(page.locator('#rawEditor')).not.toHaveValue(/"cells":\["",""\]/);
+});
+
+test('static table Done keeps a newly added bottom row anchored in the viewport', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"long-static-table-viewport"}-->
+#! Long Static Table Viewport
+
+<!--hvy:table {"tableColumns":["Issue","Notes"],"tableColumnProperties":{"Issue":{"width":"488px","wrap":false,"truncate":true,"align":"left","headerAlign":"center"}},"tableRows":${JSON.stringify(Array.from({ length: 40 }, (_item, index) => ({
+    cells: [`Example issue ${index + 1}: ${'placeholder details '.repeat(5)}`, index % 5 === 0 ? 'Example note' : ''],
+  })))} }-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const passiveFirstRow = page.getByRole('row', { name: /Example issue 1:/ });
+  await passiveFirstRow.scrollIntoViewIfNeeded();
+  await passiveFirstRow.getByRole('cell').first().click();
+
+  const activeTable = page.locator('.editor-block[data-active-editor-block="true"]', { has: page.locator('.table-editor') });
+  const editorTree = page.locator('#editorTree');
+  const addRowButton = activeTable.getByRole('button', { name: 'Row', exact: true });
+  await scrollDownUntilVisible(page, editorTree, addRowButton);
+
+  const previousRowCount = await activeTable.locator('.table-row-editor-main').count();
+  await addRowButton.dispatchEvent('click');
+  await expect(activeTable.locator('.table-row-editor-main')).toHaveCount(previousRowCount + 1);
+  await expect.poll(() => page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.pendingEditorActivation;
+  })).toBeNull();
+  const doneButton = activeTable.getByRole('button', { name: 'Done' });
+  await scrollDownUntilVisible(page, editorTree, doneButton);
+  const doneButtonBox = await doneButton.boundingBox();
+  expect(doneButtonBox).not.toBeNull();
+  const editorTreeAfterRowBox = await editorTree.boundingBox();
+  expect(editorTreeAfterRowBox).not.toBeNull();
+  expect(doneButtonBox!.y + doneButtonBox!.height).toBeLessThanOrEqual(
+    editorTreeAfterRowBox!.y + editorTreeAfterRowBox!.height
+  );
+  const expectedLastRowTop = await activeTable.locator('.table-row-editor-main').last().evaluate(
+    (element) => element.getBoundingClientRect().top
+  );
+
+  // ACTION: close the static table after adding a row.
+  await page.mouse.click(
+    doneButtonBox!.x + doneButtonBox!.width / 2,
+    doneButtonBox!.y + doneButtonBox!.height / 2
+  );
+
+  // AFTER: closing the table does not move the document away from the user's viewport.
+  const passiveTable = page.locator('.editor-block-passive', { hasText: 'Example issue 40:' });
+  await expect.poll(async () => Math.abs(
+    await passiveTable.locator('.reader-table tbody tr').last().evaluate((element) => element.getBoundingClientRect().top)
+      - expectedLastRowTop
+  )).toBeLessThanOrEqual(2);
 });

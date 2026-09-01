@@ -2,7 +2,7 @@ import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, ge
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
 import { recordHistory } from '../../history';
-import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation } from '../../scroll';
+import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from '../../scroll';
 import type { AppActionHandler } from './types';
 import { buildBlockDescriptionParentTree, buildDescriptionRequest, generateDescription } from '../../descriptions/provider';
 import { populateMissingDescriptions } from '../../descriptions/populate';
@@ -189,10 +189,7 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (!refreshedEditorSurface) {
     getRenderApp()();
   } else {
-    state.pendingEditorDeactivation = null;
-    if (deactivationAnchor) {
-      restoreCapturedEditorDeactivationScrollTop(app, deactivationAnchor);
-    }
+    scrollPendingEditorDeactivation(app);
   }
   if (runsDocumentEditHooks) {
     runDocumentEditHooksAfterCommit(capturePaneScroll(state.paneScroll, app), () => {

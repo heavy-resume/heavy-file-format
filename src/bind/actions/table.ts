@@ -1,5 +1,5 @@
 import { getRenderApp } from '../../state';
-import { findBlockByIds, refreshReaderPanelsOutsideActiveEditor, resolveBlockContext, setActiveEditorBlock } from '../../block-ops';
+import { findBlockByIds, refreshReaderPanelsOutsideActiveEditor, resolveBlockContext } from '../../block-ops';
 import { createDefaultTableRow } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock } from '../../reusable';
@@ -20,7 +20,6 @@ const addTableRowAction: ActionHandler = ({ actionButton, sectionKey, blockId })
   const columnCount = getTableColumns(block.schema).length;
   block.schema.tableRows.push(createDefaultTableRow(columnCount));
   syncReusableTemplateForBlock(sectionKey, block.id);
-  setActiveEditorBlock(sectionKey, block.id);
   getRenderApp()();
 };
 

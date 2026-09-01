@@ -150,7 +150,7 @@ function renderTableRowEditor(
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
   return `
-    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}">
+    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
       <td class="table-row-utility">
         <button
           type="button"
@@ -339,10 +339,10 @@ export const renderTableReader: ComponentReaderRenderer = (_section, block, help
     <tbody>
       ${block.schema.tableRows
         .map(
-          (row) => {
+          (row, rowIndex) => {
             const isEmptyRow = columns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
             return `
-            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}${isEmptyRow ? ' table-main-row-empty' : ''}">
+            <tr class="table-main-row table-main-row-${getNextReaderTableStripeClass()}${isEmptyRow ? ' table-main-row-empty' : ''}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${block.id}-row-${rowIndex}`)}">
               ${columns.map((_column, cellIndex) => {
                 const rawValue = row.cells[cellIndex] ?? '';
                 const value = helpers.escapeHtml(rawValue);

@@ -183,11 +183,16 @@ export function captureEditorDeactivationAnchor(
   const activeTextEditor = block.querySelector<HTMLElement>(
     '.rich-editor[data-field="block-rich"], .rich-editor.text-fill-in-editor'
   );
-  const anchorKind = activeTextEditor ? 'text' : 'block';
-  const anchorTop = activeTextEditor?.getBoundingClientRect().top ?? blockRect.top;
   const scrollRect = scrollContainer.getBoundingClientRect();
   const visibleTop = scrollRect.top + scrollContainer.clientTop;
   const visibleBottom = visibleTop + scrollContainer.clientHeight;
+  const elementAnchor = activeTextEditor
+    ? null
+    : findVisibleEditorDeactivationAnchor(block, visibleTop, visibleBottom);
+  const anchorKind = activeTextEditor ? 'text' : elementAnchor ? 'element' : 'block';
+  const anchorTop = activeTextEditor?.getBoundingClientRect().top
+    ?? elementAnchor?.getBoundingClientRect().top
+    ?? blockRect.top;
   const editorIsClipped = blockRect.top < visibleTop || blockRect.bottom > visibleBottom;
   const expandedHeight = Number.isFinite(passiveHeight)
     ? Math.max(0, blockRect.height - passiveHeight)
@@ -197,9 +202,10 @@ export function captureEditorDeactivationAnchor(
     blockId,
     anchorKind,
     anchorTop,
+    elementAnchor: elementAnchor?.dataset.editorDeactivationAnchor,
     scrollSurface,
     scrollTopBeforeClose: scrollContainer.scrollTop,
-    scrollAdjustment: editorIsClipped
+    scrollAdjustment: !elementAnchor && editorIsClipped
       && userScrollDirection === 'down'
       && Number.isFinite(userScrollStartTop)
       && Number.isFinite(passiveHeight)
@@ -209,6 +215,23 @@ export function captureEditorDeactivationAnchor(
         )
       : 0,
   };
+}
+
+function findVisibleEditorDeactivationAnchor(
+  block: HTMLElement,
+  visibleTop: number,
+  visibleBottom: number
+): HTMLElement | null {
+  const viewportCenter = (visibleTop + visibleBottom) / 2;
+  return Array.from(block.querySelectorAll<HTMLElement>('[data-editor-deactivation-anchor]'))
+    .filter((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.bottom >= visibleTop && rect.top <= visibleBottom;
+    })
+    .sort((left, right) => (
+      Math.abs(left.getBoundingClientRect().top - viewportCenter)
+      - Math.abs(right.getBoundingClientRect().top - viewportCenter)
+    ))[0] ?? null;
 }
 
 export function scrollPendingEditorDeactivation(app: HTMLElement): void {
@@ -236,10 +259,11 @@ export function restoreCapturedEditorDeactivationScrollTop(
   app: HTMLElement,
   captured: NonNullable<typeof state.pendingEditorDeactivation>
 ): void {
+  const scrollTop = captured.resolvedScrollTop ?? captured.scrollTopBeforeClose;
   const restore = (): void => {
     const scrollContainer = app.querySelector<HTMLElement>(getEditorScrollSurfaceSelector(captured.scrollSurface));
     if (scrollContainer) {
-      scrollContainer.scrollTop = captured.scrollTopBeforeClose;
+      scrollContainer.scrollTop = scrollTop;
     }
   };
   restore();
@@ -301,7 +325,11 @@ function applyPendingEditorDeactivationScroll(
     const passiveAnchorTop = passiveBlock
       ? pending.anchorKind === 'text'
         ? getFirstRenderedTextTop(passiveBlock.querySelector<HTMLElement>('.reader-block'))
-        : passiveBlock.getBoundingClientRect().top
+        : pending.anchorKind === 'element' && pending.elementAnchor
+          ? passiveBlock.querySelector<HTMLElement>(
+            `[data-editor-deactivation-anchor="${CSS.escape(pending.elementAnchor)}"]`
+          )?.getBoundingClientRect().top ?? null
+          : passiveBlock.getBoundingClientRect().top
       : null;
     const anchorAdjustment = pending.scrollAdjustment === 0 && passiveAnchorTop !== null
       ? passiveAnchorTop - pending.anchorTop

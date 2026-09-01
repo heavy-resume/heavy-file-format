@@ -555,8 +555,9 @@ export interface AppState {
   pendingEditorDeactivation: {
     sectionKey: string;
     blockId: string;
-    anchorKind: 'block' | 'text';
+    anchorKind: 'block' | 'element' | 'text';
     anchorTop: number;
+    elementAnchor?: string;
     scrollAdjustment: number;
     scrollSurface: 'editor' | 'editor-sidebar' | 'reader' | 'viewer-sidebar';
     scrollTopBeforeClose: number;

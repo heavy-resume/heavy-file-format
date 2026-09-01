@@ -289,13 +289,14 @@ test('selected component insert below adds picked components', async ({ page }) 
   await expect(page.locator('.editor-block .rich-editor').first()).toBeVisible();
 
   await page.locator('.editor-block-passive').first().click();
-  await page.locator('.active-component-insert-ghost-after').getByRole('button', { name: 'Insert component below' }).click();
-  await page.locator('.active-component-insert-ghost-after .component-picker-row-category', { hasText: 'Plugin' }).click();
-  await page.locator('.active-component-insert-ghost-after [data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'DB Table' }).evaluate((button) => {
+  const currentInsertBelow = page.locator('.active-component-insert-ghost-after').last();
+  await currentInsertBelow.getByRole('button', { name: 'Insert component below' }).click();
+  await currentInsertBelow.locator('.component-picker-row-category', { hasText: 'Plugin' }).click();
+  await currentInsertBelow.locator('[data-picker-pane="plugins"] .component-picker-row-leaf', { hasText: 'DB Table' }).evaluate((button) => {
     if (button instanceof HTMLElement) button.click();
   });
 
-  await expect(page.locator('.active-component-insert-ghost-after .component-picker[data-open="true"]')).toHaveCount(0);
+  await expect(currentInsertBelow.locator('.component-picker[data-open="true"]')).toHaveCount(0);
   await expect(page.locator('.editor-block-title', { hasText: 'DB Table' }).first()).toBeVisible();
 });
 

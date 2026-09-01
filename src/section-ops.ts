@@ -469,6 +469,64 @@ export function buildSectionRenderSequence(
   return items;
 }
 
+export type SectionInsertionBoundary =
+  | { beforeKind: 'block'; beforeId: string }
+  | { beforeKind: 'child'; beforeId: string }
+  | { beforeKind: 'end'; beforeId: '' };
+
+export function getSectionInsertionBoundary(
+  section: VisualSection,
+  visualIndex: number
+): SectionInsertionBoundary {
+  const next = buildSectionRenderSequence(section)[visualIndex];
+  if (!next) return { beforeKind: 'end', beforeId: '' };
+  return next.kind === 'block'
+    ? { beforeKind: 'block', beforeId: next.block.id }
+    : { beforeKind: 'child', beforeId: next.child.key };
+}
+
+export function insertBlockAtSectionInsertionBoundary(
+  section: VisualSection,
+  block: VisualBlock,
+  boundary: SectionInsertionBoundary
+): boolean {
+  const sequence = buildSectionRenderSequence(section);
+  const insertIndex = boundary.beforeKind === 'end'
+    ? sequence.length
+    : sequence.findIndex((item) => boundary.beforeKind === item.kind && (
+      item.kind === 'block' ? item.block.id === boundary.beforeId : item.child.key === boundary.beforeId
+    ));
+  if (insertIndex < 0) return false;
+  sequence.splice(insertIndex, 0, { kind: 'block', block });
+  applySectionRenderSequence(section, sequence);
+  return true;
+}
+
+export function removeBlockFromSectionRenderSequence(section: VisualSection, blockId: string): boolean {
+  const sequence = buildSectionRenderSequence(section);
+  const removeIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
+  if (removeIndex < 0) return false;
+  sequence.splice(removeIndex, 1);
+  applySectionRenderSequence(section, sequence);
+  return true;
+}
+
+function applySectionRenderSequence(
+  section: VisualSection,
+  sequence: Array<{ kind: 'block'; block: VisualBlock } | { kind: 'child'; child: VisualSection }>,
+): void {
+  section.blocks = sequence.flatMap((item) => item.kind === 'block' ? [item.block] : []);
+  section.children = sequence.flatMap((item) => item.kind === 'child' ? [item.child] : []);
+  let precedingBlockId = '';
+  for (const item of sequence) {
+    if (item.kind === 'block') {
+      precedingBlockId = item.block.id;
+    } else {
+      item.child.renderAfterBlockId = precedingBlockId;
+    }
+  }
+}
+
 /** Move a section-level block up or down in the visual sequence, swapping with
  * adjacent subsections by repositioning their `renderAfterBlockId` anchor. */
 export function moveBlockInVisualSequence(

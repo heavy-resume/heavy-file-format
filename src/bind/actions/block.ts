@@ -1,6 +1,6 @@
 import { state, getRenderApp, getRefreshReaderPanels, REUSABLE_SECTION_DEF_PREFIX, REUSABLE_SECTION_PREFIX } from '../../state';
 import { blockContainsBlockId, findBlockByIds, resolveBlockContext, setActiveEditorBlock, clearActiveEditorBlock, markActiveEditorBlockAsNew, moveBlockByOffset, removeBlockFromList, findBlockInList } from '../../block-ops';
-import { findBlockContainerById, findBlockContainerInList, findSectionByKey } from '../../section-ops';
+import { findBlockContainerById, findBlockContainerInList, findSectionByKey, insertBlockAtSectionInsertionBoundary, removeBlockFromSectionRenderSequence } from '../../section-ops';
 import { cloneReusableBlock, createEmptyBlock, coerceAlign, getReusableTemplateByName } from '../../document-factory';
 import { recordHistory } from '../../history';
 import { syncReusableTemplateForBlock, findReusableOwner } from '../../reusable';
@@ -28,15 +28,17 @@ import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
 import { decryptComponentInDocument } from '../../encrypted-components';
 import type { ActionHandler } from './types';
 import type { GridItem, VisualBlock } from '../../editor/types';
+import { readSectionInsertionBoundary } from '../../editor/section-insertion';
 
 type ComponentPlacementContainer = 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
 
 const addBlock: ActionHandler = ({ actionButton, section }) => {
+  const sectionBoundary = readSectionInsertionBoundary(actionButton);
   const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
     ? actionButton.dataset.insertPlacement
     : null;
   const targetBlockId = actionButton.dataset.targetBlockId ?? '';
-  if (!section || (section.lock && (!insertPlacement || !targetBlockId))) {
+  if (!section || (sectionBoundary && section.lock) || (section.lock && (!insertPlacement || !targetBlockId))) {
     return;
   }
   const component = (actionButton.dataset.component ?? state.addComponentBySection[section.key] ?? 'text').trim() || 'text';
@@ -50,6 +52,14 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
     configurePluginBlock(newBlock, actionButton.dataset.pluginId);
+  }
+  if (sectionBoundary) {
+    if (insertBlockAtSectionInsertionBoundary(section, newBlock, sectionBoundary)) {
+      setActiveEditorBlock(section.key, newBlock.id);
+      markActiveEditorBlockAsNew(newBlock.id);
+      getRenderApp()();
+    }
+    return;
   }
   if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
     setActiveEditorBlock(section.key, newBlock.id);
@@ -524,6 +534,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   const targetPlacement = actionButton.dataset.placement === 'before' || actionButton.dataset.placement === 'after'
     ? actionButton.dataset.placement
     : 'end';
+  const sectionBoundary = placementContainer === 'section' ? readSectionInsertionBoundary(actionButton) : null;
   const gridBlock = placementContainer === 'grid' && parentBlockId ? findBlockByIds(sectionKey, parentBlockId) : null;
   if (placementContainer === 'grid' && (!gridBlock || gridBlock.schema.component !== 'grid')) {
     state.componentPlacement = null;
@@ -547,6 +558,7 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     placement.sectionKey === sectionKey &&
     (
       targetBlockId === placement.blockId ||
+      (sectionBoundary?.beforeKind === 'block' && sectionBoundary.beforeId === placement.blockId) ||
       parentBlockId === placement.blockId ||
       (placementContainer === 'grid' && getGridItemBlockId(sectionKey, parentBlockId, targetGridItemId) === placement.blockId) ||
       (parentBlockId.length > 0 && blockContainsBlockId(sourceBlock, parentBlockId))
@@ -629,7 +641,13 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
     recordPlacementHistory();
   }
 
-  if (placementContainer === 'grid') {
+  if (placementContainer === 'section' && sectionBoundary) {
+    if (!insertBlockAtSectionInsertionBoundary(targetSection, placedBlock, sectionBoundary)) {
+      state.componentPlacement = null;
+      getRenderApp()();
+      return;
+    }
+  } else if (placementContainer === 'grid') {
     if (!gridBlock) {
       return;
     }
@@ -872,7 +890,9 @@ function getGridItemBlockId(sectionKey: string, gridBlockId: string, gridItemId:
 
 function removeBlockForPlacement(sectionKey: string, blockId: string): boolean {
   const section = findSectionByKey(state.document.sections, sectionKey);
-  return section ? removeBlockForPlacementFromList(section.blocks, blockId) : false;
+  if (!section) return false;
+  return removeBlockFromSectionRenderSequence(section, blockId)
+    || removeBlockForPlacementFromList(section.blocks, blockId);
 }
 
 function removeBlockForPlacementFromList(blocks: VisualBlock[], blockId: string): boolean {

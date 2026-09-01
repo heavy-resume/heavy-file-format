@@ -112,6 +112,10 @@ export interface ComponentPlacementTargetOptions {
   targetBlockId?: string;
   parentBlockId?: string;
   targetGridItemId?: string;
+  sectionBoundary?: {
+    beforeKind: 'block' | 'child' | 'end';
+    beforeId: string;
+  };
 }
 
 export interface ComponentEditorRenderer {

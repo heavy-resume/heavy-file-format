@@ -4213,7 +4213,7 @@ hvy_version: 0.1
   await page.locator('[data-action="place-component"][data-placement="after"]').nth(1).click();
 
   await page.locator('.editor-block-passive', { hasText: 'Beta' }).first().click();
-  await page.locator('.editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' }).getByRole('button', { name: 'Move', exact: true }).click();
   await page.locator('[data-action="place-component"][data-placement="before"]').first().click();
 
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -4459,7 +4459,7 @@ hvy_version: 0.1
   await page.locator('.editor-sidebar [data-action="place-component"][data-placement="after"]').last().click();
 
   await page.locator('.editor-sidebar .editor-block-passive', { hasText: 'Side note' }).click();
-  await page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"] [data-action="start-component-move"]').click();
+  await page.locator('.editor-sidebar .editor-block[data-active-editor-block="true"]', { hasText: 'Side note' }).getByRole('button', { name: 'Move', exact: true }).click();
   await page.locator('.editor-sidebar-tab').click();
   await expect(page.locator('.component-placement-target')).not.toHaveCount(0);
   await page.locator('#editorTree [data-action="place-component"][data-placement="before"]').first().click();
@@ -4610,8 +4610,9 @@ hvy_version: 0.1
   await page.locator('[data-placement-container="grid"][data-placement="after"]').first().click();
 
   await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  const activeBeta = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' });
+  await expect(activeBeta).toContainText('Beta');
+  await activeBeta.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(page.locator('[data-placement-container="grid"]')).toHaveCount(4);
   await expect(page.locator('[data-placement-container="grid"]').first()).toContainText('Move (in grid)');
   await page.locator('[data-placement-container="grid"][data-placement="after"]').last().click();
@@ -4667,8 +4668,9 @@ hvy_version: 0.1
   await page.locator('[data-placement-container="container"][data-placement="after"]').first().click();
 
   await page.locator('#editorTree .editor-block-passive', { hasText: 'Beta' }).first().click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toContainText('Beta');
-  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Move', exact: true }).click();
+  const activeBeta = page.locator('.editor-block[data-active-editor-block="true"]', { hasText: 'Beta' });
+  await expect(activeBeta).toContainText('Beta');
+  await activeBeta.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(page.locator('[data-placement-container="container"]')).toHaveCount(3);
   await expect(page.locator('[data-placement-container="container"]').first()).toContainText('Move (in container)');
   await page.locator('[data-placement-container="container"][data-placement="after"]').last().click();

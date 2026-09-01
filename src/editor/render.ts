@@ -430,12 +430,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : '';
     const addComponentGhost = state.componentPlacement || state.mobileAdjustmentMode
       ? ''
-      : `<div class="ghost-section-card add-ghost compact-add-component-ghost">
+      : `<div class="ghost-section-card add-ghost compact-add-component-ghost" data-section-insertion="true" data-section-before-kind="end">
                   ${renderComponentPicker({
         id: `section:${section.key}`,
         action: 'add-block',
         sectionKey: section.key,
         label: 'Section component type',
+        extraAttrs: {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': 'end',
+        },
         ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
       })}
               </div>`;
@@ -538,28 +542,61 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       );
     }
     const output: string[] = [];
-    let renderedFirstBlockPlacement = false;
     const canPlaceInSection = !section.lock;
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]!;
+      const previous = items[index - 1];
+      const boundary = item.kind === 'block'
+        ? { beforeKind: 'block' as const, beforeId: item.block.id }
+        : { beforeKind: 'child' as const, beforeId: item.child.key };
+      if (state.componentPlacement && canPlaceInSection) {
+        output.push(renderComponentPlacementTarget({
+          container: 'section',
+          sectionKey: section.key,
+          placement: index === 0 ? 'before' : previous?.kind === 'block' ? 'after' : 'before',
+          ...(previous?.kind === 'block' ? { targetBlockId: previous.block.id } : item.kind === 'block' ? { targetBlockId: item.block.id } : {}),
+          sectionBoundary: boundary,
+        }));
+      } else if (canPlaceInSection && previous?.kind === 'child' && item.kind === 'child') {
+        output.push(renderSectionSequenceAddGhost(section.key, boundary));
+      }
       if (item.kind === 'block') {
-        if (!renderedFirstBlockPlacement) {
-          if (canPlaceInSection) {
-            output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'before', targetBlockId: item.block.id }));
-          }
-          renderedFirstBlockPlacement = true;
-        }
         output.push(renderEditorBlock(section.key, item.block, rootSections, section.lock));
-        if (canPlaceInSection) {
-          output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'after', targetBlockId: item.block.id }));
-        }
       } else {
         output.push(renderEditorSection(item.child, rootSections, true));
       }
     }
-    if (!renderedFirstBlockPlacement && canPlaceInSection) {
-      output.push(renderComponentPlacementTarget({ container: 'section', sectionKey: section.key, placement: 'end' }));
+    if (state.componentPlacement && canPlaceInSection) {
+      const previous = items.at(-1);
+      output.push(renderComponentPlacementTarget({
+        container: 'section',
+        sectionKey: section.key,
+        placement: previous?.kind === 'block' ? 'after' : 'end',
+        ...(previous?.kind === 'block' ? { targetBlockId: previous.block.id } : {}),
+        sectionBoundary: { beforeKind: 'end', beforeId: '' },
+      }));
     }
     return output.join('');
+  }
+
+  function renderSectionSequenceAddGhost(
+    sectionKey: string,
+    boundary: { beforeKind: 'block' | 'child'; beforeId: string },
+  ): string {
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost section-sequence-add-ghost" data-section-insertion="true" data-section-before-kind="${boundary.beforeKind}" data-section-before-id="${deps.escapeAttr(boundary.beforeId)}">
+      ${renderComponentPicker({
+        id: `section-boundary:${sectionKey}:${boundary.beforeId}`,
+        action: 'add-block',
+        sectionKey,
+        label: 'Insert component between subsections',
+        extraAttrs: {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': boundary.beforeKind,
+          'data-section-before-id': boundary.beforeId,
+        },
+        ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
+      })}
+    </div>`;
   }
 
   function renderEditorSectionItemPlan(
@@ -574,6 +611,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       if (!entry) break;
       if (entry.node.kind === 'section') {
         const child = entry.node.item as VisualSection;
+        const previous = entries[index - 1];
+        if (!section.lock && previous?.node.kind === 'section') {
+          output.push(renderSectionSequenceAddGhost(section.key, { beforeKind: 'child', beforeId: child.key }));
+        }
         output.push(entry.shouldRender || hasOpenEditorInSectionTree(child)
           ? renderEditorSection(
             child,
@@ -763,7 +804,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     return `<button type="button" class="component-placement-target" data-action="place-component" data-section-key="${deps.escapeAttr(
       options.sectionKey
     )}" data-placement-container="${options.container}" data-placement="${options.placement}"${options.targetBlockId ? ` data-target-block-id="${deps.escapeAttr(options.targetBlockId)}"` : ''
-      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''
+      }${options.parentBlockId ? ` data-parent-block-id="${deps.escapeAttr(options.parentBlockId)}"` : ''}${options.targetGridItemId ? ` data-target-grid-item-id="${deps.escapeAttr(options.targetGridItemId)}"` : ''}${options.sectionBoundary ? ` data-section-insertion="true" data-section-before-kind="${options.sectionBoundary.beforeKind}"${options.sectionBoundary.beforeId ? ` data-section-before-id="${deps.escapeAttr(options.sectionBoundary.beforeId)}"` : ''}` : ''
       }>
       <span>${deps.escapeHtml(label)}</span>
     </button>`;
@@ -897,7 +938,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       ? renderActiveComponentInsertGhost(sectionKey, block, 'before')
       : '';
+    const directSectionSequence = isDirectSectionBlock && owningSection ? deps.buildSectionRenderSequence(owningSection) : [];
+    const directSequenceIndex = directSectionSequence.findIndex((item) => item.kind === 'block' && item.block === block);
+    const usesSectionEndGhost = directSequenceIndex >= 0 && directSequenceIndex === directSectionSequence.length - 1;
     const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+      && !usesSectionEndGhost
       ? renderActiveComponentInsertGhost(sectionKey, block, 'after')
       : '';
 
@@ -967,7 +1012,23 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   }
 
   function renderActiveComponentInsertGhost(sectionKey: string, block: VisualBlock, placement: 'before' | 'after'): string {
-    return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}">
+    const section = deps.findSectionByKey(state.documentSections, sectionKey);
+    const sequence = section ? deps.buildSectionRenderSequence(section) : [];
+    const blockIndex = section?.blocks.some((candidate) => candidate === block)
+      ? sequence.findIndex((item) => item.kind === 'block' && item.block === block)
+      : -1;
+    const next = blockIndex >= 0 ? sequence[blockIndex + (placement === 'after' ? 1 : 0)] : null;
+    const sectionBoundary = blockIndex < 0
+      ? null
+      : next?.kind === 'block'
+        ? { beforeKind: 'block', beforeId: next.block.id }
+        : next?.kind === 'child'
+          ? { beforeKind: 'child', beforeId: next.child.key }
+          : { beforeKind: 'end', beforeId: '' };
+    const sectionBoundaryAttrs = sectionBoundary
+      ? ` data-section-insertion="true" data-section-before-kind="${sectionBoundary.beforeKind}"${sectionBoundary.beforeId ? ` data-section-before-id="${deps.escapeAttr(sectionBoundary.beforeId)}"` : ''}`
+      : '';
+    return `<div class="ghost-section-card add-ghost compact-add-component-ghost active-component-insert-ghost active-component-insert-ghost-${placement}"${sectionBoundaryAttrs}>
       <span class="active-component-insert-label">Insert ${placement === 'before' ? 'Above' : 'Below'}</span>
       ${renderComponentPicker({
       id: `block:${block.id}:${placement}`,
@@ -977,6 +1038,11 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       extraAttrs: {
         'data-insert-placement': placement,
         'data-target-block-id': block.id,
+        ...(sectionBoundary ? {
+          'data-section-insertion': 'true',
+          'data-section-before-kind': sectionBoundary.beforeKind,
+          ...(sectionBoundary.beforeId ? { 'data-section-before-id': sectionBoundary.beforeId } : {}),
+        } : {}),
       },
       ...(isPdfEditorDocument() ? { componentFilter: isPdfAllowedEditorComponent, componentDisabledReason: getPdfDisabledComponentReason } : {}),
     })}

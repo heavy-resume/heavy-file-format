@@ -5,8 +5,9 @@ import { createEmptyBlock, createEmptySectionWithMeta, ensureContainerBlocks } f
 import { isAllowedImageAttachmentMediaType, prepareImageAttachmentBytes, resolveDocumentImageAttachmentMaxDimensions } from '../../../image-attachments';
 import { recordHistory } from '../../../history';
 import { findBlockByIds } from '../../../block-ops';
-import { findBlockContainerById, findSectionByKey } from '../../../section-ops';
+import { buildSectionRenderSequence, findBlockContainerById, findSectionByKey, getSectionInsertionBoundary, insertBlockAtSectionInsertionBoundary } from '../../../section-ops';
 import { horizontalArrowsIcon, verticalArrowsIcon } from '../../../icons';
+import { readSectionInsertionBoundary } from '../../section-insertion';
 import { state, getActiveStateRuntime, getRefreshReaderPanels, getRenderApp, runWithStateRuntimeAsync } from '../../../state';
 import { syncReusableTemplateForBlock } from '../../../reusable';
 import { clearImageBlobUrlCache, handleImageUpload, storeImageAttachment } from './image';
@@ -23,6 +24,7 @@ export type DocumentImageDropPlacement =
   | { kind: 'relative'; sectionKey: string; blockId: string; position: 'before' | 'after' }
   | { kind: 'container-end'; sectionKey: string; blockId: string }
   | { kind: 'section-index'; sectionKey: string; index: number }
+  | { kind: 'section-boundary'; sectionKey: string; boundary: ReturnType<typeof getSectionInsertionBoundary> }
   | { kind: 'new-section'; location?: 'main' | 'sidebar'; beforeSectionKey?: string };
 
 interface ResolvedDocumentImageDrop {
@@ -159,6 +161,39 @@ export function resolveDocumentImageDrop(
     };
   }
 
+  const sectionInsertionElement = target.closest<HTMLElement>('[data-section-insertion="true"]');
+  const explicitSectionBoundary = sectionInsertionElement ? readSectionInsertionBoundary(sectionInsertionElement) : null;
+  if (sectionInsertionElement && explicitSectionBoundary) {
+    const sectionElement = sectionInsertionElement.closest<HTMLElement>('[data-editor-section]');
+    const sectionKey = sectionElement?.dataset.editorSection ?? '';
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    const bounds = sectionInsertionElement.getBoundingClientRect();
+    if (!section || section.lock || !containsX(bounds, clientX)) return null;
+    const isSubsectionGap = sectionInsertionElement.classList.contains('section-sequence-add-ghost');
+    const previousVisualItem = getPreviousSectionVisualItem(sectionInsertionElement);
+    return {
+      placement: { kind: 'section-boundary', sectionKey, boundary: explicitSectionBoundary },
+      previewElement: isSubsectionGap ? sectionInsertionElement : previousVisualItem ?? sectionInsertionElement,
+      previewPosition: isSubsectionGap || previousVisualItem ? 'after' : 'before',
+    };
+  }
+
+  const subsectionHead = target.closest<HTMLElement>('.editor-subsection-card > .editor-section-head');
+  if (subsectionHead) {
+    const subsection = subsectionHead.closest<HTMLElement>('.editor-subsection-card[data-editor-section]');
+    const sectionKey = subsection?.dataset.editorSection ?? '';
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    const bounds = subsection?.getBoundingClientRect();
+    const blocksHost = subsection ? Array.from(subsection.children).find((element) => element.classList.contains('editor-blocks')) : null;
+    if (!section || section.lock || !bounds || !(blocksHost instanceof HTMLElement) || !containsX(bounds, clientX)) return null;
+    const firstVisualItem = getFirstSectionVisualItem(blocksHost);
+    return {
+      placement: { kind: 'section-boundary', sectionKey, boundary: getSectionInsertionBoundary(section, 0) },
+      previewElement: firstVisualItem ?? blocksHost,
+      previewPosition: 'before',
+    };
+  }
+
   const blockElement = target.closest<HTMLElement>('[data-hvy-virtual-item="editor-block"]');
   const nestedContainer = target.closest<HTMLElement>('[data-image-drop-block-container="container"]');
   const nestedReaderBlock = target.closest<HTMLElement>('[data-hvy-virtual-item="reader-block"]');
@@ -200,11 +235,55 @@ export function resolveDocumentImageDrop(
       return null;
     }
     const position = clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+    if (location.ownerBlockId === null) {
+      const sequence = buildSectionRenderSequence(section);
+      const blockIndex = sequence.findIndex((item) => item.kind === 'block' && item.block.id === blockId);
+      if (blockIndex < 0) return null;
+      return {
+        placement: {
+          kind: 'section-boundary',
+          sectionKey,
+          boundary: getSectionInsertionBoundary(section, blockIndex + (position === 'after' ? 1 : 0)),
+        },
+        previewElement: blockElement,
+        previewPosition: position,
+      };
+    }
     return {
       placement: { kind: 'relative', sectionKey, blockId, position },
       previewElement: blockElement,
       previewPosition: position,
     };
+  }
+
+  const nearestEditorSection = target.closest<HTMLElement>('[data-editor-section]');
+  const directSectionHead = nearestEditorSection
+    ? Array.from(nearestEditorSection.children).find((element) => element.classList.contains('editor-section-head'))
+    : null;
+  const directBlocksHost = nearestEditorSection
+    ? Array.from(nearestEditorSection.children).find((element) => element.classList.contains('editor-blocks'))
+    : null;
+  if (nearestEditorSection && directSectionHead instanceof HTMLElement && directBlocksHost instanceof HTMLElement) {
+    const sectionKey = nearestEditorSection.dataset.editorSection ?? '';
+    const section = findSectionByKey(state.document.sections, sectionKey);
+    const firstVisualItem = getFirstSectionVisualItem(directBlocksHost);
+    const headBounds = directSectionHead.getBoundingClientRect();
+    const blocksBounds = directBlocksHost.getBoundingClientRect();
+    const firstBounds = firstVisualItem?.getBoundingClientRect();
+    const insertionBottom = firstBounds?.top ?? blocksBounds.bottom;
+    if (
+      section
+      && !section.lock
+      && containsX(blocksBounds, clientX)
+      && clientY >= headBounds.bottom
+      && clientY <= insertionBottom
+    ) {
+      return {
+        placement: { kind: 'section-boundary', sectionKey, boundary: getSectionInsertionBoundary(section, 0) },
+        previewElement: firstVisualItem ?? directBlocksHost,
+        previewPosition: 'before',
+      };
+    }
   }
 
   const sectionInsertGhost = target.closest<HTMLElement>('.compact-add-component-ghost');
@@ -256,6 +335,27 @@ function getTopLevelSectionElements(body: HTMLElement): HTMLElement[] {
 
 function getRenderedSectionKey(element: HTMLElement | undefined): string {
   return element?.dataset.editorSection ?? element?.dataset.sectionKey ?? '';
+}
+
+function getPreviousSectionVisualItem(insertionElement: HTMLElement): HTMLElement | null {
+  let previous = insertionElement.previousElementSibling;
+  while (previous instanceof HTMLElement) {
+    if (
+      previous.dataset.hvyVirtualItem === 'editor-block'
+      || previous.hasAttribute('data-editor-section')
+      || previous.dataset.hvyVirtualKind === 'editor'
+    ) return previous;
+    previous = previous.previousElementSibling;
+  }
+  return null;
+}
+
+function getFirstSectionVisualItem(blocksHost: HTMLElement): HTMLElement | null {
+  return Array.from(blocksHost.children).find((element): element is HTMLElement => element instanceof HTMLElement && (
+    element.dataset.hvyVirtualItem === 'editor-block'
+    || element.hasAttribute('data-editor-section')
+    || element.dataset.hvyVirtualKind === 'editor'
+  )) ?? null;
 }
 
 function containsX(rect: Pick<DOMRect, 'left' | 'right'>, clientX: number): boolean {
@@ -320,7 +420,12 @@ export async function insertDroppedImageFiles(
   const blocks = mode === 'carousel'
     ? [createDroppedCarouselBlock(preparedFiles.map((file) => file.filename), destination.inheritedTags)]
     : preparedFiles.map((file) => createDroppedImageBlock(file.filename, destination.inheritedTags));
-  destination.blocks.splice(destination.index, 0, ...blocks);
+  if (destination.sectionBoundary) {
+    const section = findSectionByKey(state.document.sections, destination.sectionKey);
+    if (!section || blocks.some((block) => !insertBlockAtSectionInsertionBoundary(section, block, destination.sectionBoundary!))) return false;
+  } else {
+    destination.blocks.splice(destination.index, 0, ...blocks);
+  }
   if (destination.reusableOwnerBlockId) syncReusableTemplateForBlock(destination.sectionKey, destination.reusableOwnerBlockId);
   clearImageBlobUrlCache();
   getRefreshReaderPanels()();
@@ -401,6 +506,7 @@ function resolveInsertionDestination(placement: DocumentImageDropPlacement): {
   sectionKey: string;
   inheritedTags: string;
   reusableOwnerBlockId: string | null;
+  sectionBoundary?: ReturnType<typeof getSectionInsertionBoundary>;
 } | null {
   if (placement.kind === 'new-section') return null;
   const section = findSectionByKey(state.document.sections, placement.sectionKey);
@@ -413,6 +519,17 @@ function resolveInsertionDestination(placement: DocumentImageDropPlacement): {
       sectionKey: section.key,
       inheritedTags: section.tags,
       reusableOwnerBlockId: null,
+    };
+  }
+  if (placement.kind === 'section-boundary') {
+    if (section.lock) return null;
+    return {
+      blocks: section.blocks,
+      index: 0,
+      sectionKey: section.key,
+      inheritedTags: section.tags,
+      reusableOwnerBlockId: null,
+      sectionBoundary: placement.boundary,
     };
   }
   if (placement.kind === 'container-end') {

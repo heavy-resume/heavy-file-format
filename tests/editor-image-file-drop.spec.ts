@@ -173,6 +173,194 @@ test('image files dropped between top-level sections create a section in that ga
   ]);
 });
 
+test('image files and component placement share the boundary between adjacent subsections', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  const target = await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptySectionWithMeta, createEmptyBlock }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+    ]);
+    const parent = createEmptySectionWithMeta(1, '', false, state.document.meta);
+    const source = createEmptyBlock('text');
+    source.text = 'Placement source';
+    const first = createEmptySectionWithMeta(2, 'text', false, state.document.meta);
+    const second = createEmptySectionWithMeta(2, 'text', false, state.document.meta);
+    first.title = 'First Subsection';
+    second.title = 'Second Subsection';
+    first.renderAfterBlockId = source.id;
+    second.renderAfterBlockId = source.id;
+    parent.blocks = [source];
+    parent.children = [first, second];
+    state.document.sections = [parent];
+    getRenderApp()();
+    return { parentKey: parent.key, sourceId: source.id, firstKey: first.key, secondKey: second.key };
+  });
+
+  const subsectionGap = page.locator(`[data-editor-section="${target.parentKey}"] > .editor-blocks > .section-sequence-add-ghost`);
+  await expect(subsectionGap).toHaveCount(1);
+  const gapPreview = await subsectionGap.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'between-subsections.png', { type: 'image/png' }));
+    const options = {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: transfer,
+      clientX: bounds.left + bounds.width / 2,
+      clientY: bounds.top + bounds.height / 2,
+    };
+    element.dispatchEvent(new DragEvent('dragover', options));
+    const previousSubsection = element.previousElementSibling;
+    const expectedResult = {
+      gap: element.classList.contains('image-document-drop-active'),
+      upperSubsection: previousSubsection?.classList.contains('image-document-drop-active') === true,
+    };
+    element.dispatchEvent(new DragEvent('drop', options));
+    return expectedResult;
+  });
+  expect(gapPreview).toEqual({ gap: true, upperSubsection: false });
+  await expect.poll(() => page.evaluate(async ({ parentKey }) => {
+    const [{ state }, { findSectionByKey, buildSectionRenderSequence }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/section-ops.ts'),
+    ]);
+    const section = findSectionByKey(state.document.sections, parentKey);
+    return section ? buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.schema.imageFile || item.block.text : item.child.title) : [];
+  }, target)).toEqual(['Placement source', 'First Subsection', 'between-subsections.png', 'Second Subsection']);
+
+  await page.locator(`[data-block-id="${target.sourceId}"]`).filter({ hasText: 'Placement source' }).first().click();
+  await page.locator('.editor-block[data-active-editor-block="true"]').getByRole('button', { name: 'Copy' }).click();
+  const sharedBoundary = page.locator(`[data-action="place-component"][data-section-before-kind="child"][data-section-before-id="${target.secondKey}"]`);
+  await expect(sharedBoundary).toHaveCount(1);
+  await sharedBoundary.click();
+  await expect.poll(() => page.evaluate(async ({ parentKey }) => {
+    const [{ state }, { findSectionByKey, buildSectionRenderSequence }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/section-ops.ts'),
+    ]);
+    const section = findSectionByKey(state.document.sections, parentKey);
+    return section ? buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.schema.imageFile || item.block.text : item.child.title) : [];
+  }, target)).toEqual(['Placement source', 'First Subsection', 'between-subsections.png', 'Placement source', 'Second Subsection']);
+
+  await page.locator(`.editor-block[data-block-id="${target.sourceId}"]`).getByRole('button', { name: 'Move', exact: true }).click();
+  await page.locator(`[data-action="place-component"][data-section-before-kind="child"][data-section-before-id="${target.secondKey}"]`).click();
+  await expect.poll(() => page.evaluate(async ({ parentKey, sourceId }) => {
+    const [{ state }, { findSectionByKey, buildSectionRenderSequence }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/section-ops.ts'),
+    ]);
+    const section = findSectionByKey(state.document.sections, parentKey);
+    return section ? buildSectionRenderSequence(section).map((item) => item.kind === 'block'
+      ? item.block.id === sourceId ? 'moved-source' : item.block.schema.imageFile || item.block.text
+      : item.child.title) : [];
+  }, target)).toEqual(['First Subsection', 'between-subsections.png', 'Placement source', 'moved-source', 'Second Subsection']);
+});
+
+test('the subsection gap plus inserts a component at that shared boundary', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  const target = await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptySectionWithMeta }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+    ]);
+    const parent = createEmptySectionWithMeta(1, '', false, state.document.meta);
+    const first = createEmptySectionWithMeta(2, 'text', false, state.document.meta);
+    const second = createEmptySectionWithMeta(2, 'text', false, state.document.meta);
+    first.title = 'First Subsection';
+    second.title = 'Second Subsection';
+    first.renderAfterBlockId = '';
+    second.renderAfterBlockId = '';
+    parent.blocks = [];
+    parent.children = [first, second];
+    state.document.sections = [parent];
+    getRenderApp()();
+    return { parentKey: parent.key };
+  });
+
+  const gap = page.locator(`[data-editor-section="${target.parentKey}"] > .editor-blocks > .section-sequence-add-ghost`);
+  await gap.getByRole('button', { name: 'Insert component between subsections' }).click();
+  await gap.locator('.component-picker-row-direct[data-component="text"]').click();
+
+  await expect.poll(() => page.evaluate(async ({ parentKey }) => {
+    const [{ state }, { findSectionByKey, buildSectionRenderSequence }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/section-ops.ts'),
+    ]);
+    const section = findSectionByKey(state.document.sections, parentKey);
+    return section ? buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.schema.kind : item.child.title) : [];
+  }, target)).toEqual(['First Subsection', 'text', 'Second Subsection']);
+});
+
+test('a subsection title drops at the same boundary above its first component', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  const target = await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptySectionWithMeta }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+    ]);
+    const parent = createEmptySectionWithMeta(1, '', false, state.document.meta);
+    const child = createEmptySectionWithMeta(2, 'text', false, state.document.meta);
+    child.title = 'Drop On This Title';
+    child.blocks[0]!.text = 'First component';
+    child.renderAfterBlockId = '';
+    parent.blocks = [];
+    parent.children = [child];
+    state.document.sections = [parent];
+    getRenderApp()();
+    return { childKey: child.key };
+  });
+  const subsection = page.locator(`[data-editor-section="${target.childKey}"]`);
+  const accepted = await subsection.locator(':scope > .editor-section-head').evaluate((head) => {
+    const subsectionCard = head.closest<HTMLElement>('[data-editor-section]');
+    const blocks = subsectionCard?.querySelector<HTMLElement>(':scope > .editor-blocks');
+    if (!blocks) return { previewed: false, dropped: false };
+    const firstComponent = blocks.querySelector<HTMLElement>(':scope > [data-hvy-virtual-item="editor-block"]');
+    if (!firstComponent) return { previewed: false, dropped: false };
+    const bounds = head.getBoundingClientRect();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'from-title.png', { type: 'image/png' }));
+    const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 };
+    head.dispatchEvent(new DragEvent('dragover', options));
+    const titlePreviewed = firstComponent.classList.contains('image-document-drop-active') && firstComponent.classList.contains('image-document-drop-before');
+    const firstBounds = firstComponent.getBoundingClientRect();
+    const deadZoneOptions = { ...options, clientY: firstBounds.top - 2 };
+    blocks.dispatchEvent(new DragEvent('dragover', deadZoneOptions));
+    const deadZonePreviewed = firstComponent.classList.contains('image-document-drop-active') && firstComponent.classList.contains('image-document-drop-before');
+    const drop = new DragEvent('drop', deadZoneOptions);
+    blocks.dispatchEvent(drop);
+    return { previewed: titlePreviewed && deadZonePreviewed, dropped: drop.defaultPrevented };
+  });
+  expect(accepted).toEqual({ previewed: true, dropped: true });
+  await expect.poll(() => page.evaluate(async ({ childKey }) => {
+    const [{ state }, { findSectionByKey }] = await Promise.all([import('/src/state.ts'), import('/src/section-ops.ts')]);
+    return findSectionByKey(state.document.sections, childKey)?.blocks.map((block) => block.schema.imageFile || block.text);
+  }, target)).toEqual(['from-title.png', 'First component']);
+});
+
+test('the section end plus replaces a duplicate insert-below row for the last component', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  const target = await page.evaluate(async () => {
+    const [{ state, getRenderApp }, { createEmptySectionWithMeta }] = await Promise.all([
+      import('/src/state.ts'),
+      import('/src/document-factory.ts'),
+    ]);
+    const section = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
+    section.blocks[0]!.text = 'Only component';
+    state.document.sections = [section];
+    getRenderApp()();
+    return { sectionKey: section.key };
+  });
+
+  await page.locator(`[data-editor-section="${target.sectionKey}"] .editor-block-passive`, { hasText: 'Only component' }).click();
+  const blocks = page.locator(`[data-editor-section="${target.sectionKey}"] > .editor-blocks`);
+  await expect(blocks.locator(':scope > .active-component-insert-ghost-after')).toHaveCount(0);
+  await expect(blocks.locator(':scope > .compact-add-component-ghost:not(.active-component-insert-ghost)')).toHaveCount(1);
+});
+
 test('image files dropped on a section append target stay in that section', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor', exact: true }).click();
@@ -187,18 +375,23 @@ test('image files dropped on a section append target stay in that section', asyn
     const bounds = element.getBoundingClientRect();
     const transfer = new DataTransfer();
     transfer.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'section-bottom.png', { type: 'image/png' }));
-    const drop = new DragEvent('drop', {
+    const options = {
       bubbles: true,
       cancelable: true,
       dataTransfer: transfer,
       clientX: bounds.left + bounds.width / 2,
       clientY: bounds.top + bounds.height / 2,
-    });
+    };
+    element.dispatchEvent(new DragEvent('dragover', options));
+    const previous = element.previousElementSibling;
+    const previewedOnPreviousLine = previous?.classList.contains('image-document-drop-active') === true
+      && !element.classList.contains('image-document-drop-active');
+    const drop = new DragEvent('drop', options);
     element.dispatchEvent(drop);
-    return drop.defaultPrevented;
+    return { dropped: drop.defaultPrevented, previewedOnPreviousLine };
   });
 
-  expect(accepted).toBe(true);
+  expect(accepted).toEqual({ dropped: true, previewedOnPreviousLine: true });
   await expect.poll(() => page.evaluate(async ({ sectionKey }) => {
     const { state } = await import('/src/state.ts');
     const section = state.document.sections.find((candidate) => candidate.key === sectionKey);

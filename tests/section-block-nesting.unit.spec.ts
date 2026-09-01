@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { makeBlockSubsection, removeSubsection, findSectionByKey, buildSectionRenderSequence, moveBlockInVisualSequence, visitBlocksInList, findBlockContainerInList } from '../src/section-ops';
+import { makeBlockSubsection, removeSubsection, findSectionByKey, buildSectionRenderSequence, getSectionInsertionBoundary, insertBlockAtSectionInsertionBoundary, moveBlockInVisualSequence, removeBlockFromSectionRenderSequence, visitBlocksInList, findBlockContainerInList } from '../src/section-ops';
 import { findBlockInList, removeBlockFromList } from '../src/block-ops';
 import { createEmptyBlock, createEmptySection, parseVisualBlock, schemaFromUnknown } from '../src/document-factory';
 import type { VisualBlock, VisualSection } from '../src/editor/types';
@@ -245,6 +245,62 @@ describe('buildSectionRenderSequence — interleaves blocks and anchored subsect
     const seq = buildSectionRenderSequence(section);
 
     expect(seq.map((s) => s.kind)).toEqual(['child', 'block']);
+  });
+});
+
+describe('section insertion boundaries', () => {
+  test('inserts a block between adjacent subsections and preserves visual order', () => {
+    const first = makeSection([], [], 2);
+    const second = makeSection([], [], 2);
+    first.renderAfterBlockId = '';
+    second.renderAfterBlockId = '';
+    const inserted = makeBlock('image');
+    const section = makeSection([], [first, second]);
+
+    const expectedResult = insertBlockAtSectionInsertionBoundary(
+      section,
+      inserted,
+      getSectionInsertionBoundary(section, 1),
+    );
+
+    expect(expectedResult).toBe(true);
+    expect(buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.id : item.child.key)).toEqual([
+      first.key,
+      inserted.id,
+      second.key,
+    ]);
+    expect(first.renderAfterBlockId).toBe('');
+    expect(second.renderAfterBlockId).toBe(inserted.id);
+  });
+
+  test('inserts multiple blocks at one boundary in file order', () => {
+    const child = makeSection([], [], 2);
+    child.renderAfterBlockId = '';
+    const first = makeBlock('image');
+    const second = makeBlock('image');
+    const section = makeSection([], [child]);
+    const boundary = getSectionInsertionBoundary(section, 0);
+
+    expect(insertBlockAtSectionInsertionBoundary(section, first, boundary)).toBe(true);
+    expect(insertBlockAtSectionInsertionBoundary(section, second, boundary)).toBe(true);
+
+    expect(buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.id : item.child.key)).toEqual([
+      first.id,
+      second.id,
+      child.key,
+    ]);
+  });
+
+  test('removing an anchor block keeps its following subsections in sequence', () => {
+    const anchor = makeBlock('text');
+    const child = makeSection([], [], 2);
+    child.renderAfterBlockId = anchor.id;
+    const section = makeSection([anchor], [child]);
+
+    expect(removeBlockFromSectionRenderSequence(section, anchor.id)).toBe(true);
+
+    expect(buildSectionRenderSequence(section).map((item) => item.kind === 'block' ? item.block.id : item.child.key)).toEqual([child.key]);
+    expect(child.renderAfterBlockId).toBe('');
   });
 });
 

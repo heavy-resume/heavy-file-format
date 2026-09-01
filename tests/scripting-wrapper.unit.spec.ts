@@ -872,7 +872,7 @@ test('createScriptingRuntime points db-table SQL callers at doc.db instead of cl
   });
 
   expect(() => runtime.doc.cli.run('hvy plugin db-table exec "CREATE TABLE things (id INTEGER)"')).toThrow(
-    'doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.'
+    'doc.cli.run cannot run asynchronous db-table runtime commands. Use the interactive CLI, doc.db.query, or doc.db.execute instead.'
   );
 });
 

@@ -1,6 +1,7 @@
 import type { VisualBlock } from '../editor/types';
 import { getActiveStateRuntime, getRenderApp, state, type StateRuntime } from '../state';
 import type { DocumentAttachment, VisualDocument } from '../types';
+import type { JsonObject } from '../hvy/types';
 import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../attachments';
 import { DB_TABLE_PLUGIN_ID } from './registry';
 import { validateAttachedComponentHvy } from './db-table-fragment';
@@ -18,6 +19,7 @@ import {
   getDocumentDbTableNames,
   getPluginConfigValue,
 } from './db-table-model';
+import { formatEffectiveDbTableColumns, parseSparseDbTableColumns, readDbTableConfig } from './db-table/db-table-config';
 
 const SQLITE_ROW_COMPONENTS_TABLE = '__hvy_row_components';
 
@@ -108,6 +110,41 @@ export {
   restoreDbTableFrameScroll,
   toggleDbTableSort,
 } from './db-table-model';
+
+export async function getEffectiveDbTableColumnPresentation(
+  document: VisualDocument,
+  block: VisualBlock
+): Promise<JsonObject> {
+  const config = readDbTableConfig(block.schema.pluginConfig);
+  const { loadDbTableSourcePage } = await import('./db-table/db-table-data');
+  const page = await loadDbTableSourcePage(document, config, {
+    query: block.text,
+    offset: 0,
+    sortColumn: null,
+    sortDirection: null,
+  });
+  return formatEffectiveDbTableColumns(config, page.columns);
+}
+
+export async function setEffectiveDbTableColumnPresentation(
+  document: VisualDocument,
+  block: VisualBlock,
+  value: JsonObject
+): Promise<void> {
+  const config = readDbTableConfig(block.schema.pluginConfig);
+  const { loadDbTableSourcePage } = await import('./db-table/db-table-data');
+  const page = await loadDbTableSourcePage(document, config, {
+    query: block.text,
+    offset: 0,
+    sortColumn: null,
+    sortDirection: null,
+  });
+  const columns = parseSparseDbTableColumns(config, value, page.columns);
+  const pluginConfig = { ...block.schema.pluginConfig };
+  if (Object.keys(columns).length > 0) pluginConfig.columns = columns;
+  else delete pluginConfig.columns;
+  block.schema.pluginConfig = pluginConfig;
+}
 
 export async function getDbTableRowComponent(tableName: string, rowId: number): Promise<string | null> {
   const db = await getLoadedDatabase();

@@ -15,8 +15,10 @@ import {
   updateDbTableCell,
 } from '../src/plugins/db-table/db-table-data';
 import {
+  formatEffectiveDbTableColumns,
   normalizeDbTableColumnWidth,
   normalizeDbTableMaxColumnWidth,
+  parseSparseDbTableColumns,
   readDbTableColumnConfig,
   readDbTableConfig,
   removeDbTableColumnConfig,
@@ -174,6 +176,27 @@ test('database-table column presentation defaults generated keys to compact and 
     columns: {
       id: { visibility: 'hidden', width: '6rem' },
     },
+  });
+});
+
+test('database-table effective column presentation writes back sparsely', () => {
+  const config = readDbTableConfig({
+    table: 'contacts',
+    columns: { contact: { width: '18rem', wrap: true } },
+  });
+  const columns = [
+    { name: 'id', generated: true },
+    { name: 'contact', generated: false },
+  ];
+
+  const effective = formatEffectiveDbTableColumns(config, columns);
+
+  expect(effective).toEqual({
+    id: { label: 'Id', visibility: 'compact', width: '5rem', wrap: false, foreignDisplayColumn: '' },
+    contact: { label: 'Contact', visibility: 'visible', width: '18rem', wrap: true, foreignDisplayColumn: '' },
+  });
+  expect(parseSparseDbTableColumns(config, effective, columns)).toEqual({
+    contact: { width: '18rem', wrap: true },
   });
 });
 

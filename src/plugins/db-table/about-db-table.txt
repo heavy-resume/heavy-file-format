@@ -3,6 +3,7 @@ Displays configurable paged rows from a database source.
 pluginConfig.source selects a registered source adapter; with-file reads the SQLite database attached to the HVY file.
 pluginConfig.table names the table or view to display, and pluginConfig.queryLimit sets rows per page from 1 through 1000.
 pluginConfig.columns stores per-component labels, visibility, widths, wrapping, and foreign-key display columns.
+Use `hvy plugin db-table presentation COMPONENT_PATH` to read every effective column presentation value as JSON. Pass edited JSON as the final argument to write sparse non-default overrides.
 The plugin body may contain an optional read-only SELECT query.
 A source is editable when it implements the optional write contract; sources that only read render read-only.
 For the built-in with-file source that means direct base-table rows are editable while SQLite views and query results are read-only.

@@ -6,7 +6,7 @@ import { getSectionId } from '../section-ops';
 import { makeId } from '../utils';
 import { FORM_PLUGIN_ID, getHostPlugin, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { parseFormSpec, serializeFormSpec } from '../plugins/form';
-import { getTableColumns, setTableColumns } from '../table-ops';
+import { getTableColumnProperties, getTableColumns, setTableColumns } from '../table-ops';
 import { getHvyComponentHelpLines, getHvySectionHelpLines } from '../component-help';
 import { getComponentDefsFromMeta, resolveBaseComponentFromMeta } from '../component-defs';
 import { getHvyReferenceDocs } from './reference-library';
@@ -1268,7 +1268,12 @@ function addTableDataFiles(entries: Map<string, HvyVirtualEntry>, meta: JsonObje
   entries.set(`${blockPath}/tableColumnProperties.json`, {
     kind: 'file',
     path: `${blockPath}/tableColumnProperties.json`,
-    read: () => `${JSON.stringify(block.schema.tableColumnProperties ?? {}, null, 2)}\n`,
+    read: () => `${JSON.stringify(Object.fromEntries(
+      [...new Set([
+        ...getTableColumns(block.schema),
+        ...Object.keys(block.schema.tableColumnProperties ?? {}),
+      ])].map((column) => [column, getTableColumnProperties(block.schema, column)])
+    ), null, 2)}\n`,
     write: (content) => {
       block.schema.tableColumnProperties = parseTableColumnProperties(
         parseJsonObject(content, `${blockPath}/tableColumnProperties.json`)

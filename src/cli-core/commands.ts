@@ -386,8 +386,8 @@ export function executeHvyCliCommandSync(document: VisualDocument, input: string
     if (rest[0] === 'lint') {
       throw new Error('doc.cli.run cannot run hvy lint because plugin lint checks may be async.');
     }
-    if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableSqlAction(rest[2] ?? '')) {
-      throw new Error('doc.cli.run cannot run db-table SQL commands. Use doc.db.query or doc.db.execute instead.');
+    if (rest[0] === 'plugin' && rest[1] === 'db-table' && isDbTableAsyncAction(rest[2] ?? '')) {
+      throw new Error('doc.cli.run cannot run asynchronous db-table runtime commands. Use the interactive CLI, doc.db.query, or doc.db.execute instead.');
     }
     if (rest[0] === 'prune-xref') {
       return { cwd, output: commandPruneXref(document, rest.slice(1)), mutated: true };
@@ -560,8 +560,8 @@ async function runCommand(ctx: HvyCliCommandContext, command: string, args: stri
     if (args[0] === 'plugin' && args[1] && !args[2] && getHvyCliPluginCommandRegistration(args[1])) {
       return { cwd: ctx.cwd, output: helpFor(`hvy plugin ${args[1]}`), mutated: false };
     }
-    if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableSqlAction(args[2] ?? '')) {
-      const result = await commandDbTable(ctx.document, args.slice(2));
+    if (args[0] === 'plugin' && args[1] === 'db-table' && isDbTableAsyncAction(args[2] ?? '')) {
+      const result = await commandDbTable(ctx, args.slice(2));
       return { cwd: ctx.cwd, output: result.output, mutated: result.mutated };
     }
     const result = executeHvyDocumentCommand(ctx, args);
@@ -674,11 +674,12 @@ function executeHvyShellAliasCommandSync(ctx: HvyCliCommandContext, command: str
   throw new Error(`doc.cli.run does not support command "hvy ${command}".`);
 }
 
-function isDbTableSqlAction(action: string): boolean {
-  return action === 'query' || action === 'exec' || action === 'tables' || action === 'schema';
+function isDbTableAsyncAction(action: string): boolean {
+  return action === 'query' || action === 'exec' || action === 'tables' || action === 'schema' || action === 'presentation';
 }
 
-async function commandDbTable(document: VisualDocument, args: string[]): Promise<{ output: string; mutated: boolean }> {
+async function commandDbTable(ctx: HvyCliCommandContext, args: string[]): Promise<{ output: string; mutated: boolean }> {
+  const document = ctx.document;
   const [action = '', ...rest] = args;
   if (action === 'tables') {
     const names = await loadDbTableRuntime()
@@ -741,7 +742,36 @@ async function commandDbTable(document: VisualDocument, args: string[]): Promise
       runtime.dispose();
     }
   }
-  throw new Error('db-table: expected show, query, exec, tables, or schema');
+  if (action === 'presentation') {
+    const [rawPath = '', rawJson] = rest;
+    if (!rawPath || rest.length > 2) {
+      throw new Error('db-table presentation: expected COMPONENT_PATH and optional JSON object');
+    }
+    const path = resolveVirtualPath(ctx.fs, ctx.cwd, rawPath);
+    const block = findBlockForVirtualDirectory(document, path, ctx.pathNaming);
+    if (!block || block.schema.plugin !== 'hvy.db-table') {
+      throw new Error(`db-table presentation: no hvy.db-table component found at ${rawPath}`);
+    }
+    const runtime = await loadDbTableRuntime();
+    if (typeof rawJson === 'undefined') {
+      return {
+        output: `${JSON.stringify(await runtime.getEffectiveDbTableColumnPresentation(document, block), null, 2)}\n`,
+        mutated: false,
+      };
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(rawJson);
+    } catch {
+      throw new Error('db-table presentation: JSON must be a valid object');
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('db-table presentation: JSON must be an object keyed by exact database column name');
+    }
+    await runtime.setEffectiveDbTableColumnPresentation(document, block, value as Record<string, unknown>);
+    return { output: `Updated db-table column presentation: ${path}`, mutated: true };
+  }
+  throw new Error('db-table: expected query, exec, tables, schema, or presentation');
 }
 
 function commandLs(ctx: HvyCliCommandContext, args: string[]): string {

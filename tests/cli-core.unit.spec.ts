@@ -1081,8 +1081,29 @@ hvy_version: 0.1
 
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/table.txt')).output).toBe('Chore | Owner\nDishes | Mom\n');
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumns.json')).output).toBe('[\n  "Chore",\n  "Owner"\n]\n');
-  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toBe('{}\n');
+  expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableColumnProperties.json')).output).toBe(`{
+  "Chore": {
+    "width": "auto",
+    "wrap": false,
+    "truncate": true,
+    "align": "left",
+    "headerAlign": "center"
+  },
+  "Owner": {
+    "width": "auto",
+    "wrap": false,
+    "truncate": true,
+    "align": "left",
+    "headerAlign": "center"
+  }
+}\n`);
   expect((await executeHvyCliCommand(document, session, 'cat /body/quality/chores/tableRows.json')).output).toBe('[\n  {\n    "cells": [\n      "Dishes",\n      "Mom"\n    ]\n  }\n]\n');
+
+  expect((await executeHvyCliCommand(document, session, 'echo \'{"Chore":{"width":"auto","wrap":false,"truncate":true,"align":"left","headerAlign":"center"},"Owner":{"width":"auto","wrap":false,"truncate":true,"align":"left","headerAlign":"center"}}\' > /body/quality/chores/tableColumnProperties.json')).output).toBe(
+    '/body/quality/chores/tableColumnProperties.json: written'
+  );
+  expect(document.sections[0]?.blocks[0]?.schema.tableColumnProperties).toEqual({});
+  expect(serializeDocument(document)).not.toContain('tableColumnProperties');
 
   await expect(executeHvyCliCommand(document, session, 'echo "Chore | Owner" > /body/quality/chores/table.txt')).rejects.toThrow(
     'table.txt is a read-only preview for static table components. Edit tableColumns.json, tableColumnProperties.json, and tableRows.json instead'
@@ -2887,6 +2908,7 @@ test('hvy plugin db-table help shows canonical creation and operations', async (
   expect(help).toContain('hvy insert INDEX plugin db-table SECTION_PATH ID');
   expect(help).toContain('hvy plugin db-table query [SELECT/WITH SQL]');
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
+  expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
   expect(help).toContain('pluginConfig.table must be a table/view name, not SQL.');
   expect(help).toContain('hvy plugin db-table tables && hvy plugin db-table schema');
   expect(help).toContain('Do not grep for CREATE TABLE');
@@ -2908,6 +2930,7 @@ test('hvy help lists registered plugin add and operation commands as quick-refer
   expect(help).toContain('hvy plugin db-table exec [CREATE / INSERT / UPDATE / DELETE / DROP SQL]');
   expect(help).toContain('hvy plugin db-table tables');
   expect(help).toContain('hvy plugin db-table schema [TABLE_OR_VIEW]');
+  expect(help).toContain('hvy plugin db-table presentation COMPONENT_PATH [JSON]');
   expect(help).not.toContain('Try `man hvy plugin`');
 });
 
@@ -3103,6 +3126,46 @@ test('db-table cli can execute modifying SQL and query rows', async () => {
 
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table tables')).output).toContain('chores');
   expect((await executeHvyCliCommand(document, session, 'hvy plugin db-table schema chores')).output).toContain('title');
+});
+
+test('db-table cli exposes effective presentation JSON and stores only overrides', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"quality"}-->
+#! Quality
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  await executeHvyCliCommand(document, session, 'hvy plugin db-table exec "CREATE TABLE chores (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"');
+  await executeHvyCliCommand(document, session, 'hvy insert -1 plugin db-table /quality chores-table');
+  await executeHvyCliCommand(document, session, 'echo \'{"id":"chores-table","plugin":"hvy.db-table","pluginConfig":{"source":"with-file","table":"chores"}}\' > /quality/chores-table/plugin.json');
+
+  const before = JSON.parse((await executeHvyCliCommand(
+    document,
+    session,
+    'hvy plugin db-table presentation /quality/chores-table'
+  )).output);
+  expect(before).toEqual({
+    id: { label: 'Id', visibility: 'compact', width: '5rem', wrap: false, foreignDisplayColumn: '' },
+    title: { label: 'Title', visibility: 'visible', width: '12rem', wrap: false, foreignDisplayColumn: '' },
+  });
+
+  const write = await executeHvyCliCommand(
+    document,
+    session,
+    'hvy plugin db-table presentation /quality/chores-table \'{"id":{"label":"Id","visibility":"compact","width":"5rem","wrap":false,"foreignDisplayColumn":""},"title":{"label":"Chore","visibility":"visible","width":"18rem","wrap":true,"foreignDisplayColumn":""}}\''
+  );
+
+  expect(write.output).toContain('Updated db-table column presentation');
+  expect(document.sections[0]?.blocks[0]?.schema.pluginConfig.columns).toEqual({
+    title: { label: 'Chore', width: '18rem', wrap: true },
+  });
+  const serialized = serializeDocument(document);
+  expect(serialized).toContain('"columns":{"title":{"label":"Chore","width":"18rem","wrap":true}}');
+  expect(serialized).not.toContain('"width":"5rem"');
+  expect(serialized).not.toContain('"visibility":"compact"');
 });
 
 test('hvy lint reports db-table query errors with component location', async () => {

@@ -66,6 +66,75 @@ export function readDbTableColumnConfig(
   };
 }
 
+export function formatEffectiveDbTableColumns(
+  config: DbTableConfig,
+  columns: Array<{ name: string; generated: boolean }>
+): JsonObject {
+  return Object.fromEntries(columns.map((column) => {
+    const effective = readDbTableColumnConfig(config, column.name, { generated: column.generated });
+    return [column.name, {
+      label: effective.label,
+      visibility: effective.visibility,
+      width: effective.width,
+      wrap: effective.wrap,
+      foreignDisplayColumn: effective.foreignDisplayColumn ?? '',
+    }];
+  }));
+}
+
+export function parseSparseDbTableColumns(
+  config: DbTableConfig,
+  raw: JsonObject,
+  columns: Array<{ name: string; generated: boolean }>
+): Record<string, DbTableColumnConfig> {
+  const schemaByName = new Map(columns.map((column) => [column.name, column]));
+  const unknownColumns = Object.keys(raw).filter((name) => !schemaByName.has(name));
+  if (unknownColumns.length > 0) {
+    throw new Error(`db-table presentation column does not exist: ${unknownColumns.join(', ')}`);
+  }
+  const sparse: Record<string, DbTableColumnConfig> = {};
+  for (const [name, value] of Object.entries(raw)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`db-table presentation for ${name} must be a JSON object.`);
+    }
+    const candidate = value as JsonObject;
+    const unknownProperties = Object.keys(candidate).filter((property) =>
+      !['label', 'visibility', 'width', 'wrap', 'foreignDisplayColumn'].includes(property)
+    );
+    if (unknownProperties.length > 0) {
+      throw new Error(`db-table presentation for ${name} has unsupported properties: ${unknownProperties.join(', ')}`);
+    }
+    if (typeof candidate.label !== 'string') {
+      throw new Error(`db-table presentation label for ${name} must be a string.`);
+    }
+    if (candidate.visibility !== 'visible' && candidate.visibility !== 'compact' && candidate.visibility !== 'hidden') {
+      throw new Error(`db-table presentation visibility for ${name} must be visible, compact, or hidden.`);
+    }
+    const width = normalizeDbTableColumnWidth(candidate.width);
+    if (!width) {
+      throw new Error(`db-table presentation width for ${name} must be a CSS width using px, rem, em, ch, %, or auto.`);
+    }
+    if (typeof candidate.wrap !== 'boolean') {
+      throw new Error(`db-table presentation wrap for ${name} must be a boolean.`);
+    }
+    if (typeof candidate.foreignDisplayColumn !== 'string') {
+      throw new Error(`db-table presentation foreignDisplayColumn for ${name} must be a string.`);
+    }
+    const column = schemaByName.get(name)!;
+    const defaults = readDbTableColumnConfig({ ...config, columns: {} }, name, { generated: column.generated });
+    const next: DbTableColumnConfig = {};
+    const label = candidate.label.trim();
+    const foreignDisplayColumn = candidate.foreignDisplayColumn.trim();
+    if (label && label !== defaults.label) next.label = label;
+    if (candidate.visibility !== defaults.visibility) next.visibility = candidate.visibility;
+    if (width !== defaults.width) next.width = width;
+    if (candidate.wrap) next.wrap = true;
+    if (foreignDisplayColumn) next.foreignDisplayColumn = foreignDisplayColumn;
+    if (Object.keys(next).length > 0) sparse[name] = next;
+  }
+  return sparse;
+}
+
 export function updateDbTableColumnConfig(
   config: DbTableConfig,
   columnName: string,

@@ -458,6 +458,7 @@ registerHvyCliPluginCommands({
   componentHints: [
     'This plugin displays dynamic data-backed rows from an existing table/view, optionally filtered by a read-only SELECT/WITH query.',
     'plugin.json pluginConfig.table must be a table/view name, not SQL. plugin.txt may contain display SQL, but it does not create tables or views.',
+    'Use hvy plugin db-table presentation COMPONENT_PATH to inspect effective per-column labels, visibility, widths, wrapping, and foreign display settings as JSON; pass the edited JSON back to store only non-default overrides.',
     'For the current built-in SQL backend, create tables/views with hvy plugin db-table exec. Inspect objects with hvy plugin db-table tables/schema/query.',
     'To understand existing backend objects, run hvy plugin db-table tables or hvy plugin db-table schema. Do not grep for CREATE TABLE; it may find stale examples, recipes, or notes.',
   ],
@@ -483,6 +484,10 @@ registerHvyCliPluginCommands({
     {
       command: 'hvy plugin db-table schema [TABLE_OR_VIEW]',
       description: 'Show schema details.',
+    },
+    {
+      command: 'hvy plugin db-table presentation COMPONENT_PATH [JSON]',
+      description: 'Read effective per-column presentation JSON, or write edited JSON while omitting defaults from HVY storage.',
     },
   ],
   helpCommands: [

@@ -9,6 +9,11 @@ type SectionVirtualizerState = {
   observers: IntersectionObserver[];
 };
 
+type RestoredSectionLayoutGuard = {
+  align(): void;
+  release(): void;
+};
+
 const VIRTUAL_OVERSCAN_PX = 2400;
 const rootStates = new WeakMap<HTMLElement, SectionVirtualizerState>();
 const rootLifecycles = new WeakMap<HTMLElement, Pick<SectionVirtualizerOptions, 'afterRestore' | 'materializeSection' | 'onSectionMeasured'>>();
@@ -302,13 +307,154 @@ function restoreVirtualSection(
   if (sections.length === 0) {
     return;
   }
+  const layoutGuard = sections.length === 1
+    ? reserveRestoredSectionLayout(placeholder, sections[0])
+    : null;
   observer?.unobserve(placeholder);
   placeholder.replaceWith(...sections);
+  layoutGuard?.align();
   placeholderObservers.delete(placeholder);
+  const restoreResults: Array<void | Promise<void>> = [];
   sections.forEach((section) => {
     observer?.observe(section);
     measureSection(section, placeholderMeasureCallbacks.get(placeholder) ?? onSectionMeasured);
-    void afterRestore?.(section);
+    restoreResults.push(afterRestore?.(section));
+  });
+  if (layoutGuard) {
+    void Promise.allSettled(restoreResults.map((result) => Promise.resolve(result)))
+      .then(() => waitForRestoredSectionImageLayout(sections[0]))
+      .then(() => layoutGuard.release());
+  }
+}
+
+function reserveRestoredSectionLayout(
+  placeholder: HTMLElement,
+  section: HTMLElement
+): RestoredSectionLayoutGuard | null {
+  const placeholderHeight = placeholder.getBoundingClientRect().height;
+  if (placeholderHeight <= 0) {
+    return null;
+  }
+  const previousHeight = section.style.getPropertyValue('height');
+  const previousHeightPriority = section.style.getPropertyPriority('height');
+  const previousOverflow = section.style.getPropertyValue('overflow');
+  const previousOverflowPriority = section.style.getPropertyPriority('overflow');
+  section.style.setProperty('height', `${placeholderHeight}px`);
+  section.style.setProperty('overflow', 'clip');
+  const scroller = placeholder.closest<HTMLElement>(
+    '.editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel'
+  );
+  const followingContent = placeholder.nextElementSibling instanceof HTMLElement
+    ? placeholder.nextElementSibling
+    : null;
+  const placeholderWasAboveViewport = scroller
+    ? placeholder.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().top + scroller.clientTop
+    : false;
+  const followingTopBeforeRestore = followingContent?.getBoundingClientRect().top ?? null;
+  let aligned = false;
+  let released = false;
+  return {
+    align() {
+      if (aligned || !scroller || !placeholderWasAboveViewport
+        || followingTopBeforeRestore === null || !followingContent?.isConnected) {
+        return;
+      }
+      aligned = true;
+      const delta = followingContent.getBoundingClientRect().top - followingTopBeforeRestore;
+      if (Math.abs(delta) > 0.5) {
+        scroller.scrollTop += delta;
+      }
+    },
+    release() {
+      if (released || !section.isConnected) {
+        return;
+      }
+      released = true;
+      const sectionWasAboveViewport = scroller
+        ? section.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().top + scroller.clientTop
+        : false;
+      const followingTop = followingContent?.isConnected
+        ? followingContent.getBoundingClientRect().top
+        : null;
+      if (previousHeight) {
+        section.style.setProperty('height', previousHeight, previousHeightPriority);
+      } else {
+        section.style.removeProperty('height');
+      }
+      if (previousOverflow) {
+        section.style.setProperty('overflow', previousOverflow, previousOverflowPriority);
+      } else {
+        section.style.removeProperty('overflow');
+      }
+      if (!scroller || !sectionWasAboveViewport || followingTop === null || !followingContent?.isConnected) {
+        return;
+      }
+      const delta = followingContent.getBoundingClientRect().top - followingTop;
+      if (Math.abs(delta) > 0.5) {
+        scroller.scrollTop += delta;
+      }
+    },
+  };
+}
+
+function waitForRestoredSectionImageLayout(section: HTMLElement): Promise<void> {
+  if (restoredSectionImagesHaveLayout(section)) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const observedImages = new Set<HTMLImageElement>();
+    const observer = new MutationObserver(check);
+    const finish = (): void => {
+      observer.disconnect();
+      observedImages.forEach((image) => {
+        image.removeEventListener('load', check);
+        image.removeEventListener('error', check);
+      });
+      observedImages.clear();
+      resolve();
+    };
+    function check(): void {
+      if (!section.isConnected || restoredSectionImagesHaveLayout(section)) {
+        finish();
+        return;
+      }
+      section.querySelectorAll<HTMLImageElement>('img').forEach((image) => {
+        if (observedImages.has(image)) {
+          return;
+        }
+        observedImages.add(image);
+        image.addEventListener('load', check, { once: true });
+        image.addEventListener('error', check, { once: true });
+      });
+    }
+    observer.observe(section, {
+      attributes: true,
+      attributeFilter: ['src', 'width', 'height', 'style', 'class'],
+      childList: true,
+      subtree: true,
+    });
+    if (section.ownerDocument.body !== section) {
+      observer.observe(section.ownerDocument.body, {
+        childList: true,
+        subtree: true,
+      });
+    }
+    check();
+  });
+}
+
+function restoredSectionImagesHaveLayout(section: HTMLElement): boolean {
+  return Array.from(section.querySelectorAll<HTMLImageElement>('img')).every((image) => {
+    if (image.getBoundingClientRect().height > 0) {
+      return true;
+    }
+    const src = image.getAttribute('src');
+    const deferred = image.dataset.hvyLazyImage === 'true'
+      || image.dataset.hvyCarouselLazyImage === 'true';
+    if (!src && deferred) {
+      return false;
+    }
+    return !src || image.complete;
   });
 }
 

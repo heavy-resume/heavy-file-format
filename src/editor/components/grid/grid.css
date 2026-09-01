@@ -128,7 +128,82 @@
 }
 
 .hvy-document .grid-columns-input {
-  max-width: 5rem;
+  width: 2.35rem;
+  max-width: 2.35rem;
+  border-radius: 7px 0 0 7px;
+  padding-right: 0.25rem;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.hvy-document .grid-columns-input::-webkit-inner-spin-button,
+.hvy-document .grid-columns-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.hvy-document .grid-columns-header-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--hvy-text-alt);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.hvy-document .grid-columns-stepper {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.hvy-document .grid-columns-step-buttons {
+  display: grid;
+  grid-template-rows: repeat(2, 1fr);
+  width: 1.25rem;
+}
+
+.hvy-document .grid-columns-step-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-alt);
+  cursor: pointer;
+}
+
+.hvy-document .grid-columns-step-button:first-child {
+  border-radius: 0 7px 0 0;
+}
+
+.hvy-document .grid-columns-step-button:last-child {
+  border-radius: 0 0 7px 0;
+}
+
+.hvy-document .grid-columns-step-button:hover:not(:disabled),
+.hvy-document .grid-columns-step-button:focus-visible {
+  z-index: 1;
+  color: var(--hvy-focus);
+  box-shadow: 0 0 0 2px var(--hvy-focus-ring);
+}
+
+.hvy-document .grid-columns-step-button:disabled {
+  color: var(--hvy-muted);
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hvy-document .grid-columns-step-button .hvy-ui-icon {
+  width: 0.7rem;
+  height: 0.7rem;
+  stroke-width: 2.5;
 }
 
 .hvy-document .grid-stack-width-field {

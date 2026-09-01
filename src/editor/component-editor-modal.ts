@@ -11,6 +11,10 @@ interface EditorModalLayer extends EditorModalContext {
   gate: HTMLElement;
   content: HTMLElement;
   layer: HTMLElement;
+  headerControls: HTMLElement | null;
+  headerControlsParent: HTMLElement | null;
+  headerControlsNextSibling: ChildNode | null;
+  headerLayer: HTMLElement;
 }
 
 interface ComponentEditorModalController {
@@ -187,17 +191,40 @@ function portalGate(
   if (!modalRoot) {
     modalRoot = createModal(app);
   }
-  controller.layers.forEach((entry) => { entry.layer.hidden = true; });
+  controller.layers.forEach((entry) => {
+    entry.layer.hidden = true;
+    entry.headerLayer.hidden = true;
+  });
   const body = modalRoot.querySelector<HTMLElement>('.component-editor-modal-body');
-  if (!body) {
+  const headerSlot = modalRoot.querySelector<HTMLElement>('.component-editor-modal-header-controls');
+  if (!body || !headerSlot) {
     return;
   }
+  const headerControls = gate.closest<HTMLElement>('.editor-block')
+    ?.querySelector<HTMLElement>(':scope > .editor-block-head .component-editor-header-controls') ?? null;
+  const headerControlsParent = headerControls?.parentElement ?? null;
+  const headerControlsNextSibling = headerControls?.nextSibling ?? null;
+  const headerLayer = document.createElement('div');
+  headerLayer.className = 'component-editor-modal-header-control-layer';
+  if (headerControls) {
+    headerLayer.append(headerControls);
+  }
+  headerSlot.append(headerLayer);
   const layer = document.createElement('div');
   layer.className = 'component-editor-modal-layer';
   layer.style.setProperty('--hvy-component-editor-minimum-width', gate.style.getPropertyValue('--hvy-component-editor-minimum-width'));
   layer.append(content);
   body.append(layer);
-  controller.layers.push({ ...context, gate, content, layer });
+  controller.layers.push({
+    ...context,
+    gate,
+    content,
+    layer,
+    headerControls,
+    headerControlsParent,
+    headerControlsNextSibling,
+    headerLayer,
+  });
   renderModalHeader(modalRoot, controller.contexts);
   modalRoot.querySelector<HTMLElement>('.component-editor-modal-panel')?.focus({ preventScroll: true });
 }
@@ -210,7 +237,10 @@ function createModal(app: HTMLElement): HTMLElement {
     <section class="modal-panel component-editor-modal-panel" role="dialog" aria-modal="true" aria-labelledby="componentEditorModalTitle" tabindex="-1">
       <header class="component-editor-modal-head">
         <nav class="component-editor-modal-context" aria-label="Editor context"></nav>
-        <h3 id="componentEditorModalTitle">Edit component</h3>
+        <div class="component-editor-modal-title-row">
+          <h3 id="componentEditorModalTitle">Edit component</h3>
+          <div class="component-editor-modal-header-controls"></div>
+        </div>
       </header>
       <div class="component-editor-modal-body"></div>
       <footer class="component-editor-modal-actions">
@@ -298,6 +328,14 @@ function restoreLayers(controller: ComponentEditorModalController): void {
     if (entry.gate.isConnected || entry.gate.closest('.component-editor-modal-layer')) {
       entry.gate.append(entry.content);
     }
+    if (entry.headerControls && entry.headerControlsParent?.isConnected) {
+      if (entry.headerControlsNextSibling?.parentNode === entry.headerControlsParent) {
+        entry.headerControlsParent.insertBefore(entry.headerControls, entry.headerControlsNextSibling);
+      } else {
+        entry.headerControlsParent.append(entry.headerControls);
+      }
+    }
+    entry.headerLayer.remove();
     entry.layer.remove();
   }
   controller.layers = [];

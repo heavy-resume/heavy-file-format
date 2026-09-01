@@ -7,7 +7,7 @@ import { renderComponentListEditor } from './components/component-list/component
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
 import { renderExpandableEditor } from './components/expandable/expandable';
-import { renderGridEditor } from './components/grid/grid';
+import { renderGridEditor, renderGridHeaderControls } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
 import { renderCarouselEditor } from './components/carousel/carousel';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
@@ -882,6 +882,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
 
     const contentEditor = addCoreEditorControlClasses(renderBlockContentEditor(sectionKey, block));
+    const componentHeaderControls = addCoreEditorControlClasses(renderBlockHeaderControls(sectionKey, block));
     const minimumEditorWidth = getComponentEditorMinimumWidth(block);
     const activationPath = getActivationPathIds(sectionKey, rootSections ?? []);
     const activationPathIndex = activationPath.indexOf(block.id);
@@ -959,6 +960,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
               ${blockMove.canMoveUp ? `<button type="button" class="order-arrow-button" data-action="move-block-up" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block up">▲</button>` : ''}
               ${blockMove.canMoveDown ? `<button type="button" class="order-arrow-button" data-action="move-block-down" data-section-key="${deps.escapeAttr(sectionKey)}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Move block down">▼</button>` : ''}
             </div>
+            ${componentHeaderControls ? `<div class="component-editor-header-controls">${componentHeaderControls}</div>` : ''}
             <strong class="editor-block-title">${deps.escapeHtml(componentLabel)}</strong>
           </div>
           <div class="editor-actions">
@@ -2138,6 +2140,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return renderCarouselEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
+  }
+
+  function renderBlockHeaderControls(sectionKey: string, block: VisualBlock): string {
+    const component = deps.resolveBaseComponent(block.schema.component);
+    return component === 'grid'
+      ? renderGridHeaderControls(sectionKey, block, deps.getComponentRenderHelpers())
+      : '';
   }
 
   function renderEncryptedComponentEditor(sectionKey: string, block: VisualBlock): string {

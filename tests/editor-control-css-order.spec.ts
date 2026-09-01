@@ -91,7 +91,23 @@ test('core editor controls receive ownership classes without marking plugin cont
   });
 
   await page.locator('.editor-block-passive[data-block-id="core-grid"]').click();
-  await expect(page.locator('.editor-block[data-block-id="core-grid"] .grid-columns-input')).toHaveClass(/hvy-editor-field-control/);
+  const gridBlock = page.locator('.editor-block[data-block-id="core-grid"]');
+  const gridColumns = gridBlock.locator('.editor-block-head .grid-columns-header-field');
+  await expect(gridColumns.locator('.grid-columns-input')).toHaveClass(/hvy-editor-field-control/);
+  await expect(gridBlock.locator('.component-editor-inline-content .grid-columns-input')).toHaveCount(0);
+  expect(await gridColumns.evaluate((label) => getComputedStyle(label).display)).toBe('inline-flex');
+  expect(await gridBlock.locator('.section-drag-title').evaluate((header) => (
+    [...header.children].map((child) => child.className)
+  ))).toEqual(['editor-order-controls', 'component-editor-header-controls', 'editor-block-title']);
+  const gridColumnsInput = gridColumns.getByRole('spinbutton', { name: 'Grid Columns' });
+  await expect(gridColumns.getByRole('button', { name: 'Increase grid columns' })).toBeVisible();
+  await expect(gridColumns.getByRole('button', { name: 'Decrease grid columns' })).toBeVisible();
+  expect(await gridColumnsInput.evaluate((input) => getComputedStyle(input).appearance)).toBe('textfield');
+  const initialGridColumns = Number(await gridColumnsInput.inputValue());
+  await gridColumns.getByRole('button', { name: 'Increase grid columns' }).click();
+  await expect(gridColumnsInput).toHaveValue(String(initialGridColumns + 1));
+  await gridColumns.getByRole('button', { name: 'Decrease grid columns' }).click();
+  await expect(gridColumnsInput).toHaveValue(String(initialGridColumns));
 
   await page.locator('.editor-block-passive[data-block-id="plugin-form"]').click();
   const pluginBlock = page.locator('.editor-block[data-block-id="plugin-form"]');

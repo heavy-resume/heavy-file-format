@@ -72,6 +72,8 @@ hvy_version: 0.1
   await expect(modal).toBeVisible();
   await expect(modal.locator('.component-editor-modal-actions').getByRole('button', { name: 'Cancel' })).toBeVisible();
   await expect(modal.locator('.component-editor-modal-actions').getByRole('button', { name: 'Done' })).toBeVisible();
+  await expect(modal.getByText('Grid Columns', { exact: true })).toBeVisible();
+  await expect(modal.getByRole('spinbutton', { name: 'Grid Columns' })).toBeVisible();
   await expect(modal.locator('.grid-item-component-label')).toHaveCount(0);
 
   await page.evaluate(async () => {

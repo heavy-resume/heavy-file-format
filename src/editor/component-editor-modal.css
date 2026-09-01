@@ -78,6 +78,11 @@
   user-select: none;
 }
 
+.hvy-document .editor-block:has(> .editor-block-content > .component-editor-width-gate.is-component-editor-too-narrow)
+  > .editor-block-head .component-editor-header-controls {
+  display: none;
+}
+
 .hvy-document .component-editor-modal-root {
   padding: 0.75rem;
 }
@@ -104,6 +109,27 @@
   margin: 0;
   color: var(--hvy-text);
   font-size: 1rem;
+}
+
+.hvy-document .component-editor-modal-title-row,
+.hvy-document .component-editor-modal-header-controls,
+.hvy-document .component-editor-modal-header-control-layer {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.hvy-document .component-editor-modal-title-row {
+  justify-content: flex-start;
+  gap: 0.75rem;
+}
+
+.hvy-document .component-editor-modal-header-controls {
+  justify-content: flex-end;
+}
+
+.hvy-document .component-editor-modal-header-control-layer[hidden] {
+  display: none;
 }
 
 .hvy-document .component-editor-modal-context {

@@ -5,6 +5,28 @@ import { closeIcon } from '../../../icons';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../../../grid-ops';
 import { state } from '../../../state';
 import { compileSurfaceResponsiveCss } from '../../../surface-responsive-css';
+import { arrowDownIcon, arrowUpIcon } from '../../../icons';
+
+export const renderGridHeaderControls: ComponentEditorRenderer = (sectionKey, block, helpers) => `
+  <div class="grid-columns-header-field" role="group" aria-label="Grid Columns">
+    <span>Grid Columns</span>
+    <div class="grid-columns-stepper">
+      <input class="grid-columns-input" aria-label="Grid Columns" type="number" min="1" max="6" inputmode="numeric" data-section-key="${helpers.escapeAttr(
+        sectionKey
+      )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-columns" value="${helpers.escapeAttr(
+        String(block.schema.gridColumns)
+      )}" />
+      <div class="grid-columns-step-buttons">
+        <button type="button" class="grid-columns-step-button" data-action="adjust-grid-columns" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-columns-delta="1" aria-label="Increase grid columns"${block.schema.gridColumns >= 6 ? ' disabled' : ''}>${arrowUpIcon()}</button>
+        <button type="button" class="grid-columns-step-button" data-action="adjust-grid-columns" data-section-key="${helpers.escapeAttr(
+          sectionKey
+        )}" data-block-id="${helpers.escapeAttr(block.id)}" data-grid-columns-delta="-1" aria-label="Decrease grid columns"${block.schema.gridColumns <= 1 ? ' disabled' : ''}>${arrowDownIcon()}</button>
+      </div>
+    </div>
+  </div>
+`;
 
 export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, helpers) => {
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
@@ -46,16 +68,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
         })}
       </div>`;
   return `
-  <div class="editor-grid schema-grid">
-    <label>
-      <span>Grid Columns</span>
-      <input class="grid-columns-input" type="number" min="1" max="6" data-section-key="${helpers.escapeAttr(
-        sectionKey
-      )}" data-block-id="${helpers.escapeAttr(block.id)}" data-field="block-grid-columns" value="${helpers.escapeAttr(
-        String(block.schema.gridColumns)
-      )}" />
-    </label>
-  </div>
   ${stackCss}
   <div class="${helpers.escapeAttr(layoutClasses)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[

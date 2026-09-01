@@ -1,4 +1,4 @@
-import { state, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
+import { state, getInsertEditorTopLevelSection, getRenderApp, REUSABLE_SECTION_DEF_PREFIX } from '../../state';
 import { isDefaultUntitledSectionTitle, getSectionId, isHiddenEditorOnlySection, moveSectionByFilteredOffset, removeSectionByKey, makeBlockSubsection, removeSubsection, findSectionContainer } from '../../section-ops';
 import { clearOpenEditorSection, setActiveEditorBlock, setAiEditorHostBlock } from '../../block-ops';
 import { createEmptySectionWithMeta, instantiateReusableSection } from '../../document-factory';
@@ -45,6 +45,7 @@ export function insertTopLevelSection(starter: string, flavorName?: string, loca
   }
   section.location = location;
   state.document.sections.push(section);
+  state.pendingEditorCenterSectionKey = section.key;
   if (section.blocks[0]) {
     setActiveEditorBlock(section.key, section.blocks[0].id);
     if (state.currentView === 'ai') {
@@ -58,7 +59,9 @@ export function insertTopLevelSection(starter: string, flavorName?: string, loca
     state.activeEditorSectionTitleKey = section.key;
     state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
   }
-  getRenderApp()();
+  if (!getInsertEditorTopLevelSection()(section.key, location)) {
+    getRenderApp()();
+  }
 }
 
 function openSectionFlavorChooserIfNeeded(starter: string, location: SectionLocation): boolean {

@@ -5,6 +5,7 @@ import './style.css';
 import './highlight-theme.css';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
+import type { SectionLocation } from './editor/types';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 import {
@@ -104,9 +105,9 @@ import { createDefaultSearchState } from './search/state';
 import { refreshSearchSurface, renderSearchFloatingSurface } from './search/surface-refresh';
 import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
-import { centerPendingEditorSection } from './scroll';
+import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation } from './scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
-import { recordHistory, redoStateAsync, undoStateAsync } from './history';
+import { commitHistorySnapshot, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { resetTransientUiState } from './navigation';
@@ -114,7 +115,7 @@ import { renderNewDocumentModal } from './new-document-modal';
 import { applyRecoveryStatePayload, createRecoveryStatePayload, loadSessionState, saveSessionState } from './state-persistence';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
-import { createEditorBlockElement, createEditorSectionElement, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
+import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
@@ -1015,6 +1016,34 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
   return refreshed;
 }
 
+function insertEditorTopLevelSection(sectionKey: string, location: SectionLocation): boolean {
+  if (!currentRoot) {
+    return false;
+  }
+  const inserted = insertEditorTopLevelSectionDom({
+    root: currentRoot,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    location,
+    afterInsert: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      bindLazyImageHydration(element);
+      void runButtonVisibilityScripts(element);
+      observeRenderedLinks(element, currentLinkObserver);
+    },
+  });
+  if (!inserted) {
+    return false;
+  }
+  commitHistorySnapshot();
+  focusPendingSectionTitleEditor(currentRoot);
+  centerPendingEditorSection(currentRoot);
+  scrollPendingEditorActivation(currentRoot);
+  return true;
+}
+
 function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
   if (!currentRoot) {
     return false;
@@ -1240,6 +1269,11 @@ function ensureEmbedRuntime(
       currentRoot = root;
       currentLinkObserver = getLinkObserver();
       return refreshEditorSection(sectionKey, options);
+    }),
+    insertEditorTopLevelSection: (sectionKey, location) => runWithStateRuntime(runtime, () => {
+      currentRoot = root;
+      currentLinkObserver = getLinkObserver();
+      return insertEditorTopLevelSection(sectionKey, location);
     }),
     refreshModalPreview: () => runWithStateRuntime(runtime, () => {
       currentRoot = root;

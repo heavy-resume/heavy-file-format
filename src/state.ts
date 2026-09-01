@@ -1,4 +1,5 @@
 import type { AppState, HvyThemeOverrides } from './types';
+import type { SectionLocation } from './editor/types';
 
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
@@ -53,6 +54,7 @@ type RuntimeCallbacks = {
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;
   observeLinks: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,6 +79,7 @@ function createUninitializedCallbacks(): RuntimeCallbacks {
     refreshReaderBlock: () => false,
     refreshEditorBlock: () => false,
     refreshEditorSection: () => false,
+    insertEditorTopLevelSection: () => false,
     refreshModalPreview: () => { throw new Error('refreshModalPreview not initialized'); },
     observeLinks: () => {},
     componentRenderHelpers: null,
@@ -92,6 +95,7 @@ let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { ru
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
+let _insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
 let _observeLinks: (root: ParentNode) => void = () => {};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +109,7 @@ export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
 export function getRefreshEditorBlock(): (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorBlock; }
 export function getRefreshEditorSection(): (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorSection; }
+export function getInsertEditorTopLevelSection(): (sectionKey: string, location: SectionLocation) => boolean { return _insertEditorTopLevelSection; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
 export function getObserveLinks(): (root: ParentNode) => void { return _observeLinks; }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,6 +137,7 @@ export function initCallbacks(callbacks: {
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorBlock?: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshEditorSection?: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  insertEditorTopLevelSection?: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;
   observeLinks?: (root: ParentNode) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,6 +160,7 @@ export function initCallbacks(callbacks: {
     refreshReaderBlock: callbacks.refreshReaderBlock ?? (() => false),
     refreshEditorBlock: callbacks.refreshEditorBlock ?? (() => false),
     refreshEditorSection: callbacks.refreshEditorSection ?? (() => false),
+    insertEditorTopLevelSection: callbacks.insertEditorTopLevelSection ?? (() => false),
     observeLinks: callbacks.observeLinks ?? (() => {}),
   };
   activateStateRuntime(activeRuntime);
@@ -203,6 +210,7 @@ export function activateStateRuntime(runtime: StateRuntime): void {
   _refreshReaderBlock = runtime.callbacks.refreshReaderBlock;
   _refreshEditorBlock = runtime.callbacks.refreshEditorBlock;
   _refreshEditorSection = runtime.callbacks.refreshEditorSection;
+  _insertEditorTopLevelSection = runtime.callbacks.insertEditorTopLevelSection;
   _refreshModalPreview = runtime.callbacks.refreshModalPreview;
   _observeLinks = runtime.callbacks.observeLinks;
   _componentRenderHelpers = runtime.callbacks.componentRenderHelpers;

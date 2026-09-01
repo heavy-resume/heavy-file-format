@@ -10,6 +10,7 @@ import bundledExampleHvyUrl from '../examples/example.hvy?url';
 import bundledResumeViews from '../examples/resume-views.json';
 
 import { createEditorRenderer, type EditorRenderer } from './editor/render';
+import type { SectionLocation } from './editor/types';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { getTemplateFields, renderTemplatePanel } from './editor/template';
 import { renderCliView } from './cli-ui/render';
@@ -54,7 +55,7 @@ import { loadPaletteOverrideId } from './palettes/palette-preferences';
 import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { refreshReaderSurfaces } from './reader/refresh-surfaces';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
-import { createEditorBlockElement, createEditorSectionElement, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
+import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { initializeCarouselReaders } from './editor/components/carousel/carousel';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
@@ -1353,6 +1354,32 @@ function refreshEditorSection(sectionKey: string, options: { runVisibilityScript
   return refreshed;
 }
 
+function insertEditorTopLevelSection(sectionKey: string, location: SectionLocation): boolean {
+  const inserted = insertEditorTopLevelSectionDom({
+    root: app,
+    editorRenderer,
+    sections: state.document.sections,
+    sectionKey,
+    location,
+    afterInsert: (element) => {
+      reconcilePluginMounts(element, { prune: false });
+      syncTextToolbarLayout(element);
+      void runButtonVisibilityScripts(element);
+      initializeCarouselReaders(element);
+      bindLazyImageHydration(element);
+    },
+  });
+  if (!inserted) {
+    return false;
+  }
+  commitHistorySnapshot();
+  focusPendingSectionTitleEditor(app);
+  centerPendingEditorSection(app);
+  scrollPendingEditorActivation(app);
+  void runPluginDocumentHooks('unknown');
+  return true;
+}
+
 function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
@@ -1539,6 +1566,7 @@ initCallbacks({
   refreshReaderBlock,
   refreshEditorBlock,
   refreshEditorSection,
+  insertEditorTopLevelSection,
   refreshModalPreview,
   observeLinks: () => { },
   componentRenderHelpers: localGetComponentRenderHelpers(),

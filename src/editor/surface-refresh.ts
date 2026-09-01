@@ -1,5 +1,5 @@
 import { findSectionByKey } from '../section-ops';
-import type { VisualBlock, VisualSection } from './types';
+import type { SectionLocation, VisualBlock, VisualSection } from './types';
 import type { EditorRenderer } from './render';
 import type { EditorRenderTreeWindowOptions } from './editor-render-tree-window';
 
@@ -18,6 +18,35 @@ export interface EditorBlockRefreshOptions {
   sectionKey: string;
   block: VisualBlock;
   afterReplace?: (element: HTMLElement) => void;
+}
+
+export interface EditorTopLevelSectionInsertOptions {
+  root: ParentNode;
+  editorRenderer: EditorRenderer;
+  sections: VisualSection[];
+  sectionKey: string;
+  location: SectionLocation;
+  afterInsert?: (element: HTMLElement) => void;
+}
+
+export function insertEditorTopLevelSectionDom(options: EditorTopLevelSectionInsertOptions): boolean {
+  const section = options.sections.find((candidate) => candidate.key === options.sectionKey);
+  const surface = options.location === 'sidebar'
+    ? options.root.querySelector<HTMLElement>('.editor-sidebar-panel')
+    : options.root.querySelector<HTMLElement>('#editorTree');
+  const anchor = surface?.querySelector<HTMLElement>(
+    `[data-action="add-top-level-section"][data-section-location="${options.location}"]`
+  );
+  if (!section || !anchor) {
+    return false;
+  }
+  const element = createEditorSectionElement(anchor.ownerDocument, options.editorRenderer, section, options.sections);
+  if (!element) {
+    return false;
+  }
+  anchor.before(element);
+  options.afterInsert?.(element);
+  return true;
 }
 
 export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boolean {

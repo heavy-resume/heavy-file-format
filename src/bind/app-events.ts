@@ -17,6 +17,7 @@ import { bindClickMisc } from './handlers/click-misc';
 import { bindResize } from './handlers/resize';
 import { bindResponsiveSidebarShells } from '../responsive-sidebar-tab';
 import { bindComponentEditorModal } from '../editor/component-editor-modal';
+import { bindTableGrabberInsertMenus } from '../editor/components/table/table-grabber-insert-menu';
 
 const boundAppRoots = new WeakSet<HTMLElement>();
 
@@ -44,6 +45,7 @@ export function bindAppEvents(app: HTMLElement): void {
   bindDnd(app);
   bindClickMisc(app);
   bindResize(app);
+  bindTableGrabberInsertMenus(app);
 
   boundAppRoots.add(app);
   setAppEventsBound(true);

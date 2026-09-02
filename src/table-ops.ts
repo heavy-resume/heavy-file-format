@@ -82,6 +82,19 @@ export function addTableColumn(schema: BlockSchema): void {
   setTableColumns(schema, nextColumns);
 }
 
+export function insertTableColumn(schema: BlockSchema, columnIndex: number): void {
+  const columns = getTableColumns(schema);
+  const insertionIndex = Math.min(Math.max(columnIndex, 0), columns.length);
+  const nextColumns = [...columns];
+  nextColumns.splice(insertionIndex, 0, `Column ${columns.length + 1}`);
+  schema.tableColumns = nextColumns;
+  schema.tableRows = schema.tableRows.map((row) => {
+    const cells = columns.map((_column, index) => row.cells[index] ?? '');
+    cells.splice(insertionIndex, 0, '');
+    return { ...row, cells };
+  });
+}
+
 export function removeTableColumn(schema: BlockSchema, columnIndex: number): void {
   const columns = getTableColumns(schema);
   if (columns.length <= 1 || columnIndex < 0 || columnIndex >= columns.length) {

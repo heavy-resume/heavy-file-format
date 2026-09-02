@@ -536,6 +536,10 @@ function isTableEditorActionButton(actionButton: HTMLElement): boolean {
     || action === 'remove-table-column'
     || action === 'add-table-row'
     || action === 'add-table-column'
+    || action === 'insert-table-row-before'
+    || action === 'insert-table-row-after'
+    || action === 'insert-table-column-before'
+    || action === 'insert-table-column-after'
     || action === 'reset-table-column-width'
     || action === 'auto-fit-table-column')
     && Boolean(actionButton.closest('.table-editor'));

@@ -277,6 +277,58 @@
   flex: 0 0 auto;
 }
 
+.hvy-document .table-grabber-insert-menu {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.hvy-document .table-grabber-insert-menu.is-open {
+  z-index: 45;
+}
+
+.hvy-document .table-grabber-insert-popover {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  display: grid;
+  width: max-content;
+  min-width: 8.5rem;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  border: 1px solid var(--hvy-border-translucent);
+  border-radius: 9px;
+  background: var(--hvy-surface);
+  box-shadow: 0 10px 24px var(--hvy-shadow);
+}
+
+.hvy-document .table-grabber-insert-popover[hidden] {
+  display: none;
+}
+
+.hvy-document .table-grabber-insert-popover button {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--hvy-text);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hvy-document .table-grabber-insert-popover button:hover,
+.hvy-document .table-grabber-insert-popover button:focus-visible {
+  background: var(--hvy-button-bg);
+  color: var(--hvy-button-text);
+  outline: none;
+}
+
+.hvy-document .table-editor-grid :is(th, td):has(.table-grabber-insert-menu.is-open) {
+  z-index: 45;
+}
+
 .hvy-document .table-add-button {
   margin: 0.2rem;
   min-width: 1.9rem;

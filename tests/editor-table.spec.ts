@@ -348,6 +348,57 @@ hvy_version: 0.1
   expect(expectedResult.buttonCellCenterDeltaY).toBeLessThanOrEqual(1);
 });
 
+test('double-clicking static table grabbers inserts rows and columns on either side', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-grabber-insert-test"}-->
+#! Table Grabber Insert Test
+
+<!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+
+  // BEFORE: the table has its two original rows and columns, with no insertion menu open.
+  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(4);
+  await expect(page.locator('[data-field="table-column"]')).toHaveCount(2);
+  await expect(page.locator('.table-grabber-insert-popover:not([hidden])')).toHaveCount(0);
+
+  // ACTION: insert before the second row and after the first column through their grabbers.
+  await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').dblclick();
+  const rowPopover = page.locator('.table-grabber-insert-popover:not([hidden])');
+  await expect(rowPopover).toBeVisible();
+  await expect(rowPopover.getByRole('menuitem')).toHaveText(['Insert before', 'Insert after']);
+  await page.keyboard.press('Escape');
+  await expect(rowPopover).toHaveCount(0);
+  await expect(page.locator('[data-drag-handle="table-row"][data-row-index="1"]')).toBeFocused();
+  await page.locator('[data-drag-handle="table-row"][data-row-index="1"]').dblclick();
+  await rowPopover.getByRole('menuitem', { name: 'Insert before' }).click();
+
+  await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').dblclick();
+  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
+
+  // AFTER: blank entries were inserted at the requested indexes without displacing existing values.
+  await expect(page.locator('[data-field="table-column"]')).toHaveText(['Role', 'Column 3', 'Scope']);
+  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(9);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="0"]')).toHaveText(['Alpha', '', 'Open']);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="1"]')).toHaveText(['', '', '']);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="2"]')).toHaveText(['Beta', '', 'Closed']);
+
+  // ADJACENT: inserting after the last row and before the first column uses the same menu path.
+  await page.locator('[data-drag-handle="table-row"][data-row-index="2"]').dblclick();
+  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert after' }).click();
+  await page.locator('[data-drag-handle="table-column"][data-column-index="0"]').dblclick();
+  await page.locator('.table-grabber-insert-popover:not([hidden])').getByRole('menuitem', { name: 'Insert before' }).click();
+  await expect(page.locator('[data-field="table-column"]')).toHaveText(['Column 4', 'Role', 'Column 3', 'Scope']);
+  await expect(page.locator('[data-field="table-cell"]')).toHaveCount(16);
+});
+
 test('empty static table rows delete without confirmation while filled rows still confirm', async ({ page }) => {
   await page.goto('/');
 

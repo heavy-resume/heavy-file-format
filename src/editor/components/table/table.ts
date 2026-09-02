@@ -9,6 +9,7 @@ import { state } from '../../../state';
 import { findReusableOwner } from '../../../reusable';
 import { sanitizeInlineCss } from '../../../css-sanitizer';
 import { getTableColumnProperties } from '../../../table-ops';
+import { renderTableGrabberInsertMenu } from './table-grabber-insert-menu';
 
 let readerTableStripeIndex = 0;
 
@@ -157,16 +158,7 @@ function renderTableRowEditor(
   return `
     <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
       <td class="table-row-utility">
-        <button
-          type="button"
-          class="table-drag-handle"
-          draggable="true"
-          data-drag-handle="table-row"
-          data-section-key="${helpers.escapeAttr(sectionKey)}"
-          data-block-id="${helpers.escapeAttr(blockId)}"
-          data-row-index="${rowIndex}"
-          title="Drag to reorder row"
-        >::</button>
+        ${renderTableGrabberInsertMenu({ kind: 'row', sectionKey, blockId, index: rowIndex, escapeAttr: helpers.escapeAttr })}
       </td>
       ${safeColumns
         .map(
@@ -263,17 +255,14 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
                   (column, columnIndex) => `
                     <th class="${tableColumnClassNames(block, column, true)}" data-table-column-drop="true" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}">
                       <div class="table-column-head">
-                        <button
-                          type="button"
-                          class="table-drag-handle"
-                          draggable="true"
-                          ${block.schema.lock ? 'disabled' : ''}
-                          data-drag-handle="table-column"
-                          data-section-key="${helpers.escapeAttr(sectionKey)}"
-                          data-block-id="${helpers.escapeAttr(block.id)}"
-                          data-column-index="${columnIndex}"
-                          title="Drag to reorder column"
-                        >::</button>
+                        ${renderTableGrabberInsertMenu({
+                          kind: 'column',
+                          sectionKey,
+                          blockId: block.id,
+                          index: columnIndex,
+                          disabled: block.schema.lock,
+                          escapeAttr: helpers.escapeAttr,
+                        })}
                         ${renderTableColumnSettings(sectionKey, block, column, columnIndex, helpers)}
                         <div class="table-inline-edit-shell">
                           <div

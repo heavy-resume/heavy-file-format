@@ -22,6 +22,7 @@ const DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS = [
   'rich:italic',
   'rich:underline',
 ];
+const CONTEXT_ONLY_TEXT_TOOLBAR_ACTION_KEYS = new Set(['rich:link']);
 let recentTextToolbarActionKeys: string[] = [...DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS];
 let recentTextToolbarRevision = 0;
 
@@ -84,7 +85,12 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
   }
 
   const revision = String(recentTextToolbarRevision);
-  if (compact.dataset.textToolbarRecentRevision === revision) {
+  const contextActionKeys = readTextToolbarContextActionKeys(toolbar);
+  const contextSignature = contextActionKeys.join(' ');
+  if (
+    compact.dataset.textToolbarRecentRevision === revision &&
+    compact.dataset.textToolbarContextActions === contextSignature
+  ) {
     return;
   }
 
@@ -92,18 +98,20 @@ function syncCompactTextToolbar(shell: HTMLElement, toolbarSlot: HTMLElement): v
   if (!actions) {
     return;
   }
-  const nextButtons = getCompactTextToolbarButtons(toolbar);
+  const nextButtons = getCompactTextToolbarButtons(toolbar, contextActionKeys);
   const currentKeys = Array.from(actions.children).map((button) => getTextToolbarActionKey(button as HTMLElement));
   const nextKeys = nextButtons.map((button) => getTextToolbarActionKey(button));
   if (currentKeys.length === nextKeys.length && currentKeys.every((key, index) => key === nextKeys[index])) {
     compact.dataset.textToolbarRecentRevision = revision;
+    compact.dataset.textToolbarContextActions = contextSignature;
     return;
   }
   actions.replaceChildren(...nextButtons);
   compact.dataset.textToolbarRecentRevision = revision;
+  compact.dataset.textToolbarContextActions = contextSignature;
 }
 
-function getCompactTextToolbarButtons(toolbar: HTMLElement): HTMLButtonElement[] {
+function getCompactTextToolbarButtons(toolbar: HTMLElement, contextActionKeys: string[] = []): HTMLButtonElement[] {
   const sourceButtons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>(
     ':scope > .toolbar-segment button[data-rich-action], :scope > .toolbar-segment button[data-action="set-block-align"]'
   )).filter((button) => !button.closest('.paragraph-style-toolbar'));
@@ -118,7 +126,11 @@ function getCompactTextToolbarButtons(toolbar: HTMLElement): HTMLButtonElement[]
     ...recentTextToolbarActionKeys,
     ...DEFAULT_COMPACT_TEXT_TOOLBAR_ACTION_KEYS.filter((key) => !recentTextToolbarActionKeys.includes(key)),
   ];
-  return requestedKeys
+  const displayedKeys = [
+    ...requestedKeys.filter((key) => !contextActionKeys.includes(key)).slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT),
+    ...contextActionKeys,
+  ];
+  return displayedKeys
     .flatMap((key) => {
       const source = sourceByKey.get(key);
       if (!source) {
@@ -127,8 +139,30 @@ function getCompactTextToolbarButtons(toolbar: HTMLElement): HTMLButtonElement[]
       const clone = source.cloneNode(true) as HTMLButtonElement;
       clone.dataset.textToolbarCompactAction = 'true';
       return [clone];
-    })
-    .slice(0, COMPACT_TEXT_TOOLBAR_ACTION_LIMIT);
+    });
+}
+
+function readTextToolbarContextActionKeys(toolbar: HTMLElement): string[] {
+  return (toolbar.dataset.textToolbarContextActions ?? '')
+    .split(/\s+/)
+    .filter((key) => key.length > 0);
+}
+
+export function syncTextToolbarContextActions(editable: HTMLElement, actions: string[]): void {
+  const shell = editable.closest<HTMLElement>('.text-editor-shell');
+  const toolbarSlot = shell?.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+  const toolbar = toolbarSlot?.querySelector<HTMLElement>(':scope > .rich-toolbar');
+  if (!shell || !toolbarSlot || !toolbar) {
+    return;
+  }
+  const actionKeys = Array.from(new Set(actions.map((action) => `rich:${action}`)));
+  const signature = actionKeys.join(' ');
+  if ((toolbar.dataset.textToolbarContextActions ?? '') === signature) {
+    return;
+  }
+  toolbar.dataset.textToolbarContextActions = signature;
+  syncCompactTextToolbar(shell, toolbarSlot);
+  updateTextToolbarLayout(shell, toolbarSlot);
 }
 
 function getTextToolbarActionKey(button: HTMLElement): string | null {
@@ -175,6 +209,9 @@ export function dismissTextToolbarForEscape(target: EventTarget | null): boolean
 }
 
 function promoteTextToolbarActionKey(key: string, shell: HTMLElement): void {
+  if (CONTEXT_ONLY_TEXT_TOOLBAR_ACTION_KEYS.has(key)) {
+    return;
+  }
   recentTextToolbarActionKeys = [
     key,
     ...recentTextToolbarActionKeys.filter((recentKey) => recentKey !== key),

@@ -109,6 +109,11 @@
   background: var(--hvy-surface-alt);
 }
 
+.hvy-document .rich-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .hvy-document .rich-toolbar button.secondary,
 .hvy-document .align-buttons button.secondary {
   background: var(--hvy-button-bg);

@@ -52,6 +52,9 @@ export function openLinkInlineModal(
   const selection = window.getSelection();
   const selectedRange = range ?? (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
   const selectedAnchor = anchor ?? findLinkAnchorForRange(editable, selectedRange);
+  if ((!selectedRange || selectedRange.collapsed) && !selectedAnchor) {
+    return;
+  }
   const linkValue = normalizeLinkInputValue(
     initialValue || selectedAnchor?.getAttribute('href') || inferLinkValueFromRange(selectedRange) || ''
   );

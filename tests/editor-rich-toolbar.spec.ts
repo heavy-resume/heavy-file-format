@@ -893,6 +893,131 @@ test('link toolbar only defaults selected text that looks like a link target', a
   await expect(linkInput).toHaveValue('mailto:person@example.com');
 });
 
+test('link toolbar is disabled unless text is selected', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Alpha Bravo');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  await expandTextToolbar(page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first());
+  const linkButton = page.getByRole('button', { name: 'Link' }).first();
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 'Alpha'.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await expect(linkButton).toBeDisabled();
+  await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+K`);
+  await expect(page.locator('#linkInlineModal')).toBeHidden();
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.setEnd(textNode!, 'Alpha'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await expect(linkButton).toBeEnabled();
+});
+
+test('existing link appends an enabled link action to the compact toolbar', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Alpha Bravo');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+  await editor.evaluate((node) => {
+    node.innerHTML = '<p><a href="https://example.test/path">Alpha</a> Bravo</p>';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  const compactActions = toolbar.locator('.text-toolbar-compact-actions > button');
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('a')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+
+  await expect(compactActions).toHaveCount(6);
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+    'underline',
+    'link',
+  ]);
+  const linkButton = compactActions.last();
+  await expect(linkButton).toBeEnabled();
+  await expect(linkButton).toHaveClass(/secondary/);
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.lastChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await expect(compactActions).toHaveCount(5);
+  await expect(toolbar.locator('.text-toolbar-compact-actions > [data-rich-action="link"]')).toHaveCount(0);
+
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('a')?.firstChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await expect(compactActions).toHaveCount(6);
+  await linkButton.click();
+  await expect(page.locator('#linkInlineInput')).toHaveValue('https://example.test/path');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Cancel' }).click();
+  await editor.evaluate((node) => {
+    const textNode = node.querySelector('p')?.lastChild;
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'heading-1',
+    'heading-2',
+    'bold',
+    'italic',
+    'underline',
+  ]);
+});
+
 async function loadToolbarSelectionDocument(page: Page): Promise<void> {
   await loadRichTextDocument(page, `Alpha
 
@@ -1429,7 +1554,7 @@ test('default compact history evicts underline first when it was not promoted', 
   ]);
 });
 
-test('rich text hotkeys promote their actions in compact history', async ({ page }) => {
+test('format hotkeys promote while link remains outside compact history', async ({ page }) => {
   await page.goto('/');
   await loadRichTextDocument(page, 'Expected result hotkey recent stack');
   await page.locator('[data-action="activate-block"]').first().click();
@@ -1457,14 +1582,51 @@ test('rich text hotkeys promote their actions in compact history', async ({ page
     'italic',
   ]);
 
+  await editor.evaluate((node) => {
+    const textNode = document.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode();
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.setEnd(textNode!, 'Expected'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
   await page.keyboard.press(`${modifier}+K`);
   await expect(page.locator('#linkInlineModal')).toBeVisible();
   expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
-    'link',
     'bold',
     'underline',
     'heading-1',
     'heading-2',
+    'italic',
+  ]);
+  await page.locator('#linkInlineInput').fill('https://example.test/new');
+  await page.locator('#linkInlineModal').getByRole('button', { name: 'Apply' }).click();
+  await expect(editor.locator('a[href="https://example.test/new"]')).toHaveText('Expected');
+
+  await editor.evaluate((node) => {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode && !textNode.textContent?.includes('hotkey recent stack')) {
+      textNode = walker.nextNode();
+    }
+    const range = document.createRange();
+    range.setStart(textNode!, 2);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+    node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  expect(await compactActions.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.richAction))).toEqual([
+    'bold',
+    'underline',
+    'heading-1',
+    'heading-2',
+    'italic',
   ]);
 });
 

@@ -38,6 +38,7 @@ import type { TextCaptionPayload } from './editor/types';
 import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDocument, syncSortValuesForListItem } from './sort-values';
 import { highlightSearchHtml } from './search/highlight';
 import { sanitizeInlineCss } from './css-sanitizer';
+import { syncTextToolbarContextActions } from './editor/components/text/text-toolbar-layout';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
@@ -2707,6 +2708,9 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
     updateParagraphStyleToolbarState(toolbar, selectedTextLineStyle);
     toolbar.querySelectorAll<HTMLButtonElement>('[data-rich-action]').forEach((button) => {
       const action = button.dataset.richAction ?? '';
+      if (action === 'link') {
+        button.disabled = !range || (range.collapsed && !selectedInlineActions.has('link'));
+      }
       const annotationAction = normalizeAnnotationAction(action);
       if (annotationAction) {
         const shell = toolbar.closest<HTMLElement>('.table-inline-edit-shell');
@@ -2742,6 +2746,7 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
       button.classList.toggle('ghost', !selected);
     });
   });
+  syncTextToolbarContextActions(editable, selectedInlineActions.has('link') ? ['link'] : []);
 }
 
 /**

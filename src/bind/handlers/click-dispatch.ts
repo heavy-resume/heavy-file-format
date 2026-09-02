@@ -696,7 +696,7 @@ function storeCurrentRichSelection(editable: HTMLElement, options: { preserveExi
     options.preserveExistingSelection &&
     range.collapsed &&
     existing &&
-    !existing.range.collapsed &&
+    (!existing.range.collapsed || (existing.anchor && !findLinkAnchorForRange(editable, range))) &&
     isRangeInside(editable, existing.range)
   ) {
     return existing;

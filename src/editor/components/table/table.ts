@@ -156,7 +156,7 @@ function renderTableRowEditor(
   const safeColumns = columns.length > 0 ? columns : ['Column 1', 'Column 2'];
   const isEmptyRow = safeColumns.every((_column, cellIndex) => (row.cells[cellIndex] ?? '').trim().length === 0);
   return `
-    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
+    <tr class="table-row-editor table-row-editor-main${isEmptyRow ? ' table-row-editor-empty' : ''}" data-table-row-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(blockId)}" data-row-index="${rowIndex}" data-editor-deactivation-anchor="${helpers.escapeAttr(`table-${blockId}-row-${rowIndex}`)}">
       <td class="table-row-utility">
         ${renderTableGrabberInsertMenu({ kind: 'row', sectionKey, blockId, index: rowIndex, escapeAttr: helpers.escapeAttr })}
       </td>

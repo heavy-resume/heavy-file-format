@@ -67,6 +67,58 @@
   background: var(--hvy-table-row-bg-2);
 }
 
+.hvy-document .table-editor-grid .table-row-editor-main.is-table-row-drag-source > td {
+  opacity: 0.48;
+}
+
+.hvy-document .table-editor-grid .table-row-editor-main:is(.is-table-row-drop-before, .is-table-row-drop-after) > td::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 25;
+  height: 3px;
+  background: var(--hvy-button-bg);
+  box-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-button-bg) 35%, transparent);
+  pointer-events: none;
+}
+
+.hvy-document .table-editor-grid .table-row-editor-main.is-table-row-drop-before > td::after {
+  top: -2px;
+}
+
+.hvy-document .table-editor-grid .table-row-editor-main.is-table-row-drop-after > td::after {
+  bottom: -2px;
+}
+
+.hvy-document .table-row-drag-image {
+  position: fixed;
+  top: -10000px;
+  left: 0;
+  z-index: 1000;
+  min-width: 0;
+  max-width: none;
+  border: 0;
+  border-radius: 10px;
+  background: var(--hvy-surface);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hvy-button-bg) 20%, transparent),
+    0 0.8rem 1.8rem color-mix(in srgb, var(--hvy-shadow) 70%, transparent);
+  opacity: 0.62;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hvy-document .table-row-drag-image-table {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.hvy-document .table-row-drag-image :is(.table-inline-toolbar, .table-grabber-insert-menu, .table-row-remove-cell > button) {
+  display: none;
+}
+
 .hvy-document .table-utility-cell,
 .hvy-document .table-row-utility {
   width: 30px;

@@ -399,6 +399,80 @@ hvy_version: 0.1
   await expect(page.locator('[data-field="table-cell"]')).toHaveCount(16);
 });
 
+test('table row drag previews matching before or after insertion edges without a custom cursor ghost', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-row-drag-preview-test"}-->
+#! Table Row Drag Preview Test
+
+<!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]},{"cells":["Gamma","Pending"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+
+  // BEFORE: rows have no drag-source or insertion-edge treatment.
+  await expect(page.locator('.is-table-row-drag-source')).toHaveCount(0);
+  await expect(page.locator('.is-table-row-drop-before, .is-table-row-drop-after')).toHaveCount(0);
+
+  // TOOL CALL: start dragging Alpha and cross the midpoint of Beta.
+  const expectedResult = await page.evaluate(() => {
+    const sourceRow = document.querySelector<HTMLElement>('[data-table-row-drop][data-row-index="0"]');
+    const targetRow = document.querySelector<HTMLElement>('[data-table-row-drop][data-row-index="1"]');
+    const sourceHandle = sourceRow?.querySelector<HTMLElement>('[data-drag-handle="table-row"]');
+    if (!sourceRow || !targetRow || !sourceHandle) throw new Error('Expected editable table rows');
+    const transfer = new DataTransfer();
+    let dragImageCalls = 0;
+    transfer.setDragImage = () => { dragImageCalls += 1; };
+    sourceHandle.dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true,
+      cancelable: true,
+      clientX: sourceRow.getBoundingClientRect().left + 8,
+      clientY: sourceRow.getBoundingClientRect().top + 8,
+      dataTransfer: transfer,
+    }));
+    const bounds = targetRow.getBoundingClientRect();
+    targetRow.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientY: bounds.top + 2,
+      dataTransfer: transfer,
+    }));
+    const before = targetRow.classList.contains('is-table-row-drop-before');
+    const insertionLabel = getComputedStyle(targetRow.cells[0]!, '::after').content;
+    targetRow.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientY: bounds.bottom - 2,
+      dataTransfer: transfer,
+    }));
+    const after = targetRow.classList.contains('is-table-row-drop-after');
+    const sourceDimmed = sourceRow.classList.contains('is-table-row-drag-source');
+    targetRow.dispatchEvent(new DragEvent('drop', {
+      bubbles: true,
+      cancelable: true,
+      clientY: bounds.bottom - 2,
+      dataTransfer: transfer,
+    }));
+    return { dragImageCalls, before, after, insertionLabel, sourceDimmed };
+  });
+
+  // AFTER: the custom cursor ghost stayed disabled, both edges previewed, and the lower edge placed Alpha after Beta.
+  expect(expectedResult).toEqual({
+    dragImageCalls: 0,
+    before: true,
+    after: true,
+    insertionLabel: '""',
+    sourceDimmed: true,
+  });
+  await expect(page.locator('[data-field="table-cell"][data-cell-index="0"]')).toHaveText(['Beta', 'Alpha', 'Gamma']);
+  await expect(page.locator('.is-table-row-drag-source, .is-table-row-drop-before, .is-table-row-drop-after')).toHaveCount(0);
+});
+
 test('empty static table rows delete without confirmation while filled rows still confirm', async ({ page }) => {
   await page.goto('/');
 

@@ -2,6 +2,7 @@ import { state, setDraggedSectionKey, setDraggedTableItem, draggedSectionKey, dr
 
 const SECTION_DRAG_SCROLL_EDGE_PX = 72;
 const SECTION_DRAG_SCROLL_MAX_PX = 28;
+const TABLE_ROW_DRAG_IMAGE_ENABLED = false;
 
 interface SectionDragAutoScrollState {
   scroller: HTMLElement | null;
@@ -13,6 +14,12 @@ interface SectionDropPreviewState {
   card: HTMLElement | null;
 }
 
+interface TableRowDropPreviewState {
+  row: HTMLElement | null;
+  sourceRow: HTMLElement | null;
+  dragImage: HTMLElement | null;
+}
+
 const sectionDragAutoScroll: SectionDragAutoScrollState = {
   scroller: null,
   pointerY: 0,
@@ -21,6 +28,12 @@ const sectionDragAutoScroll: SectionDragAutoScrollState = {
 
 const sectionDropPreview: SectionDropPreviewState = {
   card: null,
+};
+
+const tableRowDropPreview: TableRowDropPreviewState = {
+  row: null,
+  sourceRow: null,
+  dragImage: null,
 };
 
 export function bindDnd(app: HTMLElement): void {
@@ -48,6 +61,21 @@ export function bindDnd(app: HTMLElement): void {
       event.dataTransfer?.setData('text/plain', `${blockId}:${index}`);
       if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
+        const sourceRow = tableRowHandle.closest<HTMLElement>('[data-table-row-drop]');
+        if (sourceRow) {
+          tableRowDropPreview.sourceRow = sourceRow;
+          sourceRow.classList.add('is-table-row-drag-source');
+          if (TABLE_ROW_DRAG_IMAGE_ENABLED) {
+            const dragImage = createTableRowDragImage(app, sourceRow);
+            const bounds = sourceRow.getBoundingClientRect();
+            const dragImageBounds = dragImage.getBoundingClientRect();
+            event.dataTransfer.setDragImage(
+              dragImage,
+              Math.min(Math.max(event.clientX - bounds.left, 18), dragImageBounds.width),
+              Math.min(Math.max(event.clientY - bounds.top, 8), dragImageBounds.height)
+            );
+          }
+        }
       }
       return;
     }
@@ -82,12 +110,17 @@ export function bindDnd(app: HTMLElement): void {
       return;
     }
 
-    if (draggedTableItem?.kind === 'row' && target.closest<HTMLElement>('[data-table-row-drop]')) {
-      event.preventDefault();
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = 'move';
+    if (draggedTableItem?.kind === 'row') {
+      const rowDrop = getMatchingTableRowDrop(target, draggedTableItem);
+      if (rowDrop) {
+        event.preventDefault();
+        updateTableRowDropPreview(rowDrop, event.clientY);
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = 'move';
+        }
+        return;
       }
-      return;
+      clearTableRowDropPreview();
     }
 
     if (draggedTableItem?.kind === 'column' && target.closest<HTMLElement>('[data-table-column-drop]')) {
@@ -132,19 +165,25 @@ export function bindDnd(app: HTMLElement): void {
     const block = section?.blocks.find((candidate) => candidate.id === activeTableDrag.blockId);
     if (!block) {
       setDraggedTableItem(null);
+      clearTableRowDropPreview();
       return;
     }
 
     if (activeTableDrag.kind === 'row') {
-      const rowDrop = target.closest<HTMLElement>('[data-table-row-drop]');
+      const rowDrop = getMatchingTableRowDrop(target, activeTableDrag);
       const rowIndex = Number.parseInt(rowDrop?.dataset.rowIndex ?? '', 10);
       if (rowDrop && !Number.isNaN(rowIndex)) {
         event.preventDefault();
-        recordHistory();
-        moveTableRow(block.schema, activeTableDrag.index, rowIndex);
-        getRenderApp()();
+        const position = getTableRowDropPosition(event.clientY, rowDrop.getBoundingClientRect());
+        const moveIndex = getTableItemMoveIndex(activeTableDrag.index, rowIndex, position, block.schema.tableRows.length);
+        if (moveIndex !== activeTableDrag.index) {
+          recordHistory();
+          moveTableRow(block.schema, activeTableDrag.index, moveIndex);
+          getRenderApp()();
+        }
       }
       setDraggedTableItem(null);
+      clearTableRowDropPreview();
       return;
     }
 
@@ -164,11 +203,40 @@ export function bindDnd(app: HTMLElement): void {
     setDraggedTableItem(null);
     stopSectionDragAutoScroll();
     clearSectionDropPreview();
+    clearTableRowDropPreview();
   });
 }
 
 export function getSectionDropPosition(pointerY: number, sectionRect: Pick<DOMRect, 'top' | 'height'>): 'before' | 'after' {
   return pointerY < sectionRect.top + sectionRect.height / 2 ? 'before' : 'after';
+}
+
+export function getTableRowDropPosition(pointerY: number, rowRect: Pick<DOMRect, 'top' | 'height'>): 'before' | 'after' {
+  return pointerY < rowRect.top + rowRect.height / 2 ? 'before' : 'after';
+}
+
+export function getTableItemMoveIndex(
+  fromIndex: number,
+  targetIndex: number,
+  position: 'before' | 'after',
+  itemCount: number
+): number {
+  const insertionIndex = targetIndex + (position === 'after' ? 1 : 0);
+  const adjustedIndex = insertionIndex > fromIndex ? insertionIndex - 1 : insertionIndex;
+  return Math.max(0, Math.min(itemCount - 1, adjustedIndex));
+}
+
+export function getTableRowDragImageSize(
+  rowSize: { width: number; height: number },
+  previewSize: { width: number; height: number }
+): { width: number; height: number } {
+  const width = rowSize.width > previewSize.width
+    ? Math.min(rowSize.width, previewSize.width * 0.85)
+    : rowSize.width;
+  return {
+    width: Math.max(1, width),
+    height: Math.max(1, Math.min(rowSize.height, previewSize.height * 0.35)),
+  };
 }
 
 export function calculateSectionDragAutoScrollDelta(pointerY: number, scrollerRect: Pick<DOMRect, 'top' | 'bottom'>): number {
@@ -226,6 +294,93 @@ function clearSectionDropPreview(): void {
   sectionDropPreview.card.classList.remove('is-section-drop-before', 'is-section-drop-after');
   delete sectionDropPreview.card.dataset.sectionDropTitle;
   sectionDropPreview.card = null;
+}
+
+function getMatchingTableRowDrop(
+  target: HTMLElement,
+  activeDrag: NonNullable<typeof draggedTableItem>
+): HTMLElement | null {
+  const row = target.closest<HTMLElement>('[data-table-row-drop]');
+  if (
+    !row
+    || row.dataset.sectionKey !== activeDrag.sectionKey
+    || row.dataset.blockId !== activeDrag.blockId
+  ) {
+    return null;
+  }
+  return row;
+}
+
+function updateTableRowDropPreview(row: HTMLElement, pointerY: number): void {
+  const position = getTableRowDropPosition(pointerY, row.getBoundingClientRect());
+  if (tableRowDropPreview.row && tableRowDropPreview.row !== row) {
+    clearTableRowDropTarget();
+  }
+  tableRowDropPreview.row = row;
+  row.classList.toggle('is-table-row-drop-before', position === 'before');
+  row.classList.toggle('is-table-row-drop-after', position === 'after');
+}
+
+function clearTableRowDropTarget(): void {
+  tableRowDropPreview.row?.classList.remove('is-table-row-drop-before', 'is-table-row-drop-after');
+  tableRowDropPreview.row = null;
+}
+
+function createTableRowDragImage(app: HTMLElement, sourceRow: HTMLElement): HTMLElement {
+  removeTableRowDragImage(tableRowDropPreview.dragImage);
+  const sourceTable = sourceRow.closest<HTMLTableElement>('table');
+  const bounds = sourceRow.getBoundingClientRect();
+  const previewBounds = sourceRow.closest<HTMLElement>('.hvy-preview-frame')?.getBoundingClientRect()
+    ?? app.getBoundingClientRect();
+  const dragImageSize = getTableRowDragImageSize(bounds, previewBounds);
+  const dragImage = document.createElement('div');
+  dragImage.className = 'table-row-drag-image';
+  dragImage.style.width = `${dragImageSize.width}px`;
+  dragImage.style.height = `${dragImageSize.height}px`;
+  dragImage.setAttribute('aria-hidden', 'true');
+  const table = document.createElement('table');
+  table.className = 'table-editor-grid table-row-drag-image-table';
+  table.style.cssText = sourceTable?.style.cssText ?? '';
+  table.style.width = `${bounds.width}px`;
+  table.style.height = `${bounds.height}px`;
+  const colgroup = sourceTable?.querySelector('colgroup')?.cloneNode(true);
+  if (colgroup) {
+    table.append(colgroup);
+  }
+  const body = document.createElement('tbody');
+  const row = sourceRow.cloneNode(true) as HTMLElement;
+  row.classList.remove('is-table-row-drag-source', 'is-table-row-drop-before', 'is-table-row-drop-after');
+  const sourceValues = Array.from(sourceRow.querySelectorAll<HTMLElement>('[data-field="table-cell"]'));
+  row.querySelectorAll<HTMLElement>('[data-field="table-cell"]').forEach((element, index) => {
+    element.textContent = sourceValues[index]?.innerText || sourceValues[index]?.textContent || '';
+    element.removeAttribute('data-placeholder');
+    element.removeAttribute('data-placeholder-compact');
+  });
+  row.querySelectorAll<HTMLElement>('[contenteditable]').forEach((element) => {
+    element.removeAttribute('contenteditable');
+    element.removeAttribute('tabindex');
+  });
+  row.querySelectorAll<HTMLElement>('.table-inline-toolbar, .table-grabber-insert-menu, .table-row-remove-cell > button').forEach((element) => element.remove());
+  body.append(row);
+  table.append(body);
+  dragImage.append(table);
+  app.append(dragImage);
+  tableRowDropPreview.dragImage = dragImage;
+  return dragImage;
+}
+
+function removeTableRowDragImage(dragImage: HTMLElement | null): void {
+  dragImage?.remove();
+  if (tableRowDropPreview.dragImage === dragImage) {
+    tableRowDropPreview.dragImage = null;
+  }
+}
+
+function clearTableRowDropPreview(): void {
+  clearTableRowDropTarget();
+  tableRowDropPreview.sourceRow?.classList.remove('is-table-row-drag-source');
+  tableRowDropPreview.sourceRow = null;
+  removeTableRowDragImage(tableRowDropPreview.dragImage);
 }
 
 function findSectionDragScroller(app: HTMLElement, target: HTMLElement): HTMLElement | null {

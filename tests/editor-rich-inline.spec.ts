@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
+async function expandInlineRichToolbar(page: Page): Promise<void> {
+  const toolbar = page.locator('.editor-block[data-active-editor-block="true"] .rich-toolbar').first();
+  if (!await toolbar.evaluate((node) => node.classList.contains('is-text-toolbar-expanded'))) {
+    await toolbar.locator('[data-text-toolbar-expand]').last().click();
+  }
+}
+
 test('document undo restores one clustered rich text edit and keeps its editor active', async ({ page }) => {
   await page.goto('/');
 
@@ -87,6 +94,7 @@ test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) =>
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
 
   const cases = [
     { button: 'Bold', tag: 'strong' },
@@ -472,6 +480,7 @@ test('inline toolbar actions toggle typing mode at a collapsed caret', async ({ 
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
   const boldButton = page.getByRole('button', { name: 'Bold' }).first();
   const italicButton = page.getByRole('button', { name: 'Italic' }).first();
   const underlineButton = page.getByRole('button', { name: 'Underline' }).first();
@@ -1340,6 +1349,7 @@ test('code button wraps selected text as inline code and preserves angle bracket
 
   await page.locator('[data-action="activate-block"]').first().click();
   const editor = page.locator('.rich-editor').first();
+  await expandInlineRichToolbar(page);
 
   await editor.evaluate((node) => {
     node.innerHTML = '<p>Use &lt;tag&gt; now</p>';
@@ -1606,6 +1616,53 @@ test('external rich paste strips text background and font presentation', async (
   expect(expectedResult.html).not.toContain('color: rgb(255, 0, 0)');
   expect(expectedResult.html).not.toContain('background-color');
   expect(expectedResult.html).not.toContain('background: lime');
+});
+
+test('external rich paste does not turn a rendered heading weight into bold markers', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="activate-block"]').first().click();
+  const editor = page.locator('.rich-editor').first();
+
+  const expectedResult = await editor.evaluate((node) => {
+    node.innerHTML = '<p><br></p>';
+    const paragraph = node.querySelector('p')!;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (node as HTMLElement).focus();
+
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/html',
+      '<h2 style="margin: 0; font-weight: 700; line-height: 1.15; color: rgb(26, 37, 48); font-family: sans-serif;">Source H2</h2>'
+    );
+    transfer.setData('text/plain', 'Source H2');
+    const pasteEvent = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertFromPaste',
+    });
+    Object.defineProperty(pasteEvent, 'dataTransfer', { value: transfer });
+
+    node.dispatchEvent(pasteEvent);
+
+    return {
+      headingCount: node.querySelectorAll('h2').length,
+      html: node.innerHTML,
+      prevented: pasteEvent.defaultPrevented,
+      text: node.textContent,
+    };
+  });
+
+  expect(expectedResult).toEqual({
+    headingCount: 1,
+    html: '<p><h2>Source H2</h2>\n</p>',
+    prevented: true,
+    text: 'Source H2\n',
+  });
 });
 
 test('external rich paste normalizes gmail media wrappers before insertion', async ({ page }) => {

@@ -3618,6 +3618,9 @@ function convertExternalBoldPresentationToSemanticStrong(root: ParentNode): void
     if (!isExternalBoldPresentation(element.getAttribute('style') ?? '')) {
       return;
     }
+    if (/^H[1-6]$/.test(element.tagName)) {
+      return;
+    }
     if (element.closest('strong, b')) {
       return;
     }

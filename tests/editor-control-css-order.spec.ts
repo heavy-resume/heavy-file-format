@@ -63,6 +63,12 @@ test('core editor controls receive ownership classes without marking plugin cont
     const section = createEmptySection(1, 'Controls');
     const grid = createEmptyBlock('grid');
     grid.id = 'core-grid';
+    grid.schema.gridColumns = 4;
+    grid.schema.gridItems = Array.from({ length: 5 }, (_item, index) => {
+      const block = createEmptyBlock('text');
+      block.text = `Cell ${index + 1}`;
+      return { id: `grid-item-${index + 1}`, block };
+    });
     const form = createEmptyBlock('plugin');
     form.id = 'plugin-form';
     form.schema.plugin = 'hvy.form';
@@ -96,18 +102,25 @@ test('core editor controls receive ownership classes without marking plugin cont
   await expect(gridColumns.locator('.grid-columns-input')).toHaveClass(/hvy-editor-field-control/);
   await expect(gridBlock.locator('.component-editor-inline-content .grid-columns-input')).toHaveCount(0);
   expect(await gridColumns.evaluate((label) => getComputedStyle(label).display)).toBe('inline-flex');
-  expect(await gridBlock.locator('.section-drag-title').evaluate((header) => (
+  expect(await gridBlock.locator(':scope > .editor-block-head .section-drag-title').evaluate((header) => (
     [...header.children].map((child) => child.className)
   ))).toEqual(['editor-order-controls', 'component-editor-header-controls', 'editor-block-title']);
   const gridColumnsInput = gridColumns.getByRole('spinbutton', { name: 'Grid Columns' });
+  const gridFields = gridBlock.locator('.grid-fields');
   await expect(gridColumns.getByRole('button', { name: 'Increase grid columns' })).toBeVisible();
   await expect(gridColumns.getByRole('button', { name: 'Decrease grid columns' })).toBeVisible();
   expect(await gridColumnsInput.evaluate((input) => getComputedStyle(input).appearance)).toBe('textfield');
   const initialGridColumns = Number(await gridColumnsInput.inputValue());
+  await expect(gridFields).toHaveCSS('grid-template-columns', /^(?:[^ ]+ ){3}[^ ]+$/);
   await gridColumns.getByRole('button', { name: 'Increase grid columns' }).click();
   await expect(gridColumnsInput).toHaveValue(String(initialGridColumns + 1));
+  await expect(gridFields).toHaveCSS('grid-template-columns', /^(?:[^ ]+ ){4}[^ ]+$/);
   await gridColumns.getByRole('button', { name: 'Decrease grid columns' }).click();
   await expect(gridColumnsInput).toHaveValue(String(initialGridColumns));
+  await expect(gridFields).toHaveCSS('grid-template-columns', /^(?:[^ ]+ ){3}[^ ]+$/);
+  await gridColumnsInput.fill(String(initialGridColumns + 1));
+  await expect(gridFields).toHaveCSS('grid-template-columns', /^(?:[^ ]+ ){4}[^ ]+$/);
+  await gridColumnsInput.fill(String(initialGridColumns));
 
   await page.locator('.editor-block-passive[data-block-id="plugin-form"]').click();
   const pluginBlock = page.locator('.editor-block[data-block-id="plugin-form"]');

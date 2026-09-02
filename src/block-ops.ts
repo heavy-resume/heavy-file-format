@@ -430,6 +430,11 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
   if (field === 'block-grid-columns' && target instanceof HTMLInputElement) {
     block.schema.gridColumns = coerceGridColumns(target.value);
     ensureGridItems(block.schema);
+    const editorScope = target.closest<HTMLElement>('.editor-block, .component-editor-modal-root');
+    const gridFields = [...(editorScope?.querySelectorAll<HTMLElement>('.grid-fields') ?? [])]
+      .find((candidate) => candidate.dataset.sectionKey === target.dataset.sectionKey
+        && candidate.dataset.blockId === block.id);
+    gridFields?.style.setProperty('--grid-columns', String(block.schema.gridColumns));
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     refreshReaderPanelsOutsideActiveEditor(target);
     return true;

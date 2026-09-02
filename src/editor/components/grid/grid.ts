@@ -69,7 +69,7 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
       </div>`;
   return `
   ${stackCss}
-  <div class="${helpers.escapeAttr(layoutClasses)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
+  <div class="${helpers.escapeAttr(layoutClasses)}" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" style="--grid-columns: ${helpers.escapeAttr(String(block.schema.gridColumns))};">
     ${[
       block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(

@@ -1,14 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
 
-test('undo inside active rich text editor keeps focus on text changes', async ({ page }) => {
+test('document undo restores one clustered rich text edit and keeps its editor active', async ({ page }) => {
   await page.goto('/');
 
-  await page.locator('[data-action="activate-block"]').first().click();
-  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]').first();
-  const editor = activeBlock.locator('.rich-editor').first();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"undo-cluster"}-->
+#! Undo Cluster
+
+ <!--hvy:text {"id":"body"}-->
+  Base text
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Base text' }).click();
+  let activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  let editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
   await editor.evaluate((node) => {
-    node.innerHTML = '<p>Base text</p>';
-    const textNode = node.querySelector('p')?.firstChild;
+    const textNode = node.querySelector('p')?.firstChild ?? node.firstChild;
     const selection = window.getSelection();
     const range = document.createRange();
     range.setStart(textNode!, textNode!.textContent!.length);
@@ -16,16 +29,57 @@ test('undo inside active rich text editor keeps focus on text changes', async ({
     selection?.removeAllRanges();
     selection?.addRange(range);
     (node as HTMLElement).focus();
-    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 
-  await page.keyboard.type(' added');
+  const expectedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
+  for (const key of ['Space', 'a', 'd', 'd', 'e', 'd']) {
+    await page.keyboard.press(key);
+  }
   await expect(editor).toContainText('Base text added');
+  const editedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(expectedDocument);
+
+  activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  editor = activeBlock.locator('.rich-editor[data-field="block-rich"]');
   await expect(activeBlock).toHaveCount(1);
+  await expect(editor).toBeFocused();
   await expect(editor).toContainText('Base text');
   await expect(editor).not.toContainText('added');
+  expect(await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    if (!selection?.isCollapsed || selection.rangeCount === 0 || !node.contains(selection.focusNode)) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.setStart(selection.focusNode!, selection.focusOffset);
+    return range.toString().trim();
+  })).toBe('');
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Y');
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(editedDocument);
+  editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor[data-field="block-rich"]');
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    if (!selection?.isCollapsed || selection.rangeCount === 0 || !node.contains(selection.focusNode)) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.setStart(selection.focusNode!, selection.focusOffset);
+    return range.toString().trim();
+  })).toBe('');
 });
 
 test('inline toolbar buttons wrap and unwrap selected text', async ({ page }) => {

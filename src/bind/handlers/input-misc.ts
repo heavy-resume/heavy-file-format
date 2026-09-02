@@ -7,7 +7,6 @@ import { refreshSearchFilterButton, submitSearch } from '../../search/actions';
 import { clearHideIfUnmodifiedForSectionPath } from '../../template-hide';
 import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
-import { clearNextUndoTargetsDocument } from '../../edit-command-routing';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { clearSortValueValidation } from '../../sort-value-validation';
 
@@ -675,7 +674,6 @@ export function bindInputMisc(app: HTMLElement): void {
     }
 
     if (handleBlockFieldInput(target)) {
-      clearNextUndoTargetsDocument();
       saveSessionState(state);
       if (field === 'block-rich' || field === 'text-fill-in-rich' || field === 'block-grid-rich' || field === 'table-details-rich' || field === 'caption-rich' || field === 'table-cell' || field === 'table-column') {
         refreshRichToolbarState(target);

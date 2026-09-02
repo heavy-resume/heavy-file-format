@@ -1,7 +1,6 @@
 import { getActiveStateRuntime, runWithStateRuntime, state, type StateRuntime } from '../../state';
 import { undoStateAsync, redoStateAsync } from './_imports';
 import { closeSearch, openSearch } from '../../search/actions';
-import { consumeNextNativeUndoSuppressed, consumeNextRedoTargetsDocument, consumeNextUndoTargetsDocument, routeNextRedoToDocument, routeNextUndoToDocument, suppressNextNativeUndo } from '../../edit-command-routing';
 
 const shortcutRoots = new WeakSet<HTMLElement>();
 const shortcutRootRuntimes = new WeakMap<HTMLElement, StateRuntime | null>();
@@ -56,30 +55,19 @@ export function bindShortcuts(_app: HTMLElement): void {
         return;
       }
       if (key === 'z' && !event.shiftKey) {
-        const routeToDocument = consumeNextUndoTargetsDocument();
-        if (!routeToDocument && isNativeUndoTarget(event.target) && consumeNextNativeUndoSuppressed()) {
-          event.preventDefault();
-          return;
-        }
-        if (!routeToDocument && isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'undo')) {
+        if (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target)) {
           return;
         }
         event.preventDefault();
-        void undoStateAsync();
-        if (routeToDocument) {
-          suppressNextNativeUndo();
-        }
-        routeNextRedoToDocument();
+        void undoStateAsync(_app);
         return;
       }
       if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        const routeToDocument = consumeNextRedoTargetsDocument();
-        if (!routeToDocument && isNativeUndoTarget(event.target) && hasNativeEditCommand(event.target, 'redo')) {
+        if (isNativeUndoTarget(event.target) && !isDocumentUndoTarget(event.target)) {
           return;
         }
         event.preventDefault();
-        void redoStateAsync();
-        routeNextUndoToDocument();
+        void redoStateAsync(_app);
       }
     };
     const runtime = shortcutRootRuntimes.get(_app) ?? null;
@@ -112,12 +100,20 @@ export function isNativeUndoTarget(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
-function hasNativeEditCommand(target: EventTarget | null, command: 'undo' | 'redo'): boolean {
+export function isDocumentUndoTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
   }
-  if (target.isContentEditable) {
-    return typeof document !== 'undefined' && document.queryCommandEnabled(command);
+  if (target.closest('.modal-root') && !target.closest('.theme-modal')) {
+    return false;
   }
-  return true;
+  const field = target.dataset.field ?? '';
+  if (field.startsWith('chat-') || field.startsWith('search-') || field.startsWith('cli-')) {
+    return false;
+  }
+  return Boolean(
+    target.closest('.editor-block[data-active-editor-block="true"]')
+    || target.closest('[data-hvy-plugin-mount="true"][data-plugin-mode="editor"]')
+    || field
+  );
 }

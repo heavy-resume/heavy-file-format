@@ -124,12 +124,17 @@ function renderTableColumnSettings(
 ): string {
   const properties = getTableColumnProperties(block.schema, column);
   const data = `data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}"`;
-  return `<details class="table-column-settings">
+  return `<details class="table-column-settings" data-escape-closes="true">
     <summary class="ghost table-column-settings-trigger" title="Column formatting" aria-label="Column formatting">${settingsIcon()}</summary>
     <div class="table-column-settings-panel">
       <label><span>Width</span><input type="text" data-field="table-column-width" ${data} value="${helpers.escapeAttr(properties.width)}" placeholder="auto"></label>
-      <label class="table-column-wrap-control"><input type="checkbox" data-field="table-column-wrap" ${data}${properties.wrap ? ' checked' : ''}><span>Wrap text</span></label>
-      <label class="table-column-wrap-control"><input type="checkbox" data-field="table-column-truncate" ${data}${properties.truncate ? ' checked' : ''}><span>Truncate text</span></label>
+      <div class="table-column-overflow-setting">
+        <span>Overflow:</span>
+        <div class="table-column-overflow-options" role="group" aria-label="Overflow">
+          <label><input type="checkbox" data-field="table-column-wrap" ${data}${properties.wrap ? ' checked' : ''}><span>Wrap</span></label>
+          <label><input type="checkbox" data-field="table-column-truncate" ${data}${properties.truncate ? ' checked' : ''}><span>Truncate</span></label>
+        </div>
+      </div>
       <label><span>Cells</span><select data-field="table-column-align" ${data}>${renderAlignmentOptions(properties.align)}</select></label>
       <label><span>Header</span><select data-field="table-column-header-align" ${data}>${renderAlignmentOptions(properties.headerAlign)}</select></label>
       <button type="button" class="ghost table-column-auto-button" data-action="auto-fit-table-column" ${data}>Fit to contents</button>

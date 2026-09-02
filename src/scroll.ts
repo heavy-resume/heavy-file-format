@@ -132,6 +132,7 @@ export function focusPendingSectionTitleEditor(app: HTMLElement): void {
 }
 
 export function scrollPendingEditorActivation(app: HTMLElement): void {
+  restorePendingHistoryFocus(app);
   const pending = state.pendingEditorActivation;
   if (!pending) {
     return;
@@ -154,6 +155,21 @@ export function scrollPendingEditorActivation(app: HTMLElement): void {
       focusPendingEditorActivation(app, pending);
     });
   });
+}
+
+function restorePendingHistoryFocus(app: HTMLElement): void {
+  const preferred = state.pendingHistoryFocus;
+  if (!preferred) {
+    return;
+  }
+  const matches = app.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(preferred.field)}"]`);
+  const target = matches.item(preferred.fieldIndex ?? 0);
+  state.pendingHistoryFocus = null;
+  if (!target) {
+    return;
+  }
+  focusEditorActivationTarget(target);
+  restorePreferredEditorSelection(target, preferred);
 }
 
 export function captureEditorDeactivationAnchor(
@@ -409,6 +425,7 @@ function focusPendingEditorActivation(
   }
   const target = preferredTarget ?? getEditorActivationTarget(block, fallbackTarget, pending.clientX, pending.clientY);
   focusEditorActivationTarget(target, pending.clientX, pending.clientY);
+  restorePreferredEditorSelection(target, pending.preferredEditorTarget);
   recordEditorActivationScrollTop(app, pending);
   state.pendingEditorActivation = null;
 }
@@ -448,7 +465,60 @@ function resolvePreferredEditorActivationTarget(
       `[data-field="table-column"][data-column-index="${preferred.columnIndex}"]`
     );
   }
-  return null;
+  const matches = block.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(preferred.field)}"]`);
+  return matches.item(preferred.fieldIndex ?? 0);
+}
+
+function restorePreferredEditorSelection(
+  target: HTMLElement,
+  preferred: NonNullable<typeof state.pendingEditorActivation>['preferredEditorTarget'] | undefined
+): void {
+  if (!preferred) {
+    return;
+  }
+  if (preferred.controlSelection && (target instanceof HTMLTextAreaElement || isTextSelectionInput(target))) {
+    const length = target.value.length;
+    target.setSelectionRange(
+      Math.min(preferred.controlSelection.start, length),
+      Math.min(preferred.controlSelection.end, length),
+      preferred.controlSelection.direction
+    );
+    return;
+  }
+  if (!preferred.editableSelection || !target.isContentEditable) {
+    return;
+  }
+  const anchor = resolveNodePath(target, preferred.editableSelection.anchorPath);
+  const focus = resolveNodePath(target, preferred.editableSelection.focusPath);
+  const selection = window.getSelection();
+  if (!anchor || !focus || !selection) {
+    return;
+  }
+  selection.setBaseAndExtent(
+    anchor,
+    clampNodeOffset(anchor, preferred.editableSelection.anchorOffset),
+    focus,
+    clampNodeOffset(focus, preferred.editableSelection.focusOffset)
+  );
+}
+
+function resolveNodePath(root: Node, path: number[]): Node | null {
+  let current: Node = root;
+  for (const index of path) {
+    const child = current.childNodes.item(index);
+    if (!child) {
+      return null;
+    }
+    current = child;
+  }
+  return current;
+}
+
+function clampNodeOffset(node: Node, offset: number): number {
+  const length = node.nodeType === Node.TEXT_NODE
+    ? node.textContent?.length ?? 0
+    : node.childNodes.length;
+  return Math.max(0, Math.min(offset, length));
 }
 
 function getEditorActivationTarget(

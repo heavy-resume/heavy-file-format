@@ -16,12 +16,12 @@ import { capturePaneScroll } from '../../scroll';
 import { clearSelectedRadioAnswers } from '../../inline-answer-groups';
 import { syncReusableTemplateForBlock } from '../../reusable';
 
-const undo: AppActionHandler = () => {
-  void undoStateAsync();
+const undo: AppActionHandler = ({ app }) => {
+  void undoStateAsync(app);
 };
 
-const redo: AppActionHandler = () => {
-  void redoStateAsync();
+const redo: AppActionHandler = ({ app }) => {
+  void redoStateAsync(app);
 };
 
 const switchView: AppActionHandler = ({ actionButton }) => {

@@ -22,7 +22,6 @@ import {
 import { showTransientNotice } from '../../transient-notice';
 import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
-import { routeNextUndoToDocument } from '../../edit-command-routing';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
 import { decryptComponentInDocument } from '../../encrypted-components';
@@ -328,7 +327,6 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
       error: null,
     };
     state.pendingPaneScrollRestore = scrollBeforeDelete;
-    routeNextUndoToDocument();
     getRenderApp()();
     return;
   }
@@ -361,7 +359,6 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
     state.pendingEditorActivation = null;
   }
   state.pendingPaneScrollRestore = scrollBeforeDelete;
-  routeNextUndoToDocument();
   getRenderApp()();
 };
 
@@ -674,7 +671,6 @@ const placeComponent: ActionHandler = ({ app, actionButton, sectionKey, blockId 
   if (placementMode === 'copy') {
     markActiveEditorBlockAsNew(activePlacedBlockId);
   }
-  routeNextUndoToDocument();
   getRenderApp()();
 };
 

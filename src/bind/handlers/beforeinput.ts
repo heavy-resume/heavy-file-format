@@ -1,5 +1,6 @@
-import { getRefreshChatSurface, handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste, saveSessionState, state } from './_imports';
+import { getRefreshChatSurface, handleRichEditorBeforeInput, handleRichEditorCopy, handleRichEditorPlainTextPaste, redoStateAsync, rememberHistoryEditorContextBeforeInput, saveSessionState, state, undoStateAsync } from './_imports';
 import { CHAT_PASTE_ATTACHMENT_THRESHOLD, createPastedChatAttachment } from '../../chat/chat-attachments';
+import { isDocumentUndoTarget } from './shortcuts';
 
 export function bindBeforeinput(app: HTMLElement): void {
   app.addEventListener('copy', (event) => {
@@ -52,13 +53,31 @@ export function bindBeforeinput(app: HTMLElement): void {
   });
 
   app.addEventListener('beforeinput', (event) => {
+    const inputEvent = event as InputEvent;
+    if (
+      (inputEvent.inputType === 'historyUndo' || inputEvent.inputType === 'historyRedo')
+      && isDocumentUndoTarget(event.target)
+    ) {
+      event.preventDefault();
+      const historyRoot = event.target instanceof HTMLElement
+        ? event.target.closest<HTMLElement>('.hvy-document')
+        : app;
+      if (inputEvent.inputType === 'historyUndo') {
+        void undoStateAsync(historyRoot);
+      } else {
+        void redoStateAsync(historyRoot);
+      }
+      return;
+    }
+    if (isDocumentUndoTarget(event.target)) {
+      rememberHistoryEditorContextBeforeInput(event.target);
+    }
     const editable = getRichEditable(event.target as HTMLElement);
 
     if (!editable) {
       return;
     }
 
-    const inputEvent = event as InputEvent;
     if (!handleRichEditorBeforeInput(inputEvent, editable)) {
       return;
     }

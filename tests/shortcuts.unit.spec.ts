@@ -35,14 +35,23 @@ vi.mock('../src/bind/handlers/_imports', () => {
 
 class TestHTMLElement extends EventTarget {
   isContentEditable = false;
+  activeEditorAncestor = false;
   themeModalAncestor = false;
+  modalRootAncestor = false;
   richEditorAncestor = false;
+  dataset: Record<string, string> = {};
 
   closest(selector: string) {
     if (selector === '.rich-editor' && this.richEditorAncestor) {
       return this;
     }
-    return selector === '.theme-modal' && this.themeModalAncestor ? this : null;
+    if (selector === '.editor-block[data-active-editor-block="true"]' && this.activeEditorAncestor) {
+      return this;
+    }
+    if (selector === '.theme-modal' && this.themeModalAncestor) {
+      return this;
+    }
+    return selector === '.modal-root' && this.modalRootAncestor ? this : null;
   }
 }
 
@@ -63,7 +72,7 @@ beforeEach(() => {
 });
 
 test('native undo targets keep browser undo behavior', async () => {
-  const { isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
+  const { isDocumentUndoTarget, isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
 
   expect(isNativeUndoTarget(new TestTextAreaElement())).toBe(true);
   expect(isNativeUndoTarget(new TestInputElement())).toBe(true);
@@ -71,16 +80,26 @@ test('native undo targets keep browser undo behavior', async () => {
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
   expect(isNativeUndoTarget(editable)).toBe(true);
+
+  const chatDraft = new TestTextAreaElement();
+  chatDraft.dataset.field = 'chat-input';
+  expect(isDocumentUndoTarget(chatDraft)).toBe(false);
+
+  const codeEditor = new TestTextAreaElement();
+  codeEditor.dataset.field = 'raw-editor-text';
+  expect(isDocumentUndoTarget(codeEditor)).toBe(true);
 });
 
-test('rich editors keep native text undo behavior', async () => {
-  const { isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
+test('rich editors use document undo behavior', async () => {
+  const { isDocumentUndoTarget, isNativeUndoTarget } = await import('../src/bind/handlers/shortcuts');
 
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
+  editable.activeEditorAncestor = true;
   editable.richEditorAncestor = true;
 
   expect(isNativeUndoTarget(editable)).toBe(true);
+  expect(isDocumentUndoTarget(editable)).toBe(true);
 });
 
 test('theme modal controls use document undo behavior', async () => {
@@ -123,11 +142,59 @@ test('global undo shortcut does not intercept textarea native undo', async () =>
     },
   });
 
+  listener?.({
+    target: new TestTextAreaElement(),
+    metaKey: false,
+    ctrlKey: true,
+    key: 'z',
+    shiftKey: false,
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+
   expect(prevented).toBe(false);
   expect(undoStateMock).not.toHaveBeenCalled();
 });
 
-test('global undo shortcut does not intercept rich editor native undo when available', async () => {
+test('global undo shortcut handles a document-backed textarea', async () => {
+  let listener: ((event: {
+    target: EventTarget | null;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    key: string;
+    shiftKey: boolean;
+    preventDefault: () => void;
+  }) => void) | null = null;
+  vi.stubGlobal('window', {
+    addEventListener: (_type: string, handler: typeof listener) => {
+      listener = handler;
+    },
+  });
+  const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
+  const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
+  setShortcutsBound(false);
+  bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
+
+  const textarea = new TestTextAreaElement();
+  textarea.dataset.field = 'raw-editor-text';
+  let prevented = false;
+  listener?.({
+    target: textarea,
+    metaKey: false,
+    ctrlKey: true,
+    key: 'z',
+    shiftKey: false,
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+
+  expect(prevented).toBe(true);
+  expect(undoStateMock).toHaveBeenCalledTimes(1);
+});
+
+test('global undo shortcut handles rich editor document undo regardless of browser command state', async () => {
   let listener: ((event: {
     target: EventTarget | null;
     metaKey: boolean;
@@ -151,6 +218,7 @@ test('global undo shortcut does not intercept rich editor native undo when avail
 
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
+  editable.activeEditorAncestor = true;
   editable.richEditorAncestor = true;
   let prevented = false;
   listener?.({
@@ -164,8 +232,8 @@ test('global undo shortcut does not intercept rich editor native undo when avail
     },
   });
 
-  expect(prevented).toBe(false);
-  expect(undoStateMock).not.toHaveBeenCalled();
+  expect(prevented).toBe(true);
+  expect(undoStateMock).toHaveBeenCalledTimes(1);
 });
 
 test('global undo shortcut handles rich editor undo when no native undo is available', async () => {
@@ -192,6 +260,7 @@ test('global undo shortcut handles rich editor undo when no native undo is avail
 
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
+  editable.activeEditorAncestor = true;
   editable.richEditorAncestor = true;
   let prevented = false;
   listener?.({
@@ -209,7 +278,7 @@ test('global undo shortcut handles rich editor undo when no native undo is avail
   expect(undoStateMock).toHaveBeenCalledTimes(1);
 });
 
-test('global undo shortcut handles pending document undo before rich editor native undo', async () => {
+test('global undo shortcut keeps every document editor undo on document history', async () => {
   let listener: ((event: {
     target: EventTarget | null;
     metaKey: boolean;
@@ -223,18 +292,14 @@ test('global undo shortcut handles pending document undo before rich editor nati
       listener = handler;
     },
   });
-  vi.stubGlobal('document', {
-    queryCommandEnabled: () => true,
-  });
-  const { routeNextUndoToDocument } = await import('../src/edit-command-routing');
   const { bindShortcuts } = await import('../src/bind/handlers/shortcuts');
   const { setShortcutsBound } = await import('../src/bind/handlers/_imports');
   setShortcutsBound(false);
   bindShortcuts(new TestHTMLElement() as unknown as HTMLElement);
 
-  routeNextUndoToDocument();
   const editable = new TestHTMLElement();
   editable.isContentEditable = true;
+  editable.activeEditorAncestor = true;
   editable.richEditorAncestor = true;
   let prevented = false;
   listener?.({
@@ -264,7 +329,7 @@ test('global undo shortcut handles pending document undo before rich editor nati
   });
 
   expect(prevented).toBe(true);
-  expect(undoStateMock).toHaveBeenCalledTimes(1);
+  expect(undoStateMock).toHaveBeenCalledTimes(2);
 });
 
 test('global undo shortcut still handles document-level undo', async () => {

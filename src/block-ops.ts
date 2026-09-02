@@ -16,7 +16,6 @@ import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption, sanitizeOptionalId } from './utils';
 import { recordHistory } from './history';
-import { routeNextUndoToDocument } from './edit-command-routing';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
 import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
@@ -599,9 +598,15 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
     if (field === 'table-column-width' && target instanceof HTMLInputElement) {
       setTableColumnProperties(block.schema, column, { width: target.value.trim() || 'auto' });
     } else if (field === 'table-column-wrap' && target instanceof HTMLInputElement) {
-      setTableColumnProperties(block.schema, column, { wrap: target.checked });
+      setTableColumnProperties(block.schema, column, {
+        wrap: target.checked,
+        ...(target.checked ? { truncate: false } : {}),
+      });
     } else if (field === 'table-column-truncate' && target instanceof HTMLInputElement) {
-      setTableColumnProperties(block.schema, column, { truncate: target.checked });
+      setTableColumnProperties(block.schema, column, {
+        truncate: target.checked,
+        ...(target.checked ? { wrap: false } : {}),
+      });
     } else if (field === 'table-column-align' && target instanceof HTMLSelectElement) {
       setTableColumnProperties(block.schema, column, { align: coerceTableColumnAlignment(target.value, 'left') });
     } else if (field === 'table-column-header-align' && target instanceof HTMLSelectElement) {
@@ -1354,14 +1359,12 @@ export function applyRichAction(
 ): void {
   if (action === 'fill-in') {
     if (applyTextFillInSlot(editable)) {
-      routeNextUndoToDocument();
     }
     return;
   }
   if (action === 'sort-value') {
     if (applySortValueAnnotation(editable, options)) {
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      routeNextUndoToDocument();
     }
     return;
   }
@@ -2984,7 +2987,6 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
     if (editable.dataset.hvyFormatBlockMergeChanged === 'true') {
       delete editable.dataset.hvyFormatBlockMergeChanged;
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      routeNextUndoToDocument();
     }
     updateRichToolbarState(editable);
     return true;
@@ -3149,7 +3151,6 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (isSelectionInsideCodeBlock(editable) && codeBlockPasteText) {
       insertTextInSelectionCodeBlock(editable, codeBlockPasteText);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      routeNextUndoToDocument();
       updateRichToolbarState(editable);
       return true;
     }
@@ -3158,7 +3159,6 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
       if (text) {
         insertPlainTextAtEditableSelection(editable, text);
         editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-        routeNextUndoToDocument();
         updateRichToolbarState(editable);
         return true;
       }
@@ -3169,7 +3169,6 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (html) {
       insertHtmlAtEditableSelection(editable, html);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      routeNextUndoToDocument();
       updateRichToolbarState(editable);
       return true;
     }
@@ -3177,7 +3176,6 @@ export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLEle
     if (text) {
       insertPlainTextAtEditableSelection(editable, text);
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      routeNextUndoToDocument();
       updateRichToolbarState(editable);
       return true;
     }
@@ -4964,6 +4962,11 @@ function clearFullEditableSelection(editable: HTMLElement): boolean {
     (!coversContents && !coversOnlyText)
   ) {
     return false;
+  }
+  if (editable.dataset.inlineText === 'true') {
+    editable.replaceChildren();
+    placeCaretInside(editable);
+    return true;
   }
   const paragraph = document.createElement('p');
   paragraph.appendChild(document.createElement('br'));

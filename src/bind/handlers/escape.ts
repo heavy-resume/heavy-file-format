@@ -6,6 +6,17 @@ import { closeModal } from '../../navigation';
 import { getRenderApp, state } from '../../state';
 import { dismissTextToolbarForEscape } from '../../editor/components/text/text-toolbar-layout';
 
+function dismissDetailsPopoverForEscape(target: EventTarget | null): boolean {
+  const element = target instanceof Element ? target : null;
+  const details = element?.closest<HTMLDetailsElement>('details[data-escape-closes="true"][open]');
+  if (!details) {
+    return false;
+  }
+  details.open = false;
+  details.querySelector<HTMLElement>(':scope > summary')?.focus({ preventScroll: true });
+  return true;
+}
+
 export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean {
   if (event.key !== 'Escape') {
     return false;
@@ -21,6 +32,11 @@ export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean
     event.preventDefault();
     event.stopPropagation();
     closeSearch(app);
+    return true;
+  }
+  if (dismissDetailsPopoverForEscape(event.target)) {
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   }
   if (state.chat.panelOpen) {

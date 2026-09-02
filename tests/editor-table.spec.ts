@@ -166,6 +166,15 @@ hvy_version: 0.1
   await expect.poll(() => passive.locator('.reader-table-frame').evaluate((frame) => frame.scrollWidth > frame.clientWidth)).toBe(true);
   await passive.click();
 
+  const headerToggle = page.locator('.table-header-toggle');
+  const headerToggleBox = await headerToggle.boundingBox();
+  const tableEditorBox = await page.locator('.table-editor').boundingBox();
+  if (!headerToggleBox || !tableEditorBox) throw new Error('Expected the table header toggle and editor to be visible.');
+  expect(headerToggleBox.width).toBeLessThan(tableEditorBox.width / 2);
+  const expectedHeaderChecked = await headerToggle.locator('input').isChecked();
+  await page.mouse.click(tableEditorBox.x + tableEditorBox.width - 8, headerToggleBox.y + headerToggleBox.height / 2);
+  expect(await headerToggle.locator('input').isChecked()).toBe(expectedHeaderChecked);
+
   const editorCellTextStyle = await page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="0"]').evaluate((cell) => ({
     overflow: getComputedStyle(cell).overflow,
     textOverflow: getComputedStyle(cell).textOverflow,
@@ -175,9 +184,26 @@ hvy_version: 0.1
 
   const settings = page.locator('.table-column-settings').first();
   await settings.locator('summary').click();
+  await settings.locator('[data-field="table-column-width"]').focus();
+  await page.keyboard.press('Escape');
+  await expect(settings).not.toHaveAttribute('open', '');
+  await expect(settings.locator('summary')).toBeFocused();
+  await settings.locator('summary').click();
+  const overflowFit = await settings.evaluate((details) => {
+    const panel = details.querySelector<HTMLElement>('.table-column-settings-panel');
+    const truncate = Array.from(details.querySelectorAll<HTMLElement>('.table-column-overflow-options span'))
+      .find((label) => label.textContent === 'Truncate');
+    if (!panel || !truncate) return null;
+    return truncate.getBoundingClientRect().right <= panel.getBoundingClientRect().right;
+  });
+  expect(overflowFit).toBe(true);
   await settings.locator('[data-field="table-column-truncate"]').uncheck();
   await expect(page.locator('.table-editor-grid tbody td[data-table-column-index="0"]').first()).toHaveClass(/table-column-no-truncate/);
   await settings.locator('[data-field="table-column-wrap"]').check();
+  await settings.locator('[data-field="table-column-truncate"]').check();
+  await expect(settings.locator('[data-field="table-column-wrap"]')).not.toBeChecked();
+  await settings.locator('[data-field="table-column-wrap"]').check();
+  await expect(settings.locator('[data-field="table-column-truncate"]')).not.toBeChecked();
   await settings.locator('[data-field="table-column-align"]').selectOption('right');
   await settings.locator('[data-field="table-column-header-align"]').selectOption('left');
   await expect(page.locator('.table-editor-grid tbody td[data-table-column-index="0"]').first()).toHaveClass(/table-column-wrap/);
@@ -512,6 +538,67 @@ hvy_version: 0.1
   await expect(firstCell).toContainText('Second line');
   await page.keyboard.type('Beta');
   await expect(addedRowFirstCell).toContainText('Beta');
+});
+
+test('select all and delete keeps a static table cell canonically empty and undoes once', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-cell-clear"}-->
+#! Table Cell Clear
+
+<!--hvy: {"id":"nested-table-section"}-->
+## Nested Table Section
+
+ <!--hvy:table {"tableColumns":["Role","Scope"],"tableRows":[{"cells":["Alpha","Open"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.getByRole('cell', { name: 'Open', exact: true }).click();
+  const cell = page.locator('[data-field="table-cell"][data-row-index="0"][data-cell-index="1"]');
+  await cell.click();
+  const expectedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
+  const expectedResult = await cell.evaluate((node) => node.getBoundingClientRect().height);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+
+  await expect(cell).toBeFocused();
+  await expect(cell).toHaveText('');
+  const clearedDocument = await page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  );
+  expect(await cell.evaluate((node) => node.innerHTML)).toBe('');
+  expect(await cell.evaluate(
+    (node, initialHeight) => Math.abs(node.getBoundingClientRect().height - initialHeight),
+    expectedResult
+  )).toBeLessThanOrEqual(1);
+  expect(await cell.evaluate((node) => {
+    const selection = window.getSelection();
+    return Boolean(selection?.isCollapsed && selection.rangeCount && node.contains(selection.getRangeAt(0).startContainer));
+  })).toBe(true);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+
+  await expect(page.locator('.editor-block[data-active-editor-block="true"]')).toHaveCount(1);
+  await expect(cell).toBeFocused();
+  await expect(cell).toHaveText('Open');
+  await expect(page.locator('.table-inline-text p')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(expectedDocument);
+
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Y');
+  await expect.poll(() => page.evaluate(async () =>
+    JSON.parse(JSON.stringify((await import('/src/state.ts')).state.document))
+  )).toEqual(clearedDocument);
 });
 
 test('static table Done does not persist untouched Enter-created rows', async ({ page }) => {

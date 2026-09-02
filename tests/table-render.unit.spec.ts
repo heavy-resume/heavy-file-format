@@ -151,6 +151,11 @@ test('table column presentation renders through colgroups and cell classes', () 
   expect(readerHtml).toContain('table-column-no-truncate');
   expect(editorHtml).toContain('data-field="table-column-width"');
   expect(editorHtml).toContain('data-field="table-column-truncate"');
+  expect(editorHtml).toContain('<span>Overflow:</span>');
+  expect(editorHtml).toContain('<span>Wrap</span>');
+  expect(editorHtml).toContain('<span>Truncate</span>');
+  expect(editorHtml).not.toContain('Wrap text');
+  expect(editorHtml).not.toContain('Truncate text');
   expect(editorHtml).toContain('value="12rem"');
   expect(editorHtml).toContain('table-column-resize-handle');
   const firstHeaderStart = editorHtml.indexOf('<div class="table-column-head">');

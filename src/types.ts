@@ -575,12 +575,25 @@ export interface AppState {
     immediateFocus?: boolean;
     passiveHeight?: number;
     preferredEditorTarget?: {
-      field: 'table-cell' | 'table-column';
+      field: string;
+      fieldIndex?: number;
       rowIndex?: number;
       cellIndex?: number;
       columnIndex?: number;
+      controlSelection?: {
+        start: number;
+        end: number;
+        direction: 'forward' | 'backward' | 'none';
+      };
+      editableSelection?: {
+        anchorPath: number[];
+        anchorOffset: number;
+        focusPath: number[];
+        focusOffset: number;
+      };
     };
   } | null;
+  pendingHistoryFocus?: NonNullable<AppState['pendingEditorActivation']>['preferredEditorTarget'] | null;
   activeEditorSectionTitleKey: string | null;
   clearSectionTitleOnFocusKey: string | null;
   modalSectionKey: string | null;

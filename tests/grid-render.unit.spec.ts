@@ -113,7 +113,7 @@ beforeEach(() => {
   initState(createTestState(createDocument()));
 });
 
-test('grid editor renders a newly added blank text item without reading other component fields', () => {
+test('expected result: grid editor renders a newly added blank text item without a redundant type selector', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({
     id: 'grid-item',
@@ -122,7 +122,7 @@ test('grid editor renders a newly added blank text item without reading other co
 
   const expectedResult = renderGridEditor('section-summary', grid, createHelpers());
 
-  expect(expectedResult).toContain('data-field="block-grid-item-component"');
+  expect(expectedResult).not.toContain('data-field="block-grid-item-component"');
   expect(expectedResult).toContain('data-rendered="text"');
 });
 
@@ -248,29 +248,6 @@ test('expected result: table enum sort selector renders a trailing caret anchor'
 
   expect(expectedResult).toContain('data-field="sort-value-enum"');
   expect(expectedResult).toContain('</select>&#8203;');
-});
-
-test('grid blank item component switch creates a complete schema for the selected component', () => {
-  const grid = state.document.sections[0]!.blocks[0]!;
-  grid.schema.gridItems.push({
-    id: 'grid-item',
-    block: createEmptyBlock('text'),
-  });
-  const expectedBlockId = grid.schema.gridItems[0]!.block.id;
-  const select = new TestSelectElement() as unknown as HTMLSelectElement;
-  select.dataset.field = 'block-grid-item-component';
-  select.dataset.sectionKey = 'section-summary';
-  select.dataset.blockId = 'grid-block';
-  select.dataset.gridItemId = 'grid-item';
-  select.value = 'image';
-
-  handleBlockFieldInput(select);
-
-  const expectedResult = grid.schema.gridItems[0]!.block;
-  expect(expectedResult.id).toBe(expectedBlockId);
-  expect(expectedResult.schema.kind).toBe('image');
-  expect(expectedResult.schema.component).toBe('image');
-  expect(expectedResult.schema.imageFile).toBe('');
 });
 
 test('expected result: grid cell id input creates authored slot metadata', () => {

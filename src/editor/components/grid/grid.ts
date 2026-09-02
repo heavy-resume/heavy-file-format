@@ -1,6 +1,6 @@
 import './grid.css';
 import type { ComponentEditorRenderer, ComponentReaderRenderer } from '../../component-helpers';
-import type { GridItem, VisualBlock } from '../../types';
+import type { GridItem } from '../../types';
 import { closeIcon } from '../../../icons';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../../../grid-ops';
 import { state } from '../../../state';
@@ -74,7 +74,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
       block.schema.gridItems.length === 0 ? firstPlacementTarget : '',
       ...block.schema.gridItems.map(
         (item, index) => {
-          const canChangeComponent = isBlankDefaultGridItem(item.block);
           const beforePlacementTarget = index === 0 ? firstPlacementTarget : '';
           const afterPlacementTarget = helpers.renderComponentPlacementTarget({
             container: 'grid',
@@ -108,15 +107,6 @@ export const renderGridEditor: ComponentEditorRenderer = (sectionKey, block, hel
               )}" aria-label="Remove grid component" title="Delete component">${closeIcon()}</button>
             </div>
           </div>
-          ${canChangeComponent
-            ? `<div class="grid-item-controls">
-                <select class="compact-select" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(
-                    block.id
-                  )}" data-field="block-grid-item-component" data-grid-item-id="${helpers.escapeAttr(item.id)}">
-                    ${helpers.renderComponentOptions(item.block.schema.component)}
-                </select>
-              </div>`
-            : ''}
           <div class="grid-item-editor-shell">
             ${renderedGridBlocks.get(item.block) ?? ''}
           </div>
@@ -159,18 +149,6 @@ function renderGridCellMeta(
       </label>
     </div>
   </details>`;
-}
-
-function isBlankDefaultGridItem(block: VisualBlock): boolean {
-  if ((block.schema.component || 'text') !== 'text') {
-    return false;
-  }
-  if (block.schema.kind !== 'text') {
-    return false;
-  }
-  return block.text.trim().length === 0
-    && block.schema.placeholder.trim().length === 0
-    && !block.schema.fillIn;
 }
 
 export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {

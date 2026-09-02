@@ -104,17 +104,11 @@
   resize: vertical;
 }
 
-.hvy-document .grid-item-controls,
 .hvy-document .grid-add-bar {
   display: flex;
   gap: 0.45rem;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.hvy-document .compact-select {
-  width: auto;
-  min-width: 0;
 }
 
 .hvy-document .grid-columns-input,

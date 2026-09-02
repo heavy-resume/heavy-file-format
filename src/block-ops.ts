@@ -6,7 +6,7 @@ import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
 import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
-import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot, createEmptyBlock } from './document-factory';
+import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumnProperties, getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumnProperties, setTableColumns } from './table-ops';
@@ -446,34 +446,6 @@ export function handleBlockFieldInput(target: HTMLElement, options: { migrateFil
 
   if (field === 'block-grid-stack-never' && target instanceof HTMLInputElement) {
     block.schema.gridStackWidth = target.checked ? 'never' : DEFAULT_GRID_STACK_WIDTH;
-    syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
-    getRefreshReaderPanels()();
-    getRenderApp()();
-    return true;
-  }
-
-  if (field === 'block-grid-item-component' && target instanceof HTMLSelectElement) {
-    if (isPdfDocument(state.document) && !isPdfAllowedComponent(target.value, state.document.meta)) {
-      return true;
-    }
-    const gridItemId = target.dataset.gridItemId;
-    if (!gridItemId) {
-      return true;
-    }
-    ensureGridItems(block.schema);
-    const item = block.schema.gridItems.find((candidate) => candidate.id === gridItemId);
-    if (!item) {
-      return true;
-    }
-    const reusableInstance = instantiateReusableBlock(target.value);
-    if (reusableInstance) {
-      item.block = reusableInstance;
-      item.block.schema.component = target.value;
-    } else {
-      const previousBlockId = item.block.id;
-      item.block = createEmptyBlock(target.value);
-      item.block.id = previousBlockId;
-    }
     syncReusableTemplateForBlock(target.dataset.sectionKey ?? '', block.id);
     getRefreshReaderPanels()();
     getRenderApp()();

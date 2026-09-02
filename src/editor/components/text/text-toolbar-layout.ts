@@ -43,6 +43,7 @@ export function syncTextToolbarLayout(root: ParentNode): void {
       clearTextToolbarScrollBinding(shell);
       shell.style.removeProperty('--text-editor-toolbar-max-inline-size');
       shell.style.removeProperty('--text-editor-toolbar-offset-x');
+      shell.style.removeProperty('--text-editor-toolbar-offset-y');
       shell.style.removeProperty('--text-editor-toolbar-height');
       shell.classList.remove('is-text-toolbar-below');
       return;
@@ -283,6 +284,7 @@ function updateFloatingTextToolbarGeometry(shell: HTMLElement, toolbarSlot: HTML
   if (shell.closest('.editor-block:not([data-active-editor-block="true"])')) {
     shell.style.removeProperty('--text-editor-toolbar-max-inline-size');
     shell.style.removeProperty('--text-editor-toolbar-offset-x');
+    shell.style.removeProperty('--text-editor-toolbar-offset-y');
     shell.style.removeProperty('--text-editor-toolbar-height');
     shell.classList.remove('is-text-toolbar-below');
     return;
@@ -307,20 +309,106 @@ function updateFloatingTextToolbarGeometry(shell: HTMLElement, toolbarSlot: HTML
   }
   setStylePropertyIfChanged(shell, '--text-editor-toolbar-height', `${toolbarBox.height}px`);
 
-  const visibleTop = Math.max(boundaryBox.top, scrollportBox?.top ?? boundaryBox.top);
-  const visibleBottom = Math.min(boundaryBox.bottom, scrollportBox?.bottom ?? boundaryBox.bottom);
-  const hasRoomAbove = shellBox.top - visibleTop >= toolbarBox.height + FLOATING_TOOLBAR_GAP_PX;
-  const hasVisibleComponentBottom = shellBox.bottom <= visibleBottom - FLOATING_TOOLBAR_GAP_PX;
-  const toolbarIsBelow = !hasRoomAbove && hasVisibleComponentBottom;
-  shell.classList.toggle('is-text-toolbar-below', toolbarIsBelow);
-
   const preferredLeft = getPreferredTextToolbarLeft(shell, toolbarBox.width, shellBox);
   const minimumLeft = boundaryLeft + FLOATING_TOOLBAR_EDGE_INSET_PX;
   const maximumLeft = boundaryRight - FLOATING_TOOLBAR_EDGE_INSET_PX - toolbarBox.width;
-  const toolbarLeft = Math.min(Math.max(preferredLeft, minimumLeft), maximumLeft);
+  const visibleTop = Math.max(boundaryBox.top, scrollportBox?.top ?? boundaryBox.top);
+  const visibleBottom = Math.min(boundaryBox.bottom, scrollportBox?.bottom ?? boundaryBox.bottom);
+  const defaultToolbarTop = shellBox.top - FLOATING_TOOLBAR_GAP_PX - toolbarBox.height;
+  const expandedToolbar = toolbarSlot.querySelector<HTMLElement>(':scope > .rich-toolbar.is-text-toolbar-expanded');
+  const preferredToolbarLeft = Math.min(Math.max(preferredLeft, minimumLeft), maximumLeft);
+  const toolbarLeft = expandedToolbar
+    ? getTextToolbarLeftWithoutComponentControlOverlap(
+        shell,
+        preferredToolbarLeft,
+        minimumLeft,
+        maximumLeft,
+        defaultToolbarTop,
+        toolbarBox.width,
+        toolbarBox.height
+      )
+    : preferredToolbarLeft;
+  const toolbarRight = toolbarLeft + toolbarBox.width;
+  const toolbarTop = expandedToolbar
+    ? getTextToolbarTopWithoutComponentControlOverlap(
+        shell,
+        toolbarLeft,
+        toolbarRight,
+        defaultToolbarTop,
+        toolbarBox.height
+      )
+    : defaultToolbarTop;
+  const hasRoomAbove = toolbarTop >= visibleTop;
+  const hasVisibleComponentBottom = shellBox.bottom <= visibleBottom - FLOATING_TOOLBAR_GAP_PX;
+  const toolbarIsBelow = !hasRoomAbove && hasVisibleComponentBottom;
+  shell.classList.toggle('is-text-toolbar-below', toolbarIsBelow);
+  if (toolbarIsBelow) {
+    shell.style.removeProperty('--text-editor-toolbar-offset-y');
+  } else {
+    setStylePropertyIfChanged(
+      shell,
+      '--text-editor-toolbar-offset-y',
+      `${toolbarTop - defaultToolbarTop}px`
+    );
+  }
 
   setStylePropertyIfChanged(shell, '--text-editor-toolbar-offset-x', `${toolbarLeft - shellBox.left}px`);
   syncTextToolbarActionRow(shell, toolbarSlot, toolbarIsBelow);
+}
+
+function getTextToolbarLeftWithoutComponentControlOverlap(
+  shell: HTMLElement,
+  preferredLeft: number,
+  minimumLeft: number,
+  maximumLeft: number,
+  toolbarTop: number,
+  toolbarWidth: number,
+  toolbarHeight: number
+): number {
+  const controls = getTextToolbarComponentControlBoxes(shell);
+  const toolbarBottom = toolbarTop + toolbarHeight;
+  const verticalControls = controls.filter((control) => toolbarTop < control.bottom && toolbarBottom > control.top);
+  const candidates = [
+    preferredLeft,
+    minimumLeft,
+    maximumLeft,
+    ...verticalControls.flatMap((control) => [
+      control.left - FLOATING_TOOLBAR_GAP_PX - toolbarWidth,
+      control.right + FLOATING_TOOLBAR_GAP_PX,
+    ]),
+  ].map((candidate) => Math.min(Math.max(candidate, minimumLeft), maximumLeft))
+    .sort((left, right) => Math.abs(left - preferredLeft) - Math.abs(right - preferredLeft));
+  return candidates.find((candidate) => verticalControls.every(
+    (control) => candidate + toolbarWidth <= control.left || candidate >= control.right
+  )) ?? preferredLeft;
+}
+
+function getTextToolbarTopWithoutComponentControlOverlap(
+  shell: HTMLElement,
+  toolbarLeft: number,
+  toolbarRight: number,
+  defaultToolbarTop: number,
+  toolbarHeight: number
+): number {
+  const controls = getTextToolbarComponentControlBoxes(shell)
+    .filter((control) => toolbarLeft < control.right && toolbarRight > control.left)
+    .sort((left, right) => right.top - left.top);
+  return controls.reduce((toolbarTop, control) => {
+    const toolbarBottom = toolbarTop + toolbarHeight;
+    return toolbarTop < control.bottom && toolbarBottom > control.top
+      ? control.top - FLOATING_TOOLBAR_GAP_PX - toolbarHeight
+      : toolbarTop;
+  }, defaultToolbarTop);
+}
+
+function getTextToolbarComponentControlBoxes(shell: HTMLElement): DOMRect[] {
+  const activeBlock = shell.closest<HTMLElement>('.editor-block[data-active-editor-block="true"]');
+  if (!activeBlock) return [];
+  return [
+    ...Array.from(activeBlock.querySelectorAll<HTMLElement>(':scope > .editor-block-context-actions button')),
+    ...Array.from(activeBlock.querySelectorAll<HTMLElement>(':scope > .editor-block-head .editor-actions button')),
+    ...Array.from(activeBlock.querySelectorAll<HTMLElement>(':scope > .editor-block-remove-button')),
+  ].map((control) => control.getBoundingClientRect());
 }
 
 function syncTextToolbarActionRow(shell: HTMLElement, toolbarSlot: HTMLElement, toolbarIsBelow: boolean): void {
@@ -426,7 +514,9 @@ function bindTextToolbarVisibility(shell: HTMLElement): void {
       toolbar?.classList.add('is-text-toolbar-expanded');
       const toolbarSlot = shell.querySelector<HTMLElement>('.text-editor-toolbar-slot');
       if (toolbarSlot) {
+        shell.style.removeProperty('--text-editor-toolbar-offset-y');
         updateTextToolbarLayout(shell, toolbarSlot);
+        scheduleTextToolbarMeasurement(shell, toolbarSlot);
       }
       return;
     }

@@ -144,6 +144,10 @@ test('normalizes editor answer spacing and paragraph gaps', () => {
   expect(normalizeEditorMarkdownWhitespace('( )  One\n\n( ) Two')).toBe('( ) One\n( ) Two');
 });
 
+test('restores the separator after an answer marker when the caret anchor is removed', () => {
+  expect(normalizeEditorMarkdownWhitespace('[ ]\u200bMoo\n( )Cow')).toBe('[ ] Moo\n( ) Cow');
+});
+
 test('keeps checkbox marker text literal inside code', () => {
   const html = markdownToReaderHtml('`[ ]` stays literal\n\n```md\n[x] also literal\n```');
 

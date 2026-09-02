@@ -17,6 +17,7 @@
   --text-editor-toolbar-offset-x: 0.625rem;
   --text-editor-toolbar-height: 0px;
   --text-editor-toolbar-gap: 0.5rem;
+  --text-editor-toolbar-offset-y: 0px;
 
   position: relative;
   min-width: 0;
@@ -30,7 +31,11 @@
 
 .hvy-document .text-editor-toolbar-bounds {
   position: absolute;
-  top: calc(-1 * var(--text-editor-toolbar-height) - var(--text-editor-toolbar-gap));
+  top: calc(
+    -1 * var(--text-editor-toolbar-height)
+    - var(--text-editor-toolbar-gap)
+    + var(--text-editor-toolbar-offset-y)
+  );
   right: 0;
   bottom: var(--text-editor-toolbar-bottom-clearance);
   left: 0;

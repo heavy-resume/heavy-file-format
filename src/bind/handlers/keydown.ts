@@ -1,4 +1,4 @@
-import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, createKeyboardInsertedTableRow, syncReusableTemplateForBlock } from './_imports';
+import { state, getRenderApp, getRefreshReaderPanels, handleTagEditorKeydown, applyRichAction, handleInlineAnswerArrowNavigation, handleRichEditorKeydown, handleRichEditorKeyup, refreshRichToolbarState, openLinkInlineModal, closeAiEditPopover, submitAiEditRequest, handleInlineCheckboxBackspace, tagStateHelpers, findSectionByKey, createEmptyBlock, setActiveEditorBlock, recordHistory, assignSectionTitleAndGeneratedId, resolveBlockContext, getTableColumns, createKeyboardInsertedTableRow, syncReusableTemplateForBlock } from './_imports';
 import { completeCliInput } from '../../cli-ui/completion';
 import { applyCodeIndentation } from '../../code-indentation';
 import { refreshSearchFilterButton, selectAdjacentSearchResult } from '../../search/actions';
@@ -9,6 +9,15 @@ import { promoteTextToolbarHotkeyAction } from '../../editor/components/text/tex
 export function bindKeydown(app: HTMLElement): void {
   let pendingSortSelectExit: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
   let lastFocusedSortSelect: { select: HTMLSelectElement; richTarget: HTMLElement } | null = null;
+
+  app.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) return;
+    const richTarget = getRichTarget(event.target as HTMLElement);
+    if (!richTarget || !handleInlineAnswerArrowNavigation(event, richTarget)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    refreshRichToolbarState(richTarget);
+  }, { capture: true });
 
   app.addEventListener('focusin', (event) => {
     const target = event.target;

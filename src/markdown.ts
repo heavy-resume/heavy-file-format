@@ -186,20 +186,27 @@ export function markdownToEditorHtml(markdown: string, options: MarkdownRenderOp
     }
   });
   renderInlineCheckboxes(template.content);
-  markInlineCheckboxLines(template.content);
-  splitInlineAnswerLineContainers(template.content);
-  configureInlineAnswerControls(template.content, true);
+  normalizeInlineAnswerControls(template.content, true);
   preserveTrailingEditableSpaces(template.content);
   template.content.querySelectorAll<HTMLInputElement>('input[type="checkbox"], input[type="radio"]').forEach((checkbox) => {
     checkbox.removeAttribute('disabled');
     checkbox.setAttribute('contenteditable', 'false');
   });
+  removeDirectWhitespaceTextNodes(template.content);
   if (!template.content.hasChildNodes()) {
     const paragraph = document.createElement('p');
     paragraph.appendChild(document.createElement('br'));
     template.content.appendChild(paragraph);
   }
   return template.innerHTML;
+}
+
+function removeDirectWhitespaceTextNodes(root: ParentNode): void {
+  [...root.childNodes].forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim().length === 0) {
+      node.remove();
+    }
+  });
 }
 
 export function getRichEditorSerializableHtml(root: HTMLElement): string {
@@ -677,26 +684,91 @@ function wrapInlineCheckboxLines(html: string): string {
 function markInlineCheckboxLines(root: ParentNode): void {
   root.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox').forEach((checkbox) => {
     const parent = checkbox.parentElement;
-    if (!parent || !isLeadingInlineCheckbox(checkbox)) {
+    if (!parent) {
+      return;
+    }
+    if (root instanceof HTMLElement && parent === root && root.matches('.rich-editor')) {
+      removeEmptyRichEditorPrefix(checkbox);
+      wrapDirectInlineAnswerLine(root, checkbox);
+      return;
+    }
+    if (!isLeadingInlineCheckbox(checkbox)) {
       return;
     }
     parent.classList.add('hvy-inline-checkbox-line');
   });
 }
 
+function removeEmptyRichEditorPrefix(checkbox: HTMLInputElement): void {
+  const precedingNodes: ChildNode[] = [];
+  let current = checkbox.previousSibling;
+  while (current) {
+    precedingNodes.unshift(current);
+    current = current.previousSibling;
+  }
+  if (precedingNodes.length === 0 || !precedingNodes.every(isEmptyRichEditorPlaceholderNode)) {
+    return;
+  }
+  precedingNodes.forEach((node) => node.remove());
+}
+
+function isEmptyRichEditorPlaceholderNode(node: ChildNode): boolean {
+  if (node instanceof Text) {
+    return node.data.replace(/\u200b/g, '').trim().length === 0;
+  }
+  return node instanceof HTMLElement
+    && node.matches('p, div')
+    && [...node.childNodes].every((child) => (
+      child instanceof HTMLBRElement
+      || (child instanceof Text && child.data.replace(/\u200b/g, '').trim().length === 0)
+    ));
+}
+
+function wrapDirectInlineAnswerLine(root: HTMLElement, checkbox: HTMLInputElement): void {
+  const row = document.createElement('div');
+  row.className = 'hvy-inline-checkbox-line';
+  root.insertBefore(row, checkbox);
+  let current: ChildNode | null = checkbox;
+  while (current) {
+    const next: ChildNode | null = current.nextSibling;
+    if (current !== checkbox && isDirectInlineAnswerLineBoundary(current)) {
+      break;
+    }
+    row.appendChild(current);
+    current = next;
+  }
+}
+
+function isDirectInlineAnswerLineBoundary(node: ChildNode): boolean {
+  return node instanceof HTMLBRElement
+    || (node instanceof HTMLElement && /^(?:ADDRESS|BLOCKQUOTE|DIV|H[1-6]|HR|OL|P|PRE|TABLE|UL)$/.test(node.tagName));
+}
+
 function splitInlineAnswerLineContainers(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('.hvy-inline-checkbox-line').forEach((container) => {
-    if (!container.querySelector('br') || !container.querySelector('input.hvy-inline-checkbox')) return;
+    if (!container.querySelector('input.hvy-inline-checkbox')) return;
+    const hasStructuralAnswerBoundary = Boolean(container.querySelector(
+      '.hvy-radio-group-marker.is-group-end ~ input.hvy-inline-checkbox, input.hvy-inline-checkbox ~ .hvy-radio-group-marker:not(.is-group-end)'
+    ));
+    if (!container.querySelector('br') && !hasStructuralAnswerBoundary) return;
     const rows: HTMLDivElement[] = [document.createElement('div')];
     rows[0]!.className = 'hvy-inline-checkbox-line';
     [...container.childNodes].forEach((node) => {
-      if (node instanceof HTMLBRElement) {
+      const currentRow = rows[rows.length - 1]!;
+      const startsAfterGroupEnd = node instanceof HTMLInputElement
+        && node.classList.contains('hvy-inline-checkbox')
+        && Boolean(currentRow.querySelector('.hvy-radio-group-marker.is-group-end'));
+      const startsRadioGroup = node instanceof HTMLElement
+        && node.classList.contains('hvy-radio-group-marker')
+        && !node.classList.contains('is-group-end')
+        && Boolean(currentRow.querySelector('input.hvy-inline-checkbox'));
+      if (node instanceof HTMLBRElement || startsAfterGroupEnd || startsRadioGroup) {
         const row = document.createElement('div');
         row.className = 'hvy-inline-checkbox-line';
         rows.push(row);
-      } else {
-        rows[rows.length - 1]!.appendChild(node);
+        if (node instanceof HTMLBRElement) return;
       }
+      rows[rows.length - 1]!.appendChild(node);
     });
     container.replaceWith(...rows.filter((row) => row.childNodes.length > 0));
   });
@@ -740,6 +812,13 @@ function configureInlineAnswerControls(root: ParentNode, editable: boolean): voi
   }
 }
 
+/** Establishes the editor DOM invariants shared by rendered and newly inserted answers. */
+export function normalizeInlineAnswerControls(root: ParentNode, editable: boolean): void {
+  markInlineCheckboxLines(root);
+  splitInlineAnswerLineContainers(root);
+  configureInlineAnswerControls(root, editable);
+}
+
 function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
   let previous = checkbox.previousSibling;
   while (previous) {
@@ -764,8 +843,12 @@ function isStructuralInlineMarker(element: Element): boolean {
 
 export function normalizeEditorMarkdownWhitespace(markdown: string): string {
   const normalized = markdown.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
-  const withSingleMarkerSpacing = normalized.replace(
+  const withCollapsedMarkerSpacing = normalized.replace(
     /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))[ \t]+/gm,
+    '$1 '
+  );
+  const withSingleMarkerSpacing = withCollapsedMarkerSpacing.replace(
+    /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))(?=\S)/gm,
     '$1 '
   );
   let compacted = withSingleMarkerSpacing;

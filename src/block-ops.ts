@@ -11,15 +11,15 @@ import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
 import { normalizeXrefTarget, getXrefTargetOptions, isXrefTargetValid, applyXrefTargetDefaults, getEffectiveXrefTargetTagFilter } from './xref-ops';
 import { getTableColumnProperties, getTableColumns, isEmptyTableRow, pruneEmptyKeyboardInsertedTableRows, setTableColumnProperties, setTableColumns } from './table-ops';
 import { coerceGridColumns, coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from './grid-ops';
-import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
+import { applyMobileAltAdjustment, getRichEditorSerializableHtml, normalizeEditorMarkdownWhitespace, normalizeInlineAnswerControls, normalizeMarkdownLists, markdownToEditorHtml as renderMarkdownToEditorHtml, removeNonTextContentFromRichEditor, turndown } from './markdown';
 import { applyCodeIndentation } from './code-indentation';
 import { renderAddComponentPicker } from './editor/component-picker';
 import { escapeAttr, escapeHtml, getInlineEditableText, renderOption, sanitizeOptionalId } from './utils';
 import { recordHistory } from './history';
 import { getDocumentComponentDefaultCss } from './document-component-defaults';
 import { resetDbTableViewState } from './plugins/db-table-model';
-import { handleInlineCheckboxBackspace } from './editor/inline-checkbox';
-import { renderInlineAnswerGroupOption } from './editor/components/text/text';
+import { handleInlineCheckboxBackspace, INLINE_CHECKBOX_CARET_ANCHOR } from './editor/inline-checkbox';
+import { renderInlineAnswerGroupOption, renderTextRichEditorContent } from './editor/components/text/text';
 import {
   getInlineAnswerGroupIndex,
   getNearbyRadioGroupNames,
@@ -41,6 +41,7 @@ import { sanitizeInlineCss } from './css-sanitizer';
 import { syncTextToolbarContextActions } from './editor/components/text/text-toolbar-layout';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
+const inlineAnswerSelectionSnapshots = new WeakMap<HTMLElement, ContentReplacementSelectionSnapshot>();
 const HVY_RICH_CLIPBOARD_TYPE = 'application/x-hvy-rich-html';
 const CODE_BLOCK_ENTER_SUPPRESS_MS = 300;
 
@@ -2587,7 +2588,7 @@ export function handleRichEditorClick(event: MouseEvent, editable: HTMLElement):
   const answerRow = findInlineAnswerRowAtPointer(editable, event);
   if (answerRow && editable.contains(answerRow)) {
     if (event.clientX > getInlineAnswerRowContentRight(answerRow)) {
-      placeCaretAtEnd(answerRow);
+      placeCaretAtInlineAnswerRowEnd(answerRow);
       updateRichToolbarState(editable);
       return true;
     }
@@ -2613,10 +2614,18 @@ export function handleRichEditorPointerDown(event: MouseEvent, editable: HTMLEle
   if (event.button !== 0 || !(event.target instanceof Element)) return false;
   const answerRow = findInlineAnswerRowAtPointer(editable, event);
   if (!answerRow) return false;
+  const firstControl = answerRow.querySelector<HTMLInputElement>('input.hvy-inline-checkbox');
+  if (firstControl && event.clientX < firstControl.getBoundingClientRect().left) {
+    event.preventDefault();
+    editable.focus({ preventScroll: true });
+    placeCaretBeforeInlineAnswerControl(answerRow);
+    updateRichToolbarState(editable);
+    return true;
+  }
   if (event.clientX <= getInlineAnswerRowContentRight(answerRow)) return false;
   event.preventDefault();
   editable.focus({ preventScroll: true });
-  placeCaretAtEnd(answerRow);
+  placeCaretAtInlineAnswerRowEnd(answerRow);
   updateRichToolbarState(editable);
   return true;
 }
@@ -2632,15 +2641,25 @@ function findInlineAnswerRowAtPointer(editable: HTMLElement, event: MouseEvent):
   }) ?? null;
 }
 
-function getInlineAnswerRowContentRight(row: HTMLElement): number {
+function getInlineAnswerRowTextNodes(row: HTMLElement): Text[] {
   const textNodes: Text[] = [];
   const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
   while (node) {
-    if (node instanceof Text && (node.textContent ?? '').trim().length > 0) textNodes.push(node);
+    if (
+      node instanceof Text
+      && (node.textContent ?? '').trim().length > 0
+      && !node.parentElement?.closest('.hvy-radio-group-marker')
+    ) {
+      textNodes.push(node);
+    }
     node = walker.nextNode();
   }
-  const lastText = textNodes.at(-1);
+  return textNodes;
+}
+
+function getInlineAnswerRowContentRight(row: HTMLElement): number {
+  const lastText = getInlineAnswerRowTextNodes(row).at(-1);
   if (lastText) {
     const range = document.createRange();
     range.selectNodeContents(lastText);
@@ -2648,6 +2667,37 @@ function getInlineAnswerRowContentRight(row: HTMLElement): number {
   }
   return row.querySelector<HTMLElement>('input.hvy-inline-checkbox:last-of-type')?.getBoundingClientRect().right
     ?? row.getBoundingClientRect().left;
+}
+
+function placeCaretAtInlineAnswerRowEnd(row: HTMLElement): void {
+  const visibleText = getInlineAnswerRowTextNodes(row).at(-1);
+  if (visibleText) {
+    setCollapsedSelection(visibleText, visibleText.length);
+    return;
+  }
+  const control = row.querySelector<HTMLInputElement>('input.hvy-inline-checkbox:last-of-type');
+  if (!control) {
+    placeCaretAtEnd(row);
+    return;
+  }
+  let anchor = control.nextSibling instanceof Text ? control.nextSibling : null;
+  if (!anchor || anchor.data.replaceAll(INLINE_CHECKBOX_CARET_ANCHOR, '').trim().length > 0) {
+    anchor = document.createTextNode(INLINE_CHECKBOX_CARET_ANCHOR);
+    control.parentNode?.insertBefore(anchor, control.nextSibling);
+  } else if (!anchor.data.includes(INLINE_CHECKBOX_CARET_ANCHOR)) {
+    anchor.data += INLINE_CHECKBOX_CARET_ANCHOR;
+  }
+  setCollapsedSelection(anchor, anchor.length);
+}
+
+function setCollapsedSelection(node: Node, offset: number): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.setStart(node, offset);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 /**
@@ -2664,9 +2714,15 @@ export function applyInlineAnswerTypeChoice(
   const start = Number.parseInt(control.dataset.answerStart ?? '', 10);
   const end = Number.parseInt(control.dataset.answerEnd ?? '', 10);
   const block = findBlockByIds(sectionKey, blockId);
-  if (!block || block.schema.kind !== 'text' || Number.isNaN(start) || Number.isNaN(end)) {
+  const shell = control.closest<HTMLElement>('.text-editor-shell');
+  const editable = shell?.querySelector<HTMLElement>('.rich-editor[data-field="block-rich"]');
+  if (!block || block.schema.kind !== 'text' || Number.isNaN(start) || Number.isNaN(end) || !shell || !editable) {
     return false;
   }
+  const selectionSnapshot = captureSelectionForContentReplacement(editable)
+    ?? inlineAnswerSelectionSnapshots.get(shell)
+    ?? null;
+  inlineAnswerSelectionSnapshots.delete(shell);
   recordHistory(`inline-answer-type:${blockId}`);
   block.text = convertInlineAnswerMarkerRange(block.text, start, end, choice.radio);
   const incomingName = getIncomingRadioGroupName(sectionKey, blockId);
@@ -2679,9 +2735,13 @@ export function applyInlineAnswerTypeChoice(
   );
   syncReusableTemplateForBlock(sectionKey, blockId);
   invalidateInlineAnswerGroupIndex();
-  // Changing marker type and group membership is structural, so a full rerender is
-  // the honest response here rather than patching the editor DOM in place.
-  getRenderApp()();
+  editable.innerHTML = renderTextRichEditorContent(sectionKey, block, getCachedComponentRenderHelpers());
+  if (selectionSnapshot && restoreSelectionAfterContentReplacement(editable, selectionSnapshot)) {
+    refocusEditablePreservingSelection(editable);
+  }
+  updateInlineAnswerModeSwitch(shell);
+  updateRichToolbarState(editable);
+  refreshReaderPanelsOutsideActiveEditor(editable);
   return true;
 }
 
@@ -2798,36 +2858,19 @@ function updateInlineAnswerModeSwitch(shell: HTMLElement | null, selectedInput: 
     if (nameForm) nameForm.hidden = true;
     return;
   }
-  // Answers stacked on their own lines are configured as one run. A marker embedded in
-  // prose has no answer line of its own, so it is a run of one.
-  const row = input.closest<HTMLElement>('li, .hvy-inline-checkbox-line');
-  const rows: HTMLElement[] = [];
-  if (row) {
-    rows.push(row);
-    let previous = row.previousElementSibling;
-    while (previous instanceof HTMLElement && previous.querySelector('input.hvy-inline-checkbox')) {
-      rows.unshift(previous);
-      previous = previous.previousElementSibling;
-    }
-    let next = row.nextElementSibling;
-    while (next instanceof HTMLElement && next.querySelector('input.hvy-inline-checkbox')) {
-      rows.push(next);
-      next = next.nextElementSibling;
-    }
+  const editable = shell?.querySelector<HTMLElement>('.rich-editor[data-field="block-rich"]');
+  const selectionSnapshot = editable ? captureSelectionForContentReplacement(editable) : null;
+  if (shell && selectionSnapshot) {
+    inlineAnswerSelectionSnapshots.set(shell, selectionSnapshot);
   }
-  const indexes = (rows.length > 0
-    ? rows.flatMap((candidate) => [...candidate.querySelectorAll<HTMLInputElement>('input.hvy-inline-checkbox')])
-    : [input]
-  ).flatMap((candidateInput) => {
-    const value = Number.parseInt(candidateInput.dataset.answerIndex ?? '', 10);
-    return Number.isNaN(value) ? [] : [value];
-  });
-  if (indexes.length === 0) {
+  const row = input.closest<HTMLElement>('li, .hvy-inline-checkbox-line');
+  const answerIndex = Number.parseInt(input.dataset.answerIndex ?? '', 10);
+  if (Number.isNaN(answerIndex)) {
     control.hidden = true;
     return;
   }
-  control.dataset.answerStart = String(Math.min(...indexes));
-  control.dataset.answerEnd = String(Math.max(...indexes));
+  control.dataset.answerStart = String(answerIndex);
+  control.dataset.answerEnd = String(answerIndex);
   const sectionKey = control.dataset.sectionKey ?? '';
   const blockId = control.dataset.blockId ?? '';
   const selectedGroupName = input.type === 'radio'
@@ -2858,7 +2901,7 @@ function updateInlineAnswerModeSwitch(shell: HTMLElement | null, selectedInput: 
   // Unhide before measuring: a hidden control has no height to clamp against.
   control.hidden = false;
   const shellRect = shell?.getBoundingClientRect();
-  const anchorRect = (rows[0] ?? input).getBoundingClientRect();
+  const anchorRect = (row ?? input).getBoundingClientRect();
   if (shellRect) {
     const maxTop = Math.max(0, shellRect.height - control.offsetHeight);
     control.style.top = `${Math.min(Math.max(0, anchorRect.top - shellRect.top), maxTop)}px`;
@@ -2989,6 +3032,12 @@ function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): b
 }
 
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (handleInlineAnswerArrowNavigation(event, editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (event.key === 'ArrowRight' && moveCaretAfterFocusedSortValueControl(event, editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
@@ -3116,6 +3165,13 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   if (event.key === 'Enter') {
+    if (insertParagraphBeforeInlineAnswerRowAtSelection(editable)) {
+      event.preventDefault();
+      editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      updateRichToolbarState(editable);
+      return true;
+    }
+
     if (exitEmptyListItemAtSelection(editable)) {
       event.preventDefault();
       editable.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -3160,6 +3216,74 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   return false;
+}
+
+export function handleInlineAnswerArrowNavigation(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (
+    event.shiftKey
+    || event.altKey
+    || event.ctrlKey
+    || event.metaKey
+    || !['ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)
+  ) {
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) return false;
+  const block = getSelectionBlockElement(editable);
+  if (!block || block === editable) return false;
+  const isAnswerRow = block.classList.contains('hvy-inline-checkbox-line');
+
+  if (event.key === 'ArrowDown') {
+    const next = block.nextElementSibling;
+    if (
+      next instanceof HTMLElement
+      && next.classList.contains('hvy-inline-checkbox-line')
+      && (isEffectivelyEmptyBlock(block) || (isAnswerRow && isSelectionAtInlineAnswerLeadingEdge(range, block)))
+    ) {
+      placeCaretBeforeInlineAnswerControl(next);
+      return true;
+    }
+    return false;
+  }
+
+  if (event.key === 'ArrowLeft' && isAnswerRow && isSelectionAtInlineAnswerLeadingEdge(range, block)) {
+    placeCaretBeforeInlineAnswerControl(block);
+    return true;
+  }
+  if (!isAnswerRow || !isSelectionAtInlineAnswerLeadingEdge(range, block)) return false;
+  if (event.key === 'ArrowUp') {
+    const previous = block.previousElementSibling;
+    if (previous instanceof HTMLElement) {
+      if (previous.classList.contains('hvy-inline-checkbox-line')) {
+        placeCaretBeforeInlineAnswerControl(previous);
+      } else {
+        placeCaretAtStart(previous);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+function placeCaretBeforeInlineAnswerControl(row: HTMLElement): void {
+  const control = row.querySelector('input.hvy-inline-checkbox');
+  const selection = window.getSelection();
+  if (!control || !selection) return;
+  const range = document.createRange();
+  range.setStartBefore(control);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function isSelectionAtInlineAnswerLeadingEdge(range: Range, row: HTMLElement): boolean {
+  const contentBeforeCaret = range.cloneRange();
+  contentBeforeCaret.selectNodeContents(row);
+  contentBeforeCaret.setEnd(range.startContainer, range.startOffset);
+  const prefix = contentBeforeCaret.cloneContents();
+  prefix.querySelectorAll('input.hvy-inline-checkbox, .hvy-radio-group-marker').forEach((node) => node.remove());
+  return (prefix.textContent ?? '').replaceAll(INLINE_CHECKBOX_CARET_ANCHOR, '').trim().length === 0;
 }
 
 export function handleRichEditorBeforeInput(event: InputEvent, editable: HTMLElement): boolean {
@@ -3750,6 +3874,10 @@ function insertParagraphAtEditableSelection(editable: HTMLElement): boolean {
     return false;
   }
 
+  if (insertParagraphBeforeInlineAnswerRowAtSelection(editable, range)) {
+    return true;
+  }
+
   if (!range.collapsed) {
     range.deleteContents();
   }
@@ -3767,6 +3895,42 @@ function insertParagraphAtEditableSelection(editable: HTMLElement): boolean {
   ensureEditableParagraphContent(nextBlock);
   block.parentNode?.insertBefore(nextBlock, block.nextSibling);
   placeCaretAtStart(nextBlock);
+  return true;
+}
+
+function insertParagraphBeforeInlineAnswerRowAtSelection(
+  editable: HTMLElement,
+  selectionRange?: Range
+): boolean {
+  const range = selectionRange ?? getEditableSelectionRange(editable);
+  const selectionElement = range?.startContainer instanceof Element
+    ? range.startContainer
+    : range?.startContainer.parentElement;
+  const block = selectionElement?.closest<HTMLElement>('.hvy-inline-checkbox-line') ?? null;
+  if (
+    !range
+    || !block
+    || !range.collapsed
+    || !block.classList.contains('hvy-inline-checkbox-line')
+    || !block.querySelector('input.hvy-inline-checkbox')
+    || !editable.contains(block)
+  ) {
+    return false;
+  }
+
+  const contentBeforeCaret = range.cloneRange();
+  contentBeforeCaret.selectNodeContents(block);
+  contentBeforeCaret.setEnd(range.startContainer, range.startOffset);
+  const prefix = contentBeforeCaret.cloneContents();
+  prefix.querySelectorAll('input.hvy-inline-checkbox, .hvy-radio-group-marker').forEach((node) => node.remove());
+  if ((prefix.textContent ?? '').replaceAll(INLINE_CHECKBOX_CARET_ANCHOR, '').trim().length > 0) {
+    return false;
+  }
+
+  const paragraph = document.createElement('p');
+  paragraph.appendChild(document.createElement('br'));
+  block.parentNode?.insertBefore(paragraph, block);
+  placeCaretAtStart(paragraph);
   return true;
 }
 
@@ -4617,6 +4781,96 @@ function getTextPositionAtOffset(root: HTMLElement, targetOffset: number): { nod
   return null;
 }
 
+interface ContentReplacementSelectionPoint {
+  text: string | null;
+  occurrence: number;
+  offset: number;
+  textOffset: number;
+}
+
+interface ContentReplacementSelectionSnapshot {
+  start: ContentReplacementSelectionPoint;
+  end: ContentReplacementSelectionPoint;
+}
+
+function captureSelectionForContentReplacement(root: HTMLElement): ContentReplacementSelectionSnapshot | null {
+  const range = getEditableSelectionRange(root);
+  if (!range) return null;
+  const textNodes = getContentReplacementTextNodes(root);
+  const capturePoint = (container: Node, offset: number): ContentReplacementSelectionPoint => {
+    const nodeIndex = container instanceof Text ? textNodes.indexOf(container) : -1;
+    const text = nodeIndex >= 0 ? container.textContent ?? '' : null;
+    return {
+      text,
+      occurrence: text === null
+        ? -1
+        : textNodes.slice(0, nodeIndex).filter((node) => node.textContent === text).length,
+      offset,
+      textOffset: getContentReplacementTextOffset(root, container, offset),
+    };
+  };
+  return {
+    start: capturePoint(range.startContainer, range.startOffset),
+    end: capturePoint(range.endContainer, range.endOffset),
+  };
+}
+
+function restoreSelectionAfterContentReplacement(
+  root: HTMLElement,
+  snapshot: ContentReplacementSelectionSnapshot
+): boolean {
+  const textNodes = getContentReplacementTextNodes(root);
+  const restorePoint = (point: ContentReplacementSelectionPoint): { node: Text; offset: number } | null => {
+    if (point.text !== null) {
+      const matching = textNodes.filter((node) => node.textContent === point.text);
+      const node = matching[point.occurrence];
+      if (node) return { node, offset: Math.min(point.offset, node.length) };
+    }
+    let remaining = point.textOffset;
+    for (const node of textNodes) {
+      if (remaining <= node.length) return { node, offset: remaining };
+      remaining -= node.length;
+    }
+    return null;
+  };
+  const start = restorePoint(snapshot.start);
+  const end = restorePoint(snapshot.end);
+  const selection = window.getSelection();
+  if (!start || !end || !selection) return false;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+function getContentReplacementTextNodes(root: HTMLElement): Text[] {
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    if (current instanceof Text && !current.parentElement?.closest('[contenteditable="false"]')) {
+      nodes.push(current);
+    }
+    current = walker.nextNode();
+  }
+  return nodes;
+}
+
+function getContentReplacementTextOffset(root: HTMLElement, container: Node, offset: number): number {
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  try {
+    range.setEnd(container, offset);
+  } catch {
+    return 0;
+  }
+  const fragment = range.cloneContents();
+  fragment.querySelectorAll('[contenteditable="false"]').forEach((node) => node.remove());
+  return fragment.textContent?.length ?? 0;
+}
+
 function getTextOffset(root: HTMLElement, container: Node, offset: number): number | null {
   if (container !== root && !root.contains(container)) {
     return null;
@@ -5257,33 +5511,13 @@ function insertInlineCheckboxAtSelection(editable: HTMLElement): void {
   checkbox.type = 'checkbox';
   checkbox.classList.add('hvy-inline-checkbox');
   checkbox.setAttribute('contenteditable', 'false');
-  const spacer = document.createTextNode(' ');
+  const spacer = document.createTextNode(INLINE_CHECKBOX_CARET_ANCHOR);
   const fragment = document.createDocumentFragment();
   fragment.appendChild(checkbox);
   fragment.appendChild(spacer);
   normalizedRange.insertNode(fragment);
-  markInlineCheckboxLine(checkbox);
+  normalizeInlineAnswerControls(editable, true);
   placeCaretAfterInlineCheckbox(spacer, editable);
-}
-
-function markInlineCheckboxLine(checkbox: HTMLInputElement): void {
-  const parent = checkbox.parentElement;
-  if (!parent || !isLeadingInlineCheckbox(checkbox)) {
-    return;
-  }
-  parent.classList.add('hvy-inline-checkbox-line');
-}
-
-function isLeadingInlineCheckbox(checkbox: HTMLInputElement): boolean {
-  let previous = checkbox.previousSibling;
-  while (previous) {
-    if (previous.nodeType === Node.TEXT_NODE && (previous.textContent ?? '').trim().length === 0) {
-      previous = previous.previousSibling;
-      continue;
-    }
-    return false;
-  }
-  return true;
 }
 
 export function syncEditableTaskListMarkup(editable: HTMLElement, markdown: string): void {

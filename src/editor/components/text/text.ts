@@ -76,9 +76,7 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
       </div>
     `;
   }
-  const editorHtml = fillInParts.length > 1
-    ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
-    : renderMarkdownEditorHtmlWithSortValues(block.text, sectionKey, block, helpers, codeLanguageInputAttrs);
+  const editorHtml = renderTextRichEditorContent(sectionKey, block, helpers, fillInParts);
   const mobileAdjustment = helpers.isMobileAdjustmentMode();
   const sortValueDefs = getSortValueDefsForEditorBlock(sectionKey, block);
   const useAsSelectionControl = mobileAdjustment
@@ -105,6 +103,20 @@ export const renderTextEditor: ComponentEditorRenderer = (sectionKey, block, hel
   </div>
 `;
 };
+
+export function renderTextRichEditorContent(
+  sectionKey: string,
+  block: Parameters<ComponentEditorRenderer>[1],
+  helpers: Parameters<ComponentEditorRenderer>[2],
+  fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : []
+): string {
+  return fillInParts.length > 1
+    ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
+    : renderMarkdownEditorHtmlWithSortValues(block.text, sectionKey, block, helpers, {
+      'data-section-key': sectionKey,
+      'data-block-id': block.id,
+    });
+}
 
 function renderInlineAnswerModeSwitch(
   sectionKey: string,
@@ -144,7 +156,6 @@ function renderInlineAnswerModeSwitch(
         type="text"
         autocomplete="off"
         spellcheck="false"
-        placeholder="contact"
       >
       <div class="choice-mode-name-actions">
         <button type="submit" class="secondary choice-mode-name-confirm">Confirm</button>

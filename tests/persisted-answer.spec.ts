@@ -92,14 +92,29 @@ test('survey editable text preserves reader scroll while typing', async ({ page 
   expect(await editor.evaluate((node) => node.getBoundingClientRect().top)).toBe(topBefore);
 });
 
-test('the answer type popover converts a run without answering it', async ({ page }) => {
+test('the answer type popover converts only the clicked answer without answering it', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.document-menu').evaluate((menu) => {
-    if (menu instanceof HTMLDetailsElement) menu.open = true;
-  });
-  await page.locator('.document-menu-panel').getByRole('button', { name: 'Survey Example', exact: true }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
 
-  await page.locator('.editor-block-passive', { hasText: 'Excellent' }).click();
+<!--hvy: {"id":"survey"}-->
+#! Survey
+
+ <!--hvy:text {"id":"rating"}-->
+  <!--hvy:radio-group rating-->
+  ( ) Excellent
+  ( ) Good
+  ( ) Fair
+  ( ) Poor
+  <!--hvy:radio-group-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="rating"]'),
+  }).click();
   const activeEditor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
   await expect(activeEditor.locator('input[type="radio"]')).toHaveCount(4);
 
@@ -110,7 +125,11 @@ test('the answer type popover converts a run without answering it', async ({ pag
   await expect(activeEditor.locator('input[type="radio"]').nth(1)).not.toBeChecked();
 
   await popover.locator('[data-answer-type="checkbox"]').click();
-  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="checkbox"]')).toHaveCount(4);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="checkbox"]')).toHaveCount(1);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="radio"]')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Viewer' }).click();
+  await expect(page.locator('#readerDocument input[type="radio"]')).toHaveCount(3);
+  await expect(page.locator('#readerDocument input[type="checkbox"]')).toHaveCount(1);
 });
 
 test('a new radio group spans components and clears selections across them', async ({ page }) => {
@@ -145,18 +164,22 @@ hvy_version: 0.1
   await popover.locator('.choice-mode-name-input').fill('contact');
   await popover.locator('.choice-mode-name-confirm').click();
 
-  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="radio"]')).toHaveCount(2);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="radio"]')).toHaveCount(1);
+  await expect(page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input[type="checkbox"]')).toHaveCount(1);
 
   await page.locator('.editor-block-passive', { hasText: 'Postal mail' }).first().click();
-  await page.locator('.editor-block[data-active-editor-block="true"] .rich-editor input').first().click();
+  const fallbackEditor = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator(':scope > .editor-block-content[data-component-id="fallback"]'),
+  }).locator('.rich-editor');
+  await fallbackEditor.locator('input').click();
   await expect(popover.locator('.choice-mode-group-option', { hasText: 'contact' })).toBeVisible();
   await popover.locator('.choice-mode-group-option', { hasText: 'contact' }).click();
 
   await page.getByRole('button', { name: 'Viewer' }).click();
   const radios = page.locator('#readerDocument input[type="radio"]');
-  await expect(radios).toHaveCount(3);
+  await expect(radios).toHaveCount(2);
   await radios.nth(0).check();
-  await radios.nth(2).check();
+  await radios.nth(1).check();
 
   await expect(radios.nth(0)).not.toBeChecked();
   expect(await page.evaluate(async () => {
@@ -165,8 +188,8 @@ hvy_version: 0.1
       state.document.sections.flatMap((section) => section.blocks).map((block) => [block.schema.id, block.text])
     );
   })).toEqual({
-    preferred: '<!--hvy:radio-group contact-->\n( ) Email\n( ) Phone',
-    fallback: '(x) Postal mail',
+    preferred: '<!--hvy:radio-group contact-->\n( ) Email\n<!--hvy:radio-group-->\n[ ] Phone',
+    fallback: '<!--hvy:radio-group contact-->\n(x) Postal mail',
   });
 });
 

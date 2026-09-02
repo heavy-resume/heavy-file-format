@@ -1,3 +1,5 @@
+export const INLINE_CHECKBOX_CARET_ANCHOR = '\u200b';
+
 export function handleInlineCheckboxBackspace(editable: HTMLElement): boolean {
   const selection = window.getSelection();
   if (!selection?.rangeCount || !selection.isCollapsed) {
@@ -39,13 +41,13 @@ function findInlineCheckboxRemovalTarget(
     if (offset === 0 && node.previousSibling instanceof HTMLInputElement && node.previousSibling.type === 'checkbox') {
       return { checkbox: node.previousSibling, spacer: null, container: node.parentNode };
     }
-    if (offset === 0 && node.data.startsWith(' ') && node.previousSibling instanceof HTMLInputElement && node.previousSibling.type === 'checkbox') {
+    if (offset === 0 && isInlineCheckboxSpacer(node) && node.previousSibling instanceof HTMLInputElement && node.previousSibling.type === 'checkbox') {
       return { checkbox: node.previousSibling, spacer: node, container: node.parentNode };
     }
-    if (offset === 1 && node.data.startsWith(' ') && node.previousSibling instanceof HTMLInputElement && node.previousSibling.type === 'checkbox') {
+    if (offset === 1 && isInlineCheckboxSpacer(node) && node.previousSibling instanceof HTMLInputElement && node.previousSibling.type === 'checkbox') {
       return { checkbox: node.previousSibling, spacer: node, container: node.parentNode };
     }
-    if (offset === 0 && node.previousSibling instanceof Text && node.previousSibling.data.startsWith(' ')) {
+    if (offset === 0 && node.previousSibling instanceof Text && isInlineCheckboxSpacer(node.previousSibling)) {
       const checkbox = node.previousSibling.previousSibling;
       if (checkbox instanceof HTMLInputElement && checkbox.type === 'checkbox') {
         return { checkbox, spacer: node.previousSibling, container: node.parentNode };
@@ -55,7 +57,7 @@ function findInlineCheckboxRemovalTarget(
   }
   if (node instanceof HTMLElement || node instanceof DocumentFragment) {
     if (node instanceof HTMLInputElement && node.type === 'checkbox' && editable.contains(node)) {
-      const spacer = node.nextSibling instanceof Text && node.nextSibling.data.startsWith(' ') ? node.nextSibling : null;
+      const spacer = node.nextSibling instanceof Text && isInlineCheckboxSpacer(node.nextSibling) ? node.nextSibling : null;
       return { checkbox: node, spacer, container: node.parentNode };
     }
     if (offset <= 1 && node === editable) {
@@ -73,10 +75,10 @@ function findInlineCheckboxRemovalTarget(
     const previousNode = node.childNodes[offset - 1] ?? null;
     const nextNode = node.childNodes[offset] ?? null;
     if (previousNode instanceof HTMLInputElement && previousNode.type === 'checkbox' && editable.contains(previousNode)) {
-      const spacer = nextNode instanceof Text && nextNode.data.startsWith(' ') ? nextNode : null;
+      const spacer = nextNode instanceof Text && isInlineCheckboxSpacer(nextNode) ? nextNode : null;
       return { checkbox: previousNode, spacer, container: node };
     }
-    if (previousNode instanceof Text && previousNode.data.startsWith(' ')) {
+    if (previousNode instanceof Text && isInlineCheckboxSpacer(previousNode)) {
       const checkbox = previousNode.previousSibling;
       if (checkbox instanceof HTMLInputElement && checkbox.type === 'checkbox' && editable.contains(checkbox)) {
         return { checkbox, spacer: previousNode, container: node };
@@ -92,13 +94,17 @@ function findLeadingCheckbox(
 ): { checkbox: HTMLInputElement; spacer: Node | null; container: Node | null } | null {
   const firstNode = node.childNodes[0] ?? null;
   if (firstNode instanceof HTMLInputElement && firstNode.type === 'checkbox' && editable.contains(firstNode)) {
-    const spacer = firstNode.nextSibling instanceof Text && firstNode.nextSibling.data.startsWith(' ') ? firstNode.nextSibling : null;
+    const spacer = firstNode.nextSibling instanceof Text && isInlineCheckboxSpacer(firstNode.nextSibling) ? firstNode.nextSibling : null;
     return { checkbox: firstNode, spacer, container: node };
   }
   if (firstNode instanceof HTMLElement) {
     return findLeadingCheckbox(firstNode, editable);
   }
   return null;
+}
+
+function isInlineCheckboxSpacer(node: Text): boolean {
+  return node.data.startsWith(' ') || node.data.startsWith(INLINE_CHECKBOX_CARET_ANCHOR);
 }
 
 function setCollapsedSelection(node: Node, offset: number): void {

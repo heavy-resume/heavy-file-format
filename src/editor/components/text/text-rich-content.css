@@ -472,10 +472,12 @@
 .hvy-document .rich-editor .hvy-inline-checkbox-line {
   display: flex;
   align-items: center;
+  min-height: 1lh;
+  margin: 0;
 }
 
 .hvy-document .rich-editor .hvy-inline-checkbox-line input.hvy-inline-checkbox {
-  margin: 0 0.42rem 0 0;
+  margin: 0 0.42rem 0 0.22rem;
 }
 
 .hvy-document .rich-editor input[type='checkbox']::before {
@@ -512,6 +514,7 @@
 
 .hvy-document .rich-editor input.hvy-inline-radio {
   all: initial;
+  color: inherit;
   appearance: none;
   -webkit-appearance: none;
   box-sizing: border-box;

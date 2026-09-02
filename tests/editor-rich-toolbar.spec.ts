@@ -1649,7 +1649,7 @@ test('plugin text editor hotkeys promote their actions in compact history', asyn
   ]);
 });
 
-test('grid text editor uses an unsquashed floating toolbar that stays inside the editor surface', async ({ page }) => {
+test('grid text editor uses an unsquashed floating toolbar without covering component controls', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -1682,6 +1682,22 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
     has: page.locator(':scope > .editor-block-content[data-component-id="grid-text"]'),
   });
   await expandTextToolbar(activeTextBlock.locator('.rich-toolbar').first());
+  await expect.poll(() => activeTextBlock.evaluate((block) => {
+    const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
+    if (!toolbar) return -1;
+    const toolbarBox = toolbar.getBoundingClientRect();
+    return [
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-context-actions button')),
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-head .editor-actions button')),
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-remove-button')),
+    ].filter((control) => {
+      const controlBox = control.getBoundingClientRect();
+      return toolbarBox.left < controlBox.right
+        && toolbarBox.right > controlBox.left
+        && toolbarBox.top < controlBox.bottom
+        && toolbarBox.bottom > controlBox.top;
+    }).length;
+  })).toBe(0);
   const metrics = await activeTextBlock.evaluate((block) => {
     const toolbar = block.querySelector<HTMLElement>('.text-editor-toolbar-slot');
     const gridCell = block.closest<HTMLElement>('.grid-field-row');
@@ -1693,6 +1709,20 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
     const toolbarBox = toolbar.getBoundingClientRect();
     const gridCellBox = gridCell.getBoundingClientRect();
     const editorBodyBox = editorBody.getBoundingClientRect();
+    const componentControls = [
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-context-actions button')),
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-head .editor-actions button')),
+      ...Array.from(block.querySelectorAll<HTMLElement>(':scope > .editor-block-remove-button')),
+    ];
+    const coveredComponentControls = componentControls
+      .filter((control) => {
+        const controlBox = control.getBoundingClientRect();
+        return toolbarBox.left < controlBox.right
+          && toolbarBox.right > controlBox.left
+          && toolbarBox.top < controlBox.bottom
+          && toolbarBox.bottom > controlBox.top;
+      })
+      .map((control) => control.getAttribute('aria-label') ?? control.textContent?.trim() ?? '');
     scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + 180);
     const scrolledToolbarBox = toolbar.getBoundingClientRect();
     const scrollerBox = scroller.getBoundingClientRect();
@@ -1701,9 +1731,9 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
       gridCellWidth: gridCellBox.width,
       toolbarLeft: toolbarBox.left,
       toolbarRight: toolbarBox.right,
-      gridCellRight: gridCellBox.right,
       editorBodyLeft: editorBodyBox.left,
       editorBodyRight: editorBodyBox.right,
+      coveredComponentControls,
       scrolledToolbarTop: scrolledToolbarBox.top,
       scrollerTop: scrollerBox.top,
       scrollerBottom: scrollerBox.bottom,
@@ -1714,7 +1744,7 @@ ${Array.from({ length: 16 }, (_, index) => `    Expected result line ${index + 1
   expect(metrics!.toolbarWidth).toBeGreaterThan(metrics!.gridCellWidth);
   expect(metrics!.toolbarLeft).toBeGreaterThanOrEqual(metrics!.editorBodyLeft);
   expect(metrics!.toolbarRight).toBeLessThanOrEqual(metrics!.editorBodyRight);
-  expect(Math.abs(metrics!.toolbarRight - metrics!.gridCellRight)).toBeLessThanOrEqual(1);
+  expect(metrics!.coveredComponentControls).toEqual([]);
   expect(metrics!.scrolledToolbarTop).toBeGreaterThanOrEqual(metrics!.scrollerTop);
   expect(metrics!.scrolledToolbarTop).toBeLessThan(metrics!.scrollerBottom);
 

@@ -91,6 +91,26 @@
   bottom: -2px;
 }
 
+.hvy-document .table-editor-grid :is(th, td):is(.is-table-column-drop-before, .is-table-column-drop-after)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 35;
+  width: 3px;
+  background: var(--hvy-button-bg);
+  box-shadow: 0 0 0.35rem color-mix(in srgb, var(--hvy-button-bg) 35%, transparent);
+  pointer-events: none;
+}
+
+.hvy-document .table-editor-grid :is(th, td).is-table-column-drop-before::after {
+  left: -2px;
+}
+
+.hvy-document .table-editor-grid :is(th, td).is-table-column-drop-after::after {
+  right: -2px;
+}
+
 .hvy-document .table-row-drag-image {
   position: fixed;
   top: -10000px;

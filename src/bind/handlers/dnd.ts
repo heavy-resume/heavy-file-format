@@ -20,6 +20,11 @@ interface TableRowDropPreviewState {
   dragImage: HTMLElement | null;
 }
 
+interface TableColumnDropPreviewState {
+  column: HTMLElement | null;
+  cells: HTMLElement[];
+}
+
 const sectionDragAutoScroll: SectionDragAutoScrollState = {
   scroller: null,
   pointerY: 0,
@@ -34,6 +39,11 @@ const tableRowDropPreview: TableRowDropPreviewState = {
   row: null,
   sourceRow: null,
   dragImage: null,
+};
+
+const tableColumnDropPreview: TableColumnDropPreviewState = {
+  column: null,
+  cells: [],
 };
 
 export function bindDnd(app: HTMLElement): void {
@@ -123,11 +133,17 @@ export function bindDnd(app: HTMLElement): void {
       clearTableRowDropPreview();
     }
 
-    if (draggedTableItem?.kind === 'column' && target.closest<HTMLElement>('[data-table-column-drop]')) {
-      event.preventDefault();
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = 'move';
+    if (draggedTableItem?.kind === 'column') {
+      const columnDrop = getMatchingTableColumnDrop(target, draggedTableItem);
+      if (columnDrop) {
+        event.preventDefault();
+        updateTableColumnDropPreview(columnDrop, event.clientX);
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = 'move';
+        }
+        return;
       }
+      clearTableColumnDropPreview();
     }
   });
 
@@ -166,6 +182,7 @@ export function bindDnd(app: HTMLElement): void {
     if (!block) {
       setDraggedTableItem(null);
       clearTableRowDropPreview();
+      clearTableColumnDropPreview();
       return;
     }
 
@@ -187,15 +204,20 @@ export function bindDnd(app: HTMLElement): void {
       return;
     }
 
-    const columnDrop = target.closest<HTMLElement>('[data-table-column-drop]');
+    const columnDrop = getMatchingTableColumnDrop(target, activeTableDrag);
     const columnIndex = Number.parseInt(columnDrop?.dataset.columnIndex ?? '', 10);
     if (columnDrop && !Number.isNaN(columnIndex)) {
       event.preventDefault();
-      recordHistory();
-      moveTableColumn(block.schema, activeTableDrag.index, columnIndex);
-      getRenderApp()();
+      const position = getTableColumnDropPosition(event.clientX, columnDrop.getBoundingClientRect());
+      const moveIndex = getTableItemMoveIndex(activeTableDrag.index, columnIndex, position, block.schema.tableColumns.length);
+      if (moveIndex !== activeTableDrag.index) {
+        recordHistory();
+        moveTableColumn(block.schema, activeTableDrag.index, moveIndex);
+        getRenderApp()();
+      }
     }
     setDraggedTableItem(null);
+    clearTableColumnDropPreview();
   });
 
   app.addEventListener('dragend', () => {
@@ -204,6 +226,7 @@ export function bindDnd(app: HTMLElement): void {
     stopSectionDragAutoScroll();
     clearSectionDropPreview();
     clearTableRowDropPreview();
+    clearTableColumnDropPreview();
   });
 }
 
@@ -213,6 +236,10 @@ export function getSectionDropPosition(pointerY: number, sectionRect: Pick<DOMRe
 
 export function getTableRowDropPosition(pointerY: number, rowRect: Pick<DOMRect, 'top' | 'height'>): 'before' | 'after' {
   return pointerY < rowRect.top + rowRect.height / 2 ? 'before' : 'after';
+}
+
+export function getTableColumnDropPosition(pointerX: number, columnRect: Pick<DOMRect, 'left' | 'width'>): 'before' | 'after' {
+  return pointerX < columnRect.left + columnRect.width / 2 ? 'before' : 'after';
 }
 
 export function getTableItemMoveIndex(
@@ -381,6 +408,43 @@ function clearTableRowDropPreview(): void {
   tableRowDropPreview.sourceRow?.classList.remove('is-table-row-drag-source');
   tableRowDropPreview.sourceRow = null;
   removeTableRowDragImage(tableRowDropPreview.dragImage);
+}
+
+function getMatchingTableColumnDrop(
+  target: HTMLElement,
+  activeDrag: NonNullable<typeof draggedTableItem>
+): HTMLElement | null {
+  const column = target.closest<HTMLElement>('[data-table-column-drop]');
+  if (
+    !column
+    || column.dataset.sectionKey !== activeDrag.sectionKey
+    || column.dataset.blockId !== activeDrag.blockId
+  ) {
+    return null;
+  }
+  return column;
+}
+
+function updateTableColumnDropPreview(column: HTMLElement, pointerX: number): void {
+  const position = getTableColumnDropPosition(pointerX, column.getBoundingClientRect());
+  if (tableColumnDropPreview.column && tableColumnDropPreview.column !== column) {
+    clearTableColumnDropPreview();
+  }
+  tableColumnDropPreview.column = column;
+  const columnIndex = column.dataset.columnIndex;
+  tableColumnDropPreview.cells = columnIndex === undefined
+    ? [column]
+    : Array.from(column.closest('table')?.querySelectorAll<HTMLElement>(`:is(th, td)[data-table-column-index="${columnIndex}"]`) ?? [column]);
+  tableColumnDropPreview.cells.forEach((cell) => {
+    cell.classList.toggle('is-table-column-drop-before', position === 'before');
+    cell.classList.toggle('is-table-column-drop-after', position === 'after');
+  });
+}
+
+function clearTableColumnDropPreview(): void {
+  tableColumnDropPreview.cells.forEach((cell) => cell.classList.remove('is-table-column-drop-before', 'is-table-column-drop-after'));
+  tableColumnDropPreview.column = null;
+  tableColumnDropPreview.cells = [];
 }
 
 function findSectionDragScroller(app: HTMLElement, target: HTMLElement): HTMLElement | null {

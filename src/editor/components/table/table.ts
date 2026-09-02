@@ -253,7 +253,7 @@ export const renderTableEditor: ComponentEditorRenderer = (sectionKey, block, he
               ${columns
                 .map(
                   (column, columnIndex) => `
-                    <th class="${tableColumnClassNames(block, column, true)}" data-table-column-drop="true" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}">
+                    <th class="${tableColumnClassNames(block, column, true)}" data-table-column-drop="true" data-section-key="${helpers.escapeAttr(sectionKey)}" data-block-id="${helpers.escapeAttr(block.id)}" data-column-index="${columnIndex}" data-table-column-index="${columnIndex}">
                       <div class="table-column-head">
                         ${renderTableGrabberInsertMenu({
                           kind: 'column',

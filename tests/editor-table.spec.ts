@@ -473,6 +473,67 @@ hvy_version: 0.1
   await expect(page.locator('.is-table-row-drag-source, .is-table-row-drop-before, .is-table-row-drop-after')).toHaveCount(0);
 });
 
+test('table column drag previews matching before or after insertion boundaries without a custom cursor ghost', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"table-column-drag-preview-test"}-->
+#! Table Column Drag Preview Test
+
+<!--hvy:table {"tableColumns":["Name","Status"],"tableRows":[{"cells":["Alpha","Open"]},{"cells":["Beta","Closed"]}]}-->
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.locator('.editor-block-passive', { hasText: 'Alpha' }).first().click();
+
+  // BEFORE: no table cell carries a column insertion boundary.
+  await expect(page.locator('.is-table-column-drop-before, .is-table-column-drop-after')).toHaveCount(0);
+
+  // TOOL CALL: drag Name across the midpoint of Status and drop at its right boundary.
+  const expectedResult = await page.evaluate(() => {
+    const source = document.querySelector<HTMLElement>('[data-drag-handle="table-column"][data-column-index="0"]');
+    const target = document.querySelector<HTMLTableCellElement>('[data-table-column-drop][data-column-index="1"]');
+    if (!source || !target) throw new Error('Expected editable table columns');
+    const transfer = new DataTransfer();
+    let dragImageCalls = 0;
+    transfer.setDragImage = () => { dragImageCalls += 1; };
+    source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    const bounds = target.getBoundingClientRect();
+    target.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.left + 2,
+      dataTransfer: transfer,
+    }));
+    const beforeCount = target.closest('table')?.querySelectorAll('.is-table-column-drop-before').length ?? 0;
+    const insertionLabel = getComputedStyle(target, '::after').content;
+    target.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.right - 2,
+      dataTransfer: transfer,
+    }));
+    const afterCount = target.closest('table')?.querySelectorAll('.is-table-column-drop-after').length ?? 0;
+    target.dispatchEvent(new DragEvent('drop', {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.right - 2,
+      dataTransfer: transfer,
+    }));
+    return { dragImageCalls, beforeCount, afterCount, insertionLabel };
+  });
+
+  // AFTER: the boundary spanned the header and both rows, and Status moved before Name.
+  expect(expectedResult).toEqual({ dragImageCalls: 0, beforeCount: 3, afterCount: 3, insertionLabel: '""' });
+  await expect(page.locator('[data-field="table-column"]')).toHaveText(['Status', 'Name']);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="0"]')).toHaveText(['Open', 'Alpha']);
+  await expect(page.locator('[data-field="table-cell"][data-row-index="1"]')).toHaveText(['Closed', 'Beta']);
+  await expect(page.locator('.is-table-column-drop-before, .is-table-column-drop-after')).toHaveCount(0);
+});
+
 test('empty static table rows delete without confirmation while filled rows still confirm', async ({ page }) => {
   await page.goto('/');
 

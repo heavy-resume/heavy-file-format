@@ -4,6 +4,7 @@ import {
   calculateSectionDragAutoScrollDelta,
   getSectionDropPosition,
   getTableItemMoveIndex,
+  getTableColumnDropPosition,
   getTableRowDragImageSize,
   getTableRowDropPosition,
 } from '../src/bind/handlers/dnd';
@@ -34,6 +35,11 @@ test('getSectionDropPosition splits section targets into before and after zones'
 test('getTableRowDropPosition splits row targets into before and after zones', () => {
   expect(getTableRowDropPosition(109, { top: 100, height: 20 })).toBe('before');
   expect(getTableRowDropPosition(111, { top: 100, height: 20 })).toBe('after');
+});
+
+test('getTableColumnDropPosition splits column targets into before and after zones', () => {
+  expect(getTableColumnDropPosition(109, { left: 100, width: 20 })).toBe('before');
+  expect(getTableColumnDropPosition(111, { left: 100, width: 20 })).toBe('after');
 });
 
 test('getTableItemMoveIndex resolves visual insertion edges in either drag direction', () => {

@@ -2307,6 +2307,44 @@ hvy_version: 0.1
   await expect(page.locator('#rawEditor')).not.toContainText('"fillIn"');
 });
 
+test('text toolbar fill-in converts the selected duplicate text occurrence', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"header"}-->
+#! Header
+
+ <!--hvy:text {"id":"duplicate"}-->
+  # Repeat and Repeat
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  await page.locator('.editor-block-passive', { hasText: 'Repeat and Repeat' }).click();
+  await page.locator('.rich-editor').evaluate((editable) => {
+    const textNode = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT).nextNode();
+    if (!textNode?.textContent) return;
+    const start = textNode.textContent.lastIndexOf('Repeat');
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, start + 'Repeat'.length);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (editable as HTMLElement).focus();
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await page.locator('.rich-editor').dispatchEvent('keyup');
+  await useSelectionAsFillIn(page);
+
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await expect(page.locator('#rawEditor')).toContainText('# Repeat and <!-- value {"placeholder":"Repeat"} -->');
+});
+
 test('undo after browser-selected Use as Fill-in does not enter the fill-in or abort editing', async ({ page }) => {
   await page.goto('/');
 

@@ -29,7 +29,7 @@ import {
   resolveBlockAnswerGroups,
   setAnswerRangeRadioGroup,
 } from './inline-answer-groups';
-import { createTextFillInMarker, hasTextFillInMarker, prepareTextFillIn } from './text-fill-in';
+import { createTextFillInMarker, hasTextFillInMarker } from './text-fill-in';
 import { getTextLineStylesFromMeta, sanitizeTextLineStyleCss } from './text-line-styles';
 import { isPdfAllowedComponent, isPdfAllowedComponentInstance, isPdfDocument } from './pdf-document-capabilities';
 import { inferComponentListItemLabel } from './editor/components/component-list/component-list-labels';
@@ -1749,12 +1749,15 @@ function applyTextFillInSlot(editable: HTMLElement): boolean {
     return false;
   }
   const range = getEditableSelectionRange(editable);
-  const selectedText = range && !range.collapsed
-    ? range.toString().trim()
-    : editable.dataset.fillInSelectionText?.trim() ?? '';
+  const selectedRange = range && !range.collapsed ? range : null;
+  const selectedText = selectedRange?.toString().trim() ?? '';
   recordHistory(`text:${block.id}:fill-in:set`);
-  if (selectedText && block.text.includes(selectedText)) {
-    block.text = block.text.replace(selectedText, prepareTextFillIn(selectedText).text);
+  if (selectedRange && selectedText) {
+    const selectedMarkdown = serializeTextFillInSelection(editable, selectedRange, block.text, selectedText);
+    if (selectedMarkdown === null) {
+      return false;
+    }
+    block.text = selectedMarkdown;
     block.schema.placeholder = '';
   } else if (block.text.trim().length === 0) {
     block.text = createTextFillInMarker();
@@ -1768,6 +1771,62 @@ function applyTextFillInSlot(editable: HTMLElement): boolean {
   getRefreshReaderPanels()();
   getRenderApp()();
   return true;
+}
+
+function serializeTextFillInSelection(
+  editable: HTMLElement,
+  range: Range,
+  blockText: string,
+  selectedText: string
+): string | null {
+  const singleTextNodeResult = replaceSingleTextNodeFillInSelection(range, blockText, selectedText);
+  if (singleTextNodeResult !== null) {
+    return singleTextNodeResult;
+  }
+  const startOffset = getTextOffset(editable, range.startContainer, range.startOffset);
+  const endOffset = getTextOffset(editable, range.endContainer, range.endOffset);
+  if (startOffset === null || endOffset === null) {
+    return null;
+  }
+  const rawSelectedText = range.toString();
+  const leadingWhitespace = rawSelectedText.length - rawSelectedText.trimStart().length;
+  const trailingWhitespace = rawSelectedText.length - rawSelectedText.trimEnd().length;
+  const clone = editable.cloneNode(true) as HTMLElement;
+  const start = getTextPositionAtOffset(clone, startOffset + leadingWhitespace);
+  const end = getTextPositionAtOffset(clone, endOffset - trailingWhitespace);
+  if (!start || !end) {
+    return null;
+  }
+  const marker = clone.ownerDocument.createElement('span');
+  marker.className = 'text-fill-in-box text-fill-in-rich-marker';
+  marker.contentEditable = 'false';
+  marker.dataset.hvyFillInMarker = 'true';
+  marker.dataset.placeholder = selectedText;
+  marker.textContent = selectedText;
+  const cloneRange = clone.ownerDocument.createRange();
+  cloneRange.setStart(start.node, start.offset);
+  cloneRange.setEnd(end.node, end.offset);
+  cloneRange.deleteContents();
+  cloneRange.insertNode(marker);
+  removeNonTextContentFromRichEditor(clone);
+  normalizeSortValueAnnotationDom(clone);
+  normalizeEditableListDom(clone);
+  convertInlineCodeInsertedShortcut(clone);
+  normalizeInlineCodeTextNodes(clone);
+  return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(clone))));
+}
+
+function replaceSingleTextNodeFillInSelection(range: Range, blockText: string, selectedText: string): string | null {
+  if (range.startContainer !== range.endContainer || range.startContainer.textContent !== blockText) {
+    return null;
+  }
+  const rawSelectedText = blockText.slice(range.startOffset, range.endOffset);
+  const startOffset = range.startOffset + rawSelectedText.length - rawSelectedText.trimStart().length;
+  const endOffset = range.endOffset - (rawSelectedText.length - rawSelectedText.trimEnd().length);
+  if (blockText.slice(startOffset, endOffset) !== selectedText) {
+    return null;
+  }
+  return `${blockText.slice(0, startOffset)}${createTextFillInMarker(selectedText)}${blockText.slice(endOffset)}`;
 }
 
 function toggleExistingTableAnnotationPreview(action: string, editable: HTMLElement): boolean {
@@ -2679,7 +2738,6 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
   const hasFillInSelection = editable.dataset.field === 'block-rich' && range && !range.collapsed && range.toString().trim().length > 0;
   if (hasFillInSelection) {
     textEditorShell?.classList.add('has-fill-in-selection');
-    editable.dataset.fillInSelectionText = range.toString().trim();
   } else if (
     (editable.dataset.field === 'block-rich' && range) ||
     !textEditorShell ||
@@ -2690,7 +2748,6 @@ function updateRichToolbarState(editable: HTMLElement, textLineStyleOverride?: s
     textEditorShell?.classList.remove('is-use-as-open');
     textEditorShell?.querySelector<HTMLElement>('.text-use-as-selection')?.classList.remove('is-use-as-open');
     textEditorShell?.querySelector<HTMLElement>('.text-use-as-button')?.setAttribute('aria-expanded', 'false');
-    delete editable.dataset.fillInSelectionText;
   }
   const toolbars = [
     editable.closest('.table-inline-edit-shell')?.querySelector<HTMLElement>('.table-inline-toolbar') ?? null,

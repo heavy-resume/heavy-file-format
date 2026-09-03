@@ -2,7 +2,7 @@ import './editor.css';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/core';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from './component-helpers';
-import type { ComponentDefinition, ComponentPlacementState, ImageAttachmentMaxDimensions } from '../types';
+import type { ComponentDefinition, ComponentPlacementState, ImageAttachmentMaxDimensions, VisualDocument } from '../types';
 import { renderComponentListEditor } from './components/component-list/component-list';
 import { renderButtonEditor } from './components/button/button';
 import { renderContainerEditor } from './components/container/container';
@@ -15,11 +15,14 @@ import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
 import { renderTextToolbarDismissButton } from './components/text/text-toolbar-layout';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
+import { renderDocumentAttachmentManager } from './components/document-attachments/document-attachments';
+import { renderDeleteControl } from './components/delete-control/delete-control';
 import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
 import { renderTagEditor } from './tag-editor';
 import { getTemplateFields, renderTemplateGhosts } from './template';
 import type { Align, BlockSchema, SortKeyValue, VisualBlock, VisualSection } from './types';
 import { markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from '../markdown';
+import { renderUserFileAttachmentLinksInHtml } from '../document-attachment-links';
 import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../inline-answer-groups';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
@@ -132,6 +135,7 @@ interface ComponentListDisplayContext {
 }
 
 interface EditorRenderState {
+  document?: VisualDocument;
   documentExtension: '.hvy' | '.thvy' | '.phvy' | '.md';
   documentMeta: Record<string, unknown>;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
@@ -484,9 +488,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         : ''
       }
             ${isSubsection || isPdfEditorDocument() ? '' : `<button type="button" class="${section.location === 'sidebar' ? 'secondary' : 'ghost'}" data-action="toggle-section-location" data-section-key="${deps.escapeAttr(section.key)}">${section.location === 'sidebar' ? 'main \u2192' : '\u2190 sidebar'}</button>`}
-            <button type="button" class="danger remove-x editor-section-remove-button" data-action="remove-section" data-section-key="${deps.escapeAttr(
-        section.key
-      )}" aria-label="Remove ${deps.escapeAttr(visibleTitle)} section" title="Delete section" data-tooltip="Delete section">${closeIcon()}</button>
+            ${renderDeleteControl({
+        className: 'editor-section-remove-button',
+        label: `Remove ${visibleTitle} section`,
+        title: 'Delete section',
+        attributes: {
+          'data-action': 'remove-section',
+          'data-section-key': section.key,
+          'data-tooltip': 'Delete section',
+        },
+      })}
           </div>
         </div>
 
@@ -952,9 +963,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>`
       : '';
     const removeButton = canRemove
-      ? `<button type="button" class="danger remove-x editor-block-remove-button" data-action="remove-block" data-section-key="${deps.escapeAttr(
-        sectionKey
-      )}" data-block-id="${deps.escapeAttr(block.id)}" aria-label="Remove ${deps.escapeAttr(componentLabel)}" title="Delete component">${closeIcon()}</button>`
+      ? renderDeleteControl({
+        className: 'editor-block-remove-button',
+        label: `Remove ${componentLabel}`,
+        title: 'Delete component',
+        attributes: {
+          'data-action': 'remove-block',
+          'data-section-key': sectionKey,
+          'data-block-id': block.id,
+        },
+      })
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
     const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
@@ -1949,6 +1967,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       }
         </div>
       </section>
+      ${state.documentExtension === '.hvy' && state.document ? renderDocumentAttachmentManager(state.document, deps) : ''}
     `;
   }
 
@@ -2776,13 +2795,17 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
 
   function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
     const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
-    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(addExternalLinkTargets(markdownToReaderHtml(normalized, {
+    const linkedHtml = addExternalLinkTargets(markdownToReaderHtml(normalized, {
       answerGroups,
       textLineStyles: getTextLineStylesFromMeta(state.documentMeta),
       textLineStyleMode: state.currentView === 'editor' ? 'editor' : 'viewer',
       preserveSortValueAnnotations: state.currentView === 'editor',
       crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
-    }), state.crossDocumentLinksEnabled === true), deps.escapeHtml));
+    }), state.crossDocumentLinksEnabled === true);
+    const attachmentHtml = state.document
+      ? renderUserFileAttachmentLinksInHtml(linkedHtml, state.document)
+      : linkedHtml;
+    return unwrapSingleParagraph(decorateMarkdownCodeBlocks(attachmentHtml, deps.escapeHtml));
   }
 
   function renderComponentFragment(componentName: string, content: string, block: VisualBlock, sectionKey = ''): string {

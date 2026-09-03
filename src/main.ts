@@ -430,6 +430,9 @@ function renderDocumentComponentOptions(selected: string): string {
 
 editorRenderer = createEditorRenderer(
   {
+    get document() {
+      return state.document;
+    },
     get documentMeta() {
       return state.document.meta as Record<string, unknown>;
     },
@@ -633,6 +636,9 @@ readerRenderer = createReaderRenderer(
     get currentView() {
       return state.currentView;
     },
+    get crossDocumentLinksEnabled() {
+      return state.crossDocumentLinksEnabled;
+    },
     get showAdvancedEditor() {
       return state.showAdvancedEditor;
     },
@@ -724,7 +730,7 @@ function renderApp(): void {
   const isAdvancedEditor = state.editorMode === 'advanced';
   const isMobileAdjustmentEditor = state.editorMode === 'mobile-adjustment';
   const isRawEditor = state.editorMode === 'raw';
-  const isDocumentMetaView = isEditorView && isAdvancedEditor && state.metaPanelOpen;
+  const isDocumentMetaView = isEditorView && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
   const pdfDocument = isPdfDocument(state.document);
   const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
@@ -1054,10 +1060,7 @@ function renderWorkspaceRightControls(options: {
             <button type="button" class="compact-control-button ${options.isMobileAdjustmentEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="mobile-adjustment">Mobile Adjustment</button>
             <button type="button" class="compact-control-button ${options.isAdvancedEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="advanced">Advanced</button>
             <button type="button" class="compact-control-button ${options.isRawEditor ? 'secondary' : 'ghost'}" data-action="set-editor-mode" data-editor-mode="raw">Raw</button>
-            ${options.isAdvancedEditor
-        ? `<button type="button" class="compact-control-button ${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>`
-        : ''
-      }
+            <button type="button" class="compact-control-button ${state.metaPanelOpen ? 'secondary' : 'ghost'}" data-action="toggle-document-meta">Document Meta</button>
           </div>`
       : ''
     }

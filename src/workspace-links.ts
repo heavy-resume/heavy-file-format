@@ -1,4 +1,4 @@
-export type HvyLinkKind = 'link' | 'xref-card';
+export type HvyLinkKind = 'link' | 'xref-card' | 'attachment';
 
 export type XrefTargetClassification =
   | { kind: 'empty' }

@@ -1,0 +1,40 @@
+.hvy-document .link-document-search-wrap {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+}
+
+.hvy-document .link-document-option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.hvy-document .link-document-option {
+  display: grid;
+  gap: 0.1rem;
+  max-width: 100%;
+  text-align: left;
+}
+
+.hvy-document .link-document-option span {
+  overflow: hidden;
+  color: var(--hvy-text-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvy-document .link-document-option.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--hvy-surface));
+}
+
+.hvy-document .link-picker-result-status,
+.hvy-document .link-picker-empty {
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+}

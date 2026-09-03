@@ -23,6 +23,18 @@ export function getXrefTargetOptions(tagFilter = ''): XrefTargetOption[] {
 }
 
 export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFilter = ''): XrefTargetOption[] {
+  return collectXrefTargetOptions(document, tagFilter, false);
+}
+
+export function getDocumentLinkTargetOptionsForDocument(document: VisualDocument): XrefTargetOption[] {
+  return collectXrefTargetOptions(document, '', true);
+}
+
+function collectXrefTargetOptions(
+  document: VisualDocument,
+  tagFilter: string,
+  includeGeneratedSectionIds: boolean,
+): XrefTargetOption[] {
   const seen = new Set<string>();
   const options: XrefTargetOption[] = [];
   const requestedTags = normalizeTagFilter(tagFilter);
@@ -37,7 +49,7 @@ export function getXrefTargetOptionsForDocument(document: VisualDocument, tagFil
 
   flattenSections(document.sections)
     .filter((section) => !section.isGhost)
-    .filter((section) => section.customId.trim().length > 0)
+    .filter((section) => includeGeneratedSectionIds || section.customId.trim().length > 0)
     .filter((section) => matchesTagFilter(section.tags, requestedTags))
     .forEach((section) => {
       add(getSectionId(section), formatSectionTitle(section.title), section.description.trim());

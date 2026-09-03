@@ -66,7 +66,7 @@ export function extractHvyAssets(bytes) {
       id: directive.id,
       meta: directive.meta,
       length,
-      url: attachmentUrlForId(directive.id),
+      url: attachmentUrlForDescriptor(directive.id, directive.meta),
       bytes: attachmentBytes,
     };
   });
@@ -162,9 +162,12 @@ function inferAttachmentId(payload) {
   return '';
 }
 
-function attachmentUrlForId(id) {
+function attachmentUrlForDescriptor(id, meta) {
   if (id.startsWith('image:')) {
     return `image/${encodeURIComponent(id.slice('image:'.length))}`;
+  }
+  if (meta?.role === 'user-file' && typeof meta.filename === 'string' && meta.filename.trim()) {
+    return `attachment/${encodeURIComponent(id)}/${encodeURIComponent(meta.filename.trim())}`;
   }
   return `attachment/${encodeURIComponent(id)}`;
 }

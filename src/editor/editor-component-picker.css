@@ -421,7 +421,6 @@
   top: -0.85rem;
   right: -0.55rem;
   z-index: 37;
-  box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
 .hvy-document .hvy-ai-reader-surface .editor-block[data-active-editor-block="true"] {
@@ -437,7 +436,6 @@
   top: -0.85rem;
   right: -0.55rem;
   z-index: 3;
-  box-shadow: 0 6px 14px var(--hvy-shadow);
 }
 
 .hvy-document .component-placement-target {

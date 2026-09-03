@@ -21,6 +21,11 @@ import {
   isQueuedDatabaseHistoryCommandActive,
   restoreDatabaseHistoryVersion,
 } from './database-history-controller';
+import {
+  getAttachmentHistoryVersion,
+  hasAttachmentHistoryVersionTransition,
+  restoreAttachmentHistoryVersion,
+} from './attachment-history-controller';
 import { recordDatabaseTablesChanged } from './database-change-tracker';
 import { findSectionByKey } from './section-ops';
 import {
@@ -41,6 +46,7 @@ interface ParsedHistorySnapshot {
   document: VisualDocument;
   databaseAttachment?: SerializedHistoryAttachment | null;
   databaseHistoryVersion?: string | null;
+  attachmentHistoryVersion?: string | null;
   templateValues: Record<string, string>;
   filename: string;
   editorMode?: 'basic' | 'advanced' | 'raw' | 'cli';
@@ -105,6 +111,9 @@ export function snapshotState(options: HistorySnapshotOptions = {}): string {
       ...(getDatabaseHistoryVersion() !== null
         ? { databaseHistoryVersion: getDatabaseHistoryVersion() }
         : {}),
+      ...(getAttachmentHistoryVersion() !== null
+        ? { attachmentHistoryVersion: getAttachmentHistoryVersion() }
+        : {}),
       templateValues: state.templateValues,
       filename: state.filename,
       editorMode: state.editorMode,
@@ -145,7 +154,7 @@ export function ensureHistoryInitialized(): void {
   }
 }
 
-export function recordHistory(group?: string): void {
+export function recordHistory(group?: string, options: { notify?: boolean } = {}): void {
   if (state.isRestoring) {
     return;
   }
@@ -182,7 +191,7 @@ export function recordHistory(group?: string): void {
         pushed,
         skipped,
       });
-      notifyDocumentMayHaveChanged(group, changeSource);
+      if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
       return;
     }
     state.lastHistoryGroup = group;
@@ -212,7 +221,7 @@ export function recordHistory(group?: string): void {
     pushed,
     skipped,
   });
-  notifyDocumentMayHaveChanged(group, changeSource);
+  if (options.notify !== false) notifyDocumentMayHaveChanged(group, changeSource);
 }
 
 export function recordDatabaseAttachmentHistory(): void {
@@ -330,7 +339,10 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
       ?? getHistoryEditorContextAt(state.history.length - 1);
     if (activeHistoryContext && !historySnapshotContainsActiveEditor(target, activeEditor)) return;
     await prepareHistoryViewportTransition(activeHistoryContext, root);
-    if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(target))) {
+    const targetDatabaseVersion = getHistoryDatabaseVersion(target);
+    const targetAttachmentVersion = getHistoryAttachmentVersion(target);
+    if (!hasDatabaseHistoryVersionTransition(targetDatabaseVersion)
+      && !hasAttachmentHistoryVersionTransition(targetAttachmentVersion)) {
       undoState();
       return;
     }
@@ -339,9 +351,12 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     state.isRestoring = true;
     try {
       restoreFromSnapshot(target);
-      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(target));
+      await restoreDatabaseHistoryVersion(targetDatabaseVersion);
+      await restoreAttachmentHistoryVersion(targetAttachmentVersion);
     } catch (error) {
       restoreFromSnapshot(current);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
+      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
       state.isRestoring = false;
       throw error;
     }
@@ -365,7 +380,10 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     const next = storedNext?.content ?? nextEntry;
     const nextEditorContext = storedNext?.editorContext ?? null;
     await prepareHistoryViewportTransition(nextEditorContext, root);
-    if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(next))) {
+    const nextDatabaseVersion = getHistoryDatabaseVersion(next);
+    const nextAttachmentVersion = getHistoryAttachmentVersion(next);
+    if (!hasDatabaseHistoryVersionTransition(nextDatabaseVersion)
+      && !hasAttachmentHistoryVersionTransition(nextAttachmentVersion)) {
       redoState();
       return;
     }
@@ -375,9 +393,12 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     state.isRestoring = true;
     try {
       restoreFromSnapshot(next);
-      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(next));
+      await restoreDatabaseHistoryVersion(nextDatabaseVersion);
+      await restoreAttachmentHistoryVersion(nextAttachmentVersion);
     } catch (error) {
       restoreFromSnapshot(current);
+      await restoreDatabaseHistoryVersion(getHistoryDatabaseVersion(current)).catch(() => {});
+      await restoreAttachmentHistoryVersion(getHistoryAttachmentVersion(current)).catch(() => {});
       state.isRestoring = false;
       throw error;
     }
@@ -902,6 +923,14 @@ function restoreFromSnapshot(snapshot: string): void {
 function getHistoryDatabaseVersion(snapshot: string): string | null {
   try {
     return (JSON.parse(snapshot) as ParsedHistorySnapshot).databaseHistoryVersion ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getHistoryAttachmentVersion(snapshot: string): string | null {
+  try {
+    return (JSON.parse(snapshot) as ParsedHistorySnapshot).attachmentHistoryVersion ?? null;
   } catch {
     return null;
   }

@@ -590,6 +590,59 @@ HVY.mountHvyViewer({
 a promise. Blob results are converted to object URLs and revoked by the mounted
 client when its image URL cache is cleared.
 
+Named document attachments use the same store but can delegate preview and
+download actions to the embedding host. Return `{ handled: true }` after the
+host takes ownership; otherwise HVY falls back to a browser preview or download.
+Bytes and URLs stay lazy until the callback asks for them:
+
+```js
+HVY.mountHvyViewer({
+  root,
+  document,
+  attachmentStore,
+  async attachmentAction(request) {
+    if (request.action === 'preview' && request.mediaType === 'application/pdf') {
+      await desktopBridge.openAttachmentPreview({
+        id: request.id,
+        name: request.name,
+        filename: request.filename,
+      });
+      return { handled: true };
+    }
+    if (request.action === 'download') {
+      await desktopBridge.saveAttachment({
+        id: request.id,
+        filename: request.filename,
+        bytes: await request.getBytes(),
+      });
+      return { handled: true };
+    }
+  },
+});
+```
+
+The request also includes `mediaType`, `length`, and lazy `getUrl()`. Desktop
+bridges should treat the renderer values as untrusted: validate the attachment
+ID in the privileged process, choose the stored filename rather than accepting
+a filesystem path, and open PDF windows with Node integration disabled.
+
+Editor mounts may enforce upload limits without changing the HVY format:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  attachmentLimits: {
+    maxFileBytes: 25 * 1024 * 1024,
+    maxTotalBytes: 100 * 1024 * 1024,
+  },
+});
+```
+
+Omit either value when the host does not impose that limit. Rejected additions
+and replacements leave the existing attachment store unchanged.
+
 Hosts can also use async serialization when attachment recall or final byte
 assembly belongs to another runtime, such as a local/native serializer:
 
@@ -714,9 +767,12 @@ empty string so the host can choose how to present them.
 
 DB Table v2 keeps ordinary edits compact by recording logical inverse
 operations. Before destructive or trigger-backed SQLite edits, it stores a
-full database checkpoint outside the HVY document. The default checkpoint
-store is in memory. Desktop, browser, and web hosts can instead provide a
-`historyStore`; its returned IDs remain opaque to HVY:
+full database checkpoint outside the HVY document. Named attachment add,
+replace, rename, and delete operations similarly store only the affected file
+bytes outside document history snapshots. The default checkpoint store is in
+memory. Desktop, browser, and web hosts can instead provide a `historyStore`;
+its returned IDs remain opaque to HVY. The `kind` is `sqlite-checkpoint` or
+`attachment-checkpoint`:
 
 ```js
 const historyStore = {
@@ -734,12 +790,13 @@ const historyStore = {
 const mount = HVY.mountHvy({ root, document, mode: 'editor', historyStore });
 ```
 
-Checkpoint writes are queued before the destructive command runs. Undo stores
-the corresponding redo checkpoint lazily, verifies checkpoint length and
-SHA-256 integrity before restoring it, and remains asynchronous when the host
-uses disk, IndexedDB, or bucket storage. Checkpoints are removed when their
-history branch expires or the mount is destroyed; they are never serialized
-into the `.hvy` file.
+Checkpoint writes are queued before the destructive command runs. History
+verifies checkpoint length and SHA-256 integrity before restoring it and
+remains asynchronous when the host uses disk, IndexedDB, or bucket storage.
+SQLite and attachment redo checkpoints are captured lazily when Undo first
+runs; attachment operations retain only before/after bytes for their affected
+IDs. Checkpoints are removed when their history branch expires or the mount is
+destroyed; they are never serialized into the `.hvy` file.
 
 Embedded editor/AI instances do not persist reconnect/reload session state by
 default. Set `persistSessionState: true` to opt in. Pass a stable `storageKey`

@@ -20,8 +20,22 @@ import { DB_ATTACHMENT_ID, getAttachment, setAttachment } from '../src/attachmen
 import { createScriptingDbRuntime } from '../src/plugins/db-table';
 import type { AppState } from '../src/types';
 import { attachStoreToDocument, createLazyAttachmentStore, ensureDocumentAttachmentStore } from '../src/attachment-store';
+import type { HvyAttachmentHostAdapter } from '../src/attachment-store';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory, getDatabaseHistoryQueueStatus, runQueuedDatabaseHistoryCommand } from '../src/database-history-controller';
+import {
+  configureAttachmentHistoryStore,
+  destroyAttachmentHistory,
+  runUserFileAttachmentHistoryCommand,
+} from '../src/attachment-history-controller';
 import { InMemoryHvyHistoryArtifactStore, type HvyHistoryArtifactPutRequest, type HvyHistoryArtifactStore } from '../src/history-artifact-store';
+import {
+  listUserFileAttachments,
+  removeUserFileAttachment,
+  renameUserFileAttachment,
+  replaceUserFileAttachment,
+  storeUserFileAttachment,
+} from '../src/document-attachments';
+import { createDocumentChangeApi } from '../src/document-change';
 
 function createHistoryTestState(): AppState {
   return {
@@ -607,6 +621,125 @@ test('database commands execute FIFO and expose pending queue state', async () =
   expect(getDatabaseHistoryQueueStatus()).toMatchObject({ pending: 0, runningLabel: '' });
 });
 
+test('attachment add history stores bytes externally and restores add through undo and redo', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const runtime = getActiveStateRuntime();
+  await destroyAttachmentHistory(runtime);
+  const store = new CountingHistoryStore();
+  configureAttachmentHistoryStore(runtime, store);
+  const documentChanges = createDocumentChangeApi(runtime);
+
+  // BEFORE / TOOL CALL / AFTER
+  await runAttachmentHistoryCommand('file:guide', 'Add guide', () => storeUserFileAttachment(state.document, {
+    id: 'file:guide',
+    name: 'Guide',
+    filename: 'guide.pdf',
+    mediaType: 'application/pdf',
+    bytes: new Uint8Array([11, 22, 33]),
+  }));
+  expect(listUserFileAttachments(state.document)).toMatchObject([{ id: 'file:guide', name: 'Guide', length: 3 }]);
+  expect(store.putCount).toBe(0);
+  expect(state.history.join('\n')).not.toContain('11,22,33');
+  expect(documentChanges.isDirty()).toBe(true);
+
+  await undoStateAsync();
+  expect(listUserFileAttachments(state.document)).toEqual([]);
+  expect(store.putCount).toBe(1);
+  expect(documentChanges.isDirty()).toBe(false);
+  await redoStateAsync();
+  expect(Array.from(ensureDocumentAttachmentStore(state.document).get('file:guide')?.bytes ?? [])).toEqual([11, 22, 33]);
+  expect(documentChanges.isDirty()).toBe(true);
+
+  await destroyAttachmentHistory(runtime);
+  expect(store.size).toBe(0);
+});
+
+test('attachment replace, rename, and delete history restores metadata and bytes', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const runtime = getActiveStateRuntime();
+  await destroyAttachmentHistory(runtime);
+  configureAttachmentHistoryStore(runtime, new InMemoryHvyHistoryArtifactStore());
+  await storeUserFileAttachment(state.document, {
+    id: 'file:guide',
+    name: 'Guide',
+    filename: 'guide.pdf',
+    mediaType: 'application/pdf',
+    bytes: new Uint8Array([1]),
+  });
+
+  // BEFORE / TOOL CALL / AFTER
+  await runAttachmentHistoryCommand('file:guide', 'Replace guide', () => replaceUserFileAttachment(state.document, 'file:guide', {
+    filename: 'guide-v2.pdf',
+    mediaType: 'application/pdf',
+    bytes: new Uint8Array([2, 3]),
+  }));
+  await runAttachmentHistoryCommand('file:guide', 'Rename guide', () => renameUserFileAttachment(state.document, 'file:guide', 'Handbook'));
+  await runAttachmentHistoryCommand('file:guide', 'Delete guide', () => removeUserFileAttachment(state.document, 'file:guide'));
+  expect(listUserFileAttachments(state.document)).toEqual([]);
+
+  await undoStateAsync();
+  expect(listUserFileAttachments(state.document)[0]).toMatchObject({ name: 'Handbook', filename: 'guide-v2.pdf' });
+  await undoStateAsync();
+  expect(listUserFileAttachments(state.document)[0]).toMatchObject({ name: 'Guide', filename: 'guide-v2.pdf' });
+  await undoStateAsync();
+  expect(listUserFileAttachments(state.document)[0]).toMatchObject({ name: 'Guide', filename: 'guide.pdf' });
+  expect(Array.from(ensureDocumentAttachmentStore(state.document).get('file:guide')?.bytes ?? [])).toEqual([1]);
+
+  await redoStateAsync();
+  await redoStateAsync();
+  await redoStateAsync();
+  expect(listUserFileAttachments(state.document)).toEqual([]);
+  await destroyAttachmentHistory(runtime);
+});
+
+test('hosted attachment history recalls and restores bytes through the host adapter', async () => {
+  initCallbacks({ renderApp: () => {}, refreshReaderPanels: () => {}, refreshModalPreview: () => {}, componentRenderHelpers: null, readerRenderer: null });
+  initState(createHistoryTestState());
+  const runtime = getActiveStateRuntime();
+  await destroyAttachmentHistory(runtime);
+  configureAttachmentHistoryStore(runtime, new InMemoryHvyHistoryArtifactStore());
+  const hosted = new Map<string, { bytes: Uint8Array; meta: Record<string, unknown> }>([[
+    'file:hosted',
+    { bytes: new Uint8Array([7]), meta: { role: 'user-file', name: 'Hosted', filename: 'hosted.pdf', mediaType: 'application/pdf' } },
+  ]]);
+  const host: HvyAttachmentHostAdapter = {
+    list: () => [],
+    recall: (id) => hosted.get(id)?.bytes ?? null,
+    store: (id, bytes, meta) => { hosted.set(id, { bytes: Uint8Array.from(bytes), meta }); },
+    remove: (id) => { hosted.delete(id); },
+  };
+  ensureDocumentAttachmentStore(state.document).setDescriptor({
+    id: 'file:hosted',
+    length: 1,
+    meta: { role: 'user-file', name: 'Hosted', filename: 'hosted.pdf', mediaType: 'application/pdf' },
+  });
+
+  // BEFORE / TOOL CALL / AFTER
+  await runUserFileAttachmentHistoryCommand({
+    label: 'Replace hosted attachment',
+    reason: 'Replace hosted attachment',
+    document: state.document,
+    host,
+    affectedIds: ['file:hosted'],
+    recordBefore: () => recordHistory(undefined, { notify: false }),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    execute: () => replaceUserFileAttachment(state.document, 'file:hosted', {
+      filename: 'hosted-v2.pdf',
+      mediaType: 'application/pdf',
+      bytes: new Uint8Array([8, 9]),
+    }, host),
+  });
+  expect(Array.from(hosted.get('file:hosted')?.bytes ?? [])).toEqual([8, 9]);
+  await undoStateAsync();
+  expect(Array.from(hosted.get('file:hosted')?.bytes ?? [])).toEqual([7]);
+  await redoStateAsync();
+  expect(Array.from(hosted.get('file:hosted')?.bytes ?? [])).toEqual([8, 9]);
+  await destroyAttachmentHistory(runtime);
+});
+
 class CountingHistoryStore extends InMemoryHvyHistoryArtifactStore {
   putCount = 0;
 
@@ -618,4 +751,21 @@ class CountingHistoryStore extends InMemoryHvyHistoryArtifactStore {
 
 function readDatabaseTestBytes(): number[] {
   return Array.from(getAttachment(state.document, DB_ATTACHMENT_ID)?.bytes ?? []);
+}
+
+function runAttachmentHistoryCommand<T>(
+  id: string,
+  reason: string,
+  execute: () => T | Promise<T>,
+): Promise<T> {
+  return runUserFileAttachmentHistoryCommand({
+    label: reason,
+    reason,
+    document: state.document,
+    affectedIds: [id],
+    recordBefore: () => recordHistory(undefined, { notify: false }),
+    captureHistoryState: captureHistoryStackState,
+    rollbackHistory: restoreHistoryStackState,
+    execute,
+  });
 }

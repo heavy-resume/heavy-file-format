@@ -38,6 +38,8 @@ import { bindChatThreadUi } from './chat/chat-thread-ui';
 import { bindImageDragAndDrop } from './editor/components/image/document-image-drop';
 import { bindImageFilenameEditing } from './editor/components/image/image-filename-edit';
 import { bindCarouselInteractions } from './editor/components/carousel/carousel';
+import { bindDocumentAttachmentManager } from './editor/components/document-attachments/document-attachments';
+import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { bindStaticTableReaderInteractions } from './editor/components/table/table-reader-interactions';
 import { bindAppEvents } from './bind/app-events';
 import { scheduleSidebarHelpAutoClose } from './sidebar-help';
@@ -403,6 +405,8 @@ export function bindUi(app: HTMLElement): void {
   bindImageDragAndDrop(app);
   bindImageFilenameEditing(app);
   bindCarouselInteractions(app);
+  bindDocumentAttachmentManager(app);
+  bindUserFileAttachmentLinks(app);
   scheduleSidebarHelpAutoClose(app);
 
   metaFilterQuery?.addEventListener('input', () => {

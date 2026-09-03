@@ -4,6 +4,8 @@ import type { HvyPdfExportPlan } from './pdf-export/types';
 import type { SearchState } from './search/types';
 import type { ProxyChatMode } from './chat/chat-provider-payload';
 import type { AttachmentStore, HvyAttachmentHostAdapter } from './attachment-store';
+import type { HvyAttachmentActionHandler } from './document-attachment-actions';
+import type { UserFileAttachmentLimits } from './document-attachments';
 import type { CaptionTextModalState } from './caption';
 import type { HvyEncryptionOptions } from './encryption';
 import type { HvyPdfStylePreset } from './pdf-style-presets';
@@ -513,6 +515,8 @@ export interface AppState {
   persistDocumentState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentHost?: HvyAttachmentHostAdapter | null;
+  attachmentAction?: HvyAttachmentActionHandler | null;
+  attachmentLimits?: UserFileAttachmentLimits | null;
   encryption?: HvyEncryptionOptions | null;
   chatContext?: HvyChatContextOptions | null;
   chatContextProvider?: HvyChatContextProvider | null;

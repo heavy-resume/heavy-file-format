@@ -21,6 +21,14 @@ const mimeTypes = new Map([
   ['.avif', 'image/avif'],
   ['.bmp', 'image/bmp'],
   ['.ico', 'image/x-icon'],
+  ['.pdf', 'application/pdf'],
+  ['.txt', 'text/plain; charset=utf-8'],
+  ['.md', 'text/markdown; charset=utf-8'],
+  ['.csv', 'text/csv; charset=utf-8'],
+  ['.mp3', 'audio/mpeg'],
+  ['.wav', 'audio/wav'],
+  ['.mp4', 'video/mp4'],
+  ['.webm', 'video/webm'],
 ]);
 
 const activeSockets = new Set();

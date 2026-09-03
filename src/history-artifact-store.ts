@@ -1,4 +1,4 @@
-export type HvyHistoryArtifactKind = 'sqlite-checkpoint';
+export type HvyHistoryArtifactKind = 'sqlite-checkpoint' | 'attachment-checkpoint';
 
 export interface HvyHistoryArtifactPutRequest {
   kind: HvyHistoryArtifactKind;

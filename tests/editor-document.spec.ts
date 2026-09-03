@@ -2608,6 +2608,96 @@ hvy_version: 0.1
   expect(result.firstBg).not.toBe(result.secondBg);
 });
 
+test('embedded attachment actions stay isolated and expose attachment data lazily', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="firstMount"></div><div id="secondMount"></div>';
+    const modulePath = '/src/embed.ts';
+    const { deserializeDocumentBytes, mountHvyViewer } = await import(/* @vite-ignore */ modulePath);
+    const source = `---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Open the [Guide](@attachment:Guide).
+`;
+    const calls: Array<Record<string, unknown>> = [];
+    const mount = (rootId: string, owner: string, byte: number, mediaType: string, extension: string) => mountHvyViewer({
+      root: document.querySelector<HTMLElement>(rootId)!,
+      document: deserializeDocumentBytes(new TextEncoder().encode(source), '.hvy'),
+      attachmentStore: {
+        list: () => [{
+          id: `file:${owner}`,
+          meta: {
+            role: 'user-file',
+            name: 'Guide',
+            filename: `${owner}-guide.${extension}`,
+            mediaType,
+          },
+          length: 1,
+        }],
+        recall: () => new Uint8Array([byte]),
+        store: () => {},
+        remove: () => {},
+        resolveUrl: () => `app-attachment://${owner}`,
+      },
+      attachmentAction: async (request) => {
+        calls.push({
+          owner,
+          action: request.action,
+          id: request.id,
+          name: request.name,
+          filename: request.filename,
+          mediaType: request.mediaType,
+          length: request.length,
+          bytes: Array.from(await request.getBytes() ?? []),
+          url: await request.getUrl(),
+        });
+        return { handled: true };
+      },
+    });
+    mount('#firstMount', 'first', 11, 'application/pdf', 'pdf');
+    mount('#secondMount', 'second', 22, 'application/zip', 'zip');
+    (window as typeof window & { attachmentActionCalls?: Array<Record<string, unknown>> }).attachmentActionCalls = calls;
+  });
+
+  await expect(page.locator('#firstMount a[data-hvy-link-kind="attachment"]')).toHaveCount(1);
+  await expect(page.locator('#secondMount a[data-hvy-link-kind="attachment"]')).toHaveCount(1);
+  await page.locator('#firstMount a[data-hvy-link-kind="attachment"]').click();
+  await expect(page.locator('#secondMount a[data-hvy-link-kind="attachment"]')).toHaveCount(1);
+  await page.locator('#secondMount a[data-hvy-link-kind="attachment"]').click();
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { attachmentActionCalls?: Array<Record<string, unknown>> }).attachmentActionCalls
+  )).toEqual([
+    {
+      owner: 'first',
+      action: 'preview',
+      id: 'file:first',
+      name: 'Guide',
+      filename: 'first-guide.pdf',
+      mediaType: 'application/pdf',
+      length: 1,
+      bytes: [11],
+      url: 'app-attachment://first',
+    },
+    {
+      owner: 'second',
+      action: 'download',
+      id: 'file:second',
+      name: 'Guide',
+      filename: 'second-guide.zip',
+      mediaType: 'application/zip',
+      length: 1,
+      bytes: [22],
+      url: 'app-attachment://second',
+    },
+  ]);
+});
+
 test('embedded host theme overrides win per mount without changing document theme metadata', async ({ page }) => {
   await page.goto('/');
 

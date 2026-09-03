@@ -68,7 +68,36 @@ On an explicit edit commit, authoring tools MAY split a text component where one
 
 A single physical newline inside an ordinary Markdown paragraph is a soft wrap and MUST have the logical plain-text value of one space when rendered, searched, or copied as plain text. Readers MUST preserve meaningful Markdown line boundaries, including blank-line paragraph separators, explicit hard breaks, block structures such as list items and headings, and line breaks inside code blocks.
 
-Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+Markdown links inside text components MAY point to `http:`, `https:`, `mailto:`, internal fragment (`#id`) targets, named document attachments (`@attachment:<encoded-name>`), or host-gated HVY workspace paths. Workspace paths MUST start with `./`, `../`, or `/` and MAY include a fragment target such as `./other.hvy#section-id`. A leading `/` is relative to the host-defined HVY workspace root; it is not a host filesystem root. Readers MUST NOT fetch, resolve, authorize, or traverse workspace paths on their own. Embedded hosts MAY explicitly enable workspace links and handle them through the host link observer. When workspace links are not enabled, readers SHOULD render them as disabled/non-navigable links. Empty link targets SHOULD be treated as plain text by authoring tools rather than serialized as links.
+
+Named document attachment targets begin with the exact ASCII prefix
+`@attachment:` followed by the attachment's UTF-8 name encoded with URI
+component percent encoding. For example:
+
+```markdown
+[Employee handbook](@attachment:Employee%20Handbook)
+```
+
+The decoded name identifies an author-visible tail attachment whose metadata
+contains `role: "user-file"` and the same `name`; the opaque tail attachment
+`id` is not an authoring identifier and MUST NOT be exposed in link creation
+UI. Attachment names MUST be non-empty after trimming. Names are unique within
+a document under comparison of their trimmed Unicode strings after NFKC
+normalization and default Unicode lowercase conversion. Writers MUST preserve
+the chosen display spelling in `name`. An invalid percent escape, empty decoded
+name, missing match, or multiple matching attachments makes the link
+unresolved. Readers MUST NOT navigate to the literal `@attachment:` target;
+they SHOULD render unresolved attachment links as disabled and SHOULD identify
+the missing attachment to authors.
+
+Activating a resolved attachment link requests a preview when the client has a
+safe viewer for the declared media type and otherwise requests a download.
+Clients SHOULD offer download even when preview is available. Preview support
+is a client or host capability, not a document instruction. In particular,
+clients MAY open `application/pdf` attachments in a browser or desktop PDF
+viewer without creating a document component. Temporary, host, `blob:`,
+`file:`, and desktop-protocol URLs MUST NOT replace the authored
+`@attachment:` target in serialized document content.
 
 Markdown image syntax inside text components is valid source text but MUST NOT render as an image. Authoring tools SHOULD omit pasted non-text media from text components. Use dedicated `image` or `carousel` components for offline image assets stored in HVY tail attachments.
 
@@ -1697,6 +1726,17 @@ Tail format:
 Tail directive fields:
 - `id`: REQUIRED stable identifier unique within the document. Conventional ids include `db` for the database plugin payload and `image:<filename>` for image component attachments.
 - `mediaType`: RECOMMENDED IANA media type of the decoded payload.
+- `role`: optional string describing the attachment's document role. The value
+  `user-file` identifies an author-managed file that MAY be selected by a
+  named attachment link. Plugin data, encryption payloads, embedding indexes,
+  and other implementation attachments MUST NOT use `user-file`.
+- `name`: REQUIRED non-empty author-visible name when `role` is `user-file`.
+  The name participates in the document-wide uniqueness and link resolution
+  rules in §3.1. It is independent of `id` and `filename`; renaming it MUST NOT
+  move or replace the stored bytes.
+- `filename`: REQUIRED non-empty suggested download filename when `role` is
+  `user-file`. Clients MUST treat it as untrusted display metadata and MUST NOT
+  interpret it as a filesystem path.
 - `pixelWidth` and `pixelHeight`: REQUIRED positive integer intrinsic pixel dimensions for image attachments. Writers MUST include both fields so readers can reserve the image's aspect ratio before retrieving or decoding its bytes.
 - `length`: REQUIRED non-negative integer byte count for that attachment's slice. When omitted on the last directive, the slice consumes all remaining tail bytes.
 - `encoding`: optional. When `"gzip"`, the attachment bytes are gzip-compressed and clients MUST decompress before handing them to the consumer.
@@ -1706,6 +1746,18 @@ Rules:
 - Tail payloads are NOT part of Markdown parsing.
 - Tail payloads are only valid for `.hvy`, not `.thvy`.
 - Duplicate `id` values are not permitted; if a writer adds an attachment whose `id` already exists, the previous entry is overwritten.
+- User-file attachment names MUST be unique according to §3.1. Replacing a
+  user file SHOULD preserve its `id` and `name` while updating its `filename`,
+  `mediaType`, bytes, and other byte-derived metadata. Renaming a user file in
+  an authoring client MUST update all of that document's `@attachment:` link
+  targets as one edit.
+- Authoring clients SHOULD manage user files in a document metadata surface.
+  A user file dropped on a general document editing surface MUST NOT be stored
+  invisibly: the client MUST ask for confirmation, show the proposed name, and
+  make no document or attachment-store mutation if the user cancels. After a
+  confirmed addition, the client SHOULD reveal the new file in its attachment
+  manager. A file uploaded while creating a link SHOULD be selected for that
+  link immediately.
 - Clients that do not recognize an attachment's declared plugin or media type SHOULD preserve the bytes and pass them through on save, but MAY render the corresponding component as unsupported.
 
 Embedding retrieval caches MAY be stored as derived tail attachments with ids

@@ -15,6 +15,8 @@ import { renderPluginReader } from '../editor/components/plugin/plugin';
 import { renderTableReader, resetReaderTableStripeSequence } from '../editor/components/table/table';
 import { renderTextReader } from '../editor/components/text/text';
 import { renderXrefCardReader } from '../editor/components/xref-card/xref-card';
+import { renderLinkAttachmentPicker } from '../editor/components/link-attachment-picker/link-attachment-picker';
+import { renderLinkDocumentPicker } from '../editor/components/link-document-picker/link-document-picker';
 import type { ComponentRenderHelpers, ReaderBlockRenderOptions } from '../editor/component-helpers';
 import { renderAddComponentPicker } from '../editor/component-picker';
 import type { BlockSchema, VisualBlock, VisualSection } from '../editor/types';
@@ -34,7 +36,7 @@ import { sanitizeInlineCss } from '../css-sanitizer';
 import { compileSurfaceResponsiveCss, getSurfaceResponsiveClass } from '../surface-responsive-css';
 import { areTablesEnabled } from '../reference-config';
 import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
-import { visitBlocks, visitBlocksInList } from '../section-ops';
+import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
@@ -109,6 +111,7 @@ interface ReaderRenderState {
   search: SearchState;
   componentListReaderViews: Record<string, string>;
   viewerSidebarHelpDismissed: boolean;
+  crossDocumentLinksEnabled?: boolean;
 }
 
 interface ReaderRenderDeps {
@@ -2394,19 +2397,23 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
   }
 
   function renderLinkInlineModal(): string {
-    const ids = getLinkInlineTargetIds();
     return `
       <div id="linkInlineModal" class="link-inline-modal" aria-hidden="true">
         <div class="link-inline-overlay" data-link-modal-action="cancel"></div>
         <section class="link-inline-panel">
-          <h4>Insert Link</h4>
-          <label>
-            <span>URL or #ID</span>
-            <input id="linkInlineInput" list="linkInlineIds" placeholder="https://..., mailto:..., or #section-id" />
-            <datalist id="linkInlineIds">
-              ${ids.map((id) => `<option value="${deps.escapeAttr(id)}"></option>`).join('')}
-            </datalist>
+          <h4>Add Link</h4>
+          <div class="link-target-modes" role="tablist" aria-label="Link target type">
+            <button type="button" class="link-target-mode is-active" data-link-target-mode="web" role="tab" aria-selected="true">Web</button>
+            <button type="button" class="link-target-mode" data-link-target-mode="document" role="tab" aria-selected="false">This Document</button>
+            ${state.crossDocumentLinksEnabled ? '<button type="button" class="link-target-mode" data-link-target-mode="workspace" role="tab" aria-selected="false">Workspace</button>' : ''}
+            <button type="button" class="link-target-mode" data-link-target-mode="attachment" role="tab" aria-selected="false">Attachment</button>
+          </div>
+          <label class="link-target-input-wrap">
+            <span data-link-target-input-label="true">Web address</span>
+            <input id="linkInlineInput" placeholder="https://... or mailto:..." />
           </label>
+          ${renderLinkDocumentPicker()}
+          ${renderLinkAttachmentPicker()}
           <div class="link-inline-actions">
             <button type="button" class="ghost" data-link-modal-action="cancel">Cancel</button>
             <button type="button" class="secondary" data-link-modal-action="apply">Apply</button>
@@ -2414,26 +2421,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         </section>
       </div>
     `;
-  }
-
-  function getLinkInlineTargetIds(): string[] {
-    const ids = new Set<string>();
-    const visibleSections = deps
-      .flattenSections(state.documentSections)
-      .filter((section) => !section.isGhost);
-    for (const section of visibleSections) {
-      const sectionId = deps.getSectionId(section).trim();
-      if (sectionId) {
-        ids.add(`#${sectionId}`);
-      }
-    }
-    visitBlocks(visibleSections, (block) => {
-      const blockId = getBlockDomId(block);
-      if (blockId) {
-        ids.add(`#${blockId}`);
-      }
-    });
-    return [...ids];
   }
 
   function renderWarnings(): string {

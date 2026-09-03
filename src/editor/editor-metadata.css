@@ -14,9 +14,12 @@
 }
 
 .hvy-document .document-meta-view {
+  display: grid;
   min-height: 100%;
   max-width: 58rem;
   margin: 0 auto;
+  align-content: start;
+  gap: 0.7rem;
 }
 
 .hvy-document .document-meta-view .meta-panel {

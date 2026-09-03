@@ -55,6 +55,7 @@ import { captureRenderScroll, restoreRenderScroll } from './render-scroll';
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
+import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
@@ -105,10 +106,14 @@ import type {
   ImportFromTextResult,
 } from './ai-document-edit';
 import { addExternalLinkTargets, markdownToReaderHtml, normalizeMarkdownIndentation, normalizeMarkdownLists } from './markdown';
+import { renderUserFileAttachmentLinksInHtml } from './document-attachment-links';
+import { bindUserFileAttachmentLinks } from './document-attachment-links';
 import { removeTextFillInMarkers } from './text-fill-in';
 import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
+import type { UserFileAttachmentLimits } from './document-attachments';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -160,6 +165,8 @@ export interface HvyMountOptions {
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
+  attachmentAction?: HvyAttachmentActionHandler | null;
+  attachmentLimits?: UserFileAttachmentLimits | null;
   historyStore?: HvyHistoryArtifactStore | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
@@ -264,6 +271,8 @@ function createEmbedState(
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
+  attachmentAction?: HvyAttachmentActionHandler | null,
+  attachmentLimits?: UserFileAttachmentLimits | null,
   encryption?: HvyEncryptionOptions | null,
   crossDocumentLinksEnabled = false
 ): AppState {
@@ -283,6 +292,8 @@ function createEmbedState(
     persistDocumentState: false,
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    attachmentAction: attachmentAction ?? null,
+    attachmentLimits: attachmentLimits ?? null,
     encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
@@ -482,10 +493,10 @@ function renderComponentFragment(
 
 function renderTextFragment(content: string, answerGroups?: Map<number, string>): string {
   const normalized = normalizeMarkdownIndentation(normalizeMarkdownLists(content));
-  return addExternalLinkTargets(markdownToReaderHtml(normalized, {
+  return renderUserFileAttachmentLinksInHtml(addExternalLinkTargets(markdownToReaderHtml(normalized, {
     answerGroups,
     crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true,
-  }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true });
+  }), { crossDocumentLinksEnabled: state.crossDocumentLinksEnabled === true }), state.document);
 }
 
 function ensureReaderRenderer(): ReaderRenderer {
@@ -520,6 +531,7 @@ function ensureReaderRenderer(): ReaderRenderer {
       get paletteOverrideId() { return state.paletteOverrideId; },
       get theme() { return getThemeConfig(); },
       get currentView() { return 'viewer' as const; },
+      get crossDocumentLinksEnabled() { return state.crossDocumentLinksEnabled; },
       get showAdvancedEditor() { return false; },
       get responsivePreview() { return state.responsivePreview; },
       get readerExpandableState() { return state.readerExpandableState; },
@@ -623,6 +635,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   domMs = elapsedMs(domStartedAt);
   const postStartedAt = nowMs();
   bindReaderUi(root);
+  bindUserFileAttachmentLinks(root);
   bindCarouselInteractions(root);
   reconcilePluginMounts(root);
   syncTextToolbarLayout(root);
@@ -1152,10 +1165,13 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     options.persistSessionState === true ? options.storageKey : null,
     options.attachmentStore ?? null,
+    options.attachmentAction ?? null,
+    options.attachmentLimits ?? null,
     options.encryption ?? null,
     options.crossDocumentLinks === true
   ));
   configureDatabaseHistoryStore(runtime, options.historyStore);
+  configureAttachmentHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
   setPowerScriptAcceptanceCallbacks({
     getAcceptance: options.getPowerScriptAcceptance ?? null,
@@ -1223,6 +1239,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
         unmountAllPlugins();
         options.root.innerHTML = '';
@@ -1243,6 +1260,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         }
       });
       void destroyDatabaseHistory(runtime);
+      void destroyAttachmentHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
@@ -1433,6 +1451,8 @@ export type { HvyDocumentDeltaOptions } from './document-delta';
 export type { HvyThemeOverrides } from './types';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
+export type { HvyAttachmentAction, HvyAttachmentActionHandler, HvyAttachmentActionRequest, HvyAttachmentActionResult } from './document-attachment-actions';
+export type { UserFileAttachmentLimits } from './document-attachments';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';

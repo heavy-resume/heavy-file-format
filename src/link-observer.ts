@@ -10,6 +10,7 @@ export interface HvyLinkObserverRequest {
   kind: HvyLinkKind;
   crossDocument: boolean;
   xrefTarget?: string;
+  attachmentTarget?: string;
 }
 
 export interface HvyLinkObserverResponse {
@@ -74,8 +75,13 @@ function buildLinkObserverRequest(anchor: HTMLAnchorElement, href: string): HvyL
   [...anchor.attributes].forEach((attr) => {
     attributes[attr.name] = attr.value;
   });
-  const kind = anchor.dataset.hvyLinkKind === 'xref-card' ? 'xref-card' : 'link';
+  const kind: HvyLinkKind = anchor.dataset.hvyLinkKind === 'xref-card'
+    ? 'xref-card'
+    : anchor.dataset.hvyLinkKind === 'attachment'
+      ? 'attachment'
+      : 'link';
   const xrefTarget = anchor.dataset.hvyXrefTarget;
+  const attachmentTarget = anchor.dataset.hvyAttachmentTarget;
   return {
     href,
     text: anchor.textContent ?? '',
@@ -85,6 +91,7 @@ function buildLinkObserverRequest(anchor: HTMLAnchorElement, href: string): HvyL
     kind,
     crossDocument: anchor.dataset.hvyCrossDocument === 'true',
     ...(kind === 'xref-card' && typeof xrefTarget === 'string' ? { xrefTarget } : {}),
+    ...(kind === 'attachment' && typeof attachmentTarget === 'string' ? { attachmentTarget } : {}),
   };
 }
 

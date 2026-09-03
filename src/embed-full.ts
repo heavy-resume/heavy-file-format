@@ -110,6 +110,7 @@ import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendi
 import { observeRenderedLinks, resetObservedLinks, type HvyLinkObserver } from './link-observer';
 import { commitHistorySnapshot, recordHistory, redoStateAsync, undoStateAsync } from './history';
 import { configureDatabaseHistoryStore, destroyDatabaseHistory } from './database-history-controller';
+import { configureAttachmentHistoryStore, destroyAttachmentHistory } from './attachment-history-controller';
 import type { HvyHistoryArtifactStore } from './history-artifact-store';
 import { resetTransientUiState } from './navigation';
 import { renderNewDocumentModal } from './new-document-modal';
@@ -140,6 +141,8 @@ import { createPdfExportPlan, createPdfExportPlanFromPrompt } from './pdf-export
 import { getPdfExportPromptTemplates, renderPdfExportPromptTemplate } from './pdf-export/prompt-templates';
 import { setEditorClipboardHost } from './editor-clipboard';
 import { hydrateHostAttachmentDescriptorsSync, type HvyAttachmentHostAdapter } from './attachment-store';
+import { releaseUserFileAttachmentObjectUrls, type HvyAttachmentActionHandler } from './document-attachment-actions';
+import type { UserFileAttachmentLimits } from './document-attachments';
 import { serializeMountedDocumentBytesAsync } from './embed-serialization';
 import { materializePreparedEmbeddingAttachments } from './chat/embedding-context';
 import { createHostedAttachmentAdapter } from './hosted-attachments';
@@ -191,6 +194,8 @@ export interface HvyMountOptions {
   persistSessionState?: boolean;
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null;
   attachmentStore?: HvyAttachmentHostAdapter | null;
+  attachmentAction?: HvyAttachmentActionHandler | null;
+  attachmentLimits?: UserFileAttachmentLimits | null;
   historyStore?: HvyHistoryArtifactStore | null;
   serializer?: HvyDocumentSerializerAdapter | null;
   searchSnapshot?: HvySearchSnapshotInput | null;
@@ -252,6 +257,8 @@ function createEmbedState(
   imageAttachmentMaxDimensions?: ImageAttachmentMaxDimensions | null,
   sessionStorageKey?: string | null,
   attachmentHost?: HvyAttachmentHostAdapter | null,
+  attachmentAction?: HvyAttachmentActionHandler | null,
+  attachmentLimits?: UserFileAttachmentLimits | null,
   encryption?: HvyEncryptionOptions | null,
   crossDocumentLinksEnabled = false
 ): AppState {
@@ -271,6 +278,8 @@ function createEmbedState(
     persistDocumentState: persistSessionState && mode !== 'viewer',
     imageAttachmentMaxDimensions,
     attachmentHost: attachmentHost ?? null,
+    attachmentAction: attachmentAction ?? null,
+    attachmentLimits: attachmentLimits ?? null,
     encryption: encryption ?? null,
     chat: createDefaultChatState(),
     aiModeTipDismissed: false,
@@ -484,6 +493,7 @@ function ensureRenderers(): void {
   if (editorRenderer && readerRenderer) return;
   editorRenderer = createEditorRenderer(
     {
+      get document() { return state.document; },
       get documentMeta() { return state.document.meta as Record<string, unknown>; },
       get documentExtension() { return state.document.extension; },
       get imageAttachmentMaxDimensions() { return state.imageAttachmentMaxDimensions; },
@@ -567,6 +577,7 @@ function ensureRenderers(): void {
       get paletteOverrideId() { return state.paletteOverrideId; },
       get theme() { return getThemeConfig(); },
       get currentView() { return state.currentView; },
+      get crossDocumentLinksEnabled() { return state.crossDocumentLinksEnabled; },
       get showAdvancedEditor() { return state.showAdvancedEditor; },
       get responsivePreview() { return state.responsivePreview; },
       get readerExpandableState() { return state.readerExpandableState; },
@@ -1309,6 +1320,8 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     options.imageAttachmentMaxDimensions,
     sessionStorageKey,
     options.attachmentStore ?? null,
+    options.attachmentAction ?? null,
+    options.attachmentLimits ?? null,
     options.encryption ?? null,
     options.crossDocumentLinks === true
   );
@@ -1330,6 +1343,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   runtimeState.embeddingProvider = options.embeddingProvider ?? null;
   const runtime = createStateRuntime(runtimeState);
   configureDatabaseHistoryStore(runtime, options.historyStore);
+  configureAttachmentHistoryStore(runtime, options.historyStore);
   setPowerScriptingMode(options.powerScripts ?? 'prompt', runtime);
   setPowerScriptAcceptanceCallbacks({
     getAcceptance: options.getPowerScriptAcceptance ?? null,
@@ -1395,6 +1409,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
         cancelPendingEmbedUiBind(options.root);
         unmountAllPlugins();
@@ -1418,6 +1433,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
         }
       });
       void destroyDatabaseHistory(runtime);
+      void destroyAttachmentHistory(runtime);
     },
     getDocument() {
       return runWithStateRuntime(runtime, () => state.document);
@@ -1598,6 +1614,8 @@ export type { HvyDocumentDeltaOptions } from './document-delta';
 export type { HvyThemeOverrides } from './types';
 export type { RichTextCopyPayload } from './rich-text-copy';
 export type { HvyAttachmentDescriptor, HvyAttachmentHostAdapter } from './attachment-store';
+export type { HvyAttachmentAction, HvyAttachmentActionHandler, HvyAttachmentActionRequest, HvyAttachmentActionResult } from './document-attachment-actions';
+export type { UserFileAttachmentLimits } from './document-attachments';
 export type { HostedAttachmentManifest, HostedAttachmentManifestEntry } from './hosted-attachments';
 export type { HvyDocumentSerializerAdapter, HvyDocumentSerializerRequest } from './serialization';
 export type { HvyEncryptionOptions, HvyGeneratedEncryptionKey } from './encryption';

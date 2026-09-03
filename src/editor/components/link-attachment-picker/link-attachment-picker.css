@@ -1,0 +1,115 @@
+.hvy-document .link-target-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.35rem;
+}
+
+.hvy-document .link-target-mode {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hvy-surface) 90%, var(--hvy-text));
+  color: var(--hvy-text);
+  padding: 0.42rem 0.55rem;
+}
+
+.hvy-document .link-target-mode.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--hvy-surface));
+  color: var(--accent);
+}
+
+.hvy-document .link-document-options,
+.hvy-document .link-attachment-picker {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hvy-document .link-document-options[hidden],
+.hvy-document .link-attachment-picker[hidden],
+.hvy-document .link-target-input-wrap[hidden] {
+  display: none;
+}
+
+.hvy-document .link-attachment-picker {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: color-mix(in srgb, var(--hvy-surface) 95%, var(--accent));
+}
+
+.hvy-document .link-attachment-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hvy-document .link-attachment-sort-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.hvy-document .link-attachment-sort-wrap select {
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  padding: 0.35rem 1.8rem 0.35rem 0.5rem;
+  background-color: var(--hvy-surface);
+  color: var(--hvy-text);
+}
+
+.hvy-document .link-attachment-search-wrap {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+}
+
+.hvy-document .link-attachment-options {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.hvy-document .link-attachment-option {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--hvy-border-input);
+  border-radius: 8px;
+  background: var(--hvy-surface);
+  color: var(--hvy-text);
+  padding: 0.5rem;
+}
+
+.hvy-document .link-attachment-option:hover,
+.hvy-document .link-attachment-option:focus-visible,
+.hvy-document .link-attachment-option.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--hvy-surface));
+}
+
+.hvy-document .link-attachment-option span,
+.hvy-document .link-attachment-empty,
+.hvy-document .link-picker-result-status {
+  color: var(--hvy-text-muted);
+  font-size: 0.78rem;
+}
+
+@container hvy-preview (max-width: 520px) {
+  .hvy-document .link-attachment-picker-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.hvy-document a.hvy-attachment-link-missing {
+  color: var(--hvy-text-muted);
+  cursor: not-allowed;
+  text-decoration: line-through dotted;
+}

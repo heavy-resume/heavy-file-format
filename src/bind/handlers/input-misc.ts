@@ -26,6 +26,7 @@ export function bindInputMisc(app: HTMLElement): void {
     if (!isSearchQueryControl(target)) {
       return;
     }
+    const searchTabLostFocus = state.search.activeTab === 'search';
     window.setTimeout(() => {
       if (!state.search.open || state.search.resultsCollapsed) {
         return;
@@ -33,7 +34,7 @@ export function bindInputMisc(app: HTMLElement): void {
       if (state.search.queryDraft.trim() === state.search.submittedQuery.trim()) {
         return;
       }
-      if (state.search.activeTab === 'filter' && state.search.filterQueryMode === 'semantic') {
+      if (!searchTabLostFocus || state.search.activeTab !== 'search') {
         return;
       }
       void submitSearch(app);

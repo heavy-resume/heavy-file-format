@@ -17,6 +17,20 @@ function dismissDetailsPopoverForEscape(target: EventTarget | null): boolean {
   return true;
 }
 
+function finishActiveEditorBlockForEscape(app: HTMLElement, target: EventTarget | null): boolean {
+  const targetElement = target instanceof Element ? target : null;
+  const activeBlock = targetElement?.closest<HTMLElement>('.editor-block[data-active-editor-block="true"]')
+    ?? app.querySelector<HTMLElement>('.editor-block[data-active-editor-block="true"]');
+  const doneButton = activeBlock?.querySelector<HTMLButtonElement>(
+    ':scope > .editor-block-done-row > .editor-block-done-button'
+  );
+  if (!doneButton) {
+    return false;
+  }
+  doneButton.click();
+  return true;
+}
+
 export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean {
   if (event.key !== 'Escape') {
     return false;
@@ -61,6 +75,11 @@ export function handleEscapeKey(app: HTMLElement, event: KeyboardEvent): boolean
     event.stopPropagation();
     closeAiEditPopover();
     getRenderApp()();
+    return true;
+  }
+  if (finishActiveEditorBlockForEscape(app, event.target)) {
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   }
   return false;

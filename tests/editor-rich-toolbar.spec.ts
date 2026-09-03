@@ -1029,7 +1029,7 @@ Delta`);
 }
 
 async function loadRichTextDocument(page: Page, markdown: string): Promise<void> {
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -1414,6 +1414,28 @@ test('floating text toolbar can be hidden and returns when the text is clicked',
   await expect(editor).toBeFocused();
   await editor.click();
   await expect(toolbar.locator('.text-toolbar-compact')).toBeVisible();
+});
+
+test('Escape dismisses text controls before finishing the active component edit', async ({ page }) => {
+  await page.goto('/');
+  await loadRichTextDocument(page, 'Expected result Escape finishes editing');
+  await page.locator('[data-action="activate-block"]').first().click();
+
+  const activeBlock = page.locator('.editor-block[data-active-editor-block="true"]');
+  const editor = activeBlock.locator('.rich-editor');
+  const toolbar = activeBlock.locator('.text-editor-toolbar-slot > .rich-toolbar');
+  await editor.focus();
+  await expect(toolbar).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  await expect(toolbar).toBeHidden();
+  await expect(activeBlock).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  await expect(activeBlock).toHaveCount(0);
+  await expect(page.locator('.editor-block-passive')).toContainText('Expected result Escape finishes editing');
 });
 
 test('floating text toolbar starts compact, expands from either side, and keeps recent actions', async ({ page }) => {

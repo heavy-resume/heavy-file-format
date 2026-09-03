@@ -24,9 +24,7 @@ import {
 import { recordDatabaseTablesChanged } from './database-change-tracker';
 import { findSectionByKey } from './section-ops';
 import {
-  animateHistoryRestore,
   prepareHistoryViewportTransition,
-  type HistoryViewportTransition,
 } from './history-viewport-transition';
 
 interface HistorySnapshotOptions {
@@ -256,7 +254,7 @@ export function restoreHistoryStackState(value: unknown): void {
   restoreFromSnapshot(captured.currentSnapshot);
 }
 
-export function undoState(viewportTransition: HistoryViewportTransition | null = null): void {
+export function undoState(): void {
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
@@ -292,11 +290,10 @@ export function undoState(viewportTransition: HistoryViewportTransition | null =
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  animateHistoryRestore('undo', viewportTransition);
   notifyDocumentMayHaveChanged('undo', inferDocumentChangeSource('undo'), { authoritative: true });
 }
 
-export function redoState(viewportTransition: HistoryViewportTransition | null = null): void {
+export function redoState(): void {
   ensureHistoryInitialized();
   const modalScroll = captureModalScroll();
   const activeEditor = captureActiveEditorRestoreState();
@@ -316,7 +313,6 @@ export function redoState(viewportTransition: HistoryViewportTransition | null =
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  animateHistoryRestore('redo', viewportTransition);
   notifyDocumentMayHaveChanged('redo', inferDocumentChangeSource('redo'), { authoritative: true });
 }
 
@@ -333,9 +329,9 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     const activeHistoryContext = getHistoryEditorContextAfterInput()
       ?? getHistoryEditorContextAt(state.history.length - 1);
     if (activeHistoryContext && !historySnapshotContainsActiveEditor(target, activeEditor)) return;
-    const viewportTransition = await prepareHistoryViewportTransition(activeHistoryContext, root);
+    await prepareHistoryViewportTransition(activeHistoryContext, root);
     if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(target))) {
-      undoState(viewportTransition);
+      undoState();
       return;
     }
     const modalScroll = captureModalScroll();
@@ -356,7 +352,7 @@ export function undoStateAsync(root?: HTMLElement | null): Promise<void> {
     state.history.pop();
     if (currentSnapshot) state.future.push(encodeStoredHistoryEntry(currentSnapshot, storedCurrentEditorContext));
     restoreActiveEditorState(activeEditor, targetEditorContext);
-    finishHistoryNavigation('undo', modalScroll, viewportTransition);
+    finishHistoryNavigation('undo', modalScroll);
   });
 }
 
@@ -368,9 +364,9 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     const storedNext = parseStoredHistoryEntry(nextEntry);
     const next = storedNext?.content ?? nextEntry;
     const nextEditorContext = storedNext?.editorContext ?? null;
-    const viewportTransition = await prepareHistoryViewportTransition(nextEditorContext, root);
+    await prepareHistoryViewportTransition(nextEditorContext, root);
     if (!hasDatabaseHistoryVersionTransition(getHistoryDatabaseVersion(next))) {
-      redoState(viewportTransition);
+      redoState();
       return;
     }
     const modalScroll = captureModalScroll();
@@ -388,21 +384,19 @@ export function redoStateAsync(root?: HTMLElement | null): Promise<void> {
     state.future.pop();
     pushHistorySnapshot(next, { clearFuture: false, editorContext: nextEditorContext });
     restoreActiveEditorState(activeEditor, nextEditorContext);
-    finishHistoryNavigation('redo', modalScroll, viewportTransition);
+    finishHistoryNavigation('redo', modalScroll);
   });
 }
 
 function finishHistoryNavigation(
   action: 'undo' | 'redo',
   modalScroll: { selector: string; scrollTop: number } | null,
-  viewportTransition: HistoryViewportTransition | null = null,
 ): void {
   state.lastHistoryGroup = null;
   state.lastHistoryAt = 0;
   state.isRestoring = false;
   getRenderApp()();
   restoreModalScroll(modalScroll);
-  animateHistoryRestore(action, viewportTransition);
   notifyDocumentMayHaveChanged(action, inferDocumentChangeSource(action), { authoritative: true });
 }
 

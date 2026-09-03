@@ -1,58 +1,31 @@
 import type { HistoryEditorContext } from './history';
 
-export interface HistoryViewportTransition {
-  context: HistoryEditorContext;
-  root: HTMLElement;
-}
-
-const HISTORY_SCROLL_TIMEOUT_MS = 600;
+const HISTORY_SCROLL_TIMEOUT_MS = 900;
 
 export async function prepareHistoryViewportTransition(
   context: HistoryEditorContext | null,
   preferredRoot?: HTMLElement | null,
-): Promise<HistoryViewportTransition | null> {
+): Promise<void> {
   if (!context || typeof document === 'undefined') {
-    return null;
+    return;
   }
   const root = resolveHistoryRoot(context, preferredRoot);
   if (!root) {
-    return null;
+    return;
   }
   const target = resolveHistoryTarget(root, context);
   const scrollContainer = target?.closest<HTMLElement>(
     '.editor-shell .editor-tree, .editor-sidebar-panel, .reader-document, .viewer-sidebar-panel, .full-pane'
   );
   if (!target || !scrollContainer || isFullyVisible(target, scrollContainer)) {
-    return { context, root };
+    return;
   }
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     centerTarget(target, scrollContainer, 'auto');
-    return { context, root };
-  }
-  centerTarget(target, scrollContainer, 'smooth');
-  await waitForScrollTarget(target, scrollContainer);
-  return { context, root };
-}
-
-export function animateHistoryRestore(
-  action: 'undo' | 'redo',
-  transition: HistoryViewportTransition | null,
-): void {
-  if (!transition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     return;
   }
-  const target = resolveHistoryTarget(transition.root, transition.context);
-  if (!target || typeof target.animate !== 'function') {
-    return;
-  }
-  const animation = target.animate([
-    { opacity: 0.45, transform: 'scale(0.985)' },
-    { opacity: 1, transform: 'scale(1)' },
-  ], {
-    duration: 220,
-    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-  });
-  animation.id = `hvy-history-${action}`;
+  const destination = centerTarget(target, scrollContainer, 'smooth');
+  await waitForScrollDestination(scrollContainer, destination);
 }
 
 function resolveHistoryRoot(
@@ -104,28 +77,33 @@ function centerTarget(
   target: HTMLElement,
   scrollContainer: HTMLElement,
   behavior: ScrollBehavior,
-): void {
+): number {
   const targetRect = target.getBoundingClientRect();
   const containerRect = scrollContainer.getBoundingClientRect();
-  scrollContainer.scrollTo({
-    top: Math.max(
+  const destination = Math.min(
+    Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight),
+    Math.max(
       0,
       scrollContainer.scrollTop
         + targetRect.top
         - containerRect.top
         - (scrollContainer.clientHeight - targetRect.height) / 2
-    ),
+    )
+  );
+  scrollContainer.scrollTo({
+    top: destination,
     behavior,
   });
+  return destination;
 }
 
-function waitForScrollTarget(target: HTMLElement, scrollContainer: HTMLElement): Promise<void> {
+function waitForScrollDestination(scrollContainer: HTMLElement, destination: number): Promise<void> {
   const startedAt = performance.now();
-  let visibleFrames = 0;
+  let settledFrames = 0;
   return new Promise((resolve) => {
     const check = (): void => {
-      visibleFrames = isFullyVisible(target, scrollContainer) ? visibleFrames + 1 : 0;
-      if (visibleFrames >= 2 || performance.now() - startedAt >= HISTORY_SCROLL_TIMEOUT_MS) {
+      settledFrames = Math.abs(scrollContainer.scrollTop - destination) <= 1 ? settledFrames + 1 : 0;
+      if (settledFrames >= 2 || performance.now() - startedAt >= HISTORY_SCROLL_TIMEOUT_MS) {
         resolve();
         return;
       }

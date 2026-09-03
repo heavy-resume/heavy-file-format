@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('undo and redo restore the exact xref field, selection, and document state', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -14,7 +14,7 @@ hvy_version: 0.1
  <!--hvy:xref-card {"id":"reference","xrefTitle":"Custom title","xrefDetail":"Custom detail","xrefTarget":"undo-context"}-->
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="reference"]') }).click();
   let detail = page.locator('.editor-block[data-active-editor-block="true"] [data-field="block-xref-detail"]');
@@ -57,7 +57,7 @@ hvy_version: 0.1
 
 test('raw editor typing uses clustered history without losing its focus or caret', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
 
   let editor = page.locator('#rawEditor');
   await editor.evaluate((node: HTMLTextAreaElement) => {
@@ -95,10 +95,10 @@ test('raw editor typing uses clustered history without losing its focus or caret
   expect(await editor.evaluate((node: HTMLTextAreaElement) => node.selectionStart)).toBe(editedText.length);
 });
 
-test('off-screen undo scrolls to the edited block before animating the restore', async ({ page }) => {
+test('off-screen undo scrolls to the edited block without animating the restore', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -111,7 +111,7 @@ ${Array.from({ length: 24 }, (_, index) =>
   ).join('\n\n')}
 `);
   await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
 
   await page.locator('.editor-block-passive', { has: page.locator('[data-component-id="reference-0"]') }).click();
   let detail = page.locator('.editor-block[data-active-editor-block="true"] [data-field="block-xref-detail"]');
@@ -152,21 +152,36 @@ ${Array.from({ length: 24 }, (_, index) =>
     const viewport = node.closest('.editor-tree')!.getBoundingClientRect();
     return node.getBoundingClientRect().bottom < viewport.top;
   })).toBe(true);
+  const expectedUndoScrollTop = await detail.evaluate((node) => {
+    const scrollContainer = node.closest<HTMLElement>('.editor-tree')!;
+    const targetRect = node.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    return Math.max(
+      0,
+      scrollContainer.scrollTop
+        + targetRect.top
+        - containerRect.top
+        - (scrollContainer.clientHeight - targetRect.height) / 2
+    );
+  });
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
   await expect.poll(() => page.evaluate(() =>
     (window as typeof window & { historyViewportTrace?: Array<{ kind: string; text: string }> })
       .historyViewportTrace?.map(({ kind }) => kind) ?? []
-  )).toEqual(['smooth-scroll', 'hvy-history-undo']);
+  )).toEqual(['smooth-scroll']);
   expect(await page.evaluate(() =>
     (window as typeof window & { historyViewportTrace: Array<{ kind: string; text: string }> })
       .historyViewportTrace
   )).toEqual([
     { kind: 'smooth-scroll', text: 'Detail 0 changed' },
-    { kind: 'hvy-history-undo', text: expect.stringContaining('Detail 0') },
   ]);
   detail = page.locator('.editor-block[data-active-editor-block="true"] [data-field="block-xref-detail"]');
   await expect(detail).toHaveText('Detail 0');
+  expect(await page.locator('.editor-shell .editor-tree').evaluate(
+    (node, expectedScrollTop) => Math.abs(node.scrollTop - expectedScrollTop),
+    expectedUndoScrollTop
+  )).toBeLessThanOrEqual(1);
   expect(await detail.evaluate((node) => {
     const viewport = node.closest('.editor-tree')!.getBoundingClientRect();
     const rect = node.getBoundingClientRect();
@@ -183,19 +198,34 @@ ${Array.from({ length: 24 }, (_, index) =>
     const viewport = node.closest('.editor-tree')!.getBoundingClientRect();
     return node.getBoundingClientRect().bottom < viewport.top;
   })).toBe(true);
+  const expectedRedoScrollTop = await detail.evaluate((node) => {
+    const scrollContainer = node.closest<HTMLElement>('.editor-tree')!;
+    const targetRect = node.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    return Math.max(
+      0,
+      scrollContainer.scrollTop
+        + targetRect.top
+        - containerRect.top
+        - (scrollContainer.clientHeight - targetRect.height) / 2
+    );
+  });
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Y');
   await expect.poll(() => page.evaluate(() =>
     (window as typeof window & { historyViewportTrace?: Array<{ kind: string; text: string }> })
       .historyViewportTrace?.map(({ kind }) => kind) ?? []
-  )).toEqual(['smooth-scroll', 'hvy-history-redo']);
+  )).toEqual(['smooth-scroll']);
   expect(await page.evaluate(() =>
     (window as typeof window & { historyViewportTrace: Array<{ kind: string; text: string }> })
       .historyViewportTrace
   )).toEqual([
     { kind: 'smooth-scroll', text: 'Detail 0' },
-    { kind: 'hvy-history-redo', text: expect.stringContaining('Detail 0 changed') },
   ]);
   detail = page.locator('.editor-block[data-active-editor-block="true"] [data-field="block-xref-detail"]');
   await expect(detail).toHaveText('Detail 0 changed');
+  expect(await page.locator('.editor-shell .editor-tree').evaluate(
+    (node, expectedScrollTop) => Math.abs(node.scrollTop - expectedScrollTop),
+    expectedRedoScrollTop
+  )).toBeLessThanOrEqual(1);
 });

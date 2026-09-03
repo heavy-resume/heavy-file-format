@@ -57,8 +57,9 @@ Changing an encrypted component's key MUST generate a fresh UUID and Fernet key,
 
 ### 3.1 Markdown compatibility
 
-If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is used for italics rather than `*`.
+If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_` is the preferred syntax for italics. An opening single underscore MAY immediately follow a letter or number so authors can begin italics within a word, as in `Someth_ing there_`; the closing underscore must occur at a normal emphasis boundary. This intraword-opening behavior is an HVY Markdown extension and MUST NOT reinterpret ordinary embedded-underscore identifiers such as `snake_case_value`. Authoring clients SHOULD use standard `*text*` emphasis when an italic run directly touches unformatted letters or numbers and underscore delimiters would become ambiguous, such as multiple formatted fragments within one word.
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
+Use `~~text~~` for strikethrough. Authoring clients MUST preserve this syntax when serializing strikethrough text from a rich editor.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
 Blank lines inside text components are meaningful Markdown paragraph separators. The normal paragraph gap is configured by `typography.paragraphSpacing` and defaults to `0.45rem`.

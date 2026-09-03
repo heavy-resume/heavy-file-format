@@ -2219,8 +2219,8 @@ hvy_version: 0.1
 /** Selects `text` inside the active rich editor, spanning element boundaries if needed. */
 async function selectTextInActiveEditor(page: Page, text: string): Promise<void> {
   const editor = page.locator('.editor-block[data-active-editor-block="true"] .rich-editor');
-  await editor.evaluate((node, target) => {
-    const start = (node as HTMLElement).innerText.indexOf(target);
+  await expect.poll(() => editor.evaluate((node, target) => {
+    const start = (node.textContent ?? '').indexOf(target);
     if (start < 0) throw new Error(`Selection text ${JSON.stringify(target)} is not in the editor.`);
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
     let seen = 0;
@@ -2243,8 +2243,8 @@ async function selectTextInActiveEditor(page: Page, text: string): Promise<void>
     selection?.removeAllRanges();
     selection?.addRange(range);
     node.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-  }, text);
-  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text);
+    return window.getSelection()?.toString();
+  }, text)).toBe(text);
 }
 
 function paragraphMarkdown(page: Page): Promise<string | undefined> {
@@ -2277,6 +2277,62 @@ test('unformatting the start or end of a run keeps the remainder formatted', asy
   await selectTextInActiveEditor(page, 'three');
   await page.getByRole('button', { name: 'Italic', exact: true }).first().click();
   await expect.poll(() => paragraphMarkdown(page)).toBe('_one two_ three');
+});
+
+for (const { format, source, button, renderedSelector } of [
+  { format: 'bold', source: '**Something** There', button: 'Bold', renderedSelector: 'strong' },
+  { format: 'italics', source: '_Something_ There', button: 'Italic', renderedSelector: 'em' },
+  { format: 'underline', source: '___Something___ There', button: 'Underline', renderedSelector: 'u' },
+  { format: 'strikethrough', source: '~~Something~~ There', button: 'Strikethrough', renderedSelector: 'del' },
+  { format: 'inline code', source: '`Something` There', button: 'Code block', renderedSelector: 'code' },
+]) {
+  test(`partial ${format} removal survives reactivation before formatting later text`, async ({ page }) => {
+    // BEFORE
+    await loadInlineFormattingParagraph(page, source);
+
+    // TOOL CALL
+    await selectTextInActiveEditor(page, 'hi');
+    await expandInlineRichToolbar(page);
+    await page.getByRole('button', { name: button, exact: true }).first().click();
+    await page.getByRole('button', { name: 'Done' }).first().click();
+    await page.locator('.editor-block-passive').first().click();
+    await selectTextInActiveEditor(page, 'ere');
+    await expandInlineRichToolbar(page);
+    await page.getByRole('button', { name: button, exact: true }).first().click();
+    await page.getByRole('button', { name: 'Done' }).first().click();
+
+    // AFTER
+    const expectedResult = page.locator('.editor-block-passive').first();
+    await expect(expectedResult.locator(renderedSelector)).toHaveText(['Somet', 'ng', 'ere']);
+    await expect(expectedResult).toHaveText('Something There');
+  });
+}
+
+test('removing a link survives reactivation before linking later text', async ({ page }) => {
+  // BEFORE
+  await loadInlineFormattingParagraph(page, '[Something](https://example.test/original) There');
+
+  // TOOL CALL
+  await selectTextInActiveEditor(page, 'Something');
+  await page.getByRole('button', { name: 'Link', exact: true }).first().click();
+  let linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill('');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+  await page.locator('.editor-block-passive').first().click();
+  await selectTextInActiveEditor(page, 'ere');
+  await expandInlineRichToolbar(page);
+  await page.getByRole('button', { name: 'Link', exact: true }).first().click();
+  linkModal = page.locator('.link-inline-modal.is-open');
+  await linkModal.locator('#linkInlineInput').fill('https://example.test/later');
+  await linkModal.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Done' }).first().click();
+
+  // AFTER
+  const expectedResult = page.locator('.editor-block-passive').first();
+  await expect(expectedResult.locator('a')).toHaveText('ere');
+  await expect(expectedResult.locator('a')).toHaveAttribute('href', 'https://example.test/later');
+  await expect(expectedResult).toHaveText('Something There');
 });
 
 test('selecting a whole run still removes its formatting entirely', async ({ page }) => {

@@ -16,9 +16,10 @@ Standard ATX headings are plain Markdown content and do not create HVY sections.
 HVY section titles use #! Title immediately after a section directive. #! lines are consumed by the parser and are never rendered as Markdown content.
 
 ## Inline Formatting ##
-Use _text_ for italics.
+Use _text_ for italics. The opening underscore may immediately follow a letter or number when italics begin within a word, as in Someth_ing there_; ordinary embedded-underscore identifiers such as snake_case_value remain literal. Editors may serialize italics as *text* when a formatted run directly touches unformatted letters or numbers and underscores would be ambiguous.
 HVY also supports ___text___ as a constrained inline underline extension. Triple underscores were chosen so language names such as C++ remain plain text.
 The underline extension is intentionally nonstandard Markdown, but remains readable in renderers that do not implement it.
+Use ~~text~~ for strikethrough.
 
 ## Code And Indentation ##
 Use fenced Markdown code blocks with triple backticks or standard Markdown fences for visible code.

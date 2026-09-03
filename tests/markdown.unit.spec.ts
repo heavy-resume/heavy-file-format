@@ -69,6 +69,67 @@ test('expected result: rendered prose soft wraps use spaces in DOM text', () => 
   expect(markdownToReaderHtml('_Players_\n_chasing_')).toContain('<em>Players</em> <em>chasing</em>');
 });
 
+for (const { format, editorHtml, expectedMarkdown, expectedRenderedHtml } of [
+  {
+    format: 'bold',
+    editorHtml: '<p>Someth<strong>ing there</strong></p>',
+    expectedMarkdown: 'Someth**ing there**',
+    expectedRenderedHtml: '<strong>ing there</strong>',
+  },
+  {
+    format: 'italics',
+    editorHtml: '<p>Someth<em>ing there</em></p>',
+    expectedMarkdown: 'Someth*ing there*',
+    expectedRenderedHtml: '<em>ing there</em>',
+  },
+  {
+    format: 'underline',
+    editorHtml: '<p>Someth<u>ing there</u></p>',
+    expectedMarkdown: 'Someth___ing there___',
+    expectedRenderedHtml: '<u>ing there</u>',
+  },
+  {
+    format: 'strikethrough',
+    editorHtml: '<p>Someth<s>ing there</s></p>',
+    expectedMarkdown: 'Someth~~ing there~~',
+    expectedRenderedHtml: '<del>ing there</del>',
+  },
+  {
+    format: 'link',
+    editorHtml: '<p>Someth<a href="https://example.test/path">ing there</a></p>',
+    expectedMarkdown: 'Someth[ing there](https://example.test/path)',
+    expectedRenderedHtml: '<a href="https://example.test/path"',
+  },
+  {
+    format: 'inline code',
+    editorHtml: '<p>Someth<code>ing there</code></p>',
+    expectedMarkdown: 'Someth`ing there`',
+    expectedRenderedHtml: '<code>ing there</code>',
+  },
+]) {
+  test(`expected result: ${format} can begin within a word in text components`, () => {
+    const markdown = turndown.turndown(editorHtml);
+
+    expect(markdown).toBe(expectedMarkdown);
+    expect(markdownToReaderHtml(markdown)).toContain(expectedRenderedHtml);
+  });
+}
+
+test('expected result: intraword italics do not reinterpret ordinary underscores or code', () => {
+  expect(markdownToReaderHtml('snake_case_value')).toContain('<p>snake_case_value</p>');
+  expect(markdownToReaderHtml('Someth\\_ing there_')).not.toContain('<em>');
+  expect(markdownToReaderHtml('`Someth_ing there_`')).toContain('<code>Someth_ing there_</code>');
+});
+
+test('expected result: split intraword italics serialize without ambiguous delimiter runs', () => {
+  const markdown = turndown.turndown('<p><em>Somet</em>hi<em>ng</em> Th<em>ere</em></p>');
+
+  expect(markdown).toBe('*Somet*hi*ng* Th*ere*');
+  expect(markdownToReaderHtml(markdown)).toBe(
+    '<p><em>Somet</em>hi<em>ng</em> Th<em>ere</em></p>\n'
+  );
+});
+
 test('expected result: rendered prose keeps explicit hard breaks', () => {
   expect(markdownToReaderHtml('Players  \nchasing')).toContain('Players<br>chasing');
 });

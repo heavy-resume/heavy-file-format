@@ -25,6 +25,22 @@ marked.use({
       // tokenizer; returning nothing lets a single tilde remain ordinary text.
       return source.startsWith('~~') ? false : undefined;
     },
+    emStrong: function (source, _maskedSource, previousCharacter = '') {
+      if (!/[\p{L}\p{N}]$/u.test(previousCharacter)) {
+        return false;
+      }
+      const match = source.match(/^_(?!_)(?=\S)([^_\n]*?\S)_(?!_)(?=$|[\s\p{P}\p{S}])/u);
+      if (!match) {
+        return false;
+      }
+      const text = match[1]!;
+      return {
+        type: 'em',
+        raw: match[0],
+        text,
+        tokens: this.lexer.inlineTokens(text),
+      };
+    },
   },
 });
 
@@ -34,6 +50,45 @@ export const turndown = new TurndownService({
   bulletListMarker: '-',
   emDelimiter: '_',
 });
+
+turndown.addRule('hvy-emphasis', {
+  filter: ['em', 'i'],
+  replacement: (content, node) => {
+    if (!content.trim()) {
+      return '';
+    }
+    const sourceText = node.textContent ?? '';
+    const touchesUnformattedWord = (!/^\s/u.test(sourceText)
+      && /[\p{L}\p{N}]$/u.test(findAdjacentTextCharacter(node, 'previous')))
+      || (!/\s$/u.test(sourceText)
+        && /^[\p{L}\p{N}]/u.test(findAdjacentTextCharacter(node, 'next')));
+    const delimiter = touchesUnformattedWord ? '*' : '_';
+    return `${delimiter}${content}${delimiter}`;
+  },
+});
+
+function findAdjacentTextCharacter(node: Node, direction: 'previous' | 'next'): string {
+  let current: Node | null = node;
+  while (current.parentNode) {
+    let sibling = direction === 'previous' ? current.previousSibling : current.nextSibling;
+    while (sibling) {
+      const text = sibling.textContent ?? '';
+      if (text.length > 0) {
+        return direction === 'previous' ? Array.from(text).at(-1) ?? '' : Array.from(text)[0] ?? '';
+      }
+      sibling = direction === 'previous' ? sibling.previousSibling : sibling.nextSibling;
+    }
+    current = current.parentNode;
+    if (isMarkdownBlockBoundary(current)) {
+      return '';
+    }
+  }
+  return '';
+}
+
+function isMarkdownBlockBoundary(node: Node): boolean {
+  return node.nodeType === 1 && /^(BLOCKQUOTE|DIV|H[1-6]|LI|P|PRE|TD|TH)$/.test(node.nodeName);
+}
 
 turndown.addRule('task-list-checkbox', {
   filter: (node) => node.nodeName === 'INPUT' && ['checkbox', 'radio'].includes((node as HTMLInputElement).getAttribute('type') ?? ''),
@@ -52,6 +107,11 @@ turndown.addRule('inline-answer-line-break', {
 turndown.addRule('underline', {
   filter: (node) => node.nodeName === 'U',
   replacement: (content) => (content.trim().length > 0 ? `___${content}___` : ''),
+});
+
+turndown.addRule('strikethrough', {
+  filter: (node) => ['DEL', 'S', 'STRIKE'].includes(node.nodeName),
+  replacement: (content) => (content.trim().length > 0 ? `~~${content}~~` : ''),
 });
 
 turndown.addRule('inline-code-literal-text', {

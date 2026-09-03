@@ -442,6 +442,63 @@ doc.header.set("datetime_result", f"{monday_year}-W{monday_week:02d}|{sunday_yea
   );
 });
 
+test('scripting checked random library supports safe sequence and numeric helpers', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Editor' }).click();
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"random"}-->
+#! Random
+
+<!--hvy:plugin {"id":"random-check","editorOnly":true,"plugin":"hvy.scripting","pluginConfig":{"version":"0.1","libraries":["random"]}}-->
+from random import choice, choices, randint, random as random_value, randrange, sample, shuffle, uniform
+
+shuffled = [1, 2, 3]
+shuffle(shuffled)
+failures = []
+
+def expect_failure(label, action):
+    try:
+        action()
+        failures.append(label + ":missed")
+    except BaseException:
+        failures.append(label + ":blocked")
+
+expect_failure("choice", lambda: choice([]))
+expect_failure("randrange", lambda: randrange(1, 1))
+expect_failure("sample", lambda: sample([1], 2))
+expect_failure("weights", lambda: choices([1, 2], weights=[1], k=1))
+expect_failure("both_weights", lambda: choices([1, 2], weights=[1, 1], cum_weights=[1, 2], k=1))
+expect_failure("zero_weights", lambda: choices([1, 2], weights=[0, 0], k=1))
+
+result = [
+    str(0.0 <= random_value() < 1.0),
+    choice(["only"]),
+    str(randrange(5, 6)),
+    str(randrange(7, 6, -2)),
+    str(randint(4, 4)),
+    str(uniform(2.5, 2.5)),
+    "".join(str(value) for value in sorted(sample([1, 2, 3], 3))),
+    "".join(choices(["x"], k=3)),
+    "".join(choices(["off", "on"], weights=[0, 1], k=3)),
+    "".join(choices(["off", "on"], cum_weights=[0, 2], k=2)),
+    "".join(str(value) for value in sorted(shuffled)),
+    ",".join(failures),
+]
+doc.header.set("random_result", "|".join(result))
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await waitForDocumentMeta(
+    page,
+    'random_result',
+    'True|only|5|7|4|2.5|123|xxx|ononon|onon|123|choice:blocked,randrange:blocked,sample:blocked,weights:blocked,both_weights:blocked,zero_weights:blocked'
+  );
+});
+
 test('scripting checked datetime library does not expose runtime capabilities', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Editor' }).click();

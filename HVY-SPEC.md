@@ -1569,6 +1569,14 @@ arguments is `0.2`, stored in the scripting block's `pluginConfig.version`.
 Clients implementing `0.2` MUST continue to execute `0.1` scripting blocks;
 those blocks simply did not declare the callback-preserving transport.
 
+The reference sandbox's checked `random` library exposes `random()`,
+`shuffle(items)`, `choice(sequence)`, `randrange(start, stop=None, step=1)`,
+`randint(a, b)`, `uniform(a, b)`, `sample(population, k)`, and
+`choices(population, weights=None, cum_weights=None, k=1)`. It is a constrained
+shim rather than Brython's full standard-library module; state-management,
+cryptographic, byte-generation, and specialized distribution APIs are not
+exposed.
+
 Sandboxed scripting runtimes MAY expose component handles through document
 tools such as `doc.tool.get_components(...)` and
 `doc.tool.get_updated_components(...)`, and MAY return the same handles from
@@ -1939,6 +1947,8 @@ Plugin-specific rules:
   make available to every form script before execution. Supported values are
   client-defined; this reference client supports `"random"`, `"re"`, and `"datetime"`. Import statements
   for unchecked libraries MUST remain blocked by the scripting sandbox.
+  The checked `"random"` library has the same constrained API as the reference
+  `hvy.scripting` sandbox described in section 7.5.
   The reference client's checked `"datetime"` library exposes the timezone-naive
   `datetime` and `timedelta` classes for construction, ISO and numeric-format
   parsing/formatting, arithmetic, comparisons, `weekday()`, and `isocalendar()`.

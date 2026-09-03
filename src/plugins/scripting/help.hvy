@@ -168,6 +168,20 @@ theme:
   doc.header.set("last_script_run", doc.time.now_local())
   ```
 
+  Enable the checked `random` library with `pluginConfig.libraries: ["random"]` to select or reorder values:
+
+  ```python
+  import random
+
+  featured = random.choice(items)
+  preview = random.sample(items, min(3, len(items)))
+  random.shuffle(items)
+  ```
+
+  The checked subset supports `random()`, `shuffle()`, `choice()`, `randrange()`, `randint()`, `uniform()`, `sample()`,
+  and `choices()`. Random state, byte generation, cryptographic helpers, and specialized probability distributions are
+  not exposed.
+
   Enable the checked `datetime` library with `pluginConfig.libraries: ["datetime"]`, then perform timezone-naive date
   arithmetic with familiar Python syntax:
 

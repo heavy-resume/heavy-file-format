@@ -1410,6 +1410,7 @@ export const formPlugin: HvyPlugin = {
     '`scripts` maps script names to Python/Brython source wrapped in a generated function. `pluginConfig.submitScript`, `pluginConfig.submitSourceScript`, `pluginConfig.initialScript`, `pluginConfig.changeScript`, and field triggers name a script key.',
     'Use `submitAction: "ai-generate"` for model-backed form submit. The host calls the chat model, `submitSourceScript` returns the input, and `submitScript` receives injected `response` and `source` values to apply the generated output; use `doc.json` for structured JSON responses.',
     '`scriptLibraries` enables checked sandbox libraries such as `random`, `re`, and `datetime` for every form script.',
+    'The checked `random` subset provides `random`, `shuffle`, `choice`, `randrange`, `randint`, `uniform`, `sample`, and `choices`.',
     '`scriptStepBudget` controls the maximum runtime steps for each script run.',
     'Form scripts receive `doc` plus `doc.form` for live form values, options, and errors.',
     'Use `doc.form.get_value`, `doc.form.get_values`, `doc.form.set_value`, `doc.form.set_options`, `doc.form.set_error`, and `doc.form.clear_error` for form state.',

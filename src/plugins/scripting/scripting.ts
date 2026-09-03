@@ -484,6 +484,7 @@ export const scriptingPlugin: HvyPlugin = {
     'Put executable script source in the component body.',
     'Scripts run as Python/Brython code wrapped in a generated function with a `doc` global, so `return` can stop the script early.',
     'Use `pluginConfig.libraries` to enable checked sandbox libraries such as `random`, `re`, and `datetime` before the script runs.',
+    'The checked `random` subset provides `random`, `shuffle`, `choice`, `randrange`, `randint`, `uniform`, `sample`, and `choices`.',
     'Use `pluginConfig.maxSteps` to configure the runtime step budget.',
     'Use the `doc` API for host capabilities: document tools through `doc.tool.TOOL_NAME(**args)`, header helpers, attachment helpers, and plugin-provided APIs.',
     'Use this only when the user explicitly needs a script-backed component.',

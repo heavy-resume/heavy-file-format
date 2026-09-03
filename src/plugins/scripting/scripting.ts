@@ -59,6 +59,31 @@ function refreshHighlightedSource(textarea: HTMLTextAreaElement, highlightedCode
   highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
 }
 
+function scrollScriptingSourceHorizontally(
+  event: WheelEvent,
+  sourceEditor: HTMLDivElement,
+  textarea: HTMLTextAreaElement
+): void {
+  const rawHorizontalDelta = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+  if (rawHorizontalDelta === 0) {
+    return;
+  }
+  const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+    ? Number.parseFloat(getComputedStyle(textarea).lineHeight) || 16
+    : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      ? sourceEditor.clientWidth
+      : 1;
+  const previousScrollLeft = sourceEditor.scrollLeft;
+  sourceEditor.scrollLeft += rawHorizontalDelta * deltaScale;
+  if (sourceEditor.scrollLeft === previousScrollLeft) {
+    return;
+  }
+  if (!event.shiftKey && event.deltaY !== 0) {
+    textarea.scrollTop += event.deltaY * deltaScale;
+  }
+  event.preventDefault();
+}
+
 interface ReaderHandles {
   shell: HTMLDivElement;
   summary: HTMLDivElement;
@@ -122,6 +147,11 @@ function buildEditorDom(ctx: HvyPluginContext): { root: HTMLDivElement; handles:
   textarea.addEventListener('scroll', () => {
     highlightedCode.style.transform = `translateY(${-textarea.scrollTop}px)`;
   });
+  // The textarea owns vertical scrolling, but its transparent overlay must hand
+  // horizontal gestures to the shared source scroller beneath it.
+  textarea.addEventListener('wheel', (event) => {
+    scrollScriptingSourceHorizontally(event, sourceEditor, textarea);
+  }, { passive: false });
 
   sourceEditor.appendChild(highlightedSource);
   sourceEditor.appendChild(textarea);
@@ -325,9 +355,22 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
 
   sync();
 
+  // Plugin factories run before their element replaces the mount placeholder,
+  // so repeat the font-dependent width measurement once styles are available.
+  const mountWindow = root.ownerDocument.defaultView;
+  let postMountFrame = mountWindow?.requestAnimationFrame(() => {
+    postMountFrame = undefined;
+    sync();
+  });
+
   return {
     element: root,
     refresh: sync,
+    unmount: () => {
+      if (postMountFrame !== undefined) {
+        mountWindow?.cancelAnimationFrame(postMountFrame);
+      }
+    },
   };
 }
 

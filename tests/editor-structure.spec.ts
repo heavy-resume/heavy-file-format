@@ -1917,6 +1917,35 @@ hvy_version: 0.1
   await expect(page.locator('#editorTree')).not.toContainText('maintenance script');
 });
 
+test('initial scripting editor content scrolls horizontally with a user gesture', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"script-scroll-repro"}-->
+#! Script Scroll Repro
+
+ <!--hvy:plugin {"id":"long-script","plugin":"hvy.scripting","pluginConfig":{"version":"0.1"}}-->
+  initial_horizontal_scroll_repro = "${'long-script-value-'.repeat(30)}"
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.locator('#editorTree .editor-block-passive', { hasText: 'initial_horizontal_scroll_repro' }).click();
+
+  const scriptEditor = page.getByRole('textbox', { name: 'Python script' });
+  const sourceEditor = page.locator('#editorTree .hvy-scripting-source-editor');
+  await expect(scriptEditor).toBeVisible();
+  await expect.poll(() => sourceEditor.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeGreaterThan(32);
+
+  await scriptEditor.hover();
+  await page.mouse.wheel(500, 0);
+
+  await expect.poll(() => sourceEditor.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+});
+
 test('script-only sections render at the bottom of the editor', async ({ page }) => {
   await page.goto('/');
 

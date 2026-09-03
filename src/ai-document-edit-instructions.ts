@@ -184,6 +184,7 @@ export function buildHeaderEditFormatInstructions(options?: { planActive?: boole
     'The header is YAML front matter only. It contains document metadata, component template definitions, and section template definitions such as `component_defs` and `section_defs`.',
     'Use the header path for document-level metadata, theme colors, component defaults, section defaults, text line styles, heading styles, template schema, plugins, and component template/section definitions.',
     'Do not invent metadata fields. For `section_defaults`, the only supported fields are `css` and `contained`, for example `section_defaults:\\n  css: "margin: 0.5rem 0;"\\n  contained: true`.',
+    'For `typography`, the only supported field is `paragraphSpacing`, for example `typography:\\n  paragraphSpacing: "0.45rem"`.',
     'For `component_defaults`, each component name may contain only `css`, for example `component_defaults:\\n  xref-card:\\n    css: "margin: 0.5rem 0;"`.',
     'For `text_line_styles`, each style may contain `label` and declaration-only `css`, for example `text_line_styles:\\n  role:\\n    label: Role heading\\n    css: "font-weight: 700;"`.',
     'For `heading_styles`, each `h1` through `h4` entry may contain `label`, declaration-only `css`, and `afterContentMarginTop`, for example `heading_styles:\\n  h3:\\n    label: Heading 3\\n    css: "margin: 1rem 0 0.2rem; font-weight: 700;"\\n    afterContentMarginTop: "1rem"`.',

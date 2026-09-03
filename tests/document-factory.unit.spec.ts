@@ -11,6 +11,9 @@ test('createBlankDocument uses the default reader max width', () => {
     css: 'margin: 0 0 0.5rem;',
     contained: true,
   });
+  expect(document.meta.typography).toEqual({
+    paragraphSpacing: '0.45rem',
+  });
 });
 
 test('createBlankDocument can create PHVY and THVY documents', () => {

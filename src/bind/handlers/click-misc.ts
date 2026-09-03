@@ -258,12 +258,7 @@ function closeOtherComponentPickers(app: HTMLElement, except?: HTMLElement): voi
 
 function revealComponentPicker(picker: HTMLElement): void {
   requestAnimationFrame(() => {
-    const popover = picker.querySelector<HTMLElement>('.component-picker-popover');
-    if (!popover) {
-      return;
-    }
-    popover.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    requestAnimationFrame(() => placeComponentPicker(picker));
+    placeComponentPicker(picker);
   });
 }
 
@@ -273,14 +268,28 @@ function placeComponentPicker(picker: HTMLElement): void {
     return;
   }
   picker.style.removeProperty('--component-picker-shift');
+  picker.style.removeProperty('--component-picker-shift-y');
   const padding = 8;
   const rect = popover.getBoundingClientRect();
-  const overflowLeft = padding - rect.left;
-  const overflowRight = rect.right - (window.innerWidth - padding);
+  const scrollSurface = picker.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
+  const surfaceRect = scrollSurface?.getBoundingClientRect();
+  const leftEdge = Math.max(padding, surfaceRect?.left ?? padding);
+  const rightEdge = Math.min(window.innerWidth - padding, surfaceRect?.right ?? window.innerWidth - padding);
+  const topEdge = Math.max(padding, surfaceRect?.top ?? padding);
+  const bottomEdge = Math.min(window.innerHeight - padding, surfaceRect?.bottom ?? window.innerHeight - padding);
+  const overflowLeft = leftEdge - rect.left;
+  const overflowRight = rect.right - rightEdge;
+  const overflowTop = topEdge - rect.top;
+  const overflowBottom = rect.bottom - bottomEdge;
   if (overflowLeft > 0) {
     picker.style.setProperty('--component-picker-shift', `${overflowLeft}px`);
   } else if (overflowRight > 0) {
     picker.style.setProperty('--component-picker-shift', `${-overflowRight}px`);
+  }
+  if (overflowTop > 0) {
+    picker.style.setProperty('--component-picker-shift-y', `${overflowTop}px`);
+  } else if (overflowBottom > 0) {
+    picker.style.setProperty('--component-picker-shift-y', `${-overflowBottom}px`);
   }
 }
 

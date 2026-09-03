@@ -1,6 +1,7 @@
 import { state, getRenderApp, getRefreshEditorBlock, getRefreshEditorSection, getRefreshReaderPanels } from '../../state';
 import { findSectionByKey, isDefaultUntitledSectionTitle } from '../../section-ops';
 import { findBlockByIds, setActiveEditorBlock, setAiEditorHostBlock, deactivateEditorBlock, cancelEditorBlockEdit, commitInlineTableEdit, hasActiveEditorBlockChanges } from '../../block-ops';
+import { splitTextParagraphsOnCommit } from '../../text-paragraph-split';
 import { recordHistory } from '../../history';
 import { captureEditorDeactivationAnchor, capturePaneScroll, hasEditorViewportMovedSinceActivation, restoreCapturedEditorDeactivationScrollTop, restoreEditorActivationScrollTop, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from '../../scroll';
 import type { AppActionHandler } from './types';
@@ -170,6 +171,10 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   const deactivationAnchor = captureEditorDeactivationAnchor(app, sectionKey, blockId, editorBlock);
   commitActiveTextFillIn('deactivate-block');
   commitActiveInlineTableEdit(sectionKey, blockId);
+  const richEditor = editorBlock?.querySelector<HTMLElement>('.rich-editor[data-field="block-rich"]') ?? null;
+  const splitBlocks = richEditor
+    ? splitTextParagraphsOnCommit(state.document, sectionKey, blockId, richEditor)
+    : null;
   const blockChanged = hasActiveEditorBlockChanges(sectionKey, blockId);
   const result = deactivateEditorBlock(sectionKey, blockId);
   const sortValuesChanged = state.currentView === 'ai' && (result === 'closed' || result === 'removed')
@@ -184,7 +189,9 @@ const deactivateBlock: AppActionHandler = ({ app, actionButton, event, sectionKe
   if (result === 'removed' || sortValuesChanged) {
     getRefreshReaderPanels()();
   }
-  const refreshedEditorSurface = (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId))
+  const refreshedEditorSurface = (result !== 'removed' && getRefreshEditorBlock()(sectionKey, refreshBlockId, {
+    replacementBlocks: splitBlocks ?? undefined,
+  }))
     || getRefreshEditorSection()(sectionKey);
   if (!refreshedEditorSurface) {
     getRenderApp()();

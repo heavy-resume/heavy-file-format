@@ -218,7 +218,7 @@
 
 .hvy-document .rich-editor p {
   min-width: 0;
-  margin: 0 0 0.45rem;
+  margin: 0 0 var(--hvy-document-paragraph-spacing, 0.45rem);
   overflow-wrap: anywhere;
   word-break: normal;
   white-space: normal;

@@ -35,7 +35,10 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(calc(-50% + var(--component-picker-shift, 0px)), -50%);
+  transform: translate(
+    calc(-50% + var(--component-picker-shift, 0px)),
+    calc(-50% + var(--component-picker-shift-y, 0px))
+  );
   z-index: 9999;
   width: min(14rem, calc(100vw - 2rem), calc(100vh - 2rem));
   aspect-ratio: 1;
@@ -58,7 +61,10 @@
 
 .hvy-document .component-picker:not([data-active-pane="root"]) .component-picker-popover {
   top: calc(100% + 0.45rem);
-  transform: translateX(calc(-50% + var(--component-picker-shift, 0px)));
+  transform: translate(
+    calc(-50% + var(--component-picker-shift, 0px)),
+    var(--component-picker-shift-y, 0px)
+  );
   width: min(560px, calc(100vw - 2rem));
   min-height: 0;
   aspect-ratio: auto;
@@ -574,4 +580,3 @@
     opacity: 0.62;
   }
 }
-

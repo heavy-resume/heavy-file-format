@@ -34,6 +34,7 @@ import type { BlockSchema, VisualBlock, VisualSection } from '../../editor/types
 import type { SortValueDateFormat, SortValueType } from '../../types';
 import { componentSortValueDetailsKey } from '../../editor/render';
 import type { JsonObject } from '../../hvy/types';
+import { writeDocumentParagraphSpacing } from '../../document-typography';
 import {
   formatPdfMarginUnitValue,
   formatPdfPointsAsUnit,
@@ -189,6 +190,14 @@ export function bindInputBlock(app: HTMLElement): void {
       } else {
         delete state.document.meta.sidebar_max_width;
       }
+      applyTheme();
+      getRefreshReaderPanels()();
+      return;
+    }
+
+    if (field === 'meta-paragraph-spacing' && target instanceof HTMLInputElement) {
+      recordHistory('meta:paragraph-spacing');
+      writeDocumentParagraphSpacing(state.document.meta, target.value);
       applyTheme();
       getRefreshReaderPanels()();
       return;

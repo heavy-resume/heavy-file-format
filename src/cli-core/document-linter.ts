@@ -12,6 +12,7 @@ import { buildHvyVirtualFileSystem, type HvyVirtualEntry, type HvyVirtualFileSys
 import { cssValueLooksLikeSerializedJson } from '../css-value-validation';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
 import { validateDocumentMetadata } from '../document-metadata';
+import { isDocumentParagraphSpacing } from '../document-typography';
 
 const SUPPORTED_HVY_VERSION = '0.1';
 const KNOWN_HEADER_METADATA_KEYS = new Set([
@@ -27,6 +28,7 @@ const KNOWN_HEADER_METADATA_KEYS = new Set([
   'reader_max_width',
   'sidebar_max_width',
   'database_table_max_column_width',
+  'typography',
   'pdf_page',
   'image_attachment_max_dimensions',
   'theme',
@@ -356,6 +358,24 @@ function lintHeaderCssValues(document: VisualDocument): HvyCliLintIssue[] {
       if (style && typeof style === 'object' && !Array.isArray(style)) {
         pushHeaderCssJsonIssue(issues, `heading_styles.${styleName}.css`, (style as JsonObject).css);
       }
+    }
+  }
+  const typography = document.meta.typography;
+  if (typeof typography !== 'undefined') {
+    if (!typography || typeof typography !== 'object' || Array.isArray(typography)) {
+      issues.push({
+        key: '/header.yaml:typography:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'typography must be an object with a paragraphSpacing CSS length.',
+      });
+    } else if (!isDocumentParagraphSpacing((typography as JsonObject).paragraphSpacing)) {
+      issues.push({
+        key: '/header.yaml:typography.paragraphSpacing:type',
+        path: '/header.yaml',
+        component: 'header',
+        message: 'typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".',
+      });
     }
   }
   const pdfPage = document.meta.pdf_page;

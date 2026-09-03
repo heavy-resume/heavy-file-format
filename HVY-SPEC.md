@@ -61,7 +61,9 @@ If HVY-specific directives are absent, parse as Markdown only. `_I'm in italics_
 HVY text also supports `___underlined___` as a constrained inline underline extension. The underline marker uses three underscores so language names such as `C++` remain plain text.
 Text components preserve standard Markdown unordered and ordered list syntax. Authoring tools MAY expose separate controls for unordered (`-`) and ordered (`1.`) lists. Readers SHOULD render nested ordered lists with alphabetic markers at the second level and may use roman or other conventional markers for deeper levels.
 
-Blank lines inside text components are meaningful Markdown paragraph separators. A single text component containing two paragraphs separated by a Markdown blank line SHOULD render with the same paragraph spacing as the equivalent content split into two adjacent text components; blank lines MUST NOT create additional spacer-only vertical margins beyond that normal paragraph/component separation.
+Blank lines inside text components are meaningful Markdown paragraph separators. The normal paragraph gap is configured by `typography.paragraphSpacing` and defaults to `0.45rem`.
+
+On an explicit edit commit, authoring tools MAY split a text component where one or more empty top-level paragraphs separate visible paragraph runs into adjacent text components. Adjacent visible paragraphs without an empty paragraph between them remain in the same text component. This is an editor convenience, not a distinct text-component schema: the authoring tool writes an ordinary `margin-top` declaration into the generated component's `css`, calculated from `typography.paragraphSpacing` and the number of intervening line boundaries. Authoring tools MUST NOT perform this structural split on each keystroke.
 
 A single physical newline inside an ordinary Markdown paragraph is a soft wrap and MUST have the logical plain-text value of one space when rendered, searched, or copied as plain text. Readers MUST preserve meaningful Markdown line boundaries, including blank-line paragraph separators, explicit hard breaks, block structures such as list items and headings, and line breaks inside code blocks.
 
@@ -182,6 +184,7 @@ Presentation keys in document metadata include:
 - `reader_max_width`: optional CSS width value applied to the main reader document column, for example `60rem` or `72ch`.
 - `sidebar_max_width`: optional CSS width value limiting the editor and viewer sidebar. Defaults to `40rem`.
 - `database_table_max_column_width`: optional positive CSS length limiting interactive database-table column resizing and auto-fit. It accepts `px`, `rem`, `em`, or `ch` units and defaults to `40rem`.
+- `typography`: optional object for document-wide text rhythm. `typography.paragraphSpacing` is an optional non-negative CSS length used between Markdown paragraphs and paragraph-flow text components. It defaults to `0.45rem`.
 - `responsive_breakpoints`: optional object mapping surface breakpoint names to simple CSS length tokens. Responsive inline CSS variants use these names. The defaults are `sm: 40rem`, `md: 48rem`, `lg: 64rem`, `xl: 80rem`, and `2xl: 96rem`. Authors MAY override these values or add names. Breakpoint names MUST start with a letter and contain only ASCII letters, digits, and hyphens; values MUST be simple CSS length tokens.
 - `pdf_page`: optional object for `.phvy` PDF page defaults. See PDF template documents.
 - `section_defaults`: optional object for authoring defaults applied when creating new manual sections. `section_defaults.css` is the default inline section CSS. `section_defaults.contained` is an optional boolean that controls whether newly created manual sections default to contained; it defaults to `true`.

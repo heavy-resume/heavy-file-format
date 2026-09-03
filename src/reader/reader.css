@@ -259,7 +259,7 @@
 .hvy-document .reader-block p,
 .hvy-document .reader-block ul,
 .hvy-document .reader-block ol {
-  margin: 0 0 0.45rem;
+  margin: 0 0 var(--hvy-document-paragraph-spacing, 0.45rem);
 }
 
 .hvy-document .reader-block .hvy-inline-checkbox-line {

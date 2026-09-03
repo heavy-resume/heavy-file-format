@@ -7,6 +7,7 @@ import { cssFragmentTriggersNetwork } from './css-sanitizer';
 import { isExternalCssAllowed } from './reference-config';
 import { getPaletteById } from './palettes/palette-registry';
 import { DEFAULT_SIDEBAR_MAX_WIDTH } from './document-factory';
+import { getDocumentParagraphSpacing } from './document-typography';
 
 export type { ThemeConfig };
 export type ColorMode = 'light' | 'dark';
@@ -193,6 +194,7 @@ export function applyTheme(): void {
     ? state.document.meta.sidebar_max_width.trim()
     : '';
   root.style.setProperty('--hvy-sidebar-max-width', sidebarMaxWidth || DEFAULT_SIDEBAR_MAX_WIDTH);
+  root.style.setProperty('--hvy-document-paragraph-spacing', getDocumentParagraphSpacing(state.document.meta));
 
   root.classList.add('no-transitions');
   const allowExternal = isExternalCssAllowed();

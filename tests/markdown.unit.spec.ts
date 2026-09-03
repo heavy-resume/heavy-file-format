@@ -140,8 +140,8 @@ test('renders source-line answer markers vertically and same-line markers inline
   expect(markdownToReaderHtml('( ) One ( ) Two')).not.toContain('<br>');
 });
 
-test('normalizes editor answer spacing and paragraph gaps', () => {
-  expect(normalizeEditorMarkdownWhitespace('( )  One\n\n( ) Two')).toBe('( ) One\n( ) Two');
+test('expected result: normalizing answer spacing preserves paragraph gaps', () => {
+  expect(normalizeEditorMarkdownWhitespace('( )  One\n\n( ) Two')).toBe('( ) One\n\n( ) Two');
 });
 
 test('restores the separator after an answer marker when the caret anchor is removed', () => {

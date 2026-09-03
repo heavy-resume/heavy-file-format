@@ -979,6 +979,24 @@ section_defaults:
   expect(output).toContain('css: "margin: 0.5rem 0;"');
 });
 
+test('preserves document paragraph spacing in front matter on round-trip', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+typography:
+  paragraphSpacing: 0.7rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {}-->
+ Hello
+`, '.hvy');
+
+  expect(document.meta.typography).toEqual({ paragraphSpacing: '0.7rem' });
+  expect(serializeWithState(document)).toContain('paragraphSpacing: 0.7rem');
+});
+
 test('preserves application metadata in document front matter on round-trip', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

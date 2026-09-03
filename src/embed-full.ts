@@ -17,6 +17,7 @@ import {
   runWithStateRuntime,
   runWithStateRuntimeAsync,
   type ReaderPanelRefreshOptions,
+  type EditorBlockRefreshOptions,
   type StateRuntime,
 } from './state';
 import type { AppState, ChatAttachment, ChatMessage, ChatSettings, HvyChatContextOptions, HvyChatContextProvider, HvyChatSearchCache, HvyEditorClipboardHost, HvyEmbeddingProvider, HvyThemeOverrides, ImageAttachmentMaxDimensions, VisualDocument } from './types';
@@ -1044,7 +1045,7 @@ function insertEditorTopLevelSection(sectionKey: string, location: SectionLocati
   return true;
 }
 
-function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+function refreshEditorBlock(sectionKey: string, blockId: string, options: EditorBlockRefreshOptions = {}): boolean {
   if (!currentRoot) {
     return false;
   }
@@ -1059,6 +1060,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: { runV
     sections: state.document.sections,
     sectionKey,
     block,
+    replacementBlocks: options.replacementBlocks,
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);

@@ -9,6 +9,7 @@ import { getTableColumns, normalizeTableColumns } from './table-ops';
 import { REUSABLE_SECTION_DEF_PREFIX } from './state';
 import { normalizeTextCaption } from './caption';
 import { normalizeSortValueDefs } from './sort-values';
+import { DEFAULT_PARAGRAPH_SPACING } from './document-typography';
 
 export const DEFAULT_READER_MAX_WIDTH = '60rem';
 export const DEFAULT_SIDEBAR_MAX_WIDTH = '40rem';
@@ -691,6 +692,9 @@ export function createBlankDocument(extension: VisualDocument['extension'] = '.h
       section_defaults: {
         css: DEFAULT_SECTION_CSS,
         contained: DEFAULT_SECTION_CONTAINED,
+      },
+      typography: {
+        paragraphSpacing: DEFAULT_PARAGRAPH_SPACING,
       },
     },
     extension,

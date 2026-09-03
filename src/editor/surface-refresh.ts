@@ -17,6 +17,7 @@ export interface EditorBlockRefreshOptions {
   sections: VisualSection[];
   sectionKey: string;
   block: VisualBlock;
+  replacementBlocks?: VisualBlock[];
   afterReplace?: (element: HTMLElement) => void;
 }
 
@@ -68,14 +69,14 @@ export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boole
       && (target.matches('[data-active-editor-block="true"]')
         || Boolean(target.querySelector('.editor-block[data-active-editor-block="true"]')));
     const surroundingRects = captureVisibleSiblingRects(target, scrollContainer);
-    const replacements = createEditorBlockElements(
+    const replacements = (options.replacementBlocks ?? [options.block]).flatMap((block) => createEditorBlockElements(
       target.ownerDocument,
       options.editorRenderer,
       options.sectionKey,
-      options.block,
+      block,
       options.sections,
       target.dataset.parentLocked === 'true'
-    );
+    ));
     const replacementBlock = replacements.find((element) => element.dataset.blockId === options.block.id);
     if (!replacementBlock) {
       return;
@@ -84,7 +85,7 @@ export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boole
     removeActiveInsertGhosts(target);
     target.replaceWith(...replacements);
     preserveEditorViewportPosition(scrollContainer, scrollTop);
-    options.afterReplace?.(replacementBlock);
+    replacements.forEach((element) => options.afterReplace?.(element));
     if (oldWasActive && replacementBlock.matches('.editor-block-passive')) {
       scheduleEditorBlockCollapseTransition(replacementBlock, oldRect, surroundingRects, scrollContainer, scrollTop);
     }

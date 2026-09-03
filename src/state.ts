@@ -1,5 +1,10 @@
 import type { AppState, HvyThemeOverrides } from './types';
-import type { SectionLocation } from './editor/types';
+import type { SectionLocation, VisualBlock } from './editor/types';
+
+export interface EditorBlockRefreshOptions {
+  runVisibilityScripts?: boolean;
+  replacementBlocks?: VisualBlock[];
+}
 
 export type ReaderPanelRefreshSurface = 'all' | 'reader' | 'sidebar';
 export interface ReaderPanelRefreshOptions {
@@ -52,7 +57,7 @@ type RuntimeCallbacks = {
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
-  refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean;
   refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;
@@ -93,7 +98,7 @@ let _refreshSearchSurface: (root: ParentNode, options?: SearchSurfaceRefreshOpti
 let _refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void = () => { throw new Error('refreshReaderPanels not initialized'); };
 let _refreshReaderSection: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _refreshReaderBlock: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
-let _refreshEditorBlock: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
+let _refreshEditorBlock: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean = () => false;
 let _refreshEditorSection: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean = () => false;
 let _insertEditorTopLevelSection: (sectionKey: string, location: SectionLocation) => boolean = () => false;
 let _refreshModalPreview: () => void = () => { throw new Error('refreshModalPreview not initialized'); };
@@ -107,7 +112,7 @@ export function getRefreshSearchSurface(): (root: ParentNode, options?: SearchSu
 export function getRefreshReaderPanels(): (options?: ReaderPanelRefreshOptions) => void { return _refreshReaderPanels; }
 export function getRefreshReaderSection(): (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderSection; }
 export function getRefreshReaderBlock(): (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshReaderBlock; }
-export function getRefreshEditorBlock(): (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorBlock; }
+export function getRefreshEditorBlock(): (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean { return _refreshEditorBlock; }
 export function getRefreshEditorSection(): (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean { return _refreshEditorSection; }
 export function getInsertEditorTopLevelSection(): (sectionKey: string, location: SectionLocation) => boolean { return _insertEditorTopLevelSection; }
 export function getRefreshModalPreview(): () => void { return _refreshModalPreview; }
@@ -135,7 +140,7 @@ export function initCallbacks(callbacks: {
   refreshReaderPanels: (options?: ReaderPanelRefreshOptions) => void;
   refreshReaderSection?: (root: ParentNode, sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   refreshReaderBlock?: (root: ParentNode, sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
-  refreshEditorBlock?: (sectionKey: string, blockId: string, options?: { runVisibilityScripts?: boolean }) => boolean;
+  refreshEditorBlock?: (sectionKey: string, blockId: string, options?: EditorBlockRefreshOptions) => boolean;
   refreshEditorSection?: (sectionKey: string, options?: { runVisibilityScripts?: boolean }) => boolean;
   insertEditorTopLevelSection?: (sectionKey: string, location: SectionLocation) => boolean;
   refreshModalPreview: () => void;

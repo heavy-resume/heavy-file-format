@@ -17,7 +17,7 @@ import { renderCliView } from './cli-ui/render';
 import { syncTextToolbarLayout } from './editor/components/text/text-toolbar-layout';
 
 import { state, initState, initCallbacks, incrementRenderCount, incrementRefreshReaderCount } from './state';
-import type { ReaderPanelRefreshOptions } from './state';
+import type { EditorBlockRefreshOptions, ReaderPanelRefreshOptions } from './state';
 import type { AppState, ReaderViewFilter } from './types';
 import { escapeAttr, escapeHtml } from './utils';
 import { applyTheme, getThemeConfig, initColorModeSync, setThemeRoot } from './theme';
@@ -1380,7 +1380,7 @@ function insertEditorTopLevelSection(sectionKey: string, location: SectionLocati
   return true;
 }
 
-function refreshEditorBlock(sectionKey: string, blockId: string, options: { runVisibilityScripts?: boolean } = {}): boolean {
+function refreshEditorBlock(sectionKey: string, blockId: string, options: EditorBlockRefreshOptions = {}): boolean {
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
     return false;
@@ -1391,6 +1391,7 @@ function refreshEditorBlock(sectionKey: string, blockId: string, options: { runV
     sections: state.document.sections,
     sectionKey,
     block,
+    replacementBlocks: options.replacementBlocks,
     afterReplace: (element) => {
       reconcilePluginMounts(element, { prune: false });
       syncTextToolbarLayout(element);

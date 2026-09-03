@@ -15,6 +15,7 @@ import { serializeComponentDefinition } from '../serialization';
 import { coerceGridColumns, coerceGridStackWidth } from '../grid-ops';
 import { normalizeTextCaption } from '../caption';
 import { isPdfPageMarginsInput } from '../pdf-page-settings';
+import { isDocumentParagraphSpacing } from '../document-typography';
 import { measurePhase } from '../perf-trace';
 import { defaultBlockSchema, parseTableColumnProperties } from '../document-factory';
 import { formatPluginVisualDescriptionForAgent, getPluginVisualDescription } from '../plugins/visual-description';
@@ -165,6 +166,15 @@ function validateHeaderCssValues(meta: JsonObject): void {
       if (style && typeof style === 'object' && !Array.isArray(style) && typeof (style as JsonObject).css === 'string') {
         assertCssValueIsDeclarationString((style as JsonObject).css as string, `heading_styles.${styleName}.css`);
       }
+    }
+  }
+  const typography = meta.typography;
+  if (typeof typography !== 'undefined') {
+    if (!typography || typeof typography !== 'object' || Array.isArray(typography)) {
+      throw new Error('typography must be an object with a paragraphSpacing CSS length.');
+    }
+    if (!isDocumentParagraphSpacing((typography as JsonObject).paragraphSpacing)) {
+      throw new Error('typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".');
     }
   }
   const pdfPage = meta.pdf_page;

@@ -207,6 +207,22 @@ test('changing one checkbox to a radio leaves neighboring answers unchanged', as
   ))).toEqual(['radio', 'checkbox', 'checkbox']);
 });
 
+test('expected result: changing a checkbox to a radio preserves blank paragraphs', async ({ page }) => {
+  const { activeTextBlock, editor } = await openNestedGridTextEditor(page, '[ ] Foo\n\n[ ] Bar\n\nMoo');
+  await editor.locator('input.hvy-inline-checkbox').nth(1).click();
+  await activeTextBlock.getByRole('dialog', { name: 'Selected answer block type' })
+    .locator('.choice-mode-group-option', { hasText: 'expected result group' })
+    .click();
+
+  const expectedResult = await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const grid = state.document.sections[0]!.blocks[0]!;
+    return grid.schema.gridItems[0]!.block.text;
+  });
+  expect(expectedResult).toContain('[ ] Foo\n\n');
+  expect(expectedResult).toContain('( ) Bar\n\nMoo');
+});
+
 test('assigning an existing radio group preserves the active editor, caret, and scroll', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 560 });
   const { activeTextBlock, editor } = await openNestedGridTextEditor(page, '[ ] Foo\n[ ] Bar');
@@ -665,12 +681,12 @@ test('empty toolbar answer rows keep line geometry and survive radio conversion 
     emptyRowHasLineHeight,
     populatedRowsAreAligned,
     rowTexts,
-    insertedMarkersHaveSeparators: sourceText.includes('[ ] Moo\n    [ ] Cow\n    [ ]'),
+    insertedMarkersPreserveParagraphSeparators: /\[ \] Moo\n\s*\n\s*\[ \] Cow\n\s*\n\s*\[ \]/.test(sourceText),
   }).toEqual({
     emptyRowHasLineHeight: true,
     populatedRowsAreAligned: true,
     rowTexts: ['Foo', 'Bar', 'Moo', 'Cow', ''],
-    insertedMarkersHaveSeparators: true,
+    insertedMarkersPreserveParagraphSeparators: true,
   });
 });
 

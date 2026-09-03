@@ -851,12 +851,7 @@ export function normalizeEditorMarkdownWhitespace(markdown: string): string {
     /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\)))(?=\S)/gm,
     '$1 '
   );
-  let compacted = withSingleMarkerSpacing;
-  const answerParagraphGap = /^(\s*(?:\[(?: |x|X)\]|\((?: |x|X)\))[^\n]*)\n[ \t]*\n(?=[ \t]*(?:\[(?: |x|X)\]|\((?: |x|X)\)))/gm;
-  while (answerParagraphGap.test(compacted)) {
-    compacted = compacted.replace(answerParagraphGap, '$1\n');
-  }
-  return compacted;
+  return withSingleMarkerSpacing;
 }
 
 export function normalizeMarkdownIndentation(markdown: string): string {

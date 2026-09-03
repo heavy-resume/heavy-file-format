@@ -31,7 +31,7 @@ import { readSectionInsertionBoundary } from '../../editor/section-insertion';
 
 type ComponentPlacementContainer = 'section' | 'grid' | 'container' | 'component-list' | 'expandable-stub' | 'expandable-content';
 
-const addBlock: ActionHandler = ({ actionButton, section }) => {
+const addBlock: ActionHandler = ({ app, actionButton, section }) => {
   const sectionBoundary = readSectionInsertionBoundary(actionButton);
   const insertPlacement = actionButton.dataset.insertPlacement === 'before' || actionButton.dataset.insertPlacement === 'after'
     ? actionButton.dataset.insertPlacement
@@ -47,6 +47,13 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   if (openReusableTemplateModalIfNeeded(component, { kind: 'section', sectionKey: section.key })) {
     return;
   }
+  const scrollBeforeAdd = typeof app?.querySelector === 'function'
+    ? capturePaneScroll(state.paneScroll, app)
+    : state.paneScroll;
+  const renderAddedBlock = (): void => {
+    state.pendingPaneScrollRestore = scrollBeforeAdd;
+    getRenderApp()();
+  };
   recordHistory();
   const newBlock = createEmptyBlock(component);
   if (component === 'plugin' && actionButton.dataset.pluginId) {
@@ -56,14 +63,14 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
     if (insertBlockAtSectionInsertionBoundary(section, newBlock, sectionBoundary)) {
       setActiveEditorBlock(section.key, newBlock.id);
       markActiveEditorBlockAsNew(newBlock.id);
-      getRenderApp()();
+      renderAddedBlock();
     }
     return;
   }
   if (insertPlacement && targetBlockId && insertBlockRelativeToTarget(section.blocks, targetBlockId, newBlock, insertPlacement, !section.lock)) {
     setActiveEditorBlock(section.key, newBlock.id);
     markActiveEditorBlockAsNew(newBlock.id);
-    getRenderApp()();
+    renderAddedBlock();
     return;
   }
   if (insertPlacement || targetBlockId) {
@@ -80,7 +87,7 @@ const addBlock: ActionHandler = ({ actionButton, section }) => {
   section.blocks.push(newBlock);
   setActiveEditorBlock(section.key, newBlock.id);
   markActiveEditorBlockAsNew(newBlock.id);
-  getRenderApp()();
+  renderAddedBlock();
 };
 
 const addEmptySectionHeading: ActionHandler = ({ section }) => {

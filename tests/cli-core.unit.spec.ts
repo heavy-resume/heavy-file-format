@@ -2750,6 +2750,29 @@ test('hvy lint accepts spec-defined importPreplan metadata', async () => {
   expect(result.output).not.toContain('importPreplan');
 });
 
+test('hvy lint accepts document typography and rejects invalid paragraph spacing', async () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+typography:
+  paragraphSpacing: 0.6rem
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+<!--hvy:text {"id":"intro"}-->
+Hello
+`, '.hvy');
+  const session = createHvyCliSession();
+
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toBe('No lint issues.');
+
+  document.meta.typography = { paragraphSpacing: '-1rem' };
+  expect((await executeHvyCliCommand(document, session, 'hvy lint')).output).toContain(
+    'typography.paragraphSpacing must be a non-negative CSS length such as "0.45rem".'
+  );
+});
+
 test('hvy lint accepts application metadata with two object levels', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

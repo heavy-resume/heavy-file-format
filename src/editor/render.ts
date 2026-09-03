@@ -53,6 +53,7 @@ import { renderAddComponentPicker } from './component-picker';
 import { getTextFillInPlaceholder, hasTextFillInMarker, removeTextFillInMarkers, splitTextFillIns } from '../text-fill-in';
 import { closeIcon, plusIcon, wrenchIcon } from '../icons';
 import { getEmptySectionHeadingLevel } from '../section-heading-memory';
+import { getDocumentParagraphSpacing } from '../document-typography';
 import { coerceGridStackWidth, DEFAULT_GRID_STACK_WIDTH } from '../grid-ops';
 import { getComponentEditorMinimumWidth } from './component-editor-width';
 import {
@@ -1703,6 +1704,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         <label>
           <span>Sidebar Max Width</span>
           <input data-field="meta-sidebar-max-width" placeholder="40rem" value="${deps.escapeAttr(String(state.documentMeta.sidebar_max_width ?? ''))}" />
+        </label>
+        <label>
+          <span>Paragraph Spacing</span>
+          <input data-field="meta-paragraph-spacing" placeholder="0.45rem" value="${deps.escapeAttr(getDocumentParagraphSpacing(state.documentMeta))}" />
         </label>
         <label>
           <span>Database Table Max Column Width</span>

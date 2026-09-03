@@ -22,7 +22,7 @@ export function renderTableGrabberInsertMenu(options: TableGrabberInsertMenuOpti
       ${disabled ? 'disabled' : ''}
       data-drag-handle="table-${kind}"
       ${data}
-      title="Drag to reorder ${kind}; double-click for insertion options"
+      title="Drag to reorder ${kind}; right-click or double-click for insertion options"
       aria-label="${label}"
       aria-haspopup="menu"
       aria-expanded="false"
@@ -36,22 +36,11 @@ export function renderTableGrabberInsertMenu(options: TableGrabberInsertMenuOpti
 
 export function bindTableGrabberInsertMenus(app: HTMLElement): void {
   app.addEventListener('dblclick', (event) => {
-    const handle = (event.target as Element | null)?.closest<HTMLElement>('[data-drag-handle="table-row"], [data-drag-handle="table-column"]');
-    if (!handle || handle.hasAttribute('disabled')) {
-      return;
-    }
-    const menu = handle.closest<HTMLElement>('.table-grabber-insert-menu');
-    const popover = menu?.querySelector<HTMLElement>('.table-grabber-insert-popover');
-    if (!menu || !popover) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    closeTableGrabberInsertMenus(app, menu);
-    popover.hidden = false;
-    menu.classList.add('is-open');
-    handle.setAttribute('aria-expanded', 'true');
-    popover.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    openTableGrabberInsertMenu(app, event);
+  });
+
+  app.addEventListener('contextmenu', (event) => {
+    openTableGrabberInsertMenu(app, event);
   });
 
   app.addEventListener('click', (event) => {
@@ -74,7 +63,30 @@ export function bindTableGrabberInsertMenus(app: HTMLElement): void {
     const handle = menu.querySelector<HTMLElement>('[data-drag-handle]');
     closeTableGrabberInsertMenus(app);
     handle?.focus({ preventScroll: true });
-  });
+  }, { capture: true });
+}
+
+function openTableGrabberInsertMenu(app: HTMLElement, event: MouseEvent): boolean {
+  const target = event.target;
+  const handle = target instanceof Element
+    ? target.closest<HTMLElement>('[data-drag-handle="table-row"], [data-drag-handle="table-column"]')
+    : null;
+  if (!handle || handle.hasAttribute('disabled')) {
+    return false;
+  }
+  const menu = handle.closest<HTMLElement>('.table-grabber-insert-menu');
+  const popover = menu?.querySelector<HTMLElement>('.table-grabber-insert-popover');
+  if (!menu || !popover) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  closeTableGrabberInsertMenus(app, menu);
+  popover.hidden = false;
+  menu.classList.add('is-open');
+  handle.setAttribute('aria-expanded', 'true');
+  popover.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  return true;
 }
 
 export function closeTableGrabberInsertMenus(root: ParentNode, except: HTMLElement | null = null): boolean {

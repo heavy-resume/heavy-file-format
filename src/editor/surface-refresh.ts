@@ -45,9 +45,23 @@ export function insertEditorTopLevelSectionDom(options: EditorTopLevelSectionIns
   if (!element) {
     return false;
   }
-  anchor.before(element);
+  const hasExistingSection = Array.from(anchor.parentElement?.children ?? []).some((candidate) => (
+    candidate.matches('.editor-section-card:not(.editor-subsection-card), .hvy-section-virtual-placeholder[data-hvy-virtual-kind="editor"]')
+  ));
+  const gutter = createElementFromHtml(
+    anchor.ownerDocument,
+    options.editorRenderer.renderTopLevelSectionInsertGutter(section, hasExistingSection)
+  );
+  anchor.before(...(gutter ? [gutter, element] : [element]));
   options.afterInsert?.(element);
   return true;
+}
+
+function createElementFromHtml(ownerDocument: Document, html: string): HTMLElement | null {
+  const template = ownerDocument.createElement('template');
+  template.innerHTML = html.trim();
+  const element = template.content.firstElementChild;
+  return element instanceof HTMLElement ? element : null;
 }
 
 export function refreshEditorBlockDom(options: EditorBlockRefreshOptions): boolean {
@@ -183,10 +197,7 @@ export function createEditorSectionElement(
   if (!html) {
     return null;
   }
-  const template = ownerDocument.createElement('template');
-  template.innerHTML = html;
-  const element = template.content.firstElementChild;
-  return element instanceof HTMLElement ? element : null;
+  return createElementFromHtml(ownerDocument, html);
 }
 
 export function createEditorBlockElement(

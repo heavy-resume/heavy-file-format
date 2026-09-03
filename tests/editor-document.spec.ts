@@ -4405,9 +4405,54 @@ test('new section component picker opens on the first click', async ({ page }) =
   await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
   const newSection = page.locator('.editor-section-card').last();
   await expect(newSection.locator('[data-field="section-title"]')).toBeFocused();
+  await expect(page.locator('.editor-tree-body:not(.editor-sidebar-tree-body) > .top-level-section-insert-gutter')).toHaveCount(2);
 
   await newSection.locator('.component-picker-trigger').click();
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+});
+
+test('top-level section gutters insert a focused section at the selected boundary', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"first"}-->
+#! First
+
+ First body.
+
+<!--hvy: {"id":"second"}-->
+#! Second
+
+ Second body.
+
+<!--hvy: {"id":"third"}-->
+#! Third
+
+ Third body.
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Basic' }).click();
+
+  const editorBody = page.locator('.editor-tree-body:not(.editor-sidebar-tree-body)');
+  const insertButtons = editorBody.locator(':scope > .top-level-section-insert-gutter > .top-level-section-insert-button');
+  await expect(insertButtons).toHaveCount(3);
+  await expect(insertButtons.first()).toHaveCSS('opacity', '0');
+  await insertButtons.first().locator('..').hover();
+  await expect(insertButtons.first()).toHaveCSS('opacity', '1');
+
+  await editorBody.getByRole('button', { name: 'Insert section before Second' }).click();
+  const titleInput = editorBody.locator(':scope > .editor-section-card [data-field="section-title"]');
+  await expect(titleInput).toBeFocused();
+  await titleInput.fill('Inserted');
+
+  await expect.poll(() => editorBody.locator(':scope > .editor-section-card').evaluateAll((cards) => cards.map((card) => {
+    const title = card.querySelector<HTMLElement>('.section-title-passive, [data-field="section-title"]');
+    return title instanceof HTMLInputElement ? title.value : title?.textContent ?? '';
+  }))).toEqual(['First', 'Inserted', 'Second', 'Third']);
+  await expect(insertButtons).toHaveCount(4);
 });
 
 test('new section title generates a matching section id without serializing it', async ({ page }) => {

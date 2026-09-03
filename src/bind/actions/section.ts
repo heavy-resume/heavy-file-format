@@ -32,7 +32,17 @@ const addTopLevelSection: ActionHandler = ({ actionButton }) => {
   insertTopLevelSection(starter, undefined, location);
 };
 
-export function insertTopLevelSection(starter: string, flavorName?: string, location: SectionLocation = 'main'): void {
+const insertTopLevelSectionBefore: ActionHandler = ({ actionButton, sectionKey }) => {
+  const location: SectionLocation = actionButton.dataset.sectionLocation === 'sidebar' ? 'sidebar' : 'main';
+  insertTopLevelSection('blank', undefined, location, sectionKey);
+};
+
+export function insertTopLevelSection(
+  starter: string,
+  flavorName?: string,
+  location: SectionLocation = 'main',
+  beforeSectionKey?: string
+): void {
   if (isPdfDocument(state.document) && location === 'sidebar') {
     return;
   }
@@ -44,7 +54,14 @@ export function insertTopLevelSection(starter: string, flavorName?: string, loca
     return;
   }
   section.location = location;
-  state.document.sections.push(section);
+  const beforeIndex = beforeSectionKey
+    ? state.document.sections.findIndex((candidate) => candidate.key === beforeSectionKey && candidate.location === location)
+    : -1;
+  if (beforeIndex >= 0) {
+    state.document.sections.splice(beforeIndex, 0, section);
+  } else {
+    state.document.sections.push(section);
+  }
   state.pendingEditorCenterSectionKey = section.key;
   if (section.blocks[0]) {
     setActiveEditorBlock(section.key, section.blocks[0].id);
@@ -59,7 +76,7 @@ export function insertTopLevelSection(starter: string, flavorName?: string, loca
     state.activeEditorSectionTitleKey = section.key;
     state.clearSectionTitleOnFocusKey = isDefaultUntitledSectionTitle(section.title) ? section.key : null;
   }
-  if (!getInsertEditorTopLevelSection()(section.key, location)) {
+  if (beforeIndex >= 0 || !getInsertEditorTopLevelSection()(section.key, location)) {
     getRenderApp()();
   }
 }
@@ -294,6 +311,7 @@ function activatePastedSection(section: VisualSection): void {
 
 export const sectionActions: Record<string, ActionHandler> = {
   'add-top-level-section': addTopLevelSection,
+  'insert-top-level-section-before': insertTopLevelSectionBefore,
   'spawn-child-ghost': spawnGhostChild,
   'spawn-block-ghost': spawnGhostChild,
   'toggle-section-location': toggleSectionLocation,

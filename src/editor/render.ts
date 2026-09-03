@@ -211,6 +211,7 @@ interface EditorRenderDeps {
 export interface EditorRenderer {
   renderSectionEditorTree: (sections: VisualSection[], windowOptions?: EditorRenderTreeWindowOptions) => string;
   renderEditorSection: (section: VisualSection, rootSections: VisualSection[], isSubsection?: boolean, windowOptions?: EditorRenderTreeWindowOptions) => string;
+  renderTopLevelSectionInsertGutter: (section: VisualSection, acceptsImageDrop: boolean) => string;
   recordEditorSectionHeight: (sectionKey: string, height: number) => void;
   recordEditorBlockHeight: (sectionKey: string, blockId: string, height: number) => void;
   renderSidebarEditorSections: (sections: VisualSection[]) => string;
@@ -266,7 +267,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const surfaceAttrs = renderResponsiveSurfaceAttrs('');
     return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="editor-tree-body editor-sidebar-tree-body">
       ${sidebarSections.length === 0 ? '<div class="muted editor-sidebar-empty">Move sections here using the sidebar button, or add one below.</div>' : ''}
-      ${sidebarSections.map((section, index) => `${index > 0 ? renderImageSectionDropGap(section) : ''}${renderEditorSection(section, sections)}`).join('')}
+      ${sidebarSections.map((section, index) => `${renderTopLevelSectionInsertGutter(section, index > 0)}${renderEditorSection(section, sections)}`).join('')}
       ${renderTopLevelSectionAddGhost('sidebar')}
     </div></div>`;
   }
@@ -319,7 +320,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           createChildRenderTreeWindowOptions(windowOptions, entry.offsetTop, 90)
         )
         : renderEditorSectionPlaceholder(section, entry.estimatedHeight, false);
-      return `${index > 0 ? renderImageSectionDropGap(section) : ''}${card}`;
+      return `${renderTopLevelSectionInsertGutter(section, index > 0)}${card}`;
     }).join('');
     const flatSections = deps.flattenSections(sections);
     const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
@@ -341,8 +342,25 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     `;
   }
 
-  function renderImageSectionDropGap(section: VisualSection): string {
-    return `<div class="image-section-drop-gap" data-image-section-drop-gap="true" data-before-section-key="${deps.escapeAttr(section.key)}" data-section-location="${deps.escapeAttr(section.location)}" aria-hidden="true"></div>`;
+  function renderTopLevelSectionInsertGutter(section: VisualSection, acceptsImageDrop: boolean): string {
+    if (state.mobileAdjustmentMode) {
+      return '';
+    }
+    const visibleTitle = deps.formatSectionTitle(section.title);
+    const imageDropAttrs = acceptsImageDrop
+      ? ` data-image-section-drop-gap="true" data-before-section-key="${deps.escapeAttr(section.key)}" data-section-location="${deps.escapeAttr(section.location)}"`
+      : '';
+    return `<div class="top-level-section-insert-gutter${acceptsImageDrop ? ' image-section-drop-gap' : ''}"${imageDropAttrs}>
+      <button
+        type="button"
+        class="top-level-section-insert-button"
+        data-action="insert-top-level-section-before"
+        data-section-key="${deps.escapeAttr(section.key)}"
+        data-section-location="${deps.escapeAttr(section.location)}"
+        aria-label="Insert section before ${deps.escapeAttr(visibleTitle)}"
+        title="Insert section here"
+      >${plusIcon()}</button>
+    </div>`;
   }
 
   function recordEditorSectionHeight(sectionKey: string, height: number): void {
@@ -2831,6 +2849,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
   return {
     renderSectionEditorTree,
     renderEditorSection,
+    renderTopLevelSectionInsertGutter,
     recordEditorSectionHeight,
     recordEditorBlockHeight,
     renderSidebarEditorSections,

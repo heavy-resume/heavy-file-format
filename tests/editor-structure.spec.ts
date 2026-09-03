@@ -3948,7 +3948,7 @@ hvy_version: 0.1
 test('active nested list item exposes delete controls on ancestor components', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -3987,10 +3987,53 @@ hvy_version: 0.1
   await expect(expandableEditor.locator('> [data-action="remove-block"]')).toBeVisible();
   await expandableEditor.locator('> [data-action="remove-block"]').click();
   await page.getByRole('button', { name: 'Delete' }).click();
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   const raw = await page.locator('#rawEditor').inputValue();
   expect(raw).not.toContain('Founder details');
   expect(raw).toContain('component-list');
+});
+
+test('PHVY component-list text item can be deleted', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"items"}-->
+#! Items
+
+ <!--hvy:component-list {"id":"items-list","componentListComponent":"text"}-->
+
+  <!--hvy:component-list:0 {}-->
+
+   <!--hvy:text {"id":"foo"}-->
+    Foo
+
+  <!--hvy:component-list:1 {}-->
+
+   <!--hvy:text {"id":"bar"}-->
+    Bar
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
+  await page.evaluate(async () => {
+    const { getRenderApp, state } = await import('/src/state.ts');
+    state.document.extension = '.phvy';
+    getRenderApp()();
+  });
+
+  await page.locator('.editor-block-passive', { hasText: 'Foo' }).last().click();
+  const activeItem = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator('.editor-block-title', { hasText: /^text$/ }),
+  }).last();
+  await expect(activeItem.locator('> [data-action="remove-block"]')).toBeVisible();
+  await activeItem.locator('> [data-action="remove-block"]').click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  await expect(page.locator('.editor-block-passive', { hasText: 'Foo' })).toHaveCount(0);
+  await expect(page.locator('.editor-block-passive', { hasText: 'Bar' })).toBeVisible();
 });
 
 test('cli-created expanded history record can be closed and followed by another list item', async ({ page }) => {

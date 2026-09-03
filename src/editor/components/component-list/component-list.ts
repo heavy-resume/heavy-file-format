@@ -56,12 +56,11 @@ function renderComponentListPlacementBlockList(
   blocks: VisualBlock[],
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
-  const pdfDocument = helpers.isPdfDocument?.() === true;
   const locked = block.schema.lock && helpers.isReusableDefinitionEditor?.() !== true;
   return helpers.renderEditorNestedBlocks(sectionKey, blocks, {
     container: 'component-list',
     parentBlockId: block.id,
-    locked: locked || pdfDocument,
+    locked,
   });
 }
 

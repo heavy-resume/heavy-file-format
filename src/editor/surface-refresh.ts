@@ -1,4 +1,5 @@
 import { findSectionByKey } from '../section-ops';
+import { preserveEditorScrollTop } from '../scroll';
 import type { SectionLocation, VisualBlock, VisualSection } from './types';
 import type { EditorRenderer } from './render';
 import type { EditorRenderTreeWindowOptions } from './editor-render-tree-window';
@@ -315,17 +316,5 @@ function scheduleEditorBlockCollapseTransition(
 }
 
 function preserveEditorViewportPosition(scrollContainer: HTMLElement, scrollTop: number): void {
-  const maximumScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-  if (maximumScrollTop < scrollTop) {
-    let tail = scrollContainer.querySelector<HTMLElement>(':scope > .editor-document-tail');
-    if (!tail) {
-      tail = scrollContainer.ownerDocument.createElement('div');
-      tail.className = 'editor-document-tail';
-      tail.setAttribute('aria-hidden', 'true');
-      scrollContainer.appendChild(tail);
-    }
-    const currentHeight = tail.getBoundingClientRect().height;
-    tail.style.height = `${Math.ceil(currentHeight + scrollTop - maximumScrollTop + 1)}px`;
-  }
-  scrollContainer.scrollTop = scrollTop;
+  preserveEditorScrollTop(scrollContainer, scrollTop);
 }

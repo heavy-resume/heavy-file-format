@@ -73,7 +73,7 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
       fullPane.scrollTop = scroll.fullPaneTop;
     }
     if (editorTree) {
-      editorTree.scrollTop = scroll.editorTop;
+      preserveEditorScrollTop(editorTree, scroll.editorTop);
     }
     if (editorSidebarPanel) {
       editorSidebarPanel.scrollTop = scroll.editorSidebarTop;
@@ -91,6 +91,22 @@ export function restorePaneScroll(scroll: PaneScrollState | null, app: HTMLEleme
     restore();
     window.requestAnimationFrame(restore);
   });
+}
+
+export function preserveEditorScrollTop(scrollContainer: HTMLElement, scrollTop: number): void {
+  const maximumScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+  if (maximumScrollTop < scrollTop) {
+    let tail = scrollContainer.querySelector<HTMLElement>(':scope > .editor-document-tail');
+    if (!tail) {
+      tail = scrollContainer.ownerDocument.createElement('div');
+      tail.className = 'editor-document-tail';
+      tail.setAttribute('aria-hidden', 'true');
+      scrollContainer.appendChild(tail);
+    }
+    const currentHeight = tail.getBoundingClientRect().height;
+    tail.style.height = `${Math.ceil(currentHeight + scrollTop - maximumScrollTop + 1)}px`;
+  }
+  scrollContainer.scrollTop = scrollTop;
 }
 
 export function centerPendingEditorSection(app: HTMLElement): void {

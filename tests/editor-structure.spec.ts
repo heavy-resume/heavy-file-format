@@ -3765,6 +3765,74 @@ hvy_version: 0.1
   await expect.poll(async () => Math.round(await tree.evaluate((node) => node.scrollTop))).toBe(Math.round(cancelScrollBeforeClose));
 });
 
+test('default example preserves bottom scroll when adding and deleting text below Mermaid', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/');
+  await page.waitForTimeout(300);
+  await openDocument(page, 'Default Example');
+
+  const sectionKey = await page.getByRole('button', { name: 'Diagram Example', exact: true }).evaluate((button) => {
+    const section = button.closest<HTMLElement>('article.editor-section-card');
+    return section?.dataset.sectionKey ?? '';
+  });
+  expect(sectionKey).not.toBe('');
+  const section = page.locator(`article.editor-section-card[data-section-key="${sectionKey}"]`);
+  const addComponent = section.locator(':scope > .editor-blocks > .compact-add-component-ghost').last();
+  const editorTree = page.locator('#editorTree');
+  await editorTree.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await page.waitForTimeout(100);
+  await addComponent.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
+  await page.waitForTimeout(100);
+  await addComponent.getByRole('button', { name: 'Section component type' }).dispatchEvent('mousedown');
+  await expect(addComponent.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+  const recordEditorScroll = async (action: () => Promise<void>): Promise<number[]> => {
+    const recording = page.evaluate(() => new Promise<number[]>((resolve) => {
+      const samples: number[] = [];
+      const startedAt = performance.now();
+      const sample = (): void => {
+        samples.push(document.querySelector<HTMLElement>('#editorTree')?.scrollTop ?? -1);
+        if (performance.now() - startedAt < 300) {
+          requestAnimationFrame(sample);
+        } else {
+          resolve(samples);
+        }
+      };
+      requestAnimationFrame(sample);
+    }));
+    await page.waitForTimeout(20);
+    await action();
+    return recording;
+  };
+  const addExpectedResult = await editorTree.evaluate((node) => node.scrollTop);
+  const addScrollSamples = await recordEditorScroll(() => (
+    addComponent.locator('.component-picker-row-direct[data-component="text"]').dispatchEvent('click')
+  ));
+
+  const activeText = page.locator('.editor-block[data-active-editor-block="true"]', {
+    has: page.locator('.rich-editor[data-field="block-rich"]'),
+  });
+  await expect(activeText).toBeVisible();
+  expect(addScrollSamples.every((scrollTop) => Math.round(scrollTop) === Math.round(addExpectedResult))).toBe(true);
+
+  await activeText.locator('.rich-editor[data-field="block-rich"]').fill('Text added below the Mermaid example');
+  await activeText.getByRole('button', { name: 'Done' }).dispatchEvent('click');
+
+  const passiveText = page.locator('.editor-block-passive', { hasText: 'Text added below the Mermaid example' });
+  await expect(passiveText).toBeVisible();
+  await expect.poll(() => passiveText.evaluate((node) => node.getAnimations().length)).toBe(0);
+  await passiveText.dispatchEvent('click');
+  await expect(activeText).toBeVisible();
+  await activeText.locator(':scope > [data-action="remove-block"]').dispatchEvent('click');
+  const confirmDelete = page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true });
+  await expect(confirmDelete).toBeVisible();
+  const deleteExpectedResult = await editorTree.evaluate((node) => node.scrollTop);
+  const deleteScrollSamples = await recordEditorScroll(() => confirmDelete.dispatchEvent('click'));
+  await expect(passiveText).toHaveCount(0);
+  expect(deleteScrollSamples.every((scrollTop) => Math.round(scrollTop) === Math.round(deleteExpectedResult))).toBe(true);
+});
+
 test('AI mode cancel does not scroll for components at different container positions', async ({ page }) => {
   await page.goto('/');
 

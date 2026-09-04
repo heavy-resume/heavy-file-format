@@ -34,6 +34,13 @@ test('expected result: default WebMCP tools only operate on the mounted document
     'apply_hvy_patch',
   ]);
   expect(tools.some((tool) => 'path' in ((tool.inputSchema?.properties ?? {}) as object))).toBe(false);
+  const patchDescription = ((tools.find((tool) => tool.name === 'apply_hvy_patch')!
+    .inputSchema?.properties as Record<string, { description?: string }>).patch.description ?? '');
+  expect(patchDescription).toContain('a space keeps an existing line');
+  expect(patchDescription).toContain('Do not include line numbers');
+  expect(patchDescription).toContain('zero or multiple matches');
+  expect(patchDescription).toContain('-exact old line to remove');
+  expect(patchDescription).toContain('+exact new line to insert');
 
   const patchTool = tools.find((tool) => tool.name === 'apply_hvy_patch')!;
   const result = await patchTool.execute({

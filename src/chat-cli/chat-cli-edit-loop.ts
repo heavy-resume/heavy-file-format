@@ -1451,7 +1451,7 @@ export function buildChatCliNativeToolDefinitions(): ProviderToolDefinition[] {
         properties: {
           command: {
             type: 'string',
-            description: `One HVY virtual CLI command with no markdown fence. Start with one of: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Do not use an unlisted command.`,
+            description: `One HVY virtual CLI command. Start with one of: ${CHAT_CLI_NATIVE_TOOL_COMMAND_NAMES}. Do not use an unlisted command.`,
           },
         },
         required: ['command'],

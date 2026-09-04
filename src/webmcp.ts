@@ -81,7 +81,7 @@ export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOpti
         properties: {
           command: {
             type: 'string',
-            description: 'One HVY virtual CLI command with no markdown fence.',
+            description: 'One HVY virtual CLI command.',
           },
         },
         required: ['command'],
@@ -143,13 +143,21 @@ export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOpti
     },
     {
       name: 'apply_hvy_patch',
-      description: 'Patch the open HVY document.',
+      description: 'Change existing content in the open HVY document by describing the exact text to find and what should replace it. Use run_hvy_cli to find writable virtual file paths and read their current contents first.',
       inputSchema: {
         type: 'object',
         properties: {
           patch: {
             type: 'string',
-            description: 'Patch text using Begin Patch, Update File with absolute virtual paths, @@ hunks, and exact context/remove/add lines.',
+            description: `A text replacement instruction in this exact format:
+*** Begin Patch
+*** Update File: /absolute/virtual/path
+@@
+ unchanged line kept for context
+-exact old line to remove
++exact new line to insert
+*** End Patch
+Do not include line numbers: this patch format locates the change by searching the named virtual file for the exact sequence of unchanged and removed lines after @@. Every content line after @@ must begin with one marker character: a space keeps an existing line as matching context, - removes an existing line, and + inserts a new line. The unchanged and removed text must exactly match the current virtual file. Include enough unchanged lines around the edit so that the sequence occurs in exactly one location; the patch fails instead of guessing when there are zero or multiple matches. Add another @@ block for another change in the same file, or another Update File block for a different existing file. Only paths inside the open HVY document are accepted.`,
           },
         },
         required: ['patch'],
@@ -186,7 +194,7 @@ export function registerHvyWebMcpTools(
   assertUniqueToolNames(tools);
   const modelContext = 'modelContext' in options ? options.modelContext : getDocumentModelContext();
   if (!modelContext) {
-    return { registered: false, tools, destroy() {} };
+    return { registered: false, tools, destroy() { } };
   }
   const controller = new AbortController();
   const registrationOptions = {

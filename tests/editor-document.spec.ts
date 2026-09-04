@@ -1860,6 +1860,74 @@ hvy_version: 0.1
   expect(result.aiReviewed).toBe('ai');
 });
 
+test('embedded AI component editing keeps link clicks inside the editor', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) {
+      throw new Error('Mount root missing.');
+    }
+    (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks = [];
+    root.addEventListener('click', (event) => {
+      const target = event.target;
+      const anchor = target instanceof Element ? target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!anchor) {
+        return;
+      }
+      (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks?.push(
+        anchor.getAttribute('href') ?? ''
+      );
+      event.preventDefault();
+    }, { capture: true });
+
+    const modulePath = '/src/embed-full.ts';
+    const { deserializeDocumentBytes, mountHvy } = await import(/* @vite-ignore */ modulePath);
+    mountHvy({
+      root,
+      document: deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+
+ Text before [Expected Link](https://example.test/report) and text after.
+`), '.hvy'),
+      mode: 'ai',
+    });
+  });
+
+  const passiveLink = page.locator('#aiReaderDocument .reader-block-text a');
+  const passiveLinkBox = await passiveLink.boundingBox();
+  expect(passiveLinkBox).not.toBeNull();
+  await page.mouse.click(
+    passiveLinkBox!.x + passiveLinkBox!.width / 2,
+    passiveLinkBox!.y + passiveLinkBox!.height / 2
+  );
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks ?? []
+  )).toEqual(['https://example.test/report']);
+  await page.evaluate(() => {
+    (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks = [];
+  });
+
+  await page.locator('#aiReaderDocument .reader-block-text').dblclick({ position: { x: 6, y: 6 } });
+  await page.getByRole('button', { name: 'Edit component' }).click();
+  const editorLink = page.locator('#aiReaderDocument .editor-block[data-active-editor-block="true"] .rich-editor a');
+  await expect(editorLink).toHaveAttribute('href', 'https://example.test/report');
+  const linkBox = await editorLink.boundingBox();
+  expect(linkBox).not.toBeNull();
+
+  await page.mouse.click(linkBox!.x + linkBox!.width / 2, linkBox!.y + linkBox!.height / 2);
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks ?? []
+  )).toEqual([]);
+  await expect(page.locator('#aiReaderDocument .rich-editor')).toBeFocused();
+});
+
 test('embedded runtime keeps HVY modal panels above host modal overlays', async ({ page }) => {
   await page.goto('/');
 

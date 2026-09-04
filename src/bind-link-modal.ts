@@ -6,6 +6,11 @@ import { applyRichAction } from './block-ops';
 import { refreshLinkAttachmentPicker } from './editor/components/link-attachment-picker/link-attachment-picker';
 import { refreshLinkDocumentPicker } from './editor/components/link-document-picker/link-document-picker';
 import { isWorkspacePathTarget } from './workspace-links';
+import {
+  decodeUserFileAttachmentTarget,
+  encodeUserFileAttachmentTarget,
+  resolveUserFileAttachment,
+} from './document-attachments';
 
 type LinkTargetMode = 'web' | 'document' | 'workspace' | 'attachment';
 
@@ -52,7 +57,11 @@ export function bindLinkInlineModal(app: HTMLElement): void {
   });
 
   input.addEventListener('input', () => {
-    if (input.value.trim().startsWith('#')) {
+    const mode = modal.dataset.linkTargetMode as LinkTargetMode;
+    if (mode === 'attachment') {
+      refreshLinkTargetPicker(modal, input, mode);
+      updateLinkApplyAvailability(modal, mode, input.value);
+    } else if (input.value.trim().startsWith('#')) {
       setLinkTargetMode(modal, 'document');
       refreshLinkTargetPicker(modal, input, 'document');
       focusLinkTargetMode(modal, input, 'document');
@@ -62,6 +71,14 @@ export function bindLinkInlineModal(app: HTMLElement): void {
   });
 
   input.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' && modal.dataset.linkTargetMode === 'attachment') {
+      const first = modal.querySelector<HTMLButtonElement>('[data-link-attachment-target]');
+      if (first) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       applyInlineLinkFromModal(app);
@@ -93,26 +110,9 @@ export function bindLinkInlineModal(app: HTMLElement): void {
   });
 
   const attachmentPicker = modal.querySelector<HTMLElement>('[data-link-attachment-picker="true"]');
-  attachmentPicker?.addEventListener('input', (event) => {
-    if ((event.target as HTMLElement).matches('[data-link-attachment-search="true"]')) {
-      refreshLinkAttachmentPicker(attachmentPicker, state.document, input.value);
-    }
-  });
   attachmentPicker?.addEventListener('change', (event) => {
     if ((event.target as HTMLElement).matches('[data-link-attachment-sort="true"]')) {
       refreshLinkAttachmentPicker(attachmentPicker, state.document, input.value);
-    }
-  });
-  attachmentPicker?.addEventListener('keydown', (event) => {
-    if (!(event.target instanceof HTMLInputElement) || event.target.dataset.linkAttachmentSearch !== 'true') return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      attachmentPicker.querySelector<HTMLButtonElement>('[data-link-attachment-target]')?.focus({ preventScroll: true });
-    } else if (event.key === 'Enter') {
-      const first = attachmentPicker.querySelector<HTMLButtonElement>('[data-link-attachment-target]');
-      if (!first?.dataset.linkAttachmentTarget) return;
-      event.preventDefault();
-      selectLinkTarget(modal, input, first.dataset.linkAttachmentTarget, '[data-link-attachment-target]');
     }
   });
 }
@@ -156,11 +156,12 @@ export function openLinkInlineModal(
     }
   }
 
+  const mode = inferLinkTargetMode(linkValue);
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
-  input.value = linkValue;
-  modal.querySelectorAll<HTMLInputElement>('[data-link-document-search], [data-link-attachment-search]').forEach((search) => { search.value = ''; });
-  const mode = inferLinkTargetMode(linkValue);
+  input.value = mode === 'attachment' ? decodeUserFileAttachmentTarget(linkValue) ?? '' : linkValue;
+  modal.querySelectorAll<HTMLInputElement>('[data-link-document-search]').forEach((search) => { search.value = ''; });
+  modal.dataset.linkTargetMode = mode;
   setLinkTargetMode(modal, mode);
   refreshLinkTargetPicker(modal, input, mode);
   window.setTimeout(() => {
@@ -169,6 +170,7 @@ export function openLinkInlineModal(
 }
 
 function setLinkTargetMode(modal: HTMLElement, mode: LinkTargetMode): void {
+  const previousMode = modal.dataset.linkTargetMode as LinkTargetMode | undefined;
   modal.dataset.linkTargetMode = mode;
   modal.querySelectorAll<HTMLButtonElement>('[data-link-target-mode]').forEach((button) => {
     const active = button.dataset.linkTargetMode === mode;
@@ -180,16 +182,23 @@ function setLinkTargetMode(modal: HTMLElement, mode: LinkTargetMode): void {
   const inputWrap = modal.querySelector<HTMLElement>('.link-target-input-wrap');
   if (documentOptions) documentOptions.hidden = mode !== 'document';
   if (attachmentPicker) attachmentPicker.hidden = mode !== 'attachment';
-  if (inputWrap) inputWrap.hidden = mode === 'document' || mode === 'attachment';
+  if (inputWrap) inputWrap.hidden = mode === 'document';
   const label = modal.querySelector<HTMLElement>('[data-link-target-input-label="true"]');
   const input = modal.querySelector<HTMLInputElement>('#linkInlineInput');
-  if (input && !isLinkValueCompatibleWithMode(input.value, mode)) input.value = '';
+  if (input && (
+    (previousMode !== mode && (previousMode === 'attachment' || mode === 'attachment'))
+    || !isLinkValueCompatibleWithMode(input.value, mode)
+  )) input.value = '';
   if (label) label.textContent = mode === 'workspace'
-        ? 'Workspace file path'
-        : 'Web address';
+    ? 'Workspace file path'
+    : mode === 'attachment'
+      ? 'Attachment name'
+      : 'Web address';
   if (input) input.placeholder = mode === 'workspace'
-        ? './notes.hvy, ../folder/document.hvy, or /workspace/document.hvy'
-        : 'https://... or mailto:...';
+    ? './notes.hvy, ../folder/document.hvy, or /workspace/document.hvy'
+    : mode === 'attachment'
+      ? 'Search by name or filename'
+      : 'https://... or mailto:...';
   updateLinkApplyAvailability(modal, mode, input?.value ?? '');
 }
 
@@ -201,12 +210,16 @@ function inferLinkTargetMode(value: string): LinkTargetMode {
 }
 
 function selectLinkTarget(modal: HTMLElement, input: HTMLInputElement, target: string, optionSelector: string): void {
-  input.value = target;
+  const mode = modal.dataset.linkTargetMode as LinkTargetMode;
+  input.value = mode === 'attachment' ? decodeUserFileAttachmentTarget(target) ?? '' : target;
+  if (mode === 'attachment') {
+    refreshLinkTargetPicker(modal, input, mode);
+  }
   modal.querySelectorAll<HTMLElement>(optionSelector).forEach((option) => {
     const optionTarget = option.dataset.linkAttachmentTarget ?? option.dataset.linkDocumentTarget;
     option.classList.toggle('is-selected', optionTarget === target);
   });
-  updateLinkApplyAvailability(modal, modal.dataset.linkTargetMode as LinkTargetMode, target);
+  updateLinkApplyAvailability(modal, mode, input.value);
   const selected = Array.from(modal.querySelectorAll<HTMLElement>(optionSelector)).find((option) => option.classList.contains('is-selected'));
   selected?.focus({ preventScroll: true });
 }
@@ -225,9 +238,7 @@ function refreshLinkTargetPicker(modal: HTMLElement, input: HTMLInputElement, mo
 function focusLinkTargetMode(modal: HTMLElement, input: HTMLInputElement, mode: LinkTargetMode): void {
   const target = mode === 'document'
     ? modal.querySelector<HTMLInputElement>('[data-link-document-search="true"]')
-    : mode === 'attachment'
-      ? modal.querySelector<HTMLInputElement>('[data-link-attachment-search="true"]')
-      : input;
+    : input;
   target?.focus({ preventScroll: true });
   target?.select();
 }
@@ -235,7 +246,7 @@ function focusLinkTargetMode(modal: HTMLElement, input: HTMLInputElement, mode: 
 function isLinkValueCompatibleWithMode(value: string, mode: LinkTargetMode): boolean {
   if (!value) return true;
   if (mode === 'document') return value.startsWith('#');
-  if (mode === 'attachment') return value.startsWith('@attachment:');
+  if (mode === 'attachment') return !value.startsWith('#') && !isWorkspacePathTarget(value) && !/^https?:\/\//i.test(value);
   if (mode === 'workspace') return isWorkspacePathTarget(value);
   return !value.startsWith('#') && !value.startsWith('@attachment:') && !isWorkspacePathTarget(value);
 }
@@ -244,7 +255,7 @@ function updateLinkApplyAvailability(modal: HTMLElement, mode: LinkTargetMode, v
   const apply = modal.querySelector<HTMLButtonElement>('[data-link-modal-action="apply"]');
   if (!apply) return;
   apply.disabled = (mode === 'document' && !value.startsWith('#'))
-    || (mode === 'attachment' && !value.startsWith('@attachment:'));
+    || (mode === 'attachment' && resolveUserFileAttachment(state.document, value).status !== 'resolved');
 }
 
 export function closeLinkInlineModal(app: HTMLElement): void {
@@ -264,7 +275,14 @@ function applyInlineLinkFromModal(app: HTMLElement): void {
     closeLinkInlineModal(app);
     return;
   }
-  const value = normalizeLinkInputValue(input.value);
+  const mode = input.closest<HTMLElement>('#linkInlineModal')?.dataset.linkTargetMode as LinkTargetMode | undefined;
+  const attachment = mode === 'attachment' ? resolveUserFileAttachment(state.document, input.value) : null;
+  if (mode === 'attachment' && attachment?.status !== 'resolved') {
+    return;
+  }
+  const value = attachment?.status === 'resolved'
+    ? encodeUserFileAttachmentTarget(attachment.attachment.name)
+    : normalizeLinkInputValue(input.value);
   if (!value) {
     pendingLinkEditable.focus();
     if (pendingLinkAnchor && pendingLinkEditable.contains(pendingLinkAnchor)) {

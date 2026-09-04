@@ -4,6 +4,7 @@ import {
   encodeUserFileAttachmentTarget,
   formatUserFileAttachmentByteLength,
   listUserFileAttachments,
+  normalizeUserFileAttachmentName,
 } from '../../../document-attachments';
 import type { VisualDocument } from '../../../types';
 
@@ -16,21 +17,18 @@ export function renderLinkAttachmentPicker(): string {
       <strong>Choose an attachment</strong>
       <label class="link-attachment-sort-wrap"><span>Sort</span><select data-link-attachment-sort="true" aria-label="Sort attachments"><option value="recent">Recently added</option><option value="name">Name</option></select></label>
     </div>
-    <label class="link-attachment-search-wrap">
-      <span>Find an attachment</span>
-      <input type="search" data-link-attachment-search="true" placeholder="Search by name or filename" autocomplete="off" />
-    </label>
     <div class="link-attachment-options" data-link-attachment-options="true"></div>
     <div class="link-picker-result-status" data-link-attachment-result-status="true" aria-live="polite"></div>
   </section>`;
 }
 
-export function refreshLinkAttachmentPicker(root: HTMLElement, document: VisualDocument, selectedTarget = ''): void {
+export function refreshLinkAttachmentPicker(root: HTMLElement, document: VisualDocument, attachmentName = ''): void {
   const attachments = listUserFileAttachments(document);
   const optionsRoot = root.querySelector<HTMLElement>('[data-link-attachment-options="true"]');
   const status = root.querySelector<HTMLElement>('[data-link-attachment-result-status="true"]');
   if (!optionsRoot || !status) return;
-  const search = root.querySelector<HTMLInputElement>('[data-link-attachment-search="true"]')?.value.trim().toLocaleLowerCase() ?? '';
+  const search = attachmentName.trim().toLocaleLowerCase();
+  const selectedName = normalizeUserFileAttachmentName(attachmentName);
   const sort = root.querySelector<HTMLSelectElement>('[data-link-attachment-sort="true"]')?.value ?? 'recent';
   const matching = attachments.map((attachment, index) => ({ attachment, index }))
     .filter(({ attachment }) => `${attachment.name} ${attachment.filename}`.toLocaleLowerCase().includes(search))
@@ -44,7 +42,8 @@ export function refreshLinkAttachmentPicker(root: HTMLElement, document: VisualD
       ? '<div class="link-attachment-empty">No matching attachments.</div>'
       : visible.map(({ attachment }) => {
         const target = encodeUserFileAttachmentTarget(attachment.name);
-        return `<button type="button" class="link-attachment-option${target === selectedTarget ? ' is-selected' : ''}" data-link-modal-action="select-attachment-target" data-link-attachment-target="${escapeAttribute(target)}">
+        const selected = normalizeUserFileAttachmentName(attachment.name) === selectedName;
+        return `<button type="button" class="link-attachment-option${selected ? ' is-selected' : ''}" data-link-modal-action="select-attachment-target" data-link-attachment-target="${escapeAttribute(target)}" aria-pressed="${selected ? 'true' : 'false'}">
         <strong>${escapeHtml(attachment.name)}</strong>
         <span>${escapeHtml(attachment.filename)} · ${escapeHtml(attachment.mediaType)} · ${formatUserFileAttachmentByteLength(attachment.length)}</span>
       </button>`;

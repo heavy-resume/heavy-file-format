@@ -219,19 +219,33 @@ test('before, create link, expected result: attachment selector links by name wi
   await expect(modal.getByRole('tab', { name: 'Workspace' })).toHaveCount(0);
   await modal.getByRole('tab', { name: 'Attachment' }).click();
   await expect(modal.locator('#linkInlineInput')).not.toHaveAttribute('list');
-  await expect(modal.locator('.link-target-input-wrap')).toBeHidden();
+  await expect(modal.locator('.link-target-input-wrap')).toBeVisible();
+  await expect(modal.getByRole('textbox', { name: 'Attachment name' })).toBeFocused();
   await expect(modal.getByText('Choose an attachment')).toBeVisible();
   await expect(modal.locator('[data-link-attachment-upload], [data-link-attachment-dropzone], [data-link-attachment-category]')).toHaveCount(0);
   await expect(modal.locator('.link-attachment-option strong')).toHaveText(['latest-brief', 'employee-handbook', 'alpha-notes']);
-  await modal.locator('[data-link-attachment-search="true"]').fill('employee');
+  await modal.getByRole('textbox', { name: 'Attachment name' }).fill('employee');
   const handbookOption = modal.getByRole('button', { name: /employee-handbook employee-handbook\.pdf/ });
   await expect(handbookOption).toBeVisible();
   await handbookOption.click();
-  await expect(modal.locator('#linkInlineInput')).toHaveValue('@attachment:employee-handbook');
+  await expect(modal.getByRole('textbox', { name: 'Attachment name' })).toHaveValue('employee-handbook');
   await expect(handbookOption).toHaveClass(/is-selected/);
   await modal.getByRole('button', { name: 'Apply' }).click();
 
   await expect(editor.locator('a[href="@attachment:employee-handbook"]')).toHaveText('Employee handbook');
+  await editor.locator('a[href="@attachment:employee-handbook"]').evaluate((anchor) => {
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    (anchor.closest('.rich-editor') as HTMLElement | null)?.focus();
+  });
+  await page.keyboard.press('Control+K');
+  await expect(modal.getByRole('tab', { name: 'Attachment' })).toHaveAttribute('aria-selected', 'true');
+  await expect(modal.getByRole('textbox', { name: 'Attachment name' })).toHaveValue('employee-handbook');
+  await expect(modal.locator('[data-link-attachment-target="@attachment:employee-handbook"]')).toHaveClass(/is-selected/);
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+
   await page.getByRole('button', { name: 'Viewer', exact: true }).click();
   const renderedLink = page.locator('.reader-block-text a[data-hvy-link-kind="attachment"]').first();
   await expect(renderedLink).toHaveText('Employee handbook');

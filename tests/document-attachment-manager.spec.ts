@@ -274,6 +274,11 @@ test('before, create link, expected result: attachment selector links by name wi
     };
   })).toEqual(expectedLinkStyle);
 
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  const aiRenderedLink = page.locator('#aiReaderDocument .reader-block-text a[data-hvy-link-kind="attachment"]').first();
+  await expect(aiRenderedLink).toHaveText('Employee handbook');
+  await expect(aiRenderedLink).toHaveAttribute('data-hvy-attachment-target', '@attachment:employee-handbook');
+
   await page.getByRole('button', { name: 'Editor', exact: true }).click();
   await page.getByRole('button', { name: 'Advanced', exact: true }).click();
   await page.getByRole('button', { name: 'Document Meta' }).click();

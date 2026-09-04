@@ -41,11 +41,13 @@ export function applyUserFileAttachmentLinkRendering(root: ParentNode, document:
 export function bindUserFileAttachmentLinks(app: HTMLElement): void {
   if (boundRoots.has(app)) return;
   boundRoots.add(app);
-  const activate = (target: EventTarget | null): boolean => {
+  const getAttachmentLink = (target: EventTarget | null): HTMLAnchorElement | null => {
     const link = target instanceof Element ? target.closest<HTMLAnchorElement>('[data-hvy-attachment-id]') : null;
-    if (!link || !app.contains(link)) return false;
+    return link && app.contains(link) ? link : null;
+  };
+  const activate = (link: HTMLAnchorElement): void => {
     const resolution = resolveUserFileAttachment(state.document, link.dataset.hvyAttachmentTarget ?? '');
-    if (resolution.status !== 'resolved') return true;
+    if (resolution.status !== 'resolved') return;
     const action = link.dataset.hvyAttachmentAction === 'download' ? 'download' : 'preview';
     void performUserFileAttachmentAction(
       state.document,
@@ -54,17 +56,22 @@ export function bindUserFileAttachmentLinks(app: HTMLElement): void {
       state.attachmentHost,
       state.attachmentAction,
     ).catch(() => undefined);
-    return true;
   };
   app.addEventListener('click', (event) => {
-    if (!activate(event.target)) return;
+    const link = getAttachmentLink(event.target);
+    if (!link) return;
     event.preventDefault();
+    if (state.currentView === 'editor') return;
+    activate(link);
     event.stopPropagation();
   }, true);
   app.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    if (!activate(event.target)) return;
+    const link = getAttachmentLink(event.target);
+    if (!link) return;
     event.preventDefault();
+    if (state.currentView === 'editor') return;
+    activate(link);
     event.stopPropagation();
   }, true);
 }

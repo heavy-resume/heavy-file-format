@@ -1,6 +1,6 @@
 import { state, getRenderApp } from '../../state';
 import { recordHistory, undoStateAsync, redoStateAsync } from '../../history';
-import { setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
+import { navigateToReaderTarget, setSidebarOpen, setEditorSidebarOpen } from '../../navigation';
 import { serializeDocument } from '../../serialization';
 import { clearChatConversation, focusChatPanel, toggleChatPanelOpen } from '../../chat/chat';
 import { closeAiEditPopover } from '../../ai-edit-popover';
@@ -24,8 +24,15 @@ const redo: AppActionHandler = ({ app }) => {
   void redoStateAsync(app);
 };
 
-const switchView: AppActionHandler = ({ actionButton }) => {
+const switchView: AppActionHandler = ({ app, actionButton }) => {
   commitActiveTextFillIn('switch-view');
+  const activeEditorTarget = state.currentView === 'editor'
+    ? state.activeEditorBlock
+      ? { ...state.activeEditorBlock }
+      : state.activeEditorSectionTitleKey
+        ? { sectionKey: state.activeEditorSectionTitleKey }
+        : null
+    : null;
   const requestedView = actionButton.dataset.view;
   const view = requestedView === 'viewer' ? 'viewer' : requestedView === 'ai' ? 'ai' : 'editor';
   const nextEditorMode = requestedView === 'cli'
@@ -57,6 +64,9 @@ const switchView: AppActionHandler = ({ actionButton }) => {
     state.aiEditorHostSectionKey = null;
   }
   getRenderApp()();
+  if (activeEditorTarget && view !== 'editor') {
+    navigateToReaderTarget(activeEditorTarget, app);
+  }
   if (state.editorMode === 'cli') {
     restoreCliViewAfterRender();
   }

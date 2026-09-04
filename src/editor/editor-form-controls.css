@@ -198,10 +198,11 @@
   max-width: 100%;
 }
 
-/* Keep rendered links editable without exposing them as navigation targets.
-   This also prevents an embedding host's earlier click interceptor from
-   mistaking a click used to place the editor caret for link navigation. */
-.hvy-document .editor-block[data-active-editor-block="true"] a[href] {
+/* Links are content in the editor, not navigation. Keeping every current and
+   future link kind out of pointer targeting lets passive clicks select the
+   block and prevents embedding hosts from intercepting editor navigation. */
+.hvy-document :is(.editor-block, .editor-block-passive) a[href] {
+  color: var(--hvy-link-color);
   pointer-events: none;
 }
 

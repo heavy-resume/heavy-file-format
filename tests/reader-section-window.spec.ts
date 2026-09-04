@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('before, full rerender, after: a large reader renders and restores only the visible section window', async ({ page }) => {
   test.setTimeout(5000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click({ timeout: 1000 });
+  await page.getByRole('button', { name: 'Raw', exact: true }).click({ timeout: 1000 });
   await page.locator('#rawEditor').evaluate((rawEditor, value) => {
     rawEditor.value = value;
     rawEditor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));

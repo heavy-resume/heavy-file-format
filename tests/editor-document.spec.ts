@@ -2766,6 +2766,89 @@ hvy_version: 0.1
   ]);
 });
 
+test('embedded editor links activate their blocks without reaching host navigation', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="mount"></div>';
+    const root = document.querySelector<HTMLElement>('#mount');
+    if (!root) throw new Error('Mount root missing.');
+    const interceptedLinks: string[] = [];
+    root.addEventListener('click', (event) => {
+      const target = event.target;
+      const anchor = target instanceof Element ? target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!anchor) return;
+      interceptedLinks.push(anchor.getAttribute('href') ?? '');
+      event.preventDefault();
+    }, { capture: true });
+    const [{ deserializeDocumentBytes, mountHvy }, { storeUserFileAttachment }] = await Promise.all([
+      import('/src/embed-full.ts'),
+      import('/src/document-attachments.ts'),
+    ]);
+    const hvyDocument = deserializeDocumentBytes(new TextEncoder().encode(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"resources"}-->
+#! Resources
+
+ [Open guide](@attachment:Guide)
+
+<!--hvy: {"id":"links"}-->
+#! Links
+
+ [External link](https://example.test/report)
+`), '.hvy');
+    await storeUserFileAttachment(hvyDocument, {
+      id: 'file:guide',
+      name: 'Guide',
+      filename: 'guide.pdf',
+      mediaType: 'application/pdf',
+      bytes: new Uint8Array([37, 80, 68, 70]),
+    });
+    const calls: string[] = [];
+    mountHvy({
+      root,
+      document: hvyDocument,
+      mode: 'editor',
+      attachmentAction: (request) => {
+        calls.push(request.action);
+        return { handled: true };
+      },
+    });
+    (window as typeof window & { editorAttachmentActionCalls?: string[] }).editorAttachmentActionCalls = calls;
+    (window as typeof window & { interceptedEditorLinks?: string[] }).interceptedEditorLinks = interceptedLinks;
+  });
+
+  const attachmentLink = page.locator('#editorTree .editor-block-passive a[data-hvy-link-kind="attachment"]');
+  await expect(attachmentLink).toHaveCount(1);
+  await expect(attachmentLink).toHaveCSS('pointer-events', 'none');
+  const attachmentLinkBox = await attachmentLink.boundingBox();
+  expect(attachmentLinkBox).not.toBeNull();
+  await page.mouse.click(
+    attachmentLinkBox!.x + attachmentLinkBox!.width / 2,
+    attachmentLinkBox!.y + attachmentLinkBox!.height / 2
+  );
+
+  await expect(page.locator('#editorTree .editor-block[data-active-editor-block="true"]')).toHaveCount(1);
+  const externalLink = page.locator('#editorTree .editor-block-passive a[href="https://example.test/report"]');
+  await expect(externalLink).toHaveCSS('pointer-events', 'none');
+  const externalLinkBox = await externalLink.boundingBox();
+  expect(externalLinkBox).not.toBeNull();
+  await page.mouse.click(
+    externalLinkBox!.x + externalLinkBox!.width / 2,
+    externalLinkBox!.y + externalLinkBox!.height / 2
+  );
+
+  await expect(page.locator('#editorTree .editor-block[data-active-editor-block="true"]', { hasText: 'External link' })).toHaveCount(1);
+  expect(await page.evaluate(() => (
+    window as typeof window & { editorAttachmentActionCalls?: string[] }
+  ).editorAttachmentActionCalls)).toEqual([]);
+  expect(await page.evaluate(() => (
+    window as typeof window & { interceptedEditorLinks?: string[] }
+  ).interceptedEditorLinks)).toEqual([]);
+});
+
 test('embedded host theme overrides win per mount without changing document theme metadata', async ({ page }) => {
   await page.goto('/');
 
@@ -4569,6 +4652,28 @@ test('new section component picker opens on the first click', async ({ page }) =
   await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
 });
 
+test('new section component picker survives a focusout without a related target', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  const newSection = page.locator('.editor-section-card').last();
+  const titleInput = newSection.locator('[data-field="section-title"]');
+  const pickerTrigger = newSection.locator('.component-picker-trigger');
+  await expect(titleInput).toBeFocused();
+
+  await pickerTrigger.evaluate((trigger) => {
+    const input = trigger.closest('.editor-section-card')?.querySelector<HTMLInputElement>('[data-field="section-title"]');
+    if (!input) throw new Error('Section title input missing.');
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+    trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    trigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  });
+
+  await expect(newSection.locator('[data-field="section-title"]')).toHaveCount(1);
+  await expect(newSection.locator('.component-picker')).toHaveAttribute('data-open', 'true');
+});
+
 test('top-level section gutters insert a focused section at the selected boundary', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Raw' }).click();
@@ -5029,7 +5134,7 @@ test('section remove requires confirmation', async ({ page }) => {
 test('switching to viewer commits the active component edit', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5054,10 +5159,33 @@ hvy_version: 0.1
   await expect(page.locator('.editor-block-passive', { hasText: 'Committed by view switch' })).toBeVisible();
 });
 
+test('default example editor changes render in viewer and AI views', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('.editor-block-passive', { hasText: 'This default HVY document' }).click();
+  await page.locator('.rich-editor[data-field="block-rich"]').fill('Default example view transition');
+  await page.locator('[data-action="add-top-level-section"][data-section-location="main"]').click();
+  const newSection = page.locator('.editor-section-card').last();
+  await newSection.locator('[data-field="section-title"]').fill('Default added section');
+  await newSection.locator('.component-picker-trigger').click();
+  await newSection.locator('.component-picker-row-direct[data-component="text"]').click();
+  await newSection.locator('.rich-editor[data-field="block-rich"]').fill('Default added component');
+  const newSectionKey = await newSection.getAttribute('data-editor-section');
+
+  await page.getByRole('button', { name: 'Viewer', exact: true }).click();
+  await expect(page.locator('#readerDocument')).toContainText('Default example view transition');
+  await expect(page.locator(`#readerDocument .reader-section[data-section-key="${newSectionKey}"]`)).toContainText('Default added component');
+  await page.getByRole('button', { name: 'Editor', exact: true }).click();
+  await page.locator(`.editor-section-card[data-editor-section="${newSectionKey}"] .editor-block-passive`, { hasText: 'Default added component' }).click();
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  await expect(page.locator('#aiReaderDocument')).toContainText('Default example view transition');
+  await expect(page.locator(`#aiReaderDocument .reader-section[data-section-key="${newSectionKey}"]`)).toContainText('Default added component');
+});
+
 test('template-hidden sections hide in viewer and lose the marker after editing', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---

@@ -4,6 +4,19 @@ import { runDocumentEditHooksAfterCommit } from '../../document-edit-hooks';
 import { refreshSearchFilterButton } from '../../search/actions';
 
 export function bindFocus(app: HTMLElement): void {
+  let pointerInteractionTarget: HTMLElement | null = null;
+  const rememberPointerInteractionTarget = (event: Event): void => {
+    pointerInteractionTarget = event.target instanceof HTMLElement ? event.target : null;
+  };
+  const clearPointerInteractionTarget = (): void => {
+    pointerInteractionTarget = null;
+  };
+  app.addEventListener('pointerdown', rememberPointerInteractionTarget, true);
+  app.addEventListener('mousedown', rememberPointerInteractionTarget, true);
+  app.addEventListener('pointerup', clearPointerInteractionTarget, true);
+  app.addEventListener('mouseup', clearPointerInteractionTarget, true);
+  app.addEventListener('pointercancel', clearPointerInteractionTarget, true);
+
   app.addEventListener('focusin', (event) => {
     const target = event.target as HTMLElement;
     if (target.dataset.field !== 'table-cell' && target.dataset.field !== 'table-column') {
@@ -60,7 +73,7 @@ export function bindFocus(app: HTMLElement): void {
         }
         state.activeEditorSectionTitleKey = null;
         state.clearSectionTitleOnFocusKey = null;
-        const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+        const nextTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : pointerInteractionTarget;
         if (nextTarget?.closest('.component-picker, [data-action="add-block"]')) {
           return;
         }

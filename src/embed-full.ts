@@ -91,6 +91,7 @@ import { createProxyEmbeddingProvider } from './chat/embedding-provider';
 import { planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes } from './chat/embedding-context';
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
+import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
 import { setRuntimeSemanticFilterConcurrency, setRuntimeSemanticFilterMaxAttempts, setRuntimeSemanticFilterProvider } from './reference-config';
 import type { HvySemanticFilterProvider } from './search/types';
 import { searchDocuments } from './search/documents';
@@ -134,6 +135,7 @@ import {
 import { exportDocumentSourceMarkdown } from './document-source-markdown';
 import {
   createDocumentChangeApi,
+  notifyDocumentMayHaveChanged,
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPdfExportOptions } from './pdf-export/types';
@@ -210,6 +212,8 @@ export interface HvyMountOptions {
   getPluginAuthorization?: HvyGetPluginAuthorization;
   onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
+  /** Opt in to document-scoped WebMCP tools. Disabled when omitted or false. */
+  webMcp?: boolean | HvyWebMcpOptions;
 }
 
 export interface HvyMount {
@@ -1408,6 +1412,19 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   // code, so a host that asks for nothing gets nothing.
   ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
+  const webMcpRegistration = options.webMcp
+    ? registerHvyWebMcpTools(options.webMcp === true ? {} : options.webMcp, {
+        getDocument: () => runtime.state.document,
+        embeddingProvider: options.embeddingProvider,
+        chatContext: options.chatContext,
+        beforeMutation: () => runWithStateRuntime(runtime, () => recordHistory(undefined, { notify: false })),
+        onMutation: () => runWithStateRuntime(runtime, () => {
+          state.rawEditorText = serializeDocument(state.document);
+          notifyDocumentMayHaveChanged('webmcp', 'ai');
+          runtime.callbacks.renderApp();
+        }),
+      })
+    : null;
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
   // Only re-render when there was actually something encrypted to reveal.
@@ -1415,6 +1432,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
   return {
     destroy() {
+      webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
@@ -1644,8 +1662,9 @@ export type {
   ImportPlanTargetKind,
 } from './ai-document-edit';
 export type { ImageAttachmentMaxDimensions, ToolLoopCompactionOptions } from './types';
-export { createHvyAgentTools, createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes };
+export { createHvyAgentTools, createProxyEmbeddingProvider, planEmbeddingIndexUpdate, prepareEmbeddingChatContext, readEmbeddingIndexFromDocumentBytes, registerHvyWebMcpTools };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
+export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
 export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
 export type {
   ProviderToolCall,
@@ -1712,6 +1731,7 @@ window.HVY = {
   createDocumentSearchSnapshot,
   createHostedAttachmentAdapter,
   createHvyAgentTools,
+  registerHvyWebMcpTools,
   createProxyEmbeddingProvider,
   planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,

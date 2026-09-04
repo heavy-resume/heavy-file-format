@@ -292,6 +292,45 @@ receives the built-in tool definitions in `request.tools`; it can translate
 those definitions and return normalized `toolCalls` without reimplementing
 search or patch execution.
 
+Browser hosts can opt a mounted document into WebMCP. The default surface is
+limited to the current document: HVY CLI inspection/editing, ranked search,
+exhaustive reading, and contextual patching. It does not expose workspace,
+file-management, settings, template-management, or other host capabilities.
+
+```js
+const mount = HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  webMcp: true,
+});
+```
+
+WebMCP uses the current `document.modelContext.registerTool()` API when it is
+available. The repository's reference application enables this document-only
+surface automatically. Registration is removed when the mount is destroyed. A host can
+replace the defaults by passing a `tools` array, or extend/override them with a
+callback that receives the default tools:
+
+```js
+HVY.mountHvy({
+  root,
+  document,
+  mode: 'editor',
+  webMcp: {
+    tools: (defaults, context) => [
+      ...defaults.filter((tool) => tool.name !== 'apply_hvy_patch'),
+      {
+        name: 'host_edit_hvy_document',
+        description: 'Edit the open document through the host workflow.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => host.editDocument(context.getDocument()),
+      },
+    ],
+  },
+});
+```
+
 Desktop or workspace hosts that store embeddings outside HVY can use the
 headless planner instead. The planner parses the current document structure into
 section-scoped embedding chunks and compares them against vectors from the

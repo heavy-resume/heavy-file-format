@@ -27,7 +27,7 @@ import { renderOption } from './utils';
 import { resolveBaseComponent } from './component-defs';
 import { ensureContainerBlocks, ensureComponentListBlocks, ensureExpandableBlocks, ensureGridItems } from './document-factory';
 import { isActiveEditorSectionTitle, isActiveEditorBlock, getComponentRenderHelpers, findBlockByIds } from './block-ops';
-import { commitHistorySnapshot } from './history';
+import { commitHistorySnapshot, recordHistory } from './history';
 import { centerPendingEditorSection, focusPendingSectionTitleEditor, scrollPendingEditorActivation, scrollPendingEditorDeactivation } from './scroll';
 import { bindUi } from './bind-ui';
 import { deserializeDocumentBytes, serializeDocument } from './serialization';
@@ -67,6 +67,9 @@ import { initializeReferenceDocumentDirtyTracking, renderReferenceDocumentDirtyI
 import { initializeSessionAttachmentRecovery } from './session-attachment-tail-storage';
 import { decryptEncryptedComponents } from './encrypted-components';
 import { createReferenceEncryptionOptions } from './reference-encryption-keyring';
+import { registerHvyWebMcpTools } from './webmcp';
+import { notifyDocumentMayHaveChanged } from './document-change';
+import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) {
@@ -1592,6 +1595,21 @@ async function bootstrap(): Promise<void> {
   initState(applySessionState(createInitialState(await createDefaultDocument(), createReferenceEncryptionOptions()), savedSession));
   await decryptEncryptedComponents(state.document, state.encryption);
   initializeReferenceDocumentDirtyTracking();
+  initializeWebMCPPolyfill();
+  const webMcpRegistration = registerHvyWebMcpTools({}, {
+    getDocument: () => state.document,
+    embeddingProvider: state.embeddingProvider,
+    chatContext: state.chatContext,
+    beforeMutation: () => recordHistory(undefined, { notify: false }),
+    onMutation: () => {
+      state.rawEditorText = serializeDocument(state.document);
+      state.rawEditorError = null;
+      state.rawEditorDiagnostics = [];
+      notifyDocumentMayHaveChanged('webmcp', 'ai');
+      renderApp();
+    },
+  });
+  window.addEventListener('pagehide', () => webMcpRegistration.destroy(), { once: true });
   bindSessionPersistence();
   saveSessionState(state);
   initColorModeSync();

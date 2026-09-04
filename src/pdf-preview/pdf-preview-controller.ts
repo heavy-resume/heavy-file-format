@@ -10,7 +10,7 @@ export function renderPdfPreviewPlaceholder(): string {
   return `<div ${PDF_PREVIEW_ROOT_ATTRIBUTE}="true" class="hvy-pdf-preview" aria-live="polite">
     <div class="hvy-pdf-preview-status" role="status">
       <span class="hvy-pdf-preview-spinner" aria-hidden="true"></span>
-      <span>Rendering exact PDF preview...</span>
+      <span>Rendering PDF...</span>
     </div>
   </div>`;
 }
@@ -103,7 +103,7 @@ export class HvyPdfPreviewController {
     target.setAttribute('aria-live', 'polite');
     target.innerHTML = `<div class="hvy-pdf-preview-status" role="status">
       <span class="hvy-pdf-preview-spinner" aria-hidden="true"></span>
-      <span>Rendering exact PDF preview...</span>
+      <span>Rendering PDF...</span>
     </div>`;
   }
 

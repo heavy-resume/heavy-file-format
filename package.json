@@ -27,6 +27,10 @@
       "types": "./src/agent-tools.ts",
       "default": "./src/agent-tools.ts"
     },
+    "./webmcp": {
+      "types": "./src/webmcp.ts",
+      "default": "./src/webmcp.ts"
+    },
     "./rich-text-copy": {
       "types": "./src/rich-text-copy.ts",
       "default": "./src/rich-text-copy.ts"
@@ -74,6 +78,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@mcp-b/webmcp-polyfill": "^5.0.1",
     "@noble/hashes": "^1.8.0",
     "chart.js": "^4.5.1",
     "dompurify": "^3.2.6",

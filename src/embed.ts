@@ -62,6 +62,7 @@ import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './
 import { createReaderBlockElement, createReaderSectionElement, refreshReaderBlockDom, refreshReaderSectionDom } from './reader/block-refresh';
 import {
   createDocumentChangeApi,
+  notifyDocumentMayHaveChanged,
   type HvyDocumentChangeCallback,
 } from './document-change';
 import type { HvyPluginInput } from './plugins/types';
@@ -129,6 +130,7 @@ import { elapsedMs, logPerfTrace, nowMs } from './perf-trace';
 import { applyHvyDocumentDelta, createHvyDocumentDelta, isHvyDocumentDelta } from './document-delta';
 import { createHvyAgentTools } from './agent-tools';
 import { disposeScriptingCallbacks } from './plugins/scripting/callback-lifecycle';
+import { registerHvyWebMcpTools, type HvyWebMcpOptions } from './webmcp';
 
 export type {
   HvyHistoryArtifactKind,
@@ -181,6 +183,8 @@ export interface HvyMountOptions {
   getPluginAuthorization?: HvyGetPluginAuthorization;
   onPluginAuthorizationChanged?: HvyPluginAuthorizationChanged;
   onSaveRequest?: HvySaveRequestHandler;
+  /** Opt in to document-scoped WebMCP tools. Disabled when omitted or false. */
+  webMcp?: boolean | HvyWebMcpOptions;
 }
 
 export interface HvyMount {
@@ -1237,6 +1241,19 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   // code, so a host that asks for nothing gets nothing.
   ensureEmbedRuntime(options.plugins ?? [], options.databaseSources ?? [], runtime, options.root, () => linkObserver);
   const documentChangeApi = createDocumentChangeApi(runtime, options.onDocumentChange);
+  const webMcpRegistration = options.webMcp
+    ? registerHvyWebMcpTools(options.webMcp === true ? {} : options.webMcp, {
+        getDocument: () => runtime.state.document,
+        embeddingProvider: options.embeddingProvider,
+        chatContext: options.chatContext,
+        beforeMutation: () => runWithStateRuntime(runtime, () => recordHistory(undefined, { notify: false })),
+        onMutation: () => runWithStateRuntime(runtime, () => {
+          state.rawEditorText = serializeDocument(state.document);
+          notifyDocumentMayHaveChanged('webmcp', 'ai');
+          runtime.callbacks.renderApp();
+        }),
+      })
+    : null;
   runtime.callbacks.renderApp();
   void runPluginDocumentHooks('load');
   // Only re-render when there was actually something encrypted to reveal.
@@ -1244,6 +1261,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
     .then((decrypted) => { if (decrypted) runtime.callbacks.renderApp(); });
   return {
     destroy() {
+      webMcpRegistration?.destroy();
       runWithStateRuntime(runtime, () => {
         releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
@@ -1446,8 +1464,10 @@ export {
   isHvyDocumentDelta,
   buildDocumentRichTextCopyPayload,
   createHvyAgentTools,
+  registerHvyWebMcpTools,
 };
 export type { HvyAgentSearchRequest, HvyAgentTools, HvyAgentToolsOptions } from './agent-tools';
+export type { HvyWebMcpModelContext, HvyWebMcpOptions, HvyWebMcpTool, HvyWebMcpToolContext } from './webmcp';
 export type { HostChatClient, ProxyChatRequest, ProxyChatResponse } from './chat/chat';
 export type {
   ProviderToolCall,
@@ -1550,6 +1570,7 @@ declare global {
       createHostedAttachmentAdapter: typeof createHostedAttachmentAdapter;
       createProxyEmbeddingProvider: typeof createProxyEmbeddingProvider;
       createHvyAgentTools: typeof createHvyAgentTools;
+      registerHvyWebMcpTools: typeof registerHvyWebMcpTools;
       planEmbeddingIndexUpdate: typeof planEmbeddingIndexUpdate;
       prepareEmbeddingChatContext: typeof prepareEmbeddingChatContext;
       readEmbeddingIndexFromDocumentBytes: typeof readEmbeddingIndexFromDocumentBytes;
@@ -1585,6 +1606,7 @@ window.HVY = {
   createHostedAttachmentAdapter,
   createProxyEmbeddingProvider,
   createHvyAgentTools,
+  registerHvyWebMcpTools,
   planEmbeddingIndexUpdate,
   prepareEmbeddingChatContext,
   readEmbeddingIndexFromDocumentBytes,

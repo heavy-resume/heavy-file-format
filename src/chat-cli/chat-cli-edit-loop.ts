@@ -1410,7 +1410,7 @@ function buildChatCliLoopFormatInstructions(): string {
   return [
     'Use the provided tools instead of writing terminal commands as text.',
     'Use run_hvy_cli for HVY virtual CLI commands.',
-    'Use search_hvy_document only when semantic candidate discovery will help; search results are ranked candidates, not exhaustive proof.',
+    'Use search_hvy_document only when semantic candidate discovery will help; search results are ranked candidates, not exhaustive proof. It never builds document embeddings; use run_hvy_cli with hvy embeddings build if it reports that embeddings are not prepared.',
     'Use walk_hvy_document for exhaustive review of user-visible content. Continue with each returned nextCursor until it is absent, keep concise findings or todos in /scratchpad.txt, and finish the read pass before structural edits so cursor order stays stable.',
     'Use apply_hvy_patch after targets are understood when several existing virtual files need coordinated contextual edits.',
     'If native tool calls are unavailable, call search_hvy_document or apply_hvy_patch by returning one JSON object with {"tool":"TOOL_NAME","arguments":{...}} and no surrounding prose.',

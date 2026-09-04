@@ -277,6 +277,7 @@ const tools = createHvyAgentTools({
   chatContext: { mode: 'embedding-retrieval' },
 });
 
+await tools.buildEmbeddings();
 const candidates = await tools.search({
   query: 'references to unusually fast development',
   limit: 5,
@@ -308,9 +309,18 @@ const mount = HVY.mountHvy({
 
 WebMCP uses the current `document.modelContext.registerTool()` API when it is
 available. The repository's reference application enables this document-only
-surface automatically. Registration is removed when the mount is destroyed. A host can
-replace the defaults by passing a `tools` array, or extend/override them with a
-callback that receives the default tools:
+surface automatically. When the mount has an `embeddingProvider`,
+`search_hvy_document` exposes a `semantic` boolean that selects embedding or
+lexical search and WebMCP also exposes `build_hvy_embeddings`. Semantic search
+through `search_hvy_document` only uses an already prepared document index; the
+AI/MCP search tool never generates missing document vectors. User-led semantic
+search retains its normal lazy preparation behavior. Build or refresh the tool's index explicitly with
+`build_hvy_embeddings`, or with `hvy embeddings build` through the HVY CLI.
+Without an embedding provider, the build tool and `semantic` parameter are
+omitted and the search description identifies lexical search as the available
+mode. Registration is removed when the mount is destroyed. A host can replace
+the defaults by passing a `tools` array, or extend/override them with a callback
+that receives the default tools:
 
 ```js
 HVY.mountHvy({

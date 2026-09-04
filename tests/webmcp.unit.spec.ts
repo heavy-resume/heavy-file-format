@@ -42,6 +42,22 @@ test('expected result: default WebMCP tools only operate on the mounted document
   expect(patchDescription).toContain('-exact old line to remove');
   expect(patchDescription).toContain('+exact new line to insert');
 
+  // BEFORE
+  const searchTool = tools.find((tool) => tool.name === 'search_hvy_document')!;
+
+  // TOOL CALL
+  const searchResult = await searchTool.execute({ query: 'software quickly' });
+
+  // AFTER
+  expect(searchResult).toMatchObject({
+    results: [{
+      path: '/body/summary/delivery',
+      label: 'Moves software quickly.',
+      context: 'Summary',
+      excerpt: expect.stringContaining('Moves software quickly.'),
+    }],
+  });
+
   const patchTool = tools.find((tool) => tool.name === 'apply_hvy_patch')!;
   const result = await patchTool.execute({
     patch: `*** Begin Patch
@@ -102,6 +118,41 @@ test('expected result: WebMCP quietly remains unavailable without a model contex
   const registration = registerHvyWebMcpTools({ modelContext: null }, { getDocument: testDocument });
   expect(registration.registered).toBe(false);
   expect(registration.tools).toHaveLength(4);
+});
+
+test('expected result: WebMCP only advertises semantic search when embeddings are available', async () => {
+  const document = testDocument();
+  const embeddingProvider = vi.fn(async (request: { inputs: Array<{ id: string }> }) =>
+    request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }))
+  );
+
+  // BEFORE
+  const unavailableSearch = createHvyWebMcpDocumentTools({ getDocument: testDocument })
+    .find((tool) => tool.name === 'search_hvy_document')!;
+  const availableSearch = createHvyWebMcpDocumentTools({
+    getDocument: () => document,
+    embeddingProvider,
+    chatContext: { mode: 'keyword-retrieval' },
+  });
+  const buildEmbeddings = availableSearch.find((tool) => tool.name === 'build_hvy_embeddings')!;
+  const semanticSearch = availableSearch.find((tool) => tool.name === 'search_hvy_document')!;
+
+  // TOOL CALL
+  const buildResult = await buildEmbeddings.execute({});
+  embeddingProvider.mockClear();
+  const expectedResult = await semanticSearch.execute({ query: 'delivery experience', semantic: true });
+
+  // AFTER
+  expect(unavailableSearch.description).toContain('Embeddings are not available');
+  expect(unavailableSearch.inputSchema?.properties).not.toHaveProperty('semantic');
+  expect(createHvyWebMcpDocumentTools({ getDocument: testDocument })
+    .some((tool) => tool.name === 'build_hvy_embeddings')).toBe(false);
+  expect(buildEmbeddings.description).toContain('before semantic search');
+  expect(semanticSearch.description).toContain('does not build document embeddings');
+  expect(semanticSearch.inputSchema?.properties).toHaveProperty('semantic');
+  expect(buildResult).toEqual(expect.objectContaining({ rebuiltChunks: 1 }));
+  expect(expectedResult).toMatchObject({ mode: 'embeddings' });
+  expect(embeddingProvider).toHaveBeenCalledOnce();
 });
 
 test('expected result: WebMCP follows the host when its active document changes', async () => {

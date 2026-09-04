@@ -89,7 +89,12 @@ export function buildSemanticFilterWindows(options: BuildSemanticFilterWindowsOp
 
 export function buildSemanticRetrievalChunks(
   document: VisualDocument,
-  options: { targetChunkChars?: number; overlapChars?: number; preserveLeafTargets?: boolean } = {}
+  options: {
+    targetChunkChars?: number;
+    overlapChars?: number;
+    preserveLeafTargets?: boolean;
+    includeLabelInSummary?: boolean;
+  } = {}
 ): HvyRetrievalChunk[] {
   const targetChunkChars = Math.max(1, Math.floor(options.targetChunkChars ?? DEFAULT_MAX_WINDOW_CANDIDATE_CHARS));
   const overlapChars = normalizeOverlapChars(options.overlapChars, RETRIEVAL_CHUNK_OVERLAP_CHARS);
@@ -110,21 +115,37 @@ export function buildSemanticRetrievalChunks(
   }
   if (options.preserveLeafTargets) {
     return [...leavesBySectionKey.values()].flatMap((leaves) =>
-      leaves.flatMap((leaf) => buildLeafRetrievalChunks(leaf, targetChunkChars, overlapChars))
+      leaves.flatMap((leaf) => buildLeafRetrievalChunks(
+        leaf,
+        targetChunkChars,
+        overlapChars,
+        options.includeLabelInSummary ?? true
+      ))
     );
   }
   return [...leavesBySectionKey.entries()].flatMap(([sectionKey, leaves]) =>
-    buildSectionRetrievalChunks(sectionsByKey.get(sectionKey), leaves, targetChunkChars, overlapChars)
+    buildSectionRetrievalChunks(
+      sectionsByKey.get(sectionKey),
+      leaves,
+      targetChunkChars,
+      overlapChars,
+      options.includeLabelInSummary ?? true
+    )
   );
 }
 
 function buildLeafRetrievalChunks(
   leaf: HvySemanticFilterCandidate,
   targetChunkChars: number,
-  overlapChars: number
+  overlapChars: number,
+  includeLabelInSummary: boolean
 ): HvyRetrievalChunk[] {
   const pieces = buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars)
-    .flatMap((chunk) => splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk), targetChunkChars));
+    .flatMap((chunk) => splitRetrievalPieceText(
+      chunk,
+      formatRetrievalLeafText(chunk, includeLabelInSummary),
+      targetChunkChars
+    ));
   return pieces.map((piece, index): HvyRetrievalChunk => ({
     ...piece.candidate,
     chunkId: pieces.length === 1 ? piece.candidate.candidateId : `${piece.candidate.candidateId}#chunk:${index + 1}`,
@@ -546,7 +567,8 @@ function buildSectionRetrievalChunks(
   section: HvySemanticFilterCandidate | undefined,
   leaves: HvySemanticFilterCandidate[],
   targetChunkChars: number,
-  overlapChars: number
+  overlapChars: number,
+  includeLabelInSummary: boolean
 ): HvyRetrievalChunk[] {
   if (leaves.length === 0) {
     return [];
@@ -554,7 +576,7 @@ function buildSectionRetrievalChunks(
   const sectionCandidate = section ?? leaves[0]!;
   const pieces = leaves.flatMap((leaf) =>
     buildWindowCandidateChunks(leaf, targetChunkChars, overlapChars).flatMap((chunk) =>
-      splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk), targetChunkChars)
+      splitRetrievalPieceText(chunk, formatRetrievalLeafText(chunk, includeLabelInSummary), targetChunkChars)
     )
   );
   const groups: Array<{ pieces: typeof pieces; chars: number }> = [];
@@ -607,9 +629,9 @@ function getSectionRetrievalChunkId(section: HvySemanticFilterCandidate, index: 
   return count <= 1 ? baseId : `${baseId}#chunk:${index + 1}`;
 }
 
-function formatRetrievalLeafText(candidate: HvySemanticFilterCandidate): string {
+function formatRetrievalLeafText(candidate: HvySemanticFilterCandidate, includeLabel: boolean): string {
   return [
-    candidate.label ? `Label: ${candidate.label}` : '',
+    includeLabel && candidate.label ? `Label: ${candidate.label}` : '',
     candidate.contextLabel ? `Context: ${candidate.contextLabel}` : '',
     candidate.locationLabel ? `Location: ${candidate.locationLabel}` : '',
     candidate.tags.length ? `Tags: ${candidate.tags.join(', ')}` : '',

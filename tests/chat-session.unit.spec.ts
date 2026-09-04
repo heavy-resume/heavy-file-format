@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { advanceDocumentEditCliSimStep, appendUserChatMessage, buildDocumentEditCliSimRequest, copyChatMessageToHvySection, requestChatTurn, requestDocumentEditChatTurn } from '../src/chat/chat-session';
+import { prepareEmbeddingChatContext } from '../src/chat/embedding-context';
 import { deserializeDocument, serializeDocument } from '../src/serialization';
 import type { ChatMessage, ChatSettings, HvyEmbeddingProvider } from '../src/types';
 
@@ -877,6 +878,8 @@ Known for moving software from idea to production quickly.
 <!--hvy:text {"id":"mentoring"}-->
 Mentors engineers and supports their long-term growth.
 `, '.hvy');
+  await prepareEmbeddingChatContext(document, { mode: 'embedding-retrieval' }, embeddingProvider);
+  embeddingProvider.mockClear();
   const initial = await buildDocumentEditCliSimRequest({
     settings,
     document,
@@ -918,7 +921,7 @@ Mentors engineers and supports their long-term growth.
   expect(expectedResult.commandResultMessage).toContain('/body/summary/delivery');
   expect(expectedResult.commandResultMessage).not.toContain('"score"');
   expect(expectedResult.requestJson).toContain('\\"mode\\":\\"embeddings\\"');
-  expect(embeddingProvider).toHaveBeenCalled();
+  expect(embeddingProvider).toHaveBeenCalledOnce();
 });
 
 test('expected result: CLI simulation applies a multi-file patch and reports mutation when finishing in the same turn', async () => {
@@ -2281,7 +2284,7 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
 
   expect(result.error).toBeNull();
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
-    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
+    'CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###'
   );
   expect(requestProxyCompletionMock.mock.calls[1]?.[0]?.messages.at(-1)?.content).toContain(
     '### BEGIN your urgency ###\nscore=0\nprioritize planning and understanding'
@@ -2289,14 +2292,14 @@ test('requestDocumentEditChatTurn lets the cli edit loop retry after command err
   expect(writeChatCliCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     undefined,
-    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
+    expect.stringContaining('CMD: hvy\n### CMD RESULT ###\nhvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help\n### END CMD RESULT ###')
   );
   expect(writeChatCliFailedCommandTraceMock).toHaveBeenCalledWith(
     'chat-cli-test',
     'hvy',
-    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     undefined
   );
 });
@@ -2380,7 +2383,7 @@ test('requestDocumentEditChatTurn stops after repeated cli command errors', asyn
     expect.stringContaining('hvy insert INDEX section PARENT_PATH ID TITLE'),
     expect.stringContaining('Components:'),
     'Unknown command "not-a-command". Try "help".',
-    'hvy: expected request_structure, search, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
+    'hvy: expected request_structure, search, embeddings, cheatsheet, recipe, lint, insert, plugin, remove, prune-xref, preview, or help',
     expect.stringContaining('No such file: /missing.txt'),
   ]);
 });

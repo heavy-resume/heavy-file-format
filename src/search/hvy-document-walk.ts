@@ -10,7 +10,6 @@ export interface HvyDocumentWalkItem {
   path: string;
   kind: 'section' | 'component';
   type: string;
-  label: string;
   context?: string;
   content: string;
   chunk?: {
@@ -37,6 +36,7 @@ export function walkHvyDocument(options: {
     targetChunkChars: WALK_ITEM_CHARS,
     overlapChars: 0,
     preserveLeafTargets: true,
+    includeLabelInSummary: false,
   })
     .filter((chunk) => Boolean(chunk.targetPath?.trim()))
     .sort((left, right) => left.documentOrder - right.documentOrder);
@@ -50,7 +50,6 @@ export function walkHvyDocument(options: {
       path: chunk.targetPath?.trim() ?? '',
       kind: chunk.targetKind === 'section' ? 'section' : 'component',
       type: chunk.targetKind === 'section' ? 'section' : chunk.componentType || 'component',
-      label: chunk.label,
       ...(chunk.contextLabel?.trim() ? { context: chunk.contextLabel.trim() } : {}),
       content: chunk.summary,
       ...(chunk.windowChunk

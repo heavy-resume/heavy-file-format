@@ -54,6 +54,7 @@ export interface HvyCliSession {
   virtualPathNaming?: HvyVirtualPathNamingState;
   now?: Date;
   searchHvyDocument?: (args: string[]) => Promise<string>;
+  buildHvyEmbeddings?: () => Promise<string>;
   scratchpadLimits?: HvyCliScratchpadLimits;
   readOnlyFiles?: Record<string, string>;
 }
@@ -242,6 +243,16 @@ async function executeHvyCliCommandUnmeasured(document: VisualDocument, session:
     return {
       cwd: session.cwd,
       output: truncateCliOutput(await session.searchHvyDocument(args.slice(2))),
+      mutated: false,
+    };
+  }
+  if (args[0] === 'hvy' && args[1] === 'embeddings' && args[2] === 'build' && session.buildHvyEmbeddings) {
+    if (args.length > 3) {
+      throw new Error(`hvy embeddings build: unsupported argument ${args[3]}`);
+    }
+    return {
+      cwd: session.cwd,
+      output: truncateCliOutput(await session.buildHvyEmbeddings()),
       mutated: false,
     };
   }

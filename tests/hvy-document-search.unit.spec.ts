@@ -1,7 +1,12 @@
 import { expect, test, vi } from 'vitest';
 
 import { searchHvyDocumentForAgent } from '../src/search/hvy-document-search';
-import { deserializeDocument } from '../src/serialization';
+import {
+  materializePreparedEmbeddingAttachments,
+  prepareEmbeddingChatContext,
+  searchHvyDocumentByEmbedding,
+} from '../src/chat/embedding-context';
+import { deserializeDocument, deserializeDocumentBytes, serializeDocumentBytes } from '../src/serialization';
 import type { HvyEmbeddingProvider } from '../src/types';
 
 const SEARCH_DOCUMENT = `---
@@ -28,8 +33,11 @@ test('expected result: agent search uses embeddings exclusively when embedding r
     }))
   );
 
+  const document = deserializeDocument(SEARCH_DOCUMENT, '.hvy');
+  await prepareEmbeddingChatContext(document, { mode: 'embedding-retrieval' }, embeddingProvider);
+  embeddingProvider.mockClear();
   const expectedResult = await searchHvyDocumentForAgent({
-    document: deserializeDocument(SEARCH_DOCUMENT, '.hvy'),
+    document,
     query: 'references to fast development',
     limit: 2,
     chatContext: { mode: 'embedding-retrieval' },
@@ -41,10 +49,59 @@ test('expected result: agent search uses embeddings exclusively when embedding r
     path: '/body/summary/delivery',
     kind: 'component',
     type: 'text',
+    label: 'Known for moving software from idea to production quickly.',
+    context: 'Summary',
   }));
   expect(expectedResult.results[0]?.excerpt).toContain('moving software from idea to production quickly');
   expect(JSON.stringify(expectedResult)).not.toContain('score');
+  expect(embeddingProvider).toHaveBeenCalledOnce();
+  expect(embeddingProvider.mock.calls[0]![0].inputs).toEqual([
+    expect.objectContaining({ id: 'query' }),
+  ]);
+});
+
+test('expected result: explicit semantic search uses available embeddings outside embedding retrieval mode', async () => {
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }))
+  );
+
+  // BEFORE
+  const document = deserializeDocument(SEARCH_DOCUMENT, '.hvy');
+  await prepareEmbeddingChatContext(document, { mode: 'keyword-retrieval' }, embeddingProvider);
+  embeddingProvider.mockClear();
+
+  // TOOL CALL
+  const expectedResult = await searchHvyDocumentForAgent({
+    document,
+    query: 'delivery experience',
+    semantic: true,
+    chatContext: { mode: 'keyword-retrieval' },
+    embeddingProvider,
+  });
+
+  // AFTER
+  expect(expectedResult.mode).toBe('embeddings');
   expect(embeddingProvider).toHaveBeenCalled();
+});
+
+test('expected result: explicit lexical search does not use available embeddings', async () => {
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn();
+
+  // BEFORE
+  const document = deserializeDocument(SEARCH_DOCUMENT, '.hvy');
+
+  // TOOL CALL
+  const expectedResult = await searchHvyDocumentForAgent({
+    document,
+    query: 'mentoring',
+    semantic: false,
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingProvider,
+  });
+
+  // AFTER
+  expect(expectedResult.mode).toBe('lexical_fallback');
+  expect(embeddingProvider).not.toHaveBeenCalled();
 });
 
 test('expected result: agent search uses lexical fallback when embedding retrieval is off', async () => {
@@ -60,25 +117,58 @@ test('expected result: agent search uses lexical fallback when embedding retriev
 
   expect(expectedResult.mode).toBe('lexical_fallback');
   expect(expectedResult.results).toEqual([
+    expect.objectContaining({
+      path: '/body/summary/mentoring',
+      label: 'Mentors engineers and supports their long-term growth.',
+      context: 'Summary',
+      excerpt: expect.stringContaining('Mentors engineers and supports their long-term growth.'),
+    }),
+  ]);
+  expect(embeddingProvider).not.toHaveBeenCalled();
+});
+
+test('expected result: agent search reports that document embeddings must be built without calling the provider', async () => {
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn();
+
+  const expectedResult = await searchHvyDocumentForAgent({
+    document: deserializeDocument(SEARCH_DOCUMENT, '.hvy'),
+    query: 'mentoring',
+    chatContext: { mode: 'embedding-retrieval' },
+    embeddingProvider,
+  });
+
+  expect(expectedResult.mode).toBe('lexical_fallback');
+  expect(expectedResult.fallbackReason).toContain('Document embeddings are not prepared');
+  expect(expectedResult.results).toEqual([
     expect.objectContaining({ path: '/body/summary/mentoring' }),
   ]);
   expect(embeddingProvider).not.toHaveBeenCalled();
 });
 
-test('expected result: agent search reports lexical fallback after an embedding failure', async () => {
-  const expectedResult = await searchHvyDocumentForAgent({
-    document: deserializeDocument(SEARCH_DOCUMENT, '.hvy'),
-    query: 'mentoring',
-    chatContext: { mode: 'embedding-retrieval' },
-    embeddingProvider: async () => {
-      throw new Error('Embedding service unavailable.');
-    },
+test('expected result: user-led semantic search builds missing document embeddings', async () => {
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }))
+  );
+
+  // BEFORE
+  const document = deserializeDocument(SEARCH_DOCUMENT, '.hvy');
+
+  // TOOL CALL
+  const expectedResult = await searchHvyDocumentByEmbedding({
+    document,
+    query: 'delivery experience',
+    embeddingProvider,
   });
 
-  expect(expectedResult.mode).toBe('lexical_fallback');
-  expect(expectedResult.fallbackReason).toBe('Embedding service unavailable.');
-  expect(expectedResult.results).toEqual([
-    expect.objectContaining({ path: '/body/summary/mentoring' }),
+  // AFTER
+  expect(expectedResult).not.toHaveLength(0);
+  expect(embeddingProvider).toHaveBeenCalledTimes(2);
+  expect(embeddingProvider.mock.calls[0]![0].inputs).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'component:delivery' }),
+    expect.objectContaining({ id: 'component:mentoring' }),
+  ]));
+  expect(embeddingProvider.mock.calls[1]![0].inputs).toEqual([
+    expect.objectContaining({ id: 'query' }),
   ]);
 });
 
@@ -102,6 +192,8 @@ Delivery evidence three.
   const embeddingProvider: HvyEmbeddingProvider = async (request) =>
     request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }));
 
+  await prepareEmbeddingChatContext(document, { mode: 'embedding-retrieval' }, embeddingProvider);
+
   const firstPage = await searchHvyDocumentForAgent({
     document,
     query: 'delivery evidence',
@@ -122,4 +214,33 @@ Delivery evidence three.
   expect(firstPage.nextCursor).toBe('hvy-search:1');
   expect(expectedResult.results[0]?.path).toBe('/body/summary/second');
   expect(expectedResult.nextCursor).toBe('hvy-search:2');
+});
+
+test('expected result: semantic search hydrates a prepared attachment without rebuilding document embeddings', async () => {
+  const source = deserializeDocument(SEARCH_DOCUMENT, '.hvy');
+  const embeddingProvider: HvyEmbeddingProvider = vi.fn(async (request) =>
+    request.inputs.map((input) => ({ id: input.id, vector: [1, 0] }))
+  );
+  await prepareEmbeddingChatContext(source, {
+    mode: 'embedding-retrieval',
+    persistEmbeddingsToAttachments: true,
+  }, embeddingProvider);
+  materializePreparedEmbeddingAttachments(source);
+  const document = deserializeDocumentBytes(serializeDocumentBytes(source), '.hvy');
+  embeddingProvider.mockClear();
+
+  // TOOL CALL
+  const expectedResult = await searchHvyDocumentForAgent({
+    document,
+    query: 'delivery experience',
+    semantic: true,
+    embeddingProvider,
+  });
+
+  // AFTER
+  expect(expectedResult.mode).toBe('embeddings');
+  expect(embeddingProvider).toHaveBeenCalledOnce();
+  expect(embeddingProvider.mock.calls[0]![0].inputs).toEqual([
+    expect.objectContaining({ id: 'query' }),
+  ]);
 });

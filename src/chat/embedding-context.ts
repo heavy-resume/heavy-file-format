@@ -412,6 +412,7 @@ export async function searchHvyDocumentByEmbedding(options: {
   query: string;
   embeddingProvider: HvyEmbeddingProvider;
   chatContext?: HvyChatContextOptions;
+  buildMissingDocumentEmbeddings?: boolean;
   maxResults?: number;
   offset?: number;
   signal?: AbortSignal;
@@ -421,12 +422,9 @@ export async function searchHvyDocumentByEmbedding(options: {
     return [];
   }
   const chatContext = options.chatContext ?? {};
-  const index = await getEmbeddingIndex(
-    options.document,
-    chatContext,
-    options.embeddingProvider,
-    options.signal
-  );
+  const index = options.buildMissingDocumentEmbeddings === false
+    ? getPreparedEmbeddingIndex(options.document, chatContext)
+    : await getEmbeddingIndex(options.document, chatContext, options.embeddingProvider, options.signal);
   if (index.records.length === 0) {
     return [];
   }
@@ -476,6 +474,56 @@ export async function searchHvyDocumentByEmbedding(options: {
       documentOrder: result.record.documentOrder,
       score: result.score,
     }));
+}
+
+function getPreparedEmbeddingIndex(
+  document: VisualDocument,
+  options: HvyChatContextOptions
+): RuntimeEmbeddingIndex {
+  const documentRevision = getEmbeddingDocumentRevision(document);
+  const records = buildEmbeddingRecords(document);
+  const profile = buildEmbeddingIndexProfile(document, records, options);
+  const profileKey = getEmbeddingProfileKey(profile);
+  const cached = runtimeIndexes.get(document);
+  if (
+    cached
+    && cached.documentRevision === documentRevision
+    && getEmbeddingProfileKey(cached.profile) === profileKey
+    && records.every((record) => cached.vectors.has(record.key) && cached.textHashes.get(record.key) === record.textHash)
+  ) {
+    return cached;
+  }
+  const attached = readEmbeddingAttachment(document, profile);
+  const previousEntries = collectReusableEmbeddingEntries(records, [
+    ...(cached && getEmbeddingProfileKey(cached.profile) === profileKey
+      ? records.map((record) => ({
+        id: record.key,
+        textHash: cached.textHashes.get(record.key) ?? '',
+        vector: cached.vectors.get(record.key) ?? [],
+      }))
+      : []),
+    ...(attached?.entries ?? []),
+  ]);
+  if (previousEntries.length !== records.length) {
+    throw new Error('Document embeddings are not prepared for the current document. Run build_hvy_embeddings in WebMCP or `hvy embeddings build` in the CLI before semantic search.');
+  }
+  const runtime: RuntimeEmbeddingIndex = {
+    profile,
+    documentRevision,
+    records,
+    vectors: new Map(previousEntries.map((entry) => [entry.id, entry.vector])),
+    textHashes: new Map(previousEntries.map((entry) => [entry.id, entry.textHash])),
+    persistToAttachments: options.persistEmbeddingsToAttachments === true,
+    lastBuildStats: {
+      totalChunks: records.length,
+      reusedChunks: records.length,
+      rebuiltChunks: 0,
+      missingVectors: 0,
+      alreadyPrepared: true,
+    },
+  };
+  runtimeIndexes.set(document, runtime);
+  return runtime;
 }
 
 async function getEmbeddingIndex(

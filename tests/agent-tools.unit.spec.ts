@@ -27,6 +27,8 @@ Moves software from idea to production quickly.
     chatContext: { mode: 'embedding-retrieval' },
   });
 
+  const buildResult = await tools.buildEmbeddings();
+  embeddingProvider.mockClear();
   const searchResult = await tools.search({
     query: 'claims about unusually fast development',
     limit: 5,
@@ -39,6 +41,8 @@ Moves software from idea to production quickly.
 *** End Patch`);
 
   expect(searchResult.mode).toBe('embeddings');
+  expect(buildResult.rebuiltChunks).toBeGreaterThan(0);
+  expect(embeddingProvider).toHaveBeenCalledOnce();
   expect(searchResult.results[0]?.path).toBe('/body/summary/delivery');
   expect(patchResult).toMatchObject({
     appliedFileCount: 1,

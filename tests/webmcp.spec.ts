@@ -33,6 +33,7 @@ test('expected result: reference app publishes and runs document WebMCP tools', 
   expect(expectedResult.available).toBe(true);
   expect(expectedResult.names.sort()).toEqual([
     'apply_hvy_patch',
+    'build_hvy_embeddings',
     'run_hvy_cli',
     'search_hvy_document',
     'walk_hvy_document',

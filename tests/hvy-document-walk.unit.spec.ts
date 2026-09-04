@@ -49,6 +49,8 @@ hvy_version: 0.1
     type: 'text',
     content: expect.stringContaining('First visible note.'),
   }));
+  expect(firstBatch.items[0]).not.toHaveProperty('label');
+  expect(firstBatch.items[0]!.content).not.toContain('Label:');
   expect(secondBatch).toEqual(expect.objectContaining({
     reviewedThrough: 2,
     totalItems: 2,

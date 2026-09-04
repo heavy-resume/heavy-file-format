@@ -92,15 +92,18 @@ test('expected result: chat CLI hvy search uses embeddings when embedding retrie
     embeddingProvider,
   });
 
+  const buildResult = await cli.run('hvy embeddings build');
+  embeddingProvider.mockClear();
   const expectedResult = await cli.run('hvy search "intro content" --max 5 --json');
   const parsed = JSON.parse(expectedResult.output);
 
   expect(parsed.mode).toBe('embeddings');
+  expect(JSON.parse(buildResult.output)).toEqual(expect.objectContaining({ rebuiltChunks: 1 }));
   expect(parsed.results[0]).toEqual(expect.objectContaining({
     path: '/body/summary/intro',
     kind: 'component',
     type: 'text',
   }));
   expect(expectedResult.output).not.toContain('"score"');
-  expect(embeddingProvider).toHaveBeenCalled();
+  expect(embeddingProvider).toHaveBeenCalledOnce();
 });

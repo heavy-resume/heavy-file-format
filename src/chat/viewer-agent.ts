@@ -154,7 +154,7 @@ export function buildViewerAgentToolDefinitions(): ProviderToolDefinition[] {
   return [
     {
       name: 'search_hvy_document',
-      description: 'Find ranked document paths using embeddings when configured, with lexical fallback. Results are candidates, not exhaustive proof.',
+      description: 'Find ranked document paths using an already prepared embedding index when configured, with lexical fallback. This tool does not build document embeddings. Results are candidates, not exhaustive proof.',
       strict: true,
       inputSchema: {
         type: 'object',

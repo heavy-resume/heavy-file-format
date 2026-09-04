@@ -58,6 +58,7 @@ export interface HvyWebMcpRegistration {
 }
 
 export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOptions): HvyWebMcpTool[] {
+  const embeddingsAvailable = Boolean(options.embeddingProvider);
   let activeDocument: VisualDocument | null = null;
   let activeAgentTools: ReturnType<typeof createHvyAgentTools> | null = null;
   const getAgentTools = (): ReturnType<typeof createHvyAgentTools> => {
@@ -72,6 +73,17 @@ export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOpti
     }
     return activeAgentTools;
   };
+  const embeddingTools: HvyWebMcpTool[] = embeddingsAvailable ? [{
+    name: 'build_hvy_embeddings',
+    description: 'Build or refresh the embedding index for the open HVY document. Use this before semantic search when search reports that document embeddings are not prepared.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    execute: () => getAgentTools().buildEmbeddings(),
+  }] : [];
   return [
     {
       name: 'run_hvy_cli',
@@ -105,13 +117,21 @@ export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOpti
     },
     {
       name: 'search_hvy_document',
-      description: 'Find ranked candidate sections or components related to a concept in the open HVY document.',
+      description: embeddingsAvailable
+        ? 'Find ranked candidate sections or components related to a concept in the open HVY document. Set semantic to true to use a prepared embedding index or false to use lexical search. This tool does not build document embeddings; use build_hvy_embeddings first when needed.'
+        : 'Find ranked candidate sections or components related to a concept in the open HVY document. Embeddings are not available, so this tool uses lexical search.',
       inputSchema: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Concept or content to find.' },
           limit: { type: 'integer', minimum: 1, maximum: 20 },
           cursor: { type: 'string', description: 'Continuation cursor returned by a previous search.' },
+          ...(embeddingsAvailable ? {
+            semantic: {
+              type: 'boolean',
+              description: 'True uses embedding-based semantic search; false uses lexical search.',
+            },
+          } : {}),
         },
         required: ['query'],
         additionalProperties: false,
@@ -121,8 +141,10 @@ export function createHvyWebMcpDocumentTools(options: HvyWebMcpDocumentToolsOpti
         query: requiredString(input, 'query', 'search_hvy_document'),
         ...(finiteInteger(input.limit) ? { limit: input.limit } : {}),
         ...(typeof input.cursor === 'string' && input.cursor ? { cursor: input.cursor } : {}),
+        ...(embeddingsAvailable && typeof input.semantic === 'boolean' ? { semantic: input.semantic } : {}),
       }),
     },
+    ...embeddingTools,
     {
       name: 'walk_hvy_document',
       description: 'Read the open HVY document exhaustively in document order. Continue with nextCursor until it is absent.',

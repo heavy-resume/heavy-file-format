@@ -1,6 +1,7 @@
 import { searchHvyDocumentByEmbedding } from '../chat/embedding-context';
 import { buildHvyVirtualFileSystem } from '../cli-core/virtual-file-system';
 import { searchHvyIntent } from '../cli-core/intent-search';
+import { buildSemanticFilterCandidates } from './semantic-candidates';
 import type {
   HvyChatContextOptions,
   HvyEmbeddingProvider,
@@ -13,7 +14,9 @@ export interface HvyAgentSearchCandidate {
   path: string;
   kind: 'section' | 'component' | 'section-template' | 'doc';
   type: string;
-  excerpt?: string;
+  label: string;
+  context?: string;
+  excerpt: string;
 }
 
 export interface HvyAgentSearchResult {
@@ -29,6 +32,7 @@ export async function searchHvyDocumentForAgent(options: {
   query: string;
   limit?: number;
   cursor?: string;
+  semantic?: boolean;
   embeddingProvider?: HvyEmbeddingProvider | null;
   chatContext?: HvyChatContextOptions | null;
   signal?: AbortSignal;
@@ -45,6 +49,7 @@ export async function searchHvyDocumentForAgent(options: {
         document: options.document,
         query,
         embeddingProvider: options.embeddingProvider,
+        buildMissingDocumentEmbeddings: false,
         maxResults: limit + 1,
         offset,
         ...(options.chatContext ? { chatContext: options.chatContext } : {}),
@@ -59,7 +64,9 @@ export async function searchHvyDocumentForAgent(options: {
           path,
           kind: result.targetKind === 'section' ? 'section' : 'component',
           type: result.targetKind === 'section' ? 'section' : result.sourceFile || 'component',
-          ...(result.preview.trim() ? { excerpt: result.preview.trim() } : {}),
+          label: result.label,
+          ...(result.contextLabel?.trim() ? { context: result.contextLabel.trim() } : {}),
+          excerpt: result.preview.trim(),
         }];
       });
       return {
@@ -79,9 +86,13 @@ export async function searchHvyDocumentForAgent(options: {
 }
 
 function getPreferredMode(options: {
+  semantic?: boolean;
   embeddingProvider?: HvyEmbeddingProvider | null;
   chatContext?: HvyChatContextOptions | null;
 }): HvyAgentSearchMode {
+  if (options.semantic !== undefined) {
+    return options.semantic && options.embeddingProvider ? 'embeddings' : 'lexical_fallback';
+  }
   return options.embeddingProvider && options.chatContext?.mode === 'embedding-retrieval'
     ? 'embeddings'
     : 'lexical_fallback';
@@ -94,6 +105,11 @@ function lexicalFallback(
   offset: number,
   fallbackReason?: string
 ): HvyAgentSearchResult {
+  const semanticCandidatesByPath = new Map(
+    buildSemanticFilterCandidates(document)
+      .filter((candidate) => candidate.targetPath)
+      .map((candidate) => [candidate.targetPath!, candidate])
+  );
   const candidates = searchHvyIntent(
     document,
     buildHvyVirtualFileSystem(document),
@@ -104,12 +120,20 @@ function lexicalFallback(
     mode: 'lexical_fallback',
     query,
     results: candidates.slice(offset, offset + limit)
-      .map((result) => ({
-        path: result.path,
-        kind: result.kind,
-        type: result.type,
-        ...(result.description ? { excerpt: result.description } : {}),
-      })),
+      .map((result): HvyAgentSearchCandidate => {
+        const semanticCandidate = semanticCandidatesByPath.get(result.path);
+        return {
+          path: result.path,
+          kind: result.kind,
+          type: result.type,
+          label: semanticCandidate?.label || result.id,
+          ...(semanticCandidate?.contextLabel?.trim() ? { context: semanticCandidate.contextLabel.trim() } : {}),
+          excerpt: semanticCandidate?.summary.trim()
+            || result.visualDescription?.trim()
+            || result.description?.trim()
+            || result.reason,
+        };
+      }),
     ...(candidates.length > offset + limit ? { nextCursor: formatCursor(offset + limit) } : {}),
     ...(fallbackReason ? { fallbackReason } : {}),
   };

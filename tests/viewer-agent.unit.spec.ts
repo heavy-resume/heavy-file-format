@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { deserializeDocument } from '../src/serialization';
+import { prepareEmbeddingChatContext } from '../src/chat/embedding-context';
 import type { ChatMessage, ChatSettings, HvyEmbeddingProvider } from '../src/types';
 
 const { requestProxyToolTurnMock } = vi.hoisted(() => ({
@@ -72,6 +73,18 @@ test('Viewer agent uses embedding search and keeps the same cache prefix for the
       vector: input.id === 'query' || input.text.includes('FAKE_ORBITAL_LANGUAGE') ? [1, 0] : [0, 1],
     }))
   );
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"skills"}-->
+#! Skills
+
+<!--hvy:text {"id":"orbital"}-->
+FAKE_ORBITAL_LANGUAGE
+`, '.hvy');
+  await prepareEmbeddingChatContext(document, { mode: 'embedding-retrieval' }, embeddingProvider);
+  embeddingProvider.mockClear();
   requestProxyToolTurnMock
     .mockResolvedValueOnce({
       output: '',
@@ -94,16 +107,7 @@ test('Viewer agent uses embedding search and keeps the same cache prefix for the
 
   const result = await runViewerAgent({
     settings,
-    document: deserializeDocument(`---
-hvy_version: 0.1
----
-
-<!--hvy: {"id":"skills"}-->
-#! Skills
-
-<!--hvy:text {"id":"orbital"}-->
-FAKE_ORBITAL_LANGUAGE
-`, '.hvy'),
+    document,
     messages: [{ id: 'u1', role: 'user', content: 'Where is the orbital language mentioned?' }],
     question: 'Where is the orbital language mentioned?',
     chatContext: { mode: 'embedding-retrieval' },

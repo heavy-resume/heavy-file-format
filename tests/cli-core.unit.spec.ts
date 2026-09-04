@@ -2403,6 +2403,22 @@ Software Engineering
   expect(result.output).toContain('description: Featured top skills/tools grid.');
 });
 
+test('expected result: CLI advertises embedding builds and explains when no provider is configured', async () => {
+  const document = createCliTestDocument();
+  const session = createHvyCliSession();
+
+  // BEFORE
+  const help = await executeHvyCliCommand(document, session, 'hvy --help');
+
+  // TOOL CALL
+  const expectedResult = await executeHvyCliCommand(document, session, 'hvy embeddings build');
+
+  // AFTER
+  expect(help.output).toContain('hvy embeddings build');
+  expect(expectedResult.output).toContain('no embedding provider is configured');
+  expect(expectedResult.mutated).toBe(false);
+});
+
 test('hvy search includes descriptions and supports json output', async () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

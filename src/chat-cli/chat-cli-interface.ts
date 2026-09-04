@@ -6,7 +6,7 @@ import {
   type HvyCliSession,
 } from '../cli-core/commands';
 import type { HvyChatContextOptions, HvyEmbeddingProvider, VisualDocument } from '../types';
-import { searchHvyDocumentForAgent } from '../search/hvy-document-search';
+import { createHvyAgentTools, type HvyAgentSearchResult } from '../agent-tools';
 
 export interface ChatCliCommandResult extends HvyCliExecution {
   command: string;
@@ -35,15 +35,18 @@ export function createChatCliInterface(
     signal?: AbortSignal;
   } = {}
 ): ChatCliInterface {
+  const agentTools = createHvyAgentTools({
+    document,
+    cliSession: session,
+    ...(searchOptions.chatContext ? { chatContext: searchOptions.chatContext } : {}),
+    ...(searchOptions.embeddingProvider ? { embeddingProvider: searchOptions.embeddingProvider } : {}),
+  });
   session.searchHvyDocument = async (args) => {
     const parsed = parseHvySearchArgs(args);
-    const result = await searchHvyDocumentForAgent({
-      document,
+    const result = await agentTools.search({
       query: parsed.query,
       limit: parsed.limit,
       ...(parsed.cursor ? { cursor: parsed.cursor } : {}),
-      ...(searchOptions.chatContext ? { chatContext: searchOptions.chatContext } : {}),
-      ...(searchOptions.embeddingProvider ? { embeddingProvider: searchOptions.embeddingProvider } : {}),
       ...(searchOptions.signal ? { signal: searchOptions.signal } : {}),
     });
     return parsed.json ? `${JSON.stringify(result, null, 2)}\n` : formatHvyAgentSearch(result);
@@ -117,7 +120,7 @@ function parseHvySearchArgs(args: string[]): { query: string; limit: number; cur
   return { query, limit, ...(cursor ? { cursor } : {}), json };
 }
 
-function formatHvyAgentSearch(result: Awaited<ReturnType<typeof searchHvyDocumentForAgent>>): string {
+function formatHvyAgentSearch(result: HvyAgentSearchResult): string {
   const lines = [
     `Search mode: ${result.mode}`,
     ...(result.fallbackReason ? [`Fallback reason: ${result.fallbackReason}`] : []),

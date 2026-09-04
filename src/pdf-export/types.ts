@@ -249,6 +249,7 @@ export interface HvyPdfMakeNodeObject {
   fontSize?: number;
   bold?: boolean;
   italics?: boolean;
+  link?: string;
   color?: string;
   fillColor?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';

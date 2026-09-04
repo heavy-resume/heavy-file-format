@@ -13,6 +13,7 @@ import type {
   HvyPdfExportStrategy,
   HvyPdfMakeDocumentDefinition,
 } from './types';
+import { getActivePdfArtifactCache } from '../pdf-preview/pdf-artifact-cache';
 
 type PdfMake = {
   vfs?: Record<string, string>;
@@ -68,6 +69,13 @@ function validatePdfDocumentComponents(document: VisualDocument): void {
 }
 
 export async function getHvyPdfBlob(document: VisualDocument, options: HvyPdfExportOptions = {}): Promise<Blob> {
+  if (usesDefaultPreviewLayout(options)) {
+    return getActivePdfArtifactCache().get(document, (currentDocument) => generateHvyPdfBlob(currentDocument, options));
+  }
+  return generateHvyPdfBlob(document, options);
+}
+
+async function generateHvyPdfBlob(document: VisualDocument, options: HvyPdfExportOptions): Promise<Blob> {
   const { docDefinition } = await preparePdfExport(document, options);
   const pdfMake = await loadPdfMake();
   return new Promise((resolve, reject) => {
@@ -182,4 +190,10 @@ function resolvePdfMakeVfs(fonts: unknown): Record<string, string> | undefined {
 function normalizePdfFilename(filename: string | undefined): string {
   const value = (filename || 'document.pdf').trim() || 'document.pdf';
   return value.toLowerCase().endsWith('.pdf') ? value : value.replace(/\.(hvy|thvy|md|markdown)$/i, '') + '.pdf';
+}
+
+function usesDefaultPreviewLayout(options: HvyPdfExportOptions): boolean {
+  return options.contentView === undefined
+    && options.strategy === undefined
+    && options.runPrepScript === undefined;
 }

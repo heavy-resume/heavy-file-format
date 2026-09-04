@@ -219,7 +219,7 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
   if (!token || typeof token !== 'object') {
     return [];
   }
-  const typed = token as { type?: string; text?: string; tokens?: unknown[] };
+  const typed = token as { type?: string; text?: string; href?: string; tokens?: unknown[] };
   if (typed.type === 'strong') {
     return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), bold: true }];
   }
@@ -233,7 +233,10 @@ function renderMarkedInlineToken(token: unknown): Array<string | HvyPdfMakeNodeO
     return [{ text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])), decoration: 'lineThrough' }];
   }
   if (typed.type === 'link') {
-    return renderMarkedInlineTokens(typed.tokens ?? []);
+    return [{
+      text: coercePdfInlineText(renderMarkedInlineTokens(typed.tokens ?? [])),
+      link: typed.href ?? '',
+    }];
   }
   if (Array.isArray(typed.tokens)) {
     return renderMarkedInlineTokens(typed.tokens);

@@ -44,6 +44,7 @@ import { resumeOutputGeneratorsPlugin } from './plugins/resume-output-generators
 import { skillRatingExamplePlugin } from '../examples/plugins/skill-rating';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
+import { renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import { runButtonVisibilityScripts } from './editor/components/button/button-actions';
 import { centerSearchResultLenses } from './search/render';
 import { refreshSearchSurface, renderSearchCollapsedSurface, renderSearchFloatingSurface } from './search/surface-refresh';
@@ -733,6 +734,7 @@ function renderApp(): void {
   const isDocumentMetaView = isEditorView && state.metaPanelOpen;
   const canPreviewSurface = !isEditorView || (!isRawEditor && !isCliEditor);
   const pdfDocument = isPdfDocument(state.document);
+  const readerToolsAvailable = !(pdfDocument && isViewerView);
   const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
   const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
@@ -766,7 +768,7 @@ function renderApp(): void {
   })}
         </div>
         <div${renderResponsivePreviewFrameAttrs(`pane ${isEditorView ? 'editor-pane' : 'reader-pane'} full-pane${isCliEditor || isDocumentMetaView ? '' : ' workspace-content-pane'}`)}>
-          ${isCliEditor || isDocumentMetaView ? '' : renderSearchCollapsedSurface()}
+          ${isCliEditor || isDocumentMetaView || !readerToolsAvailable ? '' : renderSearchCollapsedSurface()}
           ${isEditorView
       ? `${isRawEditor
         ? `<div class="raw-editor-shell">
@@ -838,7 +840,7 @@ function renderApp(): void {
                          <div id="${isAiView ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                        </div>
                      </aside>` : ''}
-                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections, isViewerView ? {
+                   <div id="${isAiView ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'}${state.responsivePreview === 'full' ? '' : ' viewer-document-preview'}${state.responsivePreview === 'phone' || state.responsivePreview === 'tablet' ? ' viewer-document-compact' : ''} hvy-reader-surface${isAiView ? ' hvy-ai-reader-surface' : ''}">${pdfDocument && isViewerView ? renderPdfPreviewPlaceholder() : readerRenderer.renderReaderSections(state.document.sections, isViewerView ? {
                      scrollTop: capturedScroll.paneScroll.readerTop,
                      viewportHeight: readerViewportHeight,
                    } : undefined)}</div>
@@ -850,7 +852,7 @@ function renderApp(): void {
       }
                  </div>`
     }
-          ${isCliEditor || isDocumentMetaView
+          ${isCliEditor || isDocumentMetaView || !readerToolsAvailable
       ? ''
       : `${renderChatPanel(
         state.chat,
@@ -882,6 +884,7 @@ function renderApp(): void {
 
   stepStartedAt = performance.now();
   app.innerHTML = markup;
+  syncActivePdfPreview(app, state.document, pdfDocument && isViewerView);
   domMs = performance.now() - stepStartedAt;
 
   stepStartedAt = performance.now();
@@ -1197,6 +1200,10 @@ function renderSidebarTabLabel(): string {
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   invalidateInlineAnswerGroupIndex();
+  if (isPdfDocument(state.document) && state.currentView === 'viewer') {
+    syncActivePdfPreview(app, state.document, true);
+    return;
+  }
   const refreshId = incrementRefreshReaderCount();
   const startedAt = nowMs();
   let modalMs = 0;

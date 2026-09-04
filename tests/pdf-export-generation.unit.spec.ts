@@ -104,6 +104,28 @@ test('PDF text rendering keeps soft-wrapped text line styles in one styled node'
   expect(expectedResult.stack).toBeUndefined();
 });
 
+test('PDF text rendering preserves markdown links as PDF annotations', () => {
+  const expectedResult = renderPdfTextBlock(
+    'Read the [reference](https://example.com).',
+    '',
+    {
+      visibility: 'show',
+      keepTogether: false,
+      keepWithNext: false,
+      allowSplit: true,
+      pageBreakBefore: false,
+      pageBreakAfter: false,
+      pdfStyle: {},
+    }
+  );
+
+  expect(expectedResult.text).toEqual([
+    'Read the ',
+    { text: 'reference', link: 'https://example.com' },
+    '.',
+  ]);
+});
+
 test('PDF doc definition applies component CSS margins to block wrappers', () => {
   const firstBlock = createEmptyBlock('text');
   firstBlock.schema.id = 'first';

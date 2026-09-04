@@ -10,6 +10,7 @@ import './style.css';
 import { createReaderRenderer, type ReaderRenderer } from './reader/render';
 import { isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
+import { releasePdfPreviewRuntime, renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import {
   activateStateRuntime,
   createStateRuntime,
@@ -621,7 +622,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                   <div id="readerSidebarSections" class="reader-sidebar-sections hvy-reader-surface">${readerSidebarSectionsHtml}</div>
                 </div>
               </aside>` : ''}
-            <div id="readerDocument" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface">${renderer.renderReaderSections(state.document.sections, {
+            <div id="readerDocument" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface">${pdfDocument ? renderPdfPreviewPlaceholder() : renderer.renderReaderSections(state.document.sections, {
               scrollTop: capturedScroll.paneScroll.readerTop,
               viewportHeight: readerViewportHeight,
             })}</div>
@@ -632,6 +633,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   renderHtmlMs = elapsedMs(renderHtmlStartedAt);
   const domStartedAt = nowMs();
   root.innerHTML = markup;
+  syncActivePdfPreview(root, state.document, pdfDocument);
   domMs = elapsedMs(domStartedAt);
   const postStartedAt = nowMs();
   bindReaderUi(root);
@@ -669,6 +671,10 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
+  if (isPdfDocument(state.document)) {
+    syncActivePdfPreview(currentRoot, state.document, true);
+    return;
+  }
   const runtime = getActiveStateRuntime();
   const renderer = ensureReaderRenderer();
   const startedAt = nowMs();
@@ -1239,6 +1245,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
         unmountAllPlugins();

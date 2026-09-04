@@ -120,6 +120,7 @@ import { createReaderBlockElement, createReaderSectionElement, refreshReaderBloc
 import { createEditorBlockElement, createEditorSectionElement, insertEditorTopLevelSectionDom, refreshEditorBlockDom, refreshEditorSectionDom } from './editor/surface-refresh';
 import { isPdfAllowedComponent, isPdfDocument } from './pdf-document-capabilities';
 import { renderPdfDocumentViewerThemeStyle } from './pdf-document-theme';
+import { releasePdfPreviewRuntime, renderPdfPreviewPlaceholder, syncActivePdfPreview } from './pdf-preview/pdf-preview-controller';
 import { getVirtualElementLayoutOffsetTop, virtualizeRenderedSections } from './section-virtualizer';
 import { bindLazyImageHydration } from './editor/components/image/image';
 import {
@@ -631,6 +632,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
   const isAi = state.currentView === 'ai';
   const isDocumentMetaView = isEditor && state.showAdvancedEditor && state.metaPanelOpen;
   const pdfDocument = isPdfDocument(state.document);
+  const readerToolsAvailable = !(pdfDocument && state.currentView === 'viewer');
   const readerWarningsHtml = pdfDocument ? '' : readerRenderer.renderWarnings();
   const readerSidebarSectionsHtml = pdfDocument ? '' : readerRenderer.renderSidebarSections(state.document.sections);
   const hasViewerSidebar = Boolean(readerWarningsHtml.trim() || readerSidebarSectionsHtml.trim());
@@ -676,7 +678,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                         <div id="${isAi ? 'aiSidebarSections' : 'readerSidebarSections'}" class="reader-sidebar-sections hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerSidebarSectionsHtml}</div>
                       </div>
                     </aside>` : ''}
-                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${readerRenderer.renderReaderSections(state.document.sections, state.currentView === 'viewer' ? {
+                  <div id="${isAi ? 'aiReaderDocument' : 'readerDocument'}" class="reader-document viewer-document-scroll${hasViewerSidebar ? '' : ' viewer-document-no-sidebar'} hvy-reader-surface${isAi ? ' hvy-ai-reader-surface' : ''}">${pdfDocument && state.currentView === 'viewer' ? renderPdfPreviewPlaceholder() : readerRenderer.renderReaderSections(state.document.sections, state.currentView === 'viewer' ? {
                     scrollTop: capturedScroll.paneScroll.readerTop,
                     viewportHeight: readerViewportHeight,
                   } : undefined)}</div>
@@ -684,7 +686,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
                 </div>`
           }
           ${
-            isDocumentMetaView
+            isDocumentMetaView || !readerToolsAvailable
               ? ''
               : `${renderChatPanel(
                   state.chat,
@@ -707,6 +709,7 @@ function renderApp(options: { runDocumentHooks?: boolean } = {}): void {
       ${readerRenderer.renderLinkInlineModal()}
       ${renderNewDocumentModal(state.newDocumentModalOpen, { escapeAttr, escapeHtml })}
     </main>`;
+  syncActivePdfPreview(root, state.document, pdfDocument && state.currentView === 'viewer');
   bindEmbedUi(root, runtime);
   bindChatThreadUi(
     root.querySelector<HTMLDivElement>('.chat-thread'),
@@ -870,6 +873,10 @@ function mountThemeEditor(root: HTMLElement, options: { advanced?: boolean; incl
 
 function refreshReaderPanels(options: ReaderPanelRefreshOptions = {}): void {
   if (!currentRoot) return;
+  if (isPdfDocument(state.document) && state.currentView === 'viewer') {
+    syncActivePdfPreview(currentRoot, state.document, true);
+    return;
+  }
   const runtime = getActiveStateRuntime();
   const startedAt = nowMs();
   let lazyMs = 0;
@@ -1409,6 +1416,7 @@ export function mountHvy(options: HvyMountOptions): HvyMount {
   return {
     destroy() {
       runWithStateRuntime(runtime, () => {
+        releasePdfPreviewRuntime(runtime);
         releaseUserFileAttachmentObjectUrls(state.document);
         disposeScriptingCallbacks(runtime);
         cancelPendingEmbedUiBind(options.root);

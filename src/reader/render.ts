@@ -46,7 +46,6 @@ import { extractReusableTemplateVariablesFromDefinition } from '../reusable-temp
 import { filterTemplateVisibleSections, isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
 import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
-import { renderPdfDocumentPageGuides } from '../pdf-document-theme';
 import { isAiEditablePlaceholderTextBlock } from '../ai-placeholder';
 import {
   createReaderViewContext,
@@ -250,7 +249,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const maxWidth = typeof state.documentMeta.reader_max_width === 'string' ? state.documentMeta.reader_max_width.trim() : '';
       const bodyStyle = maxWidth.length > 0 ? ` style="max-width: ${deps.escapeAttr(maxWidth)};"` : '';
       const surfaceAttrs = renderResponsiveSurfaceAttrs(maxWidth);
-      const pageGuides = state.documentExtension === '.phvy' && state.currentView === 'viewer' ? renderPdfDocumentPageGuides({ meta: state.documentMeta }) : '';
       const canWindow = state.currentView === 'viewer'
         && state.documentExtension !== '.phvy'
         && realSections.every(hasReaderSectionContentCandidate);
@@ -267,7 +265,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         )
         : renderReaderSectionPlaceholder(node.item as VisualSection, estimatedHeight)
       ).join('');
-      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${pageGuides}${sectionsHtml}${topLevelAddGhost}</div></div>`;
+      return `<div${surfaceAttrs}>${renderSurfaceHeadingStyles()}<div class="reader-document-body"${bodyStyle}>${sectionsHtml}${topLevelAddGhost}</div></div>`;
     });
   }
 

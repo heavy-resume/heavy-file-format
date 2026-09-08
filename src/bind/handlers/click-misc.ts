@@ -271,12 +271,12 @@ function placeComponentPicker(picker: HTMLElement): void {
   picker.style.removeProperty('--component-picker-shift-y');
   const padding = 8;
   const rect = popover.getBoundingClientRect();
-  const scrollSurface = picker.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel');
+  const scrollSurface = picker.closest<HTMLElement>('.editor-tree, .editor-sidebar-panel, .modal-panel');
   const surfaceRect = scrollSurface?.getBoundingClientRect();
-  const leftEdge = Math.max(padding, surfaceRect?.left ?? padding);
-  const rightEdge = Math.min(window.innerWidth - padding, surfaceRect?.right ?? window.innerWidth - padding);
-  const topEdge = Math.max(padding, surfaceRect?.top ?? padding);
-  const bottomEdge = Math.min(window.innerHeight - padding, surfaceRect?.bottom ?? window.innerHeight - padding);
+  const leftEdge = Math.max(padding, surfaceRect ? surfaceRect.left + padding : padding);
+  const rightEdge = Math.min(window.innerWidth - padding, surfaceRect ? surfaceRect.right - padding : window.innerWidth - padding);
+  const topEdge = Math.max(padding, surfaceRect ? surfaceRect.top + padding : padding);
+  const bottomEdge = Math.min(window.innerHeight - padding, surfaceRect ? surfaceRect.bottom - padding : window.innerHeight - padding);
   const overflowLeft = leftEdge - rect.left;
   const overflowRight = rect.right - rightEdge;
   const overflowTop = topEdge - rect.top;

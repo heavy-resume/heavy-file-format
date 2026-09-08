@@ -34,7 +34,7 @@ import { getHeadingStyleSurfaceClass, renderHeadingStyleElement } from '../headi
 import { sanitizeInlineCss } from '../css-sanitizer';
 import { compileSurfaceResponsiveCss, getSurfaceResponsiveClass } from '../surface-responsive-css';
 import { areTablesEnabled } from '../reference-config';
-import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
+import { createEmptySectionWithMeta, defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../document-factory';
 import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
@@ -1887,6 +1887,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       `;
     }
 
+    const flavorManagerModal = renderReusableFlavorManagerModal();
+    if (flavorManagerModal) {
+      return flavorManagerModal;
+    }
+
     const nestedTemplateMetaModal = renderNestedTemplateMetaModal();
     if (nestedTemplateMetaModal) {
       return nestedTemplateMetaModal;
@@ -1940,12 +1945,12 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         : sectionFlavor
           ? extractReusableTemplateVariablesFromSectionFlavor(sectionFlavor, sectionDefinition?.templateVariables)
           : extractReusableTemplateVariablesFromSectionDefinition(sectionDefinition!);
+      const flavors = definition.flavors ?? [];
       const canAddFlavor = modal.kind === 'section' || Boolean(componentDefinition?.template);
-      const flavorOptions = [
-        `<option value="main"${activeFlavorIndex === null ? ' selected' : ''}>${deps.escapeHtml(definition.name)}</option>`,
-        ...(definition.flavors ?? []).map((flavor, index) => `<option value="${index}"${activeFlavorIndex === index ? ' selected' : ''}>${deps.escapeHtml(flavor.name || `${definition.name} ${index + 2}`)}</option>`),
-        `<option value="new"${canAddFlavor ? '' : ' disabled'}>New flavor…</option>`,
-      ].join('');
+      const flavorAction = `<div class="reusable-definition-flavor-entry">
+        ${activeFlavorIndex === null ? '' : `<span class="reusable-definition-active-flavor">Editing ${deps.escapeHtml((componentFlavor ?? sectionFlavor)?.name ?? 'flavor')}</span>`}
+        <button type="button" class="ghost" data-modal-action="${flavors.length === 0 ? 'reusable-definition-add-flavor' : 'reusable-definition-open-flavors'}"${canAddFlavor ? '' : ' disabled'}>${flavors.length === 0 ? 'Add Flavor' : 'Flavors…'}</button>
+      </div>`;
       return `
         <div id="modalRoot" class="modal-root">
           <div class="modal-overlay" data-modal-action="reusable-definition-cancel"></div>
@@ -1957,7 +1962,6 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               </div>
             </div>
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
-            <label class="reusable-definition-flavor-picker"><span>Flavor</span><select data-field="builder-flavor-picker">${flavorOptions}</select></label>
             ${activeFlavorIndex === null ? '' : `<div class="reusable-definition-flavor-settings">
               <label><span>Description</span><input data-field="builder-flavor-description" value="${deps.escapeAttr((componentFlavor ?? sectionFlavor)?.description ?? '')}" /></label>
               <button type="button" class="ghost" data-modal-action="reusable-definition-flavor-left"${activeFlavorIndex === 0 ? ' disabled' : ''}>Move left</button>
@@ -1969,6 +1973,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             ? `<div class="reusable-definition-hvy-surface">
                         <div class="editor-grid reusable-definition-identity">
                           <label><span>Name</span><input data-field="${componentFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(componentFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
+                          ${flavorAction}
                         </div>
                         ${componentTemplate ? `<div class="reusable-definition-component-head"><strong>Component</strong><button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(componentTemplateSectionKey)}" data-block-id="${deps.escapeAttr(componentTemplate.id)}">Meta</button></div>${deps.renderEditorBlock(componentTemplateSectionKey, componentTemplate)}` : `<div class="ghost-section-card add-ghost compact-add-component-ghost reusable-definition-empty-component">${renderAddComponentPicker({
                           id: `reusable-definition:${definition.name}`,
@@ -1986,7 +1991,10 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             : ''}
                   ${sectionTemplate
             ? `<div class="reusable-definition-section-surface">
-                        <label><span>Name</span><input data-field="${sectionFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(sectionFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
+                        <div class="editor-grid reusable-definition-identity">
+                          <label><span>Name</span><input data-field="${sectionFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(sectionFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
+                          ${flavorAction}
+                        </div>
                         <label>
                           <span>Section Title</span>
                           <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
@@ -2229,6 +2237,80 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
 
     return renderSectionMetaModal();
+  }
+
+  function renderReusableFlavorManagerModal(): string {
+    const modal = state.reusableDefinitionEditModal;
+    const manager = modal?.flavorManager;
+    if (!modal || !manager) return '';
+    const definition = modal.kind === 'component'
+      ? getComponentDefsFromMeta(state.documentMeta)[modal.index]
+      : getSectionDefsFromMeta(state.documentMeta)[modal.index];
+    if (!definition) return '';
+    const flavors = definition.flavors ?? [];
+    const modalTitle = manager.mode === 'create' ? `New ${definition.name} Flavor` : `${definition.name} Flavors`;
+    if (manager.mode === 'create') {
+      const sourceFlavor = manager.sourceIndex == null ? null : flavors[manager.sourceIndex] ?? null;
+      return `
+        <div id="modalRoot" class="modal-root">
+          <div class="modal-overlay" data-modal-action="reusable-definition-flavor-manager-close"></div>
+          <section class="modal-panel reusable-flavor-manager-modal">
+            <div class="modal-head">
+              <h3>${deps.escapeHtml(modalTitle)}</h3>
+              <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-flavor-manager-close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
+            </div>
+            <p class="muted">Starts as a copy of ${deps.escapeHtml(sourceFlavor?.name ?? definition.name)}.</p>
+            ${manager.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(manager.error)}</div>` : ''}
+            <div class="reusable-flavor-creator-fields">
+              <label><span>Name</span><input data-field="builder-flavor-creator-name" value="${deps.escapeAttr(manager.draftName)}" autofocus /></label>
+              <label><span>Description</span><textarea data-field="builder-flavor-creator-description" rows="3" placeholder="Describe when this flavor should be used.">${deps.escapeHtml(manager.draftDescription)}</textarea></label>
+            </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="reusable-definition-flavor-manager-close">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="reusable-definition-flavor-manager-create">Create Flavor</button>
+            </div>
+          </section>
+        </div>`;
+    }
+    if (flavors.length === 0) return '';
+    const selectedIndex = Math.max(0, Math.min(manager.selectedIndex, flavors.length - 1));
+    const selectedFlavor = flavors[selectedIndex]!;
+    const previewHtml = renderReusableFlavorPreview(modal.kind, definition.name, selectedFlavor, selectedIndex);
+    return `
+      <div id="modalRoot" class="modal-root">
+        <div class="modal-overlay" data-modal-action="reusable-definition-flavor-manager-close"></div>
+        <section class="modal-panel reusable-flavor-manager-modal">
+          <div class="modal-head">
+            <h3>${deps.escapeHtml(modalTitle)}</h3>
+            <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-flavor-manager-close" aria-label="Close ${deps.escapeAttr(modalTitle)}" title="Close">${closeIcon()}</button>
+          </div>
+          <label class="reusable-flavor-manager-picker"><span>Flavor</span><select data-field="builder-flavor-manager-picker">${flavors.map((flavor, index) => `<option value="${index}"${index === selectedIndex ? ' selected' : ''}>${deps.escapeHtml(flavor.name)}</option>`).join('')}<option value="new">Add Flavor…</option></select></label>
+          ${selectedFlavor.description?.trim() ? `<p class="muted">${deps.escapeHtml(selectedFlavor.description.trim())}</p>` : ''}
+          <div class="reusable-flavor-preview">${previewHtml}</div>
+          <div class="link-inline-actions reusable-save-actions">
+            <button type="button" class="ghost" data-modal-action="reusable-definition-flavor-manager-main">Edit Main Template</button>
+            <button type="button" class="secondary" data-modal-action="reusable-definition-flavor-manager-edit">Edit Flavor</button>
+          </div>
+        </section>
+      </div>`;
+  }
+
+  function renderReusableFlavorPreview(kind: 'component' | 'section', definitionName: string, flavor: any, flavorIndex: number): string {
+    if (kind === 'component') {
+      const template = flavor.template ?? (flavor.schema ? {
+        id: `template-flavor-preview-${flavorIndex}`,
+        text: '',
+        schema: schemaFromUnknown({ ...(flavor.schema ?? {}), component: definitionName }, new WeakSet<object>(), state.documentMeta),
+        schemaMode: false,
+      } : null);
+      if (!template) return '<p class="muted">This flavor has no component preview.</p>';
+      const previewSection = createEmptySectionWithMeta(1, 'text', false, state.documentMeta);
+      previewSection.key = `__reusable_flavor_preview__:${definitionName}:${flavorIndex}`;
+      return renderReaderBlock(previewSection, template, { ignoreReaderSessionState: true });
+    }
+    const template = flavor.template as VisualSection | undefined;
+    if (!template) return '<p class="muted">This flavor has no section preview.</p>';
+    return `<div class="reusable-flavor-section-preview"><strong>${deps.escapeHtml(template.title)}</strong>${template.blocks.map((block) => renderReaderBlock(template, block, { ignoreReaderSessionState: true })).join('')}</div>`;
   }
 
   function renderNestedTemplateMetaModal(): string {

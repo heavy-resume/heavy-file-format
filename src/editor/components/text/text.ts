@@ -124,7 +124,7 @@ export function renderTextRichEditorContent(
   return renderTemplateValueTokens(html);
 }
 
-function renderTemplateValueTokens(html: string): string {
+export function renderTemplateValueTokens(html: string): string {
   if (typeof document === 'undefined') return html;
   const variables = new Map(getActiveBuilderTemplateVariables().map((variable) => [variable.name, variable]));
   const template = document.createElement('template');
@@ -134,6 +134,7 @@ function renderTemplateValueTokens(html: string): string {
   while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
   const pattern = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block|isempty)\s*)?%}/g;
   textNodes.forEach((node) => {
+    if (node.parentElement?.closest('.template-value-token')) return;
     const source = node.data;
     const matches = [...source.matchAll(pattern)];
     if (matches.length === 0) return;
@@ -150,7 +151,10 @@ function renderTemplateValueTokens(html: string): string {
       const tokenType = match[2] === 'isempty' ? 'empty check' : variable?.type === 'block' ? 'multi-line' : 'text';
       marker.dataset.templateValueDisplay = `${variable?.label ?? match[1] ?? 'Value'} · ${tokenType}`;
       marker.setAttribute('aria-label', marker.dataset.templateValueDisplay);
-      marker.textContent = match[0];
+      const sourceToken = document.createElement('span');
+      sourceToken.className = 'template-value-token-source';
+      sourceToken.textContent = match[0];
+      marker.append(sourceToken);
       fragment.append(marker);
       offset = (match.index ?? 0) + match[0].length;
     });
@@ -407,8 +411,8 @@ function isFillInEditorMode(sectionKey: string, blockId: string): boolean {
     && state.activeTextEditorMode.mode === 'fill-in';
 }
 
-export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) =>
-  block.schema.showCopy
+export const renderTextReader: ComponentReaderRenderer = (section, block, helpers) => {
+  const rendered = block.schema.showCopy
     ? `${helpers.renderComponentFragment('text', block.text, block, section.key)}
       <button
         type="button"
@@ -420,3 +424,5 @@ export const renderTextReader: ComponentReaderRenderer = (section, block, helper
         title="Copy text"
       ><span class="text-copy-icon" aria-hidden="true"></span></button>`
     : helpers.renderComponentFragment('text', block.text, block, section.key);
+  return state.reusableDefinitionEditModal ? renderTemplateValueTokens(rendered) : rendered;
+};

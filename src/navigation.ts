@@ -527,6 +527,10 @@ function emptyExpandResult(): ExpandResult {
 }
 
 export function closeModal(): void {
+  if (state.reusableDefinitionEditModal?.flavorManager) {
+    state.reusableDefinitionEditModal.flavorManager = null;
+    return;
+  }
   if (state.reusableDefinitionEditModal && state.componentMetaModal) {
     state.componentMetaModal = null;
     return;

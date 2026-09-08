@@ -511,15 +511,21 @@
   background: var(--hvy-surface-alt);
 }
 
-.hvy-document .reusable-definition-flavor-picker {
-  display: grid;
-  grid-template-columns: auto minmax(12rem, 22rem);
-  align-items: center;
+.hvy-document .reusable-definition-flavor-entry {
+  display: flex;
+  justify-content: flex-end;
+  align-items: end;
   gap: 0.6rem;
-  padding: 0.65rem;
-  border: 1px solid var(--hvy-border);
-  border-radius: 0.75rem;
-  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .reusable-definition-identity {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.hvy-document .reusable-definition-active-flavor {
+  color: var(--hvy-text-muted);
+  font-size: 0.88rem;
 }
 
 .hvy-document .reusable-definition-component-head {
@@ -548,12 +554,54 @@
 
 .hvy-document .template-variable-card {
   display: grid;
-  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.4fr) minmax(10rem, 1.2fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 0.55rem;
   padding: 0.65rem;
   border: 1px solid var(--hvy-border);
   border-radius: 0.65rem;
   background: var(--hvy-surface);
+}
+
+.hvy-document .template-variable-card > label,
+.hvy-document .template-variable-card > label input,
+.hvy-document .template-variable-card > label select {
+  min-width: 0;
+  width: 100%;
+}
+
+.hvy-document .template-variable-occurrences {
+  grid-column: 1 / -1;
+}
+
+.hvy-document .reusable-flavor-manager-modal {
+  width: min(58rem, calc(100% - 2rem));
+}
+
+.hvy-document .reusable-flavor-manager-picker,
+.hvy-document .reusable-flavor-creator-fields {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hvy-document .reusable-flavor-manager-picker {
+  grid-template-columns: auto minmax(12rem, 1fr);
+  align-items: center;
+}
+
+.hvy-document .reusable-flavor-preview {
+  min-height: 10rem;
+  max-height: min(28rem, 50vh);
+  overflow: auto;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .reusable-flavor-section-preview {
+  display: grid;
+  gap: 0.65rem;
 }
 
 .hvy-document .template-variable-occurrences,

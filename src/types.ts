@@ -352,6 +352,14 @@ export interface ReusableDefinitionEditModalState {
   originalRaw?: string;
   isNew?: boolean;
   draftName?: string;
+  flavorManager?: {
+    mode: 'browse' | 'create';
+    selectedIndex: number;
+    sourceIndex: number | null;
+    draftName: string;
+    draftDescription: string;
+    error: string | null;
+  } | null;
   historyBeforeDraft?: { history: string[]; future: string[] };
 }
 

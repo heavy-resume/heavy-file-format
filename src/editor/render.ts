@@ -13,7 +13,7 @@ import { renderCarouselEditor } from './components/carousel/carousel';
 import { renderCodeEditor } from './components/code/code';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
-import { renderTextEditor } from './components/text/text';
+import { renderTemplateValueTokens, renderTextEditor } from './components/text/text';
 import { renderTextToolbarDismissButton } from './components/text/text-toolbar-layout';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
 import { renderDocumentAttachmentManager } from './components/document-attachments/document-attachments';
@@ -1115,12 +1115,16 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     if (block.schema.kind === 'encrypted' && !block.schema.encryptedBlock && !state.showAdvancedEditor) {
       return '';
     }
+    const passiveContent = renderPassiveEditorBlockContent(sectionKey, section, block, rootSections);
+    const renderedContent = state.editingReusableDefinition
+      ? renderTemplateValueTokens(passiveContent)
+      : passiveContent;
     return `
       <div class="editor-block-passive hvy-link-observer-surface" data-hvy-virtual-item="editor-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-action="activate-block" data-section-key="${deps.escapeAttr(sectionKey)}" data-parent-locked="${parentLocked ? 'true' : 'false'}" data-block-id="${deps.escapeAttr(
       block.id
     )}">
         <div class="editor-block-content${anchorAttrs.className}"${anchorAttrs.attrs}>
-          ${renderPassiveEditorBlockContent(sectionKey, section, block, rootSections)}
+          ${renderedContent}
           ${anchorAttrs.overlay}
         </div>
       </div>
@@ -1842,71 +1846,18 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
           .map(
             (def, index) => {
               const flavors = Array.isArray(def.flavors) ? def.flavors : [];
-              const detailsKey = templateDefinitionDetailsKey('component', index);
-              return `<details class="component-def template-def-details" data-template-kind="component" data-def-index="${index}"${state.openTemplateDefinitionKeys.includes(detailsKey) ? ' open' : ''}>
-                <summary class="template-def-summary">
+              return `<div class="component-def template-def-row" data-template-kind="component" data-def-index="${index}">
+                <div class="template-def-summary">
                   <span class="template-def-summary-text">
                     <strong>${deps.escapeHtml(def.name || 'Untitled Template')}</strong>
                     <span>${deps.escapeHtml(def.baseType)}${flavors.length > 0 ? ` · ${flavors.length} flavor${flavors.length === 1 ? '' : 's'}` : ''}</span>
                   </span>
                   <span class="template-def-summary-actions">
                     <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
-                    <span class="template-def-summary-icon" aria-hidden="true">⌄</span>
+                    <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                   </span>
-                </summary>
-                <div class="template-def-body">
-                  <label>
-                    <span>Name</span>
-                    <input data-field="def-name" data-def-index="${index}" value="${deps.escapeAttr(def.name)}" />
-                  </label>
-                  <div class="template-meta-display">
-                    <span>Base Type</span>
-                    <strong>${deps.escapeHtml(def.baseType)}</strong>
-                  </div>
-                  <label>
-                    <span>Default Tags</span>
-                    ${renderTagEditor(
-                'def-tags',
-                def.tags ?? '',
-                {
-                  defIndex: index,
-                  placeholder: 'Add a default tag',
-                },
-                { escapeAttr: deps.escapeAttr, escapeHtml: deps.escapeHtml }
-              )}
-                  </label>
-                  <label>
-                    <span>Description</span>
-                    <textarea rows="3" data-field="def-description" data-def-index="${index}">${deps.escapeHtml(def.description ?? '')}</textarea>
-                  </label>
-                  ${renderComponentSortValueDefinitions(def, index)}
-                  ${deps.resolveBaseComponent(def.baseType) === 'xref-card'
-                  ? `<label>
-                    <span>Target Tag Filter</span>
-                    <input data-field="def-xref-target-tag-filter" data-def-index="${index}" placeholder="tag-name" value="${deps.escapeAttr(def.template?.schema.xrefTargetTagFilter ?? def.schema?.xrefTargetTagFilter ?? '')}" />
-                  </label>`
-                  : ''
-                }
-                  <div class="meta-panel-head">
-                    <strong>Flavors</strong>
-                  </div>
-                  ${flavors.length === 0
-                  ? '<div class="muted">No flavors. Import uses the main component template.</div>'
-                  : `${flavors.length === 1 ? '<div class="muted">One saved flavor. Import uses flavor choices after there are at least two options.</div>' : ''}
-                    ${flavors.map((flavor, flavorIndex) => `<div class="component-def-flavor">
-                      <label>
-                        <span>Flavor Name</span>
-                        <input data-field="def-flavor-name" data-def-index="${index}" data-flavor-index="${flavorIndex}" value="${deps.escapeAttr(flavor.name)}" />
-                      </label>
-                      <label>
-                        <span>Flavor Description</span>
-                        <textarea rows="2" data-field="def-flavor-description" data-def-index="${index}" data-flavor-index="${flavorIndex}">${deps.escapeHtml(flavor.description ?? '')}</textarea>
-                      </label>
-                  <button type="button" class="danger" data-action="remove-component-def-flavor" data-def-index="${index}" data-flavor-index="${flavorIndex}">Remove Flavor</button>
-                    </div>`).join('')}`}
-                  <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
                 </div>
-              </details>`;
+              </div>`;
             }
           )
           .join('')}

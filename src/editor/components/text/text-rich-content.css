@@ -216,14 +216,20 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--hvy-accent-1) 14%, var(--hvy-surface));
   color: var(--hvy-text);
-  font-size: 0;
+  font-size: inherit;
   font-weight: 650;
   vertical-align: baseline;
+  line-height: 1;
+}
+
+.hvy-document .template-value-token-source {
+  display: none;
 }
 
 .hvy-document .template-value-token::after {
   content: attr(data-template-value-display);
-  font-size: 0.82rem;
+  font-size: 0.82em;
+  line-height: 1;
 }
 
 .hvy-document .template-value-token.is-found {

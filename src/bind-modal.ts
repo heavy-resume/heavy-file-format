@@ -128,6 +128,30 @@ export function bindModal(app: HTMLElement): void {
       addReusableDefinitionComponent(addReusableDefinitionComponentButton);
       return;
     }
+    if (target.closest('[data-modal-action="reusable-definition-open-flavors"]')) {
+      openReusableFlavorManager('browse');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-add-flavor"]')) {
+      openReusableFlavorManager('create');
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-close"]')) {
+      closeReusableFlavorManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-create"]')) {
+      createReusableDefinitionFlavorFromManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-edit"]')) {
+      editReusableDefinitionFlavorFromManager();
+      return;
+    }
+    if (target.closest('[data-modal-action="reusable-definition-flavor-manager-main"]')) {
+      editMainReusableDefinitionFromManager();
+      return;
+    }
     if (target.closest('[data-modal-action="reusable-definition-flavor-remove"]')) {
       mutateActiveFlavor('remove');
       return;
@@ -587,16 +611,29 @@ function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void
     if (state.reusableDefinitionEditModal) state.reusableDefinitionEditModal.draftName = nameInput.value;
   });
 
-  const flavorPicker = modalRoot.querySelector<HTMLSelectElement>('[data-field="builder-flavor-picker"]');
-  flavorPicker?.addEventListener('change', () => {
+  const flavorManagerPicker = modalRoot.querySelector<HTMLSelectElement>('[data-field="builder-flavor-manager-picker"]');
+  flavorManagerPicker?.addEventListener('change', () => {
     const modal = state.reusableDefinitionEditModal;
-    if (!modal) return;
-    if (flavorPicker.value === 'new') {
-      addReusableDefinitionFlavor();
+    if (!modal?.flavorManager) return;
+    if (flavorManagerPicker.value === 'new') {
+      openReusableFlavorManager('create');
       return;
     }
-    modal.activeFlavorIndex = flavorPicker.value === 'main' ? null : Number.parseInt(flavorPicker.value, 10);
+    modal.flavorManager.selectedIndex = Number.parseInt(flavorManagerPicker.value, 10);
     getRenderApp()();
+  });
+  const flavorCreatorName = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-flavor-creator-name"]');
+  flavorCreatorName?.addEventListener('input', () => {
+    const manager = state.reusableDefinitionEditModal?.flavorManager;
+    if (!manager) return;
+    manager.draftName = flavorCreatorName.value;
+    manager.error = null;
+  });
+  const flavorCreatorDescription = modalRoot.querySelector<HTMLTextAreaElement>('[data-field="builder-flavor-creator-description"]');
+  flavorCreatorDescription?.addEventListener('input', () => {
+    const manager = state.reusableDefinitionEditModal?.flavorManager;
+    if (!manager) return;
+    manager.draftDescription = flavorCreatorDescription.value;
   });
 
   const flavorName = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-flavor-name"]');
@@ -708,7 +745,7 @@ function renameBuilderTemplateVariable(input: HTMLInputElement): void {
   getRenderApp()();
 }
 
-function addReusableDefinitionFlavor(): void {
+function openReusableFlavorManager(mode: 'browse' | 'create'): void {
   const modal = state.reusableDefinitionEditModal;
   const active = getActiveReusableDefinition();
   if (!modal || !active) return;
@@ -716,20 +753,78 @@ function addReusableDefinitionFlavor(): void {
     applyReusableDefinitionName(active.definition, modal.draftName.trim());
     delete modal.draftName;
   }
-  if (!active.template) return;
   const flavors = active.definition.flavors ?? [];
-  const name = getUniqueReusableFlavorName(active.definition.name, flavors.map((flavor: { name: string }) => flavor.name));
+  const selectedIndex = modal.flavorManager?.selectedIndex ?? modal.activeFlavorIndex ?? 0;
+  const sourceIndex = mode === 'create'
+    ? modal.flavorManager?.mode === 'browse' ? modal.flavorManager.selectedIndex : modal.activeFlavorIndex ?? null
+    : selectedIndex;
+  modal.flavorManager = {
+    mode,
+    selectedIndex: Math.max(0, Math.min(selectedIndex, flavors.length - 1)),
+    sourceIndex,
+    draftName: getUniqueReusableFlavorName(active.definition.name, flavors.map((flavor: { name: string }) => flavor.name)),
+    draftDescription: '',
+    error: null,
+  };
+  getRenderApp()();
+}
+
+function closeReusableFlavorManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) return;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function editReusableDefinitionFlavorFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal?.flavorManager) return;
+  modal.activeFlavorIndex = modal.flavorManager.selectedIndex;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function editMainReusableDefinitionFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  if (!modal) return;
+  modal.activeFlavorIndex = null;
+  modal.flavorManager = null;
+  getRenderApp()();
+}
+
+function createReusableDefinitionFlavorFromManager(): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  const manager = modal?.flavorManager;
+  if (!modal || !active || !manager || manager.mode !== 'create') return;
+  const flavors = active.definition.flavors ?? [];
+  const name = manager.draftName.trim();
+  if (!name) {
+    manager.error = 'Flavor name is required.';
+    getRenderApp()();
+    return;
+  }
+  if (name === active.definition.name || flavors.some((flavor: { name: string }) => flavor.name === name)) {
+    manager.error = `A flavor named "${name}" already exists.`;
+    getRenderApp()();
+    return;
+  }
+  const sourceFlavor = manager.sourceIndex == null ? null : flavors[manager.sourceIndex] ?? null;
+  const description = manager.draftDescription.trim();
   if (modal.kind === 'component') {
-    const source = active.template ?? getReusableTemplate(active.definition);
+    const source = sourceFlavor?.template ?? active.definition.template ?? getReusableTemplate(active.definition);
+    if (!source) return;
     const template = cloneReusableBlock(source);
     template.schema.component = active.definition.name;
-    flavors.push({ name, template, templateVariables: { ...(active.flavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
+    flavors.push({ name, ...(description ? { description } : {}), template, templateVariables: { ...(sourceFlavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
   } else {
-    const source = active.template ?? active.definition.template;
-    flavors.push({ name, template: cloneReusableSection(source), templateVariables: { ...(active.flavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
+    const source = sourceFlavor?.template ?? active.definition.template;
+    if (!source) return;
+    flavors.push({ name, ...(description ? { description } : {}), template: cloneReusableSection(source), templateVariables: { ...(sourceFlavor?.templateVariables ?? active.definition.templateVariables ?? {}) } });
   }
   active.definition.flavors = flavors;
   modal.activeFlavorIndex = flavors.length - 1;
+  modal.flavorManager = null;
   getRenderApp()();
 }
 

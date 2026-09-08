@@ -81,15 +81,41 @@ test('component template builder creates tokens and flavors as one undoable edit
   await modal.getByRole('button', { name: 'Convert occurrence 2 to text' }).click();
   await expect(modal.locator('.template-value-token')).toHaveCount(1);
   await expect(editor).toContainText('Expected title');
-  await modal.locator('[data-field="builder-flavor-picker"]').selectOption('new');
+  await page.evaluate(async () => {
+    const { clearActiveEditorBlock } = await import('/src/block-ops.ts');
+    const { getRenderApp } = await import('/src/state.ts');
+    clearActiveEditorBlock();
+    getRenderApp()();
+  });
+  await expect(modal.locator('.template-value-token')).toBeVisible();
+  await expect(modal.locator('.template-value-token-source')).toBeHidden();
+  expect(await modal.locator('.template-value-token').evaluate((marker) => getComputedStyle(marker).fontSize)).not.toBe('0px');
+  const identityRow = modal.locator('.reusable-definition-identity');
+  await expect(identityRow.locator('[data-field="builder-definition-name"]')).toBeVisible();
+  await identityRow.getByRole('button', { name: 'Add Flavor' }).click();
+  await expect(page.locator('.reusable-flavor-manager-modal')).toContainText('New fake-card Flavor');
+  await expect(page.locator('[data-field="builder-flavor-creator-name"]')).toHaveValue('fake-card 2');
+  await page.locator('[data-field="builder-flavor-creator-description"]').fill('A second fake card.');
+  await page.getByRole('button', { name: 'Create Flavor' }).click();
   await expect(modal.locator('[data-field="builder-flavor-name"]')).toHaveValue('fake-card 2');
-  await expect(modal.locator('[data-field="builder-flavor-picker"]')).toHaveValue('0');
+  await modal.getByRole('button', { name: 'Flavors…' }).click();
+  const flavorManager = page.locator('.reusable-flavor-manager-modal');
+  await expect(flavorManager.locator('[data-field="builder-flavor-manager-picker"]')).toHaveValue('0');
+  await expect(flavorManager.locator('.reusable-flavor-preview')).toBeVisible();
+  await expect(flavorManager.locator('[data-field="builder-flavor-manager-picker"] option[value="new"]')).toHaveText('Add Flavor…');
+  await flavorManager.locator('[data-field="builder-flavor-manager-picker"]').selectOption('new');
+  await expect(page.locator('[data-field="builder-flavor-creator-name"]')).toHaveValue('fake-card 3');
+  await page.locator('.reusable-flavor-manager-modal').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await modal.getByRole('button', { name: 'Flavors…' }).click();
+  await flavorManager.getByRole('button', { name: 'Edit Flavor' }).click();
   await modal.getByRole('button', { name: 'Save Template' }).click();
 
   await expect.poll(() => page.evaluate(async () => {
     const { state } = await import('/src/state.ts');
     return Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs.length : 0;
   })).toBe(originalCount + 1);
+  await expect(page.locator('.component-def.template-def-row', { hasText: 'fake-card' })).toBeVisible();
+  await expect(page.locator('details[data-template-kind="component"]')).toHaveCount(0);
   await page.evaluate(async () => {
     const { undoState } = await import('/src/history.ts');
     undoState();

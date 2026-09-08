@@ -54,6 +54,15 @@
   overflow: hidden;
 }
 
+.hvy-document .template-def-row {
+  padding: 0;
+  overflow: hidden;
+}
+
+.hvy-document .template-def-row .template-def-summary {
+  cursor: default;
+}
+
 .hvy-document .template-def-empty {
   grid-column: 1 / -1;
   border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));

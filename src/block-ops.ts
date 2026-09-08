@@ -3141,6 +3141,12 @@ function moveCaretFromEmptyTextLineStyleToPreviousLine(editable: HTMLElement): b
 }
 
 export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (handleTemplateValueTokenKeydown(event, editable)) {
+    event.preventDefault();
+    updateRichToolbarState(editable);
+    return true;
+  }
+
   if (handleInlineAnswerArrowNavigation(event, editable)) {
     event.preventDefault();
     updateRichToolbarState(editable);
@@ -3325,6 +3331,88 @@ export function handleRichEditorKeydown(event: KeyboardEvent, editable: HTMLElem
   }
 
   return false;
+}
+
+function handleTemplateValueTokenKeydown(event: KeyboardEvent, editable: HTMLElement): boolean {
+  if (!['ArrowLeft', 'ArrowRight', 'Backspace', 'Delete'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
+  }
+  const range = getEditableSelectionRange(editable);
+  if (!range?.collapsed) {
+    return false;
+  }
+  const direction = event.key === 'ArrowLeft' || event.key === 'Backspace' ? 'backward' : 'forward';
+  const token = getAdjacentTemplateValueToken(range, direction);
+  if (!token || !editable.contains(token)) {
+    return false;
+  }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    placeCaretBesideTemplateValueToken(token, direction === 'backward' ? 'before' : 'after', editable);
+    return true;
+  }
+  const caretAnchor = document.createTextNode('\u200b');
+  const next = token.nextSibling;
+  token.replaceWith(caretAnchor);
+  if (next instanceof Text && next.data === '\u200b') {
+    next.remove();
+  }
+  const nextRange = document.createRange();
+  nextRange.setStart(caretAnchor, direction === 'backward' ? caretAnchor.data.length : 0);
+  nextRange.collapse(true);
+  const selection = window.getSelection();
+  editable.focus({ preventScroll: true });
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  editable.dispatchEvent(new InputEvent('input', {
+    bubbles: true,
+    inputType: event.key === 'Backspace' ? 'deleteContentBackward' : 'deleteContentForward',
+  }));
+  return true;
+}
+
+function getAdjacentTemplateValueToken(range: Range, direction: 'backward' | 'forward'): HTMLElement | null {
+  const container = range.startContainer;
+  const containingToken = container instanceof HTMLElement
+    ? container.closest<HTMLElement>('.template-value-token')
+    : container.parentElement?.closest<HTMLElement>('.template-value-token') ?? null;
+  if (containingToken) {
+    return containingToken;
+  }
+  let candidate: Node | null = null;
+  if (container instanceof Text) {
+    if (direction === 'forward' && range.startOffset === container.data.length) {
+      candidate = container.nextSibling;
+    } else if (
+      direction === 'backward'
+      && (range.startOffset === 0 || container.data.slice(0, range.startOffset).replaceAll('\u200b', '') === '')
+    ) {
+      candidate = container.previousSibling;
+    }
+  } else {
+    candidate = direction === 'forward'
+      ? container.childNodes[range.startOffset] ?? null
+      : container.childNodes[range.startOffset - 1] ?? null;
+  }
+  return candidate instanceof HTMLElement && candidate.classList.contains('template-value-token') ? candidate : null;
+}
+
+function placeCaretBesideTemplateValueToken(
+  token: HTMLElement,
+  side: 'before' | 'after',
+  editable: HTMLElement
+): void {
+  const sibling = side === 'before' ? token.previousSibling : token.nextSibling;
+  const anchor = sibling instanceof Text ? sibling : document.createTextNode('\u200b');
+  if (anchor !== sibling) {
+    side === 'before' ? token.before(anchor) : token.after(anchor);
+  }
+  const range = document.createRange();
+  range.setStart(anchor, side === 'before' ? anchor.data.length : Math.min(1, anchor.data.length));
+  range.collapse(true);
+  const selection = window.getSelection();
+  editable.focus({ preventScroll: true });
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 export function handleInlineAnswerArrowNavigation(event: KeyboardEvent, editable: HTMLElement): boolean {

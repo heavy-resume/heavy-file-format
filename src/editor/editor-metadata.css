@@ -121,6 +121,11 @@
   font-size: 0.82rem;
 }
 
+.hvy-document .template-def-summary-actions .template-def-remove-button {
+  min-height: 1.9rem;
+  padding: 0;
+}
+
 .hvy-document .template-def-summary-icon {
   width: 1.6rem;
   height: 1.6rem;

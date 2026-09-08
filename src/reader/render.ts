@@ -1921,7 +1921,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
               schema: schemaFromUnknown({ ...(componentFlavor.schema ?? {}), component: definition.name }, new WeakSet<object>(), state.documentMeta),
               schemaMode: false,
             } : null)
-          : modal.isNew && !componentDefinition.template && !componentDefinition.schema
+          : !componentDefinition.template && !componentDefinition.schema
             ? null
             : getReusableTemplate(componentDefinition)
         : null;
@@ -1975,7 +1975,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                           <label><span>Name</span><input data-field="${componentFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(componentFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
                           ${flavorAction}
                         </div>
-                        ${componentTemplate ? `<div class="reusable-definition-component-head"><strong>Component</strong><button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(componentTemplateSectionKey)}" data-block-id="${deps.escapeAttr(componentTemplate.id)}">Meta</button></div>${deps.renderEditorBlock(componentTemplateSectionKey, componentTemplate)}` : `<div class="ghost-section-card add-ghost compact-add-component-ghost reusable-definition-empty-component">${renderAddComponentPicker({
+                        ${componentTemplate ? `<div class="reusable-definition-component-head"><strong>Component</strong><button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(componentTemplateSectionKey)}" data-block-id="${deps.escapeAttr(componentTemplate.id)}">Meta</button></div>${deps.renderEditorBlock(componentTemplateSectionKey, componentTemplate, [])}` : `<div class="ghost-section-card add-ghost compact-add-component-ghost reusable-definition-empty-component">${renderAddComponentPicker({
                           id: `reusable-definition:${definition.name}`,
                           action: 'reusable-definition-add-component',
                           sectionKey: componentTemplateSectionKey,
@@ -2004,7 +2004,7 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                           <input type="checkbox" data-field="section-lock" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" ${sectionTemplate.lock ? 'checked' : ''} />
                         </label>
                         <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(sectionTemplateKey)}">Meta</button>
-                        ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
+                        ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block, [sectionTemplate])).join('')}
                       </div>`
             : ''}
                   <aside class="reusable-template-variable-panel">

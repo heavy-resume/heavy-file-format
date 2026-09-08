@@ -21,6 +21,25 @@ test('component template builder creates tokens and flavors as one undoable edit
   const modal = page.locator('.reusable-definition-modal');
   await modal.locator('[data-field="builder-definition-name"]').fill('fake-card');
   await expect(modal.locator('[data-field="builder-definition-base-type"]')).toHaveCount(0);
+  const modalBounds = await modal.boundingBox();
+  const modalRootBounds = await page.locator('.modal-root').boundingBox();
+  expect(modalBounds).not.toBeNull();
+  expect(modalRootBounds).not.toBeNull();
+  expect(modalBounds!.height / modalRootBounds!.height).toBeGreaterThan(0.9);
+  const nameControlBounds = await modal.locator('[data-field="builder-definition-name"]').boundingBox();
+  const addFlavorBounds = await modal.getByRole('button', { name: 'Add Flavor' }).boundingBox();
+  expect(nameControlBounds).not.toBeNull();
+  expect(addFlavorBounds).not.toBeNull();
+  expect(Math.abs(
+    (nameControlBounds!.y + nameControlBounds!.height / 2)
+    - (addFlavorBounds!.y + addFlavorBounds!.height / 2)
+  )).toBeLessThan(1);
+  const componentSurfaceBounds = await modal.locator('.reusable-definition-hvy-surface').boundingBox();
+  const templateValuesBounds = await modal.locator('.reusable-template-variable-panel').boundingBox();
+  expect(componentSurfaceBounds).not.toBeNull();
+  expect(templateValuesBounds).not.toBeNull();
+  expect(templateValuesBounds!.y - (componentSurfaceBounds!.y + componentSurfaceBounds!.height)).toBeGreaterThan(100);
+  expect(templateValuesBounds!.height).toBeLessThan(150);
   await modal.getByRole('button', { name: 'Section component type' }).click();
   await expect(modal.locator('.component-picker')).toHaveAttribute('data-open', 'true');
   await modal.locator('.component-picker-row-direct[data-component="text"]').click();
@@ -114,7 +133,10 @@ test('component template builder creates tokens and flavors as one undoable edit
     const { state } = await import('/src/state.ts');
     return Array.isArray(state.document.meta.component_defs) ? state.document.meta.component_defs.length : 0;
   })).toBe(originalCount + 1);
-  await expect(page.locator('.component-def.template-def-row', { hasText: 'fake-card' })).toBeVisible();
+  const savedTemplateRow = page.locator('.component-def.template-def-row', { hasText: 'fake-card' });
+  await expect(savedTemplateRow).toBeVisible();
+  await expect(savedTemplateRow.getByRole('button', { name: 'Remove fake-card' })).toBeVisible();
+  await expect(savedTemplateRow.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
   await expect(page.locator('details[data-template-kind="component"]')).toHaveCount(0);
   await page.evaluate(async () => {
     const { undoState } = await import('/src/history.ts');
@@ -146,6 +168,105 @@ test('section template drafts cancel and component definitions stay in the visua
   await expect(modal.locator('[data-field="builder-definition-base-type"]')).toHaveCount(0);
   await expect(modal.locator('.rich-editor')).toBeVisible();
   await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+});
+
+test('component template root deletes back to the picker without section insertion controls', async ({ page }) => {
+  test.setTimeout(5_000);
+
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'New Component Template' }).click();
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('[data-field="builder-definition-name"]').fill('fake-single-component');
+  await modal.getByRole('button', { name: 'Section component type' }).click();
+  await modal.locator('.component-picker-row-direct[data-component="text"]').click();
+
+  await expect(modal.getByText('Insert Above', { exact: true })).toHaveCount(0);
+  await expect(modal.getByText('Insert Below', { exact: true })).toHaveCount(0);
+  await expect(modal).toHaveCSS('scrollbar-gutter', 'stable');
+
+  await modal.locator('.editor-block-remove-button').click();
+  await page.getByRole('dialog', { name: 'Confirm deletion?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+
+  await expect(modal.getByRole('button', { name: 'Section component type' })).toBeVisible();
+  await expect(modal.locator('.editor-block, .editor-block-passive')).toHaveCount(0);
+});
+
+test('template value markers support caret traversal and atomic deletion', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-caret-template
+    baseType: text
+    templateVariables:
+      first:
+        label: First
+      second:
+        label: Second
+    template:
+      id: fake-caret-template
+      text: "Before {% first | text %} middle {% second | text %}"
+      schema:
+        component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.getByRole('button', { name: 'Document Meta', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Template', exact: true }).click();
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('.editor-block-passive').click();
+  const editor = modal.locator('.rich-editor[data-field="block-rich"]');
+  await expect(modal.getByRole('button', { name: 'Meta', exact: true })).toHaveCount(1);
+  await expect(modal.locator('.template-value-token')).toHaveCount(2);
+
+  await editor.evaluate((editable) => {
+    const marker = editable.querySelector('.template-value-token');
+    const precedingText = marker?.previousSibling;
+    if (!(precedingText instanceof Text)) throw new Error('Expected text before the template value');
+    (editable as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(precedingText, precedingText.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.press('Delete');
+  await expect(modal.locator('.template-value-token')).toHaveCount(1);
+
+  await editor.evaluate((editable) => {
+    const marker = editable.querySelector('.template-value-token');
+    const precedingText = marker?.previousSibling;
+    if (!(precedingText instanceof Text)) throw new Error('Expected text before the template value');
+    (editable as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(precedingText, precedingText.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('r');
+  await expect.poll(() => editor.evaluate((editable) => {
+    const marker = editable.querySelector('.template-value-token');
+    return marker?.nextSibling?.textContent?.replaceAll('\u200b', '') ?? '';
+  })).toBe('r');
+  await page.keyboard.press('Backspace');
+
+  const editorBounds = await editor.boundingBox();
+  expect(editorBounds).not.toBeNull();
+  await page.mouse.click(editorBounds!.x + editorBounds!.width - 8, editorBounds!.y + 24);
+  await page.keyboard.type('x');
+  await expect(editor).toContainText('x');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expect(modal.locator('.template-value-token')).toHaveCount(0);
 });
 
 test('plugin template value forms update locally and preserve the active field', async ({ page }) => {

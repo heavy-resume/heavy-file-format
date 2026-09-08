@@ -931,6 +931,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     const owningSection = deps.findSectionByKey(rootSections ?? [], sectionKey);
     const isDirectSectionBlock = owningSection?.blocks.some((candidate) => candidate === block) === true;
     const editingReusableDefinition = state.editingReusableDefinition === true;
+    const isStandaloneComponentTemplateRoot = editingReusableDefinition && rootSections?.length === 0;
     const structurallyLocked = !editingReusableDefinition && (parentLocked || (isDirectSectionBlock && owningSection?.lock === true));
     const blockMove = isActiveFrame
       ? getBlockMoveAvailability(sectionKey, block.id, rootSections ?? [])
@@ -955,7 +956,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       : `<button type="button" class="ghost" data-action="open-save-component-def" data-section-key="${deps.escapeAttr(
         sectionKey
       )}" data-block-id="${deps.escapeAttr(block.id)}">Make Template</button>`;
-    const componentMetaActions = state.showAdvancedEditor && isActive
+    const componentMetaActions = state.showAdvancedEditor && isActive && !isStandaloneComponentTemplateRoot
       ? `<div class="editor-block-context-actions" aria-label="Component options">
           ${makeTemplateAction}
           <button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(
@@ -976,13 +977,13 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       })
       : '';
     const frameRemoveButton = state.mobileAdjustmentMode ? '' : removeButton;
-    const insertAboveGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+    const insertAboveGhost = !isStandaloneComponentTemplateRoot && canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       ? renderActiveComponentInsertGhost(sectionKey, block, 'before')
       : '';
     const directSectionSequence = isDirectSectionBlock && owningSection ? deps.buildSectionRenderSequence(owningSection) : [];
     const directSequenceIndex = directSectionSequence.findIndex((item) => item.kind === 'block' && item.block === block);
     const usesSectionEndGhost = directSequenceIndex >= 0 && directSequenceIndex === directSectionSequence.length - 1;
-    const insertBelowGhost = canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
+    const insertBelowGhost = !isStandaloneComponentTemplateRoot && canRenderActiveComponentInsertGhost(isActiveFrame, structurallyLocked)
       && !usesSectionEndGhost
       ? renderActiveComponentInsertGhost(sectionKey, block, 'after')
       : '';
@@ -1854,7 +1855,15 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
                   </span>
                   <span class="template-def-summary-actions">
                     <button type="button" class="secondary" data-action="open-reusable-definition-editor" data-template-kind="component" data-def-index="${index}">Edit Template</button>
-                    <button type="button" class="danger" data-action="remove-component-def" data-def-index="${index}">Remove</button>
+                    ${renderDeleteControl({
+                      className: 'template-def-remove-button',
+                      label: `Remove ${def.name || 'Untitled Template'}`,
+                      title: 'Delete component template',
+                      attributes: {
+                        'data-action': 'remove-component-def',
+                        'data-def-index': String(index),
+                      },
+                    })}
                   </span>
                 </div>
               </div>`;

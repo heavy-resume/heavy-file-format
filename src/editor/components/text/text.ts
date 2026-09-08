@@ -121,10 +121,10 @@ export function renderTextRichEditorContent(
   if (!state.reusableDefinitionEditModal) {
     return html;
   }
-  return renderTemplateValueTokens(html);
+  return renderTemplateValueTokens(html, { editable: true });
 }
 
-export function renderTemplateValueTokens(html: string): string {
+export function renderTemplateValueTokens(html: string, options: { editable?: boolean } = {}): string {
   if (typeof document === 'undefined') return html;
   const variables = new Map(getActiveBuilderTemplateVariables().map((variable) => [variable.name, variable]));
   const template = document.createElement('template');
@@ -156,6 +156,9 @@ export function renderTemplateValueTokens(html: string): string {
       sourceToken.textContent = match[0];
       marker.append(sourceToken);
       fragment.append(marker);
+      if (options.editable) {
+        fragment.append(document.createTextNode('\u200b'));
+      }
       offset = (match.index ?? 0) + match[0].length;
     });
     fragment.append(source.slice(offset));

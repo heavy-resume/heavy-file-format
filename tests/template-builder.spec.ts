@@ -95,20 +95,20 @@ test('component template builder creates tokens and flavors as one undoable edit
     '{% renamed-title | block %}',
     '{% renamed-title | block %}',
   ]);
-  await modal.getByRole('button', { name: 'Find 2' }).click();
-  await expect(modal.locator('.template-value-token').nth(1)).toHaveClass(/is-found/);
-  await modal.getByRole('button', { name: 'Convert occurrence 2 to text' }).click();
-  await expect(modal.locator('.template-value-token')).toHaveCount(1);
-  await expect(editor).toContainText('Expected title');
+  await expect(modal.getByText('Occurrences', { exact: true })).toHaveCount(0);
+  await expect(modal.getByText('Optional AI value generator', { exact: true })).toBeVisible();
+  await expect(modal.getByText('Button Label', { exact: true })).toHaveCount(0);
+  await modal.locator('[data-field="builder-template-variable-generator"]').selectOption({ index: 1 });
+  await expect(modal.getByText('Button Label', { exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const { clearActiveEditorBlock } = await import('/src/block-ops.ts');
     const { getRenderApp } = await import('/src/state.ts');
     clearActiveEditorBlock();
     getRenderApp()();
   });
-  await expect(modal.locator('.template-value-token')).toBeVisible();
-  await expect(modal.locator('.template-value-token-source')).toBeHidden();
-  expect(await modal.locator('.template-value-token').evaluate((marker) => getComputedStyle(marker).fontSize)).not.toBe('0px');
+  await expect(modal.locator('.template-value-token').first()).toBeVisible();
+  await expect(modal.locator('.template-value-token-source').first()).toBeHidden();
+  expect(await modal.locator('.template-value-token').first().evaluate((marker) => getComputedStyle(marker).fontSize)).not.toBe('0px');
   const identityRow = modal.locator('.reusable-definition-identity');
   await expect(identityRow.locator('[data-field="builder-definition-name"]')).toBeVisible();
   await identityRow.getByRole('button', { name: 'Add Flavor' }).click();

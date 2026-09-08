@@ -41,7 +41,7 @@ import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
 import { getAvailableOutputGenerators, getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
-import { countReusableTemplateVariableOccurrences, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
+import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
 import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
@@ -1916,11 +1916,11 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       let componentTemplate = componentDefinition
         ? componentFlavor
           ? componentFlavor.template ?? (componentFlavor.schema ? {
-              id: `template-flavor-${modal.index}-${activeFlavorIndex}`,
-              text: '',
-              schema: schemaFromUnknown({ ...(componentFlavor.schema ?? {}), component: definition.name }, new WeakSet<object>(), state.documentMeta),
-              schemaMode: false,
-            } : null)
+            id: `template-flavor-${modal.index}-${activeFlavorIndex}`,
+            text: '',
+            schema: schemaFromUnknown({ ...(componentFlavor.schema ?? {}), component: definition.name }, new WeakSet<object>(), state.documentMeta),
+            schemaMode: false,
+          } : null)
           : !componentDefinition.template && !componentDefinition.schema
             ? null
             : getReusableTemplate(componentDefinition)
@@ -1970,27 +1970,27 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
             </div>`}
             <div class="reusable-definition-editor">
                   ${componentDefinition
-            ? `<div class="reusable-definition-hvy-surface">
+          ? `<div class="reusable-definition-hvy-surface">
                         <div class="editor-grid reusable-definition-identity">
                           <label><span>Name</span><input data-field="${componentFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(componentFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
                           ${flavorAction}
                         </div>
                         ${componentTemplate ? `<div class="reusable-definition-component-head"><strong>Component</strong><button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(componentTemplateSectionKey)}" data-block-id="${deps.escapeAttr(componentTemplate.id)}">Meta</button></div>${deps.renderEditorBlock(componentTemplateSectionKey, componentTemplate, [])}` : `<div class="ghost-section-card add-ghost compact-add-component-ghost reusable-definition-empty-component">${renderAddComponentPicker({
-                          id: `reusable-definition:${definition.name}`,
-                          action: 'reusable-definition-add-component',
-                          sectionKey: componentTemplateSectionKey,
-                          label: 'Section component type',
-                          componentFilter: (componentName) => componentName !== definition.name,
-                          componentDisabledReason: (componentName) => componentName === definition.name ? 'A template cannot use itself as its base component' : null,
-                        }, {
-                          escapeAttr: deps.escapeAttr,
-                          escapeHtml: deps.escapeHtml,
-                          getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
-                        })}</div>`}
+            id: `reusable-definition:${definition.name}`,
+            action: 'reusable-definition-add-component',
+            sectionKey: componentTemplateSectionKey,
+            label: 'Section component type',
+            componentFilter: (componentName) => componentName !== definition.name,
+            componentDisabledReason: (componentName) => componentName === definition.name ? 'A template cannot use itself as its base component' : null,
+          }, {
+            escapeAttr: deps.escapeAttr,
+            escapeHtml: deps.escapeHtml,
+            getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
+          })}</div>`}
                       </div>`
-            : ''}
+          : ''}
                   ${sectionTemplate
-            ? `<div class="reusable-definition-section-surface">
+          ? `<div class="reusable-definition-section-surface">
                         <div class="editor-grid reusable-definition-identity">
                           <label><span>Name</span><input data-field="${sectionFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(sectionFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
                           ${flavorAction}
@@ -2006,20 +2006,21 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         <button type="button" class="ghost" data-action="focus-modal" data-section-key="${deps.escapeAttr(sectionTemplateKey)}">Meta</button>
                         ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block, [sectionTemplate])).join('')}
                       </div>`
-            : ''}
+          : ''}
                   <aside class="reusable-template-variable-panel">
                     <div class="meta-panel-head"><strong>Template Values</strong><span class="muted">Select text, then choose Use as…</span></div>
-                    ${activeVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : activeVariables.map((variable) => {
-                      const occurrenceCount = countReusableTemplateVariableOccurrences(componentTemplate ?? sectionTemplate, variable.name);
-                      return `<div class="template-variable-card">
+                    ${activeVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : activeVariables.map((variable) => `<div class="template-variable-card">
                       <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}" /></label>
                       <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
                       <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}" /></label>
-                      <label><span>Generator</span><select data-field="builder-template-variable-generator" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="">None</option>${getAvailableOutputGenerators().map((generator) => `<option value="${deps.escapeAttr(generator.key)}"${generator.key === variable.generator ? ' selected' : ''}>${deps.escapeHtml(generator.label || generator.key)}</option>`).join('')}</select></label>
-                      <label><span>Generator Label</span><input data-field="builder-template-variable-generator-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.generatorLabel ?? '')}" placeholder="Generate" /></label>
-                      <div class="template-variable-occurrences"><span class="muted">Occurrences</span>${Array.from({ length: occurrenceCount }, (_, occurrenceIndex) => `<span class="template-variable-occurrence"><button type="button" class="ghost" data-modal-action="reusable-definition-variable-find" data-variable-name="${deps.escapeAttr(variable.name)}" data-occurrence-index="${occurrenceIndex}">Find ${occurrenceIndex + 1}</button><button type="button" class="ghost remove-x" data-modal-action="reusable-definition-variable-unmark" data-variable-name="${deps.escapeAttr(variable.name)}" data-occurrence-index="${occurrenceIndex}" aria-label="Convert occurrence ${occurrenceIndex + 1} to text" title="Convert occurrence ${occurrenceIndex + 1} to text">${closeIcon()}</button></span>`).join('')}</div>
-                    </div>`;
-                    }).join('')}
+                      <section class="template-variable-generator-config">
+                        <div class="template-variable-generator-head"><strong>Generator</strong><span class="muted">Optional AI value generator</span></div>
+                        <div class="template-variable-generator-fields">
+                          <label><span>Generator</span><select data-field="builder-template-variable-generator" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="">None</option>${getAvailableOutputGenerators().map((generator) => `<option value="${deps.escapeAttr(generator.key)}"${generator.key === variable.generator ? ' selected' : ''}>${deps.escapeHtml(generator.label || generator.key)}</option>`).join('')}</select></label>
+                          ${variable.generator ? `<label><span>Button Label</span><input data-field="builder-template-variable-generator-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.generatorLabel ?? '')}" placeholder="Use generator label" /></label>` : ''}
+                        </div>
+                      </section>
+                    </div>`).join('')}
                   </aside>
                 </div>
             <div class="link-inline-actions reusable-save-actions">

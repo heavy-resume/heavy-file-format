@@ -19,7 +19,7 @@ import { applyXrefTargetDefaults } from './xref-ops';
 import { getOutputGenerator } from './plugins/registry';
 import { configurePluginBlock } from './plugins/plugin-block';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from './component-defs';
-import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, replaceReusableTemplateVariableOccurrenceWithText, setReusableTemplateVariableType } from './reusable-template-values';
+import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, setReusableTemplateVariableType } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
@@ -164,23 +164,6 @@ export function bindModal(app: HTMLElement): void {
       mutateActiveFlavor('right');
       return;
     }
-    const unmarkVariable = target.closest<HTMLElement>('[data-modal-action="reusable-definition-variable-unmark"]');
-    if (unmarkVariable) {
-      unmarkBuilderTemplateVariable(
-        unmarkVariable.dataset.variableName ?? '',
-        Number.parseInt(unmarkVariable.dataset.occurrenceIndex ?? '0', 10)
-      );
-      return;
-    }
-    const findVariable = target.closest<HTMLElement>('[data-modal-action="reusable-definition-variable-find"]');
-    if (findVariable) {
-      findBuilderTemplateVariableOccurrence(
-        findVariable.dataset.variableName ?? '',
-        Number.parseInt(findVariable.dataset.occurrenceIndex ?? '0', 10)
-      );
-      return;
-    }
-
     const templateGeneratorBtn = target.closest<HTMLButtonElement>('[data-modal-action="run-template-generator"]');
     if (templateGeneratorBtn && state.reusableTemplateModal) {
       void runReusableTemplateGenerator(modalRoot, templateGeneratorBtn);
@@ -663,6 +646,21 @@ function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void
       });
       return;
     }
+    if (field === 'builder-template-variable-generator') {
+      control.addEventListener('change', () => {
+        const active = getActiveReusableDefinition();
+        const name = control.dataset.variableName ?? '';
+        if (!active || !name) return;
+        const owner = active.flavor ?? active.definition;
+        owner.templateVariables = owner.templateVariables ?? {};
+        const config = owner.templateVariables[name] ?? {};
+        if (control.value) config.generator = control.value;
+        else delete config.generator;
+        owner.templateVariables[name] = config;
+        getRenderApp()();
+      });
+      return;
+    }
     control.addEventListener('input', () => {
       const active = getActiveReusableDefinition();
       const name = control.dataset.variableName ?? '';
@@ -674,10 +672,6 @@ function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void
       if (field === 'builder-template-variable-generator-label') {
         if (control.value) config.generatorLabel = control.value;
         else delete config.generatorLabel;
-      }
-      if (field === 'builder-template-variable-generator') {
-        if (control.value) config.generator = control.value;
-        else delete config.generator;
       }
       owner.templateVariables[name] = config;
     });
@@ -883,30 +877,6 @@ function mutateActiveFlavor(action: 'remove' | 'left' | 'right'): void {
     modal.activeFlavorIndex = nextIndex;
   }
   getRenderApp()();
-}
-
-function unmarkBuilderTemplateVariable(name: string, occurrenceIndex: number): void {
-  const active = getActiveReusableDefinition();
-  if (!active || !name) return;
-  const owner = active.flavor ?? active.definition;
-  const label = owner.templateVariables?.[name]?.label ?? name;
-  replaceReusableTemplateVariableOccurrenceWithText(active.template, name, occurrenceIndex, label);
-  const remainingVariables = state.reusableDefinitionEditModal?.kind === 'component'
-    ? active.flavor ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(active.definition)
-    : active.flavor ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(active.definition);
-  if (!remainingVariables.some((variable) => variable.name === name) && owner.templateVariables) delete owner.templateVariables[name];
-  getRenderApp()();
-}
-
-function findBuilderTemplateVariableOccurrence(name: string, occurrenceIndex: number): void {
-  const matches = Array.from(document.querySelectorAll<HTMLElement>('.reusable-definition-modal .template-value-token'))
-    .filter((marker) => marker.dataset.templateValueToken === name);
-  const marker = matches[occurrenceIndex];
-  if (!marker) return;
-  marker.focus({ preventScroll: true });
-  marker.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  marker.classList.remove('is-found');
-  requestAnimationFrame(() => marker.classList.add('is-found'));
 }
 
 function cancelReusableDefinitionModal(): void {

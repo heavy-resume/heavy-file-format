@@ -872,6 +872,8 @@ Component templates MAY include value tokens in any string field. Tokens use Mar
 {% project-link %}
 ```
 
+Authoring clients SHOULD provide a visual template-definition surface using the normal component and section editors. A new component template SHOULD begin as an empty section-like canvas that accepts exactly one component; that component determines `baseType`. A new section template uses the same construction model but accepts multiple components. Template flavors SHOULD be selected by name, with the main template using the component-template name and alternate names remaining unique. In that surface, clients MAY let authors select existing text and convert it to a named template token, reuse an existing variable, configure whether it accepts single-line `text` or multiline `block` values, and configure its label and output generator. Component metadata SHOULD use the ordinary component metadata editor. Template definitions remain part of the document header and therefore remain editable through the document's ordinary raw source editor; the dedicated template builder need not duplicate that editor.
+
 Template value notes:
 - `{% name %}` is equivalent to `{% name | text %}`.
 - `text` values are single-line values; `block` values may contain multiple lines.
@@ -1683,6 +1685,8 @@ to the plugin. The editor context MUST include:
 - `mode`: `"view"` or `"edit"`.
 - `detailLevel`: a number indicating how much editing UI the host is asking the
   plugin to show.
+
+The plugin context MAY also expose document component-template helpers. Such helpers list `component_defs`, inspect variables, clone and fill a selected main template or flavor, render the derived component through the ordinary HVY reader, and mount the host's normal template-value form. Plugins remain responsible for persisting their selected template, flavor, and values in `pluginConfig` or their text body. A materialized template used this way is derived plugin output: it MUST NOT be inserted into or serialized as a nested document tree, MUST NOT mutate the definition, and is not automatically searchable document content. Plugins SHOULD use their visual-description capability when that derived output needs search or agent visibility.
 
 The conventional `detailLevel` meanings are:
 

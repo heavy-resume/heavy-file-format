@@ -31,15 +31,56 @@ const tagStateHelpers = {
 const addComponentDef: AppActionHandler = () => {
   recordHistory();
   const defs = getComponentDefs();
+  const name = getUniqueDefinitionName('component', defs.map((definition) => definition.name));
   defs.push({
-    name: `component-${defs.length + 1}`,
+    name,
     baseType: 'text',
     tags: '',
     description: '',
   });
   state.document.meta.component_defs = defs;
+  state.reusableDefinitionEditModal = {
+    kind: 'component',
+    index: defs.length - 1,
+    error: null,
+    activeFlavorIndex: null,
+    originalRaw: '',
+    isNew: true,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
+  };
   getRenderApp()();
 };
+
+const addSectionDef: AppActionHandler = () => {
+  recordHistory();
+  const defs = getSectionDefs();
+  const name = getUniqueDefinitionName('section', defs.map((definition) => definition.name));
+  const template = createEmptySectionWithMeta(1, 'text', false, state.document.meta);
+  template.title = name;
+  defs.push({ name, template });
+  state.document.meta.section_defs = defs;
+  state.reusableDefinitionEditModal = {
+    kind: 'section',
+    index: defs.length - 1,
+    error: null,
+    activeFlavorIndex: null,
+    originalRaw: '',
+    isNew: true,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
+  };
+  getRenderApp()();
+};
+
+function getUniqueDefinitionName(prefix: string, names: string[]): string {
+  const used = new Set(names);
+  let index = used.size + 1;
+  let name = `${prefix}-${index}`;
+  while (used.has(name)) {
+    index += 1;
+    name = `${prefix}-${index}`;
+  }
+  return name;
+}
 
 const removeComponentDef: AppActionHandler = ({ actionButton }) => {
   recordHistory();
@@ -205,12 +246,16 @@ const openReusableDefinitionEditor: AppActionHandler = ({ actionButton }) => {
   if (!definition) {
     return;
   }
+  recordHistory(`edit-${kind}-template:${definition.name}`);
+  const raw = stringifyYaml(definition).trimEnd();
   state.reusableDefinitionEditModal = {
     kind,
     index,
-    mode: 'edit',
-    rawDraft: stringifyYaml(definition).trimEnd(),
     error: null,
+    activeFlavorIndex: null,
+    originalRaw: raw,
+    isNew: false,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
   };
   getRenderApp()();
 };
@@ -300,6 +345,7 @@ const addTemplateField: AppActionHandler = ({ actionButton }) => {
 
 export const reusableActions: Record<string, AppActionHandler> = {
   'add-component-def': addComponentDef,
+  'add-section-def': addSectionDef,
   'remove-component-def': removeComponentDef,
   'remove-component-def-flavor': removeComponentDefFlavor,
   'add-component-sort-value': addComponentSortValue,

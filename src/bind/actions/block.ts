@@ -20,7 +20,7 @@ import {
   prepareBlockForDocumentPasteWithResult,
 } from '../../editor-clipboard';
 import { showTransientNotice } from '../../transient-notice';
-import { getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
+import { getComponentDefsFromMeta, getSectionDefsFromMeta, resolveBaseComponent } from '../../component-defs';
 import { openPhvyPasteConfirmationPopover } from '../handlers/phvy-paste-confirmation-popover';
 import { emptySectionHeadingLevelToNumber, getEmptySectionHeadingLevel, rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { normalizeTextCaption, updateTextCaptionAlign } from '../../caption';
@@ -307,6 +307,25 @@ const removeBlock: ActionHandler = ({ app, section, sectionKey, blockId, reusabl
   }
   recordHistory();
   const scrollBeforeDelete = capturePaneScroll(state.paneScroll, app);
+  if (reusableName && state.reusableDefinitionEditModal?.kind === 'component') {
+    const modal = state.reusableDefinitionEditModal;
+    const definition = getComponentDefsFromMeta(state.document.meta)[modal.index];
+    const flavor = modal.activeFlavorIndex == null ? null : definition?.flavors?.[modal.activeFlavorIndex] ?? null;
+    const template = flavor?.template ?? definition?.template;
+    if (definition && template?.id === blockId) {
+      if (flavor) {
+        flavor.template = undefined;
+        flavor.schema = undefined;
+      } else {
+        definition.template = undefined;
+        definition.schema = undefined;
+        definition.baseType = 'text';
+      }
+      clearActiveEditorBlock(blockId);
+      getRenderApp()();
+      return;
+    }
+  }
   const rowComponentModal = state.dbTableRowComponentModal;
   if (rowComponentModal?.sectionKey === sectionKey) {
     const activeBlockId = state.activeEditorBlock?.sectionKey === sectionKey

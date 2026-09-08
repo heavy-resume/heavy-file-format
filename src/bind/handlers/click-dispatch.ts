@@ -197,6 +197,7 @@ export function bindClickDispatch(app: HTMLElement): void {
           applyRichAction(action, editable, richButton.dataset.textLineStyleName, {
             sortValueKey: richButton.dataset.sortValueKey,
             sortValueType: richButton.dataset.sortValueType,
+            templateVariableName: richButton.dataset.templateVariableName,
           });
           closeUseAsMenus(app);
           clearHideIfUnmodifiedForSectionPath(state.document.sections, sectionKey);

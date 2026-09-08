@@ -347,9 +347,12 @@ export interface SectionTemplateFlavorModalState {
 export interface ReusableDefinitionEditModalState {
   kind: 'component' | 'section';
   index: number;
-  mode: 'edit' | 'raw';
-  rawDraft: string;
   error: string | null;
+  activeFlavorIndex?: number | null;
+  originalRaw?: string;
+  isNew?: boolean;
+  draftName?: string;
+  historyBeforeDraft?: { history: string[]; future: string[] };
 }
 
 export interface DbTableRowComponentModalState {

@@ -9,6 +9,9 @@ import { createDefaultTextCaption, renderTextCaptionElement } from '../caption';
 import { createDefaultTextComponent, renderTextComponentElement } from '../text-component';
 import { mountPluginTextEditor } from './text-editor';
 import { findSortValueOwnerBlock, syncSortValuesForDocument } from '../sort-values';
+import { findSectionByKey } from '../section-ops';
+import { createPluginComponentTemplatesApi } from './component-templates';
+import { resolveOutputGeneratorResponse } from '../template-output-generators';
 import type {
   HvyPluginContext,
   HvyPluginInstance,
@@ -108,6 +111,10 @@ function buildContext(
   const runtime = getActiveStateRuntime();
   const block = findBlockByIds(sectionKey, blockId);
   if (!block) {
+    return null;
+  }
+  const section = findSectionByKey(state.document.sections, sectionKey);
+  if (!section) {
     return null;
   }
 
@@ -234,6 +241,19 @@ function buildContext(
     },
     textEditor: {
       mount: (options) => runWithStateRuntime(runtime, () => mountPluginTextEditor(options)),
+    },
+    templates: {
+      components: createPluginComponentTemplatesApi({
+        document: state.document,
+        section,
+        sectionKey,
+        helpers: getCachedComponentRenderHelpers(),
+        observeLinks: (root) => runWithStateRuntime(runtime, () => getObserveLinks()(root)),
+        resolveGenerator: (response) => runWithStateRuntime(runtime, () => resolveOutputGeneratorResponse({
+          response,
+          settings: state.chat.settings,
+        })),
+      }),
     },
     sortValues: {
       get: (key) => {

@@ -1514,6 +1514,20 @@ export type {
 } from './chat/embedding-context';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
 export type {
+  HvyPlugin,
+  HvyPluginInput,
+  HvyPluginContext,
+  HvyPluginInstance,
+  HvyPluginComponentTemplateFlavorInfo,
+  HvyPluginComponentTemplateInfo,
+  HvyPluginComponentTemplateSelection,
+  HvyPluginComponentTemplateRenderOptions,
+  HvyPluginComponentTemplateRenderInstance,
+  HvyPluginComponentTemplateValuesOptions,
+  HvyPluginComponentTemplateValuesInstance,
+  HvyPluginComponentTemplatesApi,
+} from './plugins/types';
+export type {
   HvyPdfExportOptions,
   HvyPdfExportPlan,
   HvyPdfExportPlanDecision,

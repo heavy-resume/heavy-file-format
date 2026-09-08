@@ -7,6 +7,8 @@ import { getBlockAnswerGroups, getInlineAnswerGroupIndex } from '../../../inline
 import { getComponentSortValueDefs, replaceSortValueAnnotations } from '../../../sort-values';
 import type { SortValueDefinition } from '../../../types';
 import { findReusableOwner } from '../../../reusable';
+import { getComponentDefs, getSectionDefs } from '../../../component-defs';
+import { extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../../../reusable-template-values';
 
 const FILL_IN_RENDER_TOKEN_PREFIX = 'HVY_FILL_IN_VALUE_TOKEN_';
 
@@ -110,12 +112,52 @@ export function renderTextRichEditorContent(
   helpers: Parameters<ComponentEditorRenderer>[2],
   fillInParts = block.schema.fillIn ? splitTextFillIns(block.text) : []
 ): string {
-  return fillInParts.length > 1
+  const html = fillInParts.length > 1
     ? renderRichTextWithFillIns(sectionKey, block, helpers, fillInParts)
     : renderMarkdownEditorHtmlWithSortValues(block.text, sectionKey, block, helpers, {
       'data-section-key': sectionKey,
       'data-block-id': block.id,
     });
+  if (!state.reusableDefinitionEditModal) {
+    return html;
+  }
+  return renderTemplateValueTokens(html);
+}
+
+function renderTemplateValueTokens(html: string): string {
+  if (typeof document === 'undefined') return html;
+  const variables = new Map(getActiveBuilderTemplateVariables().map((variable) => [variable.name, variable]));
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+  const pattern = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block|isempty)\s*)?%}/g;
+  textNodes.forEach((node) => {
+    const source = node.data;
+    const matches = [...source.matchAll(pattern)];
+    if (matches.length === 0) return;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    matches.forEach((match) => {
+      fragment.append(source.slice(offset, match.index));
+      const marker = document.createElement('span');
+      marker.className = 'template-value-token';
+      marker.contentEditable = 'false';
+      marker.tabIndex = -1;
+      marker.dataset.templateValueToken = match[1] ?? '';
+      const variable = variables.get(match[1] ?? '');
+      const tokenType = match[2] === 'isempty' ? 'empty check' : variable?.type === 'block' ? 'multi-line' : 'text';
+      marker.dataset.templateValueDisplay = `${variable?.label ?? match[1] ?? 'Value'} · ${tokenType}`;
+      marker.setAttribute('aria-label', marker.dataset.templateValueDisplay);
+      marker.textContent = match[0];
+      fragment.append(marker);
+      offset = (match.index ?? 0) + match[0].length;
+    });
+    fragment.append(source.slice(offset));
+    node.replaceWith(fragment);
+  });
+  return template.innerHTML;
 }
 
 function renderInlineAnswerModeSwitch(
@@ -190,6 +232,26 @@ function renderUseAsSelectionControl(
   sortValueDefs: Record<string, SortValueDefinition>,
   helpers: Parameters<ComponentEditorRenderer>[2]
 ): string {
+  const templateValueOption = state.reusableDefinitionEditModal
+    ? `<button
+        type="button"
+        class="ghost text-use-as-menu-item"
+        data-rich-action="template-value"
+        data-section-key="${helpers.escapeAttr(sectionKey)}"
+        data-block-id="${helpers.escapeAttr(blockId)}"
+        role="menuitem"
+      >Create template value</button>`
+    : '';
+  const templateVariables = getActiveBuilderTemplateVariables();
+  const existingTemplateValueOptions = templateVariables.map((variable) => `<button
+    type="button"
+    class="ghost text-use-as-menu-item"
+    data-rich-action="template-value"
+    data-template-variable-name="${helpers.escapeAttr(variable.name)}"
+    data-section-key="${helpers.escapeAttr(sectionKey)}"
+    data-block-id="${helpers.escapeAttr(blockId)}"
+    role="menuitem"
+  >Reuse “${helpers.escapeHtml(variable.label)}”</button>`).join('');
   const sortOptions = Object.entries(sortValueDefs)
     .filter(([key]) => key.trim().length > 0)
     .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
@@ -221,9 +283,21 @@ function renderUseAsSelectionControl(
         data-block-id="${helpers.escapeAttr(blockId)}"
         role="menuitem"
       >Fill-in</button>
+      ${templateValueOption}
+      ${existingTemplateValueOptions}
       ${sortOptions ? `<div class="text-use-as-menu-divider" role="separator"></div>${sortOptions}` : ''}
     </div>
   </div>`;
+}
+
+function getActiveBuilderTemplateVariables() {
+  const modal = state.reusableDefinitionEditModal;
+  const definition = modal?.kind === 'component' ? getComponentDefs()[modal.index] : modal ? getSectionDefs()[modal.index] : null;
+  const flavor = modal?.activeFlavorIndex == null ? null : definition?.flavors?.[modal.activeFlavorIndex] ?? null;
+  if (!modal || !definition) return [];
+  return modal.kind === 'component'
+    ? flavor ? extractReusableTemplateVariablesFromFlavor(flavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(definition as never)
+    : flavor ? extractReusableTemplateVariablesFromSectionFlavor(flavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(definition as never);
 }
 
 function renderRichTextWithFillIns(

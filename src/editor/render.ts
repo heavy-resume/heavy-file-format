@@ -10,6 +10,7 @@ import { renderExpandableEditor } from './components/expandable/expandable';
 import { renderGridEditor, renderGridHeaderControls } from './components/grid/grid';
 import { renderImageEditor } from './components/image/image';
 import { renderCarouselEditor } from './components/carousel/carousel';
+import { renderCodeEditor } from './components/code/code';
 import { renderPluginEditor, getPluginBlockHeaderLabel } from './components/plugin/plugin';
 import { renderTableEditor } from './components/table/table';
 import { renderTextEditor } from './components/text/text';
@@ -1832,7 +1833,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="meta-panel-head">
           <strong>Component Templates</strong>
-          <button type="button" class="ghost" data-action="add-component-def">Add Template</button>
+          <button type="button" class="ghost" data-action="add-component-def">New Component Template</button>
         </div>
         <div class="component-defs">
           ${defs.length === 0
@@ -1912,6 +1913,7 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
         </div>
         <div class="meta-panel-head">
           <strong>Section Templates</strong>
+          <button type="button" class="ghost" data-action="add-section-def">New Section Template</button>
         </div>
         <div class="component-defs">
           ${sectionDefs.length === 0
@@ -2180,6 +2182,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
     }
     if (component === 'carousel') {
       return renderCarouselEditor(sectionKey, block, helpers);
+    }
+    if (component === 'code') {
+      return renderCodeEditor(sectionKey, block, helpers);
     }
     return renderTextEditor(sectionKey, block, helpers);
   }

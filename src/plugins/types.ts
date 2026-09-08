@@ -4,6 +4,7 @@ import type { TextCaptionPayload } from '../editor/types';
 import type { TextComponentPayload } from '../text-component';
 import type { DocumentAttachment, ReusableTemplateModalState, VisualDocument } from '../types';
 import type { ReusableTemplateVariableType } from '../reusable-template-values';
+import type { ReusableTemplateVariable } from '../reusable-template-values';
 
 // A plugin owns the DOM element it returns. The host treats it as opaque.
 // Plugins style themselves using the standard CSS theme variables; nothing is
@@ -56,6 +57,58 @@ export interface HvyPluginTextEditorInstance {
   unmount(): void;
 }
 
+export interface HvyPluginComponentTemplateFlavorInfo {
+  name: string;
+  description?: string;
+}
+
+export interface HvyPluginComponentTemplateInfo {
+  name: string;
+  baseType: string;
+  description?: string;
+  tags?: string;
+  flavors: HvyPluginComponentTemplateFlavorInfo[];
+}
+
+export interface HvyPluginComponentTemplateSelection {
+  template: string;
+  flavor?: string;
+}
+
+export interface HvyPluginComponentTemplateRenderOptions extends HvyPluginComponentTemplateSelection {
+  values: Record<string, string>;
+}
+
+export interface HvyPluginComponentTemplateRenderInstance {
+  element: HTMLElement;
+  getBlock(): VisualBlock;
+  update(options: HvyPluginComponentTemplateRenderOptions): void;
+  refresh(): void;
+  unmount(): void;
+}
+
+export interface HvyPluginComponentTemplateValuesOptions extends HvyPluginComponentTemplateSelection {
+  values?: Record<string, string>;
+  onChange(values: Record<string, string>): void;
+}
+
+export interface HvyPluginComponentTemplateValuesInstance {
+  element: HTMLElement;
+  getValues(): Record<string, string>;
+  setValues(values: Record<string, string>): void;
+  setSelection(selection: HvyPluginComponentTemplateSelection): void;
+  focus(variable?: string): void;
+  unmount(): void;
+}
+
+export interface HvyPluginComponentTemplatesApi {
+  list(): HvyPluginComponentTemplateInfo[];
+  variables(selection: HvyPluginComponentTemplateSelection): ReusableTemplateVariable[];
+  materialize(options: HvyPluginComponentTemplateRenderOptions): VisualBlock;
+  render(options: HvyPluginComponentTemplateRenderOptions): HvyPluginComponentTemplateRenderInstance;
+  mountValues(options: HvyPluginComponentTemplateValuesOptions): HvyPluginComponentTemplateValuesInstance;
+}
+
 export interface HvyPluginContext {
   mode: 'editor' | 'reader';
   view: 'editor' | 'viewer' | 'ai';
@@ -94,6 +147,9 @@ export interface HvyPluginContext {
   };
   textEditor: {
     mount(options: HvyPluginTextEditorMountOptions): HvyPluginTextEditorInstance;
+  };
+  templates: {
+    components: HvyPluginComponentTemplatesApi;
   };
   sortValues: {
     get(key: string): SortKeyValue | undefined;

@@ -495,22 +495,108 @@
   gap: 0.5rem;
 }
 
-.hvy-document .reusable-definition-editor,
 .hvy-document .reusable-definition-editor {
   display: grid;
   gap: 0.75rem;
 }
 
-.hvy-document .reusable-definition-raw-field,
-.hvy-document .reusable-definition-section-surface > label,
+.hvy-document .reusable-definition-flavor-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.75rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .reusable-definition-flavor-picker {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 22rem);
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.75rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .reusable-definition-component-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.65rem 0 0.35rem;
+}
+
+.hvy-document .reusable-definition-empty-component {
+  min-height: 7rem;
+}
+
+.hvy-document .reusable-definition-flavor-settings label {
+  flex: 1 1 12rem;
+}
+
+.hvy-document .reusable-template-variable-panel {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.75rem;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .template-variable-card {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.4fr) minmax(10rem, 1.2fr);
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 0.65rem;
+  background: var(--hvy-surface);
+}
+
+.hvy-document .template-variable-occurrences,
+.hvy-document .template-variable-occurrence {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.hvy-document .template-variable-occurrence {
+  gap: 0.1rem;
+  padding: 0.1rem;
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  background: var(--hvy-surface-alt);
+}
+
+.hvy-document .builder-input-use-as {
+  align-self: flex-start;
+  margin-top: 0.3rem;
+  border-color: var(--hvy-accent-1);
+  color: var(--hvy-text);
+  animation: hvy-template-use-as-in 120ms ease-out;
+}
+
+@keyframes hvy-template-use-as-in {
+  from { opacity: 0; transform: translateY(-0.2rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@container hvy-surface (max-width: 42rem) {
+  .hvy-document .template-variable-card {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hvy-document .reusable-definition-raw-field,
 .hvy-document .reusable-definition-section-surface > label {
   display: grid;
   gap: 0.3rem;
 }
 
-.hvy-document .reusable-definition-raw-field textarea,
-.hvy-document .reusable-definition-section-surface input,
 .hvy-document .reusable-definition-raw-field textarea,
 .hvy-document .reusable-definition-section-surface input {
   width: 100%;

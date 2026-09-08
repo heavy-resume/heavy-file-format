@@ -23,12 +23,18 @@ export function extractReusableTemplateVariablesFromDefinition(definition: Compo
   return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(definition));
 }
 
-export function extractReusableTemplateVariablesFromFlavor(flavor: ComponentTemplateFlavor | null | undefined): ReusableTemplateVariable[] {
+export function extractReusableTemplateVariablesFromFlavor(
+  flavor: ComponentTemplateFlavor | null | undefined,
+  fallbackConfig: ComponentDefinition['templateVariables'] = {}
+): ReusableTemplateVariable[] {
   const source = flavor?.template ?? flavor?.schema;
   if (!source) {
     return [];
   }
-  return extractReusableTemplateVariables(source, getReusableTemplateVariableConfig(flavor));
+  return extractReusableTemplateVariables(source, {
+    ...getReusableTemplateVariableConfig({ templateVariables: fallbackConfig } as ComponentTemplateFlavor),
+    ...getReusableTemplateVariableConfig(flavor),
+  });
 }
 
 export function extractReusableTemplateVariablesFromSectionDefinition(definition: SectionDefinition | null | undefined): ReusableTemplateVariable[] {
@@ -38,11 +44,17 @@ export function extractReusableTemplateVariablesFromSectionDefinition(definition
   return extractReusableTemplateVariables(definition.template, getReusableTemplateVariableConfig(definition));
 }
 
-export function extractReusableTemplateVariablesFromSectionFlavor(flavor: SectionTemplateFlavor | null | undefined): ReusableTemplateVariable[] {
+export function extractReusableTemplateVariablesFromSectionFlavor(
+  flavor: SectionTemplateFlavor | null | undefined,
+  fallbackConfig: SectionDefinition['templateVariables'] = {}
+): ReusableTemplateVariable[] {
   if (!flavor?.template) {
     return [];
   }
-  return extractReusableTemplateVariables(flavor.template, getReusableTemplateVariableConfig(flavor));
+  return extractReusableTemplateVariables(flavor.template, {
+    ...getReusableTemplateVariableConfig({ templateVariables: fallbackConfig } as SectionTemplateFlavor),
+    ...getReusableTemplateVariableConfig(flavor),
+  });
 }
 
 export function extractReusableTemplateVariables(value: unknown, config: Record<string, { label?: string; generator?: string; generatorLabel?: string }> = {}): ReusableTemplateVariable[] {
@@ -148,6 +160,88 @@ export function humanizeTemplateVariableName(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export function createReusableTemplateVariableName(label: string, existingNames: Iterable<string> = []): string {
+  const normalized = label
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const baseName = /^[a-z_]/.test(normalized) ? normalized : `value-${normalized || 'text'}`;
+  const used = new Set(existingNames);
+  let name = baseName;
+  let suffix = 2;
+  while (used.has(name)) {
+    name = `${baseName}-${suffix}`;
+    suffix += 1;
+  }
+  return name;
+}
+
+export function renameReusableTemplateVariable(value: unknown, oldName: string, newName: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(newName) || oldName === newName) {
+    return;
+  }
+  visitAndReplaceTemplateStrings(value, (text) => text.replace(
+    new RegExp(`{%\\s*${escapeRegExp(oldName)}(\\s*(?:\\|\\s*(?:text|block|isempty)\\s*)?)%}`, 'g'),
+    `{% ${newName}$1%}`
+  ));
+}
+
+export function setReusableTemplateVariableType(
+  value: unknown,
+  name: string,
+  type: ReusableTemplateVariableType
+): void {
+  visitAndReplaceTemplateStrings(value, (text) => text.replace(
+    new RegExp(`{%\\s*${escapeRegExp(name)}\\s*(?:\\|\\s*(text|block|isempty)\\s*)?%}`, 'g'),
+    (token, filter: string | undefined) => filter === 'isempty' ? token : `{% ${name} | ${type} %}`
+  ));
+}
+
+export function replaceReusableTemplateVariableOccurrenceWithText(
+  value: unknown,
+  name: string,
+  occurrenceIndex: number,
+  replacement: string
+): void {
+  let currentIndex = 0;
+  visitAndReplaceTemplateStrings(value, (text) => text.replace(
+    new RegExp(`{%\\s*${escapeRegExp(name)}\\s*(?:\\|\\s*(?:text|block|isempty)\\s*)?%}`, 'g'),
+    (token) => {
+      const shouldReplace = currentIndex === occurrenceIndex;
+      currentIndex += 1;
+      return shouldReplace ? replacement : token;
+    }
+  ));
+}
+
+export function countReusableTemplateVariableOccurrences(value: unknown, name: string): number {
+  let count = 0;
+  visitTemplateStrings(value, (text) => {
+    count += [...text.matchAll(new RegExp(`{%\\s*${escapeRegExp(name)}\\s*(?:\\|\\s*(?:text|block|isempty)\\s*)?%}`, 'g'))].length;
+  });
+  return count;
+}
+
+function visitAndReplaceTemplateStrings(value: unknown, replace: (text: string) => string, seen = new WeakSet<object>()): unknown {
+  if (typeof value === 'string') return replace(value);
+  if (!value || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => { value[index] = visitAndReplaceTemplateStrings(item, replace, seen); });
+    return value;
+  }
+  Object.entries(value as Record<string, unknown>).forEach(([key, item]) => {
+    (value as Record<string, unknown>)[key] = visitAndReplaceTemplateStrings(item, replace, seen);
+  });
+  return value;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function getReusableTemplateVariableConfig(definition: ComponentDefinition | ComponentTemplateFlavor | SectionDefinition | SectionTemplateFlavor | null | undefined): Record<string, { label?: string; generator?: string; generatorLabel?: string }> {

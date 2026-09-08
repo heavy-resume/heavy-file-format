@@ -6,6 +6,8 @@
 }
 
 .hvy-document .component-picker-trigger {
+  position: relative;
+  z-index: 10000;
   width: 2rem;
   height: 2rem;
   display: grid;

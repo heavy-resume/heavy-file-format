@@ -158,6 +158,12 @@ export function recordHistory(group?: string, options: { notify?: boolean } = {}
   if (state.isRestoring) {
     return;
   }
+  // Reusable definitions are edited as a modal draft. The snapshot taken when
+  // the builder opens is the single undo boundary; field-level editor updates
+  // must not leak additional history entries from that draft workspace.
+  if (state.reusableDefinitionEditModal) {
+    return;
+  }
   if (isQueuedDatabaseHistoryCommandActive()) {
     return;
   }

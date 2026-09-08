@@ -68,7 +68,16 @@ function findReusableSectionTemplateByKey(sectionKey: string): VisualSection | n
       const name = sectionKey.slice(REUSABLE_SECTION_DEF_PREFIX.length);
       return defs.find((def) => def.name === name || def.key === name)?.template ?? null;
     }
-    return defs.find((def) => def.template?.key === sectionKey)?.template ?? null;
+    for (const def of defs) {
+      if (def.template?.key === sectionKey) {
+        return def.template;
+      }
+      const flavor = def.flavors?.find((candidate) => candidate.template?.key === sectionKey);
+      if (flavor) {
+        return flavor.template;
+      }
+    }
+    return null;
   } catch {
     return null;
   }

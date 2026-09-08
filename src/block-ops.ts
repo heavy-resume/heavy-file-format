@@ -4,7 +4,7 @@ import type { TagRenderOptions } from './editor/tag-editor';
 import type { AppState, SortValueDefinition, SortValueType } from './types';
 import { parseTags, serializeTags } from './editor/tag-editor';
 import { state, getCachedComponentRenderHelpers, getRefreshReaderPanels, getRenderApp, type ReaderPanelRefreshSurface } from './state';
-import { getReusableNameFromSectionKey, getComponentDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
+import { getReusableNameFromSectionKey, getComponentDefs, getSectionDefs, renderComponentOptions, resolveBaseComponent } from './component-defs';
 import { findSectionByKey, findBlockContainerById, moveBlockInVisualSequence } from './section-ops';
 import { getReusableTemplateByName, ensureContainerBlocks, ensureComponentListBlocks, ensureGridItems, applyComponentDefaults, instantiateReusableBlock, coerceAlign, coerceSlot } from './document-factory';
 import { findReusableOwner, syncReusableTemplateForBlock } from './reusable';
@@ -39,6 +39,13 @@ import { findSortValueOwnerBlock, getSortValueDefsForBlock, syncSortValuesForDoc
 import { highlightSearchHtml } from './search/highlight';
 import { sanitizeInlineCss } from './css-sanitizer';
 import { syncTextToolbarContextActions } from './editor/components/text/text-toolbar-layout';
+import {
+  extractReusableTemplateVariablesFromDefinition,
+  extractReusableTemplateVariablesFromFlavor,
+  extractReusableTemplateVariablesFromSectionDefinition,
+  extractReusableTemplateVariablesFromSectionFlavor,
+  createReusableTemplateVariableName,
+} from './reusable-template-values';
 
 const completedMultiSlotFillInBlurTimers = new WeakMap<HTMLElement, number>();
 const inlineAnswerSelectionSnapshots = new WeakMap<HTMLElement, ContentReplacementSelectionSnapshot>();
@@ -77,6 +84,16 @@ export function findBlockByIds(sectionKey: string, blockId: string): VisualBlock
   }
   const reusableName = getReusableNameFromSectionKey(sectionKey);
   if (reusableName) {
+    const flavorMatch = reusableName.match(/^(.*):flavor:(\d+)$/);
+    if (flavorMatch && state.reusableDefinitionEditModal?.kind === 'component') {
+      const definition = getComponentDefs()[state.reusableDefinitionEditModal.index];
+      const flavor = definition?.name === flavorMatch[1]
+        ? definition.flavors?.[Number.parseInt(flavorMatch[2] ?? '', 10)]
+        : null;
+      if (flavor?.template) {
+        return findBlockInList([flavor.template], blockId);
+      }
+    }
     const template = getReusableTemplateByName(reusableName);
     return template ? findBlockInList([template], blockId) : null;
   }
@@ -1313,7 +1330,7 @@ export function getComponentRenderHelpers(editorRenderer: {
       state.expandableEditorPanels[`${sectionKey}:${blockId}`]?.[panel === 'stub' ? 'stubOpen' : 'expandedOpen'] ?? fallback,
     isAdvancedEditorMode: () => state.showAdvancedEditor,
     isMobileAdjustmentMode: () => state.editorMode === 'mobile-adjustment',
-    isReusableDefinitionEditor: () => state.reusableDefinitionEditModal?.mode === 'edit',
+    isReusableDefinitionEditor: () => Boolean(state.reusableDefinitionEditModal),
     isPdfDocument: () => isPdfDocument(state.document),
     getTextLineStyles: () => getTextLineStylesFromMeta(state.document.meta),
   };
@@ -1334,8 +1351,14 @@ export function applyRichAction(
   action: string,
   editable: HTMLElement,
   value?: string,
-  options: { sortValueKey?: string; sortValueType?: string } = {}
+  options: { sortValueKey?: string; sortValueType?: string; templateVariableName?: string } = {}
 ): void {
+  if (action === 'template-value') {
+    if (applyTemplateValueSelection(editable, options.templateVariableName)) {
+      getRenderApp()();
+    }
+    return;
+  }
   if (action === 'fill-in') {
     if (applyTextFillInSlot(editable)) {
     }
@@ -1418,6 +1441,92 @@ export function applyRichAction(
   updateRichToolbarState(editable);
   const inputEvent = new InputEvent('input', { bubbles: true });
   editable.dispatchEvent(inputEvent);
+}
+
+function applyTemplateValueSelection(editable: HTMLElement, requestedName?: string): boolean {
+  if (editable.dataset.field !== 'block-rich' || !state.reusableDefinitionEditModal) {
+    return false;
+  }
+  const context = resolveBlockContext(editable);
+  const block = context?.block ?? null;
+  const range = getEditableSelectionRange(editable);
+  if (!block || !range || range.collapsed) {
+    return false;
+  }
+  const selectedText = range.toString().trim();
+  if (!selectedText) {
+    return false;
+  }
+  const modal = state.reusableDefinitionEditModal;
+  const definition = modal.kind === 'component'
+    ? getComponentDefs()[modal.index]
+    : getSectionDefs()[modal.index];
+  if (!definition) {
+    return false;
+  }
+  const activeFlavor = modal.activeFlavorIndex == null ? null : definition.flavors?.[modal.activeFlavorIndex] ?? null;
+  const activeVariables = (modal.kind === 'component'
+      ? activeFlavor ? extractReusableTemplateVariablesFromFlavor(activeFlavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromDefinition(definition as never)
+      : activeFlavor ? extractReusableTemplateVariablesFromSectionFlavor(activeFlavor as never, definition.templateVariables) : extractReusableTemplateVariablesFromSectionDefinition(definition as never));
+  const existingNames = new Set(activeVariables.map((variable) => variable.name));
+  const name = requestedName && existingNames.has(requestedName)
+    ? requestedName
+    : createReusableTemplateVariableName(selectedText, existingNames);
+  const type = requestedName
+    ? activeVariables.find((variable) => variable.name === requestedName)?.type ?? 'text'
+    : /\r|\n/.test(range.toString()) ? 'block' : 'text';
+  const token = `{% ${name} | ${type} %}`;
+  const nextText = replaceRichSelectionWithText(editable, range, block.text, selectedText, token);
+  if (nextText === null) {
+    return false;
+  }
+  recordHistory(`template-value:${block.id}:${name}`);
+  block.text = nextText;
+  if (!requestedName) {
+    const variableOwner = activeFlavor ?? definition;
+    const variables = variableOwner.templateVariables ?? {};
+    variables[name] = { label: selectedText.replace(/\s+/g, ' ').trim() };
+    variableOwner.templateVariables = variables;
+  }
+  return true;
+}
+
+function replaceRichSelectionWithText(
+  editable: HTMLElement,
+  range: Range,
+  blockText: string,
+  selectedText: string,
+  replacement: string
+): string | null {
+  if (range.startContainer === range.endContainer && range.startContainer.textContent === blockText) {
+    const rawSelectedText = blockText.slice(range.startOffset, range.endOffset);
+    const startOffset = range.startOffset + rawSelectedText.length - rawSelectedText.trimStart().length;
+    const endOffset = range.endOffset - (rawSelectedText.length - rawSelectedText.trimEnd().length);
+    if (blockText.slice(startOffset, endOffset) === selectedText) {
+      return `${blockText.slice(0, startOffset)}${replacement}${blockText.slice(endOffset)}`;
+    }
+  }
+  const startOffset = getTextOffset(editable, range.startContainer, range.startOffset);
+  const endOffset = getTextOffset(editable, range.endContainer, range.endOffset);
+  if (startOffset === null || endOffset === null) {
+    return null;
+  }
+  const clone = editable.cloneNode(true) as HTMLElement;
+  const start = getTextPositionAtOffset(clone, startOffset);
+  const end = getTextPositionAtOffset(clone, endOffset);
+  if (!start || !end) {
+    return null;
+  }
+  const marker = clone.ownerDocument.createTextNode(replacement);
+  const cloneRange = clone.ownerDocument.createRange();
+  cloneRange.setStart(start.node, start.offset);
+  cloneRange.setEnd(end.node, end.offset);
+  cloneRange.deleteContents();
+  cloneRange.insertNode(marker);
+  removeNonTextContentFromRichEditor(clone);
+  normalizeSortValueAnnotationDom(clone);
+  normalizeEditableListDom(clone);
+  return normalizeMarkdownLists(normalizeEditorMarkdownWhitespace(turndown.turndown(getRichEditorSerializableHtml(clone))));
 }
 
 function applySortValueAnnotation(

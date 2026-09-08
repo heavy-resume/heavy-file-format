@@ -8,6 +8,9 @@ import {
   extractReusableTemplateVariablesFromSectionDefinition,
   extractReusableTemplateVariablesFromDefinition,
   validateReusableTemplateValues,
+  renameReusableTemplateVariable,
+  replaceReusableTemplateVariableOccurrenceWithText,
+  setReusableTemplateVariableType,
 } from '../src/reusable-template-values';
 import type { ComponentDefinition, SectionDefinition } from '../src/types';
 
@@ -117,6 +120,48 @@ test('detects conflicting reusable template variable types', () => {
   expect(() => extractReusableTemplateVariables('{% title | text %}\n{% title | block %}')).toThrow(
     'Template variable "title" uses conflicting types: text and block.'
   );
+});
+
+test('renames reusable template variables recursively without changing their filters', () => {
+  const value = {
+    title: '{% old-name %}',
+    nested: ['{% old-name | block %}', '{% other | text %}'],
+  };
+
+  renameReusableTemplateVariable(value, 'old-name', 'new-name');
+
+  expect(value).toEqual({
+    title: '{% new-name %}',
+    nested: ['{% new-name | block %}', '{% other | text %}'],
+  });
+});
+
+test('changes a reusable template variable type recursively without changing empty checks', () => {
+  const value = {
+    title: '{% details | text %}',
+    nested: ['{% details | block %}', '{% details | isempty %}', '{% other | text %}'],
+  };
+
+  setReusableTemplateVariableType(value, 'details', 'block');
+
+  expect(value).toEqual({
+    title: '{% details | block %}',
+    nested: ['{% details | block %}', '{% details | isempty %}', '{% other | text %}'],
+  });
+});
+
+test('converts one reusable template variable occurrence back to label text', () => {
+  const value = {
+    text: '{% title | text %} and {% title | text %}',
+    nested: { text: '{% title | text %}' },
+  };
+
+  replaceReusableTemplateVariableOccurrenceWithText(value, 'title', 1, 'Expected title');
+
+  expect(value).toEqual({
+    text: '{% title | text %} and Expected title',
+    nested: { text: '{% title | text %}' },
+  });
 });
 
 test('substitutes reusable template values recursively and preserves placeholders when values are blank', () => {

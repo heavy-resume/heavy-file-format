@@ -1256,5 +1256,26 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
 - The current built-in DB table implementation uses a gzip-compressed SQLite tail payload appended after the textual HVY body.
 - The current reference app can author and round-trip the plugin metadata, but it does not yet read or write the binary tail runtime.
 - Plugin editor UIs can reuse the host text editor with `ctx.textEditor.mount({ value, onChange })`. The returned element uses the same rich text toolbar, Markdown conversion, paste handling, and caret-preserving input behavior as normal HVY text components; plugins remain responsible for persisting changes through `ctx.setText`, `ctx.setConfig`, or their own `onChange` callback.
+- Plugins can reuse document component templates through `ctx.templates.components`. A plugin stores only its template choice and values, mounts the shared value form, and renders a derived HVY component without creating a nested serialized document tree:
+
+  ```js
+  const selection = {
+    template: String(ctx.block.schema.pluginConfig.template || ''),
+    flavor: String(ctx.block.schema.pluginConfig.flavor || '') || undefined,
+  };
+  const values = { ...(ctx.block.schema.pluginConfig.values || {}) };
+  const form = ctx.templates.components.mountValues({
+    ...selection,
+    values,
+    onChange(nextValues) {
+      ctx.setConfig({ values: nextValues });
+      preview.update({ ...selection, values: nextValues });
+    },
+  });
+  const preview = ctx.templates.components.render({ ...selection, values });
+  element.append(form.element, preview.element);
+  ```
+
+  `list()` exposes available templates and flavors, `variables(selection)` describes the required fields, and `materialize(options)` returns a fresh filled `VisualBlock` clone when a plugin needs the derived value directly. Plugins should call each returned instance's `unmount()` during their own cleanup.
 - The built-in `hvy.editable-text` plugin uses that editor as a permanently visible writable surface in Viewer mode. Its Markdown body is stored in `plugin.txt`; `pluginConfig.placeholder` optionally controls its empty-state prompt.
 - See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.

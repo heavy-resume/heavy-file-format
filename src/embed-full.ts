@@ -521,7 +521,7 @@ function ensureRenderers(): void {
       get crossDocumentLinksEnabled() { return state.crossDocumentLinksEnabled; },
       get responsivePreview() { return state.responsivePreview; },
       get mobileAdjustmentMode() { return state.editorMode === 'mobile-adjustment'; },
-      get editingReusableDefinition() { return state.reusableDefinitionEditModal?.mode === 'edit'; },
+      get editingReusableDefinition() { return Boolean(state.reusableDefinitionEditModal); },
       get openTemplateDefinitionKeys() { return state.openTemplateDefinitionKeys; },
       get descriptionPopulate() { return state.descriptionPopulate; },
       get openTextLineStyleName() { return state.openTextLineStyleName; },
@@ -1680,6 +1680,20 @@ export type {
   HvySerializedEmbeddingIndexReadOptions,
 } from './chat/embedding-context';
 export type { HvyDocumentChangeCallback, HvyDocumentChangeEvent, HvyDocumentChangeSource } from './document-change';
+export type {
+  HvyPlugin,
+  HvyPluginInput,
+  HvyPluginContext,
+  HvyPluginInstance,
+  HvyPluginComponentTemplateFlavorInfo,
+  HvyPluginComponentTemplateInfo,
+  HvyPluginComponentTemplateSelection,
+  HvyPluginComponentTemplateRenderOptions,
+  HvyPluginComponentTemplateRenderInstance,
+  HvyPluginComponentTemplateValuesOptions,
+  HvyPluginComponentTemplateValuesInstance,
+  HvyPluginComponentTemplatesApi,
+} from './plugins/types';
 export type {
   HvyPdfExportOptions,
   HvyPdfExportPlan,

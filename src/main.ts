@@ -510,7 +510,7 @@ editorRenderer = createEditorRenderer(
       return state.editorMode === 'mobile-adjustment';
     },
     get editingReusableDefinition() {
-      return state.reusableDefinitionEditModal?.mode === 'edit';
+      return Boolean(state.reusableDefinitionEditModal);
     },
     get openTemplateDefinitionKeys() {
       return state.openTemplateDefinitionKeys;

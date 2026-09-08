@@ -4,6 +4,7 @@ import { getComponentDefs, getReusableNameFromSectionKey, isBuiltinComponent, re
 import { findSectionByKey, visitBlocks } from './section-ops';
 import { cloneReusableBlock, cloneReusableSchema, getReusableTemplate, getReusableTemplateByName, cloneReusableSection } from './document-factory';
 import type { ComponentDefinition } from './types';
+import { stringify as stringifyYaml } from 'yaml';
 
 export function findReusableOwner(sectionKey: string, blockId: string): VisualBlock | null {
   const reusableName = getReusableNameFromSectionKey(sectionKey);
@@ -260,6 +261,7 @@ function saveReusableComponent(
   state.selectedReusableComponentName = name;
   block.schema.component = name;
   deps.closeModal();
+  openSavedReusableDefinition('component', defs.findIndex((definition) => definition.name === name));
   getRenderApp()();
   getRefreshReaderPanels()();
 }
@@ -287,7 +289,23 @@ function saveReusableSection(
   }
   state.document.meta.section_defs = defs;
   deps.closeModal();
+  openSavedReusableDefinition('section', defs.findIndex((definition) => definition.name === name));
   getRenderApp()();
+}
+
+function openSavedReusableDefinition(kind: 'component' | 'section', index: number): void {
+  const definition = kind === 'component' ? getComponentDefs()[index] : getSectionDefs()[index];
+  if (!definition || index < 0) return;
+  const raw = stringifyYaml(definition).trimEnd();
+  state.reusableDefinitionEditModal = {
+    kind,
+    index,
+    originalRaw: raw,
+    error: null,
+    activeFlavorIndex: null,
+    isNew: false,
+    historyBeforeDraft: { history: [...state.history], future: [...state.future] },
+  };
 }
 
 function saveReusableSectionFlavor(

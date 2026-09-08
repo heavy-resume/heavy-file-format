@@ -1,6 +1,5 @@
 import './reader.css';
 import './sidebar.css';
-import { stringify as stringifyYaml } from 'yaml';
 import { renderCodeReader } from '../editor/components/code/code';
 import { renderButtonReader } from '../editor/components/button/button';
 import { renderComponentListReader } from '../editor/components/component-list/component-list';
@@ -39,10 +38,10 @@ import { defaultBlockSchema, getReusableTemplate, schemaFromUnknown } from '../d
 import { visitBlocksInList } from '../section-ops';
 import { getReaderSectionExpandedOverride } from '../navigation';
 import { parseAttachedComponentBlocks } from '../plugins/db-table-fragment';
-import { getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
+import { getAvailableOutputGenerators, getOutputGenerator, SCRIPTING_PLUGIN_ID } from '../plugins/registry';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from '../component-defs';
 import { REUSABLE_SECTION_PREFIX } from '../state';
-import { extractReusableTemplateVariablesFromDefinition } from '../reusable-template-values';
+import { countReusableTemplateVariableOccurrences, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor } from '../reusable-template-values';
 import { filterTemplateVisibleSections, isBlockHiddenByTemplateMarker, isSectionHiddenByTemplateMarker } from '../template-hide';
 import { closeIcon, plusIcon } from '../icons';
 import { ENABLE_PDF_TEMPLATE_IMPORT_STEPPER } from '../pdf-export/action';
@@ -1897,17 +1896,33 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       const modal = state.reusableDefinitionEditModal;
       const componentDefinitions = getComponentDefsFromMeta(state.documentMeta);
       const sectionDefinitions = getSectionDefsFromMeta(state.documentMeta);
-      const definition = modal.kind === 'component' ? componentDefinitions[modal.index] : sectionDefinitions[modal.index];
+      const componentDefinition = modal.kind === 'component' ? componentDefinitions[modal.index] : null;
+      const sectionDefinition = modal.kind === 'section' ? sectionDefinitions[modal.index] : null;
+      const definition = componentDefinition ?? sectionDefinition;
       if (!definition) {
         return '';
       }
       const title = modal.kind === 'component'
         ? `Edit ${definition.name || 'Component Template'}`
         : `Edit ${definition.name || 'Section Template'}`;
-      const rawDraft = modal.rawDraft || stringifyYaml(definition).trimEnd();
-      const componentTemplate = modal.kind === 'component' && componentDefinitions[modal.index]
-        ? getReusableTemplate(componentDefinitions[modal.index])
+      const activeFlavorIndex = modal.activeFlavorIndex ?? null;
+      const componentFlavor = activeFlavorIndex === null ? null : componentDefinition?.flavors?.[activeFlavorIndex] ?? null;
+      const sectionFlavor = activeFlavorIndex === null ? null : sectionDefinition?.flavors?.[activeFlavorIndex] ?? null;
+      let componentTemplate = componentDefinition
+        ? componentFlavor
+          ? componentFlavor.template ?? (componentFlavor.schema ? {
+              id: `template-flavor-${modal.index}-${activeFlavorIndex}`,
+              text: '',
+              schema: schemaFromUnknown({ ...(componentFlavor.schema ?? {}), component: definition.name }, new WeakSet<object>(), state.documentMeta),
+              schemaMode: false,
+            } : null)
+          : modal.isNew && !componentDefinition.template && !componentDefinition.schema
+            ? null
+            : getReusableTemplate(componentDefinition)
         : null;
+      if (componentFlavor && componentTemplate && !componentFlavor.template) {
+        componentFlavor.template = componentTemplate;
+      }
       if (componentTemplate) {
         componentTemplate.schema = schemaFromUnknown(
           { ...(componentTemplate.schema as unknown as Record<string, unknown>), component: definition.name },
@@ -1915,38 +1930,63 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           state.documentMeta
         );
       }
-      const sectionTemplate = modal.kind === 'section' ? sectionDefinitions[modal.index]?.template ?? null : null;
-      const componentTemplateSectionKey = `${REUSABLE_SECTION_PREFIX}${definition.name}`;
+      const sectionTemplate = sectionFlavor?.template ?? sectionDefinition?.template ?? null;
+      const componentTemplateSectionKey = `${REUSABLE_SECTION_PREFIX}${definition.name}${activeFlavorIndex === null ? '' : `:flavor:${activeFlavorIndex}`}`;
       const sectionTemplateKey = sectionTemplate?.key || `section-def:${definition.name}`;
+      const activeVariables = componentDefinition
+        ? componentFlavor
+          ? extractReusableTemplateVariablesFromFlavor(componentFlavor, componentDefinition.templateVariables)
+          : extractReusableTemplateVariablesFromDefinition(componentDefinition)
+        : sectionFlavor
+          ? extractReusableTemplateVariablesFromSectionFlavor(sectionFlavor, sectionDefinition?.templateVariables)
+          : extractReusableTemplateVariablesFromSectionDefinition(sectionDefinition!);
+      const canAddFlavor = modal.kind === 'section' || Boolean(componentDefinition?.template);
+      const flavorOptions = [
+        `<option value="main"${activeFlavorIndex === null ? ' selected' : ''}>${deps.escapeHtml(definition.name)}</option>`,
+        ...(definition.flavors ?? []).map((flavor, index) => `<option value="${index}"${activeFlavorIndex === index ? ' selected' : ''}>${deps.escapeHtml(flavor.name || `${definition.name} ${index + 2}`)}</option>`),
+        `<option value="new"${canAddFlavor ? '' : ' disabled'}>New flavor…</option>`,
+      ].join('');
       return `
         <div id="modalRoot" class="modal-root">
-          <div class="modal-overlay" data-modal-action="save-reusable-definition-close"></div>
+          <div class="modal-overlay" data-modal-action="reusable-definition-cancel"></div>
           <section class="modal-panel reusable-definition-modal">
             <div class="modal-head">
               <h3>${deps.escapeHtml(title)}</h3>
               <div class="modal-head-actions">
-                <button type="button" class="ghost" data-modal-action="reusable-definition-mode">${modal.mode === 'raw' ? 'Edit' : 'HVY'}</button>
-                <button type="button" class="ghost remove-x" data-modal-action="save-reusable-definition-close" aria-label="Close ${deps.escapeAttr(title)}" title="Close">${closeIcon()}</button>
+                <button type="button" class="ghost remove-x" data-modal-action="reusable-definition-cancel" aria-label="Cancel ${deps.escapeAttr(title)}" title="Cancel">${closeIcon()}</button>
               </div>
             </div>
             ${modal.error ? `<div class="raw-editor-error" role="alert">${deps.escapeHtml(modal.error)}</div>` : ''}
-            ${modal.mode === 'raw'
-          ? `<label class="reusable-definition-raw-field">
-                  <span>Header Definition YAML</span>
-                  <textarea id="reusableDefinitionRawInput" rows="18" spellcheck="false">${deps.escapeHtml(rawDraft)}</textarea>
-                </label>`
-          : `<div class="reusable-definition-editor">
-                  ${componentTemplate
+            <label class="reusable-definition-flavor-picker"><span>Flavor</span><select data-field="builder-flavor-picker">${flavorOptions}</select></label>
+            ${activeFlavorIndex === null ? '' : `<div class="reusable-definition-flavor-settings">
+              <label><span>Description</span><input data-field="builder-flavor-description" value="${deps.escapeAttr((componentFlavor ?? sectionFlavor)?.description ?? '')}" /></label>
+              <button type="button" class="ghost" data-modal-action="reusable-definition-flavor-left"${activeFlavorIndex === 0 ? ' disabled' : ''}>Move left</button>
+              <button type="button" class="ghost" data-modal-action="reusable-definition-flavor-right"${activeFlavorIndex >= (definition.flavors?.length ?? 0) - 1 ? ' disabled' : ''}>Move right</button>
+              <button type="button" class="danger" data-modal-action="reusable-definition-flavor-remove">Remove Flavor</button>
+            </div>`}
+            <div class="reusable-definition-editor">
+                  ${componentDefinition
             ? `<div class="reusable-definition-hvy-surface">
-                        ${deps.renderBlockContentEditor(componentTemplateSectionKey, componentTemplate)}
-                        <details class="meta-expandable-field">
-                          <summary><span>Template Meta</span></summary>
-                          ${deps.renderBlockMetaFields(componentTemplateSectionKey, componentTemplate)}
-                        </details>
+                        <div class="editor-grid reusable-definition-identity">
+                          <label><span>Name</span><input data-field="${componentFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(componentFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
+                        </div>
+                        ${componentTemplate ? `<div class="reusable-definition-component-head"><strong>Component</strong><button type="button" class="ghost" data-action="open-component-meta" data-section-key="${deps.escapeAttr(componentTemplateSectionKey)}" data-block-id="${deps.escapeAttr(componentTemplate.id)}">Meta</button></div>${deps.renderEditorBlock(componentTemplateSectionKey, componentTemplate)}` : `<div class="ghost-section-card add-ghost compact-add-component-ghost reusable-definition-empty-component">${renderAddComponentPicker({
+                          id: `reusable-definition:${definition.name}`,
+                          action: 'reusable-definition-add-component',
+                          sectionKey: componentTemplateSectionKey,
+                          label: 'Section component type',
+                          componentFilter: (componentName) => componentName !== definition.name,
+                          componentDisabledReason: (componentName) => componentName === definition.name ? 'A template cannot use itself as its base component' : null,
+                        }, {
+                          escapeAttr: deps.escapeAttr,
+                          escapeHtml: deps.escapeHtml,
+                          getComponentDefs: () => getComponentDefsFromMeta(state.documentMeta),
+                        })}</div>`}
                       </div>`
             : ''}
                   ${sectionTemplate
             ? `<div class="reusable-definition-section-surface">
+                        <label><span>Name</span><input data-field="${sectionFlavor ? 'builder-flavor-name' : 'builder-definition-name'}" value="${deps.escapeAttr(sectionFlavor?.name ?? modal.draftName ?? definition.name)}" /></label>
                         <label>
                           <span>Section Title</span>
                           <input data-field="section-title" data-section-key="${deps.escapeAttr(sectionTemplateKey)}" value="${deps.escapeAttr(sectionTemplate.title)}" />
@@ -1959,7 +1999,25 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
                         ${sectionTemplate.blocks.map((block) => deps.renderEditorBlock(sectionTemplateKey, block)).join('')}
                       </div>`
             : ''}
-                </div>`}
+                  <aside class="reusable-template-variable-panel">
+                    <div class="meta-panel-head"><strong>Template Values</strong><span class="muted">Select text, then choose Use as…</span></div>
+                    ${activeVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : activeVariables.map((variable) => {
+                      const occurrenceCount = countReusableTemplateVariableOccurrences(componentTemplate ?? sectionTemplate, variable.name);
+                      return `<div class="template-variable-card">
+                      <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}" /></label>
+                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
+                      <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}" /></label>
+                      <label><span>Generator</span><select data-field="builder-template-variable-generator" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="">None</option>${getAvailableOutputGenerators().map((generator) => `<option value="${deps.escapeAttr(generator.key)}"${generator.key === variable.generator ? ' selected' : ''}>${deps.escapeHtml(generator.label || generator.key)}</option>`).join('')}</select></label>
+                      <label><span>Generator Label</span><input data-field="builder-template-variable-generator-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.generatorLabel ?? '')}" placeholder="Generate" /></label>
+                      <div class="template-variable-occurrences"><span class="muted">Occurrences</span>${Array.from({ length: occurrenceCount }, (_, occurrenceIndex) => `<span class="template-variable-occurrence"><button type="button" class="ghost" data-modal-action="reusable-definition-variable-find" data-variable-name="${deps.escapeAttr(variable.name)}" data-occurrence-index="${occurrenceIndex}">Find ${occurrenceIndex + 1}</button><button type="button" class="ghost remove-x" data-modal-action="reusable-definition-variable-unmark" data-variable-name="${deps.escapeAttr(variable.name)}" data-occurrence-index="${occurrenceIndex}" aria-label="Convert occurrence ${occurrenceIndex + 1} to text" title="Convert occurrence ${occurrenceIndex + 1} to text">${closeIcon()}</button></span>`).join('')}</div>
+                    </div>`;
+                    }).join('')}
+                  </aside>
+                </div>
+            <div class="link-inline-actions reusable-save-actions">
+              <button type="button" class="ghost" data-modal-action="reusable-definition-cancel">Cancel</button>
+              <button type="button" class="secondary" data-modal-action="save-reusable-definition-close">Save Template</button>
+            </div>
           </section>
         </div>
       `;

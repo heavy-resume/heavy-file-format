@@ -4,7 +4,7 @@ test('narrow nested component editors use stacked modal contexts with fixed acti
   test.setTimeout(5_000);
   page.setDefaultTimeout(1_000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -35,8 +35,8 @@ hvy_version: 0.1
    <!--hvy:text {}-->
     Outer third
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.locator('.editor-block-passive', { hasText: 'Nested expected result' }).last().click();
   await page.locator('.editor-block-passive', { hasText: 'Outer second' }).last().dispatchEvent('click');
@@ -103,7 +103,7 @@ test('component editor modal body scrolls while Cancel and Done remain outside i
   test.setTimeout(5_000);
   page.setDefaultTimeout(1_000);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -120,8 +120,8 @@ ${Array.from({ length: 80 }, (_, index) => `    Expected result line ${index + 1
    <!--hvy:text {}-->
     Short
 `);
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await page.getByRole('button', { name: 'Basic' }).click();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Basic', exact: true }).click();
   await page.getByRole('button', { name: 'Phone 390' }).click();
   await page.locator('.reader-grid-cell > .editor-block-passive', { hasText: 'Expected result line 1' }).last().click();
   await page.getByRole('button', { name: 'Edit text' }).click();
@@ -159,4 +159,82 @@ ${Array.from({ length: 80 }, (_, index) => `    Expected result line ${index + 1
   await expect.poll(async () => Math.abs(
     await editorTree.evaluate((element) => element.scrollTop) - scrollTopBeforeCancel
   )).toBeLessThanOrEqual(2);
+});
+
+test('narrow component editors open from a three-column template grid', async ({ page }) => {
+  test.setTimeout(5_000);
+  page.setDefaultTimeout(1_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: Fake Three Column
+    baseType: grid
+    template:
+      id: fake-three-column
+      schema:
+        component: grid
+        gridColumns: 3
+        gridStackWidth: never
+        gridItems:
+          - id: first
+            block:
+              id: first-text
+              text: First
+              schema:
+                component: text
+          - id: second
+            block:
+              id: action-marker
+              schema:
+                component: location-marker
+                locationMarkerName: actions
+          - id: third
+            block:
+              id: third-text
+              text: Third
+              schema:
+                component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.getByRole('button', { name: 'Document Meta', exact: true }).click();
+  await page.locator('.component-def', { hasText: 'Fake Three Column' }).getByRole('button', { name: 'Edit Template' }).click();
+
+  const builder = page.locator('.reusable-definition-modal');
+  await builder.locator('.editor-block-passive[data-block-id="first-text"]').click();
+  await builder.getByRole('button', { name: 'Edit text' }).click();
+  const textEditor = page.getByRole('dialog', { name: 'Edit text' });
+  await expect(textEditor).toBeVisible();
+  const textEditorLayout = await textEditor.evaluate((panel) => {
+    const toolbar = panel.querySelector<HTMLElement>('.rich-toolbar');
+    const editable = panel.querySelector<HTMLElement>('[contenteditable="true"]');
+    const builderPanel = document.querySelector<HTMLElement>('.reusable-definition-modal');
+    if (!toolbar || !editable || !builderPanel) return null;
+    return {
+      toolbarBottom: toolbar.getBoundingClientRect().bottom,
+      editableTop: editable.getBoundingClientRect().top,
+      modalFontFamily: getComputedStyle(panel).fontFamily,
+      builderFontFamily: getComputedStyle(builderPanel).fontFamily,
+    };
+  });
+  expect(textEditorLayout).not.toBeNull();
+  expect(textEditorLayout!.toolbarBottom).toBeLessThanOrEqual(textEditorLayout!.editableTop);
+  expect(textEditorLayout!.modalFontFamily).toBe(textEditorLayout!.builderFontFamily);
+  await textEditor.getByRole('button', { name: 'Close' }).click();
+  await expect(builder).toBeVisible();
+
+  await builder.locator('.editor-block-passive[data-block-id="action-marker"]').click();
+  await builder.getByRole('button', { name: 'Edit location-marker' }).click();
+  const markerEditor = page.getByRole('dialog', { name: 'Edit location-marker' });
+  await expect(markerEditor).toBeVisible();
+  await expect(markerEditor.getByRole('textbox', { name: 'Marker name' })).toBeVisible();
+  await markerEditor.locator('[data-field="block-location-marker-name"]').fill('primary-actions');
+  await markerEditor.getByRole('button', { name: 'Close' }).click();
+  await expect(builder.locator('[data-field="block-location-marker-name"]')).toHaveValue('primary-actions');
 });

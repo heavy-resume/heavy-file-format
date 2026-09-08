@@ -560,6 +560,9 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
       return '';
     }
     const base = deps.resolveBaseComponent(block.schema.component);
+    if (base === 'location-marker') {
+      return '';
+    }
     if (!options.suppressAiEditorDelegation && state.currentView === 'ai' && (isAiEditorHostSection(section.key) || isAiEditorHostBlock(section.key, block.id))) {
       return deps.renderEditorBlock(section.key, block);
     }

@@ -217,6 +217,7 @@ function getPickerGroups(componentDefs: ComponentDefinition[]): PickerGroup[] {
       items: [
         ...(areTablesEnabled() ? [{ value: 'table', label: 'Table', description: 'a static table of information' }] : []),
         { value: 'xref-card', label: 'Reference', description: 'reference another document item' },
+        { value: 'location-marker', label: 'Component Location', description: 'mark where plugin-supplied components can appear' },
       ],
     },
   ];

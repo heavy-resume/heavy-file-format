@@ -127,4 +127,78 @@ describe('plugin component template helpers', () => {
       values: { title: '' },
     }).text).toBe('');
   });
+
+  test('discovers named locations and substitutes fresh component clones', () => {
+    const { document, definition } = createTemplateDocument();
+    const firstMarker = {
+      id: 'template-actions-one',
+      text: '',
+      schema: { ...defaultBlockSchema('location-marker'), locationMarkerName: 'actions' },
+      schemaMode: false,
+    };
+    const secondMarker = {
+      id: 'template-actions-two',
+      text: '',
+      schema: { ...defaultBlockSchema('location-marker'), locationMarkerName: 'actions' },
+      schemaMode: false,
+    };
+    definition.template!.schema.containerBlocks.push(firstMarker, secondMarker);
+    const replacement = {
+      id: 'plugin-action',
+      text: 'Run action',
+      schema: defaultBlockSchema('text'),
+      schemaMode: false,
+    };
+    const api = createPluginComponentTemplatesApi({
+      document,
+      section: {} as never,
+      sectionKey: 'fake-section',
+      helpers: {} as never,
+      observeLinks: () => {},
+      resolveGenerator: async () => '',
+    });
+
+    expect(api.locations({ template: 'fake-card' })).toEqual(['actions']);
+    const result = api.materialize({
+      template: 'fake-card',
+      values: { title: 'Expected title', details: 'Expected details' },
+      locations: { actions: replacement },
+    });
+    const inserted = result.schema.containerBlocks.slice(-2);
+    expect(inserted.map((block) => block.text)).toEqual(['Run action', 'Run action']);
+    expect(inserted[0]?.id).not.toBe('plugin-action');
+    expect(inserted[1]?.id).not.toBe('plugin-action');
+    expect(inserted[0]?.id).not.toBe(inserted[1]?.id);
+    expect(definition.template!.schema.containerBlocks.slice(-2)).toEqual([firstMarker, secondMarker]);
+  });
+
+  test('uses flavor-specific location markers', () => {
+    const { document, definition } = createTemplateDocument();
+    definition.flavors![0]!.template = {
+      id: 'compact-root',
+      text: '',
+      schema: {
+        ...defaultBlockSchema('container'),
+        component: 'fake-card',
+        containerBlocks: [{
+          id: 'compact-footer',
+          text: '',
+          schema: { ...defaultBlockSchema('location-marker'), locationMarkerName: 'footer' },
+          schemaMode: false,
+        }],
+      },
+      schemaMode: false,
+    };
+    const api = createPluginComponentTemplatesApi({
+      document,
+      section: {} as never,
+      sectionKey: 'fake-section',
+      helpers: {} as never,
+      observeLinks: () => {},
+      resolveGenerator: async () => '',
+    });
+
+    expect(api.locations({ template: 'fake-card' })).toEqual([]);
+    expect(api.locations({ template: 'fake-card', flavor: 'compact' })).toEqual(['footer']);
+  });
 });

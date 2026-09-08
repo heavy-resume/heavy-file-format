@@ -412,6 +412,17 @@ export function bindInputMisc(app: HTMLElement): void {
       return;
     }
 
+    if (field === 'block-location-marker-name' && target instanceof HTMLInputElement) {
+      const context = resolveBlockContext(target);
+      if (!context) {
+        return;
+      }
+      context.block.schema.locationMarkerName = target.value;
+      syncReusableTemplateForBlock(sectionKey, context.block.id);
+      refreshReaderPanelsOutsideActiveEditor(target);
+      return;
+    }
+
     if (field === 'block-container-border' && target instanceof HTMLInputElement) {
       const context = resolveBlockContext(target);
       if (!context) {

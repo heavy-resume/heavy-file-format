@@ -37,7 +37,7 @@ export function getReusableNameFromSectionKey(sectionKey: string): string | null
 }
 
 export function getComponentOptions(): string[] {
-  const builtins = ['text', 'code', 'image', 'carousel', 'button', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card'];
+  const builtins = ['text', 'code', 'image', 'carousel', 'button', 'expandable', 'container', 'component-list', 'grid', 'plugin', 'xref-card', 'location-marker'];
   if (areTablesEnabled()) {
     builtins.splice(5, 0, 'table');
   }
@@ -52,7 +52,7 @@ export function isBuiltinComponent(componentName: string): boolean {
 }
 
 export function isBuiltinComponentName(componentName: string): boolean {
-  return ['text', 'code', 'image', 'carousel', 'button', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card', 'encrypted'].includes(componentName);
+  return ['text', 'code', 'image', 'carousel', 'button', 'expandable', 'table', 'container', 'component-list', 'grid', 'plugin', 'xref-card', 'location-marker', 'encrypted'].includes(componentName);
 }
 
 export function renderComponentOptions(selected: string): string {

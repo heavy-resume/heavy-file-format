@@ -669,6 +669,7 @@ Component-owned fields are:
 - `image`: `imageFile`, `imageAlt`, `caption`, `allowDocumentImageReuse`
 - `carousel`: `carouselImages`, `allowDocumentImageReuse`, `carouselDurationMs`, `carouselPauseOnHover`, `carouselShowControls`, `carouselShowIndicators`, `carouselShowFrame`
 - `button`: `buttonLabel`, `buttonAction`, `buttonVisibleScript`, `buttonSourceScript`, `buttonPrompt`, `buttonTargetScript`, `buttonInputCharLimit`, `buttonOutputCharLimit`, `buttonPositionTargetId`, `buttonCss`
+- `location-marker`: `locationMarkerName`
 
 Fields from other component schemas MUST NOT be emitted. Readers SHOULD ignore fields that do not belong to the selected schema shape.
 
@@ -808,6 +809,14 @@ For inline HVY serialization, stub-pane and content-pane CSS/description metadat
 In the in-memory/schema form used by `component_defs`, these pane-level styles and descriptions are stored as `expandableStubCss`, `expandableContentCss`, `expandableStubDescription`, and `expandableContentDescription`. The expandable block's own `css` and `description` still apply to the outer expandable component wrapper.
 
 Serialized block objects SHOULD contain document data only. Editor-only UI state, such as whether a schema editor is open for a block, MUST NOT be emitted.
+
+Location-marker blocks name insertion points in component templates for derived plugin output:
+
+```markdown
+<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->
+```
+
+`locationMarkerName` SHOULD be a non-empty string and is matched exactly. A template MAY repeat a name when the same plugin-supplied component should appear in multiple places. Authoring tools SHOULD show location markers while editing so their names and positions are apparent. Readers MUST render an unresolved location marker as no visible output. Location markers do not create plugin regions or nested plugin serialization; they remain ordinary blocks in the template definition, and any substitution occurs only in a plugin's derived materialized clone.
 
 Preserve and round-trip these fields. When emitting new documents, prefer `hvy:expandable:stub` and `hvy:expandable:content` inline directives over `expandableStubBlocks`/`expandableContentBlocks`; the container object form is used in `component_defs` schemas where inline directives are not applicable.
 
@@ -1686,7 +1695,7 @@ to the plugin. The editor context MUST include:
 - `detailLevel`: a number indicating how much editing UI the host is asking the
   plugin to show.
 
-The plugin context MAY also expose document component-template helpers. Such helpers list `component_defs`, inspect variables, clone and fill a selected main template or flavor, render the derived component through the ordinary HVY reader, and mount the host's normal template-value form. Plugins remain responsible for persisting their selected template, flavor, and values in `pluginConfig` or their text body. A materialized template used this way is derived plugin output: it MUST NOT be inserted into or serialized as a nested document tree, MUST NOT mutate the definition, and is not automatically searchable document content. Plugins SHOULD use their visual-description capability when that derived output needs search or agent visibility.
+The plugin context MAY also expose document component-template helpers. Such helpers list `component_defs`, inspect variables and named location markers, clone and fill a selected main template or flavor, render the derived component through the ordinary HVY reader, and mount the host's normal template-value form. A plugin MAY supply a component keyed by `locationMarkerName`; materialization replaces each matching marker in the derived tree with a fresh clone of that component, including markers nested in containers, grids, component lists, and expandable panes. Missing substitutions remain unresolved and therefore render no visible output. The source template and plugin-supplied component MUST NOT be mutated. Plugins remain responsible for persisting their selected template, flavor, values, and any configuration needed to recreate location substitutions in `pluginConfig` or their text body. A materialized template used this way is derived plugin output: it MUST NOT be inserted into or serialized as a nested document tree and is not automatically searchable document content. Plugins SHOULD use their visual-description capability when that derived output needs search or agent visibility.
 
 The conventional `detailLevel` meanings are:
 

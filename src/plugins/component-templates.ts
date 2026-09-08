@@ -21,6 +21,7 @@ import type {
   HvyPluginComponentTemplatesApi,
 } from './types';
 import type { HvyOutputGeneratorResponse } from './types';
+import { visitBlocksInList } from '../section-ops';
 
 interface ComponentTemplateApiDependencies {
   document: VisualDocument;
@@ -35,6 +36,7 @@ export function createPluginComponentTemplatesApi(deps: ComponentTemplateApiDepe
   return {
     list: () => listComponentTemplates(deps.document),
     variables: (selection) => getSelection(deps.document, selection).variables,
+    locations: (selection) => getComponentTemplateLocations(deps.document, selection),
     materialize: (options) => materializeComponentTemplate(deps.document, options),
     render: (options) => mountRenderedTemplate(deps, options),
     mountValues: (options) => mountTemplateValues(deps, options),
@@ -60,7 +62,74 @@ export function materializeComponentTemplate(
 ): VisualBlock {
   const selected = getSelection(document, options);
   validateReusableTemplateValues(selected.variables, options.values);
-  return applyReusableTemplateValues(cloneTemplate(document, selected.definition, selected.flavor), options.values, selected.variables);
+  const materialized = applyReusableTemplateValues(
+    cloneTemplate(document, selected.definition, selected.flavor),
+    options.values,
+    selected.variables
+  );
+  return replaceComponentTemplateLocations(materialized, options.locations ?? {}, document);
+}
+
+export function getComponentTemplateLocations(
+  document: VisualDocument,
+  selection: HvyPluginComponentTemplateSelection
+): string[] {
+  const selected = getSelection(document, selection);
+  const template = selected.flavor?.template ?? selected.definition.template;
+  if (!template) {
+    const schema = selected.flavor?.schema ?? selected.definition.schema;
+    if (!schema) return [];
+    return collectLocationMarkerNames(parseVisualBlock({
+      text: '',
+      schema: { ...schema, component: selected.definition.name },
+    }, new WeakSet<object>(), document.meta));
+  }
+  return collectLocationMarkerNames(template);
+}
+
+function collectLocationMarkerNames(template: VisualBlock): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  visitBlocksInList([template], (block) => {
+    if (block.schema.kind !== 'location-marker') return;
+    const name = block.schema.locationMarkerName.trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  });
+  return names;
+}
+
+function replaceComponentTemplateLocations(
+  block: VisualBlock,
+  locations: Record<string, VisualBlock>,
+  document: VisualDocument
+): VisualBlock {
+  if (block.schema.kind === 'location-marker') {
+    const replacement = locations[block.schema.locationMarkerName.trim()];
+    return replacement ? cloneReusableBlockFromMeta(replacement, document.meta) : block;
+  }
+  if (block.schema.kind === 'container') {
+    block.schema.containerBlocks = block.schema.containerBlocks.map((child) =>
+      replaceComponentTemplateLocations(child, locations, document));
+  }
+  if (block.schema.kind === 'component-list') {
+    block.schema.componentListBlocks = block.schema.componentListBlocks.map((child) =>
+      replaceComponentTemplateLocations(child, locations, document));
+  }
+  if (block.schema.kind === 'grid') {
+    block.schema.gridItems = block.schema.gridItems.map((item) => ({
+      ...item,
+      block: replaceComponentTemplateLocations(item.block, locations, document),
+    }));
+  }
+  if (block.schema.kind === 'expandable') {
+    block.schema.expandableStubBlocks.children = block.schema.expandableStubBlocks.children.map((child) =>
+      replaceComponentTemplateLocations(child, locations, document));
+    block.schema.expandableContentBlocks.children = block.schema.expandableContentBlocks.children.map((child) =>
+      replaceComponentTemplateLocations(child, locations, document));
+  }
+  return block;
 }
 
 function getSelection(document: VisualDocument, selection: HvyPluginComponentTemplateSelection): {
@@ -108,7 +177,7 @@ function mountRenderedTemplate(
 ): HvyPluginComponentTemplateRenderInstance {
   const element = document.createElement('div');
   element.className = 'hvy-plugin-template-render hvy-link-observer-surface';
-  let options = { ...initial, values: { ...initial.values } };
+  let options = { ...initial, values: { ...initial.values }, locations: { ...(initial.locations ?? {}) } };
   let block = materializeComponentTemplate(deps.document, options);
 
   const refresh = (): void => {
@@ -125,7 +194,7 @@ function mountRenderedTemplate(
     element,
     getBlock: () => block,
     update(next) {
-      options = { ...next, values: { ...next.values } };
+      options = { ...next, values: { ...next.values }, locations: { ...(next.locations ?? {}) } };
       refresh();
     },
     refresh,

@@ -39,6 +39,7 @@ export type BuiltinComponentName =
   | 'image'
   | 'carousel'
   | 'button'
+  | 'location-marker'
   | 'encrypted'
   | 'plugin'
   | 'xref-card';
@@ -176,6 +177,11 @@ export interface ButtonBlockSchema extends BaseBlockSchema {
   buttonCss: string;
 }
 
+export interface LocationMarkerBlockSchema extends BaseBlockSchema {
+  kind: 'location-marker';
+  locationMarkerName: string;
+}
+
 export interface EncryptedBlockSchema extends BaseBlockSchema {
   kind: 'encrypted';
   keyId: string;
@@ -209,6 +215,7 @@ export type ComponentBlockSchema =
   | ImageBlockSchema
   | CarouselBlockSchema
   | ButtonBlockSchema
+  | LocationMarkerBlockSchema
   | EncryptedBlockSchema
   | PluginBlockSchema
   | XrefCardBlockSchema;
@@ -270,6 +277,7 @@ interface RuntimeSchemaFieldAccess {
   buttonOutputCharLimit: number;
   buttonPositionTargetId: string;
   buttonCss: string;
+  locationMarkerName: string;
   keyId: string;
   encryptedAttachmentId: string;
   encryptedBlock: VisualBlock | null;

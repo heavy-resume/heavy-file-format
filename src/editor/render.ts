@@ -16,6 +16,7 @@ import { renderTableEditor } from './components/table/table';
 import { renderTemplateValueTokens, renderTextEditor } from './components/text/text';
 import { renderTextToolbarDismissButton } from './components/text/text-toolbar-layout';
 import { renderXrefCardEditor } from './components/xref-card/xref-card';
+import { renderLocationMarkerEditor, renderLocationMarkerPreview } from './components/location-marker/location-marker';
 import { renderDocumentAttachmentManager } from './components/document-attachments/document-attachments';
 import { renderDeleteControl } from './components/delete-control/delete-control';
 import { getComponentListAddLabel, getComponentListEditLabel, hasComponentListItems } from './components/component-list/component-list-labels';
@@ -1418,6 +1419,10 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return `<div class="editor-passive-empty-text">Button: ${deps.escapeHtml(block.schema.buttonLabel || 'Generate')}${deps.escapeHtml(targetSummary)}</div>`;
     }
 
+    if (base === 'location-marker') {
+      return renderLocationMarkerPreview(block, deps.getComponentRenderHelpers());
+    }
+
     if (base === 'image' && !block.schema.imageFile.trim()) {
       return `<div class="image-reader">
         <div class="image-empty image-empty-editable muted">
@@ -2112,6 +2117,9 @@ export function createEditorRenderer(state: EditorRenderState, deps: EditorRende
       return state.showAdvancedEditor || block.schema.buttonPositionTargetId.trim().length > 0
         ? renderButtonAdvancedEditor(sectionKey, block)
         : renderButtonEditor(sectionKey, block, helpers);
+    }
+    if (component === 'location-marker') {
+      return renderLocationMarkerEditor(sectionKey, block, helpers);
     }
     if (component === 'container') {
       return renderContainerEditor(sectionKey, block, helpers);

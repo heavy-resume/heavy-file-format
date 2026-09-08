@@ -125,6 +125,12 @@ export function defaultBlockSchema(component = 'text', baseComponent: BuiltinCom
         buttonPositionTargetId: '',
         buttonCss: '',
       } as unknown as BlockSchema;
+    case 'location-marker':
+      return {
+        ...base,
+        kind: 'location-marker',
+        locationMarkerName: '',
+      } as unknown as BlockSchema;
     case 'encrypted':
       return {
         ...base,
@@ -483,6 +489,11 @@ export function schemaFromUnknown(value: unknown, seen = new WeakSet<object>(), 
     schema.buttonOutputCharLimit = parsePositiveNumber(candidate.buttonOutputCharLimit, schema.buttonOutputCharLimit);
     schema.buttonPositionTargetId = typeof candidate.buttonPositionTargetId === 'string' ? candidate.buttonPositionTargetId : schema.buttonPositionTargetId;
     schema.buttonCss = typeof candidate.buttonCss === 'string' ? candidate.buttonCss : schema.buttonCss;
+  }
+  if (schema.kind === 'location-marker') {
+    schema.locationMarkerName = typeof candidate.locationMarkerName === 'string'
+      ? candidate.locationMarkerName
+      : schema.locationMarkerName;
   }
   if (schema.kind === 'encrypted') {
     schema.keyId = typeof candidate.keyId === 'string' ? candidate.keyId : schema.keyId;

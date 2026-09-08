@@ -1264,18 +1264,25 @@ HVY has a documented plugin block envelope plus a first plugin contract for `hvy
     flavor: String(ctx.block.schema.pluginConfig.flavor || '') || undefined,
   };
   const values = { ...(ctx.block.schema.pluginConfig.values || {}) };
+  const locations = {};
+  if (ctx.templates.components.locations(selection).includes('primary-actions')) {
+    locations['primary-actions'] = ctx.templates.components.materialize({
+      template: 'action-button',
+      values: { label: 'Run' },
+    });
+  }
   const form = ctx.templates.components.mountValues({
     ...selection,
     values,
     onChange(nextValues) {
       ctx.setConfig({ values: nextValues });
-      preview.update({ ...selection, values: nextValues });
+      preview.update({ ...selection, values: nextValues, locations });
     },
   });
-  const preview = ctx.templates.components.render({ ...selection, values });
+  const preview = ctx.templates.components.render({ ...selection, values, locations });
   element.append(form.element, preview.element);
   ```
 
-  `list()` exposes available templates and flavors, `variables(selection)` describes the required fields, and `materialize(options)` returns a fresh filled `VisualBlock` clone when a plugin needs the derived value directly. Plugins should call each returned instance's `unmount()` during their own cleanup.
+  `list()` exposes available templates and flavors, `variables(selection)` describes the required fields, `locations(selection)` returns the selected template's unique location-marker names, and `materialize(options)` returns a fresh filled `VisualBlock` clone when a plugin needs the derived value directly. The optional `locations` map replaces matching markers with fresh component clones. Plugins should call each returned instance's `unmount()` during their own cleanup.
 - The built-in `hvy.editable-text` plugin uses that editor as a permanently visible writable surface in Viewer mode. Its Markdown body is stored in `plugin.txt`; `pluginConfig.placeholder` optionally controls its empty-state prompt.
 - See [`examples/embed-text-editor-plugin.html`](examples/embed-text-editor-plugin.html) for an isolated embedded editor that places a normal text component next to a plugin using `ctx.textEditor.mount(...)` and `ctx.setText(...)`.

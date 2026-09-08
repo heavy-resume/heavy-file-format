@@ -28,7 +28,7 @@ test('db table editor creates a missing table from the configured name', async (
   await expect(page.locator('[data-db-table-field="table"]').first()).toHaveValue('job_applications');
   await expect(page.getByText('Table or view "job_applications" does not exist.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Create Basic Table' }).click();
+  await page.getByRole('button', { name: 'Create Table' }).click();
 
   await expect(page.getByText('Table or view "job_applications" does not exist.')).toHaveCount(0);
   await expect(page.locator('.db-table-column-name-input')).toHaveCount(2);
@@ -38,7 +38,7 @@ test('db table editor creates a missing table from the configured name', async (
 test('db table editor deletes columns with confirmation', async ({ page }) => {
   await openCrmExample(page);
   await openFirstDbTableEditor(page);
-  await page.getByRole('button', { name: 'Create Basic Table' }).click();
+  await page.getByRole('button', { name: 'Create Table' }).click();
   await expect(page.locator('.db-table-column-name-input')).toHaveCount(2);
 
   // Column deletion lives in the Columns settings panel.

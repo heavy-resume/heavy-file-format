@@ -827,6 +827,25 @@ hvy_version: 0.1
   expect(expectedResult).toContain('"buttonTargetScript":"doc.component.set_text');
 });
 
+test('round-trips named location markers', () => {
+  const document = deserializeDocument(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"layout"}-->
+#! Layout
+
+<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->
+`, '.hvy');
+
+  const marker = document.sections[0]?.blocks[0];
+  expect(marker?.schema.kind).toBe('location-marker');
+  expect(marker?.schema.locationMarkerName).toBe('primary-actions');
+  expect(serializeDocument(document)).toContain(
+    '<!--hvy:location-marker {"locationMarkerName":"primary-actions"}-->'
+  );
+});
+
 test('round-trips block visibility scripts', () => {
   const document = deserializeDocument(`---
 hvy_version: 0.1

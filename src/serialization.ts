@@ -1556,6 +1556,9 @@ function serializeBlockSchema(
     addIfChanged(payload, 'buttonPositionTargetId', schema.buttonPositionTargetId, defaults.buttonPositionTargetId);
     addIfChanged(payload, 'buttonCss', schema.buttonCss, defaults.buttonCss);
   }
+  if (component === 'location-marker') {
+    addIfChanged(payload, 'locationMarkerName', schema.locationMarkerName, defaults.locationMarkerName);
+  }
   if (component === 'encrypted') {
     addIfChanged(payload, 'keyId', schema.keyId, defaults.keyId);
   }

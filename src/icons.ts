@@ -103,3 +103,10 @@ export function wrenchIcon(): string {
     <path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4l-3 3-3-3 3-3Z" />
   </svg>`;
 }
+
+export function componentLocationIcon(): string {
+  return `<svg class="hvy-ui-icon hvy-ui-icon-component-location" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+    <rect x="9" y="9" width="6" height="6" rx="1" />
+  </svg>`;
+}

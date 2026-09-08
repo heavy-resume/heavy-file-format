@@ -178,6 +178,20 @@
   display: none;
 }
 
+.hvy-document .component-editor-modal-layer .text-editor-toolbar-bounds {
+  position: relative;
+  inset: auto;
+  height: auto;
+  margin-bottom: 0.5rem;
+}
+
+.hvy-document .component-editor-modal-layer .text-editor-toolbar-slot {
+  position: relative;
+  inset: auto;
+  width: max-content;
+  max-width: var(--text-editor-toolbar-max-inline-size);
+}
+
 .hvy-document .component-editor-modal-actions {
   display: flex;
   justify-content: flex-end;

@@ -1,0 +1,35 @@
+.hvy-document .hvy-location-marker-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--hvy-ghost-border, var(--hvy-border-input));
+  border-radius: 8px;
+  color: var(--hvy-text-muted);
+  background: color-mix(in srgb, var(--hvy-surface-alt) 90%, var(--hvy-accent-1) 10%);
+}
+
+.hvy-document .hvy-location-marker-preview .hvy-ui-icon-component-location {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.hvy-document .hvy-location-marker-preview > span {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.hvy-document .hvy-location-marker-preview strong {
+  color: var(--hvy-text);
+}
+
+.hvy-document .hvy-location-marker-preview span span {
+  overflow-wrap: anywhere;
+}

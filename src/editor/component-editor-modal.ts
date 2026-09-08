@@ -114,7 +114,8 @@ function syncController(app: HTMLElement, controller: ComponentEditorModalContro
     return;
   }
   controller.contexts = controller.contexts.filter((context) => openEditorIds.has(contextKey(context)));
-  if (controller.contexts.length === 0 || !app.querySelector('.editor-shell')) {
+  const currentContext = controller.contexts.at(-1);
+  if (!currentContext || !findGate(app, currentContext)) {
     closeModal(controller);
     return;
   }
@@ -232,6 +233,10 @@ function portalGate(
 function createModal(app: HTMLElement): HTMLElement {
   const modalRoot = document.createElement('div');
   modalRoot.className = 'modal-root component-editor-modal-root';
+  const actions = state.reusableDefinitionEditModal
+    ? '<button type="button" class="secondary" data-hvy-component-editor-modal-action="close">Close</button>'
+    : `<button type="button" class="ghost" data-hvy-component-editor-modal-action="cancel">Cancel</button>
+        <button type="button" class="secondary" data-hvy-component-editor-modal-action="done">Done</button>`;
   modalRoot.innerHTML = `
     <div class="modal-overlay" aria-hidden="true"></div>
     <section class="modal-panel component-editor-modal-panel" role="dialog" aria-modal="true" aria-labelledby="componentEditorModalTitle" tabindex="-1">
@@ -244,11 +249,10 @@ function createModal(app: HTMLElement): HTMLElement {
       </header>
       <div class="component-editor-modal-body"></div>
       <footer class="component-editor-modal-actions">
-        <button type="button" class="ghost" data-hvy-component-editor-modal-action="cancel">Cancel</button>
-        <button type="button" class="secondary" data-hvy-component-editor-modal-action="done">Done</button>
+        ${actions}
       </footer>
     </section>`;
-  (app.querySelector('.editor-shell') ?? app).append(modalRoot);
+  (app.querySelector('.editor-shell') ?? app.querySelector('.layout') ?? app).append(modalRoot);
   return modalRoot;
 }
 
@@ -274,6 +278,10 @@ function renderModalHeader(modalRoot: HTMLElement, contexts: EditorModalContext[
 
 function handleModalAction(app: HTMLElement, controller: ComponentEditorModalController, action: HTMLElement): void {
   const kind = action.dataset.hvyComponentEditorModalAction;
+  if (kind === 'close') {
+    closeModal(controller);
+    return;
+  }
   if (kind === 'context') {
     showContext(app, controller, Number(action.dataset.contextIndex));
     return;

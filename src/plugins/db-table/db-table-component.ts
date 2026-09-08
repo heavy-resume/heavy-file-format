@@ -77,8 +77,8 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
   let snapshot: DbTableSourcePage | null = null;
   let refreshVersion = 0;
   let disposed = false;
-  let unsubscribeQueue = () => {};
-  let stopColumnResize = () => {};
+  let unsubscribeQueue = () => { };
+  let stopColumnResize = () => { };
   let columnEditor: HTMLElement | null = null;
 
   const closeColumnEditor = () => {
@@ -239,7 +239,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
         const tableName = config().table;
         void runDbTableMutation(ctx, 'Delete database column', irreversibleUndoMode(config()), async () => {
           await requireWriter(config()).dropColumn({ document: ctx.rawDocument, table: tableName }, columnName);
-            ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
+          ctx.setConfig(removeDbTableColumnConfig(config(), columnName));
         }).then(() => refreshDatabasePlugins())
           .catch((error) => showOperationError(ui, renderCurrent, error, 'Unable to delete the column.'));
       }, ctx.hostRoot);
@@ -312,7 +312,7 @@ function build(ctx: HvyPluginContext): HvyPluginInstance {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', finish);
       window.removeEventListener('pointercancel', finish);
-      stopColumnResize = () => {};
+      stopColumnResize = () => { };
     };
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', finish);
@@ -457,7 +457,7 @@ function renderDbTable(
     return `${toolbar}<div class="db-table-placeholder db-table-error">
       <span>${escapeHtml(ui.error || 'Loading table…')}</span>
       ${missing && ctx.mode === 'editor' && config.source === 'with-file'
-        ? `<button type="button" class="secondary" data-db-table-action="create-basic-table">Create Basic Table</button>`
+        ? `<button type="button" class="secondary" data-db-table-action="create-basic-table">Create Table</button>`
         : ''}
     </div>`;
   }
@@ -498,36 +498,36 @@ function renderColumnSettings(config: DbTableConfig, snapshot: DbTableSourcePage
     <div class="db-table-settings-heading"><div><strong>Column management</strong><span>Database column changes affect the table. Presentation settings affect only this component.</span></div><button type="button" class="ghost db-table-settings-close" data-db-table-action="toggle-columns" aria-label="Close column settings">${closeIcon()}</button></div>
     <div class="db-table-settings-list">
       ${snapshot.columns.map((column) => {
-        const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
-        const required = isRequiredDraftColumn(column);
-        return `<div class="db-table-column-card">
+    const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
+    const required = isRequiredDraftColumn(column);
+    return `<div class="db-table-column-card">
           <div class="db-table-column-identity"><strong>${escapeHtml(column.name)}</strong><span>${escapeHtml(column.type || 'untyped')}${column.generated ? ' · generated key' : ''}${column.foreignKey ? ` · references ${escapeHtml(column.foreignKey.referencedTable)}` : ''}</span></div>
           <label class="db-table-field"><span>Database column</span><input data-db-table-field="schema-column-name" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(column.name)}" ${snapshot.editable ? '' : 'disabled'}></label>
           <label class="db-table-field"><span>Heading</span><input data-db-table-field="column-label" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.label)}"></label>
           <label class="db-table-field"><span>Visibility</span>${renderSelect(
-            'column-visibility',
-            column.name,
-            presentation.visibility,
-            [
-              { value: 'visible', label: 'Visible' },
-              { value: 'compact', label: 'Compact' },
-              ...(!required ? [{ value: 'hidden', label: 'Hidden' }] : []),
-            ]
-          )}</label>
+      'column-visibility',
+      column.name,
+      presentation.visibility,
+      [
+        { value: 'visible', label: 'Visible' },
+        { value: 'compact', label: 'Compact' },
+        ...(!required ? [{ value: 'hidden', label: 'Hidden' }] : []),
+      ]
+    )}</label>
           <label class="db-table-field"><span>Width</span><input data-db-table-field="column-width" data-column-name="${escapeAttr(column.name)}" value="${escapeAttr(presentation.width)}" placeholder="12rem"></label>
           <label class="db-table-check"><input type="checkbox" data-db-table-field="column-wrap" data-column-name="${escapeAttr(column.name)}" ${presentation.wrap ? 'checked' : ''}><span>Wrap values</span></label>
           ${column.foreignKey ? `<label class="db-table-field db-table-relationship-setting"><span>Display ${escapeHtml(column.foreignKey.referencedTable)} by</span>${renderSelect(
-            'column-foreign-display',
-            column.name,
-            presentation.foreignDisplayColumn ?? '',
-            [
-              { value: '', label: 'Raw stored value' },
-              ...column.foreignKey.displayColumnOptions.map((name) => ({ value: name, label: humanizeDbColumnName(name) })),
-            ]
-          )}</label>` : ''}
+      'column-foreign-display',
+      column.name,
+      presentation.foreignDisplayColumn ?? '',
+      [
+        { value: '', label: 'Raw stored value' },
+        ...column.foreignKey.displayColumnOptions.map((name) => ({ value: name, label: humanizeDbColumnName(name) })),
+      ]
+    )}</label>` : ''}
           <button type="button" class="ghost db-table-delete-column" data-db-table-action="delete-column" data-column-name="${escapeAttr(column.name)}" aria-label="Delete database column ${escapeAttr(column.name)}" ${!snapshot.editable || snapshot.columns.length <= 1 ? 'disabled' : ''}>${closeIcon()}<span>Delete column</span></button>
         </div>`;
-      }).join('')}
+  }).join('')}
     </div>
     <button type="button" class="secondary db-table-add-column" data-db-table-action="add-column" ${snapshot.editable ? '' : 'disabled'}>${plusIcon()} Column</button>
   </section>`;
@@ -662,15 +662,15 @@ function renderCell(
 function renderDraftRow(config: DbTableConfig, columns: DbTableColumnSchema[]): string {
   return `<tr class="db-table-draft-row">
     ${columns.map((column) => {
-      const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
-      if (column.generated) return '<td class="db-table-generated-value">Auto</td>';
-      if (column.foreignKey && presentation.foreignDisplayColumn) {
-        return `<td>${renderRelationshipSelect(column, null, 'draft', null)}</td>`;
-      }
-      const required = isRequiredDraftColumn(column);
-      const placeholder = column.defaultValue !== null ? `Default: ${stringifyDbTableValue(column.defaultValue)}` : '';
-      return `<td><input class="db-table-cell-input" data-db-table-draft-control="true" data-column-name="${escapeAttr(column.name)}" data-column-type="${escapeAttr(column.type)}" value="" placeholder="${escapeAttr(placeholder)}" ${required ? 'required' : ''}></td>`;
-    }).join('')}
+    const presentation = readDbTableColumnConfig(config, column.name, { generated: column.generated });
+    if (column.generated) return '<td class="db-table-generated-value">Auto</td>';
+    if (column.foreignKey && presentation.foreignDisplayColumn) {
+      return `<td>${renderRelationshipSelect(column, null, 'draft', null)}</td>`;
+    }
+    const required = isRequiredDraftColumn(column);
+    const placeholder = column.defaultValue !== null ? `Default: ${stringifyDbTableValue(column.defaultValue)}` : '';
+    return `<td><input class="db-table-cell-input" data-db-table-draft-control="true" data-column-name="${escapeAttr(column.name)}" data-column-type="${escapeAttr(column.type)}" value="" placeholder="${escapeAttr(placeholder)}" ${required ? 'required' : ''}></td>`;
+  }).join('')}
     <td class="db-table-draft-actions"><button type="button" class="primary" data-db-table-action="save-row">Save</button><button type="button" class="ghost" data-db-table-action="cancel-row">Cancel</button></td>
   </tr>`;
 }

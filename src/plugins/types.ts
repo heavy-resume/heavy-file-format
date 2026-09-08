@@ -77,6 +77,8 @@ export interface HvyPluginComponentTemplateSelection {
 
 export interface HvyPluginComponentTemplateRenderOptions extends HvyPluginComponentTemplateSelection {
   values: Record<string, string>;
+  /** Components keyed by location-marker name. Each inserted occurrence is cloned. */
+  locations?: Record<string, VisualBlock>;
 }
 
 export interface HvyPluginComponentTemplateRenderInstance {
@@ -104,6 +106,7 @@ export interface HvyPluginComponentTemplateValuesInstance {
 export interface HvyPluginComponentTemplatesApi {
   list(): HvyPluginComponentTemplateInfo[];
   variables(selection: HvyPluginComponentTemplateSelection): ReusableTemplateVariable[];
+  locations(selection: HvyPluginComponentTemplateSelection): string[];
   materialize(options: HvyPluginComponentTemplateRenderOptions): VisualBlock;
   render(options: HvyPluginComponentTemplateRenderOptions): HvyPluginComponentTemplateRenderInstance;
   mountValues(options: HvyPluginComponentTemplateValuesOptions): HvyPluginComponentTemplateValuesInstance;

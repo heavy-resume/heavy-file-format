@@ -213,6 +213,35 @@ test('advanced grid component picker stays inside the template modal', async ({ 
   expect(popoverBounds!.x + popoverBounds!.width).toBeLessThanOrEqual(modalBounds!.x + modalBounds!.width - 7);
 });
 
+test('component template builder adds and names a location marker inside a grid', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.getByRole('button', { name: 'Document Meta' }).click();
+  await page.getByRole('button', { name: 'New Component Template' }).click();
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('[data-field="builder-definition-name"]').fill('fake-plugin-layout');
+  await modal.getByRole('button', { name: 'Section component type' }).click();
+  const templatePicker = modal.locator('.reusable-definition-empty-component .component-picker');
+  await templatePicker.locator('.component-picker-row-category', { hasText: 'Containers' }).click();
+  await templatePicker.locator('[data-picker-pane="containers"] .component-picker-row-leaf', { hasText: 'Grid' }).click();
+
+  const gridPicker = modal.locator('.grid-add-ghost .component-picker').first();
+  await gridPicker.locator('.component-picker-trigger').click();
+  await gridPicker.locator('.component-picker-row-category', { hasText: 'Advanced' }).click();
+  await gridPicker.locator('[data-picker-pane="advanced"] .component-picker-row-leaf', { hasText: 'Component Location' }).click();
+  const name = modal.locator('[data-field="block-location-marker-name"]');
+  await expect(name).toBeFocused();
+  await name.fill('primary-actions');
+  await expect(name).toBeFocused();
+  await modal.getByRole('button', { name: 'Save Template' }).click();
+
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    const definition = state.document.meta.component_defs?.find((candidate) => candidate.name === 'fake-plugin-layout');
+    const grid = definition?.template;
+    return grid?.schema.gridItems[0]?.block.schema.locationMarkerName;
+  })).toBe('primary-actions');
+});
+
 test('template value markers support caret traversal and atomic deletion', async ({ page }) => {
   test.setTimeout(5_000);
   await page.getByRole('button', { name: 'Raw', exact: true }).click();

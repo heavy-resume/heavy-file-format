@@ -326,7 +326,7 @@ Common block metadata fields include:
 - `css`
 
 `id` is an optional author-provided stable identifier for linking, virtual filesystem paths, and reusable component references. Authoring clients MAY generate transient block ids for editing controls or CLI addressing, but MUST NOT serialize generated ids back into block metadata when the author did not provide an id.
-`css` is an optional inline CSS style string applied to that block's rendered wrapper. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks.
+`css` is an optional inline CSS style string applied to the block's principal rendered element. Authoring tools expose this for layout and presentation adjustments such as collapsing spacing between adjacent blocks. Implementations MAY add bookkeeping or interaction wrappers around a component, but those wrappers MUST NOT intercept `css` when doing so would change the meaning of a declaration. In particular, grid block `css` applies to the element that establishes the grid layout, and image block `css` applies to the rendered image.
 Inline `css` strings are declaration-only values equivalent to an HTML `style` attribute. They MUST NOT contain selectors, `@media`, `@container`, or other at-rules. A declaration MAY use a surface-responsive prefix before its property: `md:order: 2;` applies `order: 2` when the outer HVY surface is at least the `md` breakpoint, while `max-md:order: 2;` applies it below `md`. Unprefixed declarations apply at every surface size. Renderers MUST evaluate these variants against the named `hvy-surface` query container, not the browser viewport or an HVY `container` component. Responsive selectors or rules that cannot be expressed as declarations belong in fenced HVY CSS blocks.
 `hideIfYes` is an optional string on any block. Viewer-oriented renderers MUST hide the block when the trimmed, case-insensitive value is `yes`. Empty, missing, or any other value means the block is visible unless another visibility rule hides it. Editor surfaces and document AI editing mode MUST still render the block. Template authors SHOULD use this for template-time conditional hiding, for example `hideIfYes: "{% description | isempty %}"`.
 `visibleScript` is an optional Brython/Python function body on any block. Renderers that support scripting SHOULD run it with the same document component API used by button scripts and show the block only when the return value is truthy. Empty or missing `visibleScript` means the block is visible. This is intended for reusable template affordances whose visibility depends on nearby fill-ins or document state.
@@ -508,6 +508,20 @@ Grid slot directives MAY include `id` and `css`. Slot `css` applies to the rende
 Readers SHOULD trim top and bottom margins on direct grid cell child blocks so grid gaps, rather than nested component edge margins, control spacing between cells.
 
 `gridStackWidth` is an optional string controlling when the grid switches to a single-column stack in responsive renderers. It defaults to `50rem`. It MUST be either `"never"` or a simple CSS length token such as `"30rem"`, `"640px"`, or `"42em"`. `"never"` disables automatic stacking. This field controls only the final stack-to-one-column behavior; authors who need multi-step layouts such as three columns to two columns to one column SHOULD use fenced `hvy:css` container-query rules.
+
+Readers SHOULD use `gridColumns` to generate an equal-width default grid template such as `repeat(2, minmax(0, 1fr))`. This generated declaration is a default, not an override: an explicit `grid-template-columns` declaration in the grid block's `css` MUST take precedence at widths where the grid is not stacked. Automatic stacking controlled by `gridStackWidth` still takes precedence below its threshold unless the value is `"never"`.
+
+For example, a fixed `10rem` left track and a right track that consumes the remaining width is authored as:
+
+```markdown
+<!--hvy:grid {"css":"grid-template-columns: 10rem minmax(0, 1fr);","gridColumns":2,"gridStackWidth":"never"}-->
+
+ <!--hvy:grid:0 {"id":"left"}-->
+  Left content
+
+ <!--hvy:grid:1 {"id":"right"}-->
+  Right content
+```
 
 When a `component-list` grid item has plain Markdown content before its first `hvy:component-list:N` directive, that content is implicitly treated as the first block in the list. This allows a text header to appear above list items without a wrapping directive:
 

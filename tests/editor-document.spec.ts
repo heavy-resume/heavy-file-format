@@ -5316,7 +5316,7 @@ hvy_version: 0.1
 test('grid cells stretch container cards to equal height', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Raw' }).click();
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
   await page.locator('#rawEditor').fill(`---
 hvy_version: 0.1
 ---
@@ -5368,7 +5368,7 @@ hvy_version: 0.1
   await page.getByRole('button', { name: 'Apply' }).click();
   await page.getByRole('button', { name: 'Viewer' }).click();
 
-  const metrics = await page.locator('#cards .reader-grid-layout').evaluate((grid) => {
+  const metrics = await page.locator('#mode-grid.reader-grid-layout').evaluate((grid) => {
     const cells = Array.from(grid.querySelectorAll<HTMLElement>('.reader-grid-cell'));
     const cards = Array.from(grid.querySelectorAll<HTMLElement>('.reader-block-container'));
     const containers = Array.from(grid.querySelectorAll<HTMLElement>('.reader-container'));
@@ -5394,6 +5394,41 @@ hvy_version: 0.1
   expect(Math.max(...metrics.cardHeights) - Math.min(...metrics.cardHeights)).toBeLessThanOrEqual(1);
   // Whether the container body fills its cell, and so whether a trailing xref card is
   // pinned to the bottom, is an open design question - not asserted until it is settled.
+});
+
+test('grid CSS overrides generated equal-width columns on the rendered grid root', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+---
+
+<!--hvy: {"id":"main"}-->
+#! Main
+
+ <!--hvy:grid {"id":"fixed-sidebar-grid","css":"grid-template-columns: 10rem minmax(0, 1fr);","gridColumns":2}-->
+  <!--hvy:grid:0 {}-->
+   Left
+
+  <!--hvy:grid:1 {}-->
+   Right
+`);
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Viewer' }).click();
+
+  const expectedResult = await page.locator('#fixed-sidebar-grid.reader-grid-layout').evaluate((grid) => ({
+    columns: getComputedStyle(grid).gridTemplateColumns,
+    directGridLayoutChildren: grid.querySelectorAll(':scope > .reader-grid-layout').length,
+  }));
+
+  expect(expectedResult.columns.split(' ')[0]).toBe('160px');
+  expect(expectedResult.directGridLayoutChildren).toBe(0);
+
+  await page.getByRole('button', { name: 'Phone 390' }).click();
+  await expect.poll(() => page.locator('#fixed-sidebar-grid.reader-grid-layout').evaluate((grid) =>
+    getComputedStyle(grid).gridTemplateColumns.split(' ').length
+  )).toBe(1);
 });
 
 test('resume section templates hide already used non-repeatable sections', async ({ page }) => {

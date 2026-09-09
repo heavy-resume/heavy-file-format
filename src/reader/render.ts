@@ -7,7 +7,7 @@ import { getComponentListAddLabel, hasComponentListItems } from '../editor/compo
 import { renderContainerReader } from '../editor/components/container/container';
 import { hasContainerBorderCss } from '../editor/components/container/container-css';
 import { renderExpandableReader } from '../editor/components/expandable/expandable';
-import { renderGridReader } from '../editor/components/grid/grid';
+import { buildGridReaderLayout } from '../editor/components/grid/grid';
 import { renderImageReader } from '../editor/components/image/image';
 import { renderCarouselReader } from '../editor/components/carousel/carousel';
 import { renderPluginReader } from '../editor/components/plugin/plugin';
@@ -613,21 +613,29 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     const refreshRenderContextAttrs = options.trimVerticalEdgeMargin
       ? ' data-reader-trim-vertical-edge-margin="true"'
       : '';
-    const blockAttrs = `${idAttr} class="${blockClass}${anchor.className}" data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs} style="${deps.escapeAttr(blockStyle)}"`;
+    const blockDataAttrs = `data-hvy-virtual-item="reader-block" data-hvy-dynamic-visibility="true" data-visible-state="${deps.escapeAttr(visibleState)}" data-component="${deps.escapeAttr(block.schema.component)}" data-section-key="${deps.escapeAttr(section.key)}" data-block-id="${deps.escapeAttr(block.id)}"${blockDomId ? ` data-component-id="${deps.escapeAttr(blockDomId)}"` : ''}${anchor.attrs}${expandableAttrs}${refreshRenderContextAttrs}`;
     const helpers = deps.getComponentRenderHelpers();
-    const renderBlockShell = (body: string, extraAttrs = ''): string => {
+    type BlockShellPresentation = {
+      beforeHtml?: string;
+      className?: string;
+      defaultStyle?: string;
+    };
+    const renderBlockShell = (body: string, extraAttrs = '', presentation: BlockShellPresentation = {}): string => {
       const query = searchContext.filtering ? '' : searchContext.query;
-      return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}<div ${blockAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)}>${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
+      const presentedClass = presentation.className ? ` ${deps.escapeAttr(presentation.className)}` : '';
+      const presentedStyle = [presentation.defaultStyle ?? '', blockStyle].filter(Boolean).join(' ');
+      return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}${presentation.beforeHtml ?? ''}<div${idAttr} class="${blockClass}${anchor.className}${presentedClass}" ${blockDataAttrs}${extraAttrs}${renderReaderViewTargetAttrs(targetKey, dimmed)} style="${deps.escapeAttr(presentedStyle)}">${highlightSearchHtml(body, query, searchContext.caseSensitive)}${anchor.overlay}</div>`;
     };
-    const renderMaybeCollapsedBlockShell = (body: string): string => {
+    const renderMaybeCollapsedBlockShell = (body: string, presentation: BlockShellPresentation = {}): string => {
       if (!modifiers.has('collapse') || base === 'container' || base === 'expandable') {
-        return renderBlockShell(body);
+        return renderBlockShell(body, '', presentation);
       }
-      return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body));
+      return renderBlockShell(renderReaderViewCollapseWrapper(targetKey, block, body), '', presentation);
     };
-    const renderNonEmptyBlockShell = (body: string): string => body.trim() ? renderBlockShell(body) : '';
-    const renderNonEmptyMaybeCollapsedBlockShell = (body: string): string =>
-      body.trim() ? renderMaybeCollapsedBlockShell(body) : '';
+    const renderNonEmptyBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
+      body.trim() ? renderBlockShell(body, '', presentation) : '';
+    const renderNonEmptyMaybeCollapsedBlockShell = (body: string, presentation: BlockShellPresentation = {}): string =>
+      body.trim() ? renderMaybeCollapsedBlockShell(body, presentation) : '';
 
     if (base === 'plugin') {
       if (block.schema.plugin === SCRIPTING_PLUGIN_ID) {
@@ -689,7 +697,14 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
     }
     if (base === 'grid') {
       deps.ensureGridItems(block.schema);
-      return renderNonEmptyMaybeCollapsedBlockShell(renderGridReader(section, block, helpers));
+      const layout = buildGridReaderLayout(section, block, helpers);
+      return layout
+        ? renderNonEmptyMaybeCollapsedBlockShell(layout.body, {
+            beforeHtml: layout.beforeHtml,
+            className: layout.className,
+            defaultStyle: layout.defaultStyle,
+          })
+        : '';
     }
     if (base === 'expandable') {
       deps.ensureExpandableBlocks(block);

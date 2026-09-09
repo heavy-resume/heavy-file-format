@@ -377,6 +377,30 @@ test('grid reader renders grid cells without slot alignment metadata', () => {
   expect(expectedResult).not.toContain('text-align: right;');
 });
 
+test('expected result: grid CSS overrides the generated equal-width column template', () => {
+  const grid = state.document.sections[0]!.blocks[0]!;
+  grid.schema.css = 'margin: 0.5rem 0; grid-template-columns: 10rem minmax(0, 1fr);';
+  grid.schema.gridItems.push({
+    id: 'left-item',
+    block: createEmptyBlock('text'),
+  });
+  grid.schema.gridItems.push({
+    id: 'right-item',
+    block: createEmptyBlock('text'),
+  });
+
+  const expectedResult = renderGridReader(state.document.sections[0]!, grid, {
+    ...createHelpers(),
+    renderReaderBlock: (_section, block) => `<p>${block.id}</p>`,
+  });
+
+  expect(expectedResult).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+  expect(expectedResult).toContain('margin: 0.5rem 0;grid-template-columns: 10rem minmax(0, 1fr)');
+  expect(expectedResult.indexOf('repeat(2, minmax(0, 1fr))')).toBeLessThan(
+    expectedResult.indexOf('10rem minmax(0, 1fr)')
+  );
+});
+
 test('expected result: grid reader applies slot CSS and surface-responsive order to the cell', () => {
   const grid = state.document.sections[0]!.blocks[0]!;
   grid.schema.gridItems.push({

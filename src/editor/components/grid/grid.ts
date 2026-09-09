@@ -151,7 +151,18 @@ function renderGridCellMeta(
   </details>`;
 }
 
-export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
+export interface GridReaderLayout {
+  beforeHtml: string;
+  className: string;
+  defaultStyle: string;
+  body: string;
+}
+
+export function buildGridReaderLayout(
+  _section: Parameters<ComponentReaderRenderer>[0],
+  block: Parameters<ComponentReaderRenderer>[1],
+  helpers: Parameters<ComponentReaderRenderer>[2]
+): GridReaderLayout | null {
   const columns = Math.max(1, Math.min(6, block.schema.gridColumns));
   const gridStyle = `grid-template-columns: repeat(${columns}, minmax(0, 1fr));`;
   const stackWidth = coerceGridStackWidth(block.schema.gridStackWidth);
@@ -190,9 +201,25 @@ export const renderGridReader: ComponentReaderRenderer = (_section, block, helpe
     })
     .join('');
   if (!cells.trim()) {
+    return null;
+  }
+  return {
+    beforeHtml: stackCss,
+    className: layoutClasses,
+    defaultStyle: gridStyle,
+    body: cells,
+  };
+}
+
+export const renderGridReader: ComponentReaderRenderer = (_section, block, helpers) => {
+  const layout = buildGridReaderLayout(_section, block, helpers);
+  if (!layout) {
     return '';
   }
-  return `${stackCss}<div class="${helpers.escapeAttr(layoutClasses)}" style="${helpers.escapeAttr(gridStyle)}">${cells}</div>`;
+  const responsiveClass = `grid-block-responsive-${hashGridStackKey(block.id)}`;
+  const responsiveCss = compileSurfaceResponsiveCss(block.schema.css, `.${responsiveClass}`, state.document.meta);
+  const style = [layout.defaultStyle, responsiveCss.inlineCss].filter(Boolean).join(' ');
+  return `${responsiveCss.responsiveRules ? `<style>${responsiveCss.responsiveRules}</style>` : ''}${layout.beforeHtml}<div class="${helpers.escapeAttr(`${layout.className} ${responsiveClass}`)}" style="${helpers.escapeAttr(style)}">${layout.body}</div>`;
 };
 
 function renderGridStackCss(className: string, stackWidth: string, helpers: Parameters<ComponentReaderRenderer>[2]): string {

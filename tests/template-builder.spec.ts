@@ -318,6 +318,102 @@ component_defs:
   await page.keyboard.press('Backspace');
   await page.keyboard.press('Backspace');
   await expect(modal.locator('.template-value-token')).toHaveCount(0);
+  const unreferencedCards = modal.locator('.template-variable-card.is-unreferenced');
+  await expect(unreferencedCards).toHaveCount(2);
+  await expect(unreferencedCards.getByText('template value will be deleted on save')).toHaveCount(2);
+  expect(await unreferencedCards.locator('input, select').evaluateAll((controls) => (
+    controls.every((control) => (control as HTMLInputElement | HTMLSelectElement).disabled)
+  ))).toBe(true);
+
+  await modal.getByRole('button', { name: 'Save Template' }).click();
+  expect(await page.evaluate(async () => {
+    const { state } = await import('/src/state.ts');
+    return state.document.meta.component_defs?.find((definition) => definition.name === 'fake-caret-template')?.templateVariables;
+  })).toBeUndefined();
+});
+
+test('three-column grid cell metadata stays visible above component insertion controls', async ({ page }) => {
+  test.setTimeout(5_000);
+  await page.getByRole('button', { name: 'Raw', exact: true }).click();
+  await page.locator('#rawEditor').fill(`---
+hvy_version: 0.1
+component_defs:
+  - name: fake-grid-template
+    baseType: grid
+    templateVariables:
+      middle-value:
+        label: Middle value
+    template:
+      id: fake-grid-template
+      schema:
+        component: grid
+        gridColumns: 3
+        gridStackWidth: never
+        gridItems:
+          - id: left-cell
+            block:
+              id: left-text
+              text: Left
+              schema:
+                component: text
+          - id: middle-cell
+            block:
+              id: middle-text
+              text: "Middle {% middle-value | text %}"
+              schema:
+                component: text
+          - id: right-cell
+            block:
+              id: right-text
+              text: Right
+              schema:
+                component: text
+---
+
+<!--hvy: {"id":"summary"}-->
+#! Summary
+`);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await page.getByRole('button', { name: 'Document Meta', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Template', exact: true }).click();
+  const modal = page.locator('.reusable-definition-modal');
+  await modal.locator('.editor-block-passive[data-block-id="middle-text"]').click();
+
+  const firstCellMeta = modal.locator('.grid-cell-meta').first();
+  await firstCellMeta.locator('.grid-cell-meta-button').click();
+  const modalBounds = await modal.boundingBox();
+  const firstPopoverBounds = await firstCellMeta.locator('.grid-cell-meta-body').boundingBox();
+  expect(modalBounds).not.toBeNull();
+  expect(firstPopoverBounds).not.toBeNull();
+  expect(firstPopoverBounds!.x).toBeGreaterThanOrEqual(modalBounds!.x);
+  expect(firstPopoverBounds!.x + firstPopoverBounds!.width).toBeLessThanOrEqual(modalBounds!.x + modalBounds!.width);
+  await firstCellMeta.locator('.grid-cell-meta-button').click();
+
+  const middleCell = modal.locator('.grid-field-row').nth(1);
+  await middleCell.locator('.grid-cell-meta-button').click();
+  await expect(middleCell.locator('.active-component-insert-ghost')).toHaveCount(2);
+  await expect(middleCell.locator('.active-component-insert-ghost').first()).toHaveCSS('visibility', 'hidden');
+  await expect(middleCell.locator('.grid-cell-meta-body')).toBeVisible();
+  await middleCell.locator('.grid-cell-meta-button').click();
+
+  await middleCell.getByRole('button', { name: 'Edit text' }).click();
+  const collapsedEditor = page.getByRole('dialog', { name: 'Edit text' });
+  const richEditor = collapsedEditor.locator('.rich-editor[data-field="block-rich"]');
+  await richEditor.evaluate((editable) => {
+    const marker = editable.querySelector('.template-value-token');
+    const precedingText = marker?.previousSibling;
+    if (!(precedingText instanceof Text)) throw new Error('Expected text before the template value');
+    (editable as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(precedingText, precedingText.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.press('Delete');
+  await expect(modal.locator('[data-template-variable-card="middle-value"]')).toHaveClass(/is-unreferenced/);
 });
 
 test('plugin template value forms update locally and preserve the active field', async ({ page }) => {

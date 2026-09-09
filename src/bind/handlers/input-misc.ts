@@ -9,6 +9,7 @@ import { saveSessionState } from '../../state-persistence';
 import { isPdfAllowedComponent, isPdfDocument } from '../../pdf-document-capabilities';
 import { rememberEmptySectionHeadingLevel } from '../../section-heading-memory';
 import { clearSortValueValidation } from '../../sort-value-validation';
+import { REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT } from '../../reusable-template-values';
 
 const runButtonVisibilityScripts = async (root: ParentNode): Promise<void> => {
   const actions = await import('../../editor/components/button/button-actions');
@@ -43,6 +44,11 @@ export function bindInputMisc(app: HTMLElement): void {
 
   app.addEventListener('input', (event) => {
     const rawTarget = event.target as HTMLElement;
+    if (state.reusableDefinitionEditModal) {
+      queueMicrotask(() => {
+        app.querySelector('#modalRoot')?.dispatchEvent(new Event(REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT));
+      });
+    }
     const target = rawTarget.dataset.field ? rawTarget : rawTarget.closest<HTMLElement>('[data-field]') ?? rawTarget;
     const validationBlock = rawTarget.closest<HTMLElement>('.editor-block');
     if (validationBlock && rawTarget.closest('[data-hvy-sort-value="true"]')) {

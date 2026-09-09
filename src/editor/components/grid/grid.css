@@ -17,7 +17,12 @@
 
 .hvy-document .grid-field-row:has(> .grid-field-head .grid-cell-meta[open]) {
   position: relative;
-  z-index: 40;
+  z-index: 10001;
+}
+
+.hvy-document .grid-field-row:has(> .grid-field-head .grid-cell-meta[open]) .active-component-insert-ghost {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .hvy-document .grid-field-head {
@@ -74,6 +79,11 @@
   padding: 0.55rem;
   background: color-mix(in srgb, var(--hvy-surface) 86%, var(--hvy-surface-alt) 14%);
   box-shadow: 0 12px 28px var(--hvy-shadow);
+}
+
+.hvy-document .grid-field-row:first-child .grid-cell-meta-body {
+  right: auto;
+  left: 0;
 }
 
 .hvy-document .grid-cell-meta-title,

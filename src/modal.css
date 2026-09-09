@@ -566,6 +566,7 @@
 }
 
 .hvy-document .template-variable-card {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
@@ -574,6 +575,34 @@
   border: 1px solid var(--hvy-border);
   border-radius: 0.65rem;
   background: var(--hvy-surface);
+}
+
+.hvy-document .template-variable-unreferenced-label {
+  display: none;
+}
+
+.hvy-document .template-variable-card.is-unreferenced > :not(.template-variable-unreferenced-label) {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+.hvy-document .template-variable-card.is-unreferenced .template-variable-unreferenced-label {
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  z-index: 2;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 1rem);
+  transform: translateX(-50%);
+  border: 1px solid var(--hvy-border);
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  background: var(--hvy-surface-alt);
+  color: var(--hvy-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .hvy-document .template-variable-card > label,

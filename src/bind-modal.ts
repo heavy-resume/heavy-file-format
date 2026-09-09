@@ -19,7 +19,7 @@ import { applyXrefTargetDefaults } from './xref-ops';
 import { getOutputGenerator } from './plugins/registry';
 import { configurePluginBlock } from './plugins/plugin-block';
 import { getComponentDefsFromMeta, getSectionDefsFromMeta } from './component-defs';
-import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, setReusableTemplateVariableType } from './reusable-template-values';
+import { createReusableTemplateVariableName, extractReusableTemplateVariablesFromDefinition, extractReusableTemplateVariablesFromFlavor, extractReusableTemplateVariablesFromSectionDefinition, extractReusableTemplateVariablesFromSectionFlavor, renameReusableTemplateVariable, REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT, setReusableTemplateVariableType } from './reusable-template-values';
 import { resolveOutputGeneratorResponse } from './template-output-generators';
 import { exportCurrentDocumentPdfWithTemplateBytes, runNextPdfTemplateImportLlmStep } from './pdf-export/action';
 import { changeEncryptedComponentKeyInDocument, decryptComponentInDocument, encryptComponentInDocument } from './encrypted-components';
@@ -589,6 +589,9 @@ function getActiveReusableDefinition(): { definition: any; flavor: any | null; t
 
 function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void {
   if (!state.reusableDefinitionEditModal) return;
+  modalRoot.addEventListener(REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT, () => {
+    syncReusableDefinitionVariableReferenceState(modalRoot);
+  });
   const nameInput = modalRoot.querySelector<HTMLInputElement>('[data-field="builder-definition-name"]');
   nameInput?.addEventListener('input', () => {
     if (state.reusableDefinitionEditModal) state.reusableDefinitionEditModal.draftName = nameInput.value;
@@ -681,6 +684,36 @@ function setupReusableDefinitionBuilderControls(modalRoot: HTMLDivElement): void
     control.addEventListener('select', () => showBuilderInputUseAs(control));
     control.addEventListener('mouseup', () => showBuilderInputUseAs(control));
     control.addEventListener('keyup', () => showBuilderInputUseAs(control));
+  });
+}
+
+function syncReusableDefinitionVariableReferenceState(modalRoot: HTMLDivElement): void {
+  const modal = state.reusableDefinitionEditModal;
+  const active = getActiveReusableDefinition();
+  if (!modal || !active) return;
+  const referencedNames = new Set((modal.kind === 'component'
+    ? active.flavor
+      ? extractReusableTemplateVariablesFromFlavor(active.flavor, active.definition.templateVariables)
+      : [
+          ...extractReusableTemplateVariablesFromDefinition(active.definition),
+          ...(active.definition.flavors ?? []).flatMap((flavor: any) => (
+            extractReusableTemplateVariablesFromFlavor(flavor, active.definition.templateVariables)
+          )),
+        ]
+    : active.flavor
+      ? extractReusableTemplateVariablesFromSectionFlavor(active.flavor, active.definition.templateVariables)
+      : [
+          ...extractReusableTemplateVariablesFromSectionDefinition(active.definition),
+          ...(active.definition.flavors ?? []).flatMap((flavor: any) => (
+            extractReusableTemplateVariablesFromSectionFlavor(flavor, active.definition.templateVariables)
+          )),
+        ]).map((variable) => variable.name));
+  modalRoot.querySelectorAll<HTMLElement>('[data-template-variable-card]').forEach((card) => {
+    const isReferenced = referencedNames.has(card.dataset.templateVariableCard ?? '');
+    card.classList.toggle('is-unreferenced', !isReferenced);
+    card.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach((control) => {
+      control.disabled = !isReferenced;
+    });
   });
 }
 
@@ -943,11 +976,27 @@ function saveReusableDefinitionModalAndClose(): void {
         throw new Error('Every flavor needs a component before saving.');
       }
       active.definition.baseType = active.definition.template.schema.kind;
-      extractReusableTemplateVariablesFromDefinition(active.definition);
-      active.definition.flavors?.forEach((flavor: any) => extractReusableTemplateVariablesFromFlavor(flavor, active.definition.templateVariables));
+      const definitionVariables = extractReusableTemplateVariablesFromDefinition(active.definition);
+      const flavorVariables = (active.definition.flavors ?? []).map((flavor: any) => ({
+        flavor,
+        variables: extractReusableTemplateVariablesFromFlavor(flavor, active.definition.templateVariables),
+      }));
+      pruneReusableTemplateVariableConfig(active.definition, [
+        ...definitionVariables,
+        ...flavorVariables.flatMap(({ variables }: any) => variables),
+      ]);
+      flavorVariables.forEach(({ flavor, variables }: any) => pruneReusableTemplateVariableConfig(flavor, variables));
     } else {
-      extractReusableTemplateVariablesFromSectionDefinition(active.definition);
-      active.definition.flavors?.forEach((flavor: any) => extractReusableTemplateVariablesFromSectionFlavor(flavor));
+      const definitionVariables = extractReusableTemplateVariablesFromSectionDefinition(active.definition);
+      const flavorVariables = (active.definition.flavors ?? []).map((flavor: any) => ({
+        flavor,
+        variables: extractReusableTemplateVariablesFromSectionFlavor(flavor, active.definition.templateVariables),
+      }));
+      pruneReusableTemplateVariableConfig(active.definition, [
+        ...definitionVariables,
+        ...flavorVariables.flatMap(({ variables }: any) => variables),
+      ]);
+      flavorVariables.forEach(({ flavor, variables }: any) => pruneReusableTemplateVariableConfig(flavor, variables));
     }
   } catch (error) {
     state.reusableDefinitionEditModal = {
@@ -963,6 +1012,15 @@ function saveReusableDefinitionModalAndClose(): void {
   restoreReusableDefinitionHistory(modal);
   recordHistory();
   getRefreshReaderPanels()();
+}
+
+function pruneReusableTemplateVariableConfig(owner: any, variables: Array<{ name: string }>): void {
+  if (!owner.templateVariables) return;
+  const referencedNames = new Set(variables.map((variable) => variable.name));
+  Object.keys(owner.templateVariables).forEach((name) => {
+    if (!referencedNames.has(name)) delete owner.templateVariables[name];
+  });
+  if (Object.keys(owner.templateVariables).length === 0) delete owner.templateVariables;
 }
 
 function applyReusableDefinitionName(definition: any, name: string): void {

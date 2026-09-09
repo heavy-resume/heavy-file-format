@@ -1948,6 +1948,34 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
         : sectionFlavor
           ? extractReusableTemplateVariablesFromSectionFlavor(sectionFlavor, sectionDefinition?.templateVariables)
           : extractReusableTemplateVariablesFromSectionDefinition(sectionDefinition!);
+      const variableOwner = componentFlavor ?? sectionFlavor ?? componentDefinition ?? sectionDefinition;
+      const ownerReferencedVariableNames = new Set(activeVariables.map((variable) => variable.name));
+      if (!componentFlavor && !sectionFlavor) {
+        if (componentDefinition) {
+          componentDefinition.flavors?.forEach((flavor) => {
+            extractReusableTemplateVariablesFromFlavor(flavor, componentDefinition.templateVariables)
+              .forEach((variable) => ownerReferencedVariableNames.add(variable.name));
+          });
+        } else if (sectionDefinition) {
+          sectionDefinition.flavors?.forEach((flavor) => {
+            extractReusableTemplateVariablesFromSectionFlavor(flavor, sectionDefinition.templateVariables)
+              .forEach((variable) => ownerReferencedVariableNames.add(variable.name));
+          });
+        }
+      }
+      const displayedVariables = [
+        ...activeVariables.map((variable) => ({ ...variable, referenced: true })),
+        ...Object.entries(variableOwner?.templateVariables ?? {})
+          .filter(([name]) => !ownerReferencedVariableNames.has(name))
+          .map(([name, config]) => ({
+            name,
+            type: 'text' as const,
+            label: config.label || name,
+            ...(config.generator ? { generator: config.generator } : {}),
+            ...(config.generatorLabel ? { generatorLabel: config.generatorLabel } : {}),
+            referenced: false,
+          })),
+      ];
       const flavors = definition.flavors ?? [];
       const canAddFlavor = modal.kind === 'section' || Boolean(componentDefinition?.template);
       const flavorAction = `<div class="reusable-definition-flavor-entry">
@@ -2012,15 +2040,16 @@ export function createReaderRenderer(state: ReaderRenderState, deps: ReaderRende
           : ''}
                   <aside class="reusable-template-variable-panel">
                     <div class="meta-panel-head"><strong>Template Values</strong><span class="muted">Select text, then choose Use as…</span></div>
-                    ${activeVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : activeVariables.map((variable) => `<div class="template-variable-card">
-                      <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}" /></label>
-                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
-                      <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}" /></label>
+                    ${displayedVariables.length === 0 ? '<div class="muted">No template values yet.</div>' : displayedVariables.map((variable) => `<div class="template-variable-card${variable.referenced ? '' : ' is-unreferenced'}" data-template-variable-card="${deps.escapeAttr(variable.name)}">
+                      <span class="template-variable-unreferenced-label">template value will be deleted on save</span>
+                      <label><span>Name</span><input data-field="builder-template-variable-name" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'} /></label>
+                      <label><span>Type</span><select data-field="builder-template-variable-type" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="text"${variable.type === 'text' ? ' selected' : ''}>Single-line text</option><option value="block"${variable.type === 'block' ? ' selected' : ''}>Multi-line block</option></select></label>
+                      <label><span>Label</span><input data-field="builder-template-variable-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.label)}"${variable.referenced ? '' : ' disabled'} /></label>
                       <section class="template-variable-generator-config">
                         <div class="template-variable-generator-head"><strong>Generator</strong><span class="muted">Optional AI value generator</span></div>
                         <div class="template-variable-generator-fields">
-                          <label><span>Generator</span><select data-field="builder-template-variable-generator" data-variable-name="${deps.escapeAttr(variable.name)}"><option value="">None</option>${getAvailableOutputGenerators().map((generator) => `<option value="${deps.escapeAttr(generator.key)}"${generator.key === variable.generator ? ' selected' : ''}>${deps.escapeHtml(generator.label || generator.key)}</option>`).join('')}</select></label>
-                          ${variable.generator ? `<label><span>Button Label</span><input data-field="builder-template-variable-generator-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.generatorLabel ?? '')}" placeholder="Use generator label" /></label>` : ''}
+                          <label><span>Generator</span><select data-field="builder-template-variable-generator" data-variable-name="${deps.escapeAttr(variable.name)}"${variable.referenced ? '' : ' disabled'}><option value="">None</option>${getAvailableOutputGenerators().map((generator) => `<option value="${deps.escapeAttr(generator.key)}"${generator.key === variable.generator ? ' selected' : ''}>${deps.escapeHtml(generator.label || generator.key)}</option>`).join('')}</select></label>
+                          ${variable.generator ? `<label><span>Button Label</span><input data-field="builder-template-variable-generator-label" data-variable-name="${deps.escapeAttr(variable.name)}" value="${deps.escapeAttr(variable.generatorLabel ?? '')}" placeholder="Use generator label"${variable.referenced ? '' : ' disabled'} /></label>` : ''}
                         </div>
                       </section>
                     </div>`).join('')}

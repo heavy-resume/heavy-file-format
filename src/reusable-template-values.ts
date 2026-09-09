@@ -13,6 +13,8 @@ export interface ReusableTemplateVariable {
   generatorLabel?: string;
 }
 
+export const REUSABLE_TEMPLATE_REFERENCES_CHANGED_EVENT = 'hvy:reusable-template-references-changed';
+
 const TEMPLATE_TOKEN_PATTERN = /{%\s*([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\|\s*(text|block|isempty)\s*)?%}/g;
 
 export function extractReusableTemplateVariablesFromDefinition(definition: ComponentDefinition | null | undefined): ReusableTemplateVariable[] {
